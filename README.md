@@ -1,1 +1,1 @@
-# canvas-web
+# Canvas web frontend
