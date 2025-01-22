@@ -1,0 +1,8 @@
+.env
+*.env
+*.env.*
+/extensions/**
+/ui/assets/**
+/ui/dist/**
+/ui/node_modules/**
+/ui/package-lock.json
