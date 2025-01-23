@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AuthLayout } from "@/components/auth/auth-layout"
+import { registerUser } from "@/services/auth"
 
 interface FormData {
   email: string
@@ -52,11 +53,12 @@ export default function RegisterPage() {
 
     setIsLoading(true)
     try {
-      // TODO: Add registration logic here
-      navigate("/dashboard")
+      const response = await registerUser(formData.email, formData.password)
+      localStorage.setItem('token', response.token)
+      navigate("/workspaces")
     } catch (error) {
       console.error(error)
-      setErrors({ email: "Registration failed" })
+      setErrors({ email: error instanceof Error ? error.message : "Registration failed" })
     } finally {
       setIsLoading(false)
     }
