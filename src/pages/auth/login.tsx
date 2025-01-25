@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AuthLayout } from "@/components/auth/auth-layout"
+import { loginUser } from "@/services/auth"
 
 interface FormData {
   email: string
@@ -30,8 +31,6 @@ export default function LoginPage() {
     
     if (!formData.password) {
       newErrors.password = "Password is required"
-    } else if (formData.password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters"
     }
 
     setErrors(newErrors)
@@ -52,12 +51,12 @@ export default function LoginPage() {
 
     setIsLoading(true)
     try {
-      // TODO: Add login logic here
-      // await loginUser(formData)
-      navigate("/dashboard")
+      const response = await loginUser(formData.email, formData.password)
+      localStorage.setItem('token', response.token)
+      navigate("/workspaces")
     } catch (error) {
       console.error(error)
-      setErrors({ email: "Invalid credentials" })
+      setErrors({ email: error instanceof Error ? error.message : "Login failed" })
     } finally {
       setIsLoading(false)
     }
