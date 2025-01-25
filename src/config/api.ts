@@ -1,4 +1,5 @@
-export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001/rest'
+export const API_URL = window.location.origin || 'http://localhost:8001/rest';
+//export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001/rest'
 
 export const API_ROUTES = {
   login: `${API_URL}/login`,
