@@ -25,12 +25,13 @@
 /user/**
 !user/.keep
 
+# Web
+**/dist/
+
 # Dev
 /.vscode
 /.fossil-settings
 /_SCRATCH_
-/_TODO_
-/_OLD_
 
 # Logs
 *.log
