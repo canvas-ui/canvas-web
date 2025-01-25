@@ -5,7 +5,7 @@ Contexts are represented by a tree structure resembling a file-system hierarchy;
 Context URL structure: sessionID@workspaceID://context/url, for example my-laptop@universe://work/acme/devops/jira-1234
 
 This repository is only the web frontend with no backend code.
-All interaction with the backend is done via REST API endpoints.
+All interaction with the backend is done via REST API endpoints and websocket connections.
 
 We will use the default black-and-white shadcn/ui theme
 
@@ -107,9 +107,11 @@ Tree element should have a context menu with the following options:
 
 ## Frontend
 
+- Vite
 - React
 - Tailwind CSS
 - shadcn/ui (https://ui.shadcn.com/)
+- socket.io
 
 # Personality
 
