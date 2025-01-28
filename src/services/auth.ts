@@ -5,10 +5,6 @@ interface AuthResponse {
   token: string
 }
 
-interface AuthError {
-  error: string
-}
-
 export async function loginUser(email: string, password: string): Promise<AuthResponse> {
   try {
     return await api.post<AuthResponse>(API_ROUTES.login, { email, password }, { skipAuth: true })
