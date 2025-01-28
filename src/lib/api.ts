@@ -38,12 +38,19 @@ async function fetchWithDefaults(endpoint: string, options: RequestOptions = {})
     ...rest,
   })
 
-  // Handle 401 Unauthorized responses
-  if (response.status === 401 && !skipAuth) {
-    // Clear token and redirect to login
-    localStorage.removeItem('token')
-    window.location.href = '/login'
-    throw new Error('Unauthorized')
+  if (!response.ok) {
+    // Handle 401 Unauthorized specifically
+    if (response.status === 401 && !skipAuth) {
+      localStorage.removeItem('token')
+      window.location.href = '/login'
+      throw new Error('Unauthorized')
+    }
+    // For other errors, try to get error message from response
+    const errorData = await response.json().catch(() => ({
+      error: response.statusText || 'An error occurred'
+    }))
+    
+    throw new Error(errorData.error || 'Request failed')
   }
 
   return response

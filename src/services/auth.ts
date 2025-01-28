@@ -13,8 +13,7 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
   try {
     return await api.post<AuthResponse>(API_ROUTES.login, { email, password }, { skipAuth: true })
   } catch (error) {
-    const err = error as AuthError
-    throw new Error(err.error || 'Login failed')
+    throw error;
   }
 }
 
@@ -22,7 +21,6 @@ export async function registerUser(email: string, password: string): Promise<Aut
   try {
     return await api.post<AuthResponse>(API_ROUTES.register, { email, password }, { skipAuth: true })
   } catch (error) {
-    const err = error as AuthError
-    throw new Error(err.error || 'Registration failed')
+    throw error;
   }
 }
