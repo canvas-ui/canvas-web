@@ -11,14 +11,17 @@ function getAppName(): string {
 
 interface RequestOptions extends RequestInit {
   skipAuth?: boolean
+  includeSession?: boolean
 }
 
 async function fetchWithDefaults(endpoint: string, options: RequestOptions = {}): Promise<Response> {
-  const { skipAuth = false, headers = {}, ...rest } = options
+  const { skipAuth = false, includeSession = false, headers = {}, ...rest } = options
 
   // Get the auth token unless skipAuth is true
   const token = !skipAuth ? localStorage.getItem('token') : null;
-  const selectedSession = localStorage.getItem('selectedSession');
+  
+  // Only include session header if explicitly requested
+  const selectedSession = includeSession ? localStorage.getItem('selectedSession') : null;
 
   // Merge default headers with provided headers
   const defaultHeaders: HeadersInit = {
@@ -61,6 +64,7 @@ export const api = {
   async get<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
     const response = await fetchWithDefaults(endpoint, {
       method: 'GET',
+      includeSession: !endpoint.includes('/sessions'),
       ...options,
     })
     return response.json()
@@ -69,6 +73,7 @@ export const api = {
   async post<T>(endpoint: string, data?: unknown, options: RequestOptions = {}): Promise<T> {
     const response = await fetchWithDefaults(endpoint, {
       method: 'POST',
+      includeSession: !endpoint.includes('/sessions'),
       body: data ? JSON.stringify(data) : undefined,
       ...options,
     })

@@ -2,10 +2,17 @@ import { Link, useLocation, useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { API_ROUTES } from "@/config/api"
 import { useState, useEffect } from "react"
-import { Menu, X, LogOut } from "lucide-react"
+import { Menu, X, LogOut, ChevronDown } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { api } from "@/lib/api"
 
 interface DashboardLayoutProps {
   children: React.ReactNode
+}
+
+interface Session {
+  id: string
+  name: string
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
@@ -13,6 +20,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const navigate = useNavigate()
   const [isSidebarOpen, setSidebarOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  const [sessions, setSessions] = useState<Session[]>([])
+  const selectedSession = JSON.parse(localStorage.getItem('selectedSession') || '{}')
+  const [selectedSessionId, setSelectedSessionId] = useState(selectedSession.id || null)
+  const [selectedSessionName, setSelectedSessionName] = useState(selectedSession.name || null)
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
 
   useEffect(() => {
     const handleResize = () => {
@@ -31,6 +43,27 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       setSidebarOpen(false)
     }
   }, [location.pathname, isMobile])
+
+  useEffect(() => {
+    fetchSessions()
+  }, [])
+
+  const fetchSessions = async () => {
+    try {
+      const response = await api.get<ApiResponse<Session[]>>(API_ROUTES.sessions)
+      setSessions(response.payload)
+    } catch (error) {
+      console.error('Failed to fetch sessions:', error)
+    }
+  }
+
+  const handleSessionChange = (session: Session) => {
+    setSelectedSessionId(session.id)
+    setSelectedSessionName(session.name)
+    localStorage.setItem('selectedSession', JSON.stringify({ id: session.id, name: session.name }))
+    setIsDropdownOpen(false)
+    window.location.reload();
+  }
 
   const isActive = (path: string) => {
     return location.pathname === path
@@ -74,6 +107,49 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               </svg>
               Canvas
             </Link>
+          </div>
+          <div className="flex items-center gap-4">
+            {selectedSessionId && (
+              <div className="relative">
+                <Button
+                  variant="outline"
+                  className="flex items-center gap-2"
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                >
+                  <span>{selectedSessionName}</span>
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+                
+                {isDropdownOpen && (
+                  <>
+                    <div 
+                      className="fixed inset-0" 
+                      onClick={() => setIsDropdownOpen(false)}
+                    />
+                    <div className="absolute top-full mt-1 w-48 rounded-md shadow-lg bg-white border z-50">
+                      {sessions.map((session) => (
+                        <button
+                          key={session.id}
+                          className={cn(
+                            "w-full text-left px-4 py-2 hover:bg-accent/50",
+                            session.id === selectedSessionId && "bg-accent"
+                          )}
+                          onClick={() => handleSessionChange(session)}
+                        >
+                          {session.name}
+                        </button>
+                      ))}
+                      <Link 
+                        to="/sessions"
+                        className="block border-t px-4 py-2 text-sm text-muted-foreground hover:bg-accent/50"
+                      >
+                        Manage Sessions
+                      </Link>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </header>

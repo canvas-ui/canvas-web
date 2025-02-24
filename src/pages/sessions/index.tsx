@@ -1,74 +1,97 @@
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { API_ROUTES } from "@/config/api"
-
-interface User {
-  id: string
-  email: string
-  createdAt: string
-  updatedAt: string
-}
-
-interface Session {
-  id: string
-  name: string
-  initializer: string
-  user: User
-}
-
-interface ApiResponse {
-  status: string
-  statusCode: number
-  message: string
-  payload: Session[]
-}
+import { api } from "@/lib/api"
+import { useToast } from "@/components/ui/toast-container"
 
 export default function SessionsPage() {
   const [sessions, setSessions] = useState<Session[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
-    localStorage.getItem('selectedSession')
+    JSON.parse(localStorage.getItem('selectedSession') || '{}').id || null
   )
+  const [newSessionName, setNewSessionName] = useState("")
+  const [isCreating, setIsCreating] = useState(false)
+  const { showToast } = useToast()
 
   useEffect(() => {
-    const fetchSessions = async () => {
-      try {
-        const token = localStorage.getItem('token')
-        const response = await fetch(API_ROUTES.sessions, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        })
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch sessions')
-        }
-
-        const data: ApiResponse = await response.json()
-        setSessions(data.payload)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred')
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
     fetchSessions()
   }, [])
 
-  const handleSelectSession = (sessionId: string) => {
-    setSelectedSessionId(sessionId)
-    localStorage.setItem('selectedSession', sessionId)
+  const fetchSessions = async () => {
+    try {
+      const data = await api.get<ApiResponse<Session[]>>(API_ROUTES.sessions)
+      setSessions(data.payload)
+      setError(null)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch sessions'
+      setError(message)
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleSelectSession = (session: Session) => {
+    setSelectedSessionId(session.id)
+    localStorage.setItem('selectedSession', JSON.stringify({ id: session.id, name: session.name }))
+    window.location.href = '/workspaces'
+  }
+
+  const handleCreateSession = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newSessionName.trim()) return
+
+    setIsCreating(true)
+    try {
+      await api.post(API_ROUTES.sessions, { name: newSessionName })
+      await fetchSessions()
+      setNewSessionName("")
+      showToast({
+        title: 'Success',
+        description: 'Session created successfully'
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create session'
+      setError(message)
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      })
+    } finally {
+      setIsCreating(false)
+    }
   }
 
   return (
-    <div className="p-4">
-      <Card>
+    <div className="h-full flex items-center justify-center p-4">
+      <Card className="w-full max-w-2xl">
         <CardHeader>
-          <CardTitle>Sessions</CardTitle>
+          <CardTitle>Select a Session</CardTitle>
         </CardHeader>
         <CardContent>
+          <form onSubmit={handleCreateSession} className="mb-6">
+            <div className="flex gap-2">
+              <Input
+                value={newSessionName}
+                onChange={(e) => setNewSessionName(e.target.value)}
+                placeholder="Enter new session name: e.g. 'Work', 'Personal', 'School'"
+                disabled={isCreating}
+              />
+              <Button type="submit" disabled={isCreating || !newSessionName.trim()}>
+                Create New
+              </Button>
+            </div>
+          </form>
+
           <div className="space-y-4">
             {isLoading && <p className="text-center text-muted-foreground">Loading sessions...</p>}
             
@@ -87,29 +110,19 @@ export default function SessionsPage() {
                 key={session.id} 
                 className="p-4 border rounded-lg hover:bg-accent/50 transition-colors"
               >
-                <div className="flex justify-between items-start">
+                <div className="flex justify-between items-center">
                   <div>
                     <h3 className="font-semibold">{session.name}</h3>
-                    <p className="text-sm text-muted-foreground">ID: {session.id}</p>
                     <p className="text-sm text-muted-foreground">
-                      Initializer: {session.initializer}
+                      Created by: {session.user.email}
                     </p>
                   </div>
-                  <div className="flex flex-col items-end gap-2">
-                    <p className="text-sm text-muted-foreground">
-                      User: {session.user.email}
-                    </p>
-                    {selectedSessionId === session.id ? (
-                      <span className="text-green-600 font-small">Active</span>
-                    ) : (
-                      <button
-                        onClick={() => handleSelectSession(session.id)}
-                        className="px-4 py-2 rounded-md text-sm bg-secondary hover:bg-secondary/80"
-                      >
-                        Select
-                      </button>
-                    )}
-                  </div>
+                  <Button
+                    onClick={() => handleSelectSession(session)}
+                    variant={selectedSessionId === session.id ? "secondary" : "outline"}
+                  >
+                    {selectedSessionId === session.id ? "Selected" : "Select"}
+                  </Button>
                 </div>
               </div>
             ))}

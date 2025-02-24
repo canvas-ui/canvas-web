@@ -2,7 +2,12 @@ import { API_ROUTES } from '@/config/api'
 import { api } from '@/lib/api'
 
 interface AuthResponse {
-  token: string
+  message: string,
+  payload: {
+    token: string
+  },
+  status: "success" | "error",
+  statusCode: number
 }
 
 export async function loginUser(email: string, password: string): Promise<AuthResponse> {
