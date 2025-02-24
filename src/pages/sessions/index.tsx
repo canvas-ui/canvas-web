@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { API_ROUTES } from "@/config/api"
 import { api } from "@/lib/api"
+import { useToast } from "@/components/ui/toast-container"
 
 export default function SessionsPage() {
   const [sessions, setSessions] = useState<Session[]>([])
@@ -14,6 +15,7 @@ export default function SessionsPage() {
   )
   const [newSessionName, setNewSessionName] = useState("")
   const [isCreating, setIsCreating] = useState(false)
+  const { showToast } = useToast()
 
   useEffect(() => {
     fetchSessions()
@@ -23,8 +25,15 @@ export default function SessionsPage() {
     try {
       const data = await api.get<ApiResponse<Session[]>>(API_ROUTES.sessions)
       setSessions(data.payload)
+      setError(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch sessions')
+      const message = err instanceof Error ? err.message : 'Failed to fetch sessions'
+      setError(message)
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      })
     } finally {
       setIsLoading(false)
     }
@@ -45,8 +54,18 @@ export default function SessionsPage() {
       await api.post(API_ROUTES.sessions, { name: newSessionName })
       await fetchSessions()
       setNewSessionName("")
+      showToast({
+        title: 'Success',
+        description: 'Session created successfully'
+      })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create session')
+      const message = err instanceof Error ? err.message : 'Failed to create session'
+      setError(message)
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      })
     } finally {
       setIsCreating(false)
     }
