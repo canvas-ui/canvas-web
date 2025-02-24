@@ -54,7 +54,7 @@ export default function RegisterPage() {
     setIsLoading(true)
     try {
       const response = await registerUser(formData.email, formData.password)
-      localStorage.setItem('token', response.token)
+      localStorage.setItem('token', response.payload.token)
       navigate("/workspaces")
     } catch (error) {
       console.error(error)
