@@ -22,13 +22,13 @@ export default function RegisterPage() {
 
   const validateForm = (): boolean => {
     const newErrors: Partial<FormData> = {}
-    
+
     if (!formData.email) {
       newErrors.email = "Email is required"
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       newErrors.email = "Email is invalid"
     }
-    
+
     if (!formData.password) {
       newErrors.password = "Password is required"
     } else if (formData.password.length < 6) {
@@ -58,7 +58,10 @@ export default function RegisterPage() {
       navigate("/workspaces")
     } catch (error) {
       console.error(error)
-      setErrors({ email: error instanceof Error ? error.message : "Registration failed" })
+      const errorMessage = error instanceof Error ? error.message : "Registration failed"
+      setErrors({
+        email: errorMessage
+      })
     } finally {
       setIsLoading(false)
     }
@@ -128,4 +131,4 @@ export default function RegisterPage() {
       </div>
     </AuthLayout>
   )
-} 
+}

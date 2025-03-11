@@ -22,13 +22,13 @@ export default function LoginPage() {
 
   const validateForm = (): boolean => {
     const newErrors: Partial<FormData> = {}
-    
+
     if (!formData.email) {
       newErrors.email = "Email is required"
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       newErrors.email = "Email is invalid"
     }
-    
+
     if (!formData.password) {
       newErrors.password = "Password is required"
     }
@@ -56,7 +56,10 @@ export default function LoginPage() {
       navigate("/workspaces")
     } catch (error) {
       console.error(error)
-      setErrors({ email: error instanceof Error ? error.message : "Login failed" })
+      const errorMessage = error instanceof Error ? error.message : "Login failed"
+      setErrors({
+        email: errorMessage
+      })
     } finally {
       setIsLoading(false)
     }
@@ -126,4 +129,4 @@ export default function LoginPage() {
       </div>
     </AuthLayout>
   )
-} 
+}

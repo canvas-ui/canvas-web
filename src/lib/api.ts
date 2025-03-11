@@ -19,16 +19,27 @@ async function fetchWithDefaults(endpoint: string, options: RequestOptions = {})
 
   // Get the auth token unless skipAuth is true
   const token = !skipAuth ? localStorage.getItem('token') : null;
-  
-  // Only include session header if explicitly requested
-  const selectedSession = includeSession ? localStorage.getItem('selectedSession') : null;
+
+  // Include session ID if available and requested
+  let sessionId = null;
+  if (includeSession) {
+    try {
+      const sessionData = localStorage.getItem('selectedSession');
+      if (sessionData) {
+        const parsed = JSON.parse(sessionData);
+        sessionId = parsed.id;
+      }
+    } catch (e) {
+      console.error('Error parsing session data:', e);
+    }
+  }
 
   // Merge default headers with provided headers
   const defaultHeaders: HeadersInit = {
     'Content-Type': 'application/json',
     'X-App-Name': getAppName(),
     ...(token && { 'Authorization': `Bearer ${token}` }),
-    ...(selectedSession && { 'X-Selected-Session': selectedSession }),
+    ...(sessionId && { 'X-Selected-Session': sessionId }),
     ...headers,
   }
 
@@ -52,8 +63,10 @@ async function fetchWithDefaults(endpoint: string, options: RequestOptions = {})
     const errorData = await response.json().catch(() => ({
       error: response.statusText || 'An error occurred'
     }))
-    
-    throw new Error(errorData.error || 'Request failed')
+
+    // Extract the most detailed error message available
+    const errorMessage = errorData.message || errorData.error || response.statusText || 'Request failed'
+    throw new Error(errorMessage)
   }
 
   return response
@@ -64,7 +77,7 @@ export const api = {
   async get<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
     const response = await fetchWithDefaults(endpoint, {
       method: 'GET',
-      includeSession: !endpoint.includes('/sessions'),
+      includeSession: true, // Always include session if available
       ...options,
     })
     return response.json()
@@ -73,7 +86,7 @@ export const api = {
   async post<T>(endpoint: string, data?: unknown, options: RequestOptions = {}): Promise<T> {
     const response = await fetchWithDefaults(endpoint, {
       method: 'POST',
-      includeSession: !endpoint.includes('/sessions'),
+      includeSession: true, // Always include session if available
       body: data ? JSON.stringify(data) : undefined,
       ...options,
     })
@@ -83,6 +96,7 @@ export const api = {
   async put<T>(endpoint: string, data?: unknown, options: RequestOptions = {}): Promise<T> {
     const response = await fetchWithDefaults(endpoint, {
       method: 'PUT',
+      includeSession: true, // Always include session if available
       body: data ? JSON.stringify(data) : undefined,
       ...options,
     })
@@ -92,6 +106,7 @@ export const api = {
   async delete<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
     const response = await fetchWithDefaults(endpoint, {
       method: 'DELETE',
+      includeSession: true, // Always include session if available
       ...options,
     })
     return response.json()

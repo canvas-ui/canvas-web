@@ -1,10 +1,11 @@
-import { Link, useLocation, useNavigate } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { API_ROUTES } from "@/config/api"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Menu, X, LogOut, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { api } from "@/lib/api"
+import { useToast } from "@/components/ui/toast-container"
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -18,14 +19,19 @@ interface Session {
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const location = useLocation()
   const navigate = useNavigate()
+  const { showToast } = useToast()
   const [isSidebarOpen, setSidebarOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
   const [sessions, setSessions] = useState<Session[]>([])
-  const selectedSession = JSON.parse(localStorage.getItem('selectedSession') || '{}')
-  const [selectedSessionId, setSelectedSessionId] = useState(selectedSession.id || null)
-  const [selectedSessionName, setSelectedSessionName] = useState(selectedSession.name || null)
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
 
+  // Get selected session from localStorage
+  const storedSession = localStorage.getItem('selectedSession')
+  const [selectedSession, setSelectedSession] = useState<{id: string, name: string} | null>(
+    storedSession ? JSON.parse(storedSession) : null
+  )
+
+  // Handle window resize
   useEffect(() => {
     const handleResize = () => {
       const mobile = window.innerWidth < 768
@@ -38,12 +44,16 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
+  // Close sidebar on mobile when navigating
   useEffect(() => {
     if (isMobile) {
       setSidebarOpen(false)
     }
+    // Always close dropdown when navigating
+    setIsDropdownOpen(false)
   }, [location.pathname, isMobile])
 
+  // Fetch sessions on component mount
   useEffect(() => {
     fetchSessions()
   }, [])
@@ -54,15 +64,26 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       setSessions(response.payload)
     } catch (error) {
       console.error('Failed to fetch sessions:', error)
+      showToast({
+        title: 'Error',
+        description: 'Failed to fetch sessions',
+        variant: 'destructive'
+      })
     }
   }
 
   const handleSessionChange = (session: Session) => {
-    setSelectedSessionId(session.id)
-    setSelectedSessionName(session.name)
-    localStorage.setItem('selectedSession', JSON.stringify({ id: session.id, name: session.name }))
+    // Use session ID if name is not available
+    const sessionName = session.name || `Session ${session.id.substring(0, 8)}`;
+    const sessionData = { id: session.id, name: sessionName }
+    setSelectedSession(sessionData)
+    localStorage.setItem('selectedSession', JSON.stringify(sessionData))
     setIsDropdownOpen(false)
-    window.location.reload();
+
+    showToast({
+      title: 'Success',
+      description: `Session "${sessionName}" selected successfully`
+    })
   }
 
   const isActive = (path: string) => {
@@ -71,19 +92,26 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const handleLogout = async () => {
     try {
-      await fetch(API_ROUTES.logout, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+      await api.post(API_ROUTES.logout)
+      localStorage.removeItem('token')
+      localStorage.removeItem('selectedSession')
+      navigate('/login')
     } catch (error) {
-      console.error('Logout failed', error);
+      console.error('Logout failed', error)
+      showToast({
+        title: 'Error',
+        description: 'Logout failed',
+        variant: 'destructive'
+      })
     }
-    localStorage.removeItem('token');
-    localStorage.removeItem('selectedSession');
-    navigate('/login');
   }
+
+  // Safe navigation function that uses React Router
+  const navigateTo = useCallback((path: string) => {
+    if (location.pathname !== path) {
+      navigate(path);
+    }
+  }, [location.pathname, navigate]);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -101,29 +129,34 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 {isSidebarOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
               </Button>
             )}
-            <Link to="/workspaces" className="font-bold text-xl flex items-center">
+            <button
+              onClick={() => navigateTo('/workspaces')}
+              className="font-bold text-xl flex items-center"
+              type="button"
+            >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 h-6 w-6">
                 <path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3" />
               </svg>
               Canvas
-            </Link>
+            </button>
           </div>
           <div className="flex items-center gap-4">
-            {selectedSessionId && (
+            {selectedSession && (
               <div className="relative">
                 <Button
                   variant="outline"
                   className="flex items-center gap-2"
                   onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  type="button"
                 >
-                  <span>{selectedSessionName}</span>
+                  <span>{selectedSession.name}</span>
                   <ChevronDown className="h-4 w-4" />
                 </Button>
-                
+
                 {isDropdownOpen && (
                   <>
-                    <div 
-                      className="fixed inset-0" 
+                    <div
+                      className="fixed inset-0"
                       onClick={() => setIsDropdownOpen(false)}
                     />
                     <div className="absolute top-full mt-1 w-48 rounded-md shadow-lg bg-white border z-50">
@@ -132,19 +165,24 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                           key={session.id}
                           className={cn(
                             "w-full text-left px-4 py-2 hover:bg-accent/50",
-                            session.id === selectedSessionId && "bg-accent"
+                            session.id === selectedSession?.id && "bg-accent"
                           )}
                           onClick={() => handleSessionChange(session)}
+                          type="button"
                         >
                           {session.name}
                         </button>
                       ))}
-                      <Link 
-                        to="/sessions"
-                        className="block border-t px-4 py-2 text-sm text-muted-foreground hover:bg-accent/50"
+                      <button
+                        className="block border-t px-4 py-2 text-sm text-muted-foreground hover:bg-accent/50 w-full text-left"
+                        onClick={() => {
+                          setIsDropdownOpen(false);
+                          navigateTo('/sessions');
+                        }}
+                        type="button"
                       >
                         Manage Sessions
-                      </Link>
+                      </button>
                     </div>
                   </>
                 )}
@@ -163,22 +201,39 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           w-64 border-r bg-background transition-transform duration-200 ease-in-out
         `}>
           <nav className="p-4 space-y-2">
-            <Link 
-              to="/workspaces" 
-              className={`block px-4 py-2 rounded-md ${isActive('/workspaces') ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'}`}
+            <button
+              onClick={() => navigateTo('/workspaces')}
+              className={`block w-full text-left px-4 py-2 rounded-md ${isActive('/workspaces') ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'}`}
+              type="button"
             >
               Workspaces
-            </Link>
-            <Link 
-              to="/sessions" 
-              className={`block px-4 py-2 rounded-md ${isActive('/sessions') ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'}`}
+            </button>
+            <button
+              onClick={() => navigateTo('/contexts')}
+              className={`block w-full text-left px-4 py-2 rounded-md ${isActive('/contexts') ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'}`}
+              type="button"
+            >
+              Contexts
+            </button>
+            <button
+              onClick={() => navigateTo('/sessions')}
+              className={`block w-full text-left px-4 py-2 rounded-md ${isActive('/sessions') ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'}`}
+              type="button"
             >
               Sessions
-            </Link>
+            </button>
+            <button
+              onClick={() => navigateTo('/api-tokens')}
+              className={`block w-full text-left px-4 py-2 rounded-md ${isActive('/api-tokens') ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'}`}
+              type="button"
+            >
+              API Tokens
+            </button>
             <div className="my-4 border-t border-border" />
-            <button 
+            <button
               onClick={handleLogout}
               className="w-full flex items-center px-4 py-2 rounded-md text-destructive hover:bg-destructive/10"
+              type="button"
             >
               <LogOut className="mr-2 h-4 w-4" />
               Logout
@@ -188,7 +243,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
         {/* Overlay for mobile */}
         {isMobile && isSidebarOpen && (
-          <div 
+          <div
             className="fixed inset-0 bg-black/50 z-40"
             onClick={() => setSidebarOpen(false)}
           />
@@ -204,9 +259,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       <footer className="border-t py-4">
         <div className="container mx-auto px-4 flex justify-between items-center text-sm text-muted-foreground">
           <div>© {new Date().getFullYear()} Canvas. All rights reserved.</div>
-          <a 
-            href="https://github.com/canvas-ai" 
-            target="_blank" 
+          <a
+            href="https://github.com/canvas-ai"
+            target="_blank"
             rel="noopener noreferrer"
             className="flex items-center hover:text-foreground"
           >

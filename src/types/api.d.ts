@@ -10,6 +10,38 @@ interface Session {
   name: string
   initializer: string
   user: User
+  createdAt: string
+  lastActiveAt: string
+  isActive: boolean
+}
+
+interface Workspace {
+  id: string
+  name: string
+  description: string
+  owner: string
+  created: string
+  updated: string
+  status: 'active' | 'archived'
+}
+
+interface Context {
+  id: string
+  url: string
+  name: string
+  description: string
+  createdAt: string
+  updatedAt: string
+  workspace: Workspace
+  user: User
+}
+
+interface ApiToken {
+  id: string
+  name: string
+  createdAt: string
+  lastUsedAt: string
+  expiresAt: string
 }
 
 interface ApiResponse<T = any> {
