@@ -17,9 +17,6 @@ interface RequestOptions extends RequestInit {
 async function fetchWithDefaults(endpoint: string, options: RequestOptions = {}): Promise<Response> {
   const { skipAuth = false, includeSession = false, headers = {}, ...rest } = options
 
-  // Get the auth token unless skipAuth is true
-  const token = !skipAuth ? localStorage.getItem('token') : null;
-
   // Include session ID if available and requested
   let sessionId = null;
   if (includeSession) {
@@ -38,7 +35,6 @@ async function fetchWithDefaults(endpoint: string, options: RequestOptions = {})
   const defaultHeaders: HeadersInit = {
     'Content-Type': 'application/json',
     'X-App-Name': getAppName(),
-    ...(token && { 'Authorization': `Bearer ${token}` }),
     ...(sessionId && { 'X-Selected-Session': sessionId }),
     ...headers,
   }
@@ -47,7 +43,7 @@ async function fetchWithDefaults(endpoint: string, options: RequestOptions = {})
   const url = endpoint.startsWith('http') ? endpoint : `${API_URL}${endpoint}`
 
   const response = await fetch(url, {
-    credentials: 'include',
+    credentials: 'include', // Always include credentials for cookie support
     headers: defaultHeaders,
     ...rest,
   })
@@ -55,7 +51,7 @@ async function fetchWithDefaults(endpoint: string, options: RequestOptions = {})
   if (!response.ok) {
     // Handle 401 Unauthorized specifically
     if (response.status === 401 && !skipAuth) {
-      localStorage.removeItem('token')
+      // Redirect to login
       window.location.href = '/login'
       throw new Error('Unauthorized')
     }
