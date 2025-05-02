@@ -51,7 +51,7 @@ export default function LoginPage() {
 
     setIsLoading(true)
     try {
-      const response = await loginUser(formData.email, formData.password)
+      await loginUser(formData.email, formData.password)
       navigate("/workspaces")
     } catch (error) {
       console.error(error)
