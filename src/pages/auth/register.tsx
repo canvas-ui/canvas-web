@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AuthLayout } from "@/components/auth/auth-layout"
-import { registerUser } from "@/services/auth"
+import { registerUser, isAuthenticated } from "@/services/auth"
 
 interface FormData {
   email: string
@@ -17,8 +17,15 @@ export default function RegisterPage() {
   const [errors, setErrors] = React.useState<Partial<FormData>>({})
   const [formData, setFormData] = React.useState<FormData>({
     email: "",
-    password: "",
+    password: ""
   })
+
+  // Check if we're already logged in
+  React.useEffect(() => {
+    if (isAuthenticated()) {
+      navigate('/workspaces');
+    }
+  }, [navigate]);
 
   const validateForm = (): boolean => {
     const newErrors: Partial<FormData> = {}
@@ -31,8 +38,8 @@ export default function RegisterPage() {
 
     if (!formData.password) {
       newErrors.password = "Password is required"
-    } else if (formData.password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters"
+    } else if (formData.password.length < 8) {
+      newErrors.password = "Password must be at least 8 characters"
     }
 
     setErrors(newErrors)
@@ -53,11 +60,22 @@ export default function RegisterPage() {
 
     setIsLoading(true)
     try {
-      const response = await registerUser(formData.email, formData.password)
-      localStorage.setItem('token', response.payload.token)
-      navigate("/workspaces")
+      console.log('Attempting registration with:', formData.email);
+      const response = await registerUser(
+        formData.email,
+        formData.password
+      );
+
+      console.log('Registration successful:', response);
+
+      // Navigate to login page after successful registration
+      navigate("/login", {
+        state: {
+          message: "Registration successful! Please check your email for verification instructions, or log in if email verification is not required."
+        }
+      });
     } catch (error) {
-      console.error(error)
+      console.error('Registration error:', error);
       const errorMessage = error instanceof Error ? error.message : "Registration failed"
       setErrors({
         email: errorMessage
@@ -73,7 +91,7 @@ export default function RegisterPage() {
         <div className="flex flex-col space-y-2 text-center">
           <h1 className="text-2xl font-semibold tracking-tight">Create an account</h1>
           <p className="text-sm text-muted-foreground">
-            Enter your email below to create your account
+            Enter your information below to create your account
           </p>
         </div>
 
@@ -115,7 +133,7 @@ export default function RegisterPage() {
 
             <div className="flex flex-col space-y-4">
               <Button type="submit" disabled={isLoading}>
-                Create account
+                {isLoading ? "Creating account..." : "Create account"}
               </Button>
               <Button
                 variant="outline"

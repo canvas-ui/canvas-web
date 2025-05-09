@@ -7,70 +7,61 @@ interface Workspace {
   description: string;
   color: string;
   status: string;
+  created: string;
+  updated: string;
 }
 
-interface WorkspaceResponse {
-  message: string;
-  payload: Workspace;
-  status: "success" | "error";
+interface ResponseObject<T> {
+  status: 'success' | 'error';
   statusCode: number;
-}
-
-interface WorkspaceListResponse {
   message: string;
-  payload: {
-    workspaces: Workspace[];
-    total: number;
-    limit: number;
-    offset: number;
-  };
-  status: "success" | "error";
-  statusCode: number;
+  payload: T;
+  count?: number;
 }
 
-export async function listWorkspaces(): Promise<WorkspaceListResponse> {
+export async function listWorkspaces(): Promise<ResponseObject<Workspace[]>> {
   try {
-    return await api.get<WorkspaceListResponse>(API_ROUTES.workspaces);
+    return await api.get<ResponseObject<Workspace[]>>(API_ROUTES.workspaces);
   } catch (error) {
     throw error;
   }
 }
 
-export async function createWorkspace(name: string, description?: string): Promise<WorkspaceResponse> {
+export async function createWorkspace(name: string, description?: string): Promise<ResponseObject<Workspace>> {
   try {
-    return await api.post<WorkspaceResponse>(API_ROUTES.workspaces, { name, description });
+    return await api.post<ResponseObject<Workspace>>(API_ROUTES.workspaces, { name, description });
   } catch (error) {
     throw error;
   }
 }
 
-export async function openWorkspace(id: string): Promise<WorkspaceResponse> {
+export async function openWorkspace(id: string): Promise<ResponseObject<Workspace>> {
   try {
-    return await api.post<WorkspaceResponse>(`${API_ROUTES.workspaces}/${id}/open`);
+    return await api.post<ResponseObject<Workspace>>(`${API_ROUTES.workspaces}/${id}/open`);
   } catch (error) {
     throw error;
   }
 }
 
-export async function closeWorkspace(id: string): Promise<WorkspaceResponse> {
+export async function closeWorkspace(id: string): Promise<ResponseObject<Workspace>> {
   try {
-    return await api.post<WorkspaceResponse>(`${API_ROUTES.workspaces}/${id}/close`);
+    return await api.post<ResponseObject<Workspace>>(`${API_ROUTES.workspaces}/${id}/close`);
   } catch (error) {
     throw error;
   }
 }
 
-export async function removeWorkspace(id: string): Promise<WorkspaceResponse> {
+export async function removeWorkspace(id: string): Promise<ResponseObject<null>> {
   try {
-    return await api.delete<WorkspaceResponse>(`${API_ROUTES.workspaces}/${id}`);
+    return await api.delete<ResponseObject<null>>(`${API_ROUTES.workspaces}/${id}`);
   } catch (error) {
     throw error;
   }
 }
 
-export async function purgeWorkspace(id: string): Promise<WorkspaceResponse> {
+export async function purgeWorkspace(id: string): Promise<ResponseObject<null>> {
   try {
-    return await api.delete<WorkspaceResponse>(`${API_ROUTES.workspaces}/${id}/purge`);
+    return await api.delete<ResponseObject<null>>(`${API_ROUTES.workspaces}/${id}/purge`);
   } catch (error) {
     throw error;
   }

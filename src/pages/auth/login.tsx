@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AuthLayout } from "@/components/auth/auth-layout"
-import { loginUser } from "@/services/auth"
+import { loginUser, isAuthenticated } from "@/services/auth"
 
 interface FormData {
   email: string
@@ -19,6 +19,13 @@ export default function LoginPage() {
     email: "",
     password: "",
   })
+
+  // Check if we're already logged in
+  React.useEffect(() => {
+    if (isAuthenticated()) {
+      navigate('/workspaces');
+    }
+  }, [navigate]);
 
   const validateForm = (): boolean => {
     const newErrors: Partial<FormData> = {}
@@ -51,13 +58,20 @@ export default function LoginPage() {
 
     setIsLoading(true)
     try {
-      await loginUser(formData.email, formData.password)
+      console.log('Attempting login with:', formData.email);
+      const response = await loginUser(formData.email, formData.password);
+      console.log('Login successful, received token:', !!response.payload?.token);
+
+      // Clear any existing errors
+      setErrors({})
+
+      // Navigate to workspaces
       navigate("/workspaces")
     } catch (error) {
-      console.error(error)
+      console.error('Login error:', error);
       const errorMessage = error instanceof Error ? error.message : "Login failed"
       setErrors({
-        email: errorMessage
+        password: errorMessage
       })
     } finally {
       setIsLoading(false)

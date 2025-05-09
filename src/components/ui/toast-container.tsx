@@ -14,7 +14,7 @@ type ToastContextType = {
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined)
 
-export function ToastContainer({ children }: { children: React.ReactNode }) {
+export function ToastContainer({ children }: { children?: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastType[]>([])
 
   const showToast = (toast: Omit<ToastType, 'id'>) => {

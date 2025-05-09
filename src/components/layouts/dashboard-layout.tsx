@@ -1,35 +1,16 @@
-import { useLocation, useNavigate } from "react-router-dom"
+import { Outlet, useLocation, useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
-import { API_ROUTES } from "@/config/api"
 import { useState, useEffect, useCallback } from "react"
-import { Menu, X, LogOut, ChevronDown } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { Menu, X, LogOut } from "lucide-react"
 import { api } from "@/lib/api"
 import { useToast } from "@/components/ui/toast-container"
 
-interface DashboardLayoutProps {
-  children: React.ReactNode
-}
-
-interface Session {
-  id: string
-  name: string
-}
-
-export function DashboardLayout({ children }: DashboardLayoutProps) {
+export function DashboardLayout() {
   const location = useLocation()
   const navigate = useNavigate()
   const { showToast } = useToast()
   const [isSidebarOpen, setSidebarOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
-  const [sessions, setSessions] = useState<Session[]>([])
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
-
-  // Get selected session from localStorage
-  const storedSession = localStorage.getItem('selectedSession')
-  const [selectedSession, setSelectedSession] = useState<{id: string, name: string} | null>(
-    storedSession ? JSON.parse(storedSession) : null
-  )
 
   // Handle window resize
   useEffect(() => {
@@ -49,42 +30,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (isMobile) {
       setSidebarOpen(false)
     }
-    // Always close dropdown when navigating
-    setIsDropdownOpen(false)
   }, [location.pathname, isMobile])
-
-  // Fetch sessions on component mount
-  useEffect(() => {
-    fetchSessions()
-  }, [])
-
-  const fetchSessions = async () => {
-    try {
-      const response = await api.get<ApiResponse<Session[]>>(API_ROUTES.sessions)
-      setSessions(response.payload)
-    } catch (error) {
-      console.error('Failed to fetch sessions:', error)
-      showToast({
-        title: 'Error',
-        description: 'Failed to fetch sessions',
-        variant: 'destructive'
-      })
-    }
-  }
-
-  const handleSessionChange = (session: Session) => {
-    // Use session ID if name is not available
-    const sessionName = session.name || `Session ${session.id.substring(0, 8)}`;
-    const sessionData = { id: session.id, name: sessionName }
-    setSelectedSession(sessionData)
-    localStorage.setItem('selectedSession', JSON.stringify(sessionData))
-    setIsDropdownOpen(false)
-
-    showToast({
-      title: 'Success',
-      description: `Session "${sessionName}" selected successfully`
-    })
-  }
 
   const isActive = (path: string) => {
     return location.pathname === path
@@ -92,9 +38,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const handleLogout = async () => {
     try {
-      await api.post(API_ROUTES.logout)
-      localStorage.removeItem('token')
-      localStorage.removeItem('selectedSession')
+      await api.post('/auth/logout')
+      localStorage.removeItem('authToken')
       navigate('/login')
     } catch (error) {
       console.error('Logout failed', error)
@@ -140,55 +85,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               Canvas
             </button>
           </div>
-          <div className="flex items-center gap-4">
-            {selectedSession && (
-              <div className="relative">
-                <Button
-                  variant="outline"
-                  className="flex items-center gap-2"
-                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  type="button"
-                >
-                  <span>{selectedSession.name}</span>
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
-
-                {isDropdownOpen && (
-                  <>
-                    <div
-                      className="fixed inset-0"
-                      onClick={() => setIsDropdownOpen(false)}
-                    />
-                    <div className="absolute top-full mt-1 w-48 rounded-md shadow-lg bg-white border z-50">
-                      {sessions.map((session) => (
-                        <button
-                          key={session.id}
-                          className={cn(
-                            "w-full text-left px-4 py-2 hover:bg-accent/50",
-                            session.id === selectedSession?.id && "bg-accent"
-                          )}
-                          onClick={() => handleSessionChange(session)}
-                          type="button"
-                        >
-                          {session.name}
-                        </button>
-                      ))}
-                      <button
-                        className="block border-t px-4 py-2 text-sm text-muted-foreground hover:bg-accent/50 w-full text-left"
-                        onClick={() => {
-                          setIsDropdownOpen(false);
-                          navigateTo('/sessions');
-                        }}
-                        type="button"
-                      >
-                        Manage Sessions
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
         </div>
       </header>
 
@@ -214,13 +110,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               type="button"
             >
               Contexts
-            </button>
-            <button
-              onClick={() => navigateTo('/sessions')}
-              className={`block w-full text-left px-4 py-2 rounded-md ${isActive('/sessions') ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'}`}
-              type="button"
-            >
-              Sessions
             </button>
             <button
               onClick={() => navigateTo('/api-tokens')}
@@ -250,8 +139,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         )}
 
         {/* Main content */}
-        <main className="flex-1 overflow-auto">
-          {children}
+        <main className="flex-1 overflow-auto p-6">
+          <Outlet />
         </main>
       </div>
 

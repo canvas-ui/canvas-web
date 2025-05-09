@@ -7,22 +7,26 @@ import { api } from "@/lib/api"
 import { useToast } from "@/components/ui/toast-container"
 import { Plus } from "lucide-react"
 import { WorkspaceCard } from "@/components/ui/workspace-card"
+import { useNavigate } from "react-router-dom"
+import { useSocket } from "@/hooks/useSocket"
 
 interface Workspace {
   id: string;
   name: string;
   description: string;
   color: string;
-  status: 'initialized' | 'active' | 'inactive' | 'deleted';
-  createdAt: string;
-  updatedAt: string;
+  type: string;
+  status: 'available' | 'not_found' | 'error' | 'active' | 'inactive' | 'removed' | 'destroyed';
+  created: string;
+  updated: string;
 }
 
-interface ApiResponse<T> {
+interface ResponseObject<T> {
+  status: 'success' | 'error';
+  statusCode: number;
   message: string;
   payload: T;
-  status: "success" | "error";
-  statusCode: number;
+  count?: number;
 }
 
 export default function WorkspacesPage() {
@@ -34,22 +38,47 @@ export default function WorkspacesPage() {
   const [isCreating, setIsCreating] = useState(false)
   const [editingWorkspace, setEditingWorkspace] = useState<Workspace | null>(null)
   const { showToast } = useToast()
+  const navigate = useNavigate()
+  const socket = useSocket()
 
   useEffect(() => {
     fetchWorkspaces()
-  }, [])
+
+    // Subscribe to workspace events
+    if (socket) {
+      socket.emit('subscribe', { topic: 'workspace' })
+
+      socket.on('workspace:status:changed', (data) => {
+        setWorkspaces(prev => prev.map(ws =>
+          ws.id === data.workspaceId ? { ...ws, status: data.status } : ws
+        ))
+      })
+
+      socket.on('workspace:created', (data) => {
+        // Add the new workspace to state instead of fetching all workspaces
+        setWorkspaces(prev => [...prev, data.workspace])
+      })
+
+      socket.on('workspace:deleted', (data) => {
+        setWorkspaces(prev => prev.filter(ws => ws.id !== data.workspaceId))
+      })
+    }
+
+    return () => {
+      if (socket) {
+        socket.emit('unsubscribe', { topic: 'workspace' })
+        socket.off('workspace:status:changed')
+        socket.off('workspace:created')
+        socket.off('workspace:deleted')
+      }
+    }
+  }, [socket])
 
   const fetchWorkspaces = async () => {
     try {
       setIsLoading(true)
-      const data = await api.get<ApiResponse<Workspace[] | { workspaces: Workspace[] }>>(API_ROUTES.workspaces)
-
-      // Handle both response formats
-      const workspacesData = Array.isArray(data.payload)
-        ? data.payload
-        : (data.payload as { workspaces: Workspace[] }).workspaces || [];
-
-      setWorkspaces(workspacesData)
+      const response = await api.get<ResponseObject<Workspace[]>>(API_ROUTES.workspaces)
+      setWorkspaces(response.payload)
       setError(null)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch workspaces'
@@ -70,7 +99,7 @@ export default function WorkspacesPage() {
 
     setIsCreating(true)
     try {
-      await api.post(API_ROUTES.workspaces, {
+      const response = await api.post<ResponseObject<Workspace>>(API_ROUTES.workspaces, {
         name: newWorkspaceName,
         description: newWorkspaceDescription
       })
@@ -79,7 +108,7 @@ export default function WorkspacesPage() {
       setNewWorkspaceDescription("")
       showToast({
         title: 'Success',
-        description: 'Workspace created successfully'
+        description: response.message
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create workspace'
@@ -99,7 +128,7 @@ export default function WorkspacesPage() {
     if (!editingWorkspace) return
 
     try {
-      await api.put(`${API_ROUTES.workspaces}/${editingWorkspace.id}`, {
+      const response = await api.put<ResponseObject<Workspace>>(`${API_ROUTES.workspaces}/${editingWorkspace.id}`, {
         name: editingWorkspace.name,
         description: editingWorkspace.description
       })
@@ -107,7 +136,7 @@ export default function WorkspacesPage() {
       setEditingWorkspace(null)
       showToast({
         title: 'Success',
-        description: 'Workspace updated successfully'
+        description: response.message
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to update workspace'
@@ -120,16 +149,16 @@ export default function WorkspacesPage() {
     }
   }
 
-  const handleOpenWorkspace = async (workspaceId: string) => {
+  const handleStartWorkspace = async (workspaceId: string) => {
     try {
-      await api.post(`${API_ROUTES.workspaces}/${workspaceId}/open`)
+      const response = await api.post<ResponseObject<Workspace>>(`${API_ROUTES.workspaces}/${workspaceId}/start`)
       await fetchWorkspaces()
       showToast({
         title: 'Success',
-        description: 'Workspace opened successfully'
+        description: response.message
       })
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to open workspace'
+      const message = err instanceof Error ? err.message : 'Failed to start workspace'
       showToast({
         title: 'Error',
         description: message,
@@ -138,16 +167,16 @@ export default function WorkspacesPage() {
     }
   }
 
-  const handleCloseWorkspace = async (workspaceId: string) => {
+  const handleStopWorkspace = async (workspaceId: string) => {
     try {
-      await api.post(`${API_ROUTES.workspaces}/${workspaceId}/close`)
+      const response = await api.post<ResponseObject<Workspace>>(`${API_ROUTES.workspaces}/${workspaceId}/stop`)
       await fetchWorkspaces()
       showToast({
         title: 'Success',
-        description: 'Workspace closed successfully'
+        description: response.message
       })
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to close workspace'
+      const message = err instanceof Error ? err.message : 'Failed to stop workspace'
       showToast({
         title: 'Error',
         description: message,
@@ -156,48 +185,8 @@ export default function WorkspacesPage() {
     }
   }
 
-  const handleRemoveWorkspace = async (workspaceId: string) => {
-    if (!confirm('Are you sure you want to remove this workspace? This action cannot be undone.')) {
-      return
-    }
-
-    try {
-      await api.delete(`${API_ROUTES.workspaces}/${workspaceId}`)
-      await fetchWorkspaces()
-      showToast({
-        title: 'Success',
-        description: 'Workspace removed successfully'
-      })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to remove workspace'
-      showToast({
-        title: 'Error',
-        description: message,
-        variant: 'destructive'
-      })
-    }
-  }
-
-  const handlePurgeWorkspace = async (workspaceId: string) => {
-    if (!confirm('Are you sure you want to purge this workspace? This will permanently delete all data. This action cannot be undone.')) {
-      return
-    }
-
-    try {
-      await api.delete(`${API_ROUTES.workspaces}/${workspaceId}/purge`)
-      await fetchWorkspaces()
-      showToast({
-        title: 'Success',
-        description: 'Workspace purged successfully'
-      })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to purge workspace'
-      showToast({
-        title: 'Error',
-        description: message,
-        variant: 'destructive'
-      })
-    }
+  const handleEnterWorkspace = (workspaceId: string) => {
+    navigate(`/workspaces/${workspaceId}`)
   }
 
   return (
@@ -256,10 +245,9 @@ export default function WorkspacesPage() {
                   <WorkspaceCard
                     key={workspace.id}
                     workspace={workspace}
-                    onOpen={handleOpenWorkspace}
-                    onClose={handleCloseWorkspace}
-                    onRemove={handleRemoveWorkspace}
-                    onPurge={handlePurgeWorkspace}
+                    onStart={handleStartWorkspace}
+                    onStop={handleStopWorkspace}
+                    onEnter={handleEnterWorkspace}
                   />
                 ))}
               </div>

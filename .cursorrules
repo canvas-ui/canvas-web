@@ -2,7 +2,7 @@
 
 We are building a web frontend for "Canvas", a cross-platform desktop overlay to help organize work / workflows and data into separate "contexts".
 Contexts are represented by a tree structure resembling a file-system hierarchy; every tree node("directory") represents a separate layer filtering down all unstructured information fighting for a users attention(emails, notifications, browser tabs, chat messages etc) using bitmaps
-Context URL structure: sessionID@workspaceID://context-url, for example my-laptop@universe://work/acme/devops/jira-1234
+Context URL structure: contextID@workspaceID://context-url, for example work-nb@universe://work/acme/devops/jira-1234
 
 This repository is only the web frontend with no backend code.
 All interaction with the backend is done via REST API endpoints and websocket connections.
@@ -11,99 +11,10 @@ We will use the default black-and-white shadcn/ui theme
 
 Main page should be based on the Authentication example: https://ui.shadcn.com/examples/authentication
 
-After login, user should be redirected to /canvas
-Dashboard should contain a icon for each workspace the user has access to, clicking on a workspace icon should open a sidebar with the workspace global context tree
+Dashboard should contain an icon for each workspace the user has access to,
+clicking on a workspace icon should open a sidebar with the workspace global context tree
 
 Tree element should allow dragging and dropping to reorder the tree
-
-Tree element should have a context menu with the following options:
-- Rename
-- Remove (remove the element from the tree)
-- Delete (remove the element from the tree and from the database)
-- Create (add a new element to the tree)
-
-## REST API
-
-/rest/v1/login
-    POST: Authenticates a user with user email and password or a access token, returns a JWT on successful authentication
-
-/rest/v1/logout
-    POST: Invalidates the user session and JWT
-
-/rest/v1/register
-    POST: Creates a new user with the provided details (user email, password)
-
-/rest/v1/token
-    POST: Generates a new access token for the user
-
-/rest/v1/token/refresh
-    POST: Refreshes the JWT token if the refresh token is valid
-
-/rest/v1/token/revoke
-    POST: Revokes the JWT token
-
-/rest/v1/ping
-    GET: Pings the server and returns a 200 OK response
-
-/rest/v1/contexts
-    GET: Returns a list of all contexts for the user
-
-/rest/v1/contexts/:id
-    GET: Returns a specific context by ID
-
-/rest/v1/contexts/:id
-    DELETE: Deletes a specific context by ID
-
-/rest/v1/sessions
-    GET: Returns a list of all sessions for the user
-
-/rest/v1/sessions/:id
-    GET: Returns a specific session by ID
-
-/rest/v1/sessions/:id
-    DELETE: Deletes a specific session by ID
-
-/rest/v1/workspaces
-    GET: Returns a list of all workspaces for the user
-
-/rest/v1/workspaces/:id
-    GET: Returns a specific workspace by ID
-
-/rest/v1/workspaces/:id
-    DELETE: Deletes a specific workspace by ID
-
-/rest/v1/workspaces/:id/tree
-    GET: Returns the tree structure for a specific workspace by ID
-
-/rest/v1/tree/:id
-    GET: Returns the tree structure for a specific workspace by ID
-
-/rest/v1/tree/:id/move
-    POST: Moves a tree element to a new position
-/rest/v1/tree
-    GET: Returns the entire tree structure for the user
-
-/rest/v1/tree/:id
-    GET: Returns a specific tree element by ID
-
-/rest/v1/tree/:id/move
-    POST: Moves a tree element to a new position
-
-/rest/v1/tree/:id/rename
-    POST: Renames a specific tree element by ID
-
-/rest/v1/tree/:id/remove
-    POST: Removes a specific tree element by ID
-
-/rest/v1/tree/:id/delete
-    DELETE: Deletes a specific tree element by ID
-
-/rest/v1/tree/:id/create
-    POST: Creates a new tree element under a specific parent by ID
-
-## Code
-
-- We use ES6 vanilla JavaScript
 
 ## Frontend
 

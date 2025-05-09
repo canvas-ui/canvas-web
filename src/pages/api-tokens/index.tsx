@@ -16,8 +16,11 @@ interface ApiToken {
 }
 
 interface ApiTokenResponse {
-  token: ApiToken;
-  value: string;
+  id: string;
+  token: string;
+  name: string;
+  description: string;
+  created: string;
 }
 
 interface ApiResponse<T> {
@@ -66,14 +69,8 @@ export default function ApiTokensPage() {
     }
   }
 
-  const handleGenerateToken = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newTokenName.trim()) {
-      showToast({
-        title: 'Error',
-        description: 'Token name is required',
-        variant: 'destructive'
-      })
+  const handleGenerateToken = async () => {
+    if (!newTokenName.trim() || isCreating) {
       return
     }
 
@@ -86,8 +83,8 @@ export default function ApiTokensPage() {
       setNewTokenName("")
       await fetchTokens()
 
-      if (response.payload && response.payload.value) {
-        setNewTokenValue(response.payload.value);
+      if (response.payload && response.payload.token) {
+        setNewTokenValue(response.payload.token);
       }
 
       showToast({
@@ -157,7 +154,7 @@ export default function ApiTokensPage() {
             <CardDescription>Create a new API token for programmatic access</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleGenerateToken} className="space-y-4">
+            <div className="space-y-4">
               <div className="flex gap-2">
                 <Input
                   value={newTokenName}
@@ -165,12 +162,16 @@ export default function ApiTokensPage() {
                   placeholder="Token Name (e.g., 'CLI Access', 'Automation')"
                   disabled={isCreating}
                 />
-                <Button type="submit" disabled={isCreating || !newTokenName.trim()}>
+                <Button
+                  type="button"
+                  disabled={isCreating || !newTokenName.trim()}
+                  onClick={handleGenerateToken}
+                >
                   <Plus className="mr-2 h-4 w-4" />
-                  Generate
+                  {isCreating ? 'Generating...' : 'Generate'}
                 </Button>
               </div>
-            </form>
+            </div>
 
             {newTokenValue && (
               <div className="mt-4 p-4 border rounded-md bg-muted/50">

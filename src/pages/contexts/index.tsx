@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -6,6 +6,7 @@ import { API_ROUTES } from "@/config/api"
 import { api } from "@/lib/api"
 import { useToast } from "@/components/ui/toast-container"
 import { Plus, Trash } from "lucide-react"
+import socketService from "@/lib/socket"
 
 export default function ContextsPage() {
   const [contexts, setContexts] = useState<Context[]>([])
@@ -15,29 +16,39 @@ export default function ContextsPage() {
   const [newContextUrl, setNewContextUrl] = useState("")
   const [newContextName, setNewContextName] = useState("")
   const [newContextDescription, setNewContextDescription] = useState("")
+  const [newContextBaseUrl, setNewContextBaseUrl] = useState("")
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>("")
   const [isCreating, setIsCreating] = useState(false)
   const { showToast } = useToast()
 
-  useEffect(() => {
-    fetchContexts()
-    fetchWorkspaces()
-  }, [])
-
-  const fetchContexts = async () => {
+  // Memoize fetchData to prevent unnecessary re-renders
+  const fetchData = useCallback(async () => {
     try {
       setIsLoading(true)
-      const data = await api.get<ApiResponse<Context[] | { contexts: Context[] }>>(API_ROUTES.contexts)
+      // Fetch both contexts and workspaces in parallel
+      const [contextsResponse, workspacesResponse] = await Promise.all([
+        api.get<ApiResponse<Context[] | { contexts: Context[] }>>(API_ROUTES.contexts),
+        api.get<ApiResponse<Workspace[] | { workspaces: Workspace[] }>>(API_ROUTES.workspaces)
+      ])
 
-      // Handle both response formats
-      const contextsData = Array.isArray(data.payload)
-        ? data.payload
-        : (data.payload as { contexts: Context[] }).contexts || [];
-
+      // Handle contexts data
+      const contextsData = Array.isArray(contextsResponse.payload)
+        ? contextsResponse.payload
+        : (contextsResponse.payload as { contexts: Context[] }).contexts || []
       setContexts(contextsData)
+
+      // Handle workspaces data
+      const workspacesData = Array.isArray(workspacesResponse.payload)
+        ? workspacesResponse.payload
+        : (workspacesResponse.payload as { workspaces: Workspace[] }).workspaces || []
+      setWorkspaces(workspacesData)
+      if (workspacesData.length > 0) {
+        setSelectedWorkspaceId(workspacesData[0].id)
+      }
+
       setError(null)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch contexts'
+      const message = err instanceof Error ? err.message : 'Failed to fetch data'
       setError(message)
       showToast({
         title: 'Error',
@@ -47,30 +58,48 @@ export default function ContextsPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [showToast])
 
-  const fetchWorkspaces = async () => {
-    try {
-      const data = await api.get<ApiResponse<Workspace[] | { workspaces: Workspace[] }>>(API_ROUTES.workspaces)
+  // Fetch initial data
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
 
-      // Handle both response formats
-      const workspacesData = Array.isArray(data.payload)
-        ? data.payload
-        : (data.payload as { workspaces: Workspace[] }).workspaces || [];
+  // Setup WebSocket subscriptions
+  useEffect(() => {
+    if (!socketService.isConnected()) return
 
-      setWorkspaces(workspacesData)
-      if (workspacesData.length > 0) {
-        setSelectedWorkspaceId(workspacesData[0].id)
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch workspaces'
-      showToast({
-        title: 'Error',
-        description: message,
-        variant: 'destructive'
-      })
+    // Subscribe to context events
+    socketService.emit('subscribe', { topic: 'context' })
+
+    // Handle context events
+    const handleContextCreated = (data: any) => {
+      setContexts(prev => [...prev, data.context])
     }
-  }
+
+    const handleContextUpdated = (data: any) => {
+      setContexts(prev => prev.map(ctx =>
+        ctx.id === data.context.id ? { ...ctx, ...data.context } : ctx
+      ))
+    }
+
+    const handleContextDeleted = (data: any) => {
+      setContexts(prev => prev.filter(ctx => ctx.id !== data.contextId))
+    }
+
+    // Register event handlers
+    socketService.on('context:created', handleContextCreated)
+    socketService.on('context:updated', handleContextUpdated)
+    socketService.on('context:deleted', handleContextDeleted)
+
+    // Cleanup
+    return () => {
+      socketService.emit('unsubscribe', { topic: 'context' })
+      socketService.off('context:created', handleContextCreated)
+      socketService.off('context:updated', handleContextUpdated)
+      socketService.off('context:deleted', handleContextDeleted)
+    }
+  }, [])
 
   const handleCreateContext = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -78,16 +107,23 @@ export default function ContextsPage() {
 
     setIsCreating(true)
     try {
-      await api.post(API_ROUTES.contexts, {
+      const response = await api.post<ApiResponse<{ context: Context }>>(API_ROUTES.contexts, {
         url: newContextUrl,
-        name: newContextName,
+        name: newContextName || 'default',
         description: newContextDescription,
-        workspaceId: selectedWorkspaceId
+        workspaceId: selectedWorkspaceId,
+        baseUrl: newContextBaseUrl || undefined
       })
-      await fetchContexts()
+
+      // Update local state with the new context
+      if (response.payload?.context) {
+        setContexts(prev => [...prev, response.payload.context])
+      }
+
       setNewContextUrl("")
       setNewContextName("")
       setNewContextDescription("")
+      setNewContextBaseUrl("")
       showToast({
         title: 'Success',
         description: 'Context created successfully'
@@ -112,7 +148,8 @@ export default function ContextsPage() {
 
     try {
       await api.delete(`${API_ROUTES.contexts}/${contextId}`)
-      await fetchContexts()
+      // Remove the context from local state
+      setContexts(prev => prev.filter(ctx => ctx.id !== contextId))
       showToast({
         title: 'Success',
         description: 'Context deleted successfully'
@@ -175,17 +212,31 @@ export default function ContextsPage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   <div>
+                    <label htmlFor="baseUrl" className="block text-sm font-medium text-gray-700 mb-1">
+                      Base URL (Optional)
+                    </label>
+                    <Input
+                      id="baseUrl"
+                      value={newContextBaseUrl}
+                      onChange={(e) => setNewContextBaseUrl(e.target.value)}
+                      placeholder="e.g., /work/acme/devops"
+                      disabled={isCreating}
+                    />
+                  </div>
+                  <div>
                     <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                      Name (Optional)
+                      Name
                     </label>
                     <Input
                       id="name"
                       value={newContextName}
                       onChange={(e) => setNewContextName(e.target.value)}
-                      placeholder="Context Name"
+                      placeholder="Context Name (default if empty)"
                       disabled={isCreating}
                     />
                   </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   <div>
                     <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
                       Description (Optional)
@@ -248,8 +299,8 @@ export default function ContextsPage() {
                         <tr key={context.id} className="border-t">
                           <td className="p-3 font-mono text-sm">{context.url}</td>
                           <td className="p-3">{context.name || '-'}</td>
-                          <td className="p-3">{context.workspace?.name || '-'}</td>
-                          <td className="p-3">{new Date(context.createdAt).toLocaleDateString()}</td>
+                          <td className="p-3">{typeof context.workspace === 'string' ? context.workspace : '-'}</td>
+                          <td className="p-3">{context.createdAt ? new Date(context.createdAt).toLocaleDateString() : '-'}</td>
                           <td className="p-3 text-right">
                             <Button
                               variant="outline"
