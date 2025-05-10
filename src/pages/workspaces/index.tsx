@@ -10,18 +10,6 @@ import { WorkspaceCard } from "@/components/ui/workspace-card"
 import { useNavigate } from "react-router-dom"
 import { useSocket } from "@/hooks/useSocket"
 
-interface Workspace {
-  id: string;
-  name: string;
-  description: string;
-  color?: string;
-  label?: string;
-  type: string;
-  status: 'available' | 'not_found' | 'error' | 'active' | 'inactive' | 'removed' | 'destroyed';
-  created: string;
-  updated: string;
-}
-
 interface ResponseObject<T> {
   status: 'success' | 'error';
   statusCode: number;
@@ -202,7 +190,7 @@ export default function WorkspacesPage() {
         <Card>
           <CardHeader>
             <CardTitle>Create New Workspace</CardTitle>
-            <CardDescription>Create a new workspace to organize your contexts</CardDescription>
+            <CardDescription>Divide your Universe into self-contained workspaces</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleCreateWorkspace} className="space-y-4">

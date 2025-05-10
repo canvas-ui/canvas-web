@@ -2,16 +2,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./car
 import { Button } from "./button";
 import { Play, Square, DoorOpen } from "lucide-react";
 
-interface Workspace {
-  id: string;
-  name: string;
-  description: string;
-  color?: string;
-  label?: string;
-  type: string;
-  status: 'available' | 'not_found' | 'error' | 'active' | 'inactive' | 'removed' | 'destroyed';
-}
-
 interface WorkspaceCardProps {
   workspace: Workspace;
   onStart: (id: string) => void;

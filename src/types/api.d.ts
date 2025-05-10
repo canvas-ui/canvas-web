@@ -3,6 +3,8 @@ interface User {
   email: string
   createdAt: string
   updatedAt: string
+  userType?: string
+  status?: string
 }
 
 interface Session {
@@ -21,17 +23,30 @@ interface Workspace {
   owner: string
   createdAt: string
   updatedAt: string
-  status: string
+  status: 'available' | 'not_found' | 'error' | 'active' | 'inactive' | 'removed' | 'destroyed'
+  type?: string
+  color?: string
+  label?: string
 }
 
 interface Context {
   id: string
   url: string
-  description: string
+  description?: string
   createdAt: string
   updatedAt: string
-  workspace: Workspace
+  workspace: string
   userId: string
+  baseUrl?: string
+  path?: string
+  pathArray?: string[]
+  locked?: boolean
+  serverContextArray?: any[]
+  clientContextArray?: any[]
+  contextBitmapArray?: any[]
+  featureBitmapArray?: any[]
+  filterArray?: any[]
+  pendingUrl?: string | null
 }
 
 interface ApiToken {

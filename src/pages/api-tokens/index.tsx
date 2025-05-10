@@ -20,7 +20,7 @@ interface ApiTokenResponse {
   token: string;
   name: string;
   description: string;
-  created: string;
+  createdAt: string;
 }
 
 interface ApiResponse<T> {

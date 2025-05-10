@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input"
 import { API_ROUTES } from "@/config/api"
 import { api } from "@/lib/api"
 import { useToast } from "@/components/ui/toast-container"
-import { Plus, Trash } from "lucide-react"
+import { Plus, Trash, DoorOpen } from "lucide-react"
 import socketService from "@/lib/socket"
 
 export default function ContextsPage() {
@@ -14,7 +14,6 @@ export default function ContextsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [newContextUrl, setNewContextUrl] = useState("")
-  const [newContextName, setNewContextName] = useState("")
   const [newContextDescription, setNewContextDescription] = useState("")
   const [newContextBaseUrl, setNewContextBaseUrl] = useState("")
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>("")
@@ -25,24 +24,20 @@ export default function ContextsPage() {
   const fetchData = useCallback(async () => {
     try {
       setIsLoading(true)
-      // Fetch both contexts and workspaces in parallel
       const [contextsResponse, workspacesResponse] = await Promise.all([
-        api.get<ApiResponse<Context[] | { contexts: Context[] }>>(API_ROUTES.contexts),
+        api.get<ApiResponse<Context[]>>(API_ROUTES.contexts),
         api.get<ApiResponse<Workspace[] | { workspaces: Workspace[] }>>(API_ROUTES.workspaces)
       ])
 
       // Handle contexts data
-      const contextsData = Array.isArray(contextsResponse.payload)
-        ? contextsResponse.payload
-        : (contextsResponse.payload as { contexts: Context[] }).contexts || []
-      setContexts(contextsData)
+      setContexts(contextsResponse.payload || [])
 
       // Handle workspaces data
       const workspacesData = Array.isArray(workspacesResponse.payload)
         ? workspacesResponse.payload
         : (workspacesResponse.payload as { workspaces: Workspace[] }).workspaces || []
       setWorkspaces(workspacesData)
-      if (workspacesData.length > 0) {
+      if (workspacesData.length > 0 && !selectedWorkspaceId) {
         setSelectedWorkspaceId(workspacesData[0].id)
       }
 
@@ -73,17 +68,17 @@ export default function ContextsPage() {
     socketService.emit('subscribe', { topic: 'context' })
 
     // Handle context events
-    const handleContextCreated = (data: any) => {
+    const handleContextCreated = (data: { context: Context }) => {
       setContexts(prev => [...prev, data.context])
     }
 
-    const handleContextUpdated = (data: any) => {
+    const handleContextUpdated = (data: { context: Context }) => {
       setContexts(prev => prev.map(ctx =>
         ctx.id === data.context.id ? { ...ctx, ...data.context } : ctx
       ))
     }
 
-    const handleContextDeleted = (data: any) => {
+    const handleContextDeleted = (data: { contextId: string }) => {
       setContexts(prev => prev.filter(ctx => ctx.id !== data.contextId))
     }
 
@@ -109,7 +104,6 @@ export default function ContextsPage() {
     try {
       const response = await api.post<ApiResponse<{ context: Context }>>(API_ROUTES.contexts, {
         url: newContextUrl,
-        name: newContextName || 'default',
         description: newContextDescription,
         workspaceId: selectedWorkspaceId,
         baseUrl: newContextBaseUrl || undefined
@@ -121,7 +115,6 @@ export default function ContextsPage() {
       }
 
       setNewContextUrl("")
-      setNewContextName("")
       setNewContextDescription("")
       setNewContextBaseUrl("")
       showToast({
@@ -163,6 +156,18 @@ export default function ContextsPage() {
       })
     }
   }
+
+  const handleOpenContext = (contextId: string) => {
+    // Placeholder for opening/navigating to a specific context
+    // For now, we can navigate to a path like /contexts/contextId or log to console
+    console.log("Attempting to open context:", contextId);
+    showToast({
+      title: 'Info',
+      description: `Open context functionality for ${contextId} is not yet implemented.`,
+      variant: 'default' // Or a more appropriate variant like 'info' if available/added
+    });
+    // navigate(`/contexts/${contextId}`); // Example navigation
+  };
 
   return (
     <div className="container mx-auto p-4">
@@ -223,18 +228,6 @@ export default function ContextsPage() {
                       disabled={isCreating}
                     />
                   </div>
-                  <div>
-                    <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                      Name
-                    </label>
-                    <Input
-                      id="name"
-                      value={newContextName}
-                      onChange={(e) => setNewContextName(e.target.value)}
-                      placeholder="Context Name (default if empty)"
-                      disabled={isCreating}
-                    />
-                  </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   <div>
@@ -288,31 +281,49 @@ export default function ContextsPage() {
                     <thead>
                       <tr className="bg-muted/50">
                         <th className="text-left p-3 font-medium">URL</th>
-                        <th className="text-left p-3 font-medium">Name</th>
                         <th className="text-left p-3 font-medium">Workspace</th>
                         <th className="text-left p-3 font-medium">Created</th>
+                        <th className="text-left p-3 font-medium">Updated</th>
                         <th className="text-right p-3 font-medium">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {contexts.map((context) => (
-                        <tr key={context.id} className="border-t">
-                          <td className="p-3 font-mono text-sm">{context.url}</td>
-                          <td className="p-3">{context.name || '-'}</td>
-                          <td className="p-3">{typeof context.workspace === 'string' ? context.workspace : '-'}</td>
-                          <td className="p-3">{context.createdAt ? new Date(context.createdAt).toLocaleDateString() : '-'}</td>
-                          <td className="p-3 text-right">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDeleteContext(context.id)}
-                              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                            >
-                              <Trash className="h-4 w-4" />
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
+                      {contexts.map((context) => {
+                        // Find workspace name from the workspaces state array
+                        const workspaceObject = workspaces.find(ws => ws.id === context.workspace);
+                        const workspaceNameDisplay = workspaceObject ? workspaceObject.name : context.workspace; // Fallback to ID if not found
+
+                        const createdAtDisplay = context.createdAt ? new Date(context.createdAt).toLocaleDateString() : '-';
+                        const updatedAtDisplay = context.updatedAt ? new Date(context.updatedAt).toLocaleDateString() : '-';
+
+                        return (
+                          <tr key={context.id} className="border-t">
+                            <td className="p-3 font-mono text-sm">{context.url}</td>
+                            <td className="p-3">{workspaceNameDisplay}</td>
+                            <td className="p-3">{createdAtDisplay}</td>
+                            <td className="p-3">{updatedAtDisplay}</td>
+                            <td className="p-3 text-right space-x-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleOpenContext(context.id)}
+                                title="Open Context"
+                              >
+                                <DoorOpen className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDeleteContext(context.id)}
+                                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                title="Delete Context"
+                              >
+                                <Trash className="h-4 w-4" />
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

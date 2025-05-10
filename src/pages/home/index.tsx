@@ -10,6 +10,8 @@ interface UserData {
   email: string;
   userType: string;
   status: string;
+  createdAt?: string; // Added for consistency with global User type
+  updatedAt?: string; // Added for consistency with global User type
   // Allow any other string properties that might come from the API payload
   [key: string]: any;
 }
