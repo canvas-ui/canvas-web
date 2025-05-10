@@ -65,8 +65,8 @@ export default function LoginPage() {
       // Clear any existing errors
       setErrors({})
 
-      // Navigate to workspaces
-      navigate("/workspaces")
+      // Navigate to home page
+      navigate("/home")
     } catch (error) {
       console.error('Login error:', error);
       const errorMessage = error instanceof Error ? error.message : "Login failed"

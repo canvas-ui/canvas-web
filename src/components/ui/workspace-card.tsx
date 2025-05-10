@@ -6,7 +6,8 @@ interface Workspace {
   id: string;
   name: string;
   description: string;
-  color: string;
+  color?: string;
+  label?: string;
   type: string;
   status: 'available' | 'not_found' | 'error' | 'active' | 'inactive' | 'removed' | 'destroyed';
 }
@@ -23,6 +24,9 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter }: Workspace
   const isUniverse = workspace.type === 'universe' || workspace.id === 'universe';
   const isError = workspace.status === 'error';
   const isNotFound = workspace.status === 'not_found';
+
+  const borderColorClass = workspace.color ? '' : 'border-slate-300'; // Default border color
+  const borderStyle = workspace.color ? { borderLeftColor: workspace.color, borderLeftWidth: '4px' } : { borderLeftWidth: '4px' };
 
   const getStatusColor = () => {
     switch (workspace.status) {
@@ -61,7 +65,7 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter }: Workspace
   };
 
   return (
-    <Card>
+    <Card className={`relative ${borderColorClass}`} style={borderStyle}>
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>

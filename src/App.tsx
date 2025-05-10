@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import LoginPage from './pages/auth/login'
 import RegisterPage from './pages/auth/register'
 import WorkspacesPage from './pages/workspaces'
+import HomePage from './pages/home'
 import { ProtectedRoute } from './components/auth/protected-route'
 import { PublicRoute } from './components/auth/public-route'
 import ContextsPage from './pages/contexts'
@@ -21,6 +22,7 @@ function App() {
           {/* Dashboard layout for authenticated routes */}
           <Route path="/" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
             <Route index element={<Navigate to="/workspaces" replace />} />
+            <Route path="home" element={<HomePage />} />
             <Route path="workspaces" element={<WorkspacesPage />} />
             <Route path="contexts" element={<ContextsPage />} />
             <Route path="api-tokens" element={<ApiTokensPage />} />

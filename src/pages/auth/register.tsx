@@ -68,10 +68,10 @@ export default function RegisterPage() {
 
       console.log('Registration successful:', response);
 
-      // Navigate to login page after successful registration
-      navigate("/login", {
+      // Navigate to home page after successful registration
+      navigate("/home", {
         state: {
-          message: "Registration successful! Please check your email for verification instructions, or log in if email verification is not required."
+          message: "Registration successful!"
         }
       });
     } catch (error) {

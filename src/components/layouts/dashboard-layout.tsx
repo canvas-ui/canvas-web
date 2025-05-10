@@ -98,6 +98,13 @@ export function DashboardLayout() {
         `}>
           <nav className="p-4 space-y-2">
             <button
+              onClick={() => navigateTo('/home')}
+              className={`block w-full text-left px-4 py-2 rounded-md ${isActive('/home') ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'}`}
+              type="button"
+            >
+              Home
+            </button>
+            <button
               onClick={() => navigateTo('/workspaces')}
               className={`block w-full text-left px-4 py-2 rounded-md ${isActive('/workspaces') ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'}`}
               type="button"

@@ -14,7 +14,8 @@ interface Workspace {
   id: string;
   name: string;
   description: string;
-  color: string;
+  color?: string;
+  label?: string;
   type: string;
   status: 'available' | 'not_found' | 'error' | 'active' | 'inactive' | 'removed' | 'destroyed';
   created: string;
@@ -35,6 +36,8 @@ export default function WorkspacesPage() {
   const [error, setError] = useState<string | null>(null)
   const [newWorkspaceName, setNewWorkspaceName] = useState("")
   const [newWorkspaceDescription, setNewWorkspaceDescription] = useState("")
+  const [newWorkspaceColor, setNewWorkspaceColor] = useState(generateNiceRandomHexColor())
+  const [newWorkspaceLabel, setNewWorkspaceLabel] = useState("")
   const [isCreating, setIsCreating] = useState(false)
   const [editingWorkspace, setEditingWorkspace] = useState<Workspace | null>(null)
   const { showToast } = useToast()
@@ -101,11 +104,15 @@ export default function WorkspacesPage() {
     try {
       const response = await api.post<ResponseObject<Workspace>>(API_ROUTES.workspaces, {
         name: newWorkspaceName,
-        description: newWorkspaceDescription
+        description: newWorkspaceDescription,
+        color: newWorkspaceColor,
+        label: newWorkspaceLabel
       })
       await fetchWorkspaces()
       setNewWorkspaceName("")
       setNewWorkspaceDescription("")
+      setNewWorkspaceColor(generateNiceRandomHexColor())
+      setNewWorkspaceLabel("")
       showToast({
         title: 'Success',
         description: response.message
@@ -212,6 +219,33 @@ export default function WorkspacesPage() {
                   placeholder="Description (optional)"
                   disabled={isCreating}
                 />
+                <Input
+                  value={newWorkspaceLabel}
+                  onChange={(e) => setNewWorkspaceLabel(e.target.value)}
+                  placeholder="Workspace Label (optional)"
+                  disabled={isCreating}
+                />
+                <p className="text-sm text-muted-foreground">Set Workspace Label</p>
+                <div className="flex items-center gap-2">
+                  <label htmlFor="workspace-color" className="text-sm font-medium">Workspace Color</label>
+                  <Input
+                    id="workspace-color"
+                    type="color"
+                    value={newWorkspaceColor}
+                    onChange={(e) => setNewWorkspaceColor(e.target.value)}
+                    className="h-10 w-16 p-1"
+                    disabled={isCreating}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setNewWorkspaceColor(generateNiceRandomHexColor())}
+                    disabled={isCreating}
+                  >
+                    Randomize
+                  </Button>
+                </div>
                 <Button type="submit" disabled={isCreating || !newWorkspaceName.trim()}>
                   <Plus className="mr-2 h-4 w-4" />
                   Create Workspace
@@ -295,3 +329,59 @@ export default function WorkspacesPage() {
     </div>
   )
 }
+
+// Color Utility Functions
+// From https://gist.github.com/bendc/76c48ce53299e6078a76
+const randomInt = (min: number, max: number): number => {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+};
+
+const generateRandomHsl = (): { h: number, s: number, l: number } => {
+  const h = randomInt(0, 360);
+  const s = randomInt(42, 98); // Saturation between 42% and 98%
+  const l = randomInt(40, 90); // Lightness between 40% and 90%
+  return { h, s, l };
+};
+
+// From https://css-tricks.com/converting-color-spaces-in-javascript/
+const hslToHex = (h: number, s: number, l: number): string => {
+  s /= 100;
+  l /= 100;
+
+  let c = (1 - Math.abs(2 * l - 1)) * s,
+    x = c * (1 - Math.abs((h / 60) % 2 - 1)),
+    m = l - c / 2,
+    r = 0,
+    g = 0,
+    b = 0;
+
+  if (0 <= h && h < 60) {
+    r = c; g = x; b = 0;
+  } else if (60 <= h && h < 120) {
+    r = x; g = c; b = 0;
+  } else if (120 <= h && h < 180) {
+    r = 0; g = c; b = x;
+  } else if (180 <= h && h < 240) {
+    r = 0; g = x; b = c;
+  } else if (240 <= h && h < 300) {
+    r = x; g = 0; b = c;
+  } else if (300 <= h && h < 360) {
+    r = c; g = 0; b = x;
+  }
+
+  r = Math.round((r + m) * 255);
+  g = Math.round((g + m) * 255);
+  b = Math.round((b + m) * 255);
+
+  const toHex = (val: number): string => {
+    const hex = val.toString(16);
+    return hex.length === 1 ? "0" + hex : hex;
+  };
+
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+};
+
+const generateNiceRandomHexColor = (): string => {
+  const { h, s, l } = generateRandomHsl();
+  return hslToHex(h, s, l);
+};
