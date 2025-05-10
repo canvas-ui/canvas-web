@@ -19,14 +19,6 @@ interface RequestOptions extends RequestInit {
 // Get the authorization token from localStorage
 function getAuthToken(): string | null {
   const token = localStorage.getItem('authToken');
-
-  // Skip invalid token formats (like those previously set by extensions)
-  if (token === 'canvas-server-token') {
-    console.warn('Removing invalid token format: canvas-server-token');
-    localStorage.removeItem('authToken');
-    return null;
-  }
-
   return token;
 }
 

@@ -7,7 +7,6 @@ interface User {
 
 interface Session {
   id: string
-  name: string
   initializer: string
   user: User
   createdAt: string
@@ -20,20 +19,19 @@ interface Workspace {
   name: string
   description: string
   owner: string
-  created: string
-  updated: string
-  status: 'active' | 'archived'
+  createdAt: string
+  updatedAt: string
+  status: string
 }
 
 interface Context {
   id: string
   url: string
-  name: string
   description: string
   createdAt: string
   updatedAt: string
   workspace: Workspace
-  user: User
+  userId: string
 }
 
 interface ApiToken {

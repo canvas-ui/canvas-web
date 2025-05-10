@@ -1,7 +1,7 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { useState, useEffect, useCallback } from "react"
-import { Menu, X, LogOut } from "lucide-react"
+import { Menu, X, LogOut, Home, Briefcase, Network, KeyRound } from "lucide-react"
 import { api } from "@/lib/api"
 import { useToast } from "@/components/ui/toast-container"
 
@@ -99,31 +99,31 @@ export function DashboardLayout() {
           <nav className="p-4 space-y-2">
             <button
               onClick={() => navigateTo('/home')}
-              className={`block w-full text-left px-4 py-2 rounded-md ${isActive('/home') ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'}`}
+              className={`flex items-center w-full text-left px-4 py-2 rounded-md ${isActive('/home') ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'}`}
               type="button"
             >
-              Home
+              <Home className="mr-2 h-4 w-4" /> Home
             </button>
             <button
               onClick={() => navigateTo('/workspaces')}
-              className={`block w-full text-left px-4 py-2 rounded-md ${isActive('/workspaces') ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'}`}
+              className={`flex items-center w-full text-left px-4 py-2 rounded-md ${isActive('/workspaces') ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'}`}
               type="button"
             >
-              Workspaces
+              <Briefcase className="mr-2 h-4 w-4" /> Workspaces
             </button>
             <button
               onClick={() => navigateTo('/contexts')}
-              className={`block w-full text-left px-4 py-2 rounded-md ${isActive('/contexts') ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'}`}
+              className={`flex items-center w-full text-left px-4 py-2 rounded-md ${isActive('/contexts') ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'}`}
               type="button"
             >
-              Contexts
+              <Network className="mr-2 h-4 w-4" /> Contexts
             </button>
             <button
               onClick={() => navigateTo('/api-tokens')}
-              className={`block w-full text-left px-4 py-2 rounded-md ${isActive('/api-tokens') ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'}`}
+              className={`flex items-center w-full text-left px-4 py-2 rounded-md ${isActive('/api-tokens') ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'}`}
               type="button"
             >
-              API Tokens
+              <KeyRound className="mr-2 h-4 w-4" /> API Tokens
             </button>
             <div className="my-4 border-t border-border" />
             <button

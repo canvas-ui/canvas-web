@@ -9,8 +9,6 @@ interface UserProfile {
   email: string;
   userType: string;
   status: string;
-  firstName: string;
-  lastName: string;
   created: string;
   updated: string;
 }
