@@ -78,3 +78,13 @@ export async function deleteContext(id: string): Promise<void> {
     throw error;
   }
 }
+
+export async function getContextDocuments(id: string): Promise<any> {
+  try {
+    const response = await api.get<ServiceApiResponse<any>>(`${API_ROUTES.contexts}/${id}/documents`);
+    return response.payload;
+  } catch (error) {
+    console.error(`Failed to get context documents for ${id}:`, error);
+    throw error;
+  }
+}

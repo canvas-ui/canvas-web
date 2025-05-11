@@ -4,8 +4,18 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast-container';
 import { Save } from 'lucide-react';
-import { getContext, updateContextUrl } from '@/services/context';
+import { getContext, updateContextUrl, getContextDocuments } from '@/services/context';
 import socketService from '@/lib/socket';
+
+// WebSocket event types matching server implementation
+const WS_EVENTS = {
+  CONTEXT_CREATED: 'context:created',
+  CONTEXT_UPDATED: 'context:updated',
+  CONTEXT_DELETED: 'context:deleted',
+  CONTEXT_URL_CHANGED: 'context:url:changed',
+  CONTEXT_LOCKED: 'context:locked',
+  CONTEXT_UNLOCKED: 'context:unlocked'
+};
 
 export default function ContextDetailPage() {
   const { contextId } = useParams<{ contextId: string }>();
@@ -14,7 +24,17 @@ export default function ContextDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
   const { showToast } = useToast();
+
+  // Ensure socket is connected
+  useEffect(() => {
+    if (!socketService.isConnected()) {
+      console.log('Socket not connected, attempting to connect...');
+      socketService.reconnect();
+    }
+  }, []);
 
   const fetchContextDetails = useCallback(async () => {
     if (!contextId) return;
@@ -37,31 +57,97 @@ export default function ContextDetailPage() {
     setIsLoading(false);
   }, [contextId, showToast]);
 
+  const fetchDocuments = useCallback(async () => {
+    if (!contextId) return;
+    setIsLoadingDocuments(true);
+    try {
+      const docs = await getContextDocuments(contextId);
+      setDocuments(docs);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch documents';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+    }
+    setIsLoadingDocuments(false);
+  }, [contextId, showToast]);
+
   useEffect(() => {
     fetchContextDetails();
   }, [fetchContextDetails]);
 
   useEffect(() => {
-    if (!contextId || !socketService.isConnected()) return;
+    if (!contextId) return;
 
-    socketService.emit('subscribe', { topic: 'context' });
+    // Ensure socket is connected before subscribing
+    if (!socketService.isConnected()) {
+      console.log('Socket not connected, attempting to connect...');
+      socketService.reconnect();
+      return;
+    }
+
+    console.log(`Subscribing to context events for context ${contextId}`);
+    socketService.emit('subscribe', { topic: 'context', id: contextId });
 
     const handleContextUpdateReceived = (data: { context: Context }) => {
+      console.log('Received context update:', data);
       if (data.context && data.context.id === contextId) {
         setContext(data.context);
         setEditableUrl(data.context.url);
+        // Fetch documents when URL changes
+        fetchDocuments();
       }
     };
 
-    socketService.on('context:updated', handleContextUpdateReceived);
-    socketService.on('context:url:changed', handleContextUpdateReceived);
+    const handleContextUrlChanged = (data: { id: string; url: string }) => {
+      console.log('Received context URL change:', data);
+      if (data.id === contextId) {
+        setContext(prev => prev ? { ...prev, url: data.url } : null);
+        setEditableUrl(data.url);
+        // Fetch documents when URL changes
+        fetchDocuments();
+      }
+    };
+
+    const handleContextLocked = (data: { id: string; locked: boolean }) => {
+      console.log('Received context lock status change:', data);
+      if (data.id === contextId) {
+        setContext(prev => prev ? { ...prev, locked: data.locked } : null);
+      }
+    };
+
+    const handleContextDeleted = (data: { id: string }) => {
+      console.log('Received context deletion:', data);
+      if (data.id === contextId) {
+        setContext(null);
+        setError('Context has been deleted');
+        showToast({
+          title: 'Context Deleted',
+          description: 'This context has been deleted.',
+          variant: 'destructive'
+        });
+      }
+    };
+
+    // Listen for all context-related events
+    socketService.on(WS_EVENTS.CONTEXT_UPDATED, handleContextUpdateReceived);
+    socketService.on(WS_EVENTS.CONTEXT_URL_CHANGED, handleContextUrlChanged);
+    socketService.on(WS_EVENTS.CONTEXT_LOCKED, handleContextLocked);
+    socketService.on(WS_EVENTS.CONTEXT_UNLOCKED, handleContextLocked);
+    socketService.on(WS_EVENTS.CONTEXT_DELETED, handleContextDeleted);
 
     return () => {
-      socketService.emit('unsubscribe', { topic: 'context' });
-      socketService.off('context:updated', handleContextUpdateReceived);
-      socketService.off('context:url:changed', handleContextUpdateReceived);
+      console.log(`Unsubscribing from context events for context ${contextId}`);
+      socketService.emit('unsubscribe', { topic: 'context', id: contextId });
+      socketService.off(WS_EVENTS.CONTEXT_UPDATED, handleContextUpdateReceived);
+      socketService.off(WS_EVENTS.CONTEXT_URL_CHANGED, handleContextUrlChanged);
+      socketService.off(WS_EVENTS.CONTEXT_LOCKED, handleContextLocked);
+      socketService.off(WS_EVENTS.CONTEXT_UNLOCKED, handleContextLocked);
+      socketService.off(WS_EVENTS.CONTEXT_DELETED, handleContextDeleted);
     };
-  }, [contextId, showToast]);
+  }, [contextId, showToast, fetchDocuments]);
 
   const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setEditableUrl(e.target.value);
@@ -74,6 +160,8 @@ export default function ContextDetailPage() {
       const updatedContext = await updateContextUrl(context.id, editableUrl);
       setContext(updatedContext);
       setEditableUrl(updatedContext.url);
+      // Fetch documents after URL update
+      await fetchDocuments();
       showToast({
         title: 'Success',
         description: 'Context URL set successfully.'
@@ -114,9 +202,13 @@ export default function ContextDetailPage() {
           onChange={handleUrlChange}
           className="font-mono h-10 flex-grow border-0 focus-visible:ring-0 focus-visible:ring-offset-0 !shadow-none"
           placeholder="contextID@workspaceID://context-url"
-          disabled={isSaving}
+          disabled={isSaving || context.locked}
         />
-        <Button onClick={handleSetContextUrl} disabled={isSaving || !context || editableUrl === context.url} size="sm">
+        <Button
+          onClick={handleSetContextUrl}
+          disabled={isSaving || !context || editableUrl === context.url || context.locked}
+          size="sm"
+        >
           <Save className="mr-2 h-4 w-4" />
           {isSaving ? 'Setting...' : 'Set Context'}
         </Button>
@@ -136,9 +228,26 @@ export default function ContextDetailPage() {
         {context.description && <p><strong>Description:</strong> {context.description}</p>}
       </div>
 
-      <div className="mt-6 p-4 border rounded-md min-h-[300px] bg-muted/40 text-center text-muted-foreground">
-        <p>Context Content Area (Placeholder)</p>
-        <p className="text-sm">This is where the visual representation of the context would be displayed.</p>
+      <div className="mt-6 p-4 border rounded-md min-h-[300px] bg-muted/40">
+        <h2 className="text-xl font-semibold mb-4">Context Documents</h2>
+        {isLoadingDocuments ? (
+          <div className="text-center text-muted-foreground">Loading documents...</div>
+        ) : documents.length === 0 ? (
+          <div className="text-center text-muted-foreground">
+            <p>No documents found</p>
+            <p className="text-sm">Documents will appear here when available.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {documents.map((doc, index) => (
+              <div key={index} className="p-4 border rounded-md bg-background">
+                <pre className="whitespace-pre-wrap break-words font-mono text-sm">
+                  {JSON.stringify(doc, null, 2)}
+                </pre>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -23,6 +23,14 @@ export default function ContextsPage() {
   const [isCreating, setIsCreating] = useState(false)
   const { showToast } = useToast()
 
+  // Ensure socket is connected
+  useEffect(() => {
+    if (!socketService.isConnected()) {
+      console.log('Socket not connected, attempting to connect...');
+      socketService.reconnect();
+    }
+  }, []);
+
   const fetchData = useCallback(async () => {
     try {
       setIsLoading(true)
@@ -55,35 +63,52 @@ export default function ContextsPage() {
   }, [fetchData])
 
   useEffect(() => {
-    if (!socketService.isConnected()) return
+    // Ensure socket is connected before subscribing
+    if (!socketService.isConnected()) {
+      console.log('Socket not connected, attempting to connect...');
+      socketService.reconnect();
+      return;
+    }
 
+    console.log('Subscribing to context events');
     socketService.emit('subscribe', { topic: 'context' })
 
     const handleContextCreated = (data: { context: Context }) => {
+      console.log('Received context created:', data);
       setContexts(prev => [...prev, data.context])
     }
 
     const handleContextUpdated = (data: { context: Context }) => {
+      console.log('Received context update:', data);
       setContexts(prev => prev.map(ctx =>
         ctx.id === data.context.id ? { ...ctx, ...data.context } : ctx
       ))
     }
 
     const handleContextDeleted = (data: { contextId: string }) => {
+      console.log('Received context deletion:', data);
       setContexts(prev => prev.filter(ctx => ctx.id !== data.contextId))
+    }
+
+    const handleContextUrlChanged = (data: { context: Context }) => {
+      console.log('Received context URL change:', data);
+      setContexts(prev => prev.map(ctx =>
+        ctx.id === data.context.id ? { ...ctx, ...data.context } : ctx
+      ))
     }
 
     socketService.on('context:created', handleContextCreated)
     socketService.on('context:updated', handleContextUpdated)
     socketService.on('context:deleted', handleContextDeleted)
-    socketService.on('context:url:changed', handleContextUpdated)
+    socketService.on('context:url:changed', handleContextUrlChanged)
 
     return () => {
+      console.log('Unsubscribing from context events');
       socketService.emit('unsubscribe', { topic: 'context' })
       socketService.off('context:created', handleContextCreated)
       socketService.off('context:updated', handleContextUpdated)
       socketService.off('context:deleted', handleContextDeleted)
-      socketService.off('context:url:changed', handleContextUpdated)
+      socketService.off('context:url:changed', handleContextUrlChanged)
     }
   }, [])
 
