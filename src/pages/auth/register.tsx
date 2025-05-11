@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Link, useNavigate } from "react-router-dom"
+import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,7 +13,6 @@ interface FormData {
 }
 
 export default function RegisterPage() {
-  const navigate = useNavigate()
   const { showToast } = useToast()
   const [isLoading, setIsLoading] = React.useState<boolean>(false)
   const [errors, setErrors] = React.useState<Partial<FormData>>({})

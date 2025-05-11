@@ -15,14 +15,6 @@ import {
   startWorkspace
 } from "@/services/workspace"
 
-interface ResponseObject<T> {
-  status: 'success' | 'error';
-  statusCode: number;
-  message: string;
-  payload: T;
-  count?: number;
-}
-
 export default function WorkspacesPage() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [isLoading, setIsLoading] = useState(true)
