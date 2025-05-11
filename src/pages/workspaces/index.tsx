@@ -2,13 +2,18 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { API_ROUTES } from "@/config/api"
-import { api } from "@/lib/api"
 import { useToast } from "@/components/ui/toast-container"
 import { Plus } from "lucide-react"
 import { WorkspaceCard } from "@/components/ui/workspace-card"
 import { useNavigate } from "react-router-dom"
 import { useSocket } from "@/hooks/useSocket"
+import {
+  listWorkspaces,
+  createWorkspace,
+  openWorkspace,
+  closeWorkspace,
+  startWorkspace
+} from "@/services/workspace"
 
 interface ResponseObject<T> {
   status: 'success' | 'error';
@@ -33,24 +38,40 @@ export default function WorkspacesPage() {
   const socket = useSocket()
 
   useEffect(() => {
-    fetchWorkspaces()
+    const loadWorkspaces = async () => {
+      try {
+        setIsLoading(true)
+        const response = await listWorkspaces()
+        setWorkspaces(response.payload)
+        setError(null)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to fetch workspaces'
+        setError(message)
+        showToast({
+          title: 'Error',
+          description: message,
+          variant: 'destructive'
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    loadWorkspaces()
 
-    // Subscribe to workspace events
     if (socket) {
       socket.emit('subscribe', { topic: 'workspace' })
 
-      socket.on('workspace:status:changed', (data) => {
+      socket.on('workspace:status:changed', (data: { workspaceId: string; status: Workspace['status'] }) => {
         setWorkspaces(prev => prev.map(ws =>
           ws.id === data.workspaceId ? { ...ws, status: data.status } : ws
         ))
       })
 
-      socket.on('workspace:created', (data) => {
-        // Add the new workspace to state instead of fetching all workspaces
+      socket.on('workspace:created', (data: { workspace: Workspace }) => {
         setWorkspaces(prev => [...prev, data.workspace])
       })
 
-      socket.on('workspace:deleted', (data) => {
+      socket.on('workspace:deleted', (data: { workspaceId: string }) => {
         setWorkspaces(prev => prev.filter(ws => ws.id !== data.workspaceId))
       })
     }
@@ -63,26 +84,7 @@ export default function WorkspacesPage() {
         socket.off('workspace:deleted')
       }
     }
-  }, [socket])
-
-  const fetchWorkspaces = async () => {
-    try {
-      setIsLoading(true)
-      const response = await api.get<ResponseObject<Workspace[]>>(API_ROUTES.workspaces)
-      setWorkspaces(response.payload)
-      setError(null)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch workspaces'
-      setError(message)
-      showToast({
-        title: 'Error',
-        description: message,
-        variant: 'destructive'
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  }, [socket, showToast])
 
   const handleCreateWorkspace = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -90,13 +92,13 @@ export default function WorkspacesPage() {
 
     setIsCreating(true)
     try {
-      const response = await api.post<ResponseObject<Workspace>>(API_ROUTES.workspaces, {
+      const response = await createWorkspace({
         name: newWorkspaceName,
-        description: newWorkspaceDescription,
+        description: newWorkspaceDescription || undefined,
         color: newWorkspaceColor,
-        label: newWorkspaceLabel
+        label: newWorkspaceLabel || undefined,
       })
-      await fetchWorkspaces()
+      setWorkspaces(prev => [...prev, response.payload])
       setNewWorkspaceName("")
       setNewWorkspaceDescription("")
       setNewWorkspaceColor(generateNiceRandomHexColor())
@@ -107,7 +109,6 @@ export default function WorkspacesPage() {
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create workspace'
-      setError(message)
       showToast({
         title: 'Error',
         description: message,
@@ -123,11 +124,8 @@ export default function WorkspacesPage() {
     if (!editingWorkspace) return
 
     try {
-      const response = await api.put<ResponseObject<Workspace>>(`${API_ROUTES.workspaces}/${editingWorkspace.id}`, {
-        name: editingWorkspace.name,
-        description: editingWorkspace.description
-      })
-      await fetchWorkspaces()
+      const response = await openWorkspace(editingWorkspace.id)
+      setWorkspaces(prev => prev.map(ws => ws.id === response.payload.id ? response.payload : ws))
       setEditingWorkspace(null)
       showToast({
         title: 'Success',
@@ -135,7 +133,6 @@ export default function WorkspacesPage() {
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to update workspace'
-      setError(message)
       showToast({
         title: 'Error',
         description: message,
@@ -146,8 +143,8 @@ export default function WorkspacesPage() {
 
   const handleStartWorkspace = async (workspaceId: string) => {
     try {
-      const response = await api.post<ResponseObject<Workspace>>(`${API_ROUTES.workspaces}/${workspaceId}/start`)
-      await fetchWorkspaces()
+      const response = await startWorkspace(workspaceId)
+      setWorkspaces(prev => prev.map(ws => ws.id === response.payload.id ? response.payload : ws))
       showToast({
         title: 'Success',
         description: response.message
@@ -164,8 +161,8 @@ export default function WorkspacesPage() {
 
   const handleStopWorkspace = async (workspaceId: string) => {
     try {
-      const response = await api.post<ResponseObject<Workspace>>(`${API_ROUTES.workspaces}/${workspaceId}/stop`)
-      await fetchWorkspaces()
+      const response = await closeWorkspace(workspaceId)
+      setWorkspaces(prev => prev.map(ws => ws.id === response.payload.id ? response.payload : ws))
       showToast({
         title: 'Success',
         description: response.message

@@ -65,72 +65,74 @@ export default function HomePage() {
   ];
 
   return (
-    <div className="container mx-auto p-4 sm:p-6 lg:p-8 flex flex-col items-center justify-center min-h-screen">
-      <Card className="w-full max-w-2xl shadow-xl">
-        <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-bold text-black-600">
-            {successMessage ? successMessage : "Welcome to your Universe ..indexed!"}
-          </CardTitle>
-          {!successMessage && <CardDescription>&#8734;</CardDescription>}
-        </CardHeader>
-        <CardContent className="space-y-8">
-          {loading && <p className="text-center text-muted-foreground">Loading user information...</p>}
-          {error && <p className="text-center text-destructive">Error: {error}</p>}
+    <div className="container mx-auto p-4">
+      <div className="grid gap-6">
+        <Card className="w-full shadow-xl">
+          <CardHeader className="text-center">
+            <CardTitle className="text-3xl font-bold text-black-600">
+              {successMessage ? successMessage : "Welcome to your Universe ..indexed!"}
+            </CardTitle>
+            {!successMessage && <CardDescription>&#8734;</CardDescription>}
+          </CardHeader>
+          <CardContent className="space-y-8">
+            {loading && <p className="text-center text-muted-foreground">Loading user information...</p>}
+            {error && <p className="text-center text-destructive">Error: {error}</p>}
 
-          {user && (
+            {user && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-xl">User Information</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {/* This part should now correctly iterate over the payload (user object) */}
+                  {Object.entries(user).map(([key, value]) => {
+                    if (typeof value === 'string' || typeof value === 'number') {
+                      return (
+                        <p key={key}>
+                          <strong className="capitalize">{key.replace(/([A-Z])/g, ' $1')}:</strong> {value.toString()}
+                        </p>
+                      );
+                    }
+                    return null;
+                  })}
+                </CardContent>
+              </Card>
+            )}
+
             <Card>
               <CardHeader>
-                <CardTitle className="text-xl">User Information</CardTitle>
+                <CardTitle className="text-xl">Integrate Canvas into your workflows:</CardTitle>
+                <CardDescription>
+                  Enhance your productivity by connecting Canvas with your favorite tools.
+                </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-2">
-                {/* This part should now correctly iterate over the payload (user object) */}
-                {Object.entries(user).map(([key, value]) => {
-                  if (typeof value === 'string' || typeof value === 'number') {
-                    return (
-                      <p key={key}>
-                        <strong className="capitalize">{key.replace(/([A-Z])/g, ' $1')}:</strong> {value.toString()}
-                      </p>
-                    );
-                  }
-                  return null;
-                })}
+              <CardContent>
+                <ul className="space-y-4">
+                  {integrationLinks.map((link) => (
+                    <li key={link.name} className="border p-4 rounded-md hover:shadow-md transition-shadow">
+                      <a
+                        href={link.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-semibold text-primary hover:underline text-lg"
+                      >
+                        {link.name}
+                      </a>
+                      <p className="text-sm text-muted-foreground mt-1">{link.description}</p>
+                    </li>
+                  ))}
+                </ul>
               </CardContent>
             </Card>
-          )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-xl">Integrate Canvas into your workflows:</CardTitle>
-              <CardDescription>
-                Enhance your productivity by connecting Canvas with your favorite tools.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-4">
-                {integrationLinks.map((link) => (
-                  <li key={link.name} className="border p-4 rounded-md hover:shadow-md transition-shadow">
-                    <a
-                      href={link.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-semibold text-primary hover:underline text-lg"
-                    >
-                      {link.name}
-                    </a>
-                    <p className="text-sm text-muted-foreground mt-1">{link.description}</p>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
-
-          <div className="text-center">
-            <Link to="/workspaces" className="text-primary hover:underline">
-              Go to your Workspaces &rarr;
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
+            <div className="text-center">
+              <Link to="/workspaces" className="text-primary hover:underline">
+                Go to your Workspaces &rarr;
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

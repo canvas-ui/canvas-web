@@ -1,18 +1,21 @@
 import { useEffect, useState, useCallback } from "react"
+import { useNavigate } from "react-router-dom"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { API_ROUTES } from "@/config/api"
-import { api } from "@/lib/api"
 import { useToast } from "@/components/ui/toast-container"
 import { Plus, Trash, DoorOpen } from "lucide-react"
 import socketService from "@/lib/socket"
+import { listContexts, createContext, deleteContext } from "@/services/context"
+import { listWorkspaces } from "@/services/workspace"
 
 export default function ContextsPage() {
+  const navigate = useNavigate()
   const [contexts, setContexts] = useState<Context[]>([])
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [newContextId, setNewContextId] = useState("")
   const [newContextUrl, setNewContextUrl] = useState("")
   const [newContextDescription, setNewContextDescription] = useState("")
   const [newContextBaseUrl, setNewContextBaseUrl] = useState("")
@@ -20,27 +23,19 @@ export default function ContextsPage() {
   const [isCreating, setIsCreating] = useState(false)
   const { showToast } = useToast()
 
-  // Memoize fetchData to prevent unnecessary re-renders
   const fetchData = useCallback(async () => {
     try {
       setIsLoading(true)
-      const [contextsResponse, workspacesResponse] = await Promise.all([
-        api.get<ApiResponse<Context[]>>(API_ROUTES.contexts),
-        api.get<ApiResponse<Workspace[] | { workspaces: Workspace[] }>>(API_ROUTES.workspaces)
+      const [fetchedContexts, workspacesResponse] = await Promise.all([
+        listContexts(),
+        listWorkspaces()
       ])
-
-      // Handle contexts data
-      setContexts(contextsResponse.payload || [])
-
-      // Handle workspaces data
-      const workspacesData = Array.isArray(workspacesResponse.payload)
-        ? workspacesResponse.payload
-        : (workspacesResponse.payload as { workspaces: Workspace[] }).workspaces || []
+      setContexts(fetchedContexts)
+      const workspacesData = workspacesResponse.payload || []
       setWorkspaces(workspacesData)
       if (workspacesData.length > 0 && !selectedWorkspaceId) {
         setSelectedWorkspaceId(workspacesData[0].id)
       }
-
       setError(null)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch data'
@@ -53,21 +48,17 @@ export default function ContextsPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [showToast])
+  }, [showToast, selectedWorkspaceId])
 
-  // Fetch initial data
   useEffect(() => {
     fetchData()
   }, [fetchData])
 
-  // Setup WebSocket subscriptions
   useEffect(() => {
     if (!socketService.isConnected()) return
 
-    // Subscribe to context events
     socketService.emit('subscribe', { topic: 'context' })
 
-    // Handle context events
     const handleContextCreated = (data: { context: Context }) => {
       setContexts(prev => [...prev, data.context])
     }
@@ -82,38 +73,42 @@ export default function ContextsPage() {
       setContexts(prev => prev.filter(ctx => ctx.id !== data.contextId))
     }
 
-    // Register event handlers
     socketService.on('context:created', handleContextCreated)
     socketService.on('context:updated', handleContextUpdated)
     socketService.on('context:deleted', handleContextDeleted)
+    socketService.on('context:url:changed', handleContextUpdated)
 
-    // Cleanup
     return () => {
       socketService.emit('unsubscribe', { topic: 'context' })
       socketService.off('context:created', handleContextCreated)
       socketService.off('context:updated', handleContextUpdated)
       socketService.off('context:deleted', handleContextDeleted)
+      socketService.off('context:url:changed', handleContextUpdated)
     }
   }, [])
 
   const handleCreateContext = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newContextUrl.trim() || !selectedWorkspaceId) return
+    if (!newContextUrl.trim() || !selectedWorkspaceId || !newContextId.trim()) {
+      showToast({
+        title: 'Missing Fields',
+        description: 'Context ID, Context URL and Workspace are required.',
+        variant: 'destructive'
+      })
+      return
+    }
 
     setIsCreating(true)
     try {
-      const response = await api.post<ApiResponse<{ context: Context }>>(API_ROUTES.contexts, {
+      const newContext = await createContext({
+        id: newContextId,
         url: newContextUrl,
-        description: newContextDescription,
+        description: newContextDescription || undefined,
         workspaceId: selectedWorkspaceId,
         baseUrl: newContextBaseUrl || undefined
       })
-
-      // Update local state with the new context
-      if (response.payload?.context) {
-        setContexts(prev => [...prev, response.payload.context])
-      }
-
+      setContexts(prev => [...prev, newContext])
+      setNewContextId("")
       setNewContextUrl("")
       setNewContextDescription("")
       setNewContextBaseUrl("")
@@ -140,8 +135,7 @@ export default function ContextsPage() {
     }
 
     try {
-      await api.delete(`${API_ROUTES.contexts}/${contextId}`)
-      // Remove the context from local state
+      await deleteContext(contextId)
       setContexts(prev => prev.filter(ctx => ctx.id !== contextId))
       showToast({
         title: 'Success',
@@ -158,16 +152,8 @@ export default function ContextsPage() {
   }
 
   const handleOpenContext = (contextId: string) => {
-    // Placeholder for opening/navigating to a specific context
-    // For now, we can navigate to a path like /contexts/contextId or log to console
-    console.log("Attempting to open context:", contextId);
-    showToast({
-      title: 'Info',
-      description: `Open context functionality for ${contextId} is not yet implemented.`,
-      variant: 'default' // Or a more appropriate variant like 'info' if available/added
-    });
-    // navigate(`/contexts/${contextId}`); // Example navigation
-  };
+    navigate(`/contexts/${contextId}`)
+  }
 
   return (
     <div className="container mx-auto p-4">
@@ -202,6 +188,20 @@ export default function ContextsPage() {
                       ))}
                     </select>
                   </div>
+                  <div>
+                    <label htmlFor="newContextId" className="block text-sm font-medium text-gray-700 mb-1">
+                      Context ID
+                    </label>
+                    <Input
+                      id="newContextId"
+                      value={newContextId}
+                      onChange={(e) => setNewContextId(e.target.value)}
+                      placeholder="e.g., my-new-context"
+                      disabled={isCreating}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   <div>
                     <label htmlFor="url" className="block text-sm font-medium text-gray-700 mb-1">
                       Context URL
@@ -245,7 +245,7 @@ export default function ContextsPage() {
                 </div>
                 <Button
                   type="submit"
-                  disabled={isCreating || !newContextUrl.trim() || !selectedWorkspaceId}
+                  disabled={isCreating || !newContextUrl.trim() || !selectedWorkspaceId || !newContextId.trim()}
                   className="mt-2"
                 >
                   <Plus className="mr-2 h-4 w-4" />
@@ -256,7 +256,7 @@ export default function ContextsPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="mt-6">
           <CardHeader>
             <CardTitle>Your Contexts</CardTitle>
             <CardDescription>Manage your contexts</CardDescription>
@@ -280,8 +280,9 @@ export default function ContextsPage() {
                   <table className="w-full">
                     <thead>
                       <tr className="bg-muted/50">
-                        <th className="text-left p-3 font-medium">URL</th>
-                        <th className="text-left p-3 font-medium">Workspace</th>
+                        <th className="text-left p-3 font-medium">ID</th>
+                        <th className="text-left p-3 font-medium">Context URL</th>
+                        <th className="text-left p-3 font-medium">Base URL</th>
                         <th className="text-left p-3 font-medium">Created</th>
                         <th className="text-left p-3 font-medium">Updated</th>
                         <th className="text-right p-3 font-medium">Actions</th>
@@ -289,17 +290,14 @@ export default function ContextsPage() {
                     </thead>
                     <tbody>
                       {contexts.map((context) => {
-                        // Find workspace name from the workspaces state array
-                        const workspaceObject = workspaces.find(ws => ws.id === context.workspace);
-                        const workspaceNameDisplay = workspaceObject ? workspaceObject.name : context.workspace; // Fallback to ID if not found
-
                         const createdAtDisplay = context.createdAt ? new Date(context.createdAt).toLocaleDateString() : '-';
                         const updatedAtDisplay = context.updatedAt ? new Date(context.updatedAt).toLocaleDateString() : '-';
 
                         return (
                           <tr key={context.id} className="border-t">
+                            <td className="p-3 font-mono text-sm">{context.id}</td>
                             <td className="p-3 font-mono text-sm">{context.url}</td>
-                            <td className="p-3">{workspaceNameDisplay}</td>
+                            <td className="p-3 font-mono text-sm">{context.baseUrl || '-'}</td>
                             <td className="p-3">{createdAtDisplay}</td>
                             <td className="p-3">{updatedAtDisplay}</td>
                             <td className="p-3 text-right space-x-2">
