@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -39,6 +39,7 @@ export default function ApiTokensPage() {
   const [newTokenValue, setNewTokenValue] = useState("")
   const [copiedToken, setCopiedToken] = useState(false)
   const { showToast } = useToast()
+  const tokenDisplayRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     fetchTokens()
@@ -85,6 +86,19 @@ export default function ApiTokensPage() {
 
       if (response.payload && response.payload.token) {
         setNewTokenValue(response.payload.token);
+        // Focus and select the token after it's generated
+        setTimeout(() => {
+          if (tokenDisplayRef.current) {
+            tokenDisplayRef.current.focus();
+            const range = document.createRange();
+            range.selectNodeContents(tokenDisplayRef.current);
+            const selection = window.getSelection();
+            if (selection) {
+              selection.removeAllRanges();
+              selection.addRange(range);
+            }
+          }
+        }, 100);
       }
 
       showToast({
@@ -198,7 +212,11 @@ export default function ApiTokensPage() {
                 <p className="text-sm text-muted-foreground mb-2">
                   Make sure to copy your API token now. You won't be able to see it again!
                 </p>
-                <div className="p-2 bg-background border rounded font-mono text-sm break-all">
+                <div
+                  ref={tokenDisplayRef}
+                  tabIndex={0}
+                  className="p-2 bg-background border rounded font-mono text-sm break-all outline-none focus:ring-2 focus:ring-ring"
+                >
                   {newTokenValue}
                 </div>
               </div>

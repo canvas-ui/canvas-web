@@ -62,7 +62,7 @@ export default function ContextDetailPage() {
     setIsLoadingDocuments(true);
     try {
       const docs = await getContextDocuments(contextId);
-      setDocuments(docs);
+      setDocuments(Array.isArray(docs) ? docs : []);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch documents';
       showToast({
@@ -70,6 +70,7 @@ export default function ContextDetailPage() {
         description: message,
         variant: 'destructive'
       });
+      setDocuments([]); // Reset to empty array on error
     }
     setIsLoadingDocuments(false);
   }, [contextId, showToast]);
@@ -239,11 +240,42 @@ export default function ContextDetailPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {documents.map((doc, index) => (
-              <div key={index} className="p-4 border rounded-md bg-background">
-                <pre className="whitespace-pre-wrap break-words font-mono text-sm">
-                  {JSON.stringify(doc, null, 2)}
-                </pre>
+            {documents.map((doc) => (
+              <div key={doc.id} className="p-4 border rounded-md bg-background">
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <h3 className="font-semibold">{doc.data.title || 'Untitled Document'}</h3>
+                    <p className="text-sm text-muted-foreground">{doc.schema}</p>
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {new Date(doc.createdAt).toLocaleString()}
+                  </div>
+                </div>
+                {doc.data.url && (
+                  <a
+                    href={doc.data.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-primary hover:underline break-all"
+                  >
+                    {doc.data.url}
+                  </a>
+                )}
+                {doc.data.favicon && (
+                  <img
+                    src={doc.data.favicon}
+                    alt="Favicon"
+                    className="w-4 h-4 inline-block ml-2"
+                  />
+                )}
+                <div className="mt-2 text-xs text-muted-foreground">
+                  <span>Version {doc.versionNumber}</span>
+                  {doc.checksumArray.length > 0 && (
+                    <span className="ml-2">
+                      Checksums: {doc.checksumArray.length}
+                    </span>
+                  )}
+                </div>
               </div>
             ))}
           </div>

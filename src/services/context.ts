@@ -18,6 +18,48 @@ type CreateContextPayload = Pick<Context, 'id' | 'url'> &
                             Partial<Pick<Context, 'description' | 'baseUrl'>> &
                             { workspaceId: string };
 
+interface DocumentResponse {
+  data: Array<{
+    id: number;
+    schema: string;
+    schemaVersion: string;
+    data: Record<string, any>;
+    metadata: {
+      contentType: string;
+      contentEncoding: string;
+      dataPaths: string[];
+    };
+    indexOptions: {
+      checksumAlgorithms: string[];
+      primaryChecksumAlgorithm: string;
+      checksumFields: string[];
+      ftsSearchFields: string[];
+      vectorEmbeddingFields: string[];
+      embeddingOptions: {
+        embeddingModel: string;
+        embeddingDimensions: number;
+        embeddingProvider: string;
+        embeddingProviderOptions: Record<string, any>;
+        chunking: {
+          type: string;
+          chunkSize: number;
+          chunkOverlap: number;
+        };
+      };
+    };
+    createdAt: string;
+    updatedAt: string;
+    checksumArray: string[];
+    embeddingsArray: any[];
+    parentId: string | null;
+    versions: any[];
+    versionNumber: number;
+    latestVersion: number;
+  }>;
+  count: number;
+  error: string | null;
+}
+
 export async function listContexts(): Promise<Context[]> {
   try {
     const response = await api.get<ServiceApiResponse<Context[]>>(API_ROUTES.contexts);
@@ -79,10 +121,10 @@ export async function deleteContext(id: string): Promise<void> {
   }
 }
 
-export async function getContextDocuments(id: string): Promise<any> {
+export async function getContextDocuments(id: string): Promise<DocumentResponse['data']> {
   try {
-    const response = await api.get<ServiceApiResponse<any>>(`${API_ROUTES.contexts}/${id}/documents`);
-    return response.payload;
+    const response = await api.get<ServiceApiResponse<DocumentResponse>>(`${API_ROUTES.contexts}/${id}/documents`);
+    return response.payload?.data || [];
   } catch (error) {
     console.error(`Failed to get context documents for ${id}:`, error);
     throw error;
