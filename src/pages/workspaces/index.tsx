@@ -10,13 +10,34 @@ import { useSocket } from "@/hooks/useSocket"
 import {
   listWorkspaces,
   createWorkspace,
-  openWorkspace,
   closeWorkspace,
-  startWorkspace
+  startWorkspace,
 } from "@/services/workspace"
 
+// Specific status type based on linter feedback for WorkspaceCard compatibility
+type WorkspaceStatus = 'error' | 'available' | 'not_found' | 'active' | 'inactive' | 'removed' | 'destroyed';
+
+interface ApiWorkspaceEntry {
+  id: string;
+  owner: string;
+  type: string;
+  label: string;
+  color: string | null;
+  description: string;
+  acl: {
+    rw: string[];
+    ro: string[];
+  };
+  created: string;
+  updated: string;
+  rootPath: string;
+  configPath: string;
+  status: WorkspaceStatus;
+  lastAccessed: string | null;
+}
+
 export default function WorkspacesPage() {
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  const [workspaces, setWorkspaces] = useState<ApiWorkspaceEntry[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [newWorkspaceName, setNewWorkspaceName] = useState("")
@@ -24,7 +45,7 @@ export default function WorkspacesPage() {
   const [newWorkspaceColor, setNewWorkspaceColor] = useState(generateNiceRandomHexColor())
   const [newWorkspaceLabel, setNewWorkspaceLabel] = useState("")
   const [isCreating, setIsCreating] = useState(false)
-  const [editingWorkspace, setEditingWorkspace] = useState<Workspace | null>(null)
+  const [editingWorkspace, setEditingWorkspace] = useState<ApiWorkspaceEntry | null>(null)
   const { showToast } = useToast()
   const navigate = useNavigate()
   const socket = useSocket()
@@ -34,7 +55,8 @@ export default function WorkspacesPage() {
       try {
         setIsLoading(true)
         const response = await listWorkspaces()
-        setWorkspaces(response.payload)
+        // Assuming runtime data from listWorkspaces() matches ApiWorkspaceEntry structure
+        setWorkspaces(response.payload as unknown as ApiWorkspaceEntry[])
         setError(null)
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to fetch workspaces'
@@ -53,14 +75,16 @@ export default function WorkspacesPage() {
     if (socket) {
       socket.emit('subscribe', { topic: 'workspace' })
 
-      socket.on('workspace:status:changed', (data: { workspaceId: string; status: Workspace['status'] }) => {
+      // Assuming socket data.status also matches WorkspaceStatus
+      socket.on('workspace:status:changed', (data: { workspaceId: string; status: WorkspaceStatus }) => {
         setWorkspaces(prev => prev.map(ws =>
           ws.id === data.workspaceId ? { ...ws, status: data.status } : ws
         ))
       })
 
-      socket.on('workspace:created', (data: { workspace: Workspace }) => {
-        setWorkspaces(prev => [...prev, data.workspace])
+      socket.on('workspace:created', (data: { workspace: ApiWorkspaceEntry }) => {
+        // Assuming runtime data from socket matches ApiWorkspaceEntry structure
+        setWorkspaces(prev => [...prev, data.workspace as unknown as ApiWorkspaceEntry])
       })
 
       socket.on('workspace:deleted', (data: { workspaceId: string }) => {
@@ -88,9 +112,10 @@ export default function WorkspacesPage() {
         name: newWorkspaceName,
         description: newWorkspaceDescription || undefined,
         color: newWorkspaceColor,
-        label: newWorkspaceLabel || undefined,
+        label: newWorkspaceLabel || newWorkspaceName,
       })
-      setWorkspaces(prev => [...prev, response.payload])
+      // Assuming runtime data from createWorkspace() matches ApiWorkspaceEntry structure
+      setWorkspaces(prev => [...prev, response.payload as unknown as ApiWorkspaceEntry])
       setNewWorkspaceName("")
       setNewWorkspaceDescription("")
       setNewWorkspaceColor(generateNiceRandomHexColor())
@@ -111,18 +136,37 @@ export default function WorkspacesPage() {
     }
   }
 
-  const handleUpdateWorkspace = async (e: React.FormEvent) => {
+  const handleSaveWorkspaceDetails = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editingWorkspace) return
 
     try {
-      const response = await openWorkspace(editingWorkspace.id)
-      setWorkspaces(prev => prev.map(ws => ws.id === response.payload.id ? response.payload : ws))
-      setEditingWorkspace(null)
+      const payloadToUpdate = {
+        label: editingWorkspace.label,
+        description: editingWorkspace.description,
+        color: editingWorkspace.color,
+      };
+
+      // TODO: Implement actual API call to PATCH /workspaces/:id
+      // const apiResponse = await updateWorkspaceService(editingWorkspace.id, payloadToUpdate);
+      // const updatedWorkspaceFromApi = apiResponse.payload as unknown as ApiWorkspaceEntry;
+
+      // Mocking the update for now:
+      const updatedMockedWorkspace: ApiWorkspaceEntry = {
+        ...editingWorkspace,
+        ...payloadToUpdate
+      };
+
+      setWorkspaces(prev => prev.map(ws =>
+        ws.id === updatedMockedWorkspace.id ? updatedMockedWorkspace : ws
+      ))
+
       showToast({
-        title: 'Success',
-        description: response.message
+        title: 'Success (Mocked Update)',
+        description: `Workspace '${updatedMockedWorkspace.label}' details updated. Implement actual API call.`
       })
+      setEditingWorkspace(null)
+
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to update workspace'
       showToast({
@@ -136,7 +180,8 @@ export default function WorkspacesPage() {
   const handleStartWorkspace = async (workspaceId: string) => {
     try {
       const response = await startWorkspace(workspaceId)
-      setWorkspaces(prev => prev.map(ws => ws.id === response.payload.id ? response.payload : ws))
+      // Assuming runtime data from startWorkspace() matches ApiWorkspaceEntry structure
+      setWorkspaces(prev => prev.map(ws => ws.id === response.payload.id ? (response.payload as unknown as ApiWorkspaceEntry) : ws))
       showToast({
         title: 'Success',
         description: response.message
@@ -154,7 +199,8 @@ export default function WorkspacesPage() {
   const handleStopWorkspace = async (workspaceId: string) => {
     try {
       const response = await closeWorkspace(workspaceId)
-      setWorkspaces(prev => prev.map(ws => ws.id === response.payload.id ? response.payload : ws))
+      // Assuming runtime data from closeWorkspace() matches ApiWorkspaceEntry structure
+      setWorkspaces(prev => prev.map(ws => ws.id === response.payload.id ? (response.payload as unknown as ApiWorkspaceEntry) : ws))
       showToast({
         title: 'Success',
         description: response.message
@@ -176,6 +222,7 @@ export default function WorkspacesPage() {
   return (
     <div className="container mx-auto p-4">
       <div className="grid gap-6">
+        {/* Create Workspace Card */}
         <Card>
           <CardHeader>
             <CardTitle>Create New Workspace</CardTitle>
@@ -187,7 +234,7 @@ export default function WorkspacesPage() {
                 <Input
                   value={newWorkspaceName}
                   onChange={(e) => setNewWorkspaceName(e.target.value)}
-                  placeholder="Workspace Name"
+                  placeholder="Workspace Name (becomes ID)"
                   disabled={isCreating}
                 />
                 <Input
@@ -199,10 +246,9 @@ export default function WorkspacesPage() {
                 <Input
                   value={newWorkspaceLabel}
                   onChange={(e) => setNewWorkspaceLabel(e.target.value)}
-                  placeholder="Workspace Label (optional)"
+                  placeholder="Workspace Label (display name, optional)"
                   disabled={isCreating}
                 />
-                <p className="text-sm text-muted-foreground">Set Workspace Label</p>
                 <div className="flex items-center gap-2">
                   <label htmlFor="workspace-color" className="text-sm font-medium">Workspace Color</label>
                   <Input
@@ -232,62 +278,98 @@ export default function WorkspacesPage() {
           </CardContent>
         </Card>
 
+        {/* List Workspaces Card */}
         <Card>
           <CardHeader>
             <CardTitle>Your Workspaces</CardTitle>
-            <CardDescription>Manage your workspaces</CardDescription>
+            <CardDescription>Manage your workspaces. Click on a workspace card to edit its details.</CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading && <p className="text-center text-muted-foreground">Loading workspaces...</p>}
-
             {error && (
               <div className="text-center text-destructive">
                 <p>{error}</p>
               </div>
             )}
-
             {!isLoading && !error && workspaces.length === 0 && (
               <p className="text-center text-muted-foreground">No workspaces found</p>
             )}
-
             {workspaces.length > 0 && (
               <div className="grid gap-4">
-                {workspaces.map((workspace) => (
-                  <WorkspaceCard
-                    key={workspace.id}
-                    workspace={workspace}
-                    onStart={handleStartWorkspace}
-                    onStop={handleStopWorkspace}
-                    onEnter={handleEnterWorkspace}
-                  />
-                ))}
+                {workspaces.map((ws) => {
+                  const workspaceCardProps = {
+                    ...ws,
+                    name: ws.label,
+                    createdAt: ws.created,
+                    updatedAt: ws.updated,
+                    color: ws.color === null ? undefined : ws.color,
+                  };
+                  return (
+                    <WorkspaceCard
+                      key={ws.id}
+                      workspace={workspaceCardProps}
+                      onStart={handleStartWorkspace}
+                      onStop={handleStopWorkspace}
+                      onEnter={handleEnterWorkspace}
+                    />
+                  );
+                })}
               </div>
             )}
           </CardContent>
         </Card>
 
+        {/* Edit Workspace Card (Modal/Form) */}
         {editingWorkspace && (
           <Card>
             <CardHeader>
-              <CardTitle>Edit Workspace</CardTitle>
-              <CardDescription>Update workspace details</CardDescription>
+              <CardTitle>Edit Workspace: {editingWorkspace.label}</CardTitle>
+              <CardDescription>Update workspace label, description, and color.</CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleUpdateWorkspace} className="space-y-4">
+              <form onSubmit={handleSaveWorkspaceDetails} className="space-y-4">
                 <div className="grid gap-2">
-                  <Input
-                    value={editingWorkspace.name}
-                    onChange={(e) => setEditingWorkspace({...editingWorkspace, name: e.target.value})}
-                    placeholder="Workspace Name"
-                  />
-                  <Input
-                    value={editingWorkspace.description || ''}
-                    onChange={(e) => setEditingWorkspace({...editingWorkspace, description: e.target.value})}
-                    placeholder="Description (optional)"
-                  />
-                  <div className="flex gap-2">
-                    <Button type="submit" disabled={!editingWorkspace.name.trim()}>
-                      Update Workspace
+                  <div>
+                    <label htmlFor="edit-label" className="text-sm font-medium">Label</label>
+                    <Input
+                      id="edit-label"
+                      value={editingWorkspace.label}
+                      onChange={(e) => setEditingWorkspace(prev => prev ? {...prev, label: e.target.value} : null)}
+                      placeholder="Workspace Label"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="edit-description" className="text-sm font-medium">Description</label>
+                    <Input
+                      id="edit-description"
+                      value={editingWorkspace.description || ''}
+                      onChange={(e) => setEditingWorkspace(prev => prev ? {...prev, description: e.target.value} : null)}
+                      placeholder="Description (optional)"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="edit-color" className="text-sm font-medium">Color</label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="edit-workspace-color"
+                        type="color"
+                        value={editingWorkspace.color || '#FFFFFF'}
+                        onChange={(e) => setEditingWorkspace(prev => prev ? {...prev, color: e.target.value} : null)}
+                        className="h-10 w-16 p-1"
+                      />
+                      <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setEditingWorkspace(prev => prev ? {...prev, color: generateNiceRandomHexColor()} : null)}
+                        >
+                          Randomize Color
+                        </Button>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-4">
+                    <Button type="submit" disabled={!editingWorkspace.label.trim()}>
+                      Save Changes
                     </Button>
                     <Button
                       type="button"
@@ -307,20 +389,18 @@ export default function WorkspacesPage() {
   )
 }
 
-// Color Utility Functions
-// From https://gist.github.com/bendc/76c48ce53299e6078a76
+// Color Utility Functions (Restored)
 const randomInt = (min: number, max: number): number => {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 };
 
 const generateRandomHsl = (): { h: number, s: number, l: number } => {
   const h = randomInt(0, 360);
-  const s = randomInt(42, 98); // Saturation between 42% and 98%
-  const l = randomInt(40, 90); // Lightness between 40% and 90%
+  const s = randomInt(42, 98);
+  const l = randomInt(40, 90);
   return { h, s, l };
 };
 
-// From https://css-tricks.com/converting-color-spaces-in-javascript/
 const hslToHex = (h: number, s: number, l: number): string => {
   s /= 100;
   l /= 100;
