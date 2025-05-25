@@ -1,6 +1,6 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom"
 import { useState, useEffect, useCallback } from "react"
-import { LogOut, Home, Briefcase, Network, KeyRound, Infinity, ChevronRight } from "lucide-react"
+import { LogOut, Briefcase, Network, KeyRound, Infinity, ChevronRight } from "lucide-react"
 import { api } from "@/lib/api"
 import { useToast } from "@/components/ui/toast-container"
 import { getCurrentUserFromToken } from "@/services/auth"
