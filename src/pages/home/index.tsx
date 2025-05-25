@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { api } from '@/lib/api';
 import { API_ROUTES } from '@/config/api';
 
@@ -65,73 +64,66 @@ export default function HomePage() {
   ];
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="grid gap-6">
-        <Card className="w-full shadow-xl">
-          <CardHeader className="text-center">
-            <CardTitle className="text-3xl font-bold text-black-600">
-              {successMessage ? successMessage : "Welcome to your Universe ..indexed!"}
-            </CardTitle>
-            {!successMessage && <CardDescription>&#8734;</CardDescription>}
-          </CardHeader>
-          <CardContent className="space-y-8">
-            {loading && <p className="text-center text-muted-foreground">Loading user information...</p>}
-            {error && <p className="text-center text-destructive">Error: {error}</p>}
+    <div className="space-y-6">
+      {/* Page Header */}
+      <div className="border-b pb-4 text-center">
+        <h1 className="text-3xl font-bold tracking-tight">
+          {successMessage ? successMessage : "Welcome to your Universe ..indexed!"}
+        </h1>
+        {!successMessage && <p className="text-muted-foreground mt-2">&#8734;</p>}
+      </div>
 
-            {user && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-xl">User Information</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {/* This part should now correctly iterate over the payload (user object) */}
-                  {Object.entries(user).map(([key, value]) => {
-                    if (typeof value === 'string' || typeof value === 'number') {
-                      return (
-                        <p key={key}>
-                          <strong className="capitalize">{key.replace(/([A-Z])/g, ' $1')}:</strong> {value.toString()}
-                        </p>
-                      );
-                    }
-                    return null;
-                  })}
-                </CardContent>
-              </Card>
-            )}
+      {loading && <p className="text-center text-muted-foreground">Loading user information...</p>}
+      {error && <p className="text-center text-destructive">Error: {error}</p>}
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-xl">Integrate Canvas into your workflows:</CardTitle>
-                <CardDescription>
-                  Enhance your productivity by connecting Canvas with your favorite tools.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-4">
-                  {integrationLinks.map((link) => (
-                    <li key={link.name} className="border p-4 rounded-md hover:shadow-md transition-shadow">
-                      <a
-                        href={link.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-semibold text-primary hover:underline text-lg"
-                      >
-                        {link.name}
-                      </a>
-                      <p className="text-sm text-muted-foreground mt-1">{link.description}</p>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
+      {/* User Information Section */}
+      {user && (
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold">User Information</h2>
+          <div className="space-y-2">
+            {/* This part should now correctly iterate over the payload (user object) */}
+            {Object.entries(user).map(([key, value]) => {
+              if (typeof value === 'string' || typeof value === 'number') {
+                return (
+                  <p key={key}>
+                    <strong className="capitalize">{key.replace(/([A-Z])/g, ' $1')}:</strong> {value.toString()}
+                  </p>
+                );
+              }
+              return null;
+            })}
+          </div>
+        </div>
+      )}
 
-            <div className="text-center">
-              <Link to="/workspaces" className="text-primary hover:underline">
-                Go to your Workspaces &rarr;
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Integrations Section */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold">Integrate Canvas into your workflows</h2>
+        <p className="text-muted-foreground">
+          Enhance your productivity by connecting Canvas with your favorite tools.
+        </p>
+        <ul className="space-y-4">
+          {integrationLinks.map((link) => (
+            <li key={link.name} className="border p-4 rounded-md hover:shadow-md transition-shadow">
+              <a
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-primary hover:underline text-lg"
+              >
+                {link.name}
+              </a>
+              <p className="text-sm text-muted-foreground mt-1">{link.description}</p>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Navigation Link */}
+      <div className="text-center pt-4">
+        <Link to="/workspaces" className="text-primary hover:underline">
+          Go to your Workspaces &rarr;
+        </Link>
       </div>
     </div>
   );
