@@ -1,5 +1,4 @@
 import { useEffect, useState, useRef } from "react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { API_ROUTES } from "@/config/api"
@@ -160,131 +159,127 @@ export default function ApiTokensPage() {
   }
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="grid gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Generate New API Token</CardTitle>
-            <CardDescription>Create a new API token for programmatic access</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex gap-2">
-                <Input
-                  value={newTokenName}
-                  onChange={(e) => setNewTokenName(e.target.value)}
-                  placeholder="Token Name (e.g., 'CLI Access', 'Automation')"
-                  disabled={isCreating}
-                />
-                <Button
-                  type="button"
-                  disabled={isCreating || !newTokenName.trim()}
-                  onClick={handleGenerateToken}
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  {isCreating ? 'Generating...' : 'Generate'}
-                </Button>
-              </div>
+    <div className="space-y-6">
+      {/* Page Header */}
+      <div className="border-b pb-4">
+        <h1 className="text-3xl font-bold tracking-tight">API Tokens</h1>
+        <p className="text-muted-foreground mt-2">Create and manage API tokens for programmatic access</p>
+      </div>
+
+      {/* Generate New Token Section */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold">Generate New API Token</h2>
+        <div className="flex gap-2">
+          <Input
+            value={newTokenName}
+            onChange={(e) => setNewTokenName(e.target.value)}
+            placeholder="Token Name (e.g., 'CLI Access', 'Automation')"
+            disabled={isCreating}
+            className="flex-1"
+          />
+          <Button
+            type="button"
+            disabled={isCreating || !newTokenName.trim()}
+            onClick={handleGenerateToken}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            {isCreating ? 'Generating...' : 'Generate'}
+          </Button>
+        </div>
+
+        {newTokenValue && (
+          <div className="p-4 border rounded-md bg-muted/50">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="font-semibold">Your New API Token</h3>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => copyToClipboard(newTokenValue)}
+              >
+                {copiedToken ? (
+                  <>
+                    <Check className="mr-2 h-4 w-4" />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="mr-2 h-4 w-4" />
+                    Copy
+                  </>
+                )}
+              </Button>
             </div>
+            <p className="text-sm text-muted-foreground mb-2">
+              Make sure to copy your API token now. You won't be able to see it again!
+            </p>
+            <div
+              ref={tokenDisplayRef}
+              tabIndex={0}
+              className="p-2 bg-background border rounded font-mono text-sm break-all outline-none focus:ring-2 focus:ring-ring"
+            >
+              {newTokenValue}
+            </div>
+          </div>
+        )}
+      </div>
 
-            {newTokenValue && (
-              <div className="mt-4 p-4 border rounded-md bg-muted/50">
-                <div className="flex justify-between items-center mb-2">
-                  <h3 className="font-semibold">Your New API Token</h3>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => copyToClipboard(newTokenValue)}
-                  >
-                    {copiedToken ? (
-                      <>
-                        <Check className="mr-2 h-4 w-4" />
-                        Copied
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="mr-2 h-4 w-4" />
-                        Copy
-                      </>
-                    )}
-                  </Button>
-                </div>
-                <p className="text-sm text-muted-foreground mb-2">
-                  Make sure to copy your API token now. You won't be able to see it again!
-                </p>
-                <div
-                  ref={tokenDisplayRef}
-                  tabIndex={0}
-                  className="p-2 bg-background border rounded font-mono text-sm break-all outline-none focus:ring-2 focus:ring-ring"
-                >
-                  {newTokenValue}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      {/* Existing Tokens Section */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold">Your API Tokens</h2>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Your API Tokens</CardTitle>
-            <CardDescription>Manage your API tokens</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading && <p className="text-center text-muted-foreground">Loading API tokens...</p>}
+        {isLoading && <p className="text-center text-muted-foreground">Loading API tokens...</p>}
 
-            {error && (
-              <div className="text-center text-destructive">
-                <p>{error}</p>
-              </div>
-            )}
+        {error && (
+          <div className="text-center text-destructive">
+            <p>{error}</p>
+          </div>
+        )}
 
-            {!isLoading && !error && tokens.length === 0 && (
-              <p className="text-center text-muted-foreground">No API tokens found</p>
-            )}
+        {!isLoading && !error && tokens.length === 0 && (
+          <p className="text-center text-muted-foreground">No API tokens found</p>
+        )}
 
-            {tokens.length > 0 && (
-              <div className="border rounded-md">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-muted/50">
-                        <th className="text-left p-3 font-medium">Name</th>
-                        <th className="text-left p-3 font-medium">Created</th>
-                        <th className="text-left p-3 font-medium">Last Used</th>
-                        <th className="text-left p-3 font-medium">Expires</th>
-                        <th className="text-right p-3 font-medium">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tokens.map((token) => (
-                        <tr key={token.id} className="border-t">
-                          <td className="p-3">{token.name}</td>
-                          <td className="p-3">{new Date(token.createdAt).toLocaleDateString()}</td>
-                          <td className="p-3">
-                            {token.lastUsedAt ? new Date(token.lastUsedAt).toLocaleDateString() : 'Never'}
-                          </td>
-                          <td className="p-3">
-                            {token.expiresAt ? new Date(token.expiresAt).toLocaleDateString() : 'Never'}
-                          </td>
-                          <td className="p-3 text-right">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleRevokeToken(token.id)}
-                              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                            >
-                              <Trash className="h-4 w-4" />
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        {tokens.length > 0 && (
+          <div className="border rounded-md">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-muted/50">
+                    <th className="text-left p-3 font-medium">Name</th>
+                    <th className="text-left p-3 font-medium">Created</th>
+                    <th className="text-left p-3 font-medium">Last Used</th>
+                    <th className="text-left p-3 font-medium">Expires</th>
+                    <th className="text-right p-3 font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tokens.map((token) => (
+                    <tr key={token.id} className="border-t">
+                      <td className="p-3 font-medium">{token.name}</td>
+                      <td className="p-3">{new Date(token.createdAt).toLocaleDateString()}</td>
+                      <td className="p-3">
+                        {token.lastUsedAt ? new Date(token.lastUsedAt).toLocaleDateString() : 'Never'}
+                      </td>
+                      <td className="p-3">
+                        {token.expiresAt ? new Date(token.expiresAt).toLocaleDateString() : 'Never'}
+                      </td>
+                      <td className="p-3 text-right">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRevokeToken(token.id)}
+                          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          <Trash className="h-4 w-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

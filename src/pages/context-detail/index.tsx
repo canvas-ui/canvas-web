@@ -279,19 +279,19 @@ export default function ContextDetailPage() {
   };
 
   if (isLoading) {
-    return <div className="container mx-auto p-4 text-center">Loading context details...</div>;
+    return <div className="text-center">Loading context details...</div>;
   }
 
   if (error && !context) {
-    return <div className="container mx-auto p-4 text-center text-destructive">Error: {error}</div>;
+    return <div className="text-center text-destructive">Error: {error}</div>;
   }
 
   if (!context) {
-    return <div className="container mx-auto p-4 text-center">Context not found or has been deleted.</div>;
+    return <div className="text-center">Context not found or has been deleted.</div>;
   }
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
+    <div className="space-y-6">
       <div className="flex items-center gap-2 p-2 border rounded-md shadow-sm bg-background">
         <Input
           id="contextUrlInput"
@@ -312,26 +312,83 @@ export default function ContextDetailPage() {
         </Button>
       </div>
 
-      <div className="p-4 border rounded-md bg-card text-card-foreground mt-4 space-y-2 shadow-sm">
-        <h2 className="text-xl font-semibold mb-3">Context Information</h2>
-        <p><strong>ID:</strong> {context.id}</p>
-        <p><strong>User ID:</strong> {context.userId}</p>
-        <p><strong>Current URL:</strong> {context.url}</p>
-        <p><strong>Workspace ID:</strong> {context.workspaceId}</p>
-        <p><strong>Base URL:</strong> {context.baseUrl || 'N/A'}</p>
-        <p><strong>Path:</strong> {context.path || 'N/A'}</p>
-        <p><strong>Path Array:</strong> {context.pathArray.join(', ') || 'N/A'}</p>
-        <p><strong>Locked:</strong> {context.locked ? 'Yes' : 'No'}</p>
-        <p><strong>ACL:</strong> <pre>{JSON.stringify(context.acl, null, 2)}</pre></p>
-        <p><strong>Pending URL:</strong> {context.pendingUrl || 'N/A'}</p>
-        <p><strong>Created At:</strong> {new Date(context.createdAt).toLocaleString()}</p>
-        <p><strong>Updated At:</strong> {new Date(context.updatedAt).toLocaleString()}</p>
-        {context.description && <p><strong>Description:</strong> {context.description}</p>}
-        {/* Consider displaying other array fields like serverContextArray if useful */}
+      {/* Page Header */}
+      <div className="border-b pb-4">
+        <h1 className="text-3xl font-bold tracking-tight">Context: {context.id}</h1>
+        <p className="text-muted-foreground mt-2">{context.description || 'No description available'}</p>
       </div>
 
-      <div className="mt-6 p-4 border rounded-md min-h-[300px] bg-muted/40">
-        <h2 className="text-xl font-semibold mb-4">Context Documents</h2>
+      {/* Context Details */}
+      <div className="grid gap-6 md:grid-cols-2">
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold">Basic Information</h2>
+          <div className="space-y-3">
+            <div>
+              <span className="font-medium">ID:</span>
+              <span className="ml-2 font-mono text-sm">{context.id}</span>
+            </div>
+            <div>
+              <span className="font-medium">User ID:</span>
+              <span className="ml-2 font-mono text-sm">{context.userId}</span>
+            </div>
+            <div>
+              <span className="font-medium">Workspace ID:</span>
+              <span className="ml-2 font-mono text-sm">{context.workspaceId}</span>
+            </div>
+            <div>
+              <span className="font-medium">Current URL:</span>
+              <span className="ml-2 font-mono text-sm break-all">{context.url}</span>
+            </div>
+            <div>
+              <span className="font-medium">Base URL:</span>
+              <span className="ml-2 font-mono text-sm">{context.baseUrl || 'N/A'}</span>
+            </div>
+            <div>
+              <span className="font-medium">Path:</span>
+              <span className="ml-2 font-mono text-sm">{context.path || 'N/A'}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold">Status & Metadata</h2>
+          <div className="space-y-3">
+            <div>
+              <span className="font-medium">Locked:</span>
+              <span className="ml-2">{context.locked ? 'Yes' : 'No'}</span>
+            </div>
+            <div>
+              <span className="font-medium">Pending URL:</span>
+              <span className="ml-2 font-mono text-sm">{context.pendingUrl || 'N/A'}</span>
+            </div>
+            <div>
+              <span className="font-medium">Path Array:</span>
+              <span className="ml-2 font-mono text-sm">{context.pathArray.join(', ') || 'N/A'}</span>
+            </div>
+            <div>
+              <span className="font-medium">Created:</span>
+              <span className="ml-2">{new Date(context.createdAt).toLocaleString()}</span>
+            </div>
+            <div>
+              <span className="font-medium">Updated:</span>
+              <span className="ml-2">{new Date(context.updatedAt).toLocaleString()}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Access Control */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold">Access Control List</h2>
+        <div className="bg-muted/50 p-4 rounded-md">
+          <pre className="text-sm overflow-auto">{JSON.stringify(context.acl, null, 2)}</pre>
+        </div>
+      </div>
+
+      {/* Documents Section */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold">Context Documents</h2>
+        <div className="min-h-[300px]">
         {isLoadingDocuments ? (
           <div className="text-center text-muted-foreground">Loading documents...</div>
         ) : documents.length === 0 ? (
@@ -381,6 +438,7 @@ export default function ContextDetailPage() {
             ))}
           </div>
         )}
+        </div>
       </div>
     </div>
   );

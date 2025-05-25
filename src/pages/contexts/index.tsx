@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from "react"
 import { useNavigate } from "react-router-dom"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/toast-container"
@@ -228,183 +227,176 @@ export default function ContextsPage() {
   }
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="grid gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Create New Context</CardTitle>
-            <CardDescription>Create a new context in a workspace</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleCreateContext} className="space-y-4">
-              <div className="grid gap-2">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <div>
-                    <label htmlFor="workspace" className="block text-sm font-medium text-gray-700 mb-1">
-                      Workspace
-                    </label>
-                    <select
-                      id="workspace"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
-                      value={selectedWorkspaceId}
-                      onChange={(e) => setSelectedWorkspaceId(e.target.value)}
-                      disabled={isCreating || workspaces.length === 0}
-                    >
-                      {workspaces.length === 0 && (
-                        <option value="">No workspaces available. Create one first.</option>
-                      )}
-                      {workspaces.map((ws) => (
-                        <option key={ws.id} value={ws.id}>
-                          {ws.label || ws.name || ws.id}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label htmlFor="newContextId" className="block text-sm font-medium text-gray-700 mb-1">
-                      Context ID
-                    </label>
-                    <Input
-                      id="newContextId"
-                      value={newContextId}
-                      onChange={(e) => setNewContextId(e.target.value)}
-                      placeholder="e.g., my-new-context"
-                      disabled={isCreating}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <div>
-                    <label htmlFor="url" className="block text-sm font-medium text-gray-700 mb-1">
-                      Context URL
-                    </label>
-                    <Input
-                      id="url"
-                      value={newContextUrl}
-                      onChange={(e) => setNewContextUrl(e.target.value)}
-                      placeholder="e.g., user@host://project/path/resource"
-                      disabled={isCreating}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <div>
-                    <label htmlFor="baseUrl" className="block text-sm font-medium text-gray-700 mb-1">
-                      Base URL (Optional)
-                    </label>
-                    <Input
-                      id="baseUrl"
-                      value={newContextBaseUrl}
-                      onChange={(e) => setNewContextBaseUrl(e.target.value)}
-                      placeholder="e.g., /project/path"
-                      disabled={isCreating}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <div>
-                    <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
-                      Description (Optional)
-                    </label>
-                    <Input
-                      id="description"
-                      value={newContextDescription}
-                      onChange={(e) => setNewContextDescription(e.target.value)}
-                      placeholder="Description"
-                      disabled={isCreating}
-                    />
-                  </div>
-                </div>
-                <Button
-                  type="submit"
-                  disabled={isCreating || !newContextUrl.trim() || !selectedWorkspaceId || !newContextId.trim()}
-                  className="mt-2"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Context
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+    <div className="space-y-6">
+      {/* Page Header */}
+      <div className="border-b pb-4">
+        <h1 className="text-3xl font-bold tracking-tight">Contexts</h1>
+        <p className="text-muted-foreground mt-2">Create and manage contexts in your workspaces</p>
+      </div>
 
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle>Your Contexts</CardTitle>
-            <CardDescription>Manage your contexts</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading && <p className="text-center text-muted-foreground">Loading contexts...</p>}
-            {error && (
-              <div className="text-center text-destructive">
-                <p>{error}</p>
-              </div>
-            )}
-            {!isLoading && !error && contexts.length === 0 && (
-              <p className="text-center text-muted-foreground">No contexts found. Create one above.</p>
-            )}
-            {contexts.length > 0 && (
-              <div className="border rounded-md">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-muted/50">
-                        <th className="text-left p-3 font-medium">ID</th>
-                        <th className="text-left p-3 font-medium">User ID</th>
-                        <th className="text-left p-3 font-medium">Context URL</th>
-                        <th className="text-left p-3 font-medium">Workspace ID</th>
-                        <th className="text-left p-3 font-medium">Base URL</th>
-                        <th className="text-left p-3 font-medium">Path</th>
-                        <th className="text-left p-3 font-medium">Locked</th>
-                        <th className="text-left p-3 font-medium">Created</th>
-                        <th className="text-left p-3 font-medium">Updated</th>
-                        <th className="text-right p-3 font-medium">Actions</th>
+      {/* Create New Context Section */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold">Create New Context</h2>
+        <form onSubmit={handleCreateContext} className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label htmlFor="workspace" className="block text-sm font-medium mb-1">
+                Workspace
+              </label>
+              <select
+                id="workspace"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+                value={selectedWorkspaceId}
+                onChange={(e) => setSelectedWorkspaceId(e.target.value)}
+                disabled={isCreating || workspaces.length === 0}
+              >
+                {workspaces.length === 0 && (
+                  <option value="">No workspaces available. Create one first.</option>
+                )}
+                {workspaces.map((ws) => (
+                  <option key={`${ws.owner}-${ws.id}`} value={ws.id}>
+                    {ws.label || ws.name || ws.id}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="newContextId" className="block text-sm font-medium mb-1">
+                Context ID
+              </label>
+              <Input
+                id="newContextId"
+                value={newContextId}
+                onChange={(e) => setNewContextId(e.target.value)}
+                placeholder="e.g., my-new-context"
+                disabled={isCreating}
+              />
+            </div>
+          </div>
+          <div>
+            <label htmlFor="url" className="block text-sm font-medium mb-1">
+              Context URL
+            </label>
+            <Input
+              id="url"
+              value={newContextUrl}
+              onChange={(e) => setNewContextUrl(e.target.value)}
+              placeholder="e.g., user@host://project/path/resource"
+              disabled={isCreating}
+            />
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label htmlFor="baseUrl" className="block text-sm font-medium mb-1">
+                Base URL (Optional)
+              </label>
+              <Input
+                id="baseUrl"
+                value={newContextBaseUrl}
+                onChange={(e) => setNewContextBaseUrl(e.target.value)}
+                placeholder="e.g., /project/path"
+                disabled={isCreating}
+              />
+            </div>
+            <div>
+              <label htmlFor="description" className="block text-sm font-medium mb-1">
+                Description (Optional)
+              </label>
+              <Input
+                id="description"
+                value={newContextDescription}
+                onChange={(e) => setNewContextDescription(e.target.value)}
+                placeholder="Description"
+                disabled={isCreating}
+              />
+            </div>
+          </div>
+          <Button
+            type="submit"
+            disabled={isCreating || !newContextUrl.trim() || !selectedWorkspaceId || !newContextId.trim()}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Create Context
+          </Button>
+        </form>
+      </div>
+
+      {/* Your Contexts Section */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold">Your Contexts</h2>
+
+        {isLoading && <p className="text-center text-muted-foreground">Loading contexts...</p>}
+
+        {error && (
+          <div className="text-center text-destructive">
+            <p>{error}</p>
+          </div>
+        )}
+
+        {!isLoading && !error && contexts.length === 0 && (
+          <p className="text-center text-muted-foreground">No contexts found. Create one above.</p>
+        )}
+
+        {contexts.length > 0 && (
+          <div className="border rounded-md">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-muted/50">
+                    <th className="text-left p-3 font-medium">ID</th>
+                    <th className="text-left p-3 font-medium">User ID</th>
+                    <th className="text-left p-3 font-medium">Context URL</th>
+                    <th className="text-left p-3 font-medium">Workspace ID</th>
+                    <th className="text-left p-3 font-medium">Base URL</th>
+                    <th className="text-left p-3 font-medium">Path</th>
+                    <th className="text-left p-3 font-medium">Locked</th>
+                    <th className="text-left p-3 font-medium">Created</th>
+                    <th className="text-left p-3 font-medium">Updated</th>
+                    <th className="text-right p-3 font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {contexts.map((context) => {
+                    const createdAtDisplay = context.createdAt ? new Date(context.createdAt).toLocaleDateString() : '-';
+                    const updatedAtDisplay = context.updatedAt ? new Date(context.updatedAt).toLocaleDateString() : '-';
+                    return (
+                      <tr key={`${context.userId}-${context.id}`} className="border-t">
+                        <td className="p-3 font-mono text-sm">{context.id}</td>
+                        <td className="p-3 font-mono text-sm">{context.userId}</td>
+                        <td className="p-3 font-mono text-sm">{context.url}</td>
+                        <td className="p-3 font-mono text-sm">{context.workspaceId}</td>
+                        <td className="p-3 font-mono text-sm">{context.baseUrl || '-'}</td>
+                        <td className="p-3 font-mono text-sm">{context.path || '-'}</td>
+                        <td className="p-3">{context.locked ? 'Yes' : 'No'}</td>
+                        <td className="p-3">{createdAtDisplay}</td>
+                        <td className="p-3">{updatedAtDisplay}</td>
+                        <td className="p-3 text-right space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleOpenContext(context.id)}
+                            title="Open Context Details"
+                          >
+                            <DoorOpen className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteContext(context.id)}
+                            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            title="Delete Context"
+                          >
+                            <Trash className="h-4 w-4" />
+                          </Button>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {contexts.map((context) => {
-                        const createdAtDisplay = context.createdAt ? new Date(context.createdAt).toLocaleDateString() : '-';
-                        const updatedAtDisplay = context.updatedAt ? new Date(context.updatedAt).toLocaleDateString() : '-';
-                        return (
-                          <tr key={context.id} className="border-t">
-                            <td className="p-3 font-mono text-sm">{context.id}</td>
-                            <td className="p-3 font-mono text-sm">{context.userId}</td>
-                            <td className="p-3 font-mono text-sm">{context.url}</td>
-                            <td className="p-3 font-mono text-sm">{context.workspaceId}</td>
-                            <td className="p-3 font-mono text-sm">{context.baseUrl || '-'}</td>
-                            <td className="p-3 font-mono text-sm">{context.path || '-'}</td>
-                            <td className="p-3">{context.locked ? 'Yes' : 'No'}</td>
-                            <td className="p-3">{createdAtDisplay}</td>
-                            <td className="p-3">{updatedAtDisplay}</td>
-                            <td className="p-3 text-right space-x-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleOpenContext(context.id)}
-                                title="Open Context Details"
-                              >
-                                <DoorOpen className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleDeleteContext(context.id)}
-                                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                title="Delete Context"
-                              >
-                                <Trash className="h-4 w-4" />
-                              </Button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

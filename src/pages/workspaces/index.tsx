@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/toast-container"
@@ -220,171 +219,162 @@ export default function WorkspacesPage() {
   }
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="grid gap-6">
-        {/* Create Workspace Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Create New Workspace</CardTitle>
-            <CardDescription>Divide your Universe into self-contained workspaces</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleCreateWorkspace} className="space-y-4">
-              <div className="grid gap-2">
-                <Input
-                  value={newWorkspaceName}
-                  onChange={(e) => setNewWorkspaceName(e.target.value)}
-                  placeholder="Workspace Name (becomes ID)"
-                  disabled={isCreating}
+    <div className="space-y-6">
+      {/* Page Header */}
+      <div className="border-b pb-4">
+        <h1 className="text-3xl font-bold tracking-tight">Workspaces</h1>
+        <p className="text-muted-foreground mt-2">Divide your Universe into self-contained workspaces</p>
+      </div>
+
+      {/* Create New Workspace Section */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold">Create New Workspace</h2>
+        <form onSubmit={handleCreateWorkspace} className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Input
+              value={newWorkspaceName}
+              onChange={(e) => setNewWorkspaceName(e.target.value)}
+              placeholder="Workspace Name (becomes ID)"
+              disabled={isCreating}
+            />
+            <Input
+              value={newWorkspaceLabel}
+              onChange={(e) => setNewWorkspaceLabel(e.target.value)}
+              placeholder="Workspace Label (display name, optional)"
+              disabled={isCreating}
+            />
+          </div>
+          <Input
+            value={newWorkspaceDescription}
+            onChange={(e) => setNewWorkspaceDescription(e.target.value)}
+            placeholder="Description (optional)"
+            disabled={isCreating}
+          />
+          <div className="flex items-center gap-2">
+            <label htmlFor="workspace-color" className="text-sm font-medium">Workspace Color</label>
+            <Input
+              id="workspace-color"
+              type="color"
+              value={newWorkspaceColor}
+              onChange={(e) => setNewWorkspaceColor(e.target.value)}
+              className="h-10 w-16 p-1"
+              disabled={isCreating}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setNewWorkspaceColor(generateNiceRandomHexColor())}
+              disabled={isCreating}
+            >
+              Randomize
+            </Button>
+          </div>
+          <Button type="submit" disabled={isCreating || !newWorkspaceName.trim()}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Workspace
+          </Button>
+        </form>
+      </div>
+
+      {/* Your Workspaces Section */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold">Your Workspaces</h2>
+
+        {isLoading && <p className="text-center text-muted-foreground">Loading workspaces...</p>}
+
+        {error && (
+          <div className="text-center text-destructive">
+            <p>{error}</p>
+          </div>
+        )}
+
+        {!isLoading && !error && workspaces.length === 0 && (
+          <p className="text-center text-muted-foreground">No workspaces found</p>
+        )}
+
+        {workspaces.length > 0 && (
+          <div className="grid gap-4">
+            {workspaces.map((ws) => {
+              const workspaceCardProps = {
+                ...ws,
+                name: ws.label,
+                createdAt: ws.created,
+                updatedAt: ws.updated,
+                color: ws.color === null ? undefined : ws.color,
+              };
+              return (
+                <WorkspaceCard
+                  key={ws.id}
+                  workspace={workspaceCardProps}
+                  onStart={handleStartWorkspace}
+                  onStop={handleStopWorkspace}
+                  onEnter={handleEnterWorkspace}
                 />
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Edit Workspace Section */}
+      {editingWorkspace && (
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold">Edit Workspace: {editingWorkspace.label}</h2>
+          <form onSubmit={handleSaveWorkspaceDetails} className="space-y-4">
+            <div>
+              <label htmlFor="edit-label" className="text-sm font-medium">Label</label>
+              <Input
+                id="edit-label"
+                value={editingWorkspace.label}
+                onChange={(e) => setEditingWorkspace(prev => prev ? {...prev, label: e.target.value} : null)}
+                placeholder="Workspace Label"
+              />
+            </div>
+            <div>
+              <label htmlFor="edit-description" className="text-sm font-medium">Description</label>
+              <Input
+                id="edit-description"
+                value={editingWorkspace.description || ''}
+                onChange={(e) => setEditingWorkspace(prev => prev ? {...prev, description: e.target.value} : null)}
+                placeholder="Description (optional)"
+              />
+            </div>
+            <div>
+              <label htmlFor="edit-color" className="text-sm font-medium">Color</label>
+              <div className="flex items-center gap-2">
                 <Input
-                  value={newWorkspaceDescription}
-                  onChange={(e) => setNewWorkspaceDescription(e.target.value)}
-                  placeholder="Description (optional)"
-                  disabled={isCreating}
+                  id="edit-workspace-color"
+                  type="color"
+                  value={editingWorkspace.color || '#FFFFFF'}
+                  onChange={(e) => setEditingWorkspace(prev => prev ? {...prev, color: e.target.value} : null)}
+                  className="h-10 w-16 p-1"
                 />
-                <Input
-                  value={newWorkspaceLabel}
-                  onChange={(e) => setNewWorkspaceLabel(e.target.value)}
-                  placeholder="Workspace Label (display name, optional)"
-                  disabled={isCreating}
-                />
-                <div className="flex items-center gap-2">
-                  <label htmlFor="workspace-color" className="text-sm font-medium">Workspace Color</label>
-                  <Input
-                    id="workspace-color"
-                    type="color"
-                    value={newWorkspaceColor}
-                    onChange={(e) => setNewWorkspaceColor(e.target.value)}
-                    className="h-10 w-16 p-1"
-                    disabled={isCreating}
-                  />
-                  <Button
+                <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => setNewWorkspaceColor(generateNiceRandomHexColor())}
-                    disabled={isCreating}
+                    onClick={() => setEditingWorkspace(prev => prev ? {...prev, color: generateNiceRandomHexColor()} : null)}
                   >
-                    Randomize
+                    Randomize Color
                   </Button>
-                </div>
-                <Button type="submit" disabled={isCreating || !newWorkspaceName.trim()}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Workspace
-                </Button>
               </div>
-            </form>
-          </CardContent>
-        </Card>
-
-        {/* List Workspaces Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Your Workspaces</CardTitle>
-            <CardDescription>Manage your workspaces. Click on a workspace card to edit its details.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading && <p className="text-center text-muted-foreground">Loading workspaces...</p>}
-            {error && (
-              <div className="text-center text-destructive">
-                <p>{error}</p>
-              </div>
-            )}
-            {!isLoading && !error && workspaces.length === 0 && (
-              <p className="text-center text-muted-foreground">No workspaces found</p>
-            )}
-            {workspaces.length > 0 && (
-              <div className="grid gap-4">
-                {workspaces.map((ws) => {
-                  const workspaceCardProps = {
-                    ...ws,
-                    name: ws.label,
-                    createdAt: ws.created,
-                    updatedAt: ws.updated,
-                    color: ws.color === null ? undefined : ws.color,
-                  };
-                  return (
-                    <WorkspaceCard
-                      key={ws.id}
-                      workspace={workspaceCardProps}
-                      onStart={handleStartWorkspace}
-                      onStop={handleStopWorkspace}
-                      onEnter={handleEnterWorkspace}
-                    />
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Edit Workspace Card (Modal/Form) */}
-        {editingWorkspace && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Edit Workspace: {editingWorkspace.label}</CardTitle>
-              <CardDescription>Update workspace label, description, and color.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSaveWorkspaceDetails} className="space-y-4">
-                <div className="grid gap-2">
-                  <div>
-                    <label htmlFor="edit-label" className="text-sm font-medium">Label</label>
-                    <Input
-                      id="edit-label"
-                      value={editingWorkspace.label}
-                      onChange={(e) => setEditingWorkspace(prev => prev ? {...prev, label: e.target.value} : null)}
-                      placeholder="Workspace Label"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="edit-description" className="text-sm font-medium">Description</label>
-                    <Input
-                      id="edit-description"
-                      value={editingWorkspace.description || ''}
-                      onChange={(e) => setEditingWorkspace(prev => prev ? {...prev, description: e.target.value} : null)}
-                      placeholder="Description (optional)"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="edit-color" className="text-sm font-medium">Color</label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        id="edit-workspace-color"
-                        type="color"
-                        value={editingWorkspace.color || '#FFFFFF'}
-                        onChange={(e) => setEditingWorkspace(prev => prev ? {...prev, color: e.target.value} : null)}
-                        className="h-10 w-16 p-1"
-                      />
-                      <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setEditingWorkspace(prev => prev ? {...prev, color: generateNiceRandomHexColor()} : null)}
-                        >
-                          Randomize Color
-                        </Button>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 mt-4">
-                    <Button type="submit" disabled={!editingWorkspace.label.trim()}>
-                      Save Changes
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setEditingWorkspace(null)}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+            </div>
+            <div className="flex gap-2">
+              <Button type="submit" disabled={!editingWorkspace.label.trim()}>
+                Save Changes
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditingWorkspace(null)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   )
 }
