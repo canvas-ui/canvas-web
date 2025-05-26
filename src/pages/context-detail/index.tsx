@@ -91,7 +91,7 @@ export default function ContextDetailPage() {
       });
     }
     setIsLoading(false);
-  }, [contextId, showToast]);
+  }, [contextId]);
 
   const fetchDocuments = useCallback(async () => {
     if (!contextId) return;
@@ -117,7 +117,7 @@ export default function ContextDetailPage() {
       setDocuments([]);
     }
     setIsLoadingDocuments(false);
-  }, [contextId, showToast]);
+  }, [contextId]);
 
   useEffect(() => {
     fetchContextDetails();
@@ -201,7 +201,7 @@ export default function ContextDetailPage() {
       socketService.off(WS_EVENTS.CONTEXT_UNLOCKED, handleContextLockStatusChanged);
       socketService.off(WS_EVENTS.CONTEXT_DELETED, handleContextDeleted);
     };
-  }, [contextId, showToast, fetchDocuments]);
+  }, [contextId, fetchDocuments]);
 
   const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setEditableUrl(e.target.value);

@@ -108,7 +108,7 @@ function DashboardSidebar() {
     }
 
     fetchWorkspaces()
-  }, [showToast])
+  }, [])
 
   const isActive = (path: string) => {
     return location.pathname === path || location.pathname.startsWith(path + "/")

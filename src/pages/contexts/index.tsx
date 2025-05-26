@@ -105,7 +105,7 @@ export default function ContextsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [showToast, selectedWorkspaceId]);
+  }, [selectedWorkspaceId]);
 
   useEffect(() => {
     fetchData();

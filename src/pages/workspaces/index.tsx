@@ -99,7 +99,7 @@ export default function WorkspacesPage() {
         socket.off('workspace:deleted')
       }
     }
-  }, [socket, showToast])
+  }, [socket])
 
   const handleCreateWorkspace = async (e: React.FormEvent) => {
     e.preventDefault()

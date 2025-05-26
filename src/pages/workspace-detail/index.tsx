@@ -28,13 +28,22 @@ export default function WorkspaceDetailPage() {
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasAttemptedFetch, setHasAttemptedFetch] = useState(false);
   const { showToast } = useToast();
 
+  // Reset fetch attempt when workspace ID changes
   useEffect(() => {
-    if (!workspaceId) return;
+    setHasAttemptedFetch(false);
+    setError(null);
+    setWorkspace(null);
+  }, [workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId || hasAttemptedFetch) return;
 
     const fetchWorkspaceDetails = async () => {
       setIsLoading(true);
+      setHasAttemptedFetch(true);
       try {
         const response = await api.get<ApiResponse<{ workspace: Workspace } | Workspace>>(`${API_ROUTES.workspaces}/${workspaceId}`);
 
@@ -58,14 +67,27 @@ export default function WorkspaceDetailPage() {
     };
 
     fetchWorkspaceDetails();
-  }, [workspaceId, showToast]);
+  }, [workspaceId, hasAttemptedFetch]);
 
   if (isLoading) {
     return <div className="text-center">Loading workspace details...</div>;
   }
 
   if (error) {
-    return <div className="text-center text-destructive">Error: {error}</div>;
+    return (
+      <div className="text-center space-y-4">
+        <div className="text-destructive">Error: {error}</div>
+        <button
+          onClick={() => {
+            setHasAttemptedFetch(false);
+            setError(null);
+          }}
+          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          Retry
+        </button>
+      </div>
+    );
   }
 
   if (!workspace) {
