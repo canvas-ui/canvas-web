@@ -48,7 +48,7 @@ const navigationItems = [
     title: "Universe",
     url: "/workspaces/universe",
     icon: Infinity,
-    description: "Your universal workspace"
+    description: "Universe"
   },
   {
     title: "Contexts",

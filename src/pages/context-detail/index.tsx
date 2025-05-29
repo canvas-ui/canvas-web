@@ -3,9 +3,10 @@ import { useParams } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast-container';
-import { Save } from 'lucide-react';
-import { getContext, updateContextUrl, getContextDocuments } from '@/services/context';
+import { Save, Share, X, Plus } from 'lucide-react';
+import { getContext, updateContextUrl, getContextDocuments, grantContextAccess, revokeContextAccess } from '@/services/context';
 import socketService from '@/lib/socket';
+import { getCurrentUserFromToken } from '@/services/auth';
 
 // Interface based on the GET /contexts and GET /contexts/:id API payloads
 interface ContextData {
@@ -36,7 +37,9 @@ const WS_EVENTS = {
   CONTEXT_DELETED: 'context:deleted', // Expects { id: string } or { contextId: string }
   CONTEXT_URL_CHANGED: 'context:url:changed',
   CONTEXT_LOCKED: 'context:locked',
-  CONTEXT_UNLOCKED: 'context:unlocked'
+  CONTEXT_UNLOCKED: 'context:unlocked',
+  CONTEXT_ACL_UPDATED: 'context:acl:updated',
+  CONTEXT_ACL_REVOKED: 'context:acl:revoked'
 };
 
 export default function ContextDetailPage() {
@@ -49,6 +52,16 @@ export default function ContextDetailPage() {
   const [documents, setDocuments] = useState<any[]>([]); // Type for documents can be refined if its structure is known
   const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
   const { showToast } = useToast();
+
+  // Sharing state
+  const [shareEmail, setShareEmail] = useState('');
+  const [sharePermission, setSharePermission] = useState<string>('documentRead');
+  const [isSharing, setIsSharing] = useState(false);
+  const [showShareForm, setShowShareForm] = useState(false);
+
+  // Get current user to check if they're the owner
+  const currentUser = getCurrentUserFromToken();
+  const isOwner = currentUser && context && currentUser.id === context.userId;
 
   // Ensure socket is connected
   useEffect(() => {
@@ -185,12 +198,42 @@ export default function ContextDetailPage() {
       }
     };
 
+    const handleContextAclUpdated = (data: { id: string; acl: Record<string, any>; sharedWithUserId?: string; accessLevel?: string; }) => {
+      console.log('Received context ACL update (raw socket data):', data);
+      if (data.id === contextId) {
+        console.log('Applying context ACL update:', data.acl);
+        setContext(prev => prev ? { ...prev, acl: data.acl } : null);
+        if (data.sharedWithUserId && data.accessLevel) {
+          showToast({
+            title: 'Access Granted',
+            description: `${data.sharedWithUserId} was granted ${data.accessLevel} access to this context.`
+          });
+        }
+      }
+    };
+
+    const handleContextAclRevoked = (data: { id: string; acl: Record<string, any>; revokedFromUserId?: string; }) => {
+      console.log('Received context ACL revocation (raw socket data):', data);
+      if (data.id === contextId) {
+        console.log('Applying context ACL revocation:', data.acl);
+        setContext(prev => prev ? { ...prev, acl: data.acl } : null);
+        if (data.revokedFromUserId) {
+          showToast({
+            title: 'Access Revoked',
+            description: `Access was revoked from ${data.revokedFromUserId} for this context.`
+          });
+        }
+      }
+    };
+
     // Listen for all context-related events
     socketService.on(WS_EVENTS.CONTEXT_UPDATED, handleContextUpdateReceived);
     socketService.on(WS_EVENTS.CONTEXT_URL_CHANGED, handleContextUrlChanged);
     socketService.on(WS_EVENTS.CONTEXT_LOCKED, handleContextLockStatusChanged);
     socketService.on(WS_EVENTS.CONTEXT_UNLOCKED, handleContextLockStatusChanged);
     socketService.on(WS_EVENTS.CONTEXT_DELETED, handleContextDeleted);
+    socketService.on(WS_EVENTS.CONTEXT_ACL_UPDATED, handleContextAclUpdated);
+    socketService.on(WS_EVENTS.CONTEXT_ACL_REVOKED, handleContextAclRevoked);
 
     return () => {
       console.log(`Unsubscribing from context events for context ${contextId}`);
@@ -200,6 +243,8 @@ export default function ContextDetailPage() {
       socketService.off(WS_EVENTS.CONTEXT_LOCKED, handleContextLockStatusChanged);
       socketService.off(WS_EVENTS.CONTEXT_UNLOCKED, handleContextLockStatusChanged);
       socketService.off(WS_EVENTS.CONTEXT_DELETED, handleContextDeleted);
+      socketService.off(WS_EVENTS.CONTEXT_ACL_UPDATED, handleContextAclUpdated);
+      socketService.off(WS_EVENTS.CONTEXT_ACL_REVOKED, handleContextAclRevoked);
     };
   }, [contextId, fetchDocuments]);
 
@@ -276,6 +321,72 @@ export default function ContextDetailPage() {
       }
     }
     setIsSaving(false);
+  };
+
+  // Sharing functions
+  const handleGrantAccess = async () => {
+    if (!context || !shareEmail.trim()) return;
+
+    setIsSharing(true);
+    try {
+      await grantContextAccess(context.userId, context.id, shareEmail.trim(), sharePermission);
+
+      // Update context ACL locally for immediate UI feedback
+      setContext(prev => prev ? {
+        ...prev,
+        acl: {
+          ...prev.acl,
+          [shareEmail.trim()]: sharePermission
+        }
+      } : null);
+
+      setShareEmail('');
+      setShowShareForm(false);
+
+      showToast({
+        title: 'Success',
+        description: `Access granted to ${shareEmail.trim()} with ${sharePermission} permission.`
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to grant access';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+    }
+    setIsSharing(false);
+  };
+
+  const handleRevokeAccess = async (userEmail: string) => {
+    if (!context) return;
+
+    try {
+      await revokeContextAccess(context.userId, context.id, userEmail);
+
+      // Update context ACL locally for immediate UI feedback
+      setContext(prev => {
+        if (!prev) return null;
+        const newAcl = { ...prev.acl };
+        delete newAcl[userEmail];
+        return {
+          ...prev,
+          acl: newAcl
+        };
+      });
+
+      showToast({
+        title: 'Success',
+        description: `Access revoked from ${userEmail}.`
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to revoke access';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+    }
   };
 
   if (isLoading) {
@@ -379,9 +490,135 @@ export default function ContextDetailPage() {
 
       {/* Access Control */}
       <div className="space-y-4">
-        <h2 className="text-xl font-semibold">Access Control List</h2>
-        <div className="bg-muted/50 p-4 rounded-md">
-          <pre className="text-sm overflow-auto">{JSON.stringify(context.acl, null, 2)}</pre>
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold">Sharing & Access Control</h2>
+          {isOwner && (
+            <Button
+              onClick={() => setShowShareForm(!showShareForm)}
+              size="sm"
+              variant="outline"
+            >
+              <Share className="mr-2 h-4 w-4" />
+              Share Context
+            </Button>
+          )}
+        </div>
+
+        {/* Share Form - Only for owners */}
+        {isOwner && showShareForm && (
+          <div className="border rounded-lg p-4 bg-muted/20">
+            <h3 className="font-medium mb-3">Share with a user</h3>
+            <div className="space-y-3">
+              <div>
+                <label htmlFor="shareEmail" className="block text-sm font-medium mb-1">
+                  Email Address
+                </label>
+                <Input
+                  id="shareEmail"
+                  type="email"
+                  value={shareEmail}
+                  onChange={(e) => setShareEmail(e.target.value)}
+                  placeholder="user@example.com"
+                  disabled={isSharing}
+                />
+              </div>
+              <div>
+                <label htmlFor="sharePermission" className="block text-sm font-medium mb-1">
+                  Permission Level
+                </label>
+                <select
+                  id="sharePermission"
+                  value={sharePermission}
+                  onChange={(e) => setSharePermission(e.target.value)}
+                  disabled={isSharing}
+                  className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="documentRead">Read Only (documentRead)</option>
+                  <option value="documentWrite">Read + Append (documentWrite)</option>
+                  <option value="documentReadWrite">Full Access (documentReadWrite)</option>
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleGrantAccess}
+                  disabled={!shareEmail.trim() || isSharing}
+                  size="sm"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  {isSharing ? 'Granting...' : 'Grant Access'}
+                </Button>
+                <Button
+                  onClick={() => {
+                    setShowShareForm(false);
+                    setShareEmail('');
+                  }}
+                  variant="outline"
+                  size="sm"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Current Shares */}
+        <div className="space-y-3">
+          <h3 className="font-medium">Current Access</h3>
+          <div className="space-y-2">
+            {/* Owner (always has full access) */}
+            <div className="flex items-center justify-between p-3 border rounded-lg bg-background">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                  <span className="text-sm font-medium text-primary">O</span>
+                </div>
+                <div>
+                  <div className="font-medium text-sm">{context.userId}</div>
+                  <div className="text-xs text-muted-foreground">Owner</div>
+                </div>
+              </div>
+              <div className="text-sm text-muted-foreground">Full Access</div>
+            </div>
+
+            {/* Shared Users */}
+            {Object.entries(context.acl || {}).map(([userEmail, permission]) => (
+              <div key={userEmail} className="flex items-center justify-between p-3 border rounded-lg bg-background">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center">
+                    <span className="text-sm font-medium text-secondary-foreground">
+                      {userEmail.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <div className="font-medium text-sm">{userEmail}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {permission === 'documentRead' && 'Read Only'}
+                      {permission === 'documentWrite' && 'Read + Append'}
+                      {permission === 'documentReadWrite' && 'Full Access'}
+                    </div>
+                  </div>
+                </div>
+                {isOwner && (
+                  <Button
+                    onClick={() => handleRevokeAccess(userEmail)}
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 p-0"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            ))}
+
+            {(!context.acl || Object.keys(context.acl).length === 0) && (
+              <div className="text-center py-8 text-muted-foreground">
+                <Share className="mx-auto h-8 w-8 mb-2 opacity-50" />
+                <p>No users have been granted access to this context.</p>
+                <p className="text-sm">Click "Share Context" to invite collaborators.</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

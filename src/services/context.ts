@@ -130,3 +130,29 @@ export async function getContextDocuments(id: string): Promise<DocumentResponse[
     throw error;
   }
 }
+
+// Context sharing functions
+export async function grantContextAccess(ownerId: string, contextId: string, sharedWithUserId: string, accessLevel: string): Promise<{ message: string }> {
+  try {
+    const response = await api.post<ServiceApiResponse<{ message: string }>>(
+      `${API_ROUTES.users}/${ownerId}/contexts/${contextId}/shares`,
+      { sharedWithUserId, accessLevel }
+    );
+    return response.payload;
+  } catch (error) {
+    console.error(`Failed to grant context access:`, error);
+    throw error;
+  }
+}
+
+export async function revokeContextAccess(ownerId: string, contextId: string, sharedWithUserId: string): Promise<{ message: string }> {
+  try {
+    const response = await api.delete<ServiceApiResponse<{ message: string }>>(
+      `${API_ROUTES.users}/${ownerId}/contexts/${contextId}/shares/${sharedWithUserId}`
+    );
+    return response.payload;
+  } catch (error) {
+    console.error(`Failed to revoke context access:`, error);
+    throw error;
+  }
+}
