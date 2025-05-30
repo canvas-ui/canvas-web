@@ -392,7 +392,7 @@ function DashboardSidebar() {
 
 export function DashboardLayout() {
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={false}>
       <DashboardSidebar />
     </SidebarProvider>
   )

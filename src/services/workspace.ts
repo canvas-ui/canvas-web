@@ -86,3 +86,36 @@ export async function purgeWorkspace(id: string): Promise<ResponseObject<null>> 
     throw error;
   }
 }
+
+// Get workspace tree
+export async function getWorkspaceTree(id: string): Promise<ResponseObject<any>> {
+  try {
+    return await api.get<ResponseObject<any>>(`${API_ROUTES.workspaces}/${id}/tree`);
+  } catch (error) {
+    console.error(`Failed to get workspace tree ${id}:`, error);
+    throw error;
+  }
+}
+
+// Get workspace documents
+export async function getWorkspaceDocuments(
+  id: string,
+  contextSpec: string = '/',
+  featureArray: string[] = []
+): Promise<ResponseObject<any>> {
+  try {
+    const params = new URLSearchParams();
+    if (contextSpec !== '/') params.append('contextSpec', contextSpec);
+    if (featureArray.length > 0) {
+      featureArray.forEach(feature => params.append('featureArray', feature));
+    }
+
+    const queryString = params.toString();
+    const url = `${API_ROUTES.workspaces}/${id}/documents${queryString ? '?' + queryString : ''}`;
+
+    return await api.get<ResponseObject<any>>(url);
+  } catch (error) {
+    console.error(`Failed to get workspace documents ${id}:`, error);
+    throw error;
+  }
+}

@@ -198,7 +198,7 @@ export default function WorkspacesPage() {
   const handleStopWorkspace = async (workspaceId: string) => {
     try {
       const response = await closeWorkspace(workspaceId)
-      // Assuming runtime data from closeWorkspace() matches ApiWorkspaceEntry structure
+      // Now closeWorkspace API returns the full workspace object like startWorkspace does
       setWorkspaces(prev => prev.map(ws => ws.id === response.payload.id ? (response.payload as unknown as ApiWorkspaceEntry) : ws))
       showToast({
         title: 'Success',
