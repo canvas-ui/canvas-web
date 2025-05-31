@@ -354,7 +354,7 @@ function DashboardSidebar() {
               <span className="font-medium text-foreground">
                 {location.pathname === '/home' && 'Home'}
                 {location.pathname === '/workspaces' && 'Workspaces'}
-                {location.pathname.startsWith('/workspaces/') && location.pathname !== '/workspaces' && 'Workspace Details'}
+                {location.pathname.startsWith('/workspaces/') && location.pathname !== '/workspaces' && 'Workspace Details (read-only)'}
                 {location.pathname === '/contexts' && 'Contexts'}
                 {location.pathname.startsWith('/contexts/') && location.pathname !== '/contexts' && 'Context Details'}
                 {location.pathname === '/api-tokens' && 'API Tokens'}
