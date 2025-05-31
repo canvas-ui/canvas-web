@@ -150,8 +150,9 @@ export async function getContextDocuments(
     }
 
     const url = `${API_ROUTES.contexts}/${id}/documents${params.toString() ? '?' + params.toString() : ''}`;
-    const response = await api.get<ServiceApiResponse<DocumentResponse>>(url);
-    return response.payload?.data || [];
+    // The API returns documents directly in payload array, not wrapped in a data property
+    const response = await api.get<ServiceApiResponse<DocumentResponse['data']>>(url);
+    return response.payload || [];
   } catch (error) {
     console.error(`Failed to get context documents for ${id}:`, error);
     throw error;

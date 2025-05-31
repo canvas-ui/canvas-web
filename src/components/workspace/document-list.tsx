@@ -1,5 +1,5 @@
 import { Document } from '@/types/workspace'
-import { File, Calendar, Hash, Eye, ExternalLink, Globe } from 'lucide-react'
+import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 interface DocumentListProps {
@@ -7,10 +7,14 @@ interface DocumentListProps {
   isLoading: boolean
   contextPath: string
   totalCount: number
+  onRemoveDocument?: (documentId: number) => void
+  onDeleteDocument?: (documentId: number) => void
 }
 
 interface DocumentRowProps {
   document: Document
+  onRemoveDocument?: (documentId: number) => void
+  onDeleteDocument?: (documentId: number) => void
 }
 
 interface DocumentDetailModalProps {
@@ -179,7 +183,7 @@ function DocumentDetailModal({ document, isOpen, onClose }: DocumentDetailModalP
   )
 }
 
-function DocumentRow({ document }: DocumentRowProps) {
+function DocumentRow({ document, onRemoveDocument, onDeleteDocument }: DocumentRowProps) {
   const [showDetailModal, setShowDetailModal] = useState(false)
 
   // Check if this is a tab document
@@ -259,6 +263,20 @@ function DocumentRow({ document }: DocumentRowProps) {
     setShowDetailModal(true)
   }
 
+  const handleRemoveDocument = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (onRemoveDocument) {
+      onRemoveDocument(document.id)
+    }
+  }
+
+  const handleDeleteDocument = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (onDeleteDocument) {
+      onDeleteDocument(document.id)
+    }
+  }
+
   return (
     <>
       <div
@@ -336,6 +354,27 @@ function DocumentRow({ document }: DocumentRowProps) {
             >
               <Eye className="h-4 w-4" />
             </button>
+
+            {/* Context-specific actions */}
+            {onRemoveDocument && (
+              <button
+                onClick={handleRemoveDocument}
+                className="p-1 hover:bg-muted rounded-sm"
+                title="Remove document from context (keep in database)"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+
+            {onDeleteDocument && (
+              <button
+                onClick={handleDeleteDocument}
+                className="p-1 hover:bg-destructive hover:text-destructive-foreground rounded-sm text-destructive"
+                title="Delete document permanently from database"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -350,7 +389,14 @@ function DocumentRow({ document }: DocumentRowProps) {
   )
 }
 
-export function DocumentList({ documents, isLoading, contextPath, totalCount }: DocumentListProps) {
+export function DocumentList({
+  documents,
+  isLoading,
+  contextPath,
+  totalCount,
+  onRemoveDocument,
+  onDeleteDocument
+}: DocumentListProps) {
   if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -400,7 +446,12 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount }: 
       ) : (
         <div className="space-y-3 flex-1 overflow-y-auto">
           {documents.map((document) => (
-            <DocumentRow key={document.id} document={document} />
+            <DocumentRow
+              key={document.id}
+              document={document}
+              onRemoveDocument={onRemoveDocument}
+              onDeleteDocument={onDeleteDocument}
+            />
           ))}
         </div>
       )}

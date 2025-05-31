@@ -3,13 +3,23 @@ import { useParams } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast-container';
-import { Save, Share, X, Plus, Settings, Info, Sidebar, Eye, Trash2, Minus } from 'lucide-react';
+import { Save, Share, X, Plus, Settings, Info, Sidebar } from 'lucide-react';
 import { getContext, updateContextUrl, grantContextAccess, revokeContextAccess, getContextTree, getContextDocuments } from '@/services/context';
 import socketService from '@/lib/socket';
 import { getCurrentUserFromToken } from '@/services/auth';
 import { ContextTreeView } from '@/components/context/tree-view';
 import { DocumentDetailModal } from '@/components/context/document-detail-modal';
-import { TreeNode } from '@/types/workspace';
+import { DocumentList } from '@/components/workspace/document-list';
+import { TreeNode, Document as WorkspaceDocument } from '@/types/workspace';
+
+// Simple debounce utility function
+const debounce = (func: Function, delay: number) => {
+  let timeoutId: NodeJS.Timeout;
+  return (...args: any[]) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => func.apply(null, args), delay);
+  };
+};
 
 // Interface based on the GET /contexts and GET /contexts/:id API payloads
 interface ContextData {
@@ -33,8 +43,8 @@ interface ContextData {
   description?: string | null;
 }
 
-// Document interface - matches the actual API response structure
-interface Document {
+// Document interface - matches the actual API response structure for context documents
+interface ContextDocument {
   id: number;
   schema: string;
   schemaVersion: string;
@@ -87,12 +97,16 @@ const WS_EVENTS = {
 export default function ContextDetailPage() {
   const { contextId } = useParams<{ contextId: string }>();
   const [context, setContext] = useState<ContextData | null>(null);
+  const [tree, setTree] = useState<TreeNode | null>(null);
+  const [workspaceDocuments, setWorkspaceDocuments] = useState<WorkspaceDocument[]>([]);
+  const [selectedPath, setSelectedPath] = useState<string>('/');
   const [editableUrl, setEditableUrl] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
+  const [isLoadingTree, setIsLoadingTree] = useState(false);
+  const [documentsTotalCount, setDocumentsTotalCount] = useState(0);
   const { showToast } = useToast();
 
   // Sidebar states
@@ -100,11 +114,6 @@ export default function ContextDetailPage() {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isToolboxOpen, setIsToolboxOpen] = useState(false);
-
-  // Tree view state
-  const [tree, setTree] = useState<TreeNode | null>(null);
-  const [selectedPath, setSelectedPath] = useState<string>('/');
-  const [isLoadingTree, setIsLoadingTree] = useState(false);
 
   // Toolbox state
   const [activeFilters, setActiveFilters] = useState({
@@ -121,7 +130,7 @@ export default function ContextDetailPage() {
   const [isSharing, setIsSharing] = useState(false);
 
   // Document detail modal state
-  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+  const [selectedDocument, setSelectedDocument] = useState<ContextDocument | null>(null);
   const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
 
   // Get current user to check if they're the owner
@@ -189,6 +198,14 @@ export default function ContextDetailPage() {
     }
   }, [contextId, showToast]);
 
+  // Convert ContextDocument to WorkspaceDocument for compatibility with DocumentList
+  const convertToWorkspaceDocuments = (contextDocs: ContextDocument[]): WorkspaceDocument[] => {
+    return contextDocs.map(doc => ({
+      ...doc,
+      parentId: doc.parentId ? parseInt(doc.parentId as string) : null
+    }));
+  };
+
   // Fetch documents with feature filters
   const fetchDocuments = useCallback(async () => {
     if (!contextId) return;
@@ -205,9 +222,12 @@ export default function ContextDetailPage() {
       // Add custom bitmaps
       featureArray.push(...customBitmaps);
 
-      // Use REST API to get documents with filters
+                        // Use REST API to get documents with filters
       const documentsData = await getContextDocuments(contextId, featureArray, [], {});
-      setDocuments(documentsData || []);
+
+      // getContextDocuments returns the data array directly
+      setWorkspaceDocuments(convertToWorkspaceDocuments(documentsData));
+      setDocumentsTotalCount(documentsData.length);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch documents';
       showToast({
@@ -215,11 +235,22 @@ export default function ContextDetailPage() {
         description: message,
         variant: 'destructive'
       });
-      setDocuments([]);
+      setWorkspaceDocuments([]);
+      setDocumentsTotalCount(0);
     } finally {
       setIsLoadingDocuments(false);
     }
-  }, [contextId, activeFilters, customBitmaps, showToast]);
+  }, [contextId, activeFilters, customBitmaps]);
+
+  // Debounced document refresh for WebSocket events to prevent rapid successive calls
+  const debouncedRefreshDocuments = useCallback(
+    debounce(() => {
+      if (contextId) {
+        fetchDocuments();
+      }
+    }, 300), // 300ms debounce
+    [fetchDocuments, contextId]
+  );
 
   // Update context URL from tree path selection
   const handlePathSelect = (path: string) => {
@@ -242,203 +273,89 @@ export default function ContextDetailPage() {
       console.log('New URL:', newUrl);
 
       setEditableUrl(newUrl);
+
+      // Automatically set the context URL and fetch documents
+      if (newUrl !== context.url) {
+        handleSetContextUrlInternal(newUrl);
+      }
     }
   };
 
-  // Fetch context details
-  const fetchContextDetails = useCallback(async () => {
-    if (!contextId) return;
-    setIsLoading(true);
+  // Handle document removal from context
+  const handleRemoveDocument = async (documentId: number) => {
+    if (!context) return;
+
     try {
-      const fetchedContext = await getContext(contextId) as unknown as ContextData;
-
-      if (!fetchedContext) {
-        throw new Error('No context data received from getContext service.');
-      }
-
-      if (typeof fetchedContext.id !== 'string' || typeof fetchedContext.url !== 'string') {
-        throw new Error('Fetched context data is invalid, incomplete, or not of the expected type.');
-      }
-
-      // Log context data for debugging
-      console.log('Fetched context data:', fetchedContext);
-      console.log('Context workspaceId:', fetchedContext.workspaceId);
-      console.log('Context URL:', fetchedContext.url);
-
-      setContext(fetchedContext);
-      setEditableUrl(fetchedContext.url);
-      setError(null);
+      socketService.emit('context:document:remove', {
+        contextId: context.id,
+        documentId: documentId.toString()
+      }, (response: any) => {
+        if (response.success) {
+          // Refresh documents list
+          debouncedRefreshDocuments();
+          showToast({
+            title: 'Success',
+            description: 'Document removed from context successfully.'
+          });
+        } else {
+          showToast({
+            title: 'Error',
+            description: 'Failed to remove document from context.',
+            variant: 'destructive'
+          });
+        }
+      });
     } catch (err) {
-      const message = err instanceof Error ? err.message : `Failed to fetch context ${contextId}`;
-      setError(message);
-      setContext(null);
+      const message = err instanceof Error ? err.message : 'Failed to remove document';
       showToast({
         title: 'Error',
         description: message,
         variant: 'destructive'
       });
     }
-    setIsLoading(false);
-  }, [contextId]);
-
-  // Initial data fetch
-  useEffect(() => {
-    fetchContextDetails();
-  }, [fetchContextDetails]);
-
-  // Fetch documents when filters change
-  useEffect(() => {
-    if (context) {
-      fetchDocuments();
-    }
-  }, [fetchDocuments, context]);
-
-  // Fetch tree when tree view opens
-  useEffect(() => {
-    if (isTreeViewOpen && !tree) {
-      fetchContextTree();
-    }
-  }, [isTreeViewOpen, fetchContextTree, tree]);
-
-  // WebSocket event handling
-  useEffect(() => {
-    if (!contextId) return;
-
-    if (!socketService.isConnected()) {
-      socketService.reconnect();
-      return;
-    }
-
-    console.log(`Subscribing to context events for context ${contextId}`);
-    socketService.emit('subscribe', { topic: 'context', id: contextId });
-
-    const handleContextUpdateReceived = (data: { context: Partial<ContextData> }) => {
-      if (data.context && data.context.id === contextId) {
-        setContext(prev => prev ? { ...prev, ...data.context } as ContextData : null);
-        if (data.context.url) {
-          setEditableUrl(data.context.url);
-          fetchDocuments();
-        }
-      }
-    };
-
-    const handleContextUrlChanged = (data: { id: string; url: string }) => {
-      if (data.id === contextId) {
-        setContext(prev => prev ? { ...prev, url: data.url } : null);
-        setEditableUrl(data.url);
-        fetchDocuments();
-      }
-    };
-
-    const handleContextLockStatusChanged = (data: { id: string; locked: boolean }) => {
-      if (data.id === contextId) {
-        setContext(prev => prev ? { ...prev, locked: data.locked } : null);
-      }
-    };
-
-    const handleContextDeleted = (data: { id: string } | { contextId: string }) => {
-      const deletedId = ('id' in data) ? data.id : data.contextId;
-      if (deletedId === contextId) {
-        setContext(null);
-        setError('Context has been deleted.');
-        showToast({
-          title: 'Context Deleted',
-          description: 'This context has been deleted.',
-          variant: 'destructive'
-        });
-      }
-    };
-
-    const handleContextAclUpdated = (data: { id: string; acl: Record<string, any>; sharedWithUserId?: string; accessLevel?: string }) => {
-      if (data.id === contextId) {
-        setContext(prev => prev ? { ...prev, acl: data.acl } : null);
-        if (data.sharedWithUserId && data.accessLevel) {
-          showToast({
-            title: 'Access Granted',
-            description: `${data.sharedWithUserId} was granted ${data.accessLevel} access to this context.`
-          });
-        }
-      }
-    };
-
-    const handleContextAclRevoked = (data: { id: string; acl: Record<string, any>; revokedFromUserId?: string }) => {
-      if (data.id === contextId) {
-        setContext(prev => prev ? { ...prev, acl: data.acl } : null);
-        if (data.revokedFromUserId) {
-          showToast({
-            title: 'Access Revoked',
-            description: `Access was revoked from ${data.revokedFromUserId} for this context.`
-          });
-        }
-      }
-    };
-
-    // Handle tree-related events
-    const handleTreePathInserted = (data: any) => {
-      if (data.contextId === contextId || data.id === contextId) {
-        // Refresh tree when paths are inserted
-        fetchContextTree();
-      }
-    };
-
-    const handleTreePathRemoved = (data: any) => {
-      if (data.contextId === contextId || data.id === contextId) {
-        // Refresh tree when paths are removed
-        fetchContextTree();
-      }
-    };
-
-    const handleTreePathMoved = (data: any) => {
-      if (data.contextId === contextId || data.id === contextId) {
-        // Refresh tree when paths are moved
-        fetchContextTree();
-      }
-    };
-
-    // Listen for context events
-    socketService.on(WS_EVENTS.CONTEXT_UPDATED, handleContextUpdateReceived);
-    socketService.on(WS_EVENTS.CONTEXT_URL_CHANGED, handleContextUrlChanged);
-    socketService.on(WS_EVENTS.CONTEXT_LOCKED, handleContextLockStatusChanged);
-    socketService.on(WS_EVENTS.CONTEXT_UNLOCKED, handleContextLockStatusChanged);
-    socketService.on(WS_EVENTS.CONTEXT_DELETED, handleContextDeleted);
-    socketService.on(WS_EVENTS.CONTEXT_ACL_UPDATED, handleContextAclUpdated);
-    socketService.on(WS_EVENTS.CONTEXT_ACL_REVOKED, handleContextAclRevoked);
-
-    // Listen for tree events
-    socketService.on('context:workspace:tree:path:inserted', handleTreePathInserted);
-    socketService.on('context:workspace:tree:path:removed', handleTreePathRemoved);
-    socketService.on('context:workspace:tree:path:moved', handleTreePathMoved);
-    socketService.on('context:workspace:tree:path:copied', handleTreePathMoved); // Same as moved
-
-    return () => {
-      socketService.emit('unsubscribe', { topic: 'context', id: contextId });
-      socketService.off(WS_EVENTS.CONTEXT_UPDATED, handleContextUpdateReceived);
-      socketService.off(WS_EVENTS.CONTEXT_URL_CHANGED, handleContextUrlChanged);
-      socketService.off(WS_EVENTS.CONTEXT_LOCKED, handleContextLockStatusChanged);
-      socketService.off(WS_EVENTS.CONTEXT_UNLOCKED, handleContextLockStatusChanged);
-      socketService.off(WS_EVENTS.CONTEXT_DELETED, handleContextDeleted);
-      socketService.off(WS_EVENTS.CONTEXT_ACL_UPDATED, handleContextAclUpdated);
-      socketService.off(WS_EVENTS.CONTEXT_ACL_REVOKED, handleContextAclRevoked);
-
-      // Clean up tree event listeners
-      socketService.off('context:workspace:tree:path:inserted', handleTreePathInserted);
-      socketService.off('context:workspace:tree:path:removed', handleTreePathRemoved);
-      socketService.off('context:workspace:tree:path:moved', handleTreePathMoved);
-      socketService.off('context:workspace:tree:path:copied', handleTreePathMoved);
-    };
-  }, [contextId, fetchDocuments]);
-
-  // Handle URL change
-  const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setEditableUrl(e.target.value);
   };
 
-  // Handle set context URL
-  const handleSetContextUrl = async () => {
-    if (!context || editableUrl === context.url) return;
+  // Handle document deletion from database
+  const handleDeleteDocument = async (documentId: number) => {
+    if (!context) return;
+
+    try {
+      socketService.emit('context:document:delete', {
+        contextId: context.id,
+        documentId: documentId.toString()
+      }, (response: any) => {
+        if (response.success) {
+          // Refresh documents list
+          debouncedRefreshDocuments();
+          showToast({
+            title: 'Success',
+            description: 'Document deleted from database successfully.'
+          });
+        } else {
+          showToast({
+            title: 'Error',
+            description: 'Failed to delete document from database.',
+            variant: 'destructive'
+          });
+        }
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete document';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+    }
+  };
+
+  // Internal URL setting function (without user interaction)
+  const handleSetContextUrlInternal = async (url: string) => {
+    if (!context) return;
+
     setIsSaving(true);
     try {
-      const response = await updateContextUrl(context.id, editableUrl);
+      const response = await updateContextUrl(context.id, url);
       let updatedContextData: ContextData | null = null;
 
       if ((response as any)?.payload?.context?.id && typeof (response as any)?.payload?.context?.url === 'string') {
@@ -461,10 +378,10 @@ export default function ContextDetailPage() {
       if (updatedContextData) {
         setContext(updatedContextData);
         setEditableUrl(updatedContextData.url);
-        await fetchDocuments();
+        debouncedRefreshDocuments();
         showToast({
-          title: 'Success',
-          description: 'Context URL set successfully.'
+          title: 'Context Updated',
+          description: `Context URL set to: ${updatedContextData.url}`
         });
       } else {
         throw new Error('Failed to process update response or response was empty.');
@@ -482,6 +399,12 @@ export default function ContextDetailPage() {
       }
     }
     setIsSaving(false);
+  };
+
+  // Handle set context URL (manual button click)
+  const handleSetContextUrl = async () => {
+    if (!context || editableUrl === context.url) return;
+    await handleSetContextUrlInternal(editableUrl);
   };
 
   // Handle toolbox filter changes
@@ -569,78 +492,284 @@ export default function ContextDetailPage() {
     }
   };
 
-  // Handle document removal from context
-  const handleRemoveDocument = async (documentId: number) => {
-    if (!context) return;
-
+  // Fetch context details
+  const fetchContextDetails = useCallback(async () => {
+    if (!contextId) return;
+    setIsLoading(true);
     try {
-      socketService.emit('context:document:remove', {
-        contextId: context.id,
-        documentId: documentId.toString()
-      }, (response: any) => {
-        if (response.success) {
-          // Refresh documents list
-          fetchDocuments();
-          showToast({
-            title: 'Success',
-            description: 'Document removed from context successfully.'
-          });
-        } else {
-          showToast({
-            title: 'Error',
-            description: 'Failed to remove document from context.',
-            variant: 'destructive'
-          });
-        }
-      });
+      const fetchedContext = await getContext(contextId) as unknown as ContextData;
+
+      if (!fetchedContext) {
+        throw new Error('No context data received from getContext service.');
+      }
+
+      if (typeof fetchedContext.id !== 'string' || typeof fetchedContext.url !== 'string') {
+        throw new Error('Fetched context data is invalid, incomplete, or not of the expected type.');
+      }
+
+      // Log context data for debugging
+      console.log('Fetched context data:', fetchedContext);
+      console.log('Context workspaceId:', fetchedContext.workspaceId);
+      console.log('Context URL:', fetchedContext.url);
+
+      setContext(fetchedContext);
+      setEditableUrl(fetchedContext.url);
+      setError(null);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to remove document';
+      const message = err instanceof Error ? err.message : `Failed to fetch context ${contextId}`;
+      setError(message);
+      setContext(null);
       showToast({
         title: 'Error',
         description: message,
         variant: 'destructive'
       });
     }
-  };
+    setIsLoading(false);
+  }, [contextId]);
 
-  // Handle document deletion from database
-  const handleDeleteDocument = async (documentId: number) => {
-    if (!context) return;
+  // Initial data fetch
+  useEffect(() => {
+    fetchContextDetails();
+  }, [fetchContextDetails]);
 
-    try {
-      socketService.emit('context:document:delete', {
-        contextId: context.id,
-        documentId: documentId.toString()
-      }, (response: any) => {
-        if (response.success) {
-          // Refresh documents list
-          fetchDocuments();
+  // Fetch documents when context is available and filters change
+  useEffect(() => {
+    if (!context || !contextId) return;
+
+    const loadDocuments = async () => {
+      setIsLoadingDocuments(true);
+      try {
+        const featureArray = [];
+
+        // Add feature filters based on toolbox settings
+        if (activeFilters.tabs) featureArray.push('data/abstraction/tab');
+        if (activeFilters.notes) featureArray.push('data/abstraction/note');
+        if (activeFilters.todo) featureArray.push('data/abstraction/todo');
+
+        // Add custom bitmaps
+        featureArray.push(...customBitmaps);
+
+        // Use REST API to get documents with filters
+        const documentsData = await getContextDocuments(contextId, featureArray, [], {});
+
+        // getContextDocuments returns the data array directly
+        setWorkspaceDocuments(convertToWorkspaceDocuments(documentsData));
+        setDocumentsTotalCount(documentsData.length);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to fetch documents';
+        showToast({
+          title: 'Error',
+          description: message,
+          variant: 'destructive'
+        });
+        setWorkspaceDocuments([]);
+        setDocumentsTotalCount(0);
+      } finally {
+        setIsLoadingDocuments(false);
+      }
+    };
+
+    loadDocuments();
+  }, [context?.id, activeFilters, customBitmaps, contextId, showToast]);
+
+  // Fetch tree when tree view opens
+  useEffect(() => {
+    if (isTreeViewOpen && !tree) {
+      fetchContextTree();
+    }
+  }, [isTreeViewOpen, fetchContextTree, tree]);
+
+  // WebSocket event handling
+  useEffect(() => {
+    if (!contextId) return;
+
+    if (!socketService.isConnected()) {
+      socketService.reconnect();
+      return;
+    }
+
+    console.log(`Subscribing to context events for context ${contextId}`);
+    socketService.emit('subscribe', { topic: 'context', id: contextId });
+
+    const handleContextUpdateReceived = (data: { context: Partial<ContextData> }) => {
+      if (data.context && data.context.id === contextId) {
+        setContext(prev => prev ? { ...prev, ...data.context } as ContextData : null);
+        if (data.context.url) {
+          setEditableUrl(data.context.url);
+          debouncedRefreshDocuments();
+        }
+      }
+    };
+
+    const handleContextUrlChanged = (data: { id: string; url: string }) => {
+      if (data.id === contextId) {
+        setContext(prev => prev ? { ...prev, url: data.url } : null);
+        setEditableUrl(data.url);
+        debouncedRefreshDocuments();
+      }
+    };
+
+    const handleContextLockStatusChanged = (data: { id: string; locked: boolean }) => {
+      if (data.id === contextId) {
+        setContext(prev => prev ? { ...prev, locked: data.locked } : null);
+      }
+    };
+
+    const handleContextDeleted = (data: { id: string } | { contextId: string }) => {
+      const deletedId = ('id' in data) ? data.id : data.contextId;
+      if (deletedId === contextId) {
+        setContext(null);
+        setError('Context has been deleted.');
+        showToast({
+          title: 'Context Deleted',
+          description: 'This context has been deleted.',
+          variant: 'destructive'
+        });
+      }
+    };
+
+    const handleContextAclUpdated = (data: { id: string; acl: Record<string, any>; sharedWithUserId?: string; accessLevel?: string }) => {
+      if (data.id === contextId) {
+        setContext(prev => prev ? { ...prev, acl: data.acl } : null);
+        if (data.sharedWithUserId && data.accessLevel) {
           showToast({
-            title: 'Success',
-            description: 'Document deleted from database successfully.'
-          });
-        } else {
-          showToast({
-            title: 'Error',
-            description: 'Failed to delete document from database.',
-            variant: 'destructive'
+            title: 'Access Granted',
+            description: `${data.sharedWithUserId} was granted ${data.accessLevel} access to this context.`
           });
         }
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete document';
-      showToast({
-        title: 'Error',
-        description: message,
-        variant: 'destructive'
-      });
-    }
-  };
+      }
+    };
 
-  // Handle show document details
-  const handleShowDocumentDetails = (document: Document) => {
-    setSelectedDocument(document);
-    setIsDocumentModalOpen(true);
+    const handleContextAclRevoked = (data: { id: string; acl: Record<string, any>; revokedFromUserId?: string }) => {
+      if (data.id === contextId) {
+        setContext(prev => prev ? { ...prev, acl: data.acl } : null);
+        if (data.revokedFromUserId) {
+          showToast({
+            title: 'Access Revoked',
+            description: `Access was revoked from ${data.revokedFromUserId} for this context.`
+          });
+        }
+      }
+    };
+
+    // Handle document-related events
+    const handleDocumentInsert = (data: any) => {
+      if (data.contextId === contextId) {
+        console.log('Document insert event received, refreshing documents:', data);
+        debouncedRefreshDocuments();
+        showToast({
+          title: 'Document Added',
+          description: 'A new document was added to this context.',
+        });
+      }
+    };
+
+    const handleDocumentUpdate = (data: any) => {
+      if (data.contextId === contextId) {
+        console.log('Document update event received, refreshing documents:', data);
+        debouncedRefreshDocuments();
+        showToast({
+          title: 'Document Updated',
+          description: 'A document in this context was updated.',
+        });
+      }
+    };
+
+    const handleDocumentRemove = (data: any) => {
+      if (data.contextId === contextId) {
+        console.log('Document remove event received, refreshing documents:', data);
+        debouncedRefreshDocuments();
+        showToast({
+          title: 'Document Removed',
+          description: 'A document was removed from this context.',
+        });
+      }
+    };
+
+    const handleDocumentDelete = (data: any) => {
+      if (data.contextId === contextId) {
+        console.log('Document delete event received, refreshing documents:', data);
+        debouncedRefreshDocuments();
+        showToast({
+          title: 'Document Deleted',
+          description: 'A document was permanently deleted.',
+        });
+      }
+    };
+
+    // Handle tree-related events
+    const handleTreePathInserted = (data: any) => {
+      if (data.contextId === contextId || data.id === contextId) {
+        // Refresh tree when paths are inserted
+        fetchContextTree();
+      }
+    };
+
+    const handleTreePathRemoved = (data: any) => {
+      if (data.contextId === contextId || data.id === contextId) {
+        // Refresh tree when paths are removed
+        fetchContextTree();
+      }
+    };
+
+    const handleTreePathMoved = (data: any) => {
+      if (data.contextId === contextId || data.id === contextId) {
+        // Refresh tree when paths are moved
+        fetchContextTree();
+      }
+    };
+
+    // Listen for context events
+    socketService.on(WS_EVENTS.CONTEXT_UPDATED, handleContextUpdateReceived);
+    socketService.on(WS_EVENTS.CONTEXT_URL_CHANGED, handleContextUrlChanged);
+    socketService.on(WS_EVENTS.CONTEXT_LOCKED, handleContextLockStatusChanged);
+    socketService.on(WS_EVENTS.CONTEXT_UNLOCKED, handleContextLockStatusChanged);
+    socketService.on(WS_EVENTS.CONTEXT_DELETED, handleContextDeleted);
+    socketService.on(WS_EVENTS.CONTEXT_ACL_UPDATED, handleContextAclUpdated);
+    socketService.on(WS_EVENTS.CONTEXT_ACL_REVOKED, handleContextAclRevoked);
+
+    // Listen for document events
+    socketService.on('document:insert', handleDocumentInsert);
+    socketService.on('document:update', handleDocumentUpdate);
+    socketService.on('document:remove', handleDocumentRemove);
+    socketService.on('document:delete', handleDocumentDelete);
+    socketService.on('documents:delete', handleDocumentDelete); // Handle batch delete
+
+    // Listen for tree events
+    socketService.on('context:workspace:tree:path:inserted', handleTreePathInserted);
+    socketService.on('context:workspace:tree:path:removed', handleTreePathRemoved);
+    socketService.on('context:workspace:tree:path:moved', handleTreePathMoved);
+    socketService.on('context:workspace:tree:path:copied', handleTreePathMoved); // Same as moved
+
+    return () => {
+      socketService.emit('unsubscribe', { topic: 'context', id: contextId });
+      socketService.off(WS_EVENTS.CONTEXT_UPDATED, handleContextUpdateReceived);
+      socketService.off(WS_EVENTS.CONTEXT_URL_CHANGED, handleContextUrlChanged);
+      socketService.off(WS_EVENTS.CONTEXT_LOCKED, handleContextLockStatusChanged);
+      socketService.off(WS_EVENTS.CONTEXT_UNLOCKED, handleContextLockStatusChanged);
+      socketService.off(WS_EVENTS.CONTEXT_DELETED, handleContextDeleted);
+      socketService.off(WS_EVENTS.CONTEXT_ACL_UPDATED, handleContextAclUpdated);
+      socketService.off(WS_EVENTS.CONTEXT_ACL_REVOKED, handleContextAclRevoked);
+
+      // Clean up document event listeners
+      socketService.off('document:insert', handleDocumentInsert);
+      socketService.off('document:update', handleDocumentUpdate);
+      socketService.off('document:remove', handleDocumentRemove);
+      socketService.off('document:delete', handleDocumentDelete);
+      socketService.off('documents:delete', handleDocumentDelete);
+
+      // Clean up tree event listeners
+      socketService.off('context:workspace:tree:path:inserted', handleTreePathInserted);
+      socketService.off('context:workspace:tree:path:removed', handleTreePathRemoved);
+      socketService.off('context:workspace:tree:path:moved', handleTreePathMoved);
+      socketService.off('context:workspace:tree:path:copied', handleTreePathMoved);
+    };
+  }, [contextId, debouncedRefreshDocuments, fetchContextTree]);
+
+  // Handle URL change
+  const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setEditableUrl(e.target.value);
   };
 
   if (isLoading) {
@@ -699,7 +828,7 @@ export default function ContextDetailPage() {
       )}
 
       {/* Main Content */}
-      <div className={`flex-1 space-y-6 transition-all duration-300 ${anyRightSidebarOpen ? 'mr-96' : ''}`}>
+      <div className={`flex-1 transition-all duration-300 ${anyRightSidebarOpen ? 'mr-96' : ''}`}>
         {/* Browser-like Toolbar */}
         <div className="flex items-center gap-2 p-2 border rounded-md shadow-sm bg-background">
           {/* Tree View Toggle */}
@@ -775,98 +904,37 @@ export default function ContextDetailPage() {
           </Button>
         </div>
 
-        {/* Page Header */}
-        <div className="border-b pb-4">
-          <h1 className="text-3xl font-bold tracking-tight">Context: {context.id}</h1>
-          <p className="text-muted-foreground mt-2">{context.description || 'No description available'}</p>
-        </div>
-
-        {/* Documents Section */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Documents</h2>
-            <div className="text-sm text-muted-foreground">
-              {documents.length} documents
-              {Object.values(activeFilters).some(Boolean) || customBitmaps.length > 0 ? ' (filtered)' : ''}
-            </div>
+        {/* Page Content */}
+        <div className="space-y-6 p-6">
+          {/* Page Header */}
+          <div className="border-b pb-4">
+            <h1 className="text-3xl font-bold tracking-tight">Context: {context.id}</h1>
+            <p className="text-muted-foreground mt-2">{context.description || 'No description available'}</p>
           </div>
 
-          {/* Documents List */}
-          <div className="min-h-[300px]">
-            {isLoadingDocuments ? (
-              <div className="text-center text-muted-foreground">Loading documents...</div>
-            ) : documents.length === 0 ? (
-              <div className="text-center text-muted-foreground">
-                <p>No documents found</p>
-                <p className="text-sm">Documents will appear here when available.</p>
+          {/* Documents Section using DocumentList component */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold">Documents</h2>
+              <div className="text-sm text-muted-foreground">
+                {Object.values(activeFilters).some(Boolean) || customBitmaps.length > 0 ? ' (filtered)' : ''}
               </div>
-            ) : (
-              <div className="space-y-4">
-                {documents.map((doc) => (
-                  <div key={doc.id} className="p-4 border rounded-md bg-background">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
-                        <h3 className="font-semibold">{doc.data.title || 'Untitled Document'}</h3>
-                        <p className="text-sm text-muted-foreground">{doc.schema}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          onClick={() => handleShowDocumentDetails(doc)}
-                          variant="outline"
-                          size="sm"
-                          className="p-1"
-                          title="View document details"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          onClick={() => handleRemoveDocument(doc.id)}
-                          variant="outline"
-                          size="sm"
-                          className="p-1"
-                          title="Remove document from context (keep in database)"
-                        >
-                          <Minus className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          onClick={() => handleDeleteDocument(doc.id)}
-                          variant="outline"
-                          size="sm"
-                          className="p-1 text-destructive hover:text-destructive"
-                          title="Delete document from database (permanent)"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                    {doc.data.url && (
-                      <a
-                        href={doc.data.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-primary hover:underline break-all"
-                      >
-                        {doc.data.url}
-                      </a>
-                    )}
-                    <div className="mt-2 text-xs text-muted-foreground">
-                      <span>Version {doc.versionNumber}</span>
-                      <span className="ml-4">{new Date(doc.createdAt).toLocaleString()}</span>
-                      {doc.checksumArray && doc.checksumArray.length > 0 && (
-                        <span className="ml-4">
-                          Checksums: {doc.checksumArray.length}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            </div>
+
+            {/* Use the DocumentList component for consistency with action handlers */}
+            <DocumentList
+              documents={workspaceDocuments}
+              isLoading={isLoadingDocuments}
+              contextPath={selectedPath}
+              totalCount={documentsTotalCount}
+              onRemoveDocument={handleRemoveDocument}
+              onDeleteDocument={handleDeleteDocument}
+            />
           </div>
         </div>
       </div>
 
-      {/* Right Sidebar */}
+      {/* Right Sidebar - same as before but with updated content */}
       {anyRightSidebarOpen && (
         <div className="fixed right-0 top-0 h-full w-96 bg-background border-l shadow-lg overflow-y-auto z-50">
           {/* Sidebar Header */}
