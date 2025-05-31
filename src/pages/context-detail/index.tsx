@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -81,18 +81,6 @@ interface ContextDocument {
   versionNumber: number;
   latestVersion: number;
 }
-
-// WebSocket event types
-const WS_EVENTS = {
-  CONTEXT_CREATED: 'context:created',
-  CONTEXT_UPDATED: 'context:updated',
-  CONTEXT_DELETED: 'context:deleted',
-  CONTEXT_URL_CHANGED: 'context:url:changed',
-  CONTEXT_LOCKED: 'context:locked',
-  CONTEXT_UNLOCKED: 'context:unlocked',
-  CONTEXT_ACL_UPDATED: 'context:acl:updated',
-  CONTEXT_ACL_REVOKED: 'context:acl:revoked'
-};
 
 export default function ContextDetailPage() {
   const { contextId } = useParams<{ contextId: string }>();
@@ -580,38 +568,138 @@ export default function ContextDetailPage() {
     }
   }, [isTreeViewOpen, fetchContextTree, tree]);
 
-  // WebSocket event handling
+  // Refs for stable function access in WebSocket handlers
+  const fetchDocumentsRef = useRef(fetchDocuments);
+  const fetchContextTreeRef = useRef(fetchContextTree);
+  const showToastRef = useRef(showToast);
+
+  // Update refs when functions change
+  useEffect(() => {
+    fetchDocumentsRef.current = fetchDocuments;
+  }, [fetchDocuments]);
+
+  useEffect(() => {
+    fetchContextTreeRef.current = fetchContextTree;
+  }, [fetchContextTree]);
+
+  useEffect(() => {
+    showToastRef.current = showToast;
+  }, [showToast]);
+
+  // WebSocket event handling - comprehensive approach with deduplication
   useEffect(() => {
     if (!contextId) return;
 
+    // Debug: Check socket connection status
+    console.log(`🔍 DEBUG: WebSocket connection status:`, {
+      isConnected: socketService.isConnected(),
+      contextId: contextId
+    });
+
     if (!socketService.isConnected()) {
+      console.log('🔍 DEBUG: Socket not connected, attempting to reconnect...');
       socketService.reconnect();
       return;
     }
 
-    console.log(`Subscribing to context events for context ${contextId}`);
+    console.log(`📡 Subscribing to context events for context ${contextId}`);
     socketService.emit('subscribe', { topic: 'context', id: contextId });
 
+    // Add a debug listener to verify subscription worked
+    socketService.on('subscription:confirmed', (data: any) => {
+      console.log('🔍 DEBUG: Subscription confirmed:', data);
+    });
+
+    // Event deduplication - track recent events to prevent duplicates
+    const recentEvents = new Map<string, number>();
+    const EVENT_DEDUP_WINDOW = 1000; // 1 second window for deduplication
+
+    // Debounced notification system to prevent spam
+    const pendingNotifications = new Set<string>();
+    const debouncedNotify = debounce((notification: { title: string; description: string; variant?: 'default' | 'destructive' }) => {
+      const key = `${notification.title}:${notification.description}`;
+      if (!pendingNotifications.has(key)) {
+        pendingNotifications.add(key);
+        showToast(notification);
+        // Clear from pending after showing
+        setTimeout(() => pendingNotifications.delete(key), 2000);
+      }
+    }, 500);
+
+    // Create a unified refresh function that updates both documents and tree
+    const refreshAll = () => {
+      console.log(`🔄 Refreshing all data for context ${contextId} due to relevant event`);
+      // Use refs to avoid dependency issues
+      if (contextId) {
+        fetchDocumentsRef.current();
+      }
+      // Only fetch tree if it's open and we don't have tree data
+      if (isTreeViewOpen && !tree) {
+        fetchContextTreeRef.current();
+      }
+    };
+
+    // Helper function to check if event should be processed (deduplication)
+    const shouldProcessEvent = (eventType: string, data: any): boolean => {
+      const now = Date.now();
+
+      // Create unique key for this event based on type and relevant identifiers
+      let eventKey = `${eventType}:${data.contextId || contextId}`;
+      if (data.documentId) eventKey += `:doc:${data.documentId}`;
+      if (data.documentIds?.length) eventKey += `:docs:${data.documentIds.sort().join(',')}`;
+      if (data.operation) eventKey += `:op:${data.operation}`;
+
+      // Check if we've seen this event recently
+      const lastEventTime = recentEvents.get(eventKey);
+      if (lastEventTime && (now - lastEventTime) < EVENT_DEDUP_WINDOW) {
+        console.log(`🚫 Skipping duplicate event: ${eventKey} (${now - lastEventTime}ms ago)`);
+        return false;
+      }
+
+      // Record this event
+      recentEvents.set(eventKey, now);
+
+      // Clean up old events (keep map size reasonable)
+      if (recentEvents.size > 50) {
+        const cutoff = now - EVENT_DEDUP_WINDOW * 2;
+        for (const [key, time] of recentEvents.entries()) {
+          if (time < cutoff) recentEvents.delete(key);
+        }
+      }
+
+      return true;
+    };
+
+    // Context-specific events
     const handleContextUpdateReceived = (data: { context: Partial<ContextData> }) => {
       if (data.context && data.context.id === contextId) {
+        if (!shouldProcessEvent('context:updated', data.context)) return;
+
+        console.log('Context update event received:', data);
         setContext(prev => prev ? { ...prev, ...data.context } as ContextData : null);
         if (data.context.url) {
           setEditableUrl(data.context.url);
-          debouncedRefreshDocuments();
         }
+        refreshAll();
       }
     };
 
     const handleContextUrlChanged = (data: { id: string; url: string }) => {
       if (data.id === contextId) {
+        if (!shouldProcessEvent('context:url:changed', data)) return;
+
+        console.log('Context URL changed event received:', data);
         setContext(prev => prev ? { ...prev, url: data.url } : null);
         setEditableUrl(data.url);
-        debouncedRefreshDocuments();
+        refreshAll();
       }
     };
 
     const handleContextLockStatusChanged = (data: { id: string; locked: boolean }) => {
       if (data.id === contextId) {
+        if (!shouldProcessEvent('context:lock:changed', data)) return;
+
+        console.log('Context lock status changed event received:', data);
         setContext(prev => prev ? { ...prev, locked: data.locked } : null);
       }
     };
@@ -619,6 +707,9 @@ export default function ContextDetailPage() {
     const handleContextDeleted = (data: { id: string } | { contextId: string }) => {
       const deletedId = ('id' in data) ? data.id : data.contextId;
       if (deletedId === contextId) {
+        if (!shouldProcessEvent('context:deleted', data)) return;
+
+        console.log('Context deleted event received:', data);
         setContext(null);
         setError('Context has been deleted.');
         showToast({
@@ -631,9 +722,12 @@ export default function ContextDetailPage() {
 
     const handleContextAclUpdated = (data: { id: string; acl: Record<string, any>; sharedWithUserId?: string; accessLevel?: string }) => {
       if (data.id === contextId) {
+        if (!shouldProcessEvent('context:acl:updated', data)) return;
+
+        console.log('Context ACL updated event received:', data);
         setContext(prev => prev ? { ...prev, acl: data.acl } : null);
         if (data.sharedWithUserId && data.accessLevel) {
-          showToast({
+          debouncedNotify({
             title: 'Access Granted',
             description: `${data.sharedWithUserId} was granted ${data.accessLevel} access to this context.`
           });
@@ -643,9 +737,12 @@ export default function ContextDetailPage() {
 
     const handleContextAclRevoked = (data: { id: string; acl: Record<string, any>; revokedFromUserId?: string }) => {
       if (data.id === contextId) {
+        if (!shouldProcessEvent('context:acl:revoked', data)) return;
+
+        console.log('Context ACL revoked event received:', data);
         setContext(prev => prev ? { ...prev, acl: data.acl } : null);
         if (data.revokedFromUserId) {
-          showToast({
+          debouncedNotify({
             title: 'Access Revoked',
             description: `Access was revoked from ${data.revokedFromUserId} for this context.`
           });
@@ -653,119 +750,178 @@ export default function ContextDetailPage() {
       }
     };
 
-    // Handle document-related events
-    const handleDocumentInsert = (data: any) => {
-      if (data.contextId === contextId) {
-        console.log('Document insert event received, refreshing documents:', data);
-        debouncedRefreshDocuments();
-        showToast({
-          title: 'Document Added',
-          description: 'A new document was added to this context.',
-        });
+    // Document events - prioritize specific events over generic ones
+    const handleDocumentEvent = (eventType: string, priority: 'high' | 'low' = 'high') => (data: any) => {
+      console.log(`📨 DEBUG: Received ${eventType} event (priority: ${priority}):`, data);
+
+      // Check if event is relevant to this context
+      const isRelevant = data.contextId === contextId ||
+                        data.workspaceId === context?.workspaceId ||
+                        (data.relevant !== false);
+
+      console.log(`🔍 DEBUG: Event relevance check for ${eventType}:`, {
+        eventContextId: data.contextId,
+        currentContextId: contextId,
+        eventWorkspaceId: data.workspaceId,
+        currentWorkspaceId: context?.workspaceId,
+        isRelevant: isRelevant
+      });
+
+      if (!isRelevant) {
+        console.log(`❌ Document ${eventType} event ignored (not relevant for context ${contextId})`);
+        return;
+      }
+
+      // Deduplication check
+      if (!shouldProcessEvent(`document:${eventType}:${priority}`, data)) return;
+
+      console.log(`✅ Document ${eventType} event processed for context ${contextId}:`, data);
+      refreshAll();
+
+      // Handle batch operations differently
+      const isBatchOperation = data.documentIds?.length > 1 || data.documents?.length > 1 || eventType.includes('batch');
+
+      if (isBatchOperation) {
+        const count = data.documentIds?.length || data.documents?.length || 0;
+        const batchMessages = {
+          'insert': { title: 'Documents Added', description: `${count} documents were added.` },
+          'update': { title: 'Documents Updated', description: `${count} documents were updated.` },
+          'remove': { title: 'Documents Removed', description: `${count} documents were removed.` },
+          'delete': { title: 'Documents Deleted', description: `${count} documents were permanently deleted.` }
+        };
+
+        const message = batchMessages[eventType as keyof typeof batchMessages];
+        if (message) {
+          debouncedNotify(message);
+        }
+      } else {
+        // Single document operations
+        const toastMessages = {
+          'insert': { title: 'Document Added', description: 'A new document was added.' },
+          'update': { title: 'Document Updated', description: 'A document was updated.' },
+          'remove': { title: 'Document Removed', description: 'A document was removed from this context.' },
+          'delete': { title: 'Document Deleted', description: 'A document was permanently deleted.' }
+        };
+
+        const message = toastMessages[eventType as keyof typeof toastMessages];
+        if (message) {
+          debouncedNotify(message);
+        }
       }
     };
 
-    const handleDocumentUpdate = (data: any) => {
-      if (data.contextId === contextId) {
-        console.log('Document update event received, refreshing documents:', data);
-        debouncedRefreshDocuments();
-        showToast({
-          title: 'Document Updated',
-          description: 'A document in this context was updated.',
-        });
+    // Tree events - refresh tree and potentially documents on any tree change
+    const handleTreeEvent = (eventType: string) => (data: any) => {
+      // Check if event is relevant to this context
+      const isRelevant = data.contextId === contextId ||
+                        data.workspaceId === context?.workspaceId ||
+                        data.relevant !== false;
+
+      if (isRelevant) {
+        console.log(`Tree ${eventType} event received for context ${contextId}:`, data);
+
+        // Tree changes might affect document visibility, so refresh both
+        refreshAll();
+
+        // Show appropriate toast for significant tree events
+        const significantEvents = ['path:inserted', 'path:removed', 'path:moved'];
+        if (significantEvents.some(event => eventType.includes(event))) {
+          showToast({
+            title: 'Tree Structure Changed',
+            description: 'The workspace tree structure was modified.'
+          });
+        }
       }
     };
 
-    const handleDocumentRemove = (data: any) => {
-      if (data.contextId === contextId) {
-        console.log('Document remove event received, refreshing documents:', data);
-        debouncedRefreshDocuments();
-        showToast({
-          title: 'Document Removed',
-          description: 'A document was removed from this context.',
-        });
-      }
-    };
+    // Register all context events
+    console.log('🎯 DEBUG: Registering context event listeners...');
+    socketService.on('context:updated', handleContextUpdateReceived);
+    socketService.on('context:url:set', handleContextUrlChanged);
+    socketService.on('context:locked', handleContextLockStatusChanged);
+    socketService.on('context:unlocked', handleContextLockStatusChanged);
+    socketService.on('context:deleted', handleContextDeleted);
+    socketService.on('context:acl:updated', handleContextAclUpdated);
+    socketService.on('context:acl:revoked', handleContextAclRevoked);
 
-    const handleDocumentDelete = (data: any) => {
-      if (data.contextId === contextId) {
-        console.log('Document delete event received, refreshing documents:', data);
-        debouncedRefreshDocuments();
-        showToast({
-          title: 'Document Deleted',
-          description: 'A document was permanently deleted.',
-        });
-      }
-    };
+    // Register document events with priority system
+    // HIGH PRIORITY: Specific document events (preferred)
+    const highPriorityDocumentEvents = [
+      'document:insert',
+      'document:update',
+      'document:remove',
+      'document:delete',
+      'documents:delete'  // Batch delete
+    ];
 
-    // Handle tree-related events
-    const handleTreePathInserted = (data: any) => {
-      if (data.contextId === contextId || data.id === contextId) {
-        // Refresh tree when paths are inserted
-        fetchContextTree();
-      }
-    };
+    console.log('🎯 DEBUG: Registering HIGH PRIORITY document event listeners:', highPriorityDocumentEvents);
+    highPriorityDocumentEvents.forEach(event => {
+      const eventType = event.includes(':') ? event.split(':').pop() || 'unknown' : event;
+      console.log(`   📝 Registering ${event} -> ${eventType} (HIGH PRIORITY)`);
+      socketService.on(event, handleDocumentEvent(eventType, 'high'));
+    });
 
-    const handleTreePathRemoved = (data: any) => {
-      if (data.contextId === contextId || data.id === contextId) {
-        // Refresh tree when paths are removed
-        fetchContextTree();
-      }
-    };
+    // LOW PRIORITY: Generic context events that might indicate document changes
+    // These will be ignored if we already processed a high-priority event for the same operation
+    const lowPriorityDocumentEvents: string[] = [
+      // Only register context:updated as low priority since it's generic
+      // Skip workspace-forwarded events for now to reduce noise
+    ];
 
-    const handleTreePathMoved = (data: any) => {
-      if (data.contextId === contextId || data.id === contextId) {
-        // Refresh tree when paths are moved
-        fetchContextTree();
-      }
-    };
+    console.log('🎯 DEBUG: Registering LOW PRIORITY document event listeners:', lowPriorityDocumentEvents);
+    lowPriorityDocumentEvents.forEach(event => {
+      const eventType = event.includes(':') ? event.split(':').pop() || 'unknown' : event;
+      console.log(`   📝 Registering ${event} -> ${eventType} (LOW PRIORITY)`);
+      socketService.on(event, handleDocumentEvent(eventType, 'low'));
+    });
 
-    // Listen for context events
-    socketService.on(WS_EVENTS.CONTEXT_UPDATED, handleContextUpdateReceived);
-    socketService.on(WS_EVENTS.CONTEXT_URL_CHANGED, handleContextUrlChanged);
-    socketService.on(WS_EVENTS.CONTEXT_LOCKED, handleContextLockStatusChanged);
-    socketService.on(WS_EVENTS.CONTEXT_UNLOCKED, handleContextLockStatusChanged);
-    socketService.on(WS_EVENTS.CONTEXT_DELETED, handleContextDeleted);
-    socketService.on(WS_EVENTS.CONTEXT_ACL_UPDATED, handleContextAclUpdated);
-    socketService.on(WS_EVENTS.CONTEXT_ACL_REVOKED, handleContextAclRevoked);
+    // Register tree events (workspace-forwarded) - but only significant ones
+    const significantTreeEvents = [
+      'context:workspace:tree:path:inserted',
+      'context:workspace:tree:path:removed',
+      'context:workspace:tree:path:moved'
+      // Skip document-level tree events to avoid duplication with document events
+    ];
 
-    // Listen for document events
-    socketService.on('document:insert', handleDocumentInsert);
-    socketService.on('document:update', handleDocumentUpdate);
-    socketService.on('document:remove', handleDocumentRemove);
-    socketService.on('document:delete', handleDocumentDelete);
-    socketService.on('documents:delete', handleDocumentDelete); // Handle batch delete
+    console.log('🎯 DEBUG: Registering significant tree event listeners:', significantTreeEvents);
+    significantTreeEvents.forEach(event => {
+      const eventType = event.replace('context:workspace:tree:', '');
+      console.log(`   📝 Registering ${event} -> ${eventType}`);
+      socketService.on(event, handleTreeEvent(eventType));
+    });
 
-    // Listen for tree events
-    socketService.on('context:workspace:tree:path:inserted', handleTreePathInserted);
-    socketService.on('context:workspace:tree:path:removed', handleTreePathRemoved);
-    socketService.on('context:workspace:tree:path:moved', handleTreePathMoved);
-    socketService.on('context:workspace:tree:path:copied', handleTreePathMoved); // Same as moved
-
+    // Cleanup function
     return () => {
+      console.log(`Unsubscribing from context events for context ${contextId}`);
       socketService.emit('unsubscribe', { topic: 'context', id: contextId });
-      socketService.off(WS_EVENTS.CONTEXT_UPDATED, handleContextUpdateReceived);
-      socketService.off(WS_EVENTS.CONTEXT_URL_CHANGED, handleContextUrlChanged);
-      socketService.off(WS_EVENTS.CONTEXT_LOCKED, handleContextLockStatusChanged);
-      socketService.off(WS_EVENTS.CONTEXT_UNLOCKED, handleContextLockStatusChanged);
-      socketService.off(WS_EVENTS.CONTEXT_DELETED, handleContextDeleted);
-      socketService.off(WS_EVENTS.CONTEXT_ACL_UPDATED, handleContextAclUpdated);
-      socketService.off(WS_EVENTS.CONTEXT_ACL_REVOKED, handleContextAclRevoked);
+
+      // Clean up all event listeners
+      socketService.off('context:updated', handleContextUpdateReceived);
+      socketService.off('context:url:set', handleContextUrlChanged);
+      socketService.off('context:locked', handleContextLockStatusChanged);
+      socketService.off('context:unlocked', handleContextLockStatusChanged);
+      socketService.off('context:deleted', handleContextDeleted);
+      socketService.off('context:acl:updated', handleContextAclUpdated);
+      socketService.off('context:acl:revoked', handleContextAclRevoked);
 
       // Clean up document event listeners
-      socketService.off('document:insert', handleDocumentInsert);
-      socketService.off('document:update', handleDocumentUpdate);
-      socketService.off('document:remove', handleDocumentRemove);
-      socketService.off('document:delete', handleDocumentDelete);
-      socketService.off('documents:delete', handleDocumentDelete);
+      highPriorityDocumentEvents.forEach(event => {
+        const eventType = event.includes(':') ? event.split(':').pop() || 'unknown' : event;
+        socketService.off(event, handleDocumentEvent(eventType, 'high'));
+      });
+
+      lowPriorityDocumentEvents.forEach(event => {
+        const eventType = event.includes(':') ? event.split(':').pop() || 'unknown' : event;
+        socketService.off(event, handleDocumentEvent(eventType, 'low'));
+      });
 
       // Clean up tree event listeners
-      socketService.off('context:workspace:tree:path:inserted', handleTreePathInserted);
-      socketService.off('context:workspace:tree:path:removed', handleTreePathRemoved);
-      socketService.off('context:workspace:tree:path:moved', handleTreePathMoved);
-      socketService.off('context:workspace:tree:path:copied', handleTreePathMoved);
+      significantTreeEvents.forEach(event => {
+        const eventType = event.replace('context:workspace:tree:', '');
+        socketService.off(event, handleTreeEvent(eventType));
+      });
     };
-  }, [contextId, debouncedRefreshDocuments, fetchContextTree]);
+  }, [contextId, isTreeViewOpen, tree, context?.workspaceId]);
 
   // Handle URL change
   const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {

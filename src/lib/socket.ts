@@ -42,8 +42,16 @@ class SocketService {
 
     // Use auth token from localStorage if not provided
     const authToken = token || getAuthToken()
+    console.log('🔍 DEBUG: Auth token check:', {
+      tokenProvided: !!token,
+      tokenFromStorage: !!getAuthToken(),
+      tokenLength: authToken ? authToken.length : 0,
+      tokenPreview: authToken ? authToken.substring(0, 20) + '...' : 'null'
+    });
+
     if (!authToken) {
-      console.warn('No auth token available for socket connection');
+      console.error('❌ No auth token available for socket connection');
+      console.log('🔍 DEBUG: localStorage contents:', Object.keys(localStorage));
       this.pending = false;
       return;
     }
@@ -56,8 +64,8 @@ class SocketService {
     }
 
     try {
-      console.log('Attempting to connect to WebSocket server at:', this.baseUrl)
-      console.log('Using auth token for socket connection:', authToken.substring(0, 10) + '...')
+      console.log('🔌 Attempting to connect to WebSocket server at:', this.baseUrl)
+      console.log('🔑 Using auth token for socket connection:', authToken.substring(0, 10) + '...')
 
       // Destroy any existing socket connection
       this.cleanupSocket();
@@ -81,12 +89,12 @@ class SocketService {
         }
       })
 
-      console.log('Socket.IO client initialized, connecting...')
+      console.log('🎯 Socket.IO client initialized, connecting...')
 
       // Register basic event handlers
       this.setupDefaultHandlers()
     } catch (error) {
-      console.error('Socket connection error:', error)
+      console.error('💥 Socket connection setup error:', error)
       this.pending = false
 
       // Clean up any partial socket
@@ -168,7 +176,8 @@ class SocketService {
     if (!this.socket) return
 
     this.socket.on('connect', () => {
-      console.log('Socket connected with ID:', this.socket?.id)
+      console.log('✅ Socket connected with ID:', this.socket?.id)
+      console.log('🔗 Connection established to:', this.baseUrl)
       this.connected = true
       this.pending = false
       this.reconnectAttempts = 0
@@ -181,7 +190,13 @@ class SocketService {
     })
 
     this.socket.on('disconnect', (reason: string) => {
-      console.log('Socket disconnected:', reason)
+      console.log('🔌 Socket disconnected:', reason)
+      console.log('🔍 DEBUG: Disconnect details:', {
+        reason,
+        wasConnected: this.connected,
+        reconnectAttempts: this.reconnectAttempts,
+        maxAttempts: this.maxReconnectAttempts
+      });
       this.connected = false
       this.pending = false
 
@@ -190,7 +205,7 @@ class SocketService {
 
       // Handle reconnection for transport close (which often happens when an extension is removed)
       if (reason === 'transport close' && this.reconnectAttempts < this.maxReconnectAttempts) {
-        console.log(`Attempting reconnection (${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`)
+        console.log(`🔄 Attempting reconnection (${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`)
         this.reconnectAttempts++
         // Wait a bit before trying to reconnect
         setTimeout(() => {
@@ -202,8 +217,16 @@ class SocketService {
     })
 
     this.socket.on('connect_error', (error: any) => {
-      console.error('Socket connection error:', error.message)
-      console.error('Connection error details:', error)
+      console.error('💥 Socket connection error:', error.message)
+      console.error('🔍 DEBUG: Connection error details:', {
+        message: error.message,
+        description: error.description,
+        context: error.context,
+        type: error.type,
+        transport: error.transport,
+        code: error.code
+      });
+      console.error('🔍 DEBUG: Full error object:', error)
       this.connected = false
       this.pending = false
 
