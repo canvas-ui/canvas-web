@@ -29,6 +29,7 @@ function App() {
             <Route path="workspaces/:workspaceId" element={<WorkspaceDetailPage />} />
             <Route path="contexts" element={<ContextsPage />} />
             <Route path="contexts/:contextId" element={<ContextDetailPage />} />
+            <Route path="users/:userId/contexts/:contextId" element={<ContextDetailPage />} />
             <Route path="api-tokens" element={<ApiTokensPage />} />
           </Route>
 

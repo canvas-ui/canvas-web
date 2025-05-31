@@ -357,6 +357,7 @@ function DashboardSidebar() {
                 {location.pathname.startsWith('/workspaces/') && location.pathname !== '/workspaces' && 'Workspace Details (read-only)'}
                 {location.pathname === '/contexts' && 'Contexts'}
                 {location.pathname.startsWith('/contexts/') && location.pathname !== '/contexts' && 'Context Details'}
+                {location.pathname.startsWith('/users/') && location.pathname.includes('/contexts/') && 'Shared Context Details'}
                 {location.pathname === '/api-tokens' && 'API Tokens'}
               </span>
             </nav>

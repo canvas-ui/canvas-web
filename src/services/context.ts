@@ -84,6 +84,20 @@ export async function getContext(id: string): Promise<Context> {
   }
 }
 
+export async function getSharedContext(ownerId: string, contextId: string): Promise<Context> {
+  try {
+    // API returns { payload: { context: Context } }
+    const response = await api.get<ServiceApiResponse<{ context: Context }>>(`${API_ROUTES.users}/${ownerId}/contexts/${contextId}`);
+    if (response.payload && response.payload.context) {
+      return response.payload.context;
+    }
+    throw new Error('Shared context data not found in API response');
+  } catch (error) {
+    console.error(`Failed to get shared context ${ownerId}/${contextId}:`, error);
+    throw error;
+  }
+}
+
 export async function createContext(contextData: CreateContextPayload): Promise<Context> {
   try {
     // API expects { id, url, description?, workspaceId, baseUrl? }
@@ -155,6 +169,45 @@ export async function getContextDocuments(
     return response.payload || [];
   } catch (error) {
     console.error(`Failed to get context documents for ${id}:`, error);
+    throw error;
+  }
+}
+
+export async function getSharedContextDocuments(
+  ownerId: string,
+  contextId: string,
+  featureArray: string[] = [],
+  filterArray: string[] = [],
+  options: Record<string, any> = {}
+): Promise<DocumentResponse['data']> {
+  try {
+    // Build query parameters - API expects arrays as separate parameters
+    const params = new URLSearchParams();
+
+    // Add each feature as a separate featureArray parameter
+    featureArray.forEach(feature => {
+      params.append('featureArray', feature);
+    });
+
+    // Add each filter as a separate filterArray parameter
+    filterArray.forEach(filter => {
+      params.append('filterArray', filter);
+    });
+
+    // Add options
+    if (options.includeServerContext !== undefined) {
+      params.append('includeServerContext', options.includeServerContext.toString());
+    }
+    if (options.includeClientContext !== undefined) {
+      params.append('includeClientContext', options.includeClientContext.toString());
+    }
+
+    const url = `${API_ROUTES.users}/${ownerId}/contexts/${contextId}/documents${params.toString() ? '?' + params.toString() : ''}`;
+    // The API returns documents directly in payload array, not wrapped in a data property
+    const response = await api.get<ServiceApiResponse<DocumentResponse['data']>>(url);
+    return response.payload || [];
+  } catch (error) {
+    console.error(`Failed to get shared context documents for ${ownerId}/${contextId}:`, error);
     throw error;
   }
 }

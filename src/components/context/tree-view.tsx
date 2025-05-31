@@ -9,6 +9,7 @@ interface ContextTreeViewProps {
   onPathSelect: (path: string) => void
   contextId: string
   workspaceId: string
+  disabled?: boolean
 }
 
 interface ContextTreeNodeProps {
@@ -19,6 +20,7 @@ interface ContextTreeNodeProps {
   onPathSelect: (path: string) => void
   contextId: string
   workspaceId: string
+  disabled?: boolean
 }
 
 function ContextTreeNodeComponent({
@@ -28,7 +30,8 @@ function ContextTreeNodeComponent({
   selectedPath,
   onPathSelect,
   contextId,
-  workspaceId
+  workspaceId,
+  disabled = false
 }: ContextTreeNodeProps) {
   const [isExpanded, setIsExpanded] = useState(true)
 
@@ -44,16 +47,19 @@ function ContextTreeNodeComponent({
   }
 
   const handleSelect = () => {
-    onPathSelect(currentPath)
+    if (!disabled) {
+      onPathSelect(currentPath)
+    }
   }
 
   return (
     <div>
       <div
         className={cn(
-          "flex items-center py-1 px-2 hover:bg-accent hover:text-accent-foreground cursor-pointer rounded-sm",
-          isSelected && "bg-accent text-accent-foreground",
-          "text-sm"
+          "flex items-center py-1 px-2 rounded-sm text-sm",
+          !disabled && "hover:bg-accent hover:text-accent-foreground cursor-pointer",
+          disabled && "cursor-not-allowed opacity-60",
+          isSelected && !disabled && "bg-accent text-accent-foreground"
         )}
         style={{ paddingLeft: `${level * 16 + 8}px` }}
         onClick={handleSelect}
@@ -67,6 +73,7 @@ function ContextTreeNodeComponent({
                 handleToggle()
               }}
               className="hover:bg-muted rounded-sm p-0.5"
+              disabled={disabled}
             >
               {isExpanded ? (
                 <ChevronDown className="h-3 w-3" />
@@ -116,6 +123,7 @@ function ContextTreeNodeComponent({
               onPathSelect={onPathSelect}
               contextId={contextId}
               workspaceId={workspaceId}
+              disabled={disabled}
             />
           ))}
         </div>
@@ -129,14 +137,15 @@ export function ContextTreeView({
   selectedPath,
   onPathSelect,
   contextId,
-  workspaceId
+  workspaceId,
+  disabled = false
 }: ContextTreeViewProps) {
   return (
     <div className="w-full">
       <div className="border-b pb-2 mb-2">
         <h3 className="font-semibold text-sm text-muted-foreground">Context Tree</h3>
         <p className="text-xs text-muted-foreground">
-          Click on a path to update context URL
+          {disabled ? 'Read-only view (shared context)' : 'Click on a path to update context URL'}
         </p>
       </div>
 
@@ -144,11 +153,12 @@ export function ContextTreeView({
         {/* Root node */}
         <div
           className={cn(
-            "flex items-center py-1 px-2 hover:bg-accent hover:text-accent-foreground cursor-pointer rounded-sm",
-            selectedPath === '/' && "bg-accent text-accent-foreground",
-            "text-sm"
+            "flex items-center py-1 px-2 rounded-sm text-sm",
+            !disabled && "hover:bg-accent hover:text-accent-foreground cursor-pointer",
+            disabled && "cursor-not-allowed opacity-60",
+            selectedPath === '/' && !disabled && "bg-accent text-accent-foreground"
           )}
-          onClick={() => onPathSelect('/')}
+          onClick={() => !disabled && onPathSelect('/')}
         >
           <div className="flex items-center justify-center w-4 h-4 mr-1">
             <div className="w-3 h-3" />
@@ -181,6 +191,7 @@ export function ContextTreeView({
             onPathSelect={onPathSelect}
             contextId={contextId}
             workspaceId={workspaceId}
+            disabled={disabled}
           />
         ))}
       </div>

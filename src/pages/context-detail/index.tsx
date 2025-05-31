@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast-container';
 import { Save, Share, X, Plus, Settings, Info, Sidebar } from 'lucide-react';
-import { getContext, updateContextUrl, grantContextAccess, revokeContextAccess, getContextTree, getContextDocuments } from '@/services/context';
+import { getContext, getSharedContext, updateContextUrl, grantContextAccess, revokeContextAccess, getContextTree, getContextDocuments, getSharedContextDocuments } from '@/services/context';
 import socketService from '@/lib/socket';
 import { getCurrentUserFromToken } from '@/services/auth';
 import { ContextTreeView } from '@/components/context/tree-view';
@@ -83,7 +83,7 @@ interface ContextDocument {
 }
 
 export default function ContextDetailPage() {
-  const { contextId } = useParams<{ contextId: string }>();
+  const { contextId, userId } = useParams<{ contextId: string; userId?: string }>();
   const [context, setContext] = useState<ContextData | null>(null);
   const [tree, setTree] = useState<TreeNode | null>(null);
   const [workspaceDocuments, setWorkspaceDocuments] = useState<WorkspaceDocument[]>([]);
@@ -124,6 +124,9 @@ export default function ContextDetailPage() {
   // Get current user to check if they're the owner
   const currentUser = getCurrentUserFromToken();
   const isOwner = currentUser && context && currentUser.id === context.userId;
+
+  // Check if this is a shared context route
+  const isSharedContext = Boolean(userId);
 
   // Close all right sidebars
   const closeAllRightSidebars = () => {
@@ -211,7 +214,9 @@ export default function ContextDetailPage() {
       featureArray.push(...customBitmaps);
 
                         // Use REST API to get documents with filters
-      const documentsData = await getContextDocuments(contextId, featureArray, [], {});
+      const documentsData = isSharedContext && userId
+        ? await getSharedContextDocuments(userId, contextId, featureArray, [], {})
+        : await getContextDocuments(contextId, featureArray, [], {});
 
       // getContextDocuments returns the data array directly
       setWorkspaceDocuments(convertToWorkspaceDocuments(documentsData));
@@ -228,7 +233,7 @@ export default function ContextDetailPage() {
     } finally {
       setIsLoadingDocuments(false);
     }
-  }, [contextId, activeFilters, customBitmaps]);
+  }, [contextId, activeFilters, customBitmaps, userId, isSharedContext]);
 
   // Debounced document refresh for WebSocket events to prevent rapid successive calls
   const debouncedRefreshDocuments = useCallback(
@@ -485,7 +490,9 @@ export default function ContextDetailPage() {
     if (!contextId) return;
     setIsLoading(true);
     try {
-      const fetchedContext = await getContext(contextId) as unknown as ContextData;
+      const fetchedContext = isSharedContext && userId
+        ? await getSharedContext(userId, contextId) as unknown as ContextData
+        : await getContext(contextId) as unknown as ContextData;
 
       if (!fetchedContext) {
         throw new Error('No context data received from getContext service.');
@@ -514,7 +521,7 @@ export default function ContextDetailPage() {
       });
     }
     setIsLoading(false);
-  }, [contextId]);
+  }, [contextId, userId, isSharedContext]);
 
   // Initial data fetch
   useEffect(() => {
@@ -539,7 +546,9 @@ export default function ContextDetailPage() {
         featureArray.push(...customBitmaps);
 
         // Use REST API to get documents with filters
-        const documentsData = await getContextDocuments(contextId, featureArray, [], {});
+        const documentsData = isSharedContext && userId
+          ? await getSharedContextDocuments(userId, contextId, featureArray, [], {})
+          : await getContextDocuments(contextId, featureArray, [], {});
 
         // getContextDocuments returns the data array directly
         setWorkspaceDocuments(convertToWorkspaceDocuments(documentsData));
@@ -559,7 +568,7 @@ export default function ContextDetailPage() {
     };
 
     loadDocuments();
-  }, [context?.id, activeFilters, customBitmaps, contextId, showToast]);
+  }, [context?.id, activeFilters, customBitmaps, contextId, userId, isSharedContext, showToast]);
 
   // Fetch tree when tree view opens
   useEffect(() => {
@@ -973,6 +982,7 @@ export default function ContextDetailPage() {
                 onPathSelect={handlePathSelect}
                 contextId={context?.id || ''}
                 workspaceId={context?.workspaceId || ''}
+                disabled={isSharedContext}
               />
             ) : (
               <div className="text-center text-muted-foreground text-sm">
@@ -1010,14 +1020,14 @@ export default function ContextDetailPage() {
               onChange={handleUrlChange}
               className="font-mono h-10 flex-grow border-0 focus-visible:ring-0 focus-visible:ring-offset-0 !shadow-none"
               placeholder="workspaceID:/path/to/context"
-              disabled={isSaving || context.locked}
+              disabled={isSaving || context.locked || isSharedContext}
             />
           </div>
 
           {/* Set Context Button */}
           <Button
             onClick={handleSetContextUrl}
-            disabled={isSaving || !context || editableUrl === context.url || context.locked}
+            disabled={isSaving || !context || editableUrl === context.url || context.locked || isSharedContext}
             size="sm"
           >
             <Save className="mr-2 h-4 w-4" />
@@ -1064,7 +1074,9 @@ export default function ContextDetailPage() {
         <div className="space-y-6 p-6">
           {/* Page Header */}
           <div className="border-b pb-4">
-            <h1 className="text-3xl font-bold tracking-tight">Context: {context.id}</h1>
+            <h1 className="text-3xl font-bold tracking-tight">
+              Context: {isSharedContext ? `${context.userId}/${context.id}` : context.id}
+            </h1>
             <p className="text-muted-foreground mt-2">{context.description || 'No description available'}</p>
           </div>
 

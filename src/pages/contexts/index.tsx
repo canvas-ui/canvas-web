@@ -7,6 +7,7 @@ import { Plus, Trash, DoorOpen } from "lucide-react"
 import socketService from "@/lib/socket"
 import { listContexts, createContext, deleteContext } from "@/services/context"
 import { listWorkspaces } from "@/services/workspace"
+import { getCurrentUserFromToken } from "@/services/auth"
 
 // ApiWorkspaceEntry (ideally shared)
 type WorkspaceStatus = 'error' | 'available' | 'not_found' | 'active' | 'inactive' | 'removed' | 'destroyed';
@@ -189,6 +190,8 @@ export default function ContextsPage() {
         // If createContext service returns a message property, use it, e.g., (newContext as any).message
         description: 'Context created successfully'
       });
+      // Navigate to the newly created context
+      navigate(`/contexts/${newContext.id}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create context';
       showToast({
@@ -222,8 +225,15 @@ export default function ContextsPage() {
     }
   }
 
-  const handleOpenContext = (contextId: string) => {
-    navigate(`/contexts/${contextId}`)
+  const handleOpenContext = (context: ContextEntry) => {
+    const currentUser = getCurrentUserFromToken()
+    const isSharedContext = currentUser && context.userId !== currentUser.id
+
+    if (isSharedContext) {
+      navigate(`/users/${context.userId}/contexts/${context.id}`)
+    } else {
+      navigate(`/contexts/${context.id}`)
+    }
   }
 
   return (
@@ -374,7 +384,7 @@ export default function ContextsPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleOpenContext(context.id)}
+                            onClick={() => handleOpenContext(context)}
                             title="Open Context Details"
                           >
                             <DoorOpen className="h-4 w-4" />

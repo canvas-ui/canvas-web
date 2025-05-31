@@ -409,9 +409,9 @@ export function DocumentList({
   }
 
   return (
-    <div className="flex-1 flex flex-col">
+    <div className="flex-1 flex flex-col min-h-0">
       {/* Header */}
-      <div className="border-b pb-3 mb-4">
+      <div className="border-b pb-3 mb-4 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="font-semibold text-sm text-muted-foreground">Documents</h3>
@@ -444,15 +444,17 @@ export function DocumentList({
           </div>
         </div>
       ) : (
-        <div className="space-y-3 flex-1 overflow-y-auto">
-          {documents.map((document) => (
-            <DocumentRow
-              key={document.id}
-              document={document}
-              onRemoveDocument={onRemoveDocument}
-              onDeleteDocument={onDeleteDocument}
-            />
-          ))}
+        <div className="flex-1 overflow-y-auto">
+          <div className="space-y-3 pr-2">
+            {documents.map((document) => (
+              <DocumentRow
+                key={document.id}
+                document={document}
+                onRemoveDocument={onRemoveDocument}
+                onDeleteDocument={onDeleteDocument}
+              />
+            ))}
+          </div>
         </div>
       )}
     </div>

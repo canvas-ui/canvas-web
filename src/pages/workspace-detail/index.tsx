@@ -206,7 +206,7 @@ export default function WorkspaceDetailPage() {
         </div>
 
         {/* Right Panel - Document List */}
-        <div className="flex-1 border rounded-lg p-4 overflow-hidden bg-card">
+        <div className="flex-1 border rounded-lg p-4 bg-card flex flex-col min-h-0">
           <DocumentList
             documents={documents}
             isLoading={isLoadingDocuments}
