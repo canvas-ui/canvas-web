@@ -121,9 +121,36 @@ export async function deleteContext(id: string): Promise<void> {
   }
 }
 
-export async function getContextDocuments(id: string): Promise<DocumentResponse['data']> {
+export async function getContextDocuments(
+  id: string,
+  featureArray: string[] = [],
+  filterArray: string[] = [],
+  options: Record<string, any> = {}
+): Promise<DocumentResponse['data']> {
   try {
-    const response = await api.get<ServiceApiResponse<DocumentResponse>>(`${API_ROUTES.contexts}/${id}/documents`);
+    // Build query parameters - API expects arrays as separate parameters
+    const params = new URLSearchParams();
+
+    // Add each feature as a separate featureArray parameter
+    featureArray.forEach(feature => {
+      params.append('featureArray', feature);
+    });
+
+    // Add each filter as a separate filterArray parameter
+    filterArray.forEach(filter => {
+      params.append('filterArray', filter);
+    });
+
+    // Add options
+    if (options.includeServerContext !== undefined) {
+      params.append('includeServerContext', options.includeServerContext.toString());
+    }
+    if (options.includeClientContext !== undefined) {
+      params.append('includeClientContext', options.includeClientContext.toString());
+    }
+
+    const url = `${API_ROUTES.contexts}/${id}/documents${params.toString() ? '?' + params.toString() : ''}`;
+    const response = await api.get<ServiceApiResponse<DocumentResponse>>(url);
     return response.payload?.data || [];
   } catch (error) {
     console.error(`Failed to get context documents for ${id}:`, error);
@@ -153,6 +180,16 @@ export async function revokeContextAccess(ownerId: string, contextId: string, sh
     return response.payload;
   } catch (error) {
     console.error(`Failed to revoke context access:`, error);
+    throw error;
+  }
+}
+
+export async function getContextTree(id: string): Promise<any> {
+  try {
+    const response = await api.get<ServiceApiResponse<any>>(`${API_ROUTES.contexts}/${id}/tree`);
+    return response.payload;
+  } catch (error) {
+    console.error(`Failed to get context tree for ${id}:`, error);
     throw error;
   }
 }
