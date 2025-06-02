@@ -8,6 +8,7 @@ export const API_ROUTES = {
   register: `${API_URL}/auth/register`,
   logout: `${API_URL}/auth/logout`,
   me: `${API_URL}/auth/me`,
+  authConfig: `${API_URL}/auth/config`,
 
   // API Tokens
   tokens: `${API_URL}/auth/tokens`,

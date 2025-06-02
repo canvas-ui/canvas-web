@@ -53,11 +53,12 @@ interface ApiResponse<T> {
 // Union type for possible login response structures
 type LoginResponseData = DirectLoginResponse | NestedLoginResponse;
 
-export async function loginUser(email: string, password: string): Promise<ApiResponse<any>> {
+export async function loginUser(email: string, password: string, strategy: string = 'auto'): Promise<ApiResponse<any>> {
   try {
     const response = await api.post<ApiResponse<LoginResponseData>>(API_ROUTES.login, {
       email,
       password,
+      strategy,
     }, { skipAuth: true });
 
     console.log('Login response:', response);
@@ -213,4 +214,20 @@ export async function getCurrentUser(): Promise<UserProfile | null> {
 
 export function isAuthenticated(): boolean {
   return api.isAuthenticated();
+}
+
+export async function getAuthConfig(): Promise<any> {
+  try {
+    const response = await api.get<ApiResponse<any>>(API_ROUTES.authConfig, { skipAuth: true });
+    return response.payload || response;
+  } catch (error) {
+    console.error('Failed to get auth config:', error);
+    // Return default config if API call fails
+    return {
+      strategies: {
+        local: { enabled: true },
+        imap: { enabled: false, domains: [] }
+      }
+    };
+  }
 }

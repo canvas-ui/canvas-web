@@ -4,27 +4,51 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AuthLayout } from "@/components/auth/auth-layout"
-import { loginUser, isAuthenticated } from "@/services/auth"
+import { loginUser, isAuthenticated, getAuthConfig } from "@/services/auth"
 
 interface FormData {
   email: string
   password: string
+  strategy: string
+}
+
+interface AuthConfig {
+  strategies: {
+    local: { enabled: boolean }
+    imap: {
+      enabled: boolean
+      domains: Array<{
+        domain: string
+        name: string
+        requireAppPassword: boolean
+      }>
+    }
+  }
 }
 
 export default function LoginPage() {
   const navigate = useNavigate()
   const [isLoading, setIsLoading] = React.useState<boolean>(false)
   const [errors, setErrors] = React.useState<Partial<FormData>>({})
+  const [authConfig, setAuthConfig] = React.useState<AuthConfig | null>(null)
   const [formData, setFormData] = React.useState<FormData>({
     email: "",
     password: "",
+    strategy: "auto",
   })
 
-  // Check if we're already logged in
+  // Check if we're already logged in and load auth config
   React.useEffect(() => {
     if (isAuthenticated()) {
       navigate('/workspaces');
     }
+
+    // Load authentication configuration
+    getAuthConfig().then(config => {
+      setAuthConfig(config);
+    }).catch(error => {
+      console.error('Failed to load auth config:', error);
+    });
   }, [navigate]);
 
   const validateForm = (): boolean => {
@@ -44,7 +68,7 @@ export default function LoginPage() {
     return Object.keys(newErrors).length === 0
   }
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
     setFormData(prev => ({
       ...prev,
@@ -58,8 +82,8 @@ export default function LoginPage() {
 
     setIsLoading(true)
     try {
-      console.log('Attempting login with:', formData.email);
-      const response = await loginUser(formData.email, formData.password);
+      console.log('Attempting login with:', formData.email, 'strategy:', formData.strategy);
+      const response = await loginUser(formData.email, formData.password, formData.strategy);
       console.log('Login successful, received token:', !!response.payload?.token);
 
       // Clear any existing errors
@@ -69,7 +93,24 @@ export default function LoginPage() {
       navigate("/home")
     } catch (error) {
       console.error('Login error:', error);
-      const errorMessage = error instanceof Error ? error.message : "Login failed"
+
+      // Extract the most specific error message from the server response
+      let errorMessage = "Login failed";
+
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null) {
+        // Handle API response error objects
+        const apiError = error as any;
+        if (apiError.message) {
+          errorMessage = apiError.message;
+        } else if (apiError.error) {
+          errorMessage = apiError.error;
+        } else if (apiError.payload?.message) {
+          errorMessage = apiError.payload.message;
+        }
+      }
+
       setErrors({
         password: errorMessage
       })
@@ -90,6 +131,24 @@ export default function LoginPage() {
 
         <form onSubmit={onSubmit}>
           <div className="grid gap-4">
+            {authConfig?.strategies?.imap?.enabled && authConfig.strategies.imap.domains.length > 0 && (
+              <div className="grid gap-2">
+                <Label htmlFor="strategy">Authentication Method</Label>
+                <select
+                  id="strategy"
+                  name="strategy"
+                  value={formData.strategy}
+                  onChange={handleInputChange}
+                  disabled={isLoading}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="auto">Auto-detect</option>
+                  <option value="local">Local Account</option>
+                  <option value="imap">Email Server (IMAP)</option>
+                </select>
+              </div>
+            )}
+
             <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
               <Input
