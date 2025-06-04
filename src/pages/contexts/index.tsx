@@ -81,7 +81,12 @@ export default function ContextsPage() {
         listWorkspaces()
       ]);
 
-      setContexts(fetchedContexts as unknown as ContextEntry[]); // Use the result of listContexts directly
+      // Filter out any null/undefined contexts and validate structure
+      const validContexts = (fetchedContexts as unknown as ContextEntry[])?.filter(ctx =>
+        ctx && typeof ctx === 'object' && ctx.id && ctx.userId
+      ) || [];
+
+      setContexts(validContexts);
 
       const workspacesData = (workspacesApiResponse as any).payload as unknown as ApiWorkspaceEntry[] || [];
       setWorkspaces(workspacesData);
@@ -121,26 +126,57 @@ export default function ContextsPage() {
     console.log('Subscribing to context events');
     socketService.emit('subscribe', { topic: 'context' })
 
-    const handleContextCreated = (data: { context: ContextEntry }) => {
+    const handleContextCreated = (data: ContextEntry) => {
       console.log('Received context created:', data);
-      setContexts(prev => [...prev, data.context as unknown as ContextEntry])
+      // The backend sends the context data directly, not nested under 'context' property
+      // Validate the context data before adding
+      if (!data || !data.id || !data.userId) {
+        console.error('Invalid context data received in context:created event:', data);
+        return;
+      }
+
+      // Only add if not already in the list (prevent duplicates from API call)
+      setContexts(prev => {
+        const exists = prev.some(ctx => ctx && ctx.id === data.id && ctx.userId === data.userId);
+        if (exists) {
+          console.log(`Context ${data.id} already exists, skipping duplicate add`);
+          return prev;
+        }
+        return [...prev, data];
+      });
     }
-    const handleContextUpdated = (data: { context: ContextEntry }) => {
+    const handleContextUpdated = (data: ContextEntry) => {
       console.log('Received context update:', data);
-      const updatedContext = data.context as unknown as ContextEntry;
+      // Validate the context data before updating
+      if (!data || !data.id || !data.userId) {
+        console.error('Invalid context data received in context:updated event:', data);
+        return;
+      }
+
+      // The backend sends the context data directly
       setContexts(prev => prev.map(ctx =>
-        ctx.id === updatedContext.id ? { ...ctx, ...updatedContext } : ctx
+        (ctx && ctx.id === data.id && ctx.userId === data.userId) ? { ...ctx, ...data } : ctx
       ))
     }
     const handleContextDeleted = (data: { contextId: string }) => {
       console.log('Received context deletion:', data);
-      setContexts(prev => prev.filter(ctx => ctx.id !== data.contextId))
+      if (!data || !data.contextId) {
+        console.error('Invalid context deletion data received:', data);
+        return;
+      }
+      setContexts(prev => prev.filter(ctx => ctx && ctx.id !== data.contextId))
     }
-    const handleContextUrlChanged = (data: { context: ContextEntry }) => {
+    const handleContextUrlChanged = (data: ContextEntry) => {
       console.log('Received context URL change:', data);
-      const changedContext = data.context as unknown as ContextEntry;
+      // Validate the context data before updating
+      if (!data || !data.id || !data.userId) {
+        console.error('Invalid context data received in context:url:changed event:', data);
+        return;
+      }
+
+      // The backend sends the context data directly
       setContexts(prev => prev.map(ctx =>
-        ctx.id === changedContext.id ? { ...ctx, ...changedContext } : ctx
+        (ctx && ctx.id === data.id && ctx.userId === data.userId) ? { ...ctx, ...data } : ctx
       ))
     }
 
@@ -178,16 +214,14 @@ export default function ContextsPage() {
         workspaceId: selectedWorkspaceId,
         baseUrl: newContextBaseUrl || undefined
       };
-      // Assuming createContext service returns the new ContextEntry directly
+      // Create the context - the socket event will add it to the state
       const newContext = await createContext(newContextPayload);
-      setContexts(prev => [...prev, newContext as unknown as ContextEntry]);
       setNewContextId("");
       setNewContextUrl("");
       setNewContextDescription("");
       setNewContextBaseUrl("");
       showToast({
         title: 'Success',
-        // If createContext service returns a message property, use it, e.g., (newContext as any).message
         description: 'Context created successfully'
       });
       // Navigate to the newly created context
@@ -366,15 +400,21 @@ export default function ContextsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {contexts.map((context) => {
+                  {contexts.filter(context => context != null).map((context) => {
+                    // Safety checks to prevent errors with undefined properties
+                    if (!context) {
+                      console.warn('Found null/undefined context in contexts array, skipping');
+                      return null;
+                    }
+
                     const createdAtDisplay = context.createdAt ? new Date(context.createdAt).toLocaleDateString() : '-';
                     const updatedAtDisplay = context.updatedAt ? new Date(context.updatedAt).toLocaleDateString() : '-';
                     return (
                       <tr key={`${context.userId}-${context.id}`} className="border-t">
-                        <td className="p-3 font-mono text-sm">{context.id}</td>
-                        <td className="p-3 font-mono text-sm">{context.userId}</td>
-                        <td className="p-3 font-mono text-sm">{context.url}</td>
-                        <td className="p-3 font-mono text-sm">{context.workspaceId}</td>
+                        <td className="p-3 font-mono text-sm">{context.id || '-'}</td>
+                        <td className="p-3 font-mono text-sm">{context.userId || '-'}</td>
+                        <td className="p-3 font-mono text-sm">{context.url || '-'}</td>
+                        <td className="p-3 font-mono text-sm">{context.workspaceId || '-'}</td>
                         <td className="p-3 font-mono text-sm">{context.baseUrl || '-'}</td>
                         <td className="p-3 font-mono text-sm">{context.path || '-'}</td>
                         <td className="p-3">{context.locked ? 'Yes' : 'No'}</td>
