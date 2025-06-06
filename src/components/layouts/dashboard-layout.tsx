@@ -5,6 +5,7 @@ import { api } from "@/lib/api"
 import { useToast } from "@/components/ui/toast-container"
 import { getCurrentUserFromToken } from "@/services/auth"
 import { listWorkspaces } from "@/services/workspace"
+import { listContexts } from "@/services/context"
 import {
   Sidebar,
   SidebarContent,
@@ -42,19 +43,25 @@ interface Workspace {
   updatedAt: string
 }
 
-// Navigation items (excluding workspaces which will be a submenu)
+// Context interface (from global types but redefined for local use)
+interface LocalContext {
+  id: string
+  url: string
+  description?: string
+  workspace?: string
+  baseUrl?: string
+  owner?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+// Navigation items (excluding workspaces and contexts which will be submenus)
 const navigationItems = [
   {
     title: "Universe",
     url: "/workspaces/universe",
     icon: Infinity,
     description: "Universe"
-  },
-  {
-    title: "Contexts",
-    url: "/contexts",
-    icon: Network,
-    description: "Browse and manage contexts"
   }
 ]
 
@@ -68,6 +75,9 @@ function DashboardSidebar() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [isWorkspacesOpen, setIsWorkspacesOpen] = useState(true)
   const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(false)
+  const [contexts, setContexts] = useState<LocalContext[]>([])
+  const [isContextsOpen, setIsContextsOpen] = useState(true)
+  const [isLoadingContexts, setIsLoadingContexts] = useState(false)
 
   // Get user information from token
   useEffect(() => {
@@ -108,6 +118,28 @@ function DashboardSidebar() {
     }
 
     fetchWorkspaces()
+  }, [])
+
+  // Fetch contexts
+  useEffect(() => {
+    const fetchContexts = async () => {
+      setIsLoadingContexts(true)
+      try {
+        const contextData = await listContexts()
+        setContexts(contextData)
+      } catch (error) {
+        console.error('Failed to fetch contexts:', error)
+        showToast({
+          title: 'Error',
+          description: 'Failed to load contexts',
+          variant: 'destructive'
+        })
+      } finally {
+        setIsLoadingContexts(false)
+      }
+    }
+
+    fetchContexts()
   }, [])
 
   const isActive = (path: string) => {
@@ -266,6 +298,74 @@ function DashboardSidebar() {
                            </SidebarMenuSubItem>
                          ))
                        )}
+                    </SidebarMenuSub>
+                  )}
+                </SidebarMenuItem>
+
+                {/* Contexts submenu */}
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => {
+                      // If sidebar is collapsed, navigate to contexts page
+                      if (state === 'collapsed') {
+                        navigateTo('/contexts')
+                      } else {
+                        // If sidebar is expanded, toggle the submenu
+                        setIsContextsOpen(!isContextsOpen)
+                      }
+                    }}
+                    tooltip="Browse and manage contexts"
+                  >
+                    <Network className="size-4" />
+                    <span>Contexts</span>
+                    <ChevronRight
+                      className={`ml-auto size-4 transition-transform ${isContextsOpen ? 'rotate-90' : ''}`}
+                    />
+                  </SidebarMenuButton>
+
+                  {isContextsOpen && (
+                    <SidebarMenuSub>
+                      {/* Manage Contexts link */}
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton
+                          asChild
+                          isActive={location.pathname === '/contexts'}
+                        >
+                          <button
+                            onClick={() => navigateTo('/contexts')}
+                            className="flex items-center"
+                            type="button"
+                          >
+                            <span>Manage Contexts</span>
+                          </button>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+
+                      {/* Individual contexts */}
+                      {isLoadingContexts ? (
+                        <SidebarMenuSubItem>
+                          <div className="px-2 py-1 text-xs text-muted-foreground">
+                            Loading...
+                          </div>
+                        </SidebarMenuSubItem>
+                      ) : (
+                        contexts.map((context) => (
+                          <SidebarMenuSubItem key={`${context.owner || 'unknown'}-${context.id}`}>
+                            <SidebarMenuSubButton
+                              asChild
+                              isActive={location.pathname === `/contexts/${context.id}`}
+                            >
+                              <button
+                                onClick={() => navigateTo(`/contexts/${context.id}`)}
+                                className="flex items-center"
+                                type="button"
+                              >
+                                <span className="truncate">{context.url || context.id}</span>
+                              </button>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))
+                      )}
                     </SidebarMenuSub>
                   )}
                 </SidebarMenuItem>
