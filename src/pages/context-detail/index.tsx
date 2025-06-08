@@ -7,7 +7,8 @@ import { Save, Share, X, Plus, Settings, Info, Sidebar } from 'lucide-react';
 import { getContext, getSharedContext, updateContextUrl, grantContextAccess, revokeContextAccess, getContextTree, getContextDocuments, getSharedContextDocuments } from '@/services/context';
 import socketService from '@/lib/socket';
 import { getCurrentUserFromToken } from '@/services/auth';
-import { ContextTreeView } from '@/components/context/tree-view';
+import { TreeView } from '@/components/common/tree-view';
+import { useTreeOperations } from '@/hooks/useTreeOperations';
 import { DocumentDetailModal } from '@/components/context/document-detail-modal';
 import { DocumentList } from '@/components/workspace/document-list';
 import { TreeNode, Document as WorkspaceDocument } from '@/types/workspace';
@@ -188,6 +189,12 @@ export default function ContextDetailPage() {
       setIsLoadingTree(false);
     }
   }, [contextId, showToast]);
+
+  // Initialize tree operations hook for context tree management
+  const treeOperations = useTreeOperations({
+    contextId: contextId || '',
+    onRefresh: fetchContextTree
+  });
 
   // Convert ContextDocument to WorkspaceDocument for compatibility with DocumentList
   const convertToWorkspaceDocuments = (contextDocs: ContextDocument[]): WorkspaceDocument[] => {
@@ -976,13 +983,19 @@ export default function ContextDetailPage() {
                 </div>
               </div>
             ) : tree ? (
-              <ContextTreeView
+              <TreeView
                 tree={tree}
                 selectedPath={selectedPath}
                 onPathSelect={handlePathSelect}
-                contextId={context?.id || ''}
-                workspaceId={context?.workspaceId || ''}
-                disabled={isSharedContext}
+                readOnly={isSharedContext}
+                title="Context Tree"
+                subtitle={isSharedContext ? 'Read-only view (shared context)' : 'Right-click for context menu, drag to move/copy (Ctrl=copy, Shift=recursive)'}
+                onInsertPath={!isSharedContext ? treeOperations.insertPath : undefined}
+                onRemovePath={!isSharedContext ? treeOperations.removePath : undefined}
+                onMovePath={!isSharedContext ? treeOperations.movePath : undefined}
+                onCopyPath={!isSharedContext ? treeOperations.copyPath : undefined}
+                onMergeUp={!isSharedContext ? treeOperations.mergeUp : undefined}
+                onMergeDown={!isSharedContext ? treeOperations.mergeDown : undefined}
               />
             ) : (
               <div className="text-center text-muted-foreground text-sm">

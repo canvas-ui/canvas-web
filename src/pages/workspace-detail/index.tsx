@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { API_ROUTES } from '@/config/api';
 import { useToast } from '@/components/ui/toast-container';
-import { TreeView } from '@/components/workspace/tree-view';
+import { TreeView } from '@/components/common/tree-view';
 import { DocumentList } from '@/components/workspace/document-list';
 import { getWorkspaceTree, getWorkspaceDocuments } from '@/services/workspace';
 import { TreeNode, Document, DocumentsResponse } from '@/types/workspace';
@@ -197,6 +197,9 @@ export default function WorkspaceDetailPage() {
               tree={tree}
               selectedPath={selectedPath}
               onPathSelect={handlePathSelect}
+              readOnly={true}
+              title="Workspace Tree"
+              subtitle="Click to navigate the workspace structure (read-only)"
             />
           ) : (
             <div className="text-center text-muted-foreground text-sm">
