@@ -1,10 +1,10 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast-container';
 import { Save, Share, X, Plus, Settings, Info, Sidebar } from 'lucide-react';
-import { getContext, getSharedContext, updateContextUrl, grantContextAccess, revokeContextAccess, getContextTree, getContextDocuments, getSharedContextDocuments } from '@/services/context';
+import { getContext, getSharedContext, updateContextUrl, grantContextAccess, revokeContextAccess, getContextTree, getContextDocuments, getSharedContextDocuments, removeDocumentsFromContext, deleteDocumentsFromContext } from '@/services/context';
 import socketService from '@/lib/socket';
 import { getCurrentUserFromToken } from '@/services/auth';
 import { TreeView } from '@/components/common/tree-view';
@@ -318,24 +318,6 @@ export default function ContextDetailPage() {
     }
   }, [isTreeViewOpen, fetchContextTree, tree]);
 
-  // Refs for stable function access in WebSocket handlers
-  const fetchDocumentsRef = useRef(fetchDocuments);
-  const fetchContextTreeRef = useRef(fetchContextTree);
-  const showToastRef = useRef(showToast);
-
-  // Update refs when functions change
-  useEffect(() => {
-    fetchDocumentsRef.current = fetchDocuments;
-  }, [fetchDocuments]);
-
-  useEffect(() => {
-    fetchContextTreeRef.current = fetchContextTree;
-  }, [fetchContextTree]);
-
-  useEffect(() => {
-    showToastRef.current = showToast;
-  }, [showToast]);
-
   // WebSocket event handling - only for context updates
   useEffect(() => {
     if (!contextId) return;
@@ -375,19 +357,6 @@ export default function ContextDetailPage() {
         setTimeout(() => pendingNotifications.delete(key), 2000);
       }
     }, 500);
-
-    // Create a unified refresh function that updates both documents and tree
-    const refreshAll = () => {
-      console.log(`🔄 Refreshing all data for context ${contextId} due to relevant event`);
-      // Use refs to avoid dependency issues
-      if (contextId) {
-        fetchDocumentsRef.current();
-      }
-      // Only fetch tree if it's open and we don't have tree data
-      if (isTreeViewOpen && !tree) {
-        fetchContextTreeRef.current();
-      }
-    };
 
     // Helper function to check if event should be processed (deduplication)
     const shouldProcessEvent = (eventType: string, data: any): boolean => {
@@ -430,7 +399,8 @@ export default function ContextDetailPage() {
         if (data.context.url) {
           setEditableUrl(data.context.url);
         }
-        refreshAll();
+        // Context updates can affect document filtering, so refresh documents
+        fetchDocuments();
       }
     };
 
@@ -441,7 +411,8 @@ export default function ContextDetailPage() {
         console.log('Context URL changed event received:', data);
         setContext(prev => prev ? { ...prev, url: data.url } : null);
         setEditableUrl(data.url);
-        refreshAll();
+        // URL change affects document filtering, so refresh documents
+        fetchDocuments();
       }
     };
 
@@ -527,14 +498,115 @@ export default function ContextDetailPage() {
         socketService.off(colonEvent as string, handler as any);
       });
     };
-  }, [contextId, isTreeViewOpen, tree, context?.workspaceId]);
+  }, [contextId, fetchDocuments, showToast]);
 
   // Handle URL change
   const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setEditableUrl(e.target.value);
   };
 
+  // Handle document removal from context
+  const handleRemoveDocument = async (documentId: number) => {
+    if (!context) return;
 
+    try {
+      await removeDocumentsFromContext(context.id, [documentId]);
+
+      // Update local state instead of refetching
+      setWorkspaceDocuments(prev => prev.filter(doc => doc.id !== documentId));
+      setDocumentsTotalCount(prev => Math.max(0, prev - 1));
+
+      showToast({
+        title: 'Success',
+        description: 'Document removed from context successfully.'
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to remove document';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+    }
+  };
+
+  // Handle document deletion from database
+  const handleDeleteDocument = async (documentId: number) => {
+    if (!context) return;
+
+    try {
+      await deleteDocumentsFromContext(context.id, [documentId]);
+
+      // Update local state instead of refetching
+      setWorkspaceDocuments(prev => prev.filter(doc => doc.id !== documentId));
+      setDocumentsTotalCount(prev => Math.max(0, prev - 1));
+
+      showToast({
+        title: 'Success',
+        description: 'Document deleted from database successfully.'
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete document';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+    }
+  };
+
+  // Handle set context URL (manual button click)
+  const handleSetContextUrl = async () => {
+    if (!context || editableUrl === context.url) return;
+
+    setIsSaving(true);
+    try {
+      const response = await updateContextUrl(context.id, editableUrl);
+      let updatedContextData: ContextData | null = null;
+
+      if ((response as any)?.payload?.context?.id && typeof (response as any)?.payload?.context?.url === 'string') {
+        updatedContextData = (response as any).payload.context as ContextData;
+      } else if ((response as any)?.payload?.id && typeof (response as any)?.payload?.url === 'string') {
+        updatedContextData = (response as any).payload as ContextData;
+      } else if ((response as any)?.id && typeof (response as any)?.url === 'string') {
+        updatedContextData = response as unknown as ContextData;
+      } else if (response && typeof (response as any).url === 'string') {
+        const newUpdatedAt = new Date().toISOString();
+        updatedContextData = {
+          ...(context as unknown as ContextData),
+          url: (response as any).url,
+          updatedAt: newUpdatedAt
+        } as ContextData;
+      } else {
+        throw new Error('Unexpected response format from server when updating URL.');
+      }
+
+      if (updatedContextData) {
+        setContext(updatedContextData);
+        setEditableUrl(updatedContextData.url);
+        // Only refetch documents if URL actually changed since this affects filtering
+        fetchDocuments();
+        showToast({
+          title: 'Context Updated',
+          description: `Context URL set to: ${updatedContextData.url}`
+        });
+      } else {
+        throw new Error('Failed to process update response or response was empty.');
+      }
+
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to set context URL';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+      if (context) {
+        setEditableUrl(context.url);
+      }
+    }
+    setIsSaving(false);
+  };
 
   // Update context URL from tree path selection
   const handlePathSelect = (path: string) => {
@@ -560,133 +632,9 @@ export default function ContextDetailPage() {
 
       // Automatically set the context URL and fetch documents
       if (newUrl !== context.url) {
-        handleSetContextUrlInternal(newUrl);
+        handleSetContextUrl();
       }
     }
-  };
-
-  // Handle document removal from context
-  const handleRemoveDocument = async (documentId: number) => {
-    if (!context) return;
-
-    try {
-      const response = await fetch(`/api/contexts/${context.id}/documents/remove`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify([documentId])
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to remove document: ${response.statusText}`);
-      }
-
-      // Refresh documents list
-      fetchDocuments();
-      showToast({
-        title: 'Success',
-        description: 'Document removed from context successfully.'
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to remove document';
-      showToast({
-        title: 'Error',
-        description: message,
-        variant: 'destructive'
-      });
-    }
-  };
-
-  // Handle document deletion from database
-  const handleDeleteDocument = async (documentId: number) => {
-    if (!context) return;
-
-    try {
-      const response = await fetch(`/api/contexts/${context.id}/documents`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify([documentId])
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to delete document: ${response.statusText}`);
-      }
-
-      // Refresh documents list
-      fetchDocuments();
-      showToast({
-        title: 'Success',
-        description: 'Document deleted from database successfully.'
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete document';
-      showToast({
-        title: 'Error',
-        description: message,
-        variant: 'destructive'
-      });
-    }
-  };
-
-  // Internal URL setting function (without user interaction)
-  const handleSetContextUrlInternal = async (url: string) => {
-    if (!context) return;
-
-    setIsSaving(true);
-    try {
-      const response = await updateContextUrl(context.id, url);
-      let updatedContextData: ContextData | null = null;
-
-      if ((response as any)?.payload?.context?.id && typeof (response as any)?.payload?.context?.url === 'string') {
-        updatedContextData = (response as any).payload.context as ContextData;
-      } else if ((response as any)?.payload?.id && typeof (response as any)?.payload?.url === 'string') {
-        updatedContextData = (response as any).payload as ContextData;
-      } else if ((response as any)?.id && typeof (response as any)?.url === 'string') {
-        updatedContextData = response as unknown as ContextData;
-      } else if (response && typeof (response as any).url === 'string') {
-        const newUpdatedAt = new Date().toISOString();
-        updatedContextData = {
-          ...(context as unknown as ContextData),
-          url: (response as any).url,
-          updatedAt: newUpdatedAt
-        } as ContextData;
-      } else {
-        throw new Error('Unexpected response format from server when updating URL.');
-      }
-
-      if (updatedContextData) {
-        setContext(updatedContextData);
-        setEditableUrl(updatedContextData.url);
-        fetchDocuments();
-        showToast({
-          title: 'Context Updated',
-          description: `Context URL set to: ${updatedContextData.url}`
-        });
-      } else {
-        throw new Error('Failed to process update response or response was empty.');
-      }
-
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to set context URL';
-      showToast({
-        title: 'Error',
-        description: message,
-        variant: 'destructive'
-      });
-      if (context) {
-        setEditableUrl(context.url);
-      }
-    }
-    setIsSaving(false);
-  };
-
-  // Handle set context URL (manual button click)
-  const handleSetContextUrl = async () => {
-    if (!context || editableUrl === context.url) return;
-    await handleSetContextUrlInternal(editableUrl);
   };
 
   // Handle toolbox filter changes

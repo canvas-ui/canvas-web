@@ -247,3 +247,37 @@ export async function getContextTree(id: string): Promise<any> {
     throw error;
   }
 }
+
+// Remove documents from a context (non-destructive, just unlink)
+export async function removeDocumentsFromContext(contextId: string, documentIds: (string|number)[]): Promise<{ message: string }> {
+  try {
+    const response = await api.delete<ServiceApiResponse<{ message: string }>>(
+      `${API_ROUTES.contexts}/${contextId}/documents/remove`,
+      {
+        body: JSON.stringify(documentIds),
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+    return response.payload;
+  } catch (error) {
+    console.error('Failed to remove documents from context:', error);
+    throw error;
+  }
+}
+
+// Permanently delete documents from DB (owner-only)
+export async function deleteDocumentsFromContext(contextId: string, documentIds: (string|number)[]): Promise<{ message: string }> {
+  try {
+    const response = await api.delete<ServiceApiResponse<{ message: string }>>(
+      `${API_ROUTES.contexts}/${contextId}/documents`,
+      {
+        body: JSON.stringify(documentIds),
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+    return response.payload;
+  } catch (error) {
+    console.error('Failed to delete documents from context DB:', error);
+    throw error;
+  }
+}
