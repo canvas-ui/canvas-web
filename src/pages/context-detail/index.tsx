@@ -800,11 +800,17 @@ export default function ContextDetailPage() {
       if (isBatchOperation) {
         const count = data.documentIds?.length || data.documents?.length || 0;
         const batchMessages = {
+          // Legacy
           'insert': { title: 'Documents Added', description: `${count} documents were added.` },
           'update': { title: 'Documents Updated', description: `${count} documents were updated.` },
           'remove': { title: 'Documents Removed', description: `${count} documents were removed.` },
-          'delete': { title: 'Documents Deleted', description: `${count} documents were permanently deleted.` }
-        };
+          'delete': { title: 'Documents Deleted', description: `${count} documents were permanently deleted.` },
+          // New suffix variants
+          'inserted': { title: 'Documents Added', description: `${count} documents were added.` },
+          'updated': { title: 'Documents Updated', description: `${count} documents were updated.` },
+          'removed': { title: 'Documents Removed', description: `${count} documents were removed.` },
+          'deleted': { title: 'Documents Deleted', description: `${count} documents were permanently deleted.` }
+        } as const;
 
         const message = batchMessages[eventType as keyof typeof batchMessages];
         if (message) {
@@ -813,11 +819,17 @@ export default function ContextDetailPage() {
       } else {
         // Single document operations
         const toastMessages = {
+          // Legacy
           'insert': { title: 'Document Added', description: 'A new document was added.' },
           'update': { title: 'Document Updated', description: 'A document was updated.' },
           'remove': { title: 'Document Removed', description: 'A document was removed from this context.' },
-          'delete': { title: 'Document Deleted', description: 'A document was permanently deleted.' }
-        };
+          'delete': { title: 'Document Deleted', description: 'A document was permanently deleted.' },
+          // New suffix variants
+          'inserted': { title: 'Document Added', description: 'A new document was added.' },
+          'updated': { title: 'Document Updated', description: 'A document was updated.' },
+          'removed': { title: 'Document Removed', description: 'A document was removed from this context.' },
+          'deleted': { title: 'Document Deleted', description: 'A document was permanently deleted.' }
+        } as const;
 
         const message = toastMessages[eventType as keyof typeof toastMessages];
         if (message) {
@@ -840,7 +852,7 @@ export default function ContextDetailPage() {
         refreshAll();
 
         // Show appropriate toast for significant tree events
-        const significantEvents = ['path:inserted', 'path:removed', 'path:moved'];
+        const significantEvents = ['path:inserted', 'path:removed', 'path:moved', 'path.inserted', 'path.removed', 'path.moved'];
         if (significantEvents.some(event => eventType.includes(event))) {
           showToast({
             title: 'Tree Structure Changed',
@@ -851,28 +863,28 @@ export default function ContextDetailPage() {
     };
 
     // Register all context events
-    console.log('🎯 DEBUG: Registering context event listeners...');
-    socketService.on('context:updated', handleContextUpdateReceived);
-    socketService.on('context:url:set', handleContextUrlChanged);
-    socketService.on('context:locked', handleContextLockStatusChanged);
-    socketService.on('context:unlocked', handleContextLockStatusChanged);
-    socketService.on('context:deleted', handleContextDeleted);
-    socketService.on('context:acl:updated', handleContextAclUpdated);
-    socketService.on('context:acl:revoked', handleContextAclRevoked);
+    console.log('🎯 DEBUG: Registering context event listeners (dot & colon notations)…');
 
     // Register document events with priority system
     // HIGH PRIORITY: Specific document events (preferred)
     const highPriorityDocumentEvents = [
+      // New dot notation events
+      'document.inserted',
+      'document.updated',
+      'document.removed',
+      'document.deleted',
+      'documents.delete',
+      // Legacy colon notation events kept for backward compatibility
       'document:insert',
       'document:update',
       'document:remove',
       'document:delete',
-      'documents:delete'  // Batch delete
+      'documents:delete'
     ];
 
     console.log('🎯 DEBUG: Registering HIGH PRIORITY document event listeners:', highPriorityDocumentEvents);
     highPriorityDocumentEvents.forEach(event => {
-      const eventType = event.includes(':') ? event.split(':').pop() || 'unknown' : event;
+      const eventType = extractEventType(event);
       console.log(`   📝 Registering ${event} -> ${eventType} (HIGH PRIORITY)`);
       socketService.on(event, handleDocumentEvent(eventType, 'high'));
     });
@@ -886,24 +898,44 @@ export default function ContextDetailPage() {
 
     console.log('🎯 DEBUG: Registering LOW PRIORITY document event listeners:', lowPriorityDocumentEvents);
     lowPriorityDocumentEvents.forEach(event => {
-      const eventType = event.includes(':') ? event.split(':').pop() || 'unknown' : event;
+      const eventType = extractEventType(event);
       console.log(`   📝 Registering ${event} -> ${eventType} (LOW PRIORITY)`);
       socketService.on(event, handleDocumentEvent(eventType, 'low'));
     });
 
     // Register tree events (workspace-forwarded) - but only significant ones
     const significantTreeEvents = [
+      // New dot notation
+      'context.workspace.tree.path.inserted',
+      'context.workspace.tree.path.removed',
+      'context.workspace.tree.path.moved',
+      // Legacy colon notation
       'context:workspace:tree:path:inserted',
       'context:workspace:tree:path:removed',
       'context:workspace:tree:path:moved'
-      // Skip document-level tree events to avoid duplication with document events
     ];
 
     console.log('🎯 DEBUG: Registering significant tree event listeners:', significantTreeEvents);
     significantTreeEvents.forEach(event => {
-      const eventType = event.replace('context:workspace:tree:', '');
+      const eventType = event.replace(/^context[.:]workspace[.:]tree[.:]/, '');
       console.log(`   📝 Registering ${event} -> ${eventType}`);
       socketService.on(event, handleTreeEvent(eventType));
+    });
+
+    // Register context events (support both dot & colon notations)
+    const contextEventMap = [
+      ['context.updated', 'context:updated', handleContextUpdateReceived],
+      ['context.url.set', 'context:url:set', handleContextUrlChanged],
+      ['context.locked', 'context:locked', handleContextLockStatusChanged],
+      ['context.unlocked', 'context:unlocked', handleContextLockStatusChanged],
+      ['context.deleted', 'context:deleted', handleContextDeleted],
+      ['context.acl.updated', 'context:acl:updated', handleContextAclUpdated],
+      ['context.acl.revoked', 'context:acl:revoked', handleContextAclRevoked]
+    ] as const;
+
+    contextEventMap.forEach(([dotEvent, colonEvent, handler]) => {
+      socketService.on(dotEvent as string, handler as any);
+      socketService.on(colonEvent as string, handler as any);
     });
 
     // Cleanup function
@@ -911,30 +943,38 @@ export default function ContextDetailPage() {
       console.log(`Unsubscribing from context events for context ${contextId}`);
       socketService.emit('unsubscribe', { topic: 'context', id: contextId });
 
-      // Clean up all event listeners
-      socketService.off('context:updated', handleContextUpdateReceived);
-      socketService.off('context:url:set', handleContextUrlChanged);
-      socketService.off('context:locked', handleContextLockStatusChanged);
-      socketService.off('context:unlocked', handleContextLockStatusChanged);
-      socketService.off('context:deleted', handleContextDeleted);
-      socketService.off('context:acl:updated', handleContextAclUpdated);
-      socketService.off('context:acl:revoked', handleContextAclRevoked);
+      // Clean up old explicit context event listeners (if any)
+      [
+        'context:updated',
+        'context:url:set',
+        'context:locked',
+        'context:unlocked',
+        'context:deleted',
+        'context:acl:updated',
+        'context:acl:revoked'
+      ].forEach(evt => socketService.off(evt as string, () => {}));
 
       // Clean up document event listeners
       highPriorityDocumentEvents.forEach(event => {
-        const eventType = event.includes(':') ? event.split(':').pop() || 'unknown' : event;
+        const eventType = extractEventType(event);
         socketService.off(event, handleDocumentEvent(eventType, 'high'));
       });
 
       lowPriorityDocumentEvents.forEach(event => {
-        const eventType = event.includes(':') ? event.split(':').pop() || 'unknown' : event;
+        const eventType = extractEventType(event);
         socketService.off(event, handleDocumentEvent(eventType, 'low'));
       });
 
       // Clean up tree event listeners
       significantTreeEvents.forEach(event => {
-        const eventType = event.replace('context:workspace:tree:', '');
+        const eventType = event.replace(/^context[.:]workspace[.:]tree[.:]/, '');
         socketService.off(event, handleTreeEvent(eventType));
+      });
+
+      // Clean up context event listeners
+      contextEventMap.forEach(([dotEvent, colonEvent, handler]) => {
+        socketService.off(dotEvent as string, handler as any);
+        socketService.off(colonEvent as string, handler as any);
       });
     };
   }, [contextId, isTreeViewOpen, tree, context?.workspaceId]);
@@ -942,6 +982,12 @@ export default function ContextDetailPage() {
   // Handle URL change
   const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setEditableUrl(e.target.value);
+  };
+
+  // Helper to extract the final segment of an event regardless of notation
+  const extractEventType = (event: string) => {
+    const parts = event.split(/[:.]/);
+    return parts[parts.length - 1] || 'unknown';
   };
 
   if (isLoading) {
