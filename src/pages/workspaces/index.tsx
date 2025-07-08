@@ -13,30 +13,12 @@ import {
   startWorkspace,
 } from "@/services/workspace"
 
+// Using global Workspace interface from types/api.d.ts
 // Specific status type based on linter feedback for WorkspaceCard compatibility
 type WorkspaceStatus = 'error' | 'available' | 'not_found' | 'active' | 'inactive' | 'removed' | 'destroyed';
 
-interface ApiWorkspaceEntry {
-  id: string;
-  owner: string;
-  type: string;
-  label: string;
-  color: string | null;
-  description: string;
-  acl: {
-    rw: string[];
-    ro: string[];
-  };
-  created: string;
-  updated: string;
-  rootPath: string;
-  configPath: string;
-  status: WorkspaceStatus;
-  lastAccessed: string | null;
-}
-
 export default function WorkspacesPage() {
-  const [workspaces, setWorkspaces] = useState<ApiWorkspaceEntry[]>([])
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [newWorkspaceName, setNewWorkspaceName] = useState("")
@@ -44,7 +26,7 @@ export default function WorkspacesPage() {
   const [newWorkspaceColor, setNewWorkspaceColor] = useState(generateNiceRandomHexColor())
   const [newWorkspaceLabel, setNewWorkspaceLabel] = useState("")
   const [isCreating, setIsCreating] = useState(false)
-  const [editingWorkspace, setEditingWorkspace] = useState<ApiWorkspaceEntry | null>(null)
+  const [editingWorkspace, setEditingWorkspace] = useState<Workspace | null>(null)
   const { showToast } = useToast()
   const navigate = useNavigate()
   const socket = useSocket()
@@ -54,8 +36,8 @@ export default function WorkspacesPage() {
       try {
         setIsLoading(true)
         const response = await listWorkspaces()
-        // Assuming runtime data from listWorkspaces() matches ApiWorkspaceEntry structure
-        setWorkspaces(response.payload as unknown as ApiWorkspaceEntry[])
+        // Using global Workspace type from listWorkspaces()
+        setWorkspaces(response.payload as unknown as Workspace[])
         setError(null)
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to fetch workspaces'
@@ -81,9 +63,9 @@ export default function WorkspacesPage() {
         ))
       })
 
-      socket.on('workspace:created', (data: { workspace: ApiWorkspaceEntry }) => {
-        // Assuming runtime data from socket matches ApiWorkspaceEntry structure
-        setWorkspaces(prev => [...prev, data.workspace as unknown as ApiWorkspaceEntry])
+      socket.on('workspace:created', (data: { workspace: Workspace }) => {
+        // Using global Workspace type from socket
+        setWorkspaces(prev => [...prev, data.workspace as unknown as Workspace])
       })
 
       socket.on('workspace:deleted', (data: { workspaceId: string }) => {
@@ -113,8 +95,8 @@ export default function WorkspacesPage() {
         color: newWorkspaceColor,
         label: newWorkspaceLabel || newWorkspaceName,
       })
-      // Assuming runtime data from createWorkspace() matches ApiWorkspaceEntry structure
-      setWorkspaces(prev => [...prev, response.payload as unknown as ApiWorkspaceEntry])
+      // Using global Workspace type from createWorkspace()
+      setWorkspaces(prev => [...prev, response.payload as unknown as Workspace])
       setNewWorkspaceName("")
       setNewWorkspaceDescription("")
       setNewWorkspaceColor(generateNiceRandomHexColor())
@@ -151,7 +133,7 @@ export default function WorkspacesPage() {
       // const updatedWorkspaceFromApi = apiResponse.payload as unknown as ApiWorkspaceEntry;
 
       // Mocking the update for now:
-      const updatedMockedWorkspace: ApiWorkspaceEntry = {
+      const updatedMockedWorkspace: Workspace = {
         ...editingWorkspace,
         ...payloadToUpdate
       };
@@ -179,8 +161,8 @@ export default function WorkspacesPage() {
   const handleStartWorkspace = async (workspaceId: string) => {
     try {
       const response = await startWorkspace(workspaceId)
-      // Assuming runtime data from startWorkspace() matches ApiWorkspaceEntry structure
-      setWorkspaces(prev => prev.map(ws => ws.id === response.payload.id ? (response.payload as unknown as ApiWorkspaceEntry) : ws))
+      // Using global Workspace type from startWorkspace()
+      setWorkspaces(prev => prev.map(ws => ws.id === response.payload.id ? (response.payload as unknown as Workspace) : ws))
       showToast({
         title: 'Success',
         description: response.message
@@ -199,7 +181,7 @@ export default function WorkspacesPage() {
     try {
       const response = await closeWorkspace(workspaceId)
       // Now closeWorkspace API returns the full workspace object like startWorkspace does
-      setWorkspaces(prev => prev.map(ws => ws.id === response.payload.id ? (response.payload as unknown as ApiWorkspaceEntry) : ws))
+      setWorkspaces(prev => prev.map(ws => ws.id === response.payload.id ? (response.payload as unknown as Workspace) : ws))
       showToast({
         title: 'Success',
         description: response.message
@@ -298,9 +280,9 @@ export default function WorkspacesPage() {
             {workspaces.map((ws) => {
               const workspaceCardProps = {
                 ...ws,
-                name: ws.label,
-                createdAt: ws.created,
-                updatedAt: ws.updated,
+                name: ws.label || ws.name,
+                createdAt: ws.createdAt,
+                updatedAt: ws.updatedAt,
                 color: ws.color === null ? undefined : ws.color,
               };
               return (
@@ -361,7 +343,7 @@ export default function WorkspacesPage() {
               </div>
             </div>
             <div className="flex gap-2">
-              <Button type="submit" disabled={!editingWorkspace.label.trim()}>
+              <Button type="submit" disabled={!editingWorkspace.label?.trim()}>
                 Save Changes
               </Button>
               <Button

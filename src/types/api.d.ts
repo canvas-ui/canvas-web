@@ -27,6 +27,19 @@ interface Workspace {
   type?: string
   color?: string
   label?: string
+  acl: {
+    tokens: {
+      [tokenHash: string]: {
+        permissions: ('read' | 'write' | 'admin')[]
+        description: string
+        createdAt: string
+        expiresAt: string | null
+      }
+    }
+  }
+  rootPath?: string
+  configPath?: string
+  lastAccessed?: string | null
 }
 
 interface Context {

@@ -5,27 +5,11 @@ import { API_ROUTES } from '@/config/api';
 import { useToast } from '@/components/ui/toast-container';
 import { TreeView } from '@/components/common/tree-view';
 import { DocumentList } from '@/components/workspace/document-list';
+import { TokenManager } from '@/components/workspace/token-manager';
 import { getWorkspaceTree, getWorkspaceDocuments } from '@/services/workspace';
 import { TreeNode, Document, DocumentsResponse } from '@/types/workspace';
 
-interface Workspace {
-  id: string;
-  owner: string;
-  type: string;
-  label: string;
-  color: string | null;
-  description: string;
-  acl: {
-    rw: string[];
-    ro: string[];
-  };
-  created: string;
-  updated: string;
-  rootPath: string;
-  configPath: string;
-  status: string;
-  lastAccessed: string | null;
-}
+// Using global Workspace interface from types/api.d.ts
 
 export default function WorkspaceDetailPage() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
@@ -179,6 +163,11 @@ export default function WorkspaceDetailPage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Token Management Section */}
+      <div className="border rounded-lg p-4 bg-card">
+        <TokenManager workspaceId={workspaceId!} />
       </div>
 
       {/* File Manager Layout */}
