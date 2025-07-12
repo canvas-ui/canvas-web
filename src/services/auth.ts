@@ -137,13 +137,12 @@ export async function logoutUser(): Promise<void> {
   }
 }
 
-export async function registerUser(email: string, password: string, firstName?: string, lastName?: string): Promise<any> {
+export async function registerUser(name: string, email: string, password: string): Promise<any> {
   try {
     return await api.post(API_ROUTES.register, {
+      name,
       email,
-      password,
-      firstName,
-      lastName
+      password
     }, { skipAuth: true });
   } catch (error) {
     console.error('Registration failed:', error);

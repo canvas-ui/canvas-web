@@ -6,6 +6,7 @@ import { API_ROUTES } from '@/config/api';
 // Interface for the actual user data within the payload
 interface UserData {
   id: string;
+  name: string;
   email: string;
   userType: string;
   status: string;

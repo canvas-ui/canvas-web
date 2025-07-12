@@ -8,6 +8,7 @@ import { registerUser } from "@/services/auth"
 import { useToast } from "@/components/ui/toast-container"
 
 interface FormData {
+  name: string
   email: string
   password: string
 }
@@ -17,6 +18,7 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = React.useState<boolean>(false)
   const [errors, setErrors] = React.useState<Partial<FormData>>({})
   const [formData, setFormData] = React.useState<FormData>({
+    name: "",
     email: "",
     password: ""
   })
@@ -24,16 +26,48 @@ export default function RegisterPage() {
 
   const validateForm = (): boolean => {
     const newErrors: Partial<FormData> = {}
+
+    // Username validation (GitHub-style)
+    if (!formData.name) {
+      newErrors.name = "Username is required"
+    } else if (formData.name.trim().length === 0) {
+      newErrors.name = "Username cannot be empty"
+    } else {
+      const username = formData.name.toLowerCase().trim()
+
+      if (username.length < 3) {
+        newErrors.name = "Username must be at least 3 characters long"
+      } else if (username.length > 39) {
+        newErrors.name = "Username cannot be longer than 39 characters"
+      } else if (!/^[a-z0-9_-]+$/.test(username)) {
+        newErrors.name = "Username can only contain lowercase letters, numbers, underscores, and hyphens"
+      } else {
+        // Check for reserved names
+        const reservedNames = [
+          'admin', 'administrator', 'root', 'system', 'support', 'help',
+          'api', 'www', 'mail', 'ftp', 'localhost', 'test', 'demo',
+          'canvas', 'universe', 'workspace', 'context', 'user', 'users'
+        ]
+        if (reservedNames.includes(username)) {
+          newErrors.name = `Username '${username}' is reserved and cannot be used`
+        }
+      }
+    }
+
+    // Email validation
     if (!formData.email) {
       newErrors.email = "Email is required"
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = "Email is invalid"
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      newErrors.email = "Please enter a valid email address"
     }
+
+    // Password validation
     if (!formData.password) {
       newErrors.password = "Password is required"
     } else if (formData.password.length < 8) {
-      newErrors.password = "Password must be at least 8 characters"
+      newErrors.password = "Password must be at least 8 characters long"
     }
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -49,7 +83,7 @@ export default function RegisterPage() {
     }
     setIsLoading(true)
     try {
-      const response = await registerUser(formData.email, formData.password)
+      const response = await registerUser(formData.name, formData.email, formData.password)
       console.log('Registration successful:', response)
 
       showToast({
@@ -58,7 +92,7 @@ export default function RegisterPage() {
         variant: "default"
       })
       setRegistrationComplete(true)
-      setFormData({ email: "", password: "" }) // Clear form
+      setFormData({ name: "", email: "", password: "" }) // Clear form
       setErrors({})
     } catch (error) {
       console.error('Registration failed:', error)
@@ -104,7 +138,25 @@ export default function RegisterPage() {
         </p>
       </div>
       <form onSubmit={onSubmit} className="space-y-4 pt-6">
-        <div className="grid gap-2">
+        <div className="space-y-2">
+          <Label htmlFor="name">Username</Label>
+          <Input
+            id="name"
+            type="text"
+            placeholder="Enter your username (e.g., john_doe)"
+            value={formData.name}
+            onChange={handleChange}
+            disabled={isLoading}
+            className={errors.name ? "border-red-500" : ""}
+          />
+          {errors.name && (
+            <p className="text-sm text-red-500">{errors.name}</p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            3-39 characters, lowercase letters, numbers, underscores, and hyphens only
+          </p>
+        </div>
+        <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
           <Input
             id="email"
@@ -113,21 +165,29 @@ export default function RegisterPage() {
             value={formData.email}
             onChange={handleChange}
             disabled={isLoading}
-            required
+            className={errors.email ? "border-red-500" : ""}
           />
-          {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
+          {errors.email && (
+            <p className="text-sm text-red-500">{errors.email}</p>
+          )}
         </div>
-        <div className="grid gap-2">
+        <div className="space-y-2">
           <Label htmlFor="password">Password</Label>
           <Input
             id="password"
             type="password"
+            placeholder="Enter your password"
             value={formData.password}
             onChange={handleChange}
             disabled={isLoading}
-            required
+            className={errors.password ? "border-red-500" : ""}
           />
-          {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
+          {errors.password && (
+            <p className="text-sm text-red-500">{errors.password}</p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Must be at least 8 characters long
+          </p>
         </div>
         <Button type="submit" className="w-full" disabled={isLoading}>
           {isLoading ? "Creating Account..." : "Create Account"}
