@@ -4,14 +4,14 @@ import { Play, Square, DoorOpen } from "lucide-react";
 
 interface WorkspaceCardProps {
   workspace: Workspace;
-  onStart: (id: string) => void;
-  onStop: (id: string) => void;
-  onEnter: (id: string) => void;
+  onStart: (name: string) => void;
+  onStop: (name: string) => void;
+  onEnter: (name: string) => void;
 }
 
 export function WorkspaceCard({ workspace, onStart, onStop, onEnter }: WorkspaceCardProps) {
   const isActive = workspace.status === 'active';
-  const isUniverse = workspace.type === 'universe' || workspace.id === 'universe';
+  const isUniverse = workspace.type === 'universe' || workspace.name === 'universe';
   const isError = workspace.status === 'error';
   const isNotFound = workspace.status === 'not_found';
 
@@ -59,7 +59,7 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter }: Workspace
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>{workspace.name}</CardTitle>
+            <CardTitle>{workspace.label || workspace.name}</CardTitle>
             <CardDescription>{workspace.description}</CardDescription>
           </div>
           <div className="flex items-center gap-2">
@@ -67,7 +67,7 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter }: Workspace
               <Button
                 variant="outline"
                 size="icon"
-                onClick={() => onStart(workspace.id)}
+                onClick={() => onStart(workspace.name)}
                 title="Start Workspace"
                 disabled={isError || isNotFound}
               >
@@ -77,7 +77,7 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter }: Workspace
               <Button
                 variant="outline"
                 size="icon"
-                onClick={() => onStop(workspace.id)}
+                onClick={() => onStop(workspace.name)}
                 title="Stop Workspace"
                 disabled={isError || isNotFound}
               >
@@ -88,7 +88,7 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter }: Workspace
               <Button
                 variant="outline"
                 size="icon"
-                onClick={() => onEnter(workspace.id)}
+                onClick={() => onEnter(workspace.name)}
                 title="Enter Workspace"
                 disabled={isError || isNotFound}
               >

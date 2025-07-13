@@ -1,4 +1,5 @@
 import { API_URL } from '@/config/api'
+import { handleApiError } from './error-handler'
 
 // Keep track of redirects to prevent loops
 let isRedirecting = false;
@@ -138,11 +139,15 @@ async function fetchWithDefaults(endpoint: string, options: RequestOptions = {})
 
         // Extract the most detailed error message available
         const errorMessage = errorData.message || errorData.error || response.statusText || 'Request failed';
-        throw new Error(errorMessage);
-      } catch (jsonError) {
-        // If we can't parse the error as JSON, just use the status text
-        throw new Error(response.statusText || 'Request failed');
-      }
+        const error = new Error(errorMessage);
+        handleApiError(error, `${rest.method || 'GET'} ${endpoint}`);
+        throw error;
+              } catch (jsonError) {
+          // If we can't parse the error as JSON, just use the status text
+          const error = new Error(response.statusText || 'Request failed');
+          handleApiError(error, `${rest.method || 'GET'} ${endpoint}`);
+          throw error;
+        }
     }
 
     // Reset redirecting flag on successful response
@@ -152,11 +157,16 @@ async function fetchWithDefaults(endpoint: string, options: RequestOptions = {})
     // Check if this is a CORS error
     if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
       console.error(`API Error: CORS error or network failure for ${endpoint}`);
-      throw new Error(`Network error: The server might be unavailable or CORS might be misconfigured. Please check your connection and try again.`);
+      const networkError = new Error(`Network error: The server might be unavailable or CORS might be misconfigured. Please check your connection and try again.`);
+      handleApiError(networkError, `${rest.method || 'GET'} ${endpoint}`);
+      throw networkError;
     }
 
     // Log network errors
     console.error(`API Error: ${endpoint}`, error);
+    if (error instanceof Error) {
+      handleApiError(error, `${rest.method || 'GET'} ${endpoint}`);
+    }
     throw error;
   }
 }

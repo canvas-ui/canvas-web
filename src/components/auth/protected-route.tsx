@@ -1,6 +1,7 @@
 import { Navigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { getCurrentUser, isAuthenticated } from '@/services/auth'
+import { api } from '@/lib/api'
 import { Loader } from '@/components/ui/loader'
 
 interface ProtectedRouteProps {
@@ -27,10 +28,16 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
           setAuthState('authenticated')
         } else {
           console.log('User not authenticated or token expired')
+          // getCurrentUser already clears the token on auth failure
           setAuthState('unauthenticated')
         }
       } catch (error) {
         console.error('Authentication check failed:', error)
+        // Clear token on any authentication error
+        if (error instanceof Error && error.message.includes('Authentication required')) {
+          console.log('Clearing invalid token from ProtectedRoute')
+          api.clearAuthToken()
+        }
         setAuthState('unauthenticated')
       }
     }

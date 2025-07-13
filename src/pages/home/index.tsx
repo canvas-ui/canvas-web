@@ -74,57 +74,65 @@ export default function HomePage() {
         {!successMessage && <p className="text-muted-foreground mt-2">&#8734;</p>}
       </div>
 
-      {loading && <p className="text-center text-muted-foreground">Loading user information...</p>}
-      {error && <p className="text-center text-destructive">Error: {error}</p>}
+      {/* Two-column layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Main content - left column */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Integrations Section */}
+          <div className="space-y-4">
+            <h2 className="text-xl font-semibold">Integrate Canvas into your workflows</h2>
+            <p className="text-muted-foreground">
+              Enhance your productivity by connecting Canvas with your favorite tools.
+            </p>
+            <ul className="space-y-4">
+              {integrationLinks.map((link) => (
+                <li key={link.name} className="border p-4 rounded-md hover:shadow-md transition-shadow">
+                  <a
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold text-primary hover:underline text-lg"
+                  >
+                    {link.name}
+                  </a>
+                  <p className="text-sm text-muted-foreground mt-1">{link.description}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
 
-      {/* User Information Section */}
-      {user && (
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold">User Information</h2>
-          <div className="space-y-2">
-            {/* This part should now correctly iterate over the payload (user object) */}
-            {Object.entries(user).map(([key, value]) => {
-              if (typeof value === 'string' || typeof value === 'number') {
-                return (
-                  <p key={key}>
-                    <strong className="capitalize">{key.replace(/([A-Z])/g, ' $1')}:</strong> {value.toString()}
-                  </p>
-                );
-              }
-              return null;
-            })}
+          {/* Navigation Link */}
+          <div className="text-center pt-4">
+            <Link to="/workspaces" className="text-primary hover:underline">
+              Go to your Workspaces &rarr;
+            </Link>
           </div>
         </div>
-      )}
 
-      {/* Integrations Section */}
-      <div className="space-y-4">
-        <h2 className="text-xl font-semibold">Integrate Canvas into your workflows</h2>
-        <p className="text-muted-foreground">
-          Enhance your productivity by connecting Canvas with your favorite tools.
-        </p>
-        <ul className="space-y-4">
-          {integrationLinks.map((link) => (
-            <li key={link.name} className="border p-4 rounded-md hover:shadow-md transition-shadow">
-              <a
-                href={link.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-semibold text-primary hover:underline text-lg"
-              >
-                {link.name}
-              </a>
-              <p className="text-sm text-muted-foreground mt-1">{link.description}</p>
-            </li>
-          ))}
-        </ul>
-      </div>
+        {/* User Information - right column */}
+        <div className="space-y-4">
+          {loading && <p className="text-center text-muted-foreground">Loading user information...</p>}
+          {error && <p className="text-center text-destructive">Error: {error}</p>}
 
-      {/* Navigation Link */}
-      <div className="text-center pt-4">
-        <Link to="/workspaces" className="text-primary hover:underline">
-          Go to your Workspaces &rarr;
-        </Link>
+          {user && (
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold">User Information</h2>
+              <div className="space-y-2 bg-muted/50 p-4 rounded-lg">
+                {Object.entries(user).map(([key, value]) => {
+                  if (typeof value === 'string' || typeof value === 'number') {
+                    return (
+                      <p key={key} className="text-sm">
+                        <strong className="capitalize text-foreground">{key.replace(/([A-Z])/g, ' $1')}:</strong>
+                        <span className="ml-2 text-muted-foreground">{value.toString()}</span>
+                      </p>
+                    );
+                  }
+                  return null;
+                })}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

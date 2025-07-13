@@ -8,25 +8,9 @@ import socketService from "@/lib/socket"
 import { listContexts, createContext, deleteContext } from "@/services/context"
 import { listWorkspaces } from "@/services/workspace"
 import { getCurrentUserFromToken } from "@/services/auth"
+import { logAndExtractError } from "@/lib/error-utils"
 
-// ApiWorkspaceEntry (ideally shared)
-type WorkspaceStatus = 'error' | 'available' | 'not_found' | 'active' | 'inactive' | 'removed' | 'destroyed';
-interface ApiWorkspaceEntry {
-  id: string;
-  owner: string;
-  type: string;
-  label: string;
-  name?: string;
-  color: string | null;
-  description: string;
-  acl: Record<string, any>; // Replaced specific acl with Record<string, any> for broader compatibility
-  created: string;
-  updated: string;
-  rootPath: string;
-  configPath: string;
-  status: WorkspaceStatus;
-  lastAccessed: string | null;
-}
+// Using global Workspace type from types/api.d.ts
 
 // Updated ContextEntry based on API payload
 interface ContextEntry {
@@ -53,7 +37,7 @@ interface ContextEntry {
 export default function ContextsPage() {
   const navigate = useNavigate()
   const [contexts, setContexts] = useState<ContextEntry[]>([])
-  const [workspaces, setWorkspaces] = useState<ApiWorkspaceEntry[]>([])
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [newContextId, setNewContextId] = useState("")
@@ -74,8 +58,7 @@ export default function ContextsPage() {
   const fetchData = useCallback(async () => {
     try {
       setIsLoading(true)
-      // Assuming listContexts() service returns ContextEntry[] directly
-      // Assuming listWorkspaces() service returns { payload: ApiWorkspaceEntry[] }
+      // Fetch both contexts and workspaces
       const [fetchedContexts, workspacesApiResponse] = await Promise.all([
         listContexts(),
         listWorkspaces()
@@ -88,7 +71,8 @@ export default function ContextsPage() {
 
       setContexts(validContexts);
 
-      const workspacesData = (workspacesApiResponse as any).payload as unknown as ApiWorkspaceEntry[] || [];
+      // The listWorkspaces service returns the global Workspace[] type
+      const workspacesData = (workspacesApiResponse as unknown as Workspace[]) || [];
       setWorkspaces(workspacesData);
 
       if (workspacesData.length > 0) {
@@ -101,11 +85,32 @@ export default function ContextsPage() {
       }
       setError(null);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch data';
-      setError(message);
+      console.error('Data fetch error:', err);
+
+      // Set empty arrays to prevent "A.map is not a function" errors
+      setContexts([]);
+      setWorkspaces([]);
+
+      // Extract the most detailed error message available
+      let errorMessage = 'Failed to fetch data';
+
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === 'object' && err !== null) {
+        const errorObj = err as any;
+        // Try to extract from various possible error structures
+        errorMessage = errorObj.message ||
+                     errorObj.error ||
+                     errorObj.payload?.message ||
+                     errorObj.payload?.error ||
+                     errorObj.statusText ||
+                     'Failed to fetch data';
+      }
+
+      setError(errorMessage);
       showToast({
         title: 'Error',
-        description: message,
+        description: errorMessage,
         variant: 'destructive'
       });
     } finally {
@@ -226,11 +231,12 @@ export default function ContextsPage() {
       });
       // Navigate to the newly created context
       navigate(`/contexts/${newContext.id}`);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create context';
+        } catch (err) {
+      const errorMessage = logAndExtractError(err, 'Context creation error:', 'Failed to create context');
+
       showToast({
         title: 'Error',
-        description: message,
+        description: errorMessage,
         variant: 'destructive'
       });
     } finally {
@@ -250,10 +256,27 @@ export default function ContextsPage() {
         description: 'Context deleted successfully'
       })
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete context'
+      console.error('Context deletion error:', err);
+
+      // Extract the most detailed error message available
+      let errorMessage = 'Failed to delete context';
+
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === 'object' && err !== null) {
+        const errorObj = err as any;
+        // Try to extract from various possible error structures
+        errorMessage = errorObj.message ||
+                     errorObj.error ||
+                     errorObj.payload?.message ||
+                     errorObj.payload?.error ||
+                     errorObj.statusText ||
+                     'Failed to delete context';
+      }
+
       showToast({
         title: 'Error',
-        description: message,
+        description: errorMessage,
         variant: 'destructive'
       })
     }
@@ -299,7 +322,7 @@ export default function ContextsPage() {
                 )}
                 {workspaces.map((ws) => (
                   <option key={`${ws.owner}-${ws.id}`} value={ws.id}>
-                    {ws.label || ws.name || ws.id}
+                    {ws.label || ws.name}
                   </option>
                 ))}
               </select>

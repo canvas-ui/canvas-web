@@ -35,16 +35,33 @@ export default function WorkspacesPage() {
     const loadWorkspaces = async () => {
       try {
         setIsLoading(true)
-        const response = await listWorkspaces()
-        // Using global Workspace type from listWorkspaces()
-        setWorkspaces(response.payload as unknown as Workspace[])
+        const workspacesData = await listWorkspaces()
+        // The service now returns the array directly
+        setWorkspaces(workspacesData as Workspace[])
         setError(null)
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to fetch workspaces'
-        setError(message)
+        console.error('Workspace fetch error:', err);
+
+        // Extract the most detailed error message available
+        let errorMessage = 'Failed to fetch workspaces';
+
+        if (err instanceof Error) {
+          errorMessage = err.message;
+        } else if (typeof err === 'object' && err !== null) {
+          const errorObj = err as any;
+          // Try to extract from various possible error structures
+          errorMessage = errorObj.message ||
+                       errorObj.error ||
+                       errorObj.payload?.message ||
+                       errorObj.payload?.error ||
+                       errorObj.statusText ||
+                       'Failed to fetch workspaces';
+        }
+
+        setError(errorMessage)
         showToast({
           title: 'Error',
-          description: message,
+          description: errorMessage,
           variant: 'destructive'
         })
       } finally {
@@ -89,27 +106,44 @@ export default function WorkspacesPage() {
 
     setIsCreating(true)
     try {
-      const response = await createWorkspace({
+      const newWorkspace = await createWorkspace({
         name: newWorkspaceName,
         description: newWorkspaceDescription || undefined,
         color: newWorkspaceColor,
         label: newWorkspaceLabel || newWorkspaceName,
       })
-      // Using global Workspace type from createWorkspace()
-      setWorkspaces(prev => [...prev, response.payload as unknown as Workspace])
+      // The service now returns the new workspace object directly
+      setWorkspaces(prev => [...prev, newWorkspace as Workspace])
       setNewWorkspaceName("")
       setNewWorkspaceDescription("")
       setNewWorkspaceColor(generateNiceRandomHexColor())
       setNewWorkspaceLabel("")
       showToast({
         title: 'Success',
-        description: response.message
+        description: `Workspace '${newWorkspace.label || newWorkspace.name}' created.`
       })
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create workspace'
+      console.error('Workspace creation error:', err);
+
+      // Extract the most detailed error message available
+      let errorMessage = 'Failed to create workspace';
+
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === 'object' && err !== null) {
+        const errorObj = err as any;
+        // Try to extract from various possible error structures
+        errorMessage = errorObj.message ||
+                     errorObj.error ||
+                     errorObj.payload?.message ||
+                     errorObj.payload?.error ||
+                     errorObj.statusText ||
+                     'Failed to create workspace';
+      }
+
       showToast({
         title: 'Error',
-        description: message,
+        description: errorMessage,
         variant: 'destructive'
       })
     } finally {
@@ -158,46 +192,80 @@ export default function WorkspacesPage() {
     }
   }
 
-  const handleStartWorkspace = async (workspaceId: string) => {
+  const handleStartWorkspace = async (workspaceName: string) => {
     try {
-      const response = await startWorkspace(workspaceId)
-      // Using global Workspace type from startWorkspace()
-      setWorkspaces(prev => prev.map(ws => ws.id === response.payload.id ? (response.payload as unknown as Workspace) : ws))
+      const updatedWorkspace = await startWorkspace(workspaceName)
+      // The service now returns the updated workspace object directly
+      setWorkspaces(prev => prev.map(ws => ws.name === updatedWorkspace.name ? (updatedWorkspace as Workspace) : ws))
       showToast({
         title: 'Success',
-        description: response.message
+        description: `Workspace '${updatedWorkspace.label || updatedWorkspace.name}' started.`
       })
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to start workspace'
+      console.error('Workspace start error:', err);
+
+      // Extract the most detailed error message available
+      let errorMessage = 'Failed to start workspace';
+
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === 'object' && err !== null) {
+        const errorObj = err as any;
+        // Try to extract from various possible error structures
+        errorMessage = errorObj.message ||
+                     errorObj.error ||
+                     errorObj.payload?.message ||
+                     errorObj.payload?.error ||
+                     errorObj.statusText ||
+                     'Failed to start workspace';
+      }
+
       showToast({
         title: 'Error',
-        description: message,
+        description: errorMessage,
         variant: 'destructive'
       })
     }
   }
 
-  const handleStopWorkspace = async (workspaceId: string) => {
+  const handleStopWorkspace = async (workspaceName: string) => {
     try {
-      const response = await closeWorkspace(workspaceId)
-      // Now closeWorkspace API returns the full workspace object like startWorkspace does
-      setWorkspaces(prev => prev.map(ws => ws.id === response.payload.id ? (response.payload as unknown as Workspace) : ws))
+      const updatedWorkspace = await closeWorkspace(workspaceName)
+      // The service now returns the updated workspace object directly
+      setWorkspaces(prev => prev.map(ws => ws.name === updatedWorkspace.name ? (updatedWorkspace as Workspace) : ws))
       showToast({
         title: 'Success',
-        description: response.message
+        description: `Workspace '${updatedWorkspace.label || updatedWorkspace.name}' stopped.`
       })
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to stop workspace'
+      console.error('Workspace stop error:', err);
+
+      // Extract the most detailed error message available
+      let errorMessage = 'Failed to stop workspace';
+
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === 'object' && err !== null) {
+        const errorObj = err as any;
+        // Try to extract from various possible error structures
+        errorMessage = errorObj.message ||
+                     errorObj.error ||
+                     errorObj.payload?.message ||
+                     errorObj.payload?.error ||
+                     errorObj.statusText ||
+                     'Failed to stop workspace';
+      }
+
       showToast({
         title: 'Error',
-        description: message,
+        description: errorMessage,
         variant: 'destructive'
       })
     }
   }
 
-  const handleEnterWorkspace = (workspaceId: string) => {
-    navigate(`/workspaces/${workspaceId}`)
+  const handleEnterWorkspace = (workspaceName: string) => {
+    navigate(`/workspaces/${workspaceName}`)
   }
 
   return (
@@ -216,7 +284,7 @@ export default function WorkspacesPage() {
             <Input
               value={newWorkspaceName}
               onChange={(e) => setNewWorkspaceName(e.target.value)}
-              placeholder="Workspace Name (becomes ID)"
+              placeholder="Workspace Name (e.g., 'my-project')"
               disabled={isCreating}
             />
             <Input
@@ -280,7 +348,6 @@ export default function WorkspacesPage() {
             {workspaces.map((ws) => {
               const workspaceCardProps = {
                 ...ws,
-                name: ws.label || ws.name,
                 createdAt: ws.createdAt,
                 updatedAt: ws.updatedAt,
                 color: ws.color === null ? undefined : ws.color,

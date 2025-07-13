@@ -12,7 +12,7 @@ import { TreeNode, Document, DocumentsResponse } from '@/types/workspace';
 // Using global Workspace interface from types/api.d.ts
 
 export default function WorkspaceDetailPage() {
-  const { workspaceId } = useParams<{ workspaceId: string }>();
+  const { workspaceName } = useParams<{ workspaceName: string }>();
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [tree, setTree] = useState<TreeNode | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -26,12 +26,12 @@ export default function WorkspaceDetailPage() {
 
   // Fetch workspace details
   useEffect(() => {
-    if (!workspaceId) return;
+    if (!workspaceName) return;
 
     const fetchWorkspace = async () => {
       setIsLoadingWorkspace(true);
       try {
-        const response = await api.get<ApiResponse<{ workspace: Workspace } | Workspace>>(`${API_ROUTES.workspaces}/${workspaceId}`);
+        const response = await api.get<ApiResponse<{ workspace: Workspace } | Workspace>>(`${API_ROUTES.workspaces}/${workspaceName}`);
 
         if (response.payload && 'workspace' in response.payload) {
           setWorkspace(response.payload.workspace as Workspace);
@@ -40,7 +40,7 @@ export default function WorkspaceDetailPage() {
         }
         setError(null);
       } catch (err) {
-        const message = err instanceof Error ? err.message : `Failed to fetch workspace ${workspaceId}`;
+        const message = err instanceof Error ? err.message : `Failed to fetch workspace ${workspaceName}`;
         setError(message);
         setWorkspace(null);
         showToast({
@@ -54,16 +54,16 @@ export default function WorkspaceDetailPage() {
     };
 
     fetchWorkspace();
-  }, [workspaceId]);
+  }, [workspaceName]);
 
   // Fetch workspace tree
   useEffect(() => {
-    if (!workspaceId) return;
+    if (!workspaceName) return;
 
     const fetchTree = async () => {
       setIsLoadingTree(true);
       try {
-        const response = await getWorkspaceTree(workspaceId);
+        const response = await getWorkspaceTree(workspaceName);
         setTree(response.payload as TreeNode);
         setError(null);
       } catch (err) {
@@ -80,16 +80,16 @@ export default function WorkspaceDetailPage() {
     };
 
     fetchTree();
-  }, [workspaceId]);
+  }, [workspaceName]);
 
   // Fetch documents when path changes
   useEffect(() => {
-    if (!workspaceId) return;
+    if (!workspaceName) return;
 
     const fetchDocuments = async () => {
       setIsLoadingDocuments(true);
       try {
-        const response = await getWorkspaceDocuments(workspaceId, selectedPath);
+        const response = await getWorkspaceDocuments(workspaceName, selectedPath);
         const documentsData = response.payload as DocumentsResponse;
         setDocuments(documentsData.data || []);
         setDocumentsTotalCount(documentsData.count || 0);
@@ -108,7 +108,7 @@ export default function WorkspaceDetailPage() {
     };
 
     fetchDocuments();
-  }, [workspaceId, selectedPath]);
+  }, [workspaceName, selectedPath]);
 
   const handlePathSelect = (path: string) => {
     setSelectedPath(path);
@@ -144,68 +144,76 @@ export default function WorkspaceDetailPage() {
   }
 
   return (
-    <div className="space-y-6 h-full">
-      {/* Page Header */}
-      <div className="border-b pb-4">
-        <h1 className="text-3xl font-bold tracking-tight">{workspace.label}</h1>
-        <p className="text-muted-foreground mt-2">{workspace.description || 'No description available'}</p>
-        <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-          <span>Status: <span className="font-mono">{workspace.status}</span></span>
-          <span>Owner: {workspace.owner}</span>
-          {workspace.color && (
-            <div className="flex items-center gap-2">
-              <span>Color:</span>
-              <div
-                className="w-4 h-4 rounded border"
-                style={{ backgroundColor: workspace.color }}
-              />
-              <span className="font-mono text-xs">{workspace.color}</span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Token Management Section */}
-      <div className="border rounded-lg p-4 bg-card">
-        <TokenManager workspaceId={workspaceId!} />
-      </div>
-
-      {/* File Manager Layout */}
-      <div className="flex gap-6 h-[calc(100vh-300px)]">
-        {/* Left Panel - Tree View */}
-        <div className="w-80 border rounded-lg p-4 overflow-y-auto bg-card">
-          {isLoadingTree ? (
-            <div className="flex items-center justify-center h-32">
-              <div className="text-center space-y-2">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto"></div>
-                <p className="text-xs text-muted-foreground">Loading tree...</p>
+    <div className="flex h-full gap-6">
+      {/* Main content */}
+      <div className="flex-1 space-y-6">
+        {/* Page Header */}
+        <div className="border-b pb-4">
+          <h1 className="text-3xl font-bold tracking-tight">{workspace.label}</h1>
+          <p className="text-muted-foreground mt-2">{workspace.description || 'No description available'}</p>
+          <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+            <span>Status: <span className="font-mono">{workspace.status}</span></span>
+            <span>Owner: {workspace.owner}</span>
+            {workspace.color && (
+              <div className="flex items-center gap-2">
+                <span>Color:</span>
+                <div
+                  className="w-4 h-4 rounded border"
+                  style={{ backgroundColor: workspace.color }}
+                />
+                <span className="font-mono text-xs">{workspace.color}</span>
               </div>
-            </div>
-          ) : tree ? (
-            <TreeView
-              tree={tree}
-              selectedPath={selectedPath}
-              onPathSelect={handlePathSelect}
-              readOnly={true}
-              title="Workspace Tree"
-              subtitle="Click to navigate the workspace structure (read-only)"
-            />
-          ) : (
-            <div className="text-center text-muted-foreground text-sm">
-              Failed to load workspace tree
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
-        {/* Right Panel - Document List */}
-        <div className="flex-1 border rounded-lg p-4 bg-card flex flex-col min-h-0">
-          <DocumentList
-            documents={documents}
-            isLoading={isLoadingDocuments}
-            contextPath={selectedPath}
-            totalCount={documentsTotalCount}
-          />
+        {/* File Manager Layout */}
+        <div className="flex gap-6 h-[calc(100vh-300px)]">
+          {/* Left Panel - Tree View */}
+          <div className="w-80 border rounded-lg p-4 overflow-y-auto bg-card">
+            {isLoadingTree ? (
+              <div className="flex items-center justify-center h-32">
+                <div className="text-center space-y-2">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto"></div>
+                  <p className="text-xs text-muted-foreground">Loading tree...</p>
+                </div>
+              </div>
+            ) : tree ? (
+              <TreeView
+                tree={tree}
+                selectedPath={selectedPath}
+                onPathSelect={handlePathSelect}
+                readOnly={true}
+                title="Workspace Tree"
+                subtitle="Click to navigate the workspace structure (read-only)"
+              />
+            ) : (
+              <div className="text-center text-muted-foreground text-sm">
+                Failed to load workspace tree
+              </div>
+            )}
+          </div>
+
+          {/* Right Panel - Document List */}
+          <div className="flex-1 border rounded-lg p-4 bg-card flex flex-col min-h-0">
+            <DocumentList
+              documents={documents}
+              isLoading={isLoadingDocuments}
+              contextPath={selectedPath}
+              totalCount={documentsTotalCount}
+            />
+          </div>
         </div>
+      </div>
+
+      {/* Sharing Sidebar */}
+      <div className="w-80 border rounded-lg p-4 bg-card">
+        <div className="border-b pb-4 mb-4">
+          <h3 className="text-lg font-semibold">Sharing & Tokens</h3>
+          <p className="text-sm text-muted-foreground mt-1">Manage workspace access and API tokens</p>
+        </div>
+
+        <TokenManager workspaceId={workspaceName!} />
       </div>
     </div>
   );

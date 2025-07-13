@@ -15,6 +15,11 @@ export function PublicRoute({ children }: PublicRouteProps) {
         await api.get('/auth/me')
         setIsAuthenticated(true)
       } catch (error) {
+        // Clear token on authentication failure
+        if (error instanceof Error && error.message.includes('Authentication required')) {
+          console.log('Clearing invalid token from PublicRoute')
+          api.clearAuthToken()
+        }
         setIsAuthenticated(false)
       }
     }

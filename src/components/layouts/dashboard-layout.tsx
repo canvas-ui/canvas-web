@@ -58,10 +58,10 @@ interface LocalContext {
 // Navigation items (excluding workspaces and contexts which will be submenus)
 const navigationItems = [
   {
-    title: "Universe",
+    title: "universe",
     url: "/workspaces/universe",
     icon: Infinity,
-    description: "Universe"
+    description: "universe"
   }
 ]
 
@@ -90,23 +90,32 @@ function DashboardSidebar() {
     const fetchWorkspaces = async () => {
       setIsLoadingWorkspaces(true)
       try {
-        const response = await listWorkspaces()
-        // Transform the API response to match our interface
-        const workspaceData = response.payload.map((ws: any) => ({
-          id: ws.id,
-          name: ws.label || ws.name,
-          label: ws.label || ws.name,
-          description: ws.description,
-          owner: ws.owner,
-          color: ws.color,
-          status: ws.status,
-          type: ws.type,
-          createdAt: ws.created || ws.createdAt,
-          updatedAt: ws.updated || ws.updatedAt,
-        }))
-        setWorkspaces(workspaceData)
+        const workspaceData = await listWorkspaces()
+        if (Array.isArray(workspaceData)) {
+          // Transform the API response to match our interface
+          const transformedData = workspaceData.map((ws: any) => ({
+            id: ws.id,
+            name: ws.name,
+            label: ws.label || ws.name,
+            description: ws.description,
+            owner: ws.owner,
+            color: ws.color,
+            status: ws.status,
+            type: ws.type,
+            createdAt: ws.created || ws.createdAt,
+            updatedAt: ws.updated || ws.updatedAt,
+          }))
+          setWorkspaces(transformedData)
+        } else {
+            console.warn('listWorkspaces response is not an array:', workspaceData);
+            setWorkspaces([]);
+        }
       } catch (error) {
         console.error('Failed to fetch workspaces:', error)
+
+        // Set empty array to prevent "A.map is not a function" errors
+        setWorkspaces([]);
+
         showToast({
           title: 'Error',
           description: 'Failed to load workspaces',
@@ -126,9 +135,18 @@ function DashboardSidebar() {
       setIsLoadingContexts(true)
       try {
         const contextData = await listContexts()
-        setContexts(contextData)
+        if (Array.isArray(contextData)) {
+            setContexts(contextData)
+        } else {
+            console.warn('listContexts response is not an array:', contextData);
+            setContexts([]);
+        }
       } catch (error) {
         console.error('Failed to fetch contexts:', error)
+
+        // Set empty array to prevent "A.map is not a function" errors
+        setContexts([]);
+
         showToast({
           title: 'Error',
           description: 'Failed to load contexts',
@@ -191,9 +209,11 @@ function DashboardSidebar() {
                   type="button"
                 >
                   <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4">
-                      <path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3" />
-                    </svg>
+                    <img
+                      src='/images/logo_128x128.png'
+                      alt="Canvas Logo"
+                      className="size-4"
+                    />
                   </div>
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-semibold">Canvas</span>
@@ -276,13 +296,13 @@ function DashboardSidebar() {
                          </SidebarMenuSubItem>
                        ) : (
                          workspaces.map((workspace) => (
-                           <SidebarMenuSubItem key={`${workspace.owner}-${workspace.id}`}>
+                           <SidebarMenuSubItem key={`${workspace.owner}-${workspace.name}`}>
                              <SidebarMenuSubButton
                                asChild
-                               isActive={location.pathname === `/workspaces/${workspace.id}`}
+                               isActive={location.pathname === `/workspaces/${workspace.name}`}
                              >
                                <button
-                                 onClick={() => navigateTo(`/workspaces/${workspace.id}`)}
+                                 onClick={() => navigateTo(`/workspaces/${workspace.name}`)}
                                  className="flex items-center relative"
                                  type="button"
                                >

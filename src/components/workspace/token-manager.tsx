@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast-container';
-import { Plus, Copy, Trash2, Eye, EyeOff } from 'lucide-react';
+import { Plus, Copy, Trash2, Eye, EyeOff, Check } from 'lucide-react';
 import { api } from '@/lib/api';
 
 interface Token {
@@ -27,6 +27,8 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
   const [neverExpires, setNeverExpires] = useState(true);
   const [showNewTokenForm, setShowNewTokenForm] = useState(false);
   const [visibleTokens, setVisibleTokens] = useState<Set<string>>(new Set());
+  const [newTokenValue, setNewTokenValue] = useState('');
+  const [copiedNewToken, setCopiedNewToken] = useState(false);
   const { showToast } = useToast();
 
   // Load existing tokens
@@ -78,14 +80,12 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
         expiresAt
       };
 
-            const response = await api.post<{ payload: { token: string; tokenHash: string } }>(`/workspaces/${workspaceId}/tokens`, payload);
+      const response = await api.post<{ payload: { token: string; tokenHash: string } }>(`/workspaces/${workspaceId}/tokens`, payload);
 
-      // Show the new token value to user (only shown once)
-      showToast({
-        title: 'Token Created',
-        description: `New token: ${response.payload.token}`,
-        variant: 'default'
-      });
+      // Store the new token value to display in UI
+      if (response.payload && response.payload.token) {
+        setNewTokenValue(response.payload.token);
+      }
 
       // Reset form
       setNewTokenDescription('');
@@ -96,6 +96,12 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
 
       // Reload tokens
       await loadTokens();
+
+      showToast({
+        title: 'Success',
+        description: 'Workspace sharing token created successfully',
+        variant: 'default'
+      });
     } catch (error) {
       showToast({
         title: 'Error',
@@ -152,6 +158,24 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
       showToast({
         title: 'Error',
         description: 'Failed to copy to clipboard',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const copyNewTokenToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(newTokenValue);
+      setCopiedNewToken(true);
+      showToast({
+        title: 'Success',
+        description: 'Token copied to clipboard'
+      });
+      setTimeout(() => setCopiedNewToken(false), 2000);
+    } catch (error) {
+      showToast({
+        title: 'Error',
+        description: 'Failed to copy token to clipboard',
         variant: 'destructive'
       });
     }
@@ -238,6 +262,47 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
               Cancel
             </Button>
           </div>
+        </div>
+      )}
+
+      {newTokenValue && (
+        <div className="p-4 border rounded-md bg-muted/50">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="font-semibold">Your New Workspace Sharing Token</h3>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={copyNewTokenToClipboard}
+            >
+              {copiedNewToken ? (
+                <>
+                  <Check className="mr-2 h-4 w-4" />
+                  Copied
+                </>
+              ) : (
+                <>
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copy
+                </>
+              )}
+            </Button>
+          </div>
+          <p className="text-sm text-muted-foreground mb-2">
+            Make sure to copy your workspace sharing token now. You won't be able to see it again!
+          </p>
+          <div
+            className="p-2 bg-background border rounded font-mono text-sm break-all outline-none focus:ring-2 focus:ring-ring"
+          >
+            {newTokenValue}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-2"
+            onClick={() => setNewTokenValue('')}
+          >
+            Dismiss
+          </Button>
         </div>
       )}
 

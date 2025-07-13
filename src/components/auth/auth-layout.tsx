@@ -16,7 +16,11 @@ export function AuthLayout({ children }: AuthLayoutProps) {
       <Card className="flex w-[95vw] h-[95vh] overflow-hidden">
         <div className="hidden md:block w-1/2 relative bg-black" id="particle-js">
           <Link className="absolute top-8 left-8 font-bold text-white flex items-center z-10" to="/">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 h-6 w-6"><path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"></path></svg>
+            <img
+              src='/images/logo-wr_128x128.png'
+              alt="Canvas Logo"
+              className="mr-2 h-6 w-6"
+            />
             <span className="text-2xl font-bold text-white">Canvas</span>
           </Link>
           <div className="absolute bottom-8 left-8 text-sm text-white max-w-[80%] z-10">

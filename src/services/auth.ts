@@ -74,15 +74,13 @@ export async function loginUser(email: string, password: string, strategy: strin
       // Connect WebSocket after successful login
       socketService.connect(loginData.token);
 
-      // After successful login, attempt to open the universe workspace
-      setTimeout(async () => {
-        try {
-          console.log('Attempting to open universe workspace after login');
-          await openWorkspace('universe');
-        } catch (error) {
-          console.warn('Failed to automatically open universe workspace:', error);
-        }
-      }, 1000);
+      // After successful login, attempt to open the universe workspace immediately
+      try {
+        console.log('Attempting to open universe workspace after login');
+        await openWorkspace('universe');
+      } catch (error) {
+        console.warn('Failed to automatically open universe workspace:', error);
+      }
 
       return response;
     }
@@ -94,15 +92,13 @@ export async function loginUser(email: string, password: string, strategy: strin
       // Connect WebSocket after successful login
       socketService.connect(loginData.payload.token);
 
-      // After successful login, attempt to open the universe workspace
-      setTimeout(async () => {
-        try {
-          console.log('Attempting to open universe workspace after login');
-          await openWorkspace('universe');
-        } catch (error) {
-          console.warn('Failed to automatically open universe workspace:', error);
-        }
-      }, 1000);
+      // After successful login, attempt to open the universe workspace immediately
+      try {
+        console.log('Attempting to open universe workspace after login');
+        await openWorkspace('universe');
+      } catch (error) {
+        console.warn('Failed to automatically open universe workspace:', error);
+      }
 
       return response;
     } else {
@@ -198,12 +194,27 @@ export async function getCurrentUser(): Promise<UserProfile | null> {
       return null;
     }
   } catch (error) {
-    // If we get network/CORS errors, clear the token as it might be invalid
+    console.error('Failed to get current user:', error);
+
+    // Handle the specific case where user exists in token but not in database
     if (error instanceof Error &&
-        (error.message.includes('Network error') ||
-         error.message.includes('Authentication required'))) {
+        (error.message.includes('USER_NOT_FOUND_IN_DATABASE') ||
+         error.message.includes('Your session is invalid'))) {
+      console.warn('User token is valid but user not found in database - clearing authentication');
+      api.clearAuthToken();
+      socketService.disconnect();
+      return null;
+    }
+
+    // Handle authentication errors (401 responses)
+    if (error instanceof Error &&
+        (error.message.includes('Authentication required') ||
+         error.message.includes('user account no longer exists') ||
+         error.message.includes('Network error'))) {
       console.warn('Authentication error detected, clearing token:', error.message);
       api.clearAuthToken();
+      socketService.disconnect();
+      return null;
     }
 
     console.error('Failed to get current user:', error);

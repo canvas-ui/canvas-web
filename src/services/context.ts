@@ -2,14 +2,6 @@ import { API_ROUTES } from '@/config/api';
 import { api } from '@/lib/api';
 // Removed import for Context and Workspace as they are global types from src/types/api.d.ts
 
-// Re-defining ApiResponse for service-specific payload unwrapping, aligned with global structure
-interface ServiceApiResponse<T> {
-  status: string;
-  statusCode: number;
-  message: string;
-  payload: T;
-}
-
 // Type for the payload when creating a context
 // Based on current usage in ContextsPage: id, url, description, workspaceId, baseUrl
 // Global Context type already includes most of these. We need to ensure `workspace` is `workspaceId` for the POST.
@@ -62,8 +54,16 @@ interface DocumentResponse {
 
 export async function listContexts(): Promise<Context[]> {
   try {
-    const response = await api.get<ServiceApiResponse<Context[]>>(API_ROUTES.contexts);
-    return response.payload; // ContextsPage expects the array directly
+    // The API returns a ResponseObject with contexts in the payload field
+    const response = await api.get<{ payload: Context[]; message: string; status: string; statusCode: number }>(API_ROUTES.contexts);
+
+    // Ensure we always return an array even if the response structure is unexpected
+    if (Array.isArray(response.payload)) {
+      return response.payload;
+    } else {
+      console.warn('listContexts: response.payload is not an array:', response.payload);
+      return [];
+    }
   } catch (error) {
     console.error('Failed to list contexts:', error);
     throw error;
@@ -72,10 +72,9 @@ export async function listContexts(): Promise<Context[]> {
 
 export async function getContext(id: string): Promise<Context> {
   try {
-    // API returns { payload: { context: Context } }
-    const response = await api.get<ServiceApiResponse<{ context: Context }>>(`${API_ROUTES.contexts}/${id}`);
-    if (response.payload && response.payload.context) {
-      return response.payload.context;
+    const response = await api.get<{ payload: Context }>(`${API_ROUTES.contexts}/${id}`);
+    if (response && response.payload) {
+      return response.payload;
     }
     throw new Error('Context data not found in API response');
   } catch (error) {
@@ -86,10 +85,9 @@ export async function getContext(id: string): Promise<Context> {
 
 export async function getSharedContext(ownerId: string, contextId: string): Promise<Context> {
   try {
-    // API returns { payload: { context: Context } }
-    const response = await api.get<ServiceApiResponse<{ context: Context }>>(`${API_ROUTES.users}/${ownerId}/contexts/${contextId}`);
-    if (response.payload && response.payload.context) {
-      return response.payload.context;
+    const response = await api.get<{ payload: Context }>(`${API_ROUTES.users}/${ownerId}/contexts/${contextId}`);
+    if (response && response.payload) {
+      return response.payload;
     }
     throw new Error('Shared context data not found in API response');
   } catch (error) {
@@ -100,10 +98,8 @@ export async function getSharedContext(ownerId: string, contextId: string): Prom
 
 export async function createContext(contextData: CreateContextPayload): Promise<Context> {
   try {
-    // API expects { id, url, description?, workspaceId, baseUrl? }
-    // API returns { payload: { context: Context } }
-    const response = await api.post<ServiceApiResponse<{ context: Context }>>(API_ROUTES.contexts, contextData);
-    if (response.payload && response.payload.context) {
+    const response = await api.post<{ payload: { context: Context } }>(API_ROUTES.contexts, contextData);
+    if (response && response.payload && response.payload.context) {
       return response.payload.context;
     }
     throw new Error('Created context data not found in API response');
@@ -115,10 +111,13 @@ export async function createContext(contextData: CreateContextPayload): Promise<
 
 export async function updateContextUrl(id: string, url: string): Promise<Context> {
   try {
-    // API expects { url: string }
-    // API returns { payload: Context } (as assumed in ContextDetailPage)
-    const response = await api.post<ServiceApiResponse<Context>>(`${API_ROUTES.contexts}/${id}/url`, { url });
-    return response.payload;
+    const response = await api.post<{ payload: { url: string } }>(`${API_ROUTES.contexts}/${id}/url`, { url });
+    if (response && response.payload && response.payload.url) {
+      // The URL update endpoint returns just the URL, not the full context
+      // We'll need to fetch the context again or return a partial update
+      return { url: response.payload.url } as Context;
+    }
+    throw new Error('Updated context data not found in API response');
   } catch (error) {
     console.error(`Failed to update context URL for ${id}:`, error);
     throw error;
@@ -127,8 +126,7 @@ export async function updateContextUrl(id: string, url: string): Promise<Context
 
 export async function deleteContext(id: string): Promise<void> {
   try {
-    // API typically returns a success message or no content for delete
-    await api.delete<ServiceApiResponse<null>>(`${API_ROUTES.contexts}/${id}`);
+    await api.delete<null>(`${API_ROUTES.contexts}/${id}`);
   } catch (error) {
     console.error(`Failed to delete context ${id}:`, error);
     throw error;
@@ -142,31 +140,25 @@ export async function getContextDocuments(
   options: Record<string, any> = {}
 ): Promise<DocumentResponse['data']> {
   try {
-    // Build query parameters - API expects arrays as separate parameters
     const params = new URLSearchParams();
-
-    // Add each feature as a separate featureArray parameter
-    featureArray.forEach(feature => {
-      params.append('featureArray', feature);
-    });
-
-    // Add each filter as a separate filterArray parameter
-    filterArray.forEach(filter => {
-      params.append('filterArray', filter);
-    });
-
-    // Add options
+    featureArray.forEach(feature => params.append('featureArray', feature));
+    filterArray.forEach(filter => params.append('filterArray', filter));
     if (options.includeServerContext !== undefined) {
       params.append('includeServerContext', options.includeServerContext.toString());
     }
     if (options.includeClientContext !== undefined) {
       params.append('includeClientContext', options.includeClientContext.toString());
     }
-
     const url = `${API_ROUTES.contexts}/${id}/documents${params.toString() ? '?' + params.toString() : ''}`;
-    // The API returns documents directly in payload array, not wrapped in a data property
-    const response = await api.get<ServiceApiResponse<DocumentResponse['data']>>(url);
-    return response.payload || [];
+    const response = await api.get<{ payload: DocumentResponse['data']; count: number }>(url);
+
+    // Handle the correct API response structure where documents are directly in payload
+    if (Array.isArray(response.payload)) {
+      return response.payload;
+    } else {
+      console.warn('getContextDocuments: response.payload is not an array:', response.payload);
+      return [];
+    }
   } catch (error) {
     console.error(`Failed to get context documents for ${id}:`, error);
     throw error;
@@ -181,31 +173,25 @@ export async function getSharedContextDocuments(
   options: Record<string, any> = {}
 ): Promise<DocumentResponse['data']> {
   try {
-    // Build query parameters - API expects arrays as separate parameters
     const params = new URLSearchParams();
-
-    // Add each feature as a separate featureArray parameter
-    featureArray.forEach(feature => {
-      params.append('featureArray', feature);
-    });
-
-    // Add each filter as a separate filterArray parameter
-    filterArray.forEach(filter => {
-      params.append('filterArray', filter);
-    });
-
-    // Add options
+    featureArray.forEach(feature => params.append('featureArray', feature));
+    filterArray.forEach(filter => params.append('filterArray', filter));
     if (options.includeServerContext !== undefined) {
       params.append('includeServerContext', options.includeServerContext.toString());
     }
     if (options.includeClientContext !== undefined) {
       params.append('includeClientContext', options.includeClientContext.toString());
     }
-
     const url = `${API_ROUTES.users}/${ownerId}/contexts/${contextId}/documents${params.toString() ? '?' + params.toString() : ''}`;
-    // The API returns documents directly in payload array, not wrapped in a data property
-    const response = await api.get<ServiceApiResponse<DocumentResponse['data']>>(url);
-    return response.payload || [];
+    const response = await api.get<{ payload: DocumentResponse['data']; count: number }>(url);
+
+    // Handle the correct API response structure where documents are directly in payload
+    if (Array.isArray(response.payload)) {
+      return response.payload;
+    } else {
+      console.warn('getSharedContextDocuments: response.payload is not an array:', response.payload);
+      return [];
+    }
   } catch (error) {
     console.error(`Failed to get shared context documents for ${ownerId}/${contextId}:`, error);
     throw error;
@@ -215,23 +201,23 @@ export async function getSharedContextDocuments(
 // Context sharing functions
 export async function grantContextAccess(ownerId: string, contextId: string, sharedWithUserId: string, accessLevel: string): Promise<{ message: string }> {
   try {
-    const response = await api.post<ServiceApiResponse<{ message: string }>>(
+    const response = await api.post<{ payload: string }>(
       `${API_ROUTES.users}/${ownerId}/contexts/${contextId}/shares`,
       { sharedWithUserId, accessLevel }
     );
-    return response.payload;
+    return { message: response.payload || 'Context access granted' };
   } catch (error) {
     console.error(`Failed to grant context access:`, error);
     throw error;
   }
 }
 
-export async function revokeContextAccess(ownerId: string, contextId: string, sharedWithUserId: string): Promise<{ message: string }> {
+export async function revokeContextAccess(ownerId: string, contextId: string, sharedWithUserId: string): Promise<{ message:string }> {
   try {
-    const response = await api.delete<ServiceApiResponse<{ message: string }>>(
+    const response = await api.delete<{ payload: string }>(
       `${API_ROUTES.users}/${ownerId}/contexts/${contextId}/shares/${sharedWithUserId}`
     );
-    return response.payload;
+    return { message: response.payload || 'Context access revoked' };
   } catch (error) {
     console.error(`Failed to revoke context access:`, error);
     throw error;
@@ -240,8 +226,11 @@ export async function revokeContextAccess(ownerId: string, contextId: string, sh
 
 export async function getContextTree(id: string): Promise<any> {
   try {
-    const response = await api.get<ServiceApiResponse<any>>(`${API_ROUTES.contexts}/${id}/tree`);
-    return response.payload;
+    const response = await api.get<{ payload: any }>(`${API_ROUTES.contexts}/${id}/tree`);
+    if (response && response.payload) {
+      return response.payload;
+    }
+    throw new Error('Context tree data not found in API response');
   } catch (error) {
     console.error(`Failed to get context tree for ${id}:`, error);
     throw error;
@@ -251,16 +240,13 @@ export async function getContextTree(id: string): Promise<any> {
 // Remove documents from a context (non-destructive, just unlink)
 export async function removeDocumentsFromContext(contextId: string, documentIds: (string|number)[]): Promise<{ message: string }> {
   try {
-    const response = await api.delete<ServiceApiResponse<{ message: string }>>(
-      `${API_ROUTES.contexts}/${contextId}/documents/remove`,
-      {
-        body: JSON.stringify(documentIds),
-        headers: { 'Content-Type': 'application/json' }
-      }
+    const response = await api.post<{ payload: string }>(
+        `${API_ROUTES.contexts}/${contextId}/documents/remove`,
+        { documentIds }
     );
-    return response.payload;
+    return { message: response.payload || 'Documents removed from context' };
   } catch (error) {
-    console.error('Failed to remove documents from context:', error);
+    console.error(`Failed to remove documents from context ${contextId}:`, error);
     throw error;
   }
 }
@@ -268,16 +254,12 @@ export async function removeDocumentsFromContext(contextId: string, documentIds:
 // Permanently delete documents from DB (owner-only)
 export async function deleteDocumentsFromContext(contextId: string, documentIds: (string|number)[]): Promise<{ message: string }> {
   try {
-    const response = await api.delete<ServiceApiResponse<{ message: string }>>(
-      `${API_ROUTES.contexts}/${contextId}/documents`,
-      {
-        body: JSON.stringify(documentIds),
-        headers: { 'Content-Type': 'application/json' }
-      }
+    return await api.post<{ message: string }>(
+      `${API_ROUTES.contexts}/${contextId}/documents/delete`,
+      { documentIds }
     );
-    return response.payload;
   } catch (error) {
-    console.error('Failed to delete documents from context DB:', error);
+    console.error(`Failed to delete documents from context ${contextId}:`, error);
     throw error;
   }
 }
