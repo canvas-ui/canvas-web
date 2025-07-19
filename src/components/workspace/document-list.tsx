@@ -296,13 +296,13 @@ function DocumentRow({ document, onRemoveDocument, onDeleteDocument }: DocumentR
               ) : (
                 <File className="h-4 w-4 text-blue-500 flex-shrink-0" />
               )}
-              <h4 className="font-medium truncate" title={getDisplayTitle()}>
+              <h4 className="font-medium truncate min-w-0 flex-1" title={getDisplayTitle()}>
                 {getDisplayTitle()}
               </h4>
               {isTabDocument && (
                 <ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />
               )}
-              <span className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded border">
+              <span className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded border flex-shrink-0">
                 {getSchemaDisplayName(document.schema)}
               </span>
             </div>
@@ -315,14 +315,14 @@ function DocumentRow({ document, onRemoveDocument, onDeleteDocument }: DocumentR
             )}
 
             {/* Metadata row */}
-            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-              <div className="flex items-center gap-1">
+            <div className="flex items-center gap-4 text-xs text-muted-foreground overflow-hidden">
+              <div className="flex items-center gap-1 flex-shrink-0">
                 <span className="font-medium">ID:</span>
-                <span className="font-mono">{document.id}</span>
+                <span className="font-mono truncate max-w-[60px]" title={`ID: ${document.id}`}>{document.id}</span>
               </div>
 
               {primaryChecksum && (
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 flex-shrink-0">
                   <Hash className="h-3 w-3" />
                   <span className="font-mono" title={`${primaryChecksum.algo} checksum`}>
                     {primaryChecksum.hash}
@@ -330,7 +330,7 @@ function DocumentRow({ document, onRemoveDocument, onDeleteDocument }: DocumentR
                 </div>
               )}
 
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 flex-shrink-0">
                 <Calendar className="h-3 w-3" />
                 <span title={`Created: ${formatDate(document.createdAt)}`}>
                   {formatDate(document.createdAt)}
@@ -338,7 +338,7 @@ function DocumentRow({ document, onRemoveDocument, onDeleteDocument }: DocumentR
               </div>
 
               {document.versionNumber > 1 && (
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 flex-shrink-0">
                   <span className="font-medium">v{document.versionNumber}</span>
                 </div>
               )}
