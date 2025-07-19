@@ -1,6 +1,6 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom"
 import { useState, useEffect, useCallback } from "react"
-import { LogOut, Briefcase, Network, KeyRound, Infinity, ChevronRight } from "lucide-react"
+import { LogOut, Briefcase, Network, KeyRound, Infinity, ChevronRight, Users, FolderOpen } from "lucide-react"
 import { api } from "@/lib/api"
 import { useToast } from "@/components/ui/toast-container"
 import { getCurrentUserFromToken } from "@/services/auth"
@@ -12,6 +12,7 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
@@ -407,6 +408,47 @@ function DashboardSidebar() {
                     </button>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+
+                {/* Admin Section - Only visible to admin users */}
+                {user?.userType === 'admin' && (
+                  <>
+                    <SidebarGroupLabel>Administration</SidebarGroupLabel>
+
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive('/admin/users')}
+                        tooltip="Manage users"
+                      >
+                        <button
+                          onClick={() => navigateTo('/admin/users')}
+                          className="flex items-center"
+                          type="button"
+                        >
+                          <Users className="size-4" />
+                          <span>User Management</span>
+                        </button>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive('/admin/workspaces')}
+                        tooltip="Manage workspaces for all users"
+                      >
+                        <button
+                          onClick={() => navigateTo('/admin/workspaces')}
+                          className="flex items-center"
+                          type="button"
+                        >
+                          <FolderOpen className="size-4" />
+                          <span>Workspace Administration</span>
+                        </button>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  </>
+                )}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
@@ -479,6 +521,8 @@ function DashboardSidebar() {
                 {location.pathname.startsWith('/contexts/') && location.pathname !== '/contexts' && 'Context Details'}
                 {location.pathname.startsWith('/users/') && location.pathname.includes('/contexts/') && 'Shared Context Details'}
                 {location.pathname === '/api-tokens' && 'API Tokens'}
+                {location.pathname === '/admin/users' && 'User Management'}
+                {location.pathname === '/admin/workspaces' && 'Workspace Administration'}
               </span>
             </nav>
           </div>

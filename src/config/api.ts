@@ -23,6 +23,12 @@ export const API_ROUTES = {
   // Contexts
   contexts: `${API_URL}/contexts`,
 
+  // Admin routes
+  admin: {
+    users: `${API_URL}/admin/users`,
+    workspaces: `${API_URL}/admin/workspaces`,
+  },
+
   // WebSocket
   ws: WS_URL
 }
