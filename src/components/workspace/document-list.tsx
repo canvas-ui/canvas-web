@@ -290,13 +290,13 @@ function DocumentRow({ document, onRemoveDocument, onDeleteDocument }: DocumentR
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             {/* Header row */}
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-2 overflow-hidden">
               {isTabDocument ? (
                 <Globe className="h-4 w-4 text-blue-500 flex-shrink-0" />
               ) : (
                 <File className="h-4 w-4 text-blue-500 flex-shrink-0" />
               )}
-              <h4 className="font-medium truncate min-w-0 flex-1" title={getDisplayTitle()}>
+              <h4 className="font-medium truncate min-w-0 flex-1 max-w-0" title={getDisplayTitle()}>
                 {getDisplayTitle()}
               </h4>
               {isTabDocument && (
