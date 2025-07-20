@@ -296,7 +296,7 @@ function DocumentRow({ document, onRemoveDocument, onDeleteDocument }: DocumentR
               ) : (
                 <File className="h-4 w-4 text-blue-500 flex-shrink-0" />
               )}
-              <h4 className="font-medium truncate min-w-0 flex-1 max-w-0" title={getDisplayTitle()}>
+              <h4 className="font-medium truncate min-w-0 max-w-[200px]" title={getDisplayTitle()}>
                 {getDisplayTitle()}
               </h4>
               {isTabDocument && (
