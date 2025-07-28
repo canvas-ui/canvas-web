@@ -25,45 +25,34 @@ export default function AgentsPage() {
   const [newAgentLabel, setNewAgentLabel] = useState("")
   const [newAgentProvider, setNewAgentProvider] = useState<'anthropic' | 'openai' | 'ollama'>('anthropic')
   const [newAgentModel, setNewAgentModel] = useState("")
+  const [newAgentConnectorConfig, setNewAgentConnectorConfig] = useState({
+    apiKey: "",
+    host: "",
+    maxTokens: 4096,
+    temperature: 0.7
+  })
   const [isCreating, setIsCreating] = useState(false)
   const { showToast } = useToast()
   const navigate = useNavigate()
   const socket = useSocket()
 
-  // Model options for each provider
-  const modelOptions = {
-    anthropic: [
-      'claude-3-5-sonnet-20241022',
-      'claude-3-5-haiku-20241022',
-      'claude-3-opus-20240229',
-      'claude-3-sonnet-20240229',
-      'claude-3-haiku-20240307'
-    ],
-    openai: [
-      'gpt-4o',
-      'gpt-4o-mini',
-      'gpt-4-turbo',
-      'gpt-4',
-      'gpt-3.5-turbo'
-    ],
-    ollama: [
-      'qwen2.5-coder:latest',
-      'llama3.1:latest',
-      'mistral:latest',
-      'codellama:latest',
-      'deepseek-coder:latest',
-      'phi3:latest'
-    ]
+  // Default models for reference
+  const defaultModels = {
+    anthropic: 'claude-3-5-sonnet-20241022',
+    openai: 'gpt-4o',
+    ollama: 'qwen2.5-coder:latest'
   }
 
   useEffect(() => {
     // Set default model when provider changes
-    const defaultModels = {
-      anthropic: 'claude-3-5-sonnet-20241022',
-      openai: 'gpt-4o',
-      ollama: 'qwen2.5-coder:latest'
-    }
     setNewAgentModel(defaultModels[newAgentProvider])
+    // Reset connector config when provider changes
+    setNewAgentConnectorConfig({
+      apiKey: "",
+      host: newAgentProvider === 'ollama' ? 'http://localhost:11434' : "",
+      maxTokens: 4096,
+      temperature: 0.7
+    })
   }, [newAgentProvider])
 
   useEffect(() => {
@@ -142,6 +131,16 @@ export default function AgentsPage() {
         color: newAgentColor,
         llmProvider: newAgentProvider,
         model: newAgentModel,
+        connectors: {
+          [newAgentProvider]: {
+            ...newAgentConnectorConfig,
+            // Clean up empty values
+            ...(newAgentConnectorConfig.apiKey ? { apiKey: newAgentConnectorConfig.apiKey } : {}),
+            ...(newAgentConnectorConfig.host ? { host: newAgentConnectorConfig.host } : {}),
+            maxTokens: newAgentConnectorConfig.maxTokens,
+            temperature: newAgentConnectorConfig.temperature
+          }
+        },
         mcp: {
           servers: [
             // Include default weather MCP server
@@ -160,6 +159,12 @@ export default function AgentsPage() {
       setNewAgentDescription("")
       setNewAgentColor(generateNiceRandomHexColor())
       setNewAgentLabel("")
+      setNewAgentConnectorConfig({
+        apiKey: "",
+        host: newAgentProvider === 'ollama' ? 'http://localhost:11434' : "",
+        maxTokens: 4096,
+        temperature: 0.7
+      })
       showToast({
         title: 'Success',
         description: `Agent '${newAgent.label || newAgent.name}' created.`
@@ -312,17 +317,38 @@ export default function AgentsPage() {
             </div>
             <div>
               <label htmlFor="agent-model" className="text-sm font-medium">Model</label>
-              <select
+              <Input
                 id="agent-model"
                 value={newAgentModel}
                 onChange={(e) => setNewAgentModel(e.target.value)}
-                className="w-full mt-1 px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                placeholder="Model name (e.g., 'gpt-4o')"
                 disabled={isCreating}
-              >
-                {modelOptions[newAgentProvider].map(model => (
-                  <option key={model} value={model}>{model}</option>
-                ))}
-              </select>
+              />
+            </div>
+          </div>
+
+          {/* Connector Configuration */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label htmlFor="api-key" className="text-sm font-medium">API Key (Optional)</label>
+              <Input
+                id="api-key"
+                type="password"
+                value={newAgentConnectorConfig.apiKey}
+                onChange={(e) => setNewAgentConnectorConfig(prev => ({ ...prev, apiKey: e.target.value }))}
+                placeholder="Enter your API key"
+                disabled={isCreating}
+              />
+            </div>
+            <div>
+              <label htmlFor="host" className="text-sm font-medium">Host (Optional)</label>
+              <Input
+                id="host"
+                value={newAgentConnectorConfig.host}
+                onChange={(e) => setNewAgentConnectorConfig(prev => ({ ...prev, host: e.target.value }))}
+                placeholder="Enter your host (e.g., http://localhost:11434)"
+                disabled={isCreating}
+              />
             </div>
           </div>
 
