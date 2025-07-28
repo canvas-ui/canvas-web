@@ -1,11 +1,12 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom"
 import { useState, useEffect, useCallback } from "react"
-import { LogOut, Briefcase, Network, KeyRound, Infinity, ChevronRight, Users, FolderOpen } from "lucide-react"
+import { LogOut, Briefcase, Network, KeyRound, Infinity, ChevronRight, Users, FolderOpen, Brain } from "lucide-react"
 import { api } from "@/lib/api"
 import { useToast } from "@/components/ui/toast-container"
 import { getCurrentUserFromToken } from "@/services/auth"
 import { listWorkspaces } from "@/services/workspace"
 import { listContexts } from "@/services/context"
+import { listAgents, type Agent } from "@/services/agent"
 import {
   Sidebar,
   SidebarContent,
@@ -56,6 +57,16 @@ interface LocalContext {
   updatedAt?: string
 }
 
+// Agents interface for sidebar display
+interface LocalAgent {
+  id: string
+  name: string
+  label?: string
+  color?: string
+  isActive: boolean
+  status: string
+}
+
 // Navigation items (excluding workspaces and contexts which will be submenus)
 const navigationItems = [
   {
@@ -79,6 +90,9 @@ function DashboardSidebar() {
   const [contexts, setContexts] = useState<LocalContext[]>([])
   const [isContextsOpen, setIsContextsOpen] = useState(true)
   const [isLoadingContexts, setIsLoadingContexts] = useState(false)
+  const [agents, setAgents] = useState<LocalAgent[]>([])
+  const [isAgentsOpen, setIsAgentsOpen] = useState(true)
+  const [isLoadingAgents, setIsLoadingAgents] = useState(false)
 
   // Get user information from token
   useEffect(() => {
@@ -159,6 +173,43 @@ function DashboardSidebar() {
     }
 
     fetchContexts()
+  }, [])
+
+  // Fetch agents
+  useEffect(() => {
+    const fetchAgents = async () => {
+      setIsLoadingAgents(true)
+      try {
+        const agentData = await listAgents()
+        if (Array.isArray(agentData)) {
+          // Transform the API response to match our interface
+          const transformedData: LocalAgent[] = agentData.map((agent: Agent) => ({
+            id: agent.id,
+            name: agent.name,
+            label: agent.label || agent.name,
+            color: agent.color,
+            isActive: agent.isActive,
+            status: agent.status
+          }))
+          setAgents(transformedData)
+        } else {
+          console.warn('listAgents response is not an array:', agentData);
+          setAgents([]);
+        }
+      } catch (error) {
+        console.error('Failed to fetch agents:', error)
+        setAgents([]);
+        showToast({
+          title: 'Error',
+          description: 'Failed to load agents',
+          variant: 'destructive'
+        })
+      } finally {
+        setIsLoadingAgents(false)
+      }
+    }
+
+    fetchAgents()
   }, [])
 
   const isActive = (path: string) => {
@@ -409,6 +460,85 @@ function DashboardSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
 
+                {/* Agents submenu */}
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => {
+                      // If sidebar is collapsed, navigate to agents page
+                      if (state === 'collapsed') {
+                        navigateTo('/agents')
+                      } else {
+                        // If sidebar is expanded, toggle the submenu
+                        setIsAgentsOpen(!isAgentsOpen)
+                      }
+                    }}
+                    tooltip="Manage your AI agents"
+                  >
+                    <Brain className="size-4" />
+                    <span>Agents</span>
+                    <ChevronRight
+                      className={`ml-auto size-4 transition-transform ${isAgentsOpen ? 'rotate-90' : ''}`}
+                    />
+                  </SidebarMenuButton>
+
+                  {isAgentsOpen && (
+                    <SidebarMenuSub>
+                      {/* Manage Agents link */}
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton
+                          asChild
+                          isActive={location.pathname === '/agents'}
+                        >
+                          <button
+                            onClick={() => navigateTo('/agents')}
+                            className="flex items-center"
+                            type="button"
+                          >
+                            <span>Manage Agents</span>
+                          </button>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+
+                      {/* Individual agents */}
+                      {isLoadingAgents ? (
+                        <SidebarMenuSubItem>
+                          <div className="px-2 py-1 text-xs text-muted-foreground">
+                            Loading...
+                          </div>
+                        </SidebarMenuSubItem>
+                      ) : (
+                        agents.map((agent) => (
+                          <SidebarMenuSubItem key={agent.id}>
+                            <SidebarMenuSubButton
+                              asChild
+                              isActive={location.pathname === `/agents/${agent.name}`}
+                            >
+                              <button
+                                onClick={() => navigateTo(`/agents/${agent.name}`)}
+                                className="flex items-center relative"
+                                type="button"
+                              >
+                                {agent.color && (
+                                  <div
+                                    className="absolute left-0 top-0 bottom-0 w-1 rounded-none"
+                                    style={{ backgroundColor: agent.color, borderRadius: '0' }}
+                                  />
+                                )}
+                                <div
+                                  className={`w-2 h-2 rounded-full mr-2 flex-shrink-0 ${
+                                    agent.isActive ? 'bg-green-500' : 'bg-gray-400'
+                                  }`}
+                                />
+                                <span className="truncate">{agent.label}</span>
+                              </button>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))
+                      )}
+                    </SidebarMenuSub>
+                  )}
+                </SidebarMenuItem>
+
                 {/* Admin Section - Only visible to admin users */}
                 {user?.userType === 'admin' && (
                   <>
@@ -521,6 +651,8 @@ function DashboardSidebar() {
                 {location.pathname.startsWith('/contexts/') && location.pathname !== '/contexts' && 'Context Details'}
                 {location.pathname.startsWith('/users/') && location.pathname.includes('/contexts/') && 'Shared Context Details'}
                 {location.pathname === '/api-tokens' && 'API Tokens'}
+                {location.pathname === '/agents' && 'Agents'}
+                {location.pathname.startsWith('/agents/') && location.pathname !== '/agents' && 'Agent Details'}
                 {location.pathname === '/admin/users' && 'User Management'}
                 {location.pathname === '/admin/workspaces' && 'Workspace Administration'}
               </span>

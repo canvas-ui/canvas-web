@@ -12,6 +12,8 @@ import ContextDetailPage from './pages/context-detail'
 import ApiTokensPage from './pages/api-tokens'
 import AdminUsersPage from './pages/admin/users'
 import AdminWorkspacesPage from './pages/admin/workspaces'
+import AgentsPage from './pages/agents'
+import AgentDetailPage from './pages/agents/[agentId]'
 import { DashboardLayout } from './components/layouts/dashboard-layout'
 import { ToastContainer, useToast } from './components/ui/toast-container'
 import { setGlobalErrorHandler } from './lib/error-handler'
@@ -46,6 +48,8 @@ function AppContent() {
           <Route path="contexts" element={<ContextsPage />} />
           <Route path="contexts/:contextId" element={<ContextDetailPage />} />
           <Route path="users/:userId/contexts/:contextId" element={<ContextDetailPage />} />
+          <Route path="agents" element={<AgentsPage />} />
+          <Route path="agents/:agentId" element={<AgentDetailPage />} />
           <Route path="api-tokens" element={<ApiTokensPage />} />
 
           {/* Admin routes */}
