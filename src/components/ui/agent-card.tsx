@@ -181,10 +181,9 @@ export function AgentCard({ agent, onStart, onStop, onEnter }: AgentCardProps) {
           onClick={() => onEnter(agent.name)}
           size="sm"
           className="flex-1"
-          disabled={!agent.isActive}
         >
           <MessageCircle className="mr-2 h-4 w-4" />
-          {agent.isActive ? 'Chat' : 'Inactive'}
+          Chat
         </Button>
       </div>
     </div>

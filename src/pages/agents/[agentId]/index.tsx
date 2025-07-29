@@ -14,33 +14,62 @@ import {
   Cpu,
   MessageCircle,
   Clock,
-  Database
+  Database,
+  StopCircle,
+  Wifi,
+  WifiOff,
+  Radio,
+  Edit,
+  Trash2
 } from 'lucide-react'
 import {
   getAgent,
   startAgent,
   stopAgent,
-  chatWithAgent,
   getAgentMemory,
   clearAgentMemory,
   getAgentMCPTools,
   callMCPTool,
+  deleteAgent,
+  updateAgent,
+  getAgentStatus,
   Agent,
-  ChatMessage,
   MCPTool,
   AgentMemory
 } from '@/services/agent'
+import { useAgentChat } from '@/hooks/useAgentChat'
+import StreamingChatMessageComponent from '@/components/agent/StreamingChatMessage'
 
 export default function AgentDetailPage() {
   const { agentId } = useParams<{ agentId: string }>()
   const [agent, setAgent] = useState<Agent | null>(null)
-  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [currentMessage, setCurrentMessage] = useState('')
   const [isLoading, setIsLoading] = useState(true)
-  const [isChatting, setIsChatting] = useState(false)
   const [isStartingAgent, setIsStartingAgent] = useState(false)
   const [isStoppingAgent, setIsStoppingAgent] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Edit and delete states
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  // Edit modal form state
+  const [editForm, setEditForm] = useState({
+    label: '',
+    description: '',
+    llmProvider: 'anthropic',
+    model: '',
+    systemPrompt: '',
+    temperature: 0.7,
+    maxTokens: 4096,
+    topP: 1.0,
+    frequencyPenalty: 0.0,
+    presencePenalty: 0.0,
+    numCtx: 4096, // For Ollama
+    reasoning: false // For advanced reasoning
+  })
+  const [isSaving, setIsSaving] = useState(false)
 
   // Sidebar states
   const [activeTab, setActiveTab] = useState<'info' | 'tools' | 'memory'>('info')
@@ -56,6 +85,28 @@ export default function AgentDetailPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const chatInputRef = useRef<HTMLInputElement>(null)
 
+  // Streaming chat hook
+  const {
+    allMessages,
+    isStreaming,
+    currentStreamingMessage,
+    connectionStatus,
+    error: chatError,
+    sendMessage,
+    clearMessages,
+    stopStreaming
+  } = useAgentChat({
+    agentId: agentId || '',
+    llmProvider: agent?.llmProvider, // Pass provider info for smart streaming
+    onError: (error) => {
+      showToast({
+        title: 'Chat Error',
+        description: error.message,
+        variant: 'destructive'
+      })
+    }
+  })
+
   // Auto-scroll to bottom of chat
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -63,7 +114,7 @@ export default function AgentDetailPage() {
 
   useEffect(() => {
     scrollToBottom()
-  }, [messages])
+  }, [allMessages, currentStreamingMessage])
 
   // Focus chat input when agent becomes active
   useEffect(() => {
@@ -71,6 +122,35 @@ export default function AgentDetailPage() {
       chatInputRef.current.focus()
     }
   }, [agent?.isActive])
+
+  // Periodic status refresh to ensure UI stays in sync
+  useEffect(() => {
+    if (!agent || !agentId) return
+
+    const refreshStatus = async () => {
+      try {
+        const status = await getAgentStatus(agentId)
+        // Update agent state if status has changed
+        if (agent.isActive !== status.isActive || agent.status !== status.status) {
+          setAgent(prev => prev ? {
+            ...prev,
+            isActive: status.isActive,
+            status: status.status as Agent['status'],
+            lastAccessed: status.lastAccessed
+          } : null)
+        }
+      } catch (err) {
+        // Silently fail status refresh to avoid spamming errors
+        console.warn('Status refresh failed:', err)
+      }
+    }
+
+    // Refresh immediately and then every 10 seconds
+    refreshStatus()
+    const interval = setInterval(refreshStatus, 10000)
+
+    return () => clearInterval(interval)
+  }, [agent?.id, agentId])
 
   // Fetch agent details
   useEffect(() => {
@@ -96,7 +176,7 @@ export default function AgentDetailPage() {
     }
 
     fetchAgent()
-  }, [agentId])
+  }, [agentId, showToast])
 
   // Load tools when agent is active and tools tab is selected
   useEffect(() => {
@@ -180,7 +260,7 @@ export default function AgentDetailPage() {
     try {
       await stopAgent(agent.name)
       setAgent(prev => prev ? { ...prev, status: 'inactive', isActive: false } : null)
-      setMessages([])
+      clearMessages() // Clear messages on agent stop
       showToast({
         title: 'Success',
         description: 'Agent stopped successfully'
@@ -199,51 +279,54 @@ export default function AgentDetailPage() {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!currentMessage.trim() || !agent?.isActive || isChatting) return
-
-    const userMessage: ChatMessage = {
-      role: 'user',
-      content: currentMessage,
-      timestamp: new Date().toISOString()
-    }
-
-    setMessages(prev => [...prev, userMessage])
-    setCurrentMessage('')
-    setIsChatting(true)
+    if (!currentMessage.trim() || !agent?.isActive || isStreaming) return
 
     try {
-      const response = await chatWithAgent(agent.id, {
-        message: currentMessage,
-        context: messages.slice(-10), // Last 10 messages for context
+      await sendMessage(currentMessage, {
         mcpContext: true
       })
-
-      const assistantMessage: ChatMessage = {
-        role: 'assistant',
-        content: response.content,
-        timestamp: new Date().toISOString(),
-        metadata: response.metadata
-      }
-
-      setMessages(prev => [...prev, assistantMessage])
+      setCurrentMessage('')
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to send message'
-      showToast({
-        title: 'Error',
-        description: message,
-        variant: 'destructive'
-      })
-
-      // Add error message to chat
-      const errorMessage: ChatMessage = {
-        role: 'assistant',
-        content: `Error: ${message}`,
-        timestamp: new Date().toISOString()
-      }
-      setMessages(prev => [...prev, errorMessage])
-    } finally {
-      setIsChatting(false)
+      // Error handling is done by the useAgentChat hook
+      console.error('Failed to send message:', err)
     }
+  }
+
+  const handleStopStreaming = () => {
+    stopStreaming()
+    showToast({
+      title: 'Streaming Stopped',
+      description: 'Chat streaming has been stopped',
+    })
+  }
+
+  const getConnectionStatusDisplay = () => {
+    const icons = {
+      websocket: <Wifi className="h-4 w-4 text-green-500" />,
+      sse: <Radio className="h-4 w-4 text-blue-500" />,
+      rest: <Cpu className="h-4 w-4 text-yellow-500" />,
+      disconnected: <WifiOff className="h-4 w-4 text-red-500" />
+    }
+
+    const getStatusLabel = () => {
+      switch (connectionStatus) {
+        case 'websocket':
+          return 'WebSocket';
+        case 'sse':
+          return agent?.llmProvider === 'ollama' ? 'SSE (Ollama)' : 'SSE Fallback';
+        case 'rest':
+          return 'REST API';
+        default:
+          return 'Disconnected';
+      }
+    }
+
+    return (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        {icons[connectionStatus]}
+        <span>{getStatusLabel()}</span>
+      </div>
+    )
   }
 
   const handleExecuteTool = async () => {
@@ -253,24 +336,18 @@ export default function AgentDetailPage() {
     try {
       const result = await callMCPTool(agent.id, selectedTool.name, toolArgs, selectedTool.source)
 
-      // Add tool execution to chat
-      const toolMessage: ChatMessage = {
-        role: 'assistant',
-        content: `Tool "${selectedTool.name}" executed:\n${result.content.map(c => c.text || JSON.stringify(c)).join('\n')}`,
-        timestamp: new Date().toISOString(),
-        metadata: {
-          toolCalls: [{ tool: selectedTool.name, args: toolArgs, result }]
-        }
-      }
-
-      setMessages(prev => [...prev, toolMessage])
-      setSelectedTool(null)
-      setToolArgs({})
+      // Show toast for tool execution with result summary
+      const resultSummary = result.content.length > 0
+        ? result.content.map(c => c.text || 'Result').join(', ').substring(0, 100)
+        : 'Executed successfully'
 
       showToast({
         title: 'Success',
-        description: `Tool "${selectedTool.name}" executed successfully`
+        description: `Tool "${selectedTool.name}" executed: ${resultSummary}`
       })
+      setSelectedTool(null)
+      setToolArgs({})
+
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to execute tool'
       showToast({
@@ -300,6 +377,102 @@ export default function AgentDetailPage() {
         description: message,
         variant: 'destructive'
       })
+    }
+  }
+
+  const handleDeleteAgent = async () => {
+    if (!agent) return
+
+    setIsDeleting(true)
+    try {
+      await deleteAgent(agent.id)
+      showToast({
+        title: 'Success',
+        description: 'Agent deleted successfully'
+      })
+      // Navigate back to agents list
+      window.location.href = '/agents'
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete agent'
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      })
+    } finally {
+      setIsDeleting(false)
+      setShowDeleteConfirm(false)
+    }
+  }
+
+  const handleEditAgent = () => {
+    if (!agent) return
+
+    // Initialize form with current agent values
+    setEditForm({
+      label: agent.label || agent.name,
+      description: agent.description || '',
+      llmProvider: agent.llmProvider || 'anthropic',
+      model: agent.model || '',
+      systemPrompt: agent.config?.prompts?.system || '',
+      temperature: agent.config?.connectors?.[agent.llmProvider]?.temperature || 0.7,
+      maxTokens: agent.config?.connectors?.[agent.llmProvider]?.maxTokens || 4096,
+      topP: agent.config?.connectors?.[agent.llmProvider]?.topP || 1.0,
+      frequencyPenalty: agent.config?.connectors?.[agent.llmProvider]?.frequencyPenalty || 0.0,
+      presencePenalty: agent.config?.connectors?.[agent.llmProvider]?.presencePenalty || 0.0,
+      numCtx: agent.config?.connectors?.[agent.llmProvider]?.numCtx || 4096,
+      reasoning: agent.config?.connectors?.[agent.llmProvider]?.reasoning || false
+    })
+    setShowEditModal(true)
+  }
+
+  const handleSaveAgent = async () => {
+    if (!agent) return
+
+    setIsSaving(true)
+    try {
+      // Prepare the update data
+      const updateData = {
+        label: editForm.label,
+        description: editForm.description,
+        llmProvider: editForm.llmProvider as 'anthropic' | 'openai' | 'ollama',
+        model: editForm.model,
+        prompts: {
+          system: editForm.systemPrompt
+        },
+        connectors: {
+          [editForm.llmProvider]: {
+            temperature: editForm.temperature,
+            maxTokens: editForm.maxTokens,
+            topP: editForm.topP,
+            frequencyPenalty: editForm.frequencyPenalty,
+            presencePenalty: editForm.presencePenalty,
+            numCtx: editForm.numCtx,
+            reasoning: editForm.reasoning
+          }
+        }
+      }
+
+      await updateAgent(agent.id, updateData)
+
+      showToast({
+        title: 'Success',
+        description: 'Agent updated successfully'
+      })
+
+      // Refresh agent data
+      const agentData = await getAgent(agent.id)
+      setAgent(agentData)
+      setShowEditModal(false)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update agent'
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      })
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -402,16 +575,49 @@ export default function AgentDetailPage() {
             </div>
             <div>
               <h1 className="text-xl font-bold">{agent.label || agent.name}</h1>
-              <p className="text-sm text-muted-foreground">
-                {agent.llmProvider} • {agent.model} •
-                <span className={`ml-1 ${agent.isActive ? 'text-green-600' : 'text-yellow-600'}`}>
-                  {agent.status}
-                </span>
-              </p>
+              <div className="flex items-center gap-3">
+                <p className="text-sm text-muted-foreground">
+                  {agent.llmProvider} • {agent.model} •
+                  <span className={`ml-1 ${agent.isActive ? 'text-green-600' : 'text-yellow-600'}`}>
+                    {agent.status}
+                  </span>
+                </p>
+                {agent.isActive && getConnectionStatusDisplay()}
+              </div>
             </div>
           </div>
 
           <div className="flex gap-2">
+            {isStreaming && (
+              <Button
+                onClick={handleStopStreaming}
+                size="sm"
+                variant="outline"
+              >
+                <StopCircle className="mr-2 h-4 w-4" />
+                Stop
+              </Button>
+            )}
+
+            <Button
+              onClick={handleEditAgent}
+              size="sm"
+              variant="outline"
+            >
+              <Edit className="mr-2 h-4 w-4" />
+              Edit
+            </Button>
+
+            <Button
+              onClick={() => setShowDeleteConfirm(true)}
+              size="sm"
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </Button>
+
             {!agent.isActive ? (
               <Button
                 onClick={handleStartAgent}
@@ -442,67 +648,78 @@ export default function AgentDetailPage() {
               <Cpu className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>Agent is not active. Start the agent to begin chatting.</p>
             </div>
-          ) : messages.length === 0 ? (
+          ) : allMessages.length === 0 ? (
             <div className="text-center text-muted-foreground py-8">
               <MessageCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>No messages yet. Start a conversation with your agent!</p>
+              <p className="text-xs mt-2">
+                {agent?.llmProvider === 'ollama'
+                  ? 'Using optimized SSE streaming for Ollama'
+                  : `Using ${connectionStatus === 'websocket' ? 'real-time WebSocket' :
+                      connectionStatus === 'sse' ? 'Server-Sent Events' :
+                      'REST API'} for communication`
+                }
+              </p>
             </div>
           ) : (
-            messages.map((message, index) => (
-              <div
-                key={index}
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div
-                  className={`max-w-[70%] p-3 rounded-lg ${
-                    message.role === 'user'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted'
-                  }`}
-                >
-                  <div className="whitespace-pre-wrap text-sm">{message.content}</div>
-                  <div className="text-xs mt-2 opacity-70">
-                    {new Date(message.timestamp).toLocaleTimeString()}
-                    {message.metadata && (
-                      <span className="ml-2">• {message.metadata.model}</span>
-                    )}
-                  </div>
-                </div>
-              </div>
+            allMessages.map((message, index) => (
+              <StreamingChatMessageComponent
+                key={`${message.timestamp}-${index}`}
+                message={message}
+                isStreaming={isStreaming && message === currentStreamingMessage}
+                connectionStatus={connectionStatus}
+              />
             ))
           )}
-          {isChatting && (
-            <div className="flex justify-start">
-              <div className="bg-muted p-3 rounded-lg">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
-                  Agent is thinking...
-                </div>
-              </div>
+
+          {chatError && (
+            <div className="text-center text-destructive p-4 bg-destructive/10 rounded-lg">
+              <p className="font-medium">Chat Error</p>
+              <p className="text-sm mt-1">{chatError}</p>
             </div>
           )}
+
           <div ref={messagesEndRef} />
         </div>
 
         {/* Chat Input */}
         <div className="p-4 border-t">
           <form onSubmit={handleSendMessage} className="flex gap-2">
+            {/* Chat is always available regardless of agent status - only streaming disables input */}
             <Input
               ref={chatInputRef}
               value={currentMessage}
               onChange={(e) => setCurrentMessage(e.target.value)}
-              placeholder={agent.isActive ? "Type a message..." : "Start the agent to chat"}
-              disabled={!agent.isActive || isChatting}
+              placeholder={isStreaming ? "Streaming in progress..." : "Type a message..."}
+              disabled={isStreaming}
               className="flex-1"
             />
             <Button
               type="submit"
-              disabled={!agent.isActive || !currentMessage.trim() || isChatting}
+              disabled={!currentMessage.trim() || isStreaming}
               size="sm"
             >
               <Send className="h-4 w-4" />
             </Button>
           </form>
+
+          <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
+            <div className="flex items-center gap-4">
+              <span>
+                {allMessages.length} message{allMessages.length !== 1 ? 's' : ''}
+              </span>
+              {allMessages.length > 0 && (
+                <button
+                  onClick={clearMessages}
+                  className="text-destructive hover:underline"
+                  disabled={isStreaming}
+                >
+                  Clear chat
+                </button>
+              )}
+            </div>
+            {getConnectionStatusDisplay()}
+          </div>
         </div>
       </div>
 
@@ -712,6 +929,252 @@ export default function AgentDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Edit Agent Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-[800px] max-h-[90vh] overflow-y-auto">
+            <h2 className="text-lg font-semibold mb-4">Edit Agent Configuration</h2>
+
+            <div className="grid grid-cols-2 gap-6">
+              {/* Basic Settings */}
+              <div className="space-y-4">
+                <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Basic Settings</h3>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Display Name</label>
+                  <Input
+                    value={editForm.label}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, label: e.target.value }))}
+                    placeholder="Agent display name"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Description</label>
+                  <textarea
+                    className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm"
+                    rows={3}
+                    value={editForm.description}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Agent description"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">LLM Provider</label>
+                  <select
+                    className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm"
+                    value={editForm.llmProvider}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, llmProvider: e.target.value }))}
+                  >
+                    <option value="anthropic">Anthropic (Claude)</option>
+                    <option value="openai">OpenAI (GPT)</option>
+                    <option value="ollama">Ollama (Local)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Model</label>
+                  <Input
+                    value={editForm.model}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, model: e.target.value }))}
+                    placeholder="Model name (e.g., claude-3-5-sonnet-20241022)"
+                  />
+                </div>
+              </div>
+
+              {/* LLM Parameters */}
+              <div className="space-y-4">
+                <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">LLM Parameters</h3>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Temperature: {editForm.temperature}
+                    <span className="text-xs text-muted-foreground ml-1">(0.0 - 2.0)</span>
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="2"
+                    step="0.1"
+                    value={editForm.temperature}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, temperature: parseFloat(e.target.value) }))}
+                    className="w-full"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Controls randomness. Lower = more focused, Higher = more creative
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Max Tokens</label>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="32768"
+                    value={editForm.maxTokens}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, maxTokens: parseInt(e.target.value) }))}
+                    placeholder="4096"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Top P: {editForm.topP}
+                    <span className="text-xs text-muted-foreground ml-1">(0.0 - 1.0)</span>
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={editForm.topP}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, topP: parseFloat(e.target.value) }))}
+                    className="w-full"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Nucleus sampling. Controls diversity via probability mass
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Frequency Penalty: {editForm.frequencyPenalty}
+                    <span className="text-xs text-muted-foreground ml-1">(-2.0 - 2.0)</span>
+                  </label>
+                  <input
+                    type="range"
+                    min="-2"
+                    max="2"
+                    step="0.1"
+                    value={editForm.frequencyPenalty}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, frequencyPenalty: parseFloat(e.target.value) }))}
+                    className="w-full"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Reduces repetition of frequent tokens
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Presence Penalty: {editForm.presencePenalty}
+                    <span className="text-xs text-muted-foreground ml-1">(-2.0 - 2.0)</span>
+                  </label>
+                  <input
+                    type="range"
+                    min="-2"
+                    max="2"
+                    step="0.1"
+                    value={editForm.presencePenalty}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, presencePenalty: parseFloat(e.target.value) }))}
+                    className="w-full"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Reduces repetition of topics
+                  </p>
+                </div>
+
+                {editForm.llmProvider === 'ollama' && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Context Window (num_ctx)</label>
+                    <Input
+                      type="number"
+                      min="512"
+                      max="32768"
+                      value={editForm.numCtx}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, numCtx: parseInt(e.target.value) }))}
+                      placeholder="4096"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Ollama-specific: Maximum context window size
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="reasoning"
+                    checked={editForm.reasoning}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, reasoning: e.target.checked }))}
+                    className="rounded"
+                  />
+                  <label htmlFor="reasoning" className="text-sm font-medium">
+                    Enable Advanced Reasoning
+                  </label>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Enables step-by-step reasoning for complex tasks
+                </p>
+              </div>
+            </div>
+
+            {/* System Prompt */}
+            <div className="mt-6">
+              <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide mb-2">System Prompt</h3>
+              <div className="space-y-2">
+                <textarea
+                  className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm font-mono"
+                  rows={8}
+                  value={editForm.systemPrompt}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, systemPrompt: e.target.value }))}
+                  placeholder="You are a helpful AI assistant. You are knowledgeable, creative, and always try to provide accurate and helpful responses..."
+                />
+                <p className="text-xs text-muted-foreground">
+                  This prompt defines the agent's personality and behavior. It will be combined with internal Canvas system prompts.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
+              <Button
+                onClick={() => setShowEditModal(false)}
+                variant="outline"
+                disabled={isSaving}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSaveAgent}
+                disabled={isSaving}
+              >
+                {isSaving ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    {/* Delete Confirmation Modal */}
+    {showDeleteConfirm && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-96">
+          <h2 className="text-lg font-semibold mb-4 text-destructive">Delete Agent</h2>
+          <p className="text-sm text-muted-foreground mb-6">
+            Are you sure you want to delete <strong>{agent.label || agent.name}</strong>?
+            This action cannot be undone and will permanently remove the agent and all its data.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button
+              onClick={() => setShowDeleteConfirm(false)}
+              variant="outline"
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleDeleteAgent}
+              variant="destructive"
+              disabled={isDeleting}
+            >
+              {isDeleting ? 'Deleting...' : 'Delete Agent'}
+            </Button>
+          </div>
+                 </div>
+       </div>
+     )}
     </div>
   )
 }
