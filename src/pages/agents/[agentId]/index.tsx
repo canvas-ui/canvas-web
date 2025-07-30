@@ -337,8 +337,8 @@ export default function AgentDetailPage() {
       const result = await callMCPTool(agent.id, selectedTool.name, toolArgs, selectedTool.source)
 
       // Show toast for tool execution with result summary
-      const resultSummary = result.content.length > 0
-        ? result.content.map(c => c.text || 'Result').join(', ').substring(0, 100)
+      const resultSummary = result.content && result.content.length > 0
+        ? result.content.map((c: any) => c.text || 'Result').join(', ').substring(0, 100)
         : 'Executed successfully'
 
       showToast({
@@ -799,7 +799,7 @@ export default function AgentDetailPage() {
                 </div>
               )}
 
-              {agent.config.mcp.servers.length > 0 && (
+              {agent.config.mcp?.servers && agent.config.mcp.servers.length > 0 && (
                 <div>
                   <h4 className="font-medium mb-2">MCP Servers</h4>
                   <div className="space-y-2">
@@ -807,7 +807,7 @@ export default function AgentDetailPage() {
                       <div key={index} className="p-2 bg-muted rounded text-sm">
                         <div className="font-medium">{server.name}</div>
                         <div className="text-xs text-muted-foreground font-mono">
-                          {server.command} {server.args.join(' ')}
+                          {server.command} {server.args ? server.args.join(' ') : ''}
                         </div>
                       </div>
                     ))}
@@ -906,7 +906,7 @@ export default function AgentDetailPage() {
                       <div className="flex items-center gap-2 mb-2">
                         <Clock className="h-3 w-3" />
                         <span className="text-xs text-muted-foreground">
-                          {new Date(entry.timestamp).toLocaleString()}
+                          {entry.timestamp ? new Date(entry.timestamp).toLocaleString() : 'Unknown time'}
                         </span>
                       </div>
                       {entry.user_message && (

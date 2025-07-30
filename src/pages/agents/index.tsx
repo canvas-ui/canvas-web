@@ -131,6 +131,10 @@ export default function AgentsPage() {
         color: newAgentColor,
         llmProvider: newAgentProvider,
         model: newAgentModel,
+        config: {
+          type: newAgentProvider,
+          model: newAgentModel
+        },
         connectors: {
           [newAgentProvider]: {
             ...newAgentConnectorConfig,
@@ -142,6 +146,7 @@ export default function AgentsPage() {
           }
         },
         mcp: {
+          enabled: true,
           servers: [
             // Include default weather MCP server
             {

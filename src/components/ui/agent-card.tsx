@@ -133,7 +133,7 @@ export function AgentCard({ agent, onStart, onStop, onEnter }: AgentCardProps) {
       </div>
 
       {/* MCP Servers Info */}
-      {agent.config.mcp.servers.length > 0 && (
+      {agent.config.mcp?.servers && agent.config.mcp.servers.length > 0 && (
         <div className="text-sm">
           <span className="text-muted-foreground">MCP Servers:</span>
           <div className="flex flex-wrap gap-1 mt-1">

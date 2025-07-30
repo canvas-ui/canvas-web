@@ -20,6 +20,132 @@ export interface AgentConfig {
   streamingSupported: boolean;
 }
 
+// Main Agent interface used throughout the application
+export interface Agent {
+  id: string;
+  name: string;
+  label?: string;
+  description?: string;
+  color?: string;
+  status: 'active' | 'inactive' | 'error' | 'starting' | 'stopping' | 'available';
+  isActive: boolean;
+  llmProvider: 'anthropic' | 'openai' | 'ollama' | 'custom';
+  model: string;
+  lastAccessed?: string;
+  config: {
+    type: 'anthropic' | 'openai' | 'ollama' | 'custom';
+    model?: string;
+    apiKey?: string;
+    baseUrl?: string;
+    prompts?: {
+      system?: string;
+      user?: string;
+    };
+    connectors?: {
+      [key: string]: {
+        temperature?: number;
+        maxTokens?: number;
+        topP?: number;
+        topK?: number;
+        frequencyPenalty?: number;
+        presencePenalty?: number;
+        numCtx?: number;
+        reasoning?: boolean;
+      };
+    };
+    mcp?: {
+      enabled: boolean;
+      servers: Array<{
+        name: string;
+        command: string;
+        args?: string[];
+        env?: Record<string, string>;
+      }>;
+    };
+    parameters?: {
+      temperature?: number;
+      maxTokens?: number;
+      topP?: number;
+      topK?: number;
+    };
+  };
+  createdAt: string;
+  updatedAt: string;
+  lastUsed?: string;
+}
+
+// MCP Tool interface for Model Context Protocol tools
+export interface MCPTool {
+  name: string;
+  title?: string;
+  description: string;
+  inputSchema: {
+    type: string;
+    properties: Record<string, any>;
+    required?: string[];
+  };
+  server: string;
+  source: string;
+}
+
+// Agent memory interface
+export interface AgentMemory {
+  id: string;
+  agentId: string;
+  type: 'conversation' | 'context' | 'instruction';
+  content: string;
+  metadata?: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
+  timestamp?: string;
+  user_message?: string;
+  agent_response?: string;
+}
+
+// Chat message interface for streaming chat
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: string;
+  metadata?: {
+    model?: string;
+    provider?: string;
+    toolCalls?: any[];
+  };
+}
+
+// Agent creation data interface
+export interface CreateAgentData {
+  name: string;
+  label?: string;
+  description?: string;
+  color?: string;
+  llmProvider?: 'anthropic' | 'openai' | 'ollama' | 'custom';
+  model?: string;
+  config: Partial<Agent['config']>;
+  connectors?: {
+    [key: string]: {
+      temperature?: number;
+      maxTokens?: number;
+      topP?: number;
+      topK?: number;
+      frequencyPenalty?: number;
+      presencePenalty?: number;
+      numCtx?: number;
+      reasoning?: boolean;
+    };
+  };
+  mcp?: {
+    enabled: boolean;
+    servers: Array<{
+      name: string;
+      command: string;
+      args?: string[];
+      env?: Record<string, string>;
+    }>;
+  };
+}
+
 export class AgentService {
   private connectors = new Map<string, AnthropicConnector>();
   private wsService: WebSocketStreamingService | null = null;
@@ -286,3 +412,241 @@ export class AgentService {
 
 // Export singleton instance
 export const agentService = new AgentService();
+
+// Agent API Functions
+// ===================
+
+/**
+ * List all available agents
+ */
+export async function listAgents(): Promise<Agent[]> {
+  try {
+    const response = await api.get<{ payload: Agent[] }>('/api/agents');
+    return response.payload || [];
+  } catch (error) {
+    console.error('Failed to list agents:', error);
+    return [];
+  }
+}
+
+/**
+ * Get a specific agent by ID
+ */
+export async function getAgent(agentId: string): Promise<Agent> {
+  const response = await api.get<{ payload: Agent }>(`/api/agents/${agentId}`);
+  return response.payload;
+}
+
+/**
+ * Create a new agent
+ */
+export async function createAgent(agentData: CreateAgentData): Promise<Agent> {
+  const response = await api.post<{ payload: Agent }>('/api/agents', agentData);
+  return response.payload;
+}
+
+/**
+ * Update an existing agent
+ */
+export async function updateAgent(agentId: string, agentData: Partial<CreateAgentData>): Promise<Agent> {
+  const response = await api.put<{ payload: Agent }>(`/api/agents/${agentId}`, agentData);
+  return response.payload;
+}
+
+/**
+ * Delete an agent
+ */
+export async function deleteAgent(agentId: string): Promise<void> {
+  await api.delete(`/api/agents/${agentId}`);
+}
+
+/**
+ * Start an agent
+ */
+export async function startAgent(agentId: string): Promise<Agent> {
+  const response = await api.post<{ payload: Agent }>(`/api/agents/${agentId}/start`);
+  return response.payload;
+}
+
+/**
+ * Stop an agent
+ */
+export async function stopAgent(agentId: string): Promise<Agent> {
+  const response = await api.post<{ payload: Agent }>(`/api/agents/${agentId}/stop`);
+  return response.payload;
+}
+
+/**
+ * Get agent status
+ */
+export async function getAgentStatus(agentId: string): Promise<{ status: string; isActive: boolean; lastAccessed?: string }> {
+  const response = await api.get<{ payload: { status: string; isActive: boolean; lastAccessed?: string } }>(`/api/agents/${agentId}/status`);
+  return response.payload;
+}
+
+// Agent Memory Functions
+// ======================
+
+/**
+ * Get agent memory
+ */
+export async function getAgentMemory(agentId: string): Promise<AgentMemory[]> {
+  try {
+    const response = await api.get<{ payload: AgentMemory[] }>(`/api/agents/${agentId}/memory`);
+    return response.payload || [];
+  } catch (error) {
+    console.error('Failed to get agent memory:', error);
+    return [];
+  }
+}
+
+/**
+ * Clear agent memory
+ */
+export async function clearAgentMemory(agentId: string): Promise<void> {
+  await api.delete(`/api/agents/${agentId}/memory`);
+}
+
+// MCP Tool Functions
+// ==================
+
+/**
+ * Get MCP tools for an agent
+ */
+export async function getAgentMCPTools(agentId: string): Promise<MCPTool[]> {
+  try {
+    const response = await api.get<{ payload: MCPTool[] }>(`/api/agents/${agentId}/mcp/tools`);
+    return response.payload || [];
+  } catch (error) {
+    console.error('Failed to get MCP tools:', error);
+    return [];
+  }
+}
+
+/**
+ * Call an MCP tool
+ */
+export async function callMCPTool(
+  agentId: string,
+  toolName: string,
+  arguments_: Record<string, any>,
+  source?: string
+): Promise<any> {
+  const response = await api.post<{ payload: any }>(`/api/agents/${agentId}/mcp/tools/${toolName}`, {
+    arguments: arguments_,
+    source
+  });
+  return response.payload;
+}
+
+// Chat Functions for Streaming
+// =============================
+
+/**
+ * Chat with agent using streaming
+ */
+export async function chatWithAgentStream(
+  agentId: string,
+  message: string,
+  options: {
+    onMessage?: (content: any, isComplete: any, metadata: any) => void;
+    onError?: (error: any) => void;
+    onComplete?: () => void;
+    context?: ChatMessage[];
+    mcpContext?: boolean;
+    maxTokens?: number;
+    temperature?: number;
+  } = {}
+): Promise<void> {
+  const { onMessage, onError, onComplete, context, mcpContext, maxTokens, temperature } = options;
+
+  await api.stream(`/api/agents/${agentId}/chat`, {
+    message,
+    context,
+    mcpContext,
+    maxTokens,
+    temperature,
+    stream: true
+  }, {
+    onChunk: (chunk: string) => {
+      try {
+        // Handle SSE-style streaming
+        const lines = chunk.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = JSON.parse(line.slice(6));
+            if (onMessage) {
+              onMessage(data.content || data.delta || '', data.done || false, data.metadata || {});
+            }
+          }
+        }
+      } catch (error) {
+        // Handle plain text chunks
+        if (onMessage && chunk.trim()) {
+          onMessage(chunk, false, {});
+        }
+      }
+    },
+    onError,
+    onComplete
+  });
+}
+
+/**
+ * Chat with agent using fallback method
+ */
+export async function chatWithAgentFallback(
+  agentId: string,
+  options: {
+    message: string;
+    onMessage?: (content: any, isComplete: any, metadata: any) => void;
+    onError?: (error: any) => void;
+    onComplete?: () => void;
+    context?: ChatMessage[];
+    mcpContext?: boolean;
+    maxTokens?: number;
+    temperature?: number;
+  }
+): Promise<{ content: string; metadata?: any }> {
+  const { message, onMessage, onError, onComplete, context, mcpContext, maxTokens, temperature } = options;
+
+  try {
+    const response = await api.post<{ 
+      payload: { 
+        content: string; 
+        metadata?: any; 
+      } 
+    }>(`/api/agents/${agentId}/chat`, {
+      message,
+      context,
+      mcpContext,
+      maxTokens,
+      temperature,
+      stream: false
+    });
+
+    if (onMessage) {
+      onMessage(response.payload.content, true, response.payload.metadata || {});
+    }
+    if (onComplete) {
+      onComplete();
+    }
+
+    return response.payload;
+  } catch (error) {
+    if (onError) {
+      onError(error);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Convert chat messages to streaming format
+ */
+export function convertToStreamingMessages(messages: ChatMessage[]): ChatMessage[] {
+  return messages.map(msg => ({
+    ...msg,
+    timestamp: typeof msg.timestamp === 'string' ? msg.timestamp : new Date().toISOString()
+  }));
+}

@@ -5,7 +5,7 @@ interface StreamingOptions {
   signal?: AbortSignal;
 }
 
-interface StreamMessage {
+export interface StreamMessage {
   agentId: string;
   messageId: string;
   content?: string;
@@ -118,11 +118,11 @@ export class StreamingService {
  * streaming responses with proper error handling
  */
 export class AnthropicConnector {
-  private apiKey: string;
   private baseUrl: string;
 
-  constructor(apiKey: string, baseUrl: string = '/api/agents/anthropic') {
-    this.apiKey = apiKey;
+  constructor(_apiKey: string, baseUrl: string = '/api/agents/anthropic') {
+    // apiKey parameter kept for API compatibility but not currently used
+    // as authentication is handled by the server via session tokens
     this.baseUrl = baseUrl;
   }
 

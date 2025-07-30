@@ -20,7 +20,7 @@ export interface UseAgentChatOptions {
   enableWebSocket?: boolean;
   enableSSE?: boolean;
   enableFallback?: boolean;
-  llmProvider?: 'anthropic' | 'openai' | 'ollama'; // Add provider info
+  llmProvider?: 'anthropic' | 'openai' | 'ollama' | 'custom'; // Add provider info
 }
 
 export interface ChatState {
@@ -209,37 +209,47 @@ export function useAgentChat(options: UseAgentChatOptions) {
 
         await chatWithAgentStream(
           agentId,
-          request,
-          (content, isComplete, metadata) => {
-            streamingMessage += content;
+          request.message,
+          {
+            onMessage: (content: string, isComplete: boolean, metadata: any) => {
+              streamingMessage += content;
 
-            setCurrentStreamingMessage({
-              role: 'assistant',
-              content: streamingMessage,
-              timestamp: new Date().toISOString(),
-              isComplete,
-              metadata
-            });
-
-            if (isComplete) {
-              setMessages(prev => [...prev, {
+              setCurrentStreamingMessage({
                 role: 'assistant',
                 content: streamingMessage,
                 timestamp: new Date().toISOString(),
-                isComplete: true,
+                isComplete,
                 metadata
-              }]);
-              setCurrentStreamingMessage(null);
+              });
+
+              if (isComplete) {
+                setMessages(prev => [...prev, {
+                  role: 'assistant',
+                  content: streamingMessage,
+                  timestamp: new Date().toISOString(),
+                  isComplete: true,
+                  metadata
+                }]);
+                setCurrentStreamingMessage(null);
+                setIsStreaming(false);
+              }
+            },
+            onError: (error: Error) => {
+              console.error('SSE streaming error:', error);
+              setError(error.message);
               setIsStreaming(false);
-            }
-          },
-          (error) => {
-            console.error('SSE streaming error:', error);
-            setError(error.message);
-            setIsStreaming(false);
-            if (onError) onError(error);
-          },
-          abortControllerRef.current.signal
+              if (onError) onError(error);
+            },
+            context: messages.slice(-10).map(msg => ({
+              role: msg.role,
+              content: msg.content,
+              timestamp: msg.timestamp,
+              metadata: msg.metadata
+            })),
+            mcpContext: options.mcpContext ?? true,
+            maxTokens: options.maxTokens,
+            temperature: options.temperature
+          }
         );
         return;
       } catch (error) {
