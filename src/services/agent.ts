@@ -1,320 +1,288 @@
-import { api } from '@/lib/api'
-import { StreamingChatMessage, StreamingChatRequest } from '@/hooks/useAgentSocket'
+import { api } from '@/lib/api';
+import { AnthropicConnector, WebSocketStreamingService, StreamMessage } from './streaming';
 
-// Agent interfaces
-export interface Agent {
-  id: string
-  name: string
-  label?: string
-  description?: string
-  color?: string
-  llmProvider: 'anthropic' | 'openai' | 'ollama'
-  model: string
-  status: 'available' | 'not_found' | 'error' | 'active' | 'inactive' | 'removed' | 'destroyed'
-  isActive: boolean
-  owner: string
-  ownerEmail?: string
-  createdAt: string
-  updatedAt: string
-  lastAccessed?: string
-  config: {
-    connectors: Record<string, any>
-    prompts: Record<string, any>
-    tools: Record<string, any>
-    mcp: {
-      servers: Array<{
-        name: string
-        command: string
-        args: string[]
-      }>
+export interface AgentMessage {
+  id: string;
+  agentId: string;
+  content: string;
+  timestamp: Date;
+  type: 'user' | 'agent';
+  streaming?: boolean;
+  error?: string;
+}
+
+export interface AgentConfig {
+  id: string;
+  name: string;
+  type: 'anthropic' | 'openai' | 'custom';
+  apiKey?: string;
+  endpoint?: string;
+  streamingSupported: boolean;
+}
+
+export class AgentService {
+  private connectors = new Map<string, AnthropicConnector>();
+  private wsService: WebSocketStreamingService | null = null;
+  private messageCallbacks = new Map<string, (message: AgentMessage) => void>();
+
+  constructor() {
+    // Initialize WebSocket fallback if needed
+    this.initializeWebSocketFallback();
+  }
+
+  private async initializeWebSocketFallback(): Promise<void> {
+    try {
+      // Get WebSocket URL from current location
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      
+      this.wsService = new WebSocketStreamingService(wsUrl);
+      // Don't auto-connect, only use as fallback
+    } catch (error) {
+      console.warn('WebSocket fallback not available:', error);
     }
   }
-  metadata: Record<string, any>
-}
 
-export interface CreateAgentData {
-  name: string
-  label?: string
-  description?: string
-  color?: string
-  llmProvider?: 'anthropic' | 'openai' | 'ollama'
-  model?: string
-  connectors?: Record<string, any>
-  prompts?: Record<string, any>
-  tools?: Record<string, any>
-  mcp?: {
-    servers: Array<{
-      name: string
-      command: string
-      args: string[]
-    }>
-  }
-  metadata?: Record<string, any>
-}
-
-export interface ChatMessage {
-  role: 'user' | 'assistant' | 'system'
-  content: string
-  timestamp: string
-  metadata?: {
-    model?: string
-    provider?: string
-    toolCalls?: any[]
-  }
-}
-
-export interface ChatRequest {
-  message: string
-  context?: ChatMessage[]
-  mcpContext?: boolean
-  maxTokens?: number
-  temperature?: number
-}
-
-export interface ChatResponse {
-  content: string
-  metadata: {
-    model: string
-    provider: string
-    timestamp: string
-  }
-}
-
-export interface AgentMemory {
-  id: string
-  type: string
-  user_message?: string
-  agent_response?: string
-  timestamp: string
-  metadata: Record<string, any>
-  stored_at: string
-  agent_id: string
-}
-
-export interface MCPTool {
-  name: string
-  title?: string
-  description: string
-  inputSchema: Record<string, any>
-  source: string
-}
-
-export interface MCPToolResult {
-  content: Array<{
-    type: string
-    text?: string
-    [key: string]: any
-  }>
-}
-
-// Agent API functions
-export const listAgents = async (): Promise<Agent[]> => {
-  const response = await api.get<{ payload: Agent[] }>('/agents')
-  return response.payload
-}
-
-export const createAgent = async (agentData: CreateAgentData): Promise<Agent> => {
-  const response = await api.post<{ payload: Agent }>('/agents', agentData)
-  return response.payload
-}
-
-export const getAgent = async (agentId: string): Promise<Agent> => {
-  const response = await api.get<{ payload: Agent }>(`/agents/${agentId}`)
-  return response.payload
-}
-
-export const startAgent = async (agentId: string): Promise<Agent> => {
-  const response = await api.post<{ payload: Agent }>(`/agents/${agentId}/start`)
-  return response.payload
-}
-
-export const stopAgent = async (agentId: string): Promise<{ success: boolean }> => {
-  const response = await api.post<{ payload: { success: boolean } }>(`/agents/${agentId}/stop`)
-  return response.payload
-}
-
-export const getAgentStatus = async (agentId: string): Promise<{
-  id: string
-  name: string
-  status: string
-  isActive: boolean
-  llmProvider: string
-  model: string
-  lastAccessed?: string
-}> => {
-  const response = await api.get<{ payload: any }>(`/agents/${agentId}/status`)
-  return response.payload
-}
-
-export const updateAgent = async (agentId: string, updateData: Partial<CreateAgentData>): Promise<Agent> => {
-  const response = await api.put<{ payload: Agent }>(`/agents/${agentId}`, updateData)
-  return response.payload
-}
-
-export const deleteAgent = async (agentId: string): Promise<{ success: boolean }> => {
-  const response = await api.delete<{ payload: { success: boolean } }>(`/agents/${agentId}`)
-  return response.payload
-}
-
-export const chatWithAgent = async (agentId: string, chatRequest: ChatRequest): Promise<ChatResponse> => {
-  const response = await api.post<{ payload: ChatResponse }>(`/agents/${agentId}/chat`, chatRequest)
-  return response.payload
-}
-
-export const getAgentMemory = async (agentId: string, query?: string, limit = 50): Promise<AgentMemory[]> => {
-  const params = new URLSearchParams()
-  if (query) params.append('query', query)
-  params.append('limit', limit.toString())
-
-  const url = `/agents/${agentId}/memory?${params.toString()}`
-  const response = await api.get<{ payload: AgentMemory[] }>(url)
-  return response.payload
-}
-
-export const clearAgentMemory = async (agentId: string): Promise<{ success: boolean }> => {
-  const response = await api.delete<{ payload: { success: boolean } }>(`/agents/${agentId}/memory`)
-  return response.payload
-}
-
-export const getAgentMCPTools = async (agentId: string): Promise<MCPTool[]> => {
-  const response = await api.get<{ payload: MCPTool[] }>(`/agents/${agentId}/mcp/tools`)
-  return response.payload
-}
-
-export const callMCPTool = async (
-  agentId: string,
-  toolName: string,
-  args: Record<string, any>,
-  source?: string
-): Promise<MCPToolResult> => {
-  const response = await api.post<{ payload: MCPToolResult }>(
-    `/agents/${agentId}/mcp/tools/${toolName}`,
-    { arguments: args, source }
-  )
-  return response.payload
-}
-
-// Streaming chat with Server-Sent Events fallback
-export const chatWithAgentStream = async (
-  agentId: string,
-  request: StreamingChatRequest,
-  onChunk: (content: string, isComplete: boolean, metadata?: any) => void,
-  onError?: (error: Error) => void,
-  signal?: AbortSignal
-): Promise<void> => {
-  try {
-    const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8001/rest/v2'}/agents/${agentId}/chat/stream`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-        'Accept': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-      },
-      body: JSON.stringify(request),
-      signal
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  /**
+   * Registers an agent with the service
+   */
+  registerAgent(config: AgentConfig): void {
+    if (config.type === 'anthropic') {
+      const connector = new AnthropicConnector(
+        config.apiKey || '',
+        config.endpoint || `/api/agents/${config.id}`
+      );
+      this.connectors.set(config.id, connector);
     }
+  }
 
-    if (!response.body) {
-      throw new Error('Response body is null');
+  /**
+   * Sends a message to an agent with streaming support
+   */
+  async sendMessage(
+    agentId: string,
+    message: string,
+    options: {
+      onMessage?: (message: AgentMessage) => void;
+      onError?: (error: Error) => void;
+      onComplete?: () => void;
+      useWebSocketFallback?: boolean;
+    } = {}
+  ): Promise<void> {
+    const { onMessage, onError, onComplete, useWebSocketFallback = false } = options;
+    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // Store callback for this message
+    if (onMessage) {
+      this.messageCallbacks.set(messageId, onMessage);
     }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
 
     try {
-      while (true) {
-        const { done, value } = await reader.read();
-
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-
-        // Keep the last potentially incomplete line in the buffer
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.trim() === '') continue;
-
-          if (line.startsWith('data: ')) {
-            const data = line.substring(6);
-
-            if (data === '[DONE]') {
-              onChunk('', true);
-              return;
-            }
-
-            try {
-              const parsed = JSON.parse(data);
-              console.log('SSE parsed data:', parsed);
-
-              // Handle backend's actual format
-              if (parsed.type === 'start') {
-                // Stream starting, don't send content yet
-                continue;
-              } else if (parsed.type === 'chunk' || parsed.type === 'content') {
-                // Send delta content if available, otherwise content
-                const content = parsed.delta || parsed.content || '';
-                onChunk(content, false, parsed.metadata);
-              } else if (parsed.type === 'complete' || parsed.type === 'done') {
-                // Stream complete
-                onChunk('', true, parsed.metadata);
-                return;
-              } else if (parsed.type === 'error') {
-                // Handle error type
-                throw new Error(parsed.error || 'Stream error');
-              } else {
-                // Fallback for unknown types - treat as content
-                const content = parsed.delta || parsed.content || '';
-                if (content) {
-                  onChunk(content, false, parsed.metadata);
-                }
-              }
-            } catch (parseError) {
-              console.warn('Failed to parse SSE data:', data, parseError);
-            }
-          }
+      if (useWebSocketFallback && this.wsService) {
+        // Use WebSocket fallback
+        await this.sendMessageViaWebSocket(agentId, messageId, message, onMessage, onError);
+        if (onComplete) {
+          onComplete();
         }
+        return;
       }
 
-      // If we exit the loop without explicit completion, mark as complete
-      onChunk('', true);
+      // Try to use the specific connector first
+      const connector = this.connectors.get(agentId);
+      if (connector) {
+        await connector.chatStream(message, {
+          agentId,
+          messageId,
+          onMessage: (streamMsg: StreamMessage) => {
+            const agentMessage: AgentMessage = {
+              id: streamMsg.messageId,
+              agentId: streamMsg.agentId,
+              content: streamMsg.content || '',
+              timestamp: new Date(),
+              type: 'agent',
+              streaming: !streamMsg.done,
+              error: streamMsg.error,
+            };
+            
+            if (onMessage) {
+              onMessage(agentMessage);
+            }
+          },
+          onError: (error: Error) => {
+            console.error('Agent connector error:', error);
+            // Try WebSocket fallback on fetch streaming failure
+            if (error.message.includes('getReader is not a function') && this.wsService) {
+              console.log('Falling back to WebSocket streaming...');
+              this.sendMessageViaWebSocket(agentId, messageId, message, onMessage, onError);
+              return;
+            }
+            if (onError) {
+              onError(error);
+            }
+          },
+          onComplete,
+        });
+      } else {
+        // Fallback to generic API streaming
+        await this.sendMessageViaAPI(agentId, messageId, message, onMessage, onError, onComplete);
+      }
+    } catch (error) {
+      console.error('Agent communication error:', error);
+      if (onError) {
+        onError(error instanceof Error ? error : new Error(String(error)));
+      }
     } finally {
-      reader.releaseLock();
+      // Clean up callback
+      this.messageCallbacks.delete(messageId);
     }
-  } catch (error) {
-    if (error instanceof Error && onError) {
-      onError(error);
-    } else if (onError) {
-      onError(new Error('Unknown streaming error'));
-    }
-    throw error;
   }
-};
 
-// Convert ChatMessage to StreamingChatMessage
-export const convertToStreamingMessage = (message: ChatMessage): StreamingChatMessage => ({
-  role: message.role,
-  content: message.content,
-  timestamp: message.timestamp,
-  isComplete: true,
-  metadata: message.metadata
-});
+  private async sendMessageViaAPI(
+    agentId: string,
+    messageId: string,
+    message: string,
+    onMessage?: (message: AgentMessage) => void,
+    onError?: (error: Error) => void,
+    onComplete?: () => void
+  ): Promise<void> {
+    try {
+      await api.stream(`/api/agents/${agentId}/chat`, {
+        message,
+        messageId,
+        stream: true,
+      }, {
+        onChunk: (chunk: string) => {
+          try {
+            // Try to parse as JSON first
+            const data = JSON.parse(chunk);
+            const agentMessage: AgentMessage = {
+              id: messageId,
+              agentId,
+              content: data.content || chunk,
+              timestamp: new Date(),
+              type: 'agent',
+              streaming: !data.done,
+              error: data.error,
+            };
+            
+            if (onMessage) {
+              onMessage(agentMessage);
+            }
+          } catch {
+            // If not JSON, treat as raw text
+            const agentMessage: AgentMessage = {
+              id: messageId,
+              agentId,
+              content: chunk,
+              timestamp: new Date(),
+              type: 'agent',
+              streaming: true,
+            };
+            
+            if (onMessage) {
+              onMessage(agentMessage);
+            }
+          }
+        },
+        onError: (error: Error) => {
+          console.error('API streaming error:', error);
+          if (onError) {
+            onError(error);
+          }
+        },
+        onComplete,
+      });
+    } catch (error) {
+      if (onError) {
+        onError(error instanceof Error ? error : new Error(String(error)));
+      }
+    }
+  }
 
-// Convert array of ChatMessages to StreamingChatMessages
-export const convertToStreamingMessages = (messages: ChatMessage[]): StreamingChatMessage[] =>
-  messages.map(convertToStreamingMessage);
+  private async sendMessageViaWebSocket(
+    agentId: string,
+    messageId: string,
+    message: string,
+    onMessage?: (message: AgentMessage) => void,
+    onError?: (error: Error) => void
+  ): Promise<void> {
+    if (!this.wsService) {
+      if (onError) {
+        onError(new Error('WebSocket service not available'));
+      }
+      return;
+    }
 
-// Fallback chat function that uses regular REST API
-export const chatWithAgentFallback = async (
-  agentId: string,
-  request: ChatRequest
-): Promise<ChatResponse> => {
-  return chatWithAgent(agentId, request);
-};
+    try {
+      // Connect if not already connected
+      if (this.wsService['socket']?.readyState !== WebSocket.OPEN) {
+        await this.wsService.connect();
+      }
+
+      this.wsService.startChatStream(
+        agentId,
+        messageId,
+        message,
+        (streamMsg: StreamMessage) => {
+          const agentMessage: AgentMessage = {
+            id: streamMsg.messageId,
+            agentId: streamMsg.agentId,
+            content: streamMsg.content || '',
+            timestamp: new Date(),
+            type: 'agent',
+            streaming: !streamMsg.done,
+            error: streamMsg.error,
+          };
+          
+          if (onMessage) {
+            onMessage(agentMessage);
+          }
+        },
+        onError
+      );
+    } catch (error) {
+      if (onError) {
+        onError(error instanceof Error ? error : new Error(String(error)));
+      }
+    }
+  }
+
+  /**
+   * Gets list of available agents
+   */
+  async getAvailableAgents(): Promise<AgentConfig[]> {
+    try {
+      const response = await api.get<{agents: AgentConfig[]}>('/api/agents');
+      return response.agents || [];
+    } catch (error) {
+      console.error('Failed to fetch available agents:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Creates a new agent configuration
+   */
+  async createAgent(config: Omit<AgentConfig, 'id'>): Promise<AgentConfig> {
+    const response = await api.post<AgentConfig>('/api/agents', config);
+    
+    // Register the new agent
+    this.registerAgent(response);
+    
+    return response;
+  }
+
+  /**
+   * Cleans up resources
+   */
+  dispose(): void {
+    this.connectors.clear();
+    this.messageCallbacks.clear();
+    if (this.wsService) {
+      this.wsService.disconnect();
+    }
+  }
+}
+
+// Export singleton instance
+export const agentService = new AgentService();
