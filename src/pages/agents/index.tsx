@@ -29,8 +29,13 @@ export default function AgentsPage() {
     apiKey: "",
     host: "",
     maxTokens: 4096,
-    temperature: 0.7
+    temperature: 0.7,
+    topP: 1.0,
+    frequencyPenalty: 0.0,
+    presencePenalty: 0.0,
+    numCtx: 4096
   })
+  const [newAgentSystemPrompt, setNewAgentSystemPrompt] = useState("")
   const [isCreating, setIsCreating] = useState(false)
   const { showToast } = useToast()
   const navigate = useNavigate()
@@ -51,7 +56,11 @@ export default function AgentsPage() {
       apiKey: "",
       host: newAgentProvider === 'ollama' ? 'http://localhost:11434' : "",
       maxTokens: 4096,
-      temperature: 0.7
+      temperature: 0.7,
+      topP: 1.0,
+      frequencyPenalty: 0.0,
+      presencePenalty: 0.0,
+      numCtx: 4096
     })
   }, [newAgentProvider])
 
@@ -133,7 +142,10 @@ export default function AgentsPage() {
         model: newAgentModel,
         config: {
           type: newAgentProvider,
-          model: newAgentModel
+          model: newAgentModel,
+          prompts: newAgentSystemPrompt ? {
+            system: newAgentSystemPrompt
+          } : undefined
         },
         connectors: {
           [newAgentProvider]: {
@@ -142,7 +154,11 @@ export default function AgentsPage() {
             ...(newAgentConnectorConfig.apiKey ? { apiKey: newAgentConnectorConfig.apiKey } : {}),
             ...(newAgentConnectorConfig.host ? { host: newAgentConnectorConfig.host } : {}),
             maxTokens: newAgentConnectorConfig.maxTokens,
-            temperature: newAgentConnectorConfig.temperature
+            temperature: newAgentConnectorConfig.temperature,
+            topP: newAgentConnectorConfig.topP,
+            frequencyPenalty: newAgentConnectorConfig.frequencyPenalty,
+            presencePenalty: newAgentConnectorConfig.presencePenalty,
+            ...(newAgentProvider === 'ollama' ? { numCtx: newAgentConnectorConfig.numCtx } : {})
           }
         },
         mcp: {
@@ -164,11 +180,16 @@ export default function AgentsPage() {
       setNewAgentDescription("")
       setNewAgentColor(generateNiceRandomHexColor())
       setNewAgentLabel("")
+      setNewAgentSystemPrompt("")
       setNewAgentConnectorConfig({
         apiKey: "",
         host: newAgentProvider === 'ollama' ? 'http://localhost:11434' : "",
         maxTokens: 4096,
-        temperature: 0.7
+        temperature: 0.7,
+        topP: 1.0,
+        frequencyPenalty: 0.0,
+        presencePenalty: 0.0,
+        numCtx: 4096
       })
       showToast({
         title: 'Success',
@@ -332,6 +353,19 @@ export default function AgentsPage() {
             </div>
           </div>
 
+          {/* System Prompt */}
+          <div>
+            <label htmlFor="system-prompt" className="text-sm font-medium">System Prompt (Optional)</label>
+            <textarea
+              id="system-prompt"
+              value={newAgentSystemPrompt}
+              onChange={(e) => setNewAgentSystemPrompt(e.target.value)}
+              placeholder="Enter system prompt to define agent behavior..."
+              className="w-full mt-1 px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring min-h-[80px] resize-y"
+              disabled={isCreating}
+            />
+          </div>
+
           {/* Connector Configuration */}
           <div className="grid gap-4 md:grid-cols-2">
             <div>
@@ -355,6 +389,96 @@ export default function AgentsPage() {
                 disabled={isCreating}
               />
             </div>
+          </div>
+
+          {/* LLM Parameters */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium">LLM Parameters</h3>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <label htmlFor="max-tokens" className="text-sm font-medium">Max Tokens</label>
+                <Input
+                  id="max-tokens"
+                  type="number"
+                  min="1"
+                  max="32768"
+                  value={newAgentConnectorConfig.maxTokens}
+                  onChange={(e) => setNewAgentConnectorConfig(prev => ({ ...prev, maxTokens: parseInt(e.target.value) || 4096 }))}
+                  disabled={isCreating}
+                />
+              </div>
+              <div>
+                <label htmlFor="temperature" className="text-sm font-medium">Temperature</label>
+                <Input
+                  id="temperature"
+                  type="number"
+                  min="0"
+                  max="2"
+                  step="0.1"
+                  value={newAgentConnectorConfig.temperature}
+                  onChange={(e) => setNewAgentConnectorConfig(prev => ({ ...prev, temperature: parseFloat(e.target.value) || 0.7 }))}
+                  disabled={isCreating}
+                />
+              </div>
+              <div>
+                <label htmlFor="top-p" className="text-sm font-medium">Top P</label>
+                <Input
+                  id="top-p"
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={newAgentConnectorConfig.topP}
+                  onChange={(e) => setNewAgentConnectorConfig(prev => ({ ...prev, topP: parseFloat(e.target.value) || 1.0 }))}
+                  disabled={isCreating}
+                />
+              </div>
+              {newAgentProvider === 'ollama' && (
+                <div>
+                  <label htmlFor="num-ctx" className="text-sm font-medium">Context Length</label>
+                  <Input
+                    id="num-ctx"
+                    type="number"
+                    min="1024"
+                    max="32768"
+                    value={newAgentConnectorConfig.numCtx}
+                    onChange={(e) => setNewAgentConnectorConfig(prev => ({ ...prev, numCtx: parseInt(e.target.value) || 4096 }))}
+                    disabled={isCreating}
+                  />
+                </div>
+              )}
+            </div>
+
+            {newAgentProvider !== 'ollama' && (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label htmlFor="frequency-penalty" className="text-sm font-medium">Frequency Penalty</label>
+                  <Input
+                    id="frequency-penalty"
+                    type="number"
+                    min="-2"
+                    max="2"
+                    step="0.1"
+                    value={newAgentConnectorConfig.frequencyPenalty}
+                    onChange={(e) => setNewAgentConnectorConfig(prev => ({ ...prev, frequencyPenalty: parseFloat(e.target.value) || 0.0 }))}
+                    disabled={isCreating}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="presence-penalty" className="text-sm font-medium">Presence Penalty</label>
+                  <Input
+                    id="presence-penalty"
+                    type="number"
+                    min="-2"
+                    max="2"
+                    step="0.1"
+                    value={newAgentConnectorConfig.presencePenalty}
+                    onChange={(e) => setNewAgentConnectorConfig(prev => ({ ...prev, presencePenalty: parseFloat(e.target.value) || 0.0 }))}
+                    disabled={isCreating}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2">

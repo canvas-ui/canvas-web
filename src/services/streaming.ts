@@ -56,7 +56,7 @@ export class StreamingService {
           }
 
           const { done, value } = await reader.read();
-          
+
           if (done) {
             if (onComplete) {
               onComplete();
@@ -87,12 +87,12 @@ export class StreamingService {
   static processSSEChunk(chunk: string): StreamMessage[] {
     const messages: StreamMessage[] = [];
     const lines = chunk.split('\n');
-    
+
     let currentMessage: Partial<StreamMessage> = {};
-    
+
     for (const line of lines) {
       const trimmed = line.trim();
-      
+
       if (trimmed.startsWith('data: ')) {
         try {
           const data = JSON.parse(trimmed.slice(6));
@@ -108,7 +108,7 @@ export class StreamingService {
         currentMessage = {};
       }
     }
-    
+
     return messages;
   }
 }
@@ -120,7 +120,7 @@ export class StreamingService {
 export class AnthropicConnector {
   private baseUrl: string;
 
-  constructor(_apiKey: string, baseUrl: string = '/api/agents/anthropic') {
+  constructor(_apiKey: string, baseUrl: string = '/rest/v2/agents/anthropic') {
     // apiKey parameter kept for API compatibility but not currently used
     // as authentication is handled by the server via session tokens
     this.baseUrl = baseUrl;
@@ -211,7 +211,7 @@ export class AnthropicConnector {
 }
 
 /**
- * WebSocket-based streaming fallback for environments where 
+ * WebSocket-based streaming fallback for environments where
  * fetch streaming is not reliable
  */
 export class WebSocketStreamingService {
@@ -224,7 +224,7 @@ export class WebSocketStreamingService {
     return new Promise((resolve, reject) => {
       try {
         this.socket = new WebSocket(this.wsUrl);
-        
+
         this.socket.onopen = () => {
           console.log('WebSocket connected for streaming');
           resolve();

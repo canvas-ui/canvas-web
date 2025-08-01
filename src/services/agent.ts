@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import { API_URL } from '@/config/api';
 import { AnthropicConnector, WebSocketStreamingService, StreamMessage } from './streaming';
 
 export interface AgentMessage {
@@ -161,7 +162,7 @@ export class AgentService {
       // Get WebSocket URL from current location
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/ws`;
-      
+
       this.wsService = new WebSocketStreamingService(wsUrl);
       // Don't auto-connect, only use as fallback
     } catch (error) {
@@ -176,7 +177,7 @@ export class AgentService {
     if (config.type === 'anthropic') {
       const connector = new AnthropicConnector(
         config.apiKey || '',
-        config.endpoint || `/api/agents/${config.id}`
+        config.endpoint || `${API_URL}/agents/${config.id}`
       );
       this.connectors.set(config.id, connector);
     }
@@ -229,7 +230,7 @@ export class AgentService {
               streaming: !streamMsg.done,
               error: streamMsg.error,
             };
-            
+
             if (onMessage) {
               onMessage(agentMessage);
             }
@@ -272,7 +273,7 @@ export class AgentService {
     onComplete?: () => void
   ): Promise<void> {
     try {
-      await api.stream(`/api/agents/${agentId}/chat`, {
+      await api.stream(`${API_URL}/agents/${agentId}/chat`, {
         message,
         messageId,
         stream: true,
@@ -290,7 +291,7 @@ export class AgentService {
               streaming: !data.done,
               error: data.error,
             };
-            
+
             if (onMessage) {
               onMessage(agentMessage);
             }
@@ -304,7 +305,7 @@ export class AgentService {
               type: 'agent',
               streaming: true,
             };
-            
+
             if (onMessage) {
               onMessage(agentMessage);
             }
@@ -359,7 +360,7 @@ export class AgentService {
             streaming: !streamMsg.done,
             error: streamMsg.error,
           };
-          
+
           if (onMessage) {
             onMessage(agentMessage);
           }
@@ -378,7 +379,7 @@ export class AgentService {
    */
   async getAvailableAgents(): Promise<AgentConfig[]> {
     try {
-      const response = await api.get<{agents: AgentConfig[]}>('/api/agents');
+      const response = await api.get<{agents: AgentConfig[]}>(`${API_URL}/agents`);
       return response.agents || [];
     } catch (error) {
       console.error('Failed to fetch available agents:', error);
@@ -390,11 +391,11 @@ export class AgentService {
    * Creates a new agent configuration
    */
   async createAgent(config: Omit<AgentConfig, 'id'>): Promise<AgentConfig> {
-    const response = await api.post<AgentConfig>('/api/agents', config);
-    
+    const response = await api.post<AgentConfig>(`${API_URL}/agents`, config);
+
     // Register the new agent
     this.registerAgent(response);
-    
+
     return response;
   }
 
@@ -421,7 +422,7 @@ export const agentService = new AgentService();
  */
 export async function listAgents(): Promise<Agent[]> {
   try {
-    const response = await api.get<{ payload: Agent[] }>('/api/agents');
+    const response = await api.get<{ payload: Agent[] }>(`${API_URL}/agents`);
     return response.payload || [];
   } catch (error) {
     console.error('Failed to list agents:', error);
@@ -433,7 +434,7 @@ export async function listAgents(): Promise<Agent[]> {
  * Get a specific agent by ID
  */
 export async function getAgent(agentId: string): Promise<Agent> {
-  const response = await api.get<{ payload: Agent }>(`/api/agents/${agentId}`);
+  const response = await api.get<{ payload: Agent }>(`${API_URL}/agents/${agentId}`);
   return response.payload;
 }
 
@@ -441,7 +442,7 @@ export async function getAgent(agentId: string): Promise<Agent> {
  * Create a new agent
  */
 export async function createAgent(agentData: CreateAgentData): Promise<Agent> {
-  const response = await api.post<{ payload: Agent }>('/api/agents', agentData);
+  const response = await api.post<{ payload: Agent }>(`${API_URL}/agents`, agentData);
   return response.payload;
 }
 
@@ -449,7 +450,7 @@ export async function createAgent(agentData: CreateAgentData): Promise<Agent> {
  * Update an existing agent
  */
 export async function updateAgent(agentId: string, agentData: Partial<CreateAgentData>): Promise<Agent> {
-  const response = await api.put<{ payload: Agent }>(`/api/agents/${agentId}`, agentData);
+  const response = await api.put<{ payload: Agent }>(`${API_URL}/agents/${agentId}`, agentData);
   return response.payload;
 }
 
@@ -457,14 +458,14 @@ export async function updateAgent(agentId: string, agentData: Partial<CreateAgen
  * Delete an agent
  */
 export async function deleteAgent(agentId: string): Promise<void> {
-  await api.delete(`/api/agents/${agentId}`);
+  await api.delete(`${API_URL}/agents/${agentId}`);
 }
 
 /**
  * Start an agent
  */
 export async function startAgent(agentId: string): Promise<Agent> {
-  const response = await api.post<{ payload: Agent }>(`/api/agents/${agentId}/start`);
+  const response = await api.post<{ payload: Agent }>(`${API_URL}/agents/${agentId}/start`);
   return response.payload;
 }
 
@@ -472,7 +473,7 @@ export async function startAgent(agentId: string): Promise<Agent> {
  * Stop an agent
  */
 export async function stopAgent(agentId: string): Promise<Agent> {
-  const response = await api.post<{ payload: Agent }>(`/api/agents/${agentId}/stop`);
+  const response = await api.post<{ payload: Agent }>(`${API_URL}/agents/${agentId}/stop`);
   return response.payload;
 }
 
@@ -480,7 +481,7 @@ export async function stopAgent(agentId: string): Promise<Agent> {
  * Get agent status
  */
 export async function getAgentStatus(agentId: string): Promise<{ status: string; isActive: boolean; lastAccessed?: string }> {
-  const response = await api.get<{ payload: { status: string; isActive: boolean; lastAccessed?: string } }>(`/api/agents/${agentId}/status`);
+  const response = await api.get<{ payload: { status: string; isActive: boolean; lastAccessed?: string } }>(`${API_URL}/agents/${agentId}/status`);
   return response.payload;
 }
 
@@ -492,7 +493,7 @@ export async function getAgentStatus(agentId: string): Promise<{ status: string;
  */
 export async function getAgentMemory(agentId: string): Promise<AgentMemory[]> {
   try {
-    const response = await api.get<{ payload: AgentMemory[] }>(`/api/agents/${agentId}/memory`);
+    const response = await api.get<{ payload: AgentMemory[] }>(`${API_URL}/agents/${agentId}/memory`);
     return response.payload || [];
   } catch (error) {
     console.error('Failed to get agent memory:', error);
@@ -504,7 +505,7 @@ export async function getAgentMemory(agentId: string): Promise<AgentMemory[]> {
  * Clear agent memory
  */
 export async function clearAgentMemory(agentId: string): Promise<void> {
-  await api.delete(`/api/agents/${agentId}/memory`);
+  await api.delete(`${API_URL}/agents/${agentId}/memory`);
 }
 
 // MCP Tool Functions
@@ -515,7 +516,7 @@ export async function clearAgentMemory(agentId: string): Promise<void> {
  */
 export async function getAgentMCPTools(agentId: string): Promise<MCPTool[]> {
   try {
-    const response = await api.get<{ payload: MCPTool[] }>(`/api/agents/${agentId}/mcp/tools`);
+    const response = await api.get<{ payload: MCPTool[] }>(`${API_URL}/agents/${agentId}/mcp/tools`);
     return response.payload || [];
   } catch (error) {
     console.error('Failed to get MCP tools:', error);
@@ -532,7 +533,7 @@ export async function callMCPTool(
   arguments_: Record<string, any>,
   source?: string
 ): Promise<any> {
-  const response = await api.post<{ payload: any }>(`/api/agents/${agentId}/mcp/tools/${toolName}`, {
+  const response = await api.post<{ payload: any }>(`${API_URL}/agents/${agentId}/mcp/tools/${toolName}`, {
     arguments: arguments_,
     source
   });
@@ -560,7 +561,7 @@ export async function chatWithAgentStream(
 ): Promise<void> {
   const { onMessage, onError, onComplete, context, mcpContext, maxTokens, temperature } = options;
 
-  await api.stream(`/api/agents/${agentId}/chat`, {
+  await api.stream(`${API_URL}/agents/${agentId}/chat`, {
     message,
     context,
     mcpContext,
@@ -611,12 +612,12 @@ export async function chatWithAgentFallback(
   const { message, onMessage, onError, onComplete, context, mcpContext, maxTokens, temperature } = options;
 
   try {
-    const response = await api.post<{ 
-      payload: { 
-        content: string; 
-        metadata?: any; 
-      } 
-    }>(`/api/agents/${agentId}/chat`, {
+    const response = await api.post<{
+      payload: {
+        content: string;
+        metadata?: any;
+      }
+    }>(`${API_URL}/agents/${agentId}/chat`, {
       message,
       context,
       mcpContext,
