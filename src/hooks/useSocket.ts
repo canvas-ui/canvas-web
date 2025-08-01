@@ -2,11 +2,25 @@ import { useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { API_ROUTES } from '@/config/api';
 
+/**
+ * Shared Socket.io hook used across the frontend.
+ *
+ * It looks for the authentication token stored by the `api` helper – this is
+ * always saved under the localStorage key `authToken` (see `api.setAuthToken`).
+ *
+ * Prior to this change the hook was reading from the key `token`, which was
+ * never set by our authentication flow. The result was that an **empty token**
+ * was sent during the WebSocket handshake and the server responded with
+ * `JWT verification failed: invalid signature`. Using the correct key fixes
+ * the handshake for all pages that rely on real-time updates (agents,
+ * workspaces, contexts …).
+ */
 export function useSocket() {
   const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    // Retrieve the token using the same key as the REST helper
+    const token = localStorage.getItem('authToken');
     if (!token) return;
 
     const socketInstance = io(API_ROUTES.ws, {
@@ -38,3 +52,4 @@ export function useSocket() {
 
   return socket;
 }
+
