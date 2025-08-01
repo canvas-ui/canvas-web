@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react"
+import { generateNiceRandomHexColor } from "@/utils/color"
+import { useSocketSubscription } from "@/hooks/useSocketSubscription"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/toast-container"
@@ -30,6 +32,16 @@ export default function WorkspacesPage() {
   const { showToast } = useToast()
   const navigate = useNavigate()
   const socket = useSocket()
+
+  // WebSocket live updates
+  useSocketSubscription(socket, 'workspace', {
+    'workspace:status:changed': (data: { workspaceId: string; status: WorkspaceStatus }) =>
+      setWorkspaces(prev => prev.map(ws => ws.id === data.workspaceId ? { ...ws, status: data.status } : ws)),
+    'workspace:created': (data: { workspace: Workspace }) =>
+      setWorkspaces(prev => [...prev, data.workspace as unknown as Workspace]),
+    'workspace:deleted': (data: { workspaceId: string }) =>
+      setWorkspaces(prev => prev.filter(ws => ws.id !== data.workspaceId))
+  })
 
   useEffect(() => {
     const loadWorkspaces = async () => {
@@ -70,34 +82,7 @@ export default function WorkspacesPage() {
     }
     loadWorkspaces()
 
-    if (socket) {
-      socket.emit('subscribe', { topic: 'workspace' })
 
-      // Assuming socket data.status also matches WorkspaceStatus
-      socket.on('workspace:status:changed', (data: { workspaceId: string; status: WorkspaceStatus }) => {
-        setWorkspaces(prev => prev.map(ws =>
-          ws.id === data.workspaceId ? { ...ws, status: data.status } : ws
-        ))
-      })
-
-      socket.on('workspace:created', (data: { workspace: Workspace }) => {
-        // Using global Workspace type from socket
-        setWorkspaces(prev => [...prev, data.workspace as unknown as Workspace])
-      })
-
-      socket.on('workspace:deleted', (data: { workspaceId: string }) => {
-        setWorkspaces(prev => prev.filter(ws => ws.id !== data.workspaceId))
-      })
-    }
-
-    return () => {
-      if (socket) {
-        socket.emit('unsubscribe', { topic: 'workspace' })
-        socket.off('workspace:status:changed')
-        socket.off('workspace:created')
-        socket.off('workspace:deleted')
-      }
-    }
   }, [socket])
 
   const handleCreateWorkspace = async (e: React.FormEvent) => {
@@ -428,56 +413,4 @@ export default function WorkspacesPage() {
   )
 }
 
-// Color Utility Functions (Restored)
-const randomInt = (min: number, max: number): number => {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-};
 
-const generateRandomHsl = (): { h: number, s: number, l: number } => {
-  const h = randomInt(0, 360);
-  const s = randomInt(42, 98);
-  const l = randomInt(40, 90);
-  return { h, s, l };
-};
-
-const hslToHex = (h: number, s: number, l: number): string => {
-  s /= 100;
-  l /= 100;
-
-  let c = (1 - Math.abs(2 * l - 1)) * s,
-    x = c * (1 - Math.abs((h / 60) % 2 - 1)),
-    m = l - c / 2,
-    r = 0,
-    g = 0,
-    b = 0;
-
-  if (0 <= h && h < 60) {
-    r = c; g = x; b = 0;
-  } else if (60 <= h && h < 120) {
-    r = x; g = c; b = 0;
-  } else if (120 <= h && h < 180) {
-    r = 0; g = c; b = x;
-  } else if (180 <= h && h < 240) {
-    r = 0; g = x; b = c;
-  } else if (240 <= h && h < 300) {
-    r = x; g = 0; b = c;
-  } else if (300 <= h && h < 360) {
-    r = c; g = 0; b = x;
-  }
-
-  r = Math.round((r + m) * 255);
-  g = Math.round((g + m) * 255);
-  b = Math.round((b + m) * 255);
-
-  const toHex = (val: number): string => {
-    const hex = val.toString(16);
-    return hex.length === 1 ? "0" + hex : hex;
-  };
-
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-};
-
-const generateNiceRandomHexColor = (): string => {
-  const { h, s, l } = generateRandomHsl();
-  return hslToHex(h, s, l);
-};
