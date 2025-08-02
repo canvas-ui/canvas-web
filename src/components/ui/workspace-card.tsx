@@ -1,15 +1,37 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./card";
 import { Button } from "./button";
-import { Play, Square, DoorOpen } from "lucide-react";
+import { Play, Square, DoorOpen, Trash2, Edit, MoreVertical } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "./alert-dialog";
+import { useState } from "react";
 
 interface WorkspaceCardProps {
   workspace: Workspace;
   onStart: (name: string) => void;
   onStop: (name: string) => void;
   onEnter: (name: string) => void;
+  onEdit?: (workspace: Workspace) => void;
+  onDestroy?: (workspace: Workspace) => void;
 }
 
-export function WorkspaceCard({ workspace, onStart, onStop, onEnter }: WorkspaceCardProps) {
+export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onDestroy }: WorkspaceCardProps) {
+  const [isDestroyDialogOpen, setIsDestroyDialogOpen] = useState(false);
   const isActive = workspace.status === 'active';
   const isUniverse = workspace.type === 'universe' || workspace.name === 'universe';
   const isError = workspace.status === 'error';
@@ -94,6 +116,69 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter }: Workspace
               >
                 <DoorOpen className="h-4 w-4" />
               </Button>
+            )}
+            
+            {/* More Actions Menu */}
+            {(onEdit || onDestroy) && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    title="More actions"
+                    disabled={isError || isNotFound}
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {onEdit && !isUniverse && (
+                    <DropdownMenuItem onClick={() => onEdit(workspace)}>
+                      <Edit className="mr-2 h-4 w-4" />
+                      Edit Workspace
+                    </DropdownMenuItem>
+                  )}
+                  {onEdit && onDestroy && !isUniverse && <DropdownMenuSeparator />}
+                  {onDestroy && !isUniverse && (
+                    <AlertDialog open={isDestroyDialogOpen} onOpenChange={setIsDestroyDialogOpen}>
+                      <AlertDialogTrigger asChild>
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onSelect={(e: Event) => {
+                            e.preventDefault();
+                            setIsDestroyDialogOpen(true);
+                          }}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Destroy Workspace
+                        </DropdownMenuItem>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Destroy Workspace</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to destroy the workspace "{workspace.label || workspace.name}"?
+                            <br /><br />
+                            <strong>This action cannot be undone.</strong> All data associated with this workspace, including documents, contexts, and configurations will be permanently removed.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => {
+                              onDestroy(workspace);
+                              setIsDestroyDialogOpen(false);
+                            }}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            Destroy Workspace
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </div>
         </div>

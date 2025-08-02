@@ -13,7 +13,11 @@ import {
   createWorkspace,
   closeWorkspace,
   startWorkspace,
+  updateWorkspace,
+  removeWorkspace,
+  purgeWorkspace,
 } from "@/services/workspace"
+
 
 // Using global Workspace interface from types/api.d.ts
 // Specific status type based on linter feedback for WorkspaceCard compatibility
@@ -147,28 +151,46 @@ export default function WorkspacesPage() {
         color: editingWorkspace.color,
       };
 
-      // TODO: Implement actual API call to PATCH /workspaces/:id
-      // const apiResponse = await updateWorkspaceService(editingWorkspace.id, payloadToUpdate);
-      // const updatedWorkspaceFromApi = apiResponse.payload as unknown as ApiWorkspaceEntry;
-
-      // Mocking the update for now:
-      const updatedMockedWorkspace: Workspace = {
-        ...editingWorkspace,
-        ...payloadToUpdate
-      };
+      const updatedWorkspace = await updateWorkspace(editingWorkspace.id, payloadToUpdate);
 
       setWorkspaces(prev => prev.map(ws =>
-        ws.id === updatedMockedWorkspace.id ? updatedMockedWorkspace : ws
+        ws.id === updatedWorkspace.id ? updatedWorkspace : ws
       ))
 
       showToast({
-        title: 'Success (Mocked Update)',
-        description: `Workspace '${updatedMockedWorkspace.label}' details updated. Implement actual API call.`
+        title: 'Success',
+        description: `Workspace '${updatedWorkspace.label}' details updated.`
       })
       setEditingWorkspace(null)
 
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to update workspace'
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      })
+    }
+  }
+
+  const handleEditWorkspace = (workspace: Workspace) => {
+    setEditingWorkspace(workspace)
+  }
+
+  const handleDestroyWorkspace = async (workspace: Workspace) => {
+    try {
+      // First remove the workspace
+      await removeWorkspace(workspace.id)
+      // Then purge all its data
+      await purgeWorkspace(workspace.id)
+
+      setWorkspaces(prev => prev.filter(ws => ws.id !== workspace.id))
+      showToast({
+        title: 'Success',
+        description: `Workspace '${workspace.label || workspace.name}' has been destroyed.`
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to destroy workspace'
       showToast({
         title: 'Error',
         description: message,
@@ -344,6 +366,8 @@ export default function WorkspacesPage() {
                   onStart={handleStartWorkspace}
                   onStop={handleStopWorkspace}
                   onEnter={handleEnterWorkspace}
+                  onEdit={handleEditWorkspace}
+                  onDestroy={handleDestroyWorkspace}
                 />
               );
             })}

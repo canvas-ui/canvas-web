@@ -886,6 +886,7 @@ export default function ContextDetailPage() {
               isLoading={isLoadingDocuments}
               contextPath={selectedPath}
               totalCount={documentsTotalCount}
+              viewMode="table"
               onRemoveDocument={handleRemoveDocument}
               onDeleteDocument={handleDeleteDocument}
             />
@@ -897,21 +898,35 @@ export default function ContextDetailPage() {
       {anyRightSidebarOpen && (
         <div className="fixed right-0 top-0 h-full w-96 bg-background border-l shadow-lg overflow-y-auto z-50">
           {/* Sidebar Header */}
-          <div className="flex items-center justify-between p-4 border-b">
-            <h3 className="font-semibold">
-              {isDetailsOpen && 'Context Details'}
-              {isShareOpen && 'Share Context'}
-              {isToolboxOpen && 'Toolbox'}
-            </h3>
+          <div className="flex border-b mb-4">
+            <button
+              className={`flex-1 py-2 text-sm font-medium ${isDetailsOpen ? 'border-b-2 border-primary' : ''}`}
+              onClick={() => toggleSidebar('details')}
+            >
+              Details
+            </button>
+            <button
+              className={`flex-1 py-2 text-sm font-medium ${isShareOpen ? 'border-b-2 border-primary' : ''}`}
+              onClick={() => toggleSidebar('share')}
+            >
+              Share
+            </button>
+            <button
+              className={`flex-1 py-2 text-sm font-medium ${isToolboxOpen ? 'border-b-2 border-primary' : ''}`}
+              onClick={() => toggleSidebar('toolbox')}
+            >
+              Filter
+            </button>
             <Button
               onClick={closeAllRightSidebars}
               variant="ghost"
               size="sm"
-              className="p-1"
+              className="p-2"
             >
               <X className="h-4 w-4" />
             </Button>
           </div>
+
 
           {/* Sidebar Content */}
           <div className="p-4">

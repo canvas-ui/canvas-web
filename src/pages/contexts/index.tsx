@@ -3,7 +3,15 @@ import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/toast-container"
-import { Plus, Trash, DoorOpen } from "lucide-react"
+import { Plus, Trash, DoorOpen, Edit } from "lucide-react"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import socketService from "@/lib/socket"
 import { listContexts, createContext, deleteContext } from "@/services/context"
 import { listWorkspaces } from "@/services/workspace"
@@ -46,6 +54,7 @@ export default function ContextsPage() {
   const [newContextBaseUrl, setNewContextBaseUrl] = useState("")
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>("")
   const [isCreating, setIsCreating] = useState(false)
+  const [editingContext, setEditingContext] = useState<ContextEntry | null>(null)
   const { showToast } = useToast()
 
   useEffect(() => {
@@ -293,6 +302,38 @@ export default function ContextsPage() {
     }
   }
 
+  const handleEditContext = (context: ContextEntry) => {
+    setEditingContext(context)
+  }
+
+  const handleSaveContextEdit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingContext) return
+
+    try {
+      // TODO: Implement context update API call
+      // For now, just update local state
+      setContexts(prev => prev.map(ctx => 
+        ctx.id === editingContext.id && ctx.userId === editingContext.userId 
+          ? editingContext 
+          : ctx
+      ))
+      
+      showToast({
+        title: 'Success',
+        description: 'Context updated successfully (mock update)'
+      })
+      setEditingContext(null)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update context'
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      })
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -405,45 +446,55 @@ export default function ContextsPage() {
         )}
 
         {contexts.length > 0 && (
-          <div className="border rounded-md">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-muted/50">
-                    <th className="text-left p-3 font-medium">ID</th>
-                    <th className="text-left p-3 font-medium">User ID</th>
-                    <th className="text-left p-3 font-medium">Context URL</th>
-                    <th className="text-left p-3 font-medium">Workspace ID</th>
-                    <th className="text-left p-3 font-medium">Base URL</th>
-                    <th className="text-left p-3 font-medium">Path</th>
-                    <th className="text-left p-3 font-medium">Locked</th>
-                    <th className="text-left p-3 font-medium">Created</th>
-                    <th className="text-left p-3 font-medium">Updated</th>
-                    <th className="text-right p-3 font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {contexts.filter(context => context != null).map((context) => {
-                    // Safety checks to prevent errors with undefined properties
-                    if (!context) {
-                      console.warn('Found null/undefined context in contexts array, skipping');
-                      return null;
-                    }
+          <div className="border rounded-lg overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>ID</TableHead>
+                  <TableHead>User ID</TableHead>
+                  <TableHead>Context URL</TableHead>
+                  <TableHead>Workspace ID</TableHead>
+                  <TableHead>Base URL</TableHead>
+                  <TableHead>Path</TableHead>
+                  <TableHead>Locked</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead>Updated</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {contexts.filter(context => context != null).map((context) => {
+                  // Safety checks to prevent errors with undefined properties
+                  if (!context) {
+                    console.warn('Found null/undefined context in contexts array, skipping');
+                    return null;
+                  }
 
-                    const createdAtDisplay = context.createdAt ? new Date(context.createdAt).toLocaleDateString() : '-';
-                    const updatedAtDisplay = context.updatedAt ? new Date(context.updatedAt).toLocaleDateString() : '-';
-                    return (
-                      <tr key={`${context.userId}-${context.id}`} className="border-t">
-                        <td className="p-3 font-mono text-sm">{context.id || '-'}</td>
-                        <td className="p-3 font-mono text-sm">{context.userId || '-'}</td>
-                        <td className="p-3 font-mono text-sm">{context.url || '-'}</td>
-                        <td className="p-3 font-mono text-sm">{context.workspaceId || '-'}</td>
-                        <td className="p-3 font-mono text-sm">{context.baseUrl || '-'}</td>
-                        <td className="p-3 font-mono text-sm">{context.path || '-'}</td>
-                        <td className="p-3">{context.locked ? 'Yes' : 'No'}</td>
-                        <td className="p-3">{createdAtDisplay}</td>
-                        <td className="p-3">{updatedAtDisplay}</td>
-                        <td className="p-3 text-right space-x-2">
+                  const createdAtDisplay = context.createdAt ? new Date(context.createdAt).toLocaleDateString() : '-';
+                  const updatedAtDisplay = context.updatedAt ? new Date(context.updatedAt).toLocaleDateString() : '-';
+                  return (
+                    <TableRow key={`${context.userId}-${context.id}`}>
+                      <TableCell className="font-mono text-sm">{context.id || '-'}</TableCell>
+                      <TableCell className="font-mono text-sm">{context.userId || '-'}</TableCell>
+                      <TableCell className="font-mono text-sm max-w-xs truncate" title={context.url || '-'}>
+                        {context.url || '-'}
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">{context.workspaceId || '-'}</TableCell>
+                      <TableCell className="font-mono text-sm">{context.baseUrl || '-'}</TableCell>
+                      <TableCell className="font-mono text-sm">{context.path || '-'}</TableCell>
+                      <TableCell>{context.locked ? 'Yes' : 'No'}</TableCell>
+                      <TableCell>{createdAtDisplay}</TableCell>
+                      <TableCell>{updatedAtDisplay}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEditContext(context)}
+                            title="Edit Context"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
                           <Button
                             variant="outline"
                             size="sm"
@@ -461,16 +512,85 @@ export default function ContextsPage() {
                           >
                             <Trash className="h-4 w-4" />
                           </Button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           </div>
         )}
       </div>
+
+      {/* Edit Context Section */}
+      {editingContext && (
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold">Edit Context</h2>
+          <form onSubmit={handleSaveContextEdit} className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label htmlFor="edit-context-id" className="block text-sm font-medium mb-1">
+                  Context ID (read-only)
+                </label>
+                <Input
+                  id="edit-context-id"
+                  value={editingContext.id}
+                  disabled
+                  className="bg-muted"
+                />
+              </div>
+              <div>
+                <label htmlFor="edit-context-url" className="block text-sm font-medium mb-1">
+                  Context URL
+                </label>
+                <Input
+                  id="edit-context-url"
+                  value={editingContext.url}
+                  onChange={(e) => setEditingContext(prev => prev ? {...prev, url: e.target.value} : null)}
+                  placeholder="https://example.com/path"
+                />
+              </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label htmlFor="edit-base-url" className="block text-sm font-medium mb-1">
+                  Base URL (optional)
+                </label>
+                <Input
+                  id="edit-base-url"
+                  value={editingContext.baseUrl || ''}
+                  onChange={(e) => setEditingContext(prev => prev ? {...prev, baseUrl: e.target.value || null} : null)}
+                  placeholder="https://example.com"
+                />
+              </div>
+              <div>
+                <label htmlFor="edit-path" className="block text-sm font-medium mb-1">
+                  Path (optional)
+                </label>
+                <Input
+                  id="edit-path"
+                  value={editingContext.path || ''}
+                  onChange={(e) => setEditingContext(prev => prev ? {...prev, path: e.target.value || null} : null)}
+                  placeholder="/path"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button type="submit">
+                Save Changes
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditingContext(null)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   )
 }
