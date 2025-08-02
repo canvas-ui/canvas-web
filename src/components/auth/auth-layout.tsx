@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card"
 import { Link } from "react-router-dom"
 import { version } from "../../../package.json"
 import { useParticles } from "@/hooks/useParticles"
+import { useServerVersion } from "@/hooks/useServerVersion"
 
 interface AuthLayoutProps {
   children: React.ReactNode
@@ -10,6 +11,7 @@ interface AuthLayoutProps {
 
 export function AuthLayout({ children }: AuthLayoutProps) {
   useParticles('particle-js')
+  const { serverVersion, isLoading: isLoadingVersion, error: versionError } = useServerVersion()
 
   return (
     <div className="flex min-h-screen w-full items-center justify-center p-4 flex-col">
@@ -24,7 +26,11 @@ export function AuthLayout({ children }: AuthLayoutProps) {
             <span className="text-2xl font-bold text-white">Canvas</span>
           </Link>
           <div className="absolute bottom-8 left-8 text-sm text-white max-w-[80%] z-10">
-            Web UI version: {version}
+            Web UI: v{version}, Server: {
+              isLoadingVersion ? 'Loading...' :
+              versionError ? 'Unavailable' :
+              serverVersion ? `v${serverVersion}` : 'Unknown'
+            }
           </div>
         </div>
         <div className="flex w-full md:w-1/2 flex-col justify-center px-4 py-12 sm:px-6 lg:px-8">
