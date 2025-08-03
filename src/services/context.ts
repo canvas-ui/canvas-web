@@ -238,11 +238,17 @@ export async function getContextTree(id: string): Promise<any> {
 }
 
 // Remove documents from a context (non-destructive, just unlink)
-export async function removeDocumentsFromContext(contextId: string, documentIds: (string|number)[]): Promise<{ message: string }> {
+export async function removeDocumentsFromContext(contextId: string, documentIds: (string|number)[] | string | number): Promise<{ message: string }> {
   try {
-    const response = await api.post<{ payload: string }>(
+    // Ensure documentIds is always an array
+    const idsArray = Array.isArray(documentIds) ? documentIds : [documentIds];
+
+    const response = await api.delete<{ payload: string }>(
         `${API_ROUTES.contexts}/${contextId}/documents/remove`,
-        { documentIds }
+        {
+          body: JSON.stringify(idsArray),
+          headers: { 'Content-Type': 'application/json' }
+        }
     );
     return { message: response.payload || 'Documents removed from context' };
   } catch (error) {
@@ -252,11 +258,17 @@ export async function removeDocumentsFromContext(contextId: string, documentIds:
 }
 
 // Permanently delete documents from DB (owner-only)
-export async function deleteDocumentsFromContext(contextId: string, documentIds: (string|number)[]): Promise<{ message: string }> {
+export async function deleteDocumentsFromContext(contextId: string, documentIds: (string|number)[] | string | number): Promise<{ message: string }> {
   try {
-    return await api.post<{ message: string }>(
-      `${API_ROUTES.contexts}/${contextId}/documents/delete`,
-      { documentIds }
+    // Ensure documentIds is always an array
+    const idsArray = Array.isArray(documentIds) ? documentIds : [documentIds];
+
+    return await api.delete<{ message: string }>(
+      `${API_ROUTES.contexts}/${contextId}/documents`,
+      {
+        body: JSON.stringify(idsArray),
+        headers: { 'Content-Type': 'application/json' }
+      }
     );
   } catch (error) {
     console.error(`Failed to delete documents from context ${contextId}:`, error);
