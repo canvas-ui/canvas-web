@@ -131,6 +131,19 @@ export default function ContextsPage() {
     fetchData();
   }, [fetchData]);
 
+  // Auto-populate the Context URL field when the workspace selection changes, but only if the user hasn't typed anything yet
+  useEffect(() => {
+    if (!selectedWorkspaceId) return;
+    const ws = workspaces.find(w => w.id === selectedWorkspaceId);
+    if (!ws) return;
+
+    // Only set a default if the field is empty or still has the initial placeholder value
+    if (!newContextUrl.trim() || newContextUrl.trim() === 'universe://') {
+      const defaultUrl = `workspace://${ws.name || ws.id}`;
+      setNewContextUrl(defaultUrl);
+    }
+  }, [selectedWorkspaceId, workspaces, newContextUrl]);
+
   useEffect(() => {
     if (!socketService.isConnected()) {
       console.log('Socket not connected, attempting to connect...');

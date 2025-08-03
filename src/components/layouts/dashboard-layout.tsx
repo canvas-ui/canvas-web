@@ -2,6 +2,7 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom"
 import { useState, useEffect, useCallback } from "react"
 import { LogOut, Briefcase, Network, KeyRound, Infinity, ChevronRight, Users, FolderOpen, Brain } from "lucide-react"
 import { api } from "@/lib/api"
+import socketService from "@/lib/socket"
 import { useToast } from "@/components/ui/toast-container"
 import { getCurrentUserFromToken } from "@/services/auth"
 import { listWorkspaces } from "@/services/workspace"
@@ -210,6 +211,63 @@ function DashboardSidebar() {
     }
 
     fetchAgents()
+  }, [])
+
+  // Keep workspaces and contexts in sync with real-time socket events so that the sidebar updates automatically
+  useEffect(() => {
+    if (!socketService.isConnected()) {
+      socketService.reconnect()
+    }
+
+    socketService.emit('subscribe', { topic: 'context' })
+    socketService.emit('subscribe', { topic: 'workspace' })
+
+    const handleContextCreated = (data: any) => {
+      if (!data || !data.id) return
+
+      setContexts(prev => {
+        if (prev.some(ctx => ctx.id === data.id)) {
+          return prev
+        }
+        return [...prev, data]
+      })
+    }
+
+    const handleContextDeleted = (data: { id?: string; contextId?: string }) => {
+      const deletedId = data.id ?? data.contextId
+      if (!deletedId) return
+      setContexts(prev => prev.filter(ctx => ctx.id !== deletedId))
+    }
+
+    const handleWorkspaceCreated = (data: any) => {
+      if (!data || !data.id) return
+      setWorkspaces(prev => {
+        if (prev.some(ws => ws.id === data.id)) {
+          return prev
+        }
+        return [...prev, { ...data, label: data.label || data.name }]
+      })
+    }
+
+    const handleWorkspaceDeleted = (data: { id?: string; workspaceId?: string }) => {
+      const deletedId = data.id ?? data.workspaceId
+      if (!deletedId) return
+      setWorkspaces(prev => prev.filter(ws => ws.id !== deletedId))
+    }
+
+    socketService.on('context:created', handleContextCreated)
+    socketService.on('context:deleted', handleContextDeleted)
+    socketService.on('workspace:created', handleWorkspaceCreated)
+    socketService.on('workspace:deleted', handleWorkspaceDeleted)
+
+    return () => {
+      socketService.emit('unsubscribe', { topic: 'context' })
+      socketService.emit('unsubscribe', { topic: 'workspace' })
+      socketService.off('context:created', handleContextCreated)
+      socketService.off('context:deleted', handleContextDeleted)
+      socketService.off('workspace:created', handleWorkspaceCreated)
+      socketService.off('workspace:deleted', handleWorkspaceDeleted)
+    }
   }, [])
 
   const isActive = (path: string) => {
