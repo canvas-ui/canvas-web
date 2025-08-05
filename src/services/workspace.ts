@@ -134,3 +134,96 @@ export async function updateWorkspace(id: string, payload: Partial<CreateWorkspa
     throw error;
   }
 }
+
+// Workspace tree operations
+export async function insertWorkspacePath(workspaceId: string, path: string, autoCreateLayers: boolean = true): Promise<boolean> {
+  try {
+    const response = await api.post<{ payload: boolean; message: string; status: string; statusCode: number }>(
+      `${API_ROUTES.workspaces}/${workspaceId}/tree/paths`,
+      { path, autoCreateLayers }
+    );
+    return response.payload;
+  } catch (error) {
+    console.error(`Failed to insert workspace path ${path}:`, error);
+    throw error;
+  }
+}
+
+export async function removeWorkspacePath(workspaceId: string, path: string, recursive: boolean = false): Promise<boolean> {
+  try {
+    const params = new URLSearchParams({ path, recursive: recursive.toString() });
+    const response = await api.delete<{ payload: boolean; message: string; status: string; statusCode: number }>(
+      `${API_ROUTES.workspaces}/${workspaceId}/tree/paths?${params.toString()}`
+    );
+    return response.payload;
+  } catch (error) {
+    console.error(`Failed to remove workspace path ${path}:`, error);
+    throw error;
+  }
+}
+
+export async function moveWorkspacePath(workspaceId: string, fromPath: string, toPath: string, recursive: boolean = false): Promise<boolean> {
+  try {
+    const response = await api.post<{ payload: boolean; message: string; status: string; statusCode: number }>(
+      `${API_ROUTES.workspaces}/${workspaceId}/tree/paths/move`,
+      { from: fromPath, to: toPath, recursive }
+    );
+    return response.payload;
+  } catch (error) {
+    console.error(`Failed to move workspace path from ${fromPath} to ${toPath}:`, error);
+    throw error;
+  }
+}
+
+export async function copyWorkspacePath(workspaceId: string, fromPath: string, toPath: string, recursive: boolean = false): Promise<boolean> {
+  try {
+    const response = await api.post<{ payload: boolean; message: string; status: string; statusCode: number }>(
+      `${API_ROUTES.workspaces}/${workspaceId}/tree/paths/copy`,
+      { from: fromPath, to: toPath, recursive }
+    );
+    return response.payload;
+  } catch (error) {
+    console.error(`Failed to copy workspace path from ${fromPath} to ${toPath}:`, error);
+    throw error;
+  }
+}
+
+export async function mergeUpWorkspacePath(workspaceId: string, path: string): Promise<boolean> {
+  try {
+    const response = await api.post<{ payload: boolean; message: string; status: string; statusCode: number }>(
+      `${API_ROUTES.workspaces}/${workspaceId}/tree/paths/merge-up`,
+      { path }
+    );
+    return response.payload;
+  } catch (error) {
+    console.error(`Failed to merge up workspace path ${path}:`, error);
+    throw error;
+  }
+}
+
+export async function mergeDownWorkspacePath(workspaceId: string, path: string): Promise<boolean> {
+  try {
+    const response = await api.post<{ payload: boolean; message: string; status: string; statusCode: number }>(
+      `${API_ROUTES.workspaces}/${workspaceId}/tree/paths/merge-down`,
+      { path }
+    );
+    return response.payload;
+  } catch (error) {
+    console.error(`Failed to merge down workspace path ${path}:`, error);
+    throw error;
+  }
+}
+
+export async function pasteDocumentsToWorkspacePath(workspaceId: string, path: string, documentIds: number[]): Promise<boolean> {
+  try {
+    // This would use the document insertion API with the specified path
+    await api.post<{ payload: any; message: string; status: string; statusCode: number }>(
+      `${API_ROUTES.workspaces}/${workspaceId}/documents`,
+      { documentIds, contextSpec: path }
+    );
+    return true;
+  } catch (error) {
+    console.error(`Failed to paste documents to workspace path ${path}:`, error);
+    throw error;
+  }
+}

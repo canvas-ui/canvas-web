@@ -31,6 +31,7 @@ interface ContextData {
   path: string | null;
   pathArray: string[];
   workspaceId: string;
+  workspaceName: string;
   acl: Record<string, any>;
   createdAt: string;
   updatedAt: string;
@@ -270,7 +271,8 @@ export default function ContextDetailPage() {
         baseUrl: fetchedContext.baseUrl || null,
         path: fetchedContext.path || null,
         pathArray: fetchedContext.pathArray || [],
-        workspaceId: fetchedContext.workspace,
+        workspaceId: fetchedContext.workspaceId || fetchedContext.workspace,
+        workspaceName: fetchedContext.workspaceName || fetchedContext.workspace,
         acl: (fetchedContext as any).acl || {},
         createdAt: fetchedContext.createdAt,
         updatedAt: fetchedContext.updatedAt,
@@ -608,32 +610,14 @@ export default function ContextDetailPage() {
     setIsSaving(false);
   };
 
-  // Update context URL from tree path selection
+  // Handle tree path selection for navigation/display and populate input
   const handlePathSelect = (path: string) => {
     setSelectedPath(path);
-    if (context && context.url) {
-      // Extract workspace part from current URL and combine with new path
-      let newUrl;
-      if (context.url.includes('://')) {
-        // Current URL has workspace format: workspaceName://currentPath
-        const workspacePart = context.url.split('://')[0];
-        const pathPart = path.startsWith('/') ? path.slice(1) : path;
-        newUrl = `${workspacePart}://${pathPart}`;
-      } else {
-        // Current URL is just a path, keep it as a path
-        newUrl = path;
-      }
-
-      console.log('Selected path:', path);
-      console.log('Current URL:', context.url);
-      console.log('New URL:', newUrl);
-
+    // Update the editable URL input with the selected path in workspace.name://path format
+    if (context) {
+      const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+      const newUrl = `${context.workspaceName}://${cleanPath}`;
       setEditableUrl(newUrl);
-
-      // Automatically set the context URL and fetch documents
-      if (newUrl !== context.url) {
-        handleSetContextUrl();
-      }
     }
   };
 
@@ -889,6 +873,8 @@ export default function ContextDetailPage() {
               viewMode="table"
               onRemoveDocument={handleRemoveDocument}
               onDeleteDocument={handleDeleteDocument}
+              activeContextUrl={editableUrl}
+              currentContextUrl={context.url}
             />
           </div>
         </div>

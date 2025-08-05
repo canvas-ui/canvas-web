@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useMemo } from 'react'
-import { ChevronRight, ChevronDown, Folder, FolderOpen, MoreHorizontal, Trash2, Plus, ArrowUp, ArrowDown } from 'lucide-react'
+import { ChevronRight, ChevronDown, Folder, FolderOpen, MoreHorizontal, Trash2, Plus, ArrowUp, ArrowDown, Clipboard } from 'lucide-react'
 import { TreeNode } from '@/types/workspace'
 import { cn } from '@/lib/utils'
 
@@ -16,6 +16,8 @@ interface TreeViewProps {
   onCopyPath?: (fromPath: string, toPath: string, recursive?: boolean) => Promise<boolean>
   onMergeUp?: (path: string) => Promise<boolean>
   onMergeDown?: (path: string) => Promise<boolean>
+  onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
+  pastedDocumentIds?: number[]
 }
 
 interface TreeNodeProps {
@@ -31,6 +33,8 @@ interface TreeNodeProps {
   onCopyPath?: (fromPath: string, toPath: string, recursive?: boolean) => Promise<boolean>
   onMergeUp?: (path: string) => Promise<boolean>
   onMergeDown?: (path: string) => Promise<boolean>
+  onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
+  pastedDocumentIds?: number[]
   onDragStart: (path: string, event: React.DragEvent) => void
   onDragOver: (path: string, event: React.DragEvent) => void
   onDrop: (path: string, event: React.DragEvent) => void
@@ -47,9 +51,11 @@ interface ContextMenuProps {
   onRemovePath?: (path: string, recursive?: boolean) => Promise<boolean>
   onMergeUp?: (path: string) => Promise<boolean>
   onMergeDown?: (path: string) => Promise<boolean>
+  onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
+  pastedDocumentIds?: number[]
 }
 
-function ContextMenu({ isOpen, onClose, x, y, path, onInsertPath, onRemovePath, onMergeUp, onMergeDown }: ContextMenuProps) {
+function ContextMenu({ isOpen, onClose, x, y, path, onInsertPath, onRemovePath, onMergeUp, onMergeDown, onPasteDocuments, pastedDocumentIds }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
 
   const handleAction = async (action: string) => {
@@ -86,6 +92,11 @@ function ContextMenu({ isOpen, onClose, x, y, path, onInsertPath, onRemovePath, 
             await onMergeDown(path)
           }
           break
+        case 'paste':
+          if (onPasteDocuments && pastedDocumentIds && pastedDocumentIds.length > 0) {
+            await onPasteDocuments(path, pastedDocumentIds)
+          }
+          break
       }
     } catch (error) {
       console.error(`Error performing ${action}:`, error)
@@ -112,6 +123,15 @@ function ContextMenu({ isOpen, onClose, x, y, path, onInsertPath, onRemovePath, 
           <Plus className="w-4 h-4 mr-2" />
           Insert Path
         </div>
+        {pastedDocumentIds && pastedDocumentIds.length > 0 && (
+          <div
+            className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+            onClick={() => handleAction('paste')}
+          >
+            <Clipboard className="w-4 h-4 mr-2" />
+            Paste Documents ({pastedDocumentIds.length})
+          </div>
+        )}
         <div className="my-1 h-px bg-border" />
         <div
           className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
@@ -160,6 +180,8 @@ function TreeNodeComponent({
   onCopyPath,
   onMergeUp,
   onMergeDown,
+  onPasteDocuments,
+  pastedDocumentIds,
   onDragStart,
   onDragOver,
   onDrop,
@@ -276,6 +298,8 @@ function TreeNodeComponent({
         onRemovePath={onRemovePath}
         onMergeUp={onMergeUp}
         onMergeDown={onMergeDown}
+        onPasteDocuments={onPasteDocuments}
+        pastedDocumentIds={pastedDocumentIds}
       />
 
       {/* Children */}
@@ -296,6 +320,8 @@ function TreeNodeComponent({
               onCopyPath={onCopyPath}
               onMergeUp={onMergeUp}
               onMergeDown={onMergeDown}
+              onPasteDocuments={onPasteDocuments}
+              pastedDocumentIds={pastedDocumentIds}
               onDragStart={onDragStart}
               onDragOver={onDragOver}
               onDrop={onDrop}
@@ -320,7 +346,9 @@ export function TreeView({
   onMovePath,
   onCopyPath,
   onMergeUp,
-  onMergeDown
+  onMergeDown,
+  onPasteDocuments,
+  pastedDocumentIds
 }: TreeViewProps) {
   const [dragOverPath, setDragOverPath] = useState<string | null>(null)
   const [draggedPath, setDraggedPath] = useState<string | null>(null)
@@ -435,8 +463,8 @@ export function TreeView({
                 title={`Color: ${tree.color}`}
               />
             )}
-            <span className="truncate font-medium" title={tree.description || tree.label}>
-              {tree.label}
+            <span className="truncate font-medium" title={tree.description || "Root directory"}>
+              /
             </span>
           </div>
 
@@ -465,6 +493,8 @@ export function TreeView({
           onRemovePath={onRemovePath}
           onMergeUp={onMergeUp}
           onMergeDown={onMergeDown}
+          onPasteDocuments={onPasteDocuments}
+          pastedDocumentIds={pastedDocumentIds}
         />
 
         {/* Child nodes */}
@@ -472,7 +502,7 @@ export function TreeView({
           <TreeNodeComponent
             key={child.id}
             node={child}
-            level={0}
+            level={1}
             parentPath="/"
             selectedPath={selectedPath}
             onPathSelect={onPathSelect}
@@ -483,6 +513,8 @@ export function TreeView({
             onCopyPath={onCopyPath}
             onMergeUp={onMergeUp}
             onMergeDown={onMergeDown}
+            onPasteDocuments={onPasteDocuments}
+            pastedDocumentIds={pastedDocumentIds}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDrop={handleDrop}

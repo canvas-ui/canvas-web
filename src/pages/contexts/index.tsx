@@ -267,6 +267,17 @@ export default function ContextsPage() {
   };
 
   const handleDeleteContext = async (contextId: string) => {
+    // Find the context to check if it's a default context
+    const context = contexts.find(ctx => ctx.id === contextId)
+    if (context && context.url && (context.url.endsWith('/default') || context.url.includes('://default'))) {
+      showToast({
+        title: 'Error',
+        description: 'Cannot delete the default context',
+        variant: 'destructive'
+      })
+      return
+    }
+
     if (!confirm('Are you sure you want to delete this context? This action cannot be undone.')) {
       return
     }
@@ -326,12 +337,12 @@ export default function ContextsPage() {
     try {
       // TODO: Implement context update API call
       // For now, just update local state
-      setContexts(prev => prev.map(ctx => 
-        ctx.id === editingContext.id && ctx.userId === editingContext.userId 
-          ? editingContext 
+      setContexts(prev => prev.map(ctx =>
+        ctx.id === editingContext.id && ctx.userId === editingContext.userId
+          ? editingContext
           : ctx
       ))
-      
+
       showToast({
         title: 'Success',
         description: 'Context updated successfully (mock update)'
@@ -516,15 +527,17 @@ export default function ContextsPage() {
                           >
                             <DoorOpen className="h-4 w-4" />
                           </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDeleteContext(context.id)}
-                            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                            title="Delete Context"
-                          >
-                            <Trash className="h-4 w-4" />
-                          </Button>
+                                                    {!(context.url && (context.url.endsWith('/default') || context.url.includes('://default'))) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeleteContext(context.id)}
+                              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              title="Delete Context"
+                            >
+                              <Trash className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

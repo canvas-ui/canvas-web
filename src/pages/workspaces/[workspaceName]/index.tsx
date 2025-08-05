@@ -7,7 +7,17 @@ import { Button } from '@/components/ui/button';
 import { TreeView } from '@/components/common/tree-view';
 import { DocumentList } from '@/components/workspace/document-list';
 import { TokenManager } from '@/components/workspace/token-manager';
-import { getWorkspaceTree, getWorkspaceDocuments } from '@/services/workspace';
+import {
+  getWorkspaceTree,
+  getWorkspaceDocuments,
+  insertWorkspacePath,
+  removeWorkspacePath,
+  moveWorkspacePath,
+  copyWorkspacePath,
+  mergeUpWorkspacePath,
+  mergeDownWorkspacePath,
+  pasteDocumentsToWorkspacePath
+} from '@/services/workspace';
 import { getSchemas, getSchemaDisplayName } from '@/services/schemas';
 import { TreeNode, Document, DocumentsResponse } from '@/types/workspace';
 
@@ -28,7 +38,51 @@ export default function WorkspaceDetailPage() {
   const [selectedSchemas, setSelectedSchemas] = useState<string[]>([]);
   const [isLoadingSchemas, setIsLoadingSchemas] = useState(false);
   const [rightTab, setRightTab] = useState<'filter' | 'tokens'>('tokens');
+  const [copiedDocuments, setCopiedDocuments] = useState<number[]>([]);
   const { showToast } = useToast();
+
+  // Reusable fetch functions
+  const fetchTree = async () => {
+    if (!workspaceName) return;
+    setIsLoadingTree(true);
+    try {
+      const response = await getWorkspaceTree(workspaceName);
+      setTree(response.payload as TreeNode);
+      setError(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch workspace tree';
+      setError(message);
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+    } finally {
+      setIsLoadingTree(false);
+    }
+  };
+
+  const fetchDocuments = async () => {
+    if (!workspaceName) return;
+    setIsLoadingDocuments(true);
+    try {
+      const response = await getWorkspaceDocuments(workspaceName, selectedPath, selectedSchemas);
+      const documentsData = response.payload as DocumentsResponse;
+      setDocuments(documentsData.data || []);
+      setDocumentsTotalCount(documentsData.count || 0);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch documents';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+      setDocuments([]);
+      setDocumentsTotalCount(0);
+    } finally {
+      setIsLoadingDocuments(false);
+    }
+  };
 
   // Fetch workspace details
   useEffect(() => {
@@ -64,27 +118,6 @@ export default function WorkspaceDetailPage() {
 
   // Fetch workspace tree
   useEffect(() => {
-    if (!workspaceName) return;
-
-    const fetchTree = async () => {
-      setIsLoadingTree(true);
-      try {
-        const response = await getWorkspaceTree(workspaceName);
-        setTree(response.payload as TreeNode);
-        setError(null);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to fetch workspace tree';
-        setError(message);
-        showToast({
-          title: 'Error',
-          description: message,
-          variant: 'destructive'
-        });
-      } finally {
-        setIsLoadingTree(false);
-      }
-    };
-
     fetchTree();
   }, [workspaceName]);
 
@@ -106,29 +139,6 @@ export default function WorkspaceDetailPage() {
 
   // Fetch documents when path or schema filters change
   useEffect(() => {
-    if (!workspaceName) return;
-
-    const fetchDocuments = async () => {
-      setIsLoadingDocuments(true);
-      try {
-        const response = await getWorkspaceDocuments(workspaceName, selectedPath, selectedSchemas);
-        const documentsData = response.payload as DocumentsResponse;
-        setDocuments(documentsData.data || []);
-        setDocumentsTotalCount(documentsData.count || 0);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to fetch documents';
-        showToast({
-          title: 'Error',
-          description: message,
-          variant: 'destructive'
-        });
-        setDocuments([]);
-        setDocumentsTotalCount(0);
-      } finally {
-        setIsLoadingDocuments(false);
-      }
-    };
-
     fetchDocuments();
   }, [workspaceName, selectedPath, selectedSchemas]);
 
@@ -180,6 +190,177 @@ export default function WorkspaceDetailPage() {
         variant: 'destructive'
       });
     }
+  };
+
+  // Tree operation handlers
+  const handleInsertPath = async (path: string, autoCreateLayers: boolean = true): Promise<boolean> => {
+    if (!workspace) return false;
+    try {
+      const success = await insertWorkspacePath(workspace.id, path, autoCreateLayers);
+      if (success) {
+        await fetchTree(); // Refresh tree
+        showToast({
+          title: 'Success',
+          description: `Path "${path}" created successfully`
+        });
+      }
+      return success;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create path';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+      return false;
+    }
+  };
+
+  const handleRemovePath = async (path: string, recursive: boolean = false): Promise<boolean> => {
+    if (!workspace) return false;
+    try {
+      const success = await removeWorkspacePath(workspace.id, path, recursive);
+      if (success) {
+        await fetchTree(); // Refresh tree
+        showToast({
+          title: 'Success',
+          description: `Path "${path}" removed successfully`
+        });
+      }
+      return success;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to remove path';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+      return false;
+    }
+  };
+
+  const handleMovePath = async (fromPath: string, toPath: string, recursive: boolean = false): Promise<boolean> => {
+    if (!workspace) return false;
+    try {
+      const success = await moveWorkspacePath(workspace.id, fromPath, toPath, recursive);
+      if (success) {
+        await fetchTree(); // Refresh tree
+        showToast({
+          title: 'Success',
+          description: `Path moved from "${fromPath}" to "${toPath}"`
+        });
+      }
+      return success;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to move path';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+      return false;
+    }
+  };
+
+  const handleCopyPath = async (fromPath: string, toPath: string, recursive: boolean = false): Promise<boolean> => {
+    if (!workspace) return false;
+    try {
+      const success = await copyWorkspacePath(workspace.id, fromPath, toPath, recursive);
+      if (success) {
+        await fetchTree(); // Refresh tree
+        showToast({
+          title: 'Success',
+          description: `Path copied from "${fromPath}" to "${toPath}"`
+        });
+      }
+      return success;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to copy path';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+      return false;
+    }
+  };
+
+  const handleMergeUp = async (path: string): Promise<boolean> => {
+    if (!workspace) return false;
+    try {
+      const success = await mergeUpWorkspacePath(workspace.id, path);
+      if (success) {
+        await fetchTree(); // Refresh tree
+        showToast({
+          title: 'Success',
+          description: `Path "${path}" merged up successfully`
+        });
+      }
+      return success;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to merge up';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+      return false;
+    }
+  };
+
+  const handleMergeDown = async (path: string): Promise<boolean> => {
+    if (!workspace) return false;
+    try {
+      const success = await mergeDownWorkspacePath(workspace.id, path);
+      if (success) {
+        await fetchTree(); // Refresh tree
+        showToast({
+          title: 'Success',
+          description: `Path "${path}" merged down successfully`
+        });
+      }
+      return success;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to merge down';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+      return false;
+    }
+  };
+
+  const handlePasteDocuments = async (path: string, documentIds: number[]): Promise<boolean> => {
+    if (!workspace) return false;
+    try {
+      const success = await pasteDocumentsToWorkspacePath(workspace.id, path, documentIds);
+      if (success) {
+        await fetchDocuments(); // Refresh documents
+        setCopiedDocuments([]); // Clear copied documents
+        showToast({
+          title: 'Success',
+          description: `${documentIds.length} document(s) pasted to "${path}"`
+        });
+      }
+      return success;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to paste documents';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+      return false;
+    }
+  };
+
+  const handleCopyDocuments = (documentIds: number[]) => {
+    setCopiedDocuments(documentIds);
+    showToast({
+      title: 'Success',
+      description: `${documentIds.length} document(s) copied to clipboard`
+    });
   };
 
   if (isLoadingWorkspace) {
@@ -252,9 +433,17 @@ export default function WorkspaceDetailPage() {
                 tree={tree}
                 selectedPath={selectedPath}
                 onPathSelect={handlePathSelect}
-                readOnly={true}
+                readOnly={false}
                 title="Workspace Tree"
-                subtitle="Click to navigate the workspace structure (read-only)"
+                subtitle="Right-click for context menu, drag to move/copy (Ctrl=copy, Shift=recursive)"
+                onInsertPath={handleInsertPath}
+                onRemovePath={handleRemovePath}
+                onMovePath={handleMovePath}
+                onCopyPath={handleCopyPath}
+                onMergeUp={handleMergeUp}
+                onMergeDown={handleMergeDown}
+                onPasteDocuments={handlePasteDocuments}
+                pastedDocumentIds={copiedDocuments}
               />
             ) : (
               <div className="text-center text-muted-foreground text-sm">
@@ -273,6 +462,7 @@ export default function WorkspaceDetailPage() {
               viewMode="table"
               onRemoveDocument={handleRemoveDocument}
               onDeleteDocument={handleDeleteDocument}
+              onCopyDocuments={handleCopyDocuments}
             />
           </div>
         </div>
@@ -296,7 +486,7 @@ export default function WorkspaceDetailPage() {
         </div>
 
         {rightTab === 'tokens' ? (
-          <TokenManager workspaceId={workspaceName!} />
+          <TokenManager workspaceId={workspace.id} />
         ) : (
           <div>
             <h3 className="text-lg font-semibold mb-4">Filter by Schema</h3>

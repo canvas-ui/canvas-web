@@ -49,6 +49,8 @@ interface Context {
   createdAt: string
   updatedAt: string
   workspace: string
+  workspaceId?: string
+  workspaceName?: string
   userId: string
   baseUrl?: string
   path?: string

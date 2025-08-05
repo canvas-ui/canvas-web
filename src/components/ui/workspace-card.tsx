@@ -117,9 +117,9 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onD
                 <DoorOpen className="h-4 w-4" />
               </Button>
             )}
-            
+
             {/* More Actions Menu */}
-            {(onEdit || onDestroy) && (
+            {(onEdit || onDestroy) && !isUniverse && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -132,14 +132,14 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onD
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  {onEdit && !isUniverse && (
+                  {onEdit && (
                     <DropdownMenuItem onClick={() => onEdit(workspace)}>
                       <Edit className="mr-2 h-4 w-4" />
                       Edit Workspace
                     </DropdownMenuItem>
                   )}
-                  {onEdit && onDestroy && !isUniverse && <DropdownMenuSeparator />}
-                  {onDestroy && !isUniverse && (
+                  {onEdit && onDestroy && <DropdownMenuSeparator />}
+                  {onDestroy && (
                     <AlertDialog open={isDestroyDialogOpen} onOpenChange={setIsDestroyDialogOpen}>
                       <AlertDialogTrigger asChild>
                         <DropdownMenuItem
