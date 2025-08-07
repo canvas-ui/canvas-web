@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronRight, ChevronDown, Folder, FolderOpen, MoreHorizontal, Trash2, Plus, ArrowUp, ArrowDown, Clipboard } from 'lucide-react'
 import { TreeNode } from '@/types/workspace'
 import { cn } from '@/lib/utils'
@@ -108,7 +109,7 @@ function ContextMenu({ isOpen, onClose, x, y, path, onInsertPath, onRemovePath, 
 
   if (!isOpen) return null
 
-  return (
+  return createPortal(
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
       <div
@@ -163,7 +164,7 @@ function ContextMenu({ isOpen, onClose, x, y, path, onInsertPath, onRemovePath, 
           Merge Down
         </div>
       </div>
-    </>
+    </>, document.body
   )
 }
 

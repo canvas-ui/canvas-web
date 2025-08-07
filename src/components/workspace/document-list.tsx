@@ -10,6 +10,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
+import { createPortal } from 'react-dom'
 
 interface DocumentListProps {
   documents: Document[]
@@ -32,6 +33,7 @@ interface DocumentRowProps {
   onSelect?: (documentId: number, isSelected: boolean, isCtrlClick: boolean) => void
   onRemoveDocument?: (documentId: number) => void
   onDeleteDocument?: (documentId: number) => void
+  onRightClick?: (event: React.MouseEvent, documentId: number) => void
 }
 
 interface DocumentTableRowProps {
@@ -40,6 +42,7 @@ interface DocumentTableRowProps {
   onSelect?: (documentId: number, isSelected: boolean, isCtrlClick: boolean) => void
   onRemoveDocument?: (documentId: number) => void
   onDeleteDocument?: (documentId: number) => void
+  onRightClick?: (event: React.MouseEvent, documentId: number) => void
 }
 
 interface DocumentDetailModalProps {
@@ -208,7 +211,7 @@ function DocumentDetailModal({ document, isOpen, onClose }: DocumentDetailModalP
   )
 }
 
-function DocumentTableRow({ document, isSelected, onSelect, onRemoveDocument, onDeleteDocument }: DocumentTableRowProps) {
+function DocumentTableRow({ document, isSelected, onSelect, onRemoveDocument, onDeleteDocument, onRightClick }: DocumentTableRowProps) {
   const [showDetailModal, setShowDetailModal] = useState(false)
 
   // Check if this is a tab document
@@ -286,6 +289,9 @@ function DocumentTableRow({ document, isSelected, onSelect, onRemoveDocument, on
       if (!isSelected) {
         onSelect(document.id, true, false)
       }
+    }
+    if (onRightClick) {
+      onRightClick(e, document.id)
     }
   }
 
@@ -401,7 +407,7 @@ function DocumentTableRow({ document, isSelected, onSelect, onRemoveDocument, on
   )
 }
 
-function DocumentRow({ document, isSelected, onSelect, onRemoveDocument, onDeleteDocument }: DocumentRowProps) {
+function DocumentRow({ document, isSelected, onSelect, onRemoveDocument, onDeleteDocument, onRightClick }: DocumentRowProps) {
   const [showDetailModal, setShowDetailModal] = useState(false)
 
   // Check if this is a tab document
@@ -493,6 +499,9 @@ function DocumentRow({ document, isSelected, onSelect, onRemoveDocument, onDelet
       if (!isSelected) {
         onSelect(document.id, true, false)
       }
+    }
+    if (onRightClick) {
+      onRightClick(e, document.id)
     }
   }
 
@@ -795,7 +804,7 @@ export function DocumentList({
                   isSelected={selectedDocuments.has(document.id)}
                   onSelect={handleDocumentSelect}
                   onRemoveDocument={onRemoveDocument}
-                  onDeleteDocument={onDeleteDocument}
+                  onDeleteDocument={onDeleteDocument} onRightClick={handleDocumentRightClick}
                 />
               ))}
             </TableBody>
@@ -814,7 +823,7 @@ export function DocumentList({
                   isSelected={selectedDocuments.has(document.id)}
                   onSelect={handleDocumentSelect}
                   onRemoveDocument={onRemoveDocument}
-                  onDeleteDocument={onDeleteDocument}
+                  onDeleteDocument={onDeleteDocument} onRightClick={handleDocumentRightClick}
                 />
               </div>
             ))}
@@ -823,7 +832,8 @@ export function DocumentList({
       )}
 
       {/* Context menu */}
-      {contextMenu && (
+      {contextMenu &&
+        createPortal(
         <>
           <div
             className="fixed inset-0 z-40"
@@ -855,7 +865,7 @@ export function DocumentList({
               Delete {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
             </button>
           </div>
-        </>
+        </>, document.body
       )}
     </div>
   )
