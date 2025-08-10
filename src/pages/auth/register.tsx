@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AuthLayout } from "@/components/auth/auth-layout"
-import { registerUser } from "@/services/auth"
+import { registerUser, getAuthConfig } from "@/services/auth"
 import { useToast } from "@/components/ui/toast-container"
 
 interface FormData {
@@ -23,6 +23,28 @@ export default function RegisterPage() {
     password: ""
   })
   const [registrationComplete, setRegistrationComplete] = React.useState<boolean>(false)
+  const [policy, setPolicy] = React.useState<{ minLength: number; requireUppercase: boolean; requireLowercase: boolean; requireNumbers: boolean; requireSpecialChars: boolean; maxLength: number } | null>(null)
+
+  React.useEffect(() => {
+    (async () => {
+      const conf = await getAuthConfig()
+      const pol = conf?.strategies?.local?.passwordPolicy
+      if (pol) setPolicy(pol)
+    })()
+  }, [])
+
+  const passwordChecks = React.useMemo(() => {
+    if (!policy) return null
+    const pwd = formData.password || ''
+    return {
+      minLength: policy.minLength ? pwd.length >= policy.minLength : true,
+      maxLength: policy.maxLength ? pwd.length <= policy.maxLength : true,
+      uppercase: policy.requireUppercase ? /[A-Z]/.test(pwd) : true,
+      lowercase: policy.requireLowercase ? /[a-z]/.test(pwd) : true,
+      number: policy.requireNumbers ? /[0-9]/.test(pwd) : true,
+      special: policy.requireSpecialChars ? /[^A-Za-z0-9]/.test(pwd) : true,
+    }
+  }, [policy, formData.password])
 
   const validateForm = (): boolean => {
     const newErrors: Partial<FormData> = {}
@@ -61,11 +83,24 @@ export default function RegisterPage() {
       newErrors.email = "Please enter a valid email address"
     }
 
-    // Password validation
+    // Password validation (use server policy if available)
     if (!formData.password) {
       newErrors.password = "Password is required"
-    } else if (formData.password.length < 8) {
-      newErrors.password = "Password must be at least 8 characters long"
+    } else if (policy) {
+      const pwd = formData.password
+      const unmet: string[] = []
+      if (policy.minLength && pwd.length < policy.minLength) unmet.push(`at least ${policy.minLength} characters`)
+      if (policy.maxLength && pwd.length > policy.maxLength) unmet.push(`no more than ${policy.maxLength} characters`)
+      if (policy.requireUppercase && !/[A-Z]/.test(pwd)) unmet.push('an uppercase letter')
+      if (policy.requireLowercase && !/[a-z]/.test(pwd)) unmet.push('a lowercase letter')
+      if (policy.requireNumbers && !/[0-9]/.test(pwd)) unmet.push('a number')
+      if (policy.requireSpecialChars && !/[^A-Za-z0-9]/.test(pwd)) unmet.push('a special character')
+      if (unmet.length) {
+        newErrors.password = `Password must contain ${unmet.join(', ').replace(/, ([^,]*)$/, ' and $1')}.`
+      }
+    } else if (formData.password.length < 12) {
+      // Fallback to default if policy not yet loaded
+      newErrors.password = "Password must be at least 12 characters long"
     }
 
     setErrors(newErrors)
@@ -73,7 +108,13 @@ export default function RegisterPage() {
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.id]: e.target.value })
+    const next = { ...formData, [e.target.id]: e.target.value }
+    setFormData(next)
+    // Re-validate on each change for immediate hints
+    if (e.target.id === 'name' || e.target.id === 'email' || e.target.id === 'password') {
+      // lightweight live validation
+      validateForm()
+    }
   }
 
   const onSubmit = async (event: React.SyntheticEvent) => {
@@ -83,7 +124,7 @@ export default function RegisterPage() {
     }
     setIsLoading(true)
     try {
-      const response = await registerUser(formData.name, formData.email, formData.password)
+      const response: any = await registerUser(formData.name, formData.email, formData.password)
       console.log('Registration successful:', response)
 
       showToast({
@@ -94,13 +135,18 @@ export default function RegisterPage() {
       setRegistrationComplete(true)
       setFormData({ name: "", email: "", password: "" }) // Clear form
       setErrors({})
-    } catch (error) {
+    } catch (error: any) {
       console.error('Registration failed:', error)
-      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred"
-      setErrors({ ...errors, email: errorMessage })
+      const msg = error?.message || 'Registration failed'
+      // Prefer to attach the message to password if it mentions password
+      if (msg.toLowerCase().includes('password')) {
+        setErrors({ ...errors, password: msg })
+      } else {
+        setErrors({ ...errors, email: msg })
+      }
       showToast({
         title: "Registration Failed",
-        description: errorMessage,
+        description: msg,
         variant: "destructive"
       })
     } finally {
@@ -185,9 +231,38 @@ export default function RegisterPage() {
           {errors.password && (
             <p className="text-sm text-red-500">{errors.password}</p>
           )}
-          <p className="text-xs text-muted-foreground">
-            Must be at least 8 characters long
-          </p>
+          {policy && passwordChecks && (
+            <ul className="text-xs list-disc pl-4 space-y-1">
+              <li className={passwordChecks.minLength ? 'text-green-600' : 'text-muted-foreground'}>
+                At least {policy.minLength} characters
+              </li>
+              {policy.requireUppercase && (
+                <li className={passwordChecks.uppercase ? 'text-green-600' : 'text-muted-foreground'}>
+                  At least one uppercase letter
+                </li>
+              )}
+              {policy.requireLowercase && (
+                <li className={passwordChecks.lowercase ? 'text-green-600' : 'text-muted-foreground'}>
+                  At least one lowercase letter
+                </li>
+              )}
+              {policy.requireNumbers && (
+                <li className={passwordChecks.number ? 'text-green-600' : 'text-muted-foreground'}>
+                  At least one number
+                </li>
+              )}
+              {policy.requireSpecialChars && (
+                <li className={passwordChecks.special ? 'text-green-600' : 'text-muted-foreground'}>
+                  At least one special character
+                </li>
+              )}
+              {policy.maxLength && (
+                <li className={passwordChecks.maxLength ? 'text-green-600' : 'text-muted-foreground'}>
+                  No more than {policy.maxLength} characters
+                </li>
+              )}
+            </ul>
+          )}
         </div>
         <Button type="submit" className="w-full" disabled={isLoading}>
           {isLoading ? "Creating Account..." : "Create Account"}
