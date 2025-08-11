@@ -9,6 +9,7 @@ export const API_ROUTES = {
   logout: `${API_URL}/auth/logout`,
   me: `${API_URL}/auth/me`,
   authConfig: `${API_URL}/auth/config`,
+  verifyEmailRequest: `${API_URL}/auth/verify-email`,
 
   // API Tokens
   tokens: `${API_URL}/auth/tokens`,

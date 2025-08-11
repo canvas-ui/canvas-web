@@ -241,3 +241,12 @@ export async function getAuthConfig(): Promise<any> {
     };
   }
 }
+
+export async function requestEmailVerification(email: string): Promise<void> {
+  try {
+    await api.post(API_ROUTES.verifyEmailRequest, { email }, { skipAuth: true });
+  } catch (error) {
+    console.error('Failed to request email verification:', error);
+    throw error;
+  }
+}

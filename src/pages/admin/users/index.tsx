@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/toast-container"
 import { Plus, Trash, Edit2, X } from "lucide-react"
 import { adminService, AdminUser, CreateUserData, UpdateUserData } from "@/services/admin"
-import { getCurrentUserFromToken } from "@/services/auth"
+import { getCurrentUserFromToken, getAuthConfig, requestEmailVerification } from "@/services/auth"
 
 // Define form data interface
 interface UserFormData {
@@ -23,6 +23,7 @@ export default function AdminUsersPage() {
   const [isCreating, setIsCreating] = useState(false)
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [requireEmailVerification, setRequireEmailVerification] = useState<boolean>(false)
   const [filters, setFilters] = useState({
     status: '',
     userType: '',
@@ -51,7 +52,32 @@ export default function AdminUsersPage() {
       return
     }
     fetchUsers()
+    // load auth config to decide on resend activation visibility
+    ;(async () => {
+      try {
+        const conf = await getAuthConfig()
+        const req = !!conf?.strategies?.local?.requireEmailVerification
+        setRequireEmailVerification(req)
+      } catch (_) {
+        setRequireEmailVerification(false)
+      }
+    })()
   }, [isCurrentUserAdmin])
+  const formatDate = (value?: string) => {
+    if (!value) return '-'
+    const d = new Date(value)
+    return isNaN(d.getTime()) ? '-' : d.toLocaleString()
+  }
+
+  const handleResendActivation = async (email: string) => {
+    try {
+      await requestEmailVerification(email)
+      showToast({ title: 'Verification email', description: 'If the account exists, a verification email was sent.' })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to send verification email'
+      showToast({ title: 'Error', description: message, variant: 'destructive' })
+    }
+  }
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -338,8 +364,8 @@ export default function AdminUsersPage() {
                           {user.status}
                         </span>
                       </td>
-                      <td className="p-3">{new Date(user.createdAt).toLocaleDateString()}</td>
-                      <td className="p-3">{new Date(user.updatedAt).toLocaleDateString()}</td>
+                      <td className="p-3">{formatDate(user.createdAt)}</td>
+                      <td className="p-3">{formatDate(user.updatedAt)}</td>
                       <td className="p-3 text-right space-x-2">
                         <Button
                           variant="outline"
@@ -348,6 +374,16 @@ export default function AdminUsersPage() {
                         >
                           <Edit2 className="h-4 w-4" />
                         </Button>
+                        {requireEmailVerification && user.status === 'pending' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleResendActivation(user.email)}
+                            title="Resend activation email"
+                          >
+                            Resend activation
+                          </Button>
+                        )}
                         <Button
                           variant="outline"
                           size="sm"
