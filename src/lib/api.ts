@@ -246,6 +246,33 @@ export const api = {
     return response.json();
   },
 
+  async patch<T>(endpoint: string, data?: unknown, options: RequestOptions = {}): Promise<T> {
+    let bodyContent: RequestInit['body'];
+    const currentHeaders: Record<string, string> = { ...options.headers } as Record<string, string>;
+
+    if (data !== undefined) {
+      if (typeof data === 'object' && data !== null && !(data instanceof FormData) && !(data instanceof URLSearchParams) && !(data instanceof Blob)) {
+        bodyContent = JSON.stringify(data);
+        if (!currentHeaders['Content-Type']) {
+            currentHeaders['Content-Type'] = 'application/json';
+        }
+      } else {
+        bodyContent = data as BodyInit;
+      }
+    }
+
+    const response = await fetchWithDefaults(endpoint, {
+      method: 'PATCH',
+      ...options,
+      headers: currentHeaders,
+      body: bodyContent,
+    });
+    if (response.status === 204 || response.headers.get('content-length') === '0') {
+        return Promise.resolve(undefined as T);
+    }
+    return response.json();
+  },
+
   async delete<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
     const currentHeaders: Record<string, string> = { ...options.headers } as Record<string, string>;
 
@@ -367,7 +394,7 @@ export const api = {
           }
 
           const { done, value } = await reader.read();
-          
+
           if (done) {
             if (onComplete) {
               onComplete();

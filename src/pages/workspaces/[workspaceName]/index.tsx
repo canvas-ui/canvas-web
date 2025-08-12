@@ -5,8 +5,9 @@ import { API_ROUTES } from '@/config/api';
 import { useToast } from '@/components/ui/toast-container';
 import { Button } from '@/components/ui/button';
 import { TreeView } from '@/components/common/tree-view';
-import { DocumentList } from '@/components/workspace/document-list';
+import { DocumentList } from '@/components/common/document-list';
 import { TokenManager } from '@/components/workspace/token-manager';
+import { createPortal } from 'react-dom';
 import {
   getWorkspaceTree,
   getWorkspaceDocuments,
@@ -16,7 +17,12 @@ import {
   copyWorkspacePath,
   mergeUpWorkspacePath,
   mergeDownWorkspacePath,
-  pasteDocumentsToWorkspacePath
+  pasteDocumentsToWorkspacePath,
+  listWorkspaceLayers,
+  renameWorkspaceLayer,
+  lockWorkspaceLayer,
+  unlockWorkspaceLayer,
+  destroyWorkspaceLayer
 } from '@/services/workspace';
 import { getSchemas, getSchemaDisplayName } from '@/services/schemas';
 import { TreeNode, Document, DocumentsResponse } from '@/types/workspace';
@@ -40,6 +46,12 @@ export default function WorkspaceDetailPage() {
   const [rightTab, setRightTab] = useState<'filter' | 'tokens'>('tokens');
   const [copiedDocuments, setCopiedDocuments] = useState<number[]>([]);
   const { showToast } = useToast();
+
+  const [leftTab, setLeftTab] = useState<'tree' | 'layers'>('tree');
+  const [layers, setLayers] = useState<any[]>([]);
+  const [isLoadingLayers, setIsLoadingLayers] = useState(false);
+  const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
+  const [layersContextMenu, setLayersContextMenu] = useState<{ x: number; y: number; layer: any } | null>(null);
 
   // Reusable fetch functions
   const fetchTree = async () => {
@@ -142,55 +154,23 @@ export default function WorkspaceDetailPage() {
     fetchDocuments();
   }, [workspaceName, selectedPath, selectedSchemas]);
 
-  const handlePathSelect = (path: string) => {
-    setSelectedPath(path);
-  };
-
-  const handleRemoveDocument = async (documentId: number) => {
-    try {
-      // TODO: Implement API call to remove document from workspace context
-      // await removeDocumentFromWorkspace(workspaceName!, documentId, selectedPath);
-
-      // For now, just remove from local state
-      setDocuments(prev => prev.filter(doc => doc.id !== documentId));
-      setDocumentsTotalCount(prev => Math.max(0, prev - 1));
-
-      showToast({
-        title: 'Success',
-        description: 'Document removed from workspace context.'
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to remove document';
-      showToast({
-        title: 'Error',
-        description: message,
-        variant: 'destructive'
-      });
-    }
-  };
-
-  const handleDeleteDocument = async (documentId: number) => {
-    try {
-      // TODO: Implement API call to permanently delete document
-      // await deleteDocument(documentId);
-
-      // For now, just remove from local state
-      setDocuments(prev => prev.filter(doc => doc.id !== documentId));
-      setDocumentsTotalCount(prev => Math.max(0, prev - 1));
-
-      showToast({
-        title: 'Success',
-        description: 'Document deleted permanently.'
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete document';
-      showToast({
-        title: 'Error',
-        description: message,
-        variant: 'destructive'
-      });
-    }
-  };
+  // Load layers when switching to layers tab
+  useEffect(() => {
+    const loadLayers = async () => {
+      if (!workspace || leftTab !== 'layers') return;
+      try {
+        setIsLoadingLayers(true);
+        const data = await listWorkspaceLayers(workspace.id);
+        // sort by name; include root and handle it as disabled in UI
+        setLayers(data.sort((a, b) => a.name.localeCompare(b.name)));
+      } catch (err) {
+        console.error('Failed to load layers:', err);
+      } finally {
+        setIsLoadingLayers(false);
+      }
+    };
+    loadLayers();
+  }, [workspace, leftTab]);
 
   // Tree operation handlers
   const handleInsertPath = async (path: string, autoCreateLayers: boolean = true): Promise<boolean> => {
@@ -363,6 +343,102 @@ export default function WorkspaceDetailPage() {
     });
   };
 
+  // Layer tab interactions
+  const handleSelectLayer = async (layer: any) => {
+    setSelectedLayerId(layer.id);
+    // If context layer, fetch documents for that single layer (use layer.name as contextSpec)
+    if (workspace) {
+      setIsLoadingDocuments(true);
+      try {
+        const response = await getWorkspaceDocuments(workspace.id, `/${layer.name}`, selectedSchemas);
+        const documentsData = response.payload as DocumentsResponse;
+        setDocuments(documentsData.data || []);
+        setDocumentsTotalCount(documentsData.count || 0);
+        setSelectedPath(`/${layer.name}`);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to fetch layer documents';
+        showToast({ title: 'Error', description: message, variant: 'destructive' });
+      } finally {
+        setIsLoadingDocuments(false);
+      }
+    }
+  };
+
+  const handleRenameLayer = async (layer: any) => {
+    if (!workspace) return;
+    if (layer.name === '/') return;
+    const newName = prompt('Enter new layer name (lowercase):', layer.name);
+    if (!newName || newName === layer.name) return;
+    try {
+      await renameWorkspaceLayer(workspace.id, layer.id, newName.toLowerCase());
+      showToast({ title: 'Success', description: `Layer renamed to ${newName}` });
+      // reload list and possibly tree
+      await fetchTree();
+      const data = await listWorkspaceLayers(workspace.id);
+      setLayers(data.sort((a, b) => a.name.localeCompare(b.name)));
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to rename layer', variant: 'destructive' });
+    }
+  };
+
+  const handleLockLayer = async (layer: any) => {
+    if (!workspace) return;
+    const lockBy = workspace.id; // simple placeholder lockBy
+    try {
+      await lockWorkspaceLayer(workspace.id, layer.id, lockBy);
+      showToast({ title: 'Success', description: `Layer locked` });
+      const data = await listWorkspaceLayers(workspace.id);
+      setLayers(data.sort((a, b) => a.name.localeCompare(b.name)));
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to lock layer', variant: 'destructive' });
+    }
+  };
+
+  const handleUnlockLayer = async (layer: any) => {
+    if (!workspace) return;
+    const lockBy = workspace.id; // simple placeholder lockBy
+    try {
+      await unlockWorkspaceLayer(workspace.id, layer.id, lockBy);
+      showToast({ title: 'Success', description: `Layer unlocked` });
+      const data = await listWorkspaceLayers(workspace.id);
+      setLayers(data.sort((a, b) => a.name.localeCompare(b.name)));
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to unlock layer', variant: 'destructive' });
+    }
+  };
+
+  const handleDestroyLayer = async (layer: any) => {
+    if (!workspace) return;
+    if (layer.name === '/') return;
+    if (!confirm(`Destroy layer "${layer.name}"? This cannot be undone.`)) return;
+    try {
+      await destroyWorkspaceLayer(workspace.id, layer.id);
+      showToast({ title: 'Success', description: 'Layer destroyed' });
+      await fetchTree();
+      const data = await listWorkspaceLayers(workspace.id);
+      setLayers(data.sort((a, b) => a.name.localeCompare(b.name)));
+      if (selectedLayerId === layer.id) {
+        setSelectedLayerId(null);
+        setSelectedPath('/');
+        fetchDocuments();
+      }
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to destroy layer', variant: 'destructive' });
+    }
+  };
+
+  const handleLayerRightClick = (e: React.MouseEvent, layer: any) => {
+    if (layer.name === '/') return;
+    e.preventDefault();
+    setLayersContextMenu({ x: e.clientX, y: e.clientY, layer });
+  };
+
+  const handlePasteToLayer = async (layer: any) => {
+    if (!workspace || copiedDocuments.length === 0) return;
+    await handlePasteDocuments(`/${layer.name}`, copiedDocuments);
+    setLayersContextMenu(null);
+  };
+
   if (isLoadingWorkspace) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -420,36 +496,103 @@ export default function WorkspaceDetailPage() {
         {/* File Manager Layout */}
         <div className="flex gap-6 h-[calc(100vh-300px)]">
           {/* Left Panel - Tree View */}
-          <div className="w-80 border rounded-lg p-4 overflow-y-auto bg-card">
-            {isLoadingTree ? (
-              <div className="flex items-center justify-center h-32">
-                <div className="text-center space-y-2">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto"></div>
-                  <p className="text-xs text-muted-foreground">Loading tree...</p>
+          <div className="w-80 border rounded-lg p-0 overflow-y-auto bg-card flex flex-col">
+            <div className="flex border-b">
+              <button
+                className={`flex-1 py-2 text-xs font-medium ${leftTab === 'tree' ? 'border-b-2 border-primary' : ''}`}
+                onClick={() => setLeftTab('tree')}
+              >
+                Workspace Tree
+              </button>
+              <button
+                className={`flex-1 py-2 text-xs font-medium ${leftTab === 'layers' ? 'border-b-2 border-primary' : ''}`}
+                onClick={() => setLeftTab('layers')}
+              >
+                Tree Layers
+              </button>
+            </div>
+
+            <div className="p-4 flex-1 overflow-y-auto">
+              {leftTab === 'tree' ? (
+                isLoadingTree ? (
+                  <div className="flex items-center justify-center h-32">
+                    <div className="text-center space-y-2">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto"></div>
+                      <p className="text-xs text-muted-foreground">Loading tree...</p>
+                    </div>
+                  </div>
+                ) : tree ? (
+                  <TreeView
+                    tree={tree}
+                    selectedPath={selectedPath}
+                    onPathSelect={setSelectedPath}
+                    readOnly={false}
+                    title="Workspace Tree"
+                    subtitle="Right-click for context menu, drag to move/copy (Ctrl=copy, Shift=recursive)"
+                    onInsertPath={handleInsertPath}
+                    onRemovePath={handleRemovePath}
+                    onMovePath={handleMovePath}
+                    onCopyPath={handleCopyPath}
+                    onMergeUp={handleMergeUp}
+                    onMergeDown={handleMergeDown}
+                    onPasteDocuments={handlePasteDocuments}
+                    pastedDocumentIds={copiedDocuments}
+                  />
+                ) : (
+                  <div className="text-center text-muted-foreground text-sm">
+                    Failed to load workspace tree
+                  </div>
+                )
+              ) : (
+                <div>
+                  <div className="mb-2 text-sm text-muted-foreground">All Layers</div>
+                  {isLoadingLayers ? (
+                    <div className="text-xs text-muted-foreground">Loading layers...</div>
+                  ) : layers.length === 0 ? (
+                    <div className="text-xs text-muted-foreground">No layers</div>
+                  ) : (
+                    <ul className="space-y-1">
+                      {layers.map((layer) => (
+                        <li
+                          key={layer.id}
+                          className={`flex items-center justify-between px-2 py-1 rounded hover:bg-accent ${selectedLayerId === layer.id ? 'bg-accent' : ''} ${layer.name === '/' ? 'opacity-60 pointer-events-none' : ''}`}
+                          onContextMenu={(e) => handleLayerRightClick(e, layer)}
+                        >
+                          <button className="flex items-center gap-2 min-w-0 flex-1 text-left" onClick={() => handleSelectLayer(layer)} title={layer.description || layer.label}>
+                            {layer.color && (
+                              <span className="w-2 h-2 rounded-full border" style={{ backgroundColor: layer.color }} />
+                            )}
+                            <span className="truncate" title={layer.name}>{layer.name}</span>
+                            {(() => {
+                              const isLocked = layer.name === '/' || layer.locked === true || (Array.isArray(layer.lockedBy) && layer.lockedBy.length > 0)
+                              if (isLocked) {
+                                const lockedBy = Array.isArray(layer.lockedBy) ? layer.lockedBy : []
+                                return <span className="text-xs text-muted-foreground" title={lockedBy.length > 0 ? `Locked by: ${lockedBy.join(', ')}` : 'Locked'}>🔒</span>
+                              }
+                              return null
+                            })()}
+                          </button>
+                          {layer.name !== '/' && (
+                            <div className="flex items-center gap-1 ml-2">
+                              {(() => {
+                                const isLocked = layer.locked === true || (Array.isArray(layer.lockedBy) && layer.lockedBy.length > 0)
+                                return isLocked ? (
+                                  <button className="px-1 text-xs hover:bg-muted rounded" onClick={() => handleUnlockLayer(layer)} title="Unlock">Unlock</button>
+                                ) : (
+                                  <button className="px-1 text-xs hover:bg-muted rounded" onClick={() => handleLockLayer(layer)} title="Lock">Lock</button>
+                                )
+                              })()}
+                              <button className="px-1 text-xs hover:bg-muted rounded" onClick={() => handleRenameLayer(layer)} title="Rename">Rename</button>
+                              <button className="px-1 text-xs hover:bg-destructive/10 text-destructive rounded" onClick={() => handleDestroyLayer(layer)} title="Destroy">Destroy</button>
+                            </div>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
-              </div>
-            ) : tree ? (
-              <TreeView
-                tree={tree}
-                selectedPath={selectedPath}
-                onPathSelect={handlePathSelect}
-                readOnly={false}
-                title="Workspace Tree"
-                subtitle="Right-click for context menu, drag to move/copy (Ctrl=copy, Shift=recursive)"
-                onInsertPath={handleInsertPath}
-                onRemovePath={handleRemovePath}
-                onMovePath={handleMovePath}
-                onCopyPath={handleCopyPath}
-                onMergeUp={handleMergeUp}
-                onMergeDown={handleMergeDown}
-                onPasteDocuments={handlePasteDocuments}
-                pastedDocumentIds={copiedDocuments}
-              />
-            ) : (
-              <div className="text-center text-muted-foreground text-sm">
-                Failed to load workspace tree
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
           {/* Right Panel - Document List */}
@@ -460,8 +603,8 @@ export default function WorkspaceDetailPage() {
               contextPath={selectedPath}
               totalCount={documentsTotalCount}
               viewMode="table"
-              onRemoveDocument={handleRemoveDocument}
-              onDeleteDocument={handleDeleteDocument}
+              onRemoveDocument={undefined}
+              onDeleteDocument={undefined}
               onCopyDocuments={handleCopyDocuments}
             />
           </div>
@@ -528,6 +671,24 @@ export default function WorkspaceDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Layers context menu */}
+      {layersContextMenu && createPortal(
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setLayersContextMenu(null)} />
+          <div
+            className="fixed z-50 min-w-[10rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+            style={{ left: layersContextMenu.x, top: layersContextMenu.y }}
+          >
+            <button
+              className={`relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground ${copiedDocuments.length === 0 ? 'opacity-50 pointer-events-none' : ''}`}
+              onClick={() => handlePasteToLayer(layersContextMenu.layer)}
+            >
+              Paste Documents {copiedDocuments.length > 0 ? `(${copiedDocuments.length})` : ''}
+            </button>
+          </div>
+        </>, document.body
+      )}
     </div>
   );
 }

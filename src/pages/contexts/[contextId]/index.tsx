@@ -10,7 +10,7 @@ import { getCurrentUserFromToken } from '@/services/auth';
 import { TreeView } from '@/components/common/tree-view';
 import { useTreeOperations } from '@/hooks/useTreeOperations';
 import { DocumentDetailModal } from '@/components/context/document-detail-modal';
-import { DocumentList } from '@/components/workspace/document-list';
+import { DocumentList } from '@/components/common/document-list';
 import { TreeNode, Document as WorkspaceDocument } from '@/types/workspace';
 
 // Simple debounce utility function

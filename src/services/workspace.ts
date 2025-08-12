@@ -217,13 +217,91 @@ export async function mergeDownWorkspacePath(workspaceId: string, path: string):
 export async function pasteDocumentsToWorkspacePath(workspaceId: string, path: string, documentIds: number[]): Promise<boolean> {
   try {
     // This would use the document insertion API with the specified path
+    const ids = Array.isArray(documentIds) ? documentIds : [documentIds]
     await api.post<{ payload: any; message: string; status: string; statusCode: number }>(
       `${API_ROUTES.workspaces}/${workspaceId}/documents`,
-      { documentIds, contextSpec: path }
+      { documentIds: ids, contextSpec: path }
     );
     return true;
   } catch (error) {
     console.error(`Failed to paste documents to workspace path ${path}:`, error);
     throw error;
   }
+}
+
+// Layers API
+export interface Layer {
+  id: string;
+  type: string;
+  name: string;
+  label: string;
+  description: string;
+  color: string | null;
+  locked?: boolean;
+  lockedBy?: string[];
+}
+
+export async function listWorkspaceLayers(workspaceId: string): Promise<Layer[]> {
+  const res = await api.get<{ payload: Layer[] }>(`${API_ROUTES.workspaces}/${workspaceId}/layers`)
+  return res.payload || []
+}
+
+export async function getWorkspaceLayer(workspaceId: string, layerId: string): Promise<Layer> {
+  const res = await api.get<{ payload: Layer }>(`${API_ROUTES.workspaces}/${workspaceId}/layers/${layerId}`)
+  return res.payload
+}
+
+export async function renameWorkspaceLayer(workspaceId: string, layerId: string, newName: string): Promise<Layer> {
+  const res = await api.patch<{ payload: Layer }>(`${API_ROUTES.workspaces}/${workspaceId}/layers/${layerId}`, { name: newName })
+  return res.payload
+}
+
+export async function lockWorkspaceLayer(workspaceId: string, layerId: string, lockBy: string): Promise<boolean> {
+  await api.post(`${API_ROUTES.workspaces}/${workspaceId}/layers/${layerId}/lock`, { lockBy })
+  return true
+}
+
+export async function unlockWorkspaceLayer(workspaceId: string, layerId: string, lockBy: string): Promise<boolean> {
+  await api.post(`${API_ROUTES.workspaces}/${workspaceId}/layers/${layerId}/unlock`, { lockBy })
+  return true
+}
+
+export async function destroyWorkspaceLayer(workspaceId: string, layerId: string): Promise<boolean> {
+  await api.delete(`${API_ROUTES.workspaces}/${workspaceId}/layers/${layerId}`)
+  return true
+}
+
+// Document removal/deletion helpers
+export async function removeWorkspaceDocuments(
+  workspaceId: string,
+  documentIds: number[],
+  contextSpec: string = '/',
+  featureArray: string[] = []
+): Promise<boolean> {
+  const params = new URLSearchParams()
+  if (contextSpec) params.append('contextSpec', contextSpec)
+  featureArray.forEach(f => params.append('featureArray', f))
+  const headers = { 'Content-Type': 'application/json' }
+  await api.delete(`${API_ROUTES.workspaces}/${workspaceId}/documents/remove?${params.toString()}`, {
+    headers,
+    body: JSON.stringify(documentIds)
+  } as any)
+  return true
+}
+
+export async function deleteWorkspaceDocuments(
+  workspaceId: string,
+  documentIds: number[],
+  contextSpec: string = '/',
+  featureArray: string[] = []
+): Promise<boolean> {
+  const params = new URLSearchParams()
+  if (contextSpec) params.append('contextSpec', contextSpec)
+  featureArray.forEach(f => params.append('featureArray', f))
+  const headers = { 'Content-Type': 'application/json' }
+  await api.delete(`${API_ROUTES.workspaces}/${workspaceId}/documents?${params.toString()}`, {
+    headers,
+    body: JSON.stringify(documentIds)
+  } as any)
+  return true
 }

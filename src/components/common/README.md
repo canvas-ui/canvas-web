@@ -154,3 +154,5 @@ const {
 3. **Refresh data**: Pass `onRefresh` to the hook to automatically refresh tree data after operations
 4. **Read-only mode**: Use `readOnly={true}` for workspace trees or shared contexts
 5. **Custom titles**: Provide meaningful titles to distinguish different tree types 
+
+- DocumentList: shared across contexts, workspaces, layers (moved from workspace/) 
