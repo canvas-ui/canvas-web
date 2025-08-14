@@ -151,7 +151,7 @@ export default function ContextsPage() {
       return;
     }
     console.log('Subscribing to context events');
-    socketService.emit('subscribe', { topic: 'context' })
+    socketService.emit('subscribe', { channel: 'context' })
 
     const handleContextCreated = (data: ContextEntry) => {
       console.log('Received context created:', data);
@@ -214,7 +214,7 @@ export default function ContextsPage() {
 
     return () => {
       console.log('Unsubscribing from context events');
-      socketService.emit('unsubscribe', { topic: 'context' })
+      socketService.emit('unsubscribe', { channel: 'context' })
       socketService.off('context:created', handleContextCreated)
       socketService.off('context:updated', handleContextUpdated)
       socketService.off('context:deleted', handleContextDeleted)

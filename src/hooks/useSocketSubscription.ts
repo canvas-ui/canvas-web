@@ -13,7 +13,7 @@ export interface EventHandlers {
  *   • attaching & detaching event listeners
  *
  * Usage example:
- *   useSocketSubscription(socket, 'agent', {
+  *   useSocketSubscription(socket, 'agent', {
  *     'agent:created': (data) => { ... },
  *     'agent:deleted': (data) => { ... },
  *   })
@@ -26,8 +26,8 @@ export function useSocketSubscription(
   useEffect(() => {
     if (!socket) return
 
-    // Subscribe to the topic once connected
-    socket.emit('subscribe', { topic })
+    // Subscribe to the channel once connected
+    socket.emit('subscribe', { channel: topic })
 
     // Register event listeners
     for (const [event, handler] of Object.entries(handlers)) {
@@ -36,7 +36,7 @@ export function useSocketSubscription(
 
     // Cleanup on unmount or socket change
     return () => {
-      socket.emit('unsubscribe', { topic })
+      socket.emit('unsubscribe', { channel: topic })
       for (const [event, handler] of Object.entries(handlers)) {
         socket.off(event, handler as any)
       }

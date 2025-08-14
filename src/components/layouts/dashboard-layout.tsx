@@ -219,8 +219,8 @@ function DashboardSidebar() {
       socketService.reconnect()
     }
 
-    socketService.emit('subscribe', { topic: 'context' })
-    socketService.emit('subscribe', { topic: 'workspace' })
+    socketService.emit('subscribe', { channel: 'context' })
+    socketService.emit('subscribe', { channel: 'workspace' })
 
     const handleContextCreated = (data: any) => {
       if (!data || !data.id) return
@@ -261,8 +261,8 @@ function DashboardSidebar() {
     socketService.on('workspace:deleted', handleWorkspaceDeleted)
 
     return () => {
-      socketService.emit('unsubscribe', { topic: 'context' })
-      socketService.emit('unsubscribe', { topic: 'workspace' })
+      socketService.emit('unsubscribe', { channel: 'context' })
+      socketService.emit('unsubscribe', { channel: 'workspace' })
       socketService.off('context:created', handleContextCreated)
       socketService.off('context:deleted', handleContextDeleted)
       socketService.off('workspace:created', handleWorkspaceCreated)

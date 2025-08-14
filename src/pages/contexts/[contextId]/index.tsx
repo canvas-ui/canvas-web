@@ -337,7 +337,7 @@ export default function ContextDetailPage() {
     }
 
     console.log(`📡 Subscribing to context events for context ${contextId}`);
-    socketService.emit('subscribe', { topic: 'context', id: contextId });
+    socketService.emit('subscribe', { channel: `context:${contextId}` });
 
     // Add a debug listener to verify subscription worked
     socketService.on('subscription:confirmed', (data: any) => {
@@ -492,7 +492,7 @@ export default function ContextDetailPage() {
     // Cleanup function
     return () => {
       console.log(`Unsubscribing from context events for context ${contextId}`);
-      socketService.emit('unsubscribe', { topic: 'context', id: contextId });
+      socketService.emit('unsubscribe', { channel: `context:${contextId}` });
 
       // Clean up context event listeners
       contextEventMap.forEach(([dotEvent, colonEvent, handler]) => {
