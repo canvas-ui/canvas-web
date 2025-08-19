@@ -68,7 +68,14 @@ interface ImportModalProps {
 }
 
 function ExportModal({ isOpen, onClose, documents, selectedDocuments }: ExportModalProps) {
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle')
+
   if (!isOpen) return null
+
+  const handleClose = () => {
+    setCopyStatus('idle')
+    onClose()
+  }
 
   const documentsToExport = selectedDocuments.size > 0
     ? documents.filter(doc => selectedDocuments.has(doc.id))
@@ -86,9 +93,27 @@ function ExportModal({ isOpen, onClose, documents, selectedDocuments }: ExportMo
   const copyToClipboard = async () => {
     try {
       await navigator.clipboard.writeText(jsonString)
-      alert('JSON data copied to clipboard!')
+      setCopyStatus('copied')
+      setTimeout(() => setCopyStatus('idle'), 2000)
     } catch (err) {
       console.error('Failed to copy to clipboard:', err)
+      setCopyStatus('error')
+      setTimeout(() => setCopyStatus('idle'), 2000)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      if (e.key === 'a') {
+        e.preventDefault()
+        const selection = window.getSelection()
+        const range = document.createRange()
+        range.selectNodeContents(e.currentTarget)
+        selection?.removeAllRanges()
+        selection?.addRange(range)
+      } else if (e.key === 'c') {
+        copyToClipboard()
+      }
     }
   }
 
@@ -101,28 +126,35 @@ function ExportModal({ isOpen, onClose, documents, selectedDocuments }: ExportMo
               <h2 className="text-2xl font-bold">Export Documents</h2>
               <p className="text-muted-foreground">
                 Exporting {documentsToExport.length} document{documentsToExport.length !== 1 ? 's' : ''}
+                {copyStatus === 'copied' && <span className="text-green-600 ml-2">✓ Copied to clipboard!</span>}
+                {copyStatus === 'error' && <span className="text-red-600 ml-2">✗ Failed to copy</span>}
               </p>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-muted rounded-sm" title="Close">✕</button>
+            <button onClick={handleClose} className="p-2 hover:bg-muted rounded-sm" title="Close">✕</button>
           </div>
 
           <div className="space-y-4">
             <div>
               <div className="flex items-center justify-between mb-2">
-                <h3 className="font-semibold">JSON Data</h3>
+                <h3 className="font-semibold">JSON Data (Press Ctrl+A to select all, Ctrl+C to copy)</h3>
                 <Button onClick={copyToClipboard} size="sm" className="flex items-center gap-2">
                   <Copy className="h-4 w-4" />
                   Copy to Clipboard
                 </Button>
               </div>
-              <pre className="bg-muted p-4 rounded-lg text-sm overflow-auto max-h-96 border">
-                {jsonString}
-              </pre>
+                                          <textarea
+                className="w-full h-96 p-4 bg-muted border rounded-lg text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                value={jsonString}
+                readOnly
+                autoFocus
+                onKeyDown={handleKeyDown}
+                onFocus={(e) => e.target.select()}
+              />
             </div>
           </div>
 
           <div className="mt-8 pt-4 border-t flex justify-end">
-            <Button onClick={onClose}>Close</Button>
+            <Button onClick={handleClose}>Close</Button>
           </div>
         </div>
       </div>
@@ -202,6 +234,7 @@ function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
                 className="w-full h-64 p-3 border rounded-lg font-mono text-sm"
                 placeholder='[{"schema": "data/abstraction/tab", "schemaVersion": "2.0", "data": {...}, "metadata": {...}}]'
                 disabled={isImporting}
+                autoFocus
               />
             </div>
 
