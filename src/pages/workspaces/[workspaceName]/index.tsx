@@ -685,7 +685,7 @@ export default function WorkspaceDetailPage() {
             </div>
           </div>
 
-          {/* Right Panel - Document List */}
+          {/* Center Panel - Document List */}
           <div className="flex-1 border rounded-lg p-4 bg-card flex flex-col min-h-0">
             <DocumentList
               documents={documents}
@@ -702,68 +702,68 @@ export default function WorkspaceDetailPage() {
               pastedDocumentIds={copiedDocuments}
             />
           </div>
-        </div>
-      </div>
 
-      {/* Right Sidebar */}
-      <div className="w-80 border rounded-lg p-4 bg-card">
-        <div className="flex border-b mb-4">
-          <button
-            className={`flex-1 py-2 text-sm font-medium ${rightTab === 'tokens' ? 'border-b-2 border-primary' : ''}`}
-            onClick={() => setRightTab('tokens')}
-          >
-            Tokens
-          </button>
-          <button
-            className={`flex-1 py-2 text-sm font-medium ${rightTab === 'filter' ? 'border-b-2 border-primary' : ''}`}
-            onClick={() => setRightTab('filter')}
-          >
-            Filter
-          </button>
-        </div>
+          {/* Right Sidebar */}
+          <div className="w-80 border rounded-lg p-4 bg-card">
+            <div className="flex border-b mb-4">
+              <button
+                className={`flex-1 py-2 text-sm font-medium ${rightTab === 'tokens' ? 'border-b-2 border-primary' : ''}`}
+                onClick={() => setRightTab('tokens')}
+              >
+                Tokens
+              </button>
+              <button
+                className={`flex-1 py-2 text-sm font-medium ${rightTab === 'filter' ? 'border-b-2 border-primary' : ''}`}
+                onClick={() => setRightTab('filter')}
+              >
+                Filter
+              </button>
+            </div>
 
-        {rightTab === 'tokens' ? (
-          <TokenManager workspaceId={workspace.id} />
-        ) : (
-          <div>
-            <h3 className="text-lg font-semibold mb-4">Filter by Schema</h3>
-            {isLoadingSchemas ? (
-              <div className="text-sm text-muted-foreground">Loading schemas...</div>
+            {rightTab === 'tokens' ? (
+              <TokenManager workspaceId={workspace.id} />
             ) : (
-              <div className="space-y-2 max-h-80 overflow-y-auto">
-                {schemas.map((schema) => (
-                  <label key={schema} className="flex items-center space-x-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={selectedSchemas.includes(schema)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedSchemas(prev => [...prev, schema])
-                        } else {
-                          setSelectedSchemas(prev => prev.filter(s => s !== schema))
-                        }
-                      }}
-                      className="rounded border-gray-300"
-                    />
-                    <span title={schema}>
-                      {getSchemaDisplayName(schema)}
-                    </span>
-                  </label>
-                ))}
-                {selectedSchemas.length > 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSelectedSchemas([])}
-                    className="w-full mt-2"
-                  >
-                    Clear Filters
-                  </Button>
+              <div>
+                <h3 className="text-lg font-semibold mb-4">Filter by Schema</h3>
+                {isLoadingSchemas ? (
+                  <div className="text-sm text-muted-foreground">Loading schemas...</div>
+                ) : (
+                  <div className="space-y-2 max-h-80 overflow-y-auto">
+                    {schemas.map((schema) => (
+                      <label key={schema} className="flex items-center space-x-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={selectedSchemas.includes(schema)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedSchemas(prev => [...prev, schema])
+                            } else {
+                              setSelectedSchemas(prev => prev.filter(s => s !== schema))
+                            }
+                          }}
+                          className="rounded border-gray-300"
+                        />
+                        <span title={schema}>
+                          {getSchemaDisplayName(schema)}
+                        </span>
+                      </label>
+                    ))}
+                    {selectedSchemas.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSelectedSchemas([])}
+                        className="w-full mt-2"
+                      >
+                        Clear Filters
+                      </Button>
+                    )}
+                  </div>
                 )}
               </div>
             )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Layers context menu */}
@@ -781,7 +781,8 @@ export default function WorkspaceDetailPage() {
               Paste Documents {copiedDocuments.length > 0 ? `(${copiedDocuments.length})` : ''}
             </button>
           </div>
-        </>, document.body
+        </>,
+        document.body
       )}
     </div>
   );
