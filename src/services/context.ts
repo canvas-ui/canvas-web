@@ -275,3 +275,18 @@ export async function deleteDocumentsFromContext(contextId: string, documentIds:
     throw error;
   }
 }
+
+// Insert/paste documents to context at specific path
+export async function pasteDocumentsToContext(contextId: string, path: string, documentIds: number[]): Promise<boolean> {
+  try {
+    const ids = Array.isArray(documentIds) ? documentIds : [documentIds];
+    await api.post<{ payload: any; message: string; status: string; statusCode: number }>(
+      `${API_ROUTES.contexts}/${contextId}/documents`,
+      { documentIds: ids, contextSpec: path }
+    );
+    return true;
+  } catch (error) {
+    console.error(`Failed to paste documents to context path ${path}:`, error);
+    throw error;
+  }
+}

@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./card";
 import { Button } from "./button";
-import { Play, Square, DoorOpen, Trash2, Edit, MoreVertical } from "lucide-react";
+import { Play, Square, DoorOpen, Trash2, Edit, MoreVertical, Move } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,7 +19,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "./alert-dialog";
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 
 interface WorkspaceCardProps {
   workspace: Workspace;
@@ -28,10 +29,13 @@ interface WorkspaceCardProps {
   onEnter: (name: string) => void;
   onEdit?: (workspace: Workspace) => void;
   onDestroy?: (workspace: Workspace) => void;
+  onRemove?: (workspace: Workspace) => void;
+  onDelete?: (workspace: Workspace) => void;
 }
 
-export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onDestroy }: WorkspaceCardProps) {
+export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onDestroy, onRemove, onDelete }: WorkspaceCardProps) {
   const [isDestroyDialogOpen, setIsDestroyDialogOpen] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const isActive = workspace.status === 'active';
   const isUniverse = workspace.type === 'universe' || workspace.name === 'universe';
   const isError = workspace.status === 'error';
@@ -76,8 +80,26 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onD
     }
   };
 
+  const handleRightClick = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
+    setContextMenu({ x: event.clientX, y: event.clientY });
+  }, []);
+
+  const handleContextMenuAction = useCallback((action: string) => {
+    switch (action) {
+      case 'remove':
+        onRemove?.(workspace);
+        break;
+      case 'delete':
+        onDelete?.(workspace);
+        break;
+    }
+    setContextMenu(null);
+  }, [workspace, onRemove, onDelete]);
+
   return (
-    <Card className={`relative ${borderColorClass}`} style={borderStyle}>
+    <>
+      <Card className={`relative ${borderColorClass}`} style={borderStyle} onContextMenu={handleRightClick}>
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
@@ -198,6 +220,28 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onD
           )}
         </div>
       </CardContent>
-    </Card>
+      </Card>
+
+      {/* Context Menu */}
+      {contextMenu && createPortal(
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setContextMenu(null)} />
+          <div className="fixed z-50 bg-background border rounded-lg shadow-lg py-1 min-w-[120px]" style={{ left: contextMenu.x, top: contextMenu.y }}>
+            {onRemove && !isUniverse && (
+              <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('remove')}>
+                <Move className="h-3 w-3" />
+                Remove
+              </button>
+            )}
+            {onDelete && (
+              <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2 text-destructive" onClick={() => handleContextMenuAction('delete')}>
+                <Trash2 className="h-3 w-3" />
+                Delete
+              </button>
+            )}
+          </div>
+        </>, document.body
+      )}
+    </>
   );
 }

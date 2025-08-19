@@ -1,5 +1,5 @@
 import { Document } from '@/types/workspace'
-import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move } from 'lucide-react'
+import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard } from 'lucide-react'
 import { useState, useCallback } from 'react'
 import {
   Table,
@@ -22,6 +22,8 @@ interface DocumentListProps {
   onRemoveDocuments?: (documentIds: number[]) => void
   onDeleteDocuments?: (documentIds: number[]) => void
   onCopyDocuments?: (documentIds: number[]) => void
+  onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
+  pastedDocumentIds?: number[]
   viewMode?: 'card' | 'table'
   activeContextUrl?: string
   currentContextUrl?: string
@@ -190,6 +192,7 @@ function DocumentTableRow({ document, isSelected, onSelect, onRemoveDocument, on
 
   const handleRightClick = (e: React.MouseEvent) => {
     e.preventDefault()
+    e.stopPropagation() // Prevent bubbling to empty area handler
     if (onSelect && !isSelected) { onSelect(document.id, true, false) }
     onRightClick?.(e, document.id)
   }
@@ -260,7 +263,7 @@ function DocumentRow({ document, isSelected, onSelect, onRemoveDocument, onDelet
     if (!isCtrlClick) { if (isTabDocument && tabUrl) { window.open(tabUrl, '_blank', 'noopener,noreferrer') } else { setShowDetailModal(true) } }
   }
 
-  const handleRightClick = (e: React.MouseEvent) => { e.preventDefault(); if (onSelect && !isSelected) { onSelect(document.id, true, false) } onRightClick?.(e, document.id) }
+  const handleRightClick = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); if (onSelect && !isSelected) { onSelect(document.id, true, false) } onRightClick?.(e, document.id) }
   const handleViewDetails = (e: React.MouseEvent) => { e.stopPropagation(); setShowDetailModal(true) }
   const handleRemoveDocument = (e: React.MouseEvent) => { e.stopPropagation(); onRemoveDocument?.(document.id) }
   const handleDeleteDocument = (e: React.MouseEvent) => { e.stopPropagation(); onDeleteDocument?.(document.id) }
@@ -298,9 +301,10 @@ function DocumentRow({ document, isSelected, onSelect, onRemoveDocument, onDelet
   )
 }
 
-export function DocumentList({ documents, isLoading, contextPath, totalCount, onRemoveDocument, onDeleteDocument, onRemoveDocuments, onDeleteDocuments, onCopyDocuments, viewMode = 'card', activeContextUrl, currentContextUrl }: DocumentListProps) {
+export function DocumentList({ documents, isLoading, contextPath, totalCount, onRemoveDocument, onDeleteDocument, onRemoveDocuments, onDeleteDocuments, onCopyDocuments, onPasteDocuments, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl }: DocumentListProps) {
   const [selectedDocuments, setSelectedDocuments] = useState<Set<number>>(new Set())
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; documentIds: number[] } | null>(null)
+  const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null)
 
   const handleDocumentSelect = useCallback((documentId: number, isSelected: boolean, isCtrlClick: boolean) => {
     setSelectedDocuments(prev => {
@@ -316,6 +320,7 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
 
   const handleDocumentRightClick = useCallback((event: React.MouseEvent, documentId: number) => {
     event.preventDefault()
+    event.stopPropagation() // Prevent bubbling to empty area handler
     let targetIds: number[]
     if (selectedDocuments.has(documentId)) { targetIds = Array.from(selectedDocuments) } else { targetIds = [documentId]; setSelectedDocuments(new Set([documentId])) }
     setContextMenu({ x: event.clientX, y: event.clientY, documentIds: targetIds })
@@ -330,6 +335,24 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
     setContextMenu(null)
     setSelectedDocuments(new Set())
   }, [onCopyDocuments, onRemoveDocument, onRemoveDocuments, onDeleteDocument, onDeleteDocuments])
+
+  const handleEmptyAreaRightClick = useCallback((event: React.MouseEvent) => {
+    // Only show context menu if there are documents to paste
+    if (!pastedDocumentIds || pastedDocumentIds.length === 0 || !onPasteDocuments) return
+    event.preventDefault()
+    setEmptyAreaContextMenu({ x: event.clientX, y: event.clientY })
+  }, [pastedDocumentIds, onPasteDocuments])
+
+  const handleEmptyAreaPaste = useCallback(async () => {
+    if (!onPasteDocuments || !pastedDocumentIds || pastedDocumentIds.length === 0) return
+    try {
+      await onPasteDocuments(contextPath, pastedDocumentIds)
+    } catch (error) {
+      console.error('Failed to paste documents:', error)
+    } finally {
+      setEmptyAreaContextMenu(null)
+    }
+  }, [onPasteDocuments, pastedDocumentIds, contextPath])
 
   if (isLoading) {
     return (
@@ -359,15 +382,18 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
       </div>
 
       {documents.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex-1 flex items-center justify-center" onContextMenu={handleEmptyAreaRightClick}>
           <div className="text-center space-y-2">
             <File className="h-12 w-12 text-muted-foreground/50 mx-auto" />
             <p className="text-sm text-muted-foreground">No documents found in this context</p>
             <p className="text-xs text-muted-foreground">Path: <span className="font-mono">{contextPath}</span></p>
+            {pastedDocumentIds && pastedDocumentIds.length > 0 && (
+              <p className="text-xs text-muted-foreground">Right-click to paste {pastedDocumentIds.length} document(s)</p>
+            )}
           </div>
         </div>
       ) : viewMode === 'table' ? (
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto" onContextMenu={handleEmptyAreaRightClick}>
           <Table>
             <TableHeader>
               <TableRow>
@@ -389,10 +415,10 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
           </Table>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto" onContextMenu={handleEmptyAreaRightClick}>
           <div className="space-y-3 pr-2">
             {documents.map((document) => (
-              <div key={document.id} onContextMenu={(e) => handleDocumentRightClick(e, document.id)}>
+              <div key={document.id} onContextMenu={(e) => { e.stopPropagation(); handleDocumentRightClick(e, document.id); }}>
                 <DocumentRow document={document} isSelected={selectedDocuments.has(document.id)} onSelect={handleDocumentSelect} onRemoveDocument={onRemoveDocument} onDeleteDocument={onDeleteDocument} onRightClick={handleDocumentRightClick} />
               </div>
             ))}
@@ -420,6 +446,19 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
                 Delete {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
               </button>
             )}
+          </div>
+        </>, document.body
+      )}
+
+      {/* Empty Area Context Menu */}
+      {emptyAreaContextMenu && createPortal(
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setEmptyAreaContextMenu(null)} />
+          <div className="fixed z-50 bg-background border rounded-lg shadow-lg py-1 min-w-[120px]" style={{ left: emptyAreaContextMenu.x, top: emptyAreaContextMenu.y }}>
+            <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={handleEmptyAreaPaste}>
+              <Clipboard className="h-3 w-3" />
+              Paste Documents ({pastedDocumentIds?.length || 0})
+            </button>
           </div>
         </>, document.body
       )}

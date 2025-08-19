@@ -18,6 +18,8 @@ import {
   mergeUpWorkspacePath,
   mergeDownWorkspacePath,
   pasteDocumentsToWorkspacePath,
+  removeWorkspaceDocuments,
+  deleteWorkspaceDocuments,
   listWorkspaceLayers,
   renameWorkspaceLayer,
   lockWorkspaceLayer,
@@ -343,6 +345,94 @@ export default function WorkspaceDetailPage() {
     });
   };
 
+  // Handle document removal from workspace path
+  const handleRemoveDocument = async (documentId: number) => {
+    if (!workspace) return;
+    try {
+      await removeWorkspaceDocuments(workspace.id, [documentId], selectedPath);
+      // Update local state
+      setDocuments(prev => prev.filter(doc => doc.id !== documentId));
+      setDocumentsTotalCount(prev => Math.max(0, prev - 1));
+      showToast({
+        title: 'Success',
+        description: 'Document removed from workspace path successfully.'
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to remove document';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+    }
+  };
+
+  // Handle document deletion from workspace
+  const handleDeleteDocument = async (documentId: number) => {
+    if (!workspace) return;
+    try {
+      await deleteWorkspaceDocuments(workspace.id, [documentId], selectedPath);
+      // Update local state
+      setDocuments(prev => prev.filter(doc => doc.id !== documentId));
+      setDocumentsTotalCount(prev => Math.max(0, prev - 1));
+      showToast({
+        title: 'Success',
+        description: 'Document deleted from workspace successfully.'
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete document';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+    }
+  };
+
+  // Handle multiple document removal from workspace path
+  const handleRemoveDocuments = async (documentIds: number[]) => {
+    if (!workspace) return;
+    try {
+      await removeWorkspaceDocuments(workspace.id, documentIds, selectedPath);
+      // Update local state
+      setDocuments(prev => prev.filter(doc => !documentIds.includes(doc.id)));
+      setDocumentsTotalCount(prev => Math.max(0, prev - documentIds.length));
+      showToast({
+        title: 'Success',
+        description: `${documentIds.length} document(s) removed from workspace path successfully.`
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to remove documents';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+    }
+  };
+
+  // Handle multiple document deletion from workspace
+  const handleDeleteDocuments = async (documentIds: number[]) => {
+    if (!workspace) return;
+    try {
+      await deleteWorkspaceDocuments(workspace.id, documentIds, selectedPath);
+      // Update local state
+      setDocuments(prev => prev.filter(doc => !documentIds.includes(doc.id)));
+      setDocumentsTotalCount(prev => Math.max(0, prev - documentIds.length));
+      showToast({
+        title: 'Success',
+        description: `${documentIds.length} document(s) deleted from workspace successfully.`
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete documents';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+    }
+  };
+
   // Layer tab interactions
   const handleSelectLayer = async (layer: any) => {
     setSelectedLayerId(layer.id);
@@ -603,9 +693,13 @@ export default function WorkspaceDetailPage() {
               contextPath={selectedPath}
               totalCount={documentsTotalCount}
               viewMode="table"
-              onRemoveDocument={undefined}
-              onDeleteDocument={undefined}
+              onRemoveDocument={selectedPath !== '/' ? handleRemoveDocument : undefined}
+              onDeleteDocument={handleDeleteDocument}
+              onRemoveDocuments={selectedPath !== '/' ? handleRemoveDocuments : undefined}
+              onDeleteDocuments={handleDeleteDocuments}
               onCopyDocuments={handleCopyDocuments}
+              onPasteDocuments={handlePasteDocuments}
+              pastedDocumentIds={copiedDocuments}
             />
           </div>
         </div>

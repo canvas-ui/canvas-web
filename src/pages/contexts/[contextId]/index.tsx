@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast-container';
 import { Save, Share, X, Plus, Settings, Info, Sidebar } from 'lucide-react';
-import { getContext, getSharedContext, updateContextUrl, grantContextAccess, revokeContextAccess, getContextTree, getContextDocuments, getSharedContextDocuments, removeDocumentsFromContext, deleteDocumentsFromContext } from '@/services/context';
+import { getContext, getSharedContext, updateContextUrl, grantContextAccess, revokeContextAccess, getContextTree, getContextDocuments, getSharedContextDocuments, removeDocumentsFromContext, deleteDocumentsFromContext, pasteDocumentsToContext } from '@/services/context';
 import socketService from '@/lib/socket';
 import { getCurrentUserFromToken } from '@/services/auth';
 import { TreeView } from '@/components/common/tree-view';
@@ -122,6 +122,9 @@ export default function ContextDetailPage() {
   // Document detail modal state
   const [selectedDocument, setSelectedDocument] = useState<ContextDocument | null>(null);
   const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
+
+  // Document copy/paste state
+  const [copiedDocuments, setCopiedDocuments] = useState<number[]>([]);
 
   // Get current user to check if they're the owner
   const currentUser = getCurrentUserFromToken();
@@ -557,6 +560,84 @@ export default function ContextDetailPage() {
     }
   };
 
+  // Handle document copy
+  const handleCopyDocuments = (documentIds: number[]) => {
+    setCopiedDocuments(documentIds);
+    showToast({
+      title: 'Success',
+      description: `${documentIds.length} document(s) copied to clipboard`
+    });
+  };
+
+  // Handle multiple document removal from context
+  const handleRemoveDocuments = async (documentIds: number[]) => {
+    if (!context) return;
+    try {
+      await removeDocumentsFromContext(context.id, documentIds);
+      // Update local state
+      setWorkspaceDocuments(prev => prev.filter(doc => !documentIds.includes(doc.id)));
+      setDocumentsTotalCount(prev => Math.max(0, prev - documentIds.length));
+      showToast({
+        title: 'Success',
+        description: `${documentIds.length} document(s) removed from context successfully.`
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to remove documents';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+    }
+  };
+
+  // Handle multiple document deletion from context
+  const handleDeleteDocuments = async (documentIds: number[]) => {
+    if (!context) return;
+    try {
+      await deleteDocumentsFromContext(context.id, documentIds);
+      // Update local state
+      setWorkspaceDocuments(prev => prev.filter(doc => !documentIds.includes(doc.id)));
+      setDocumentsTotalCount(prev => Math.max(0, prev - documentIds.length));
+      showToast({
+        title: 'Success',
+        description: `${documentIds.length} document(s) deleted from database successfully.`
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete documents';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+    }
+  };
+
+  // Handle document paste to path
+  const handlePasteDocuments = async (path: string, documentIds: number[]): Promise<boolean> => {
+    if (!context) return false;
+    try {
+      const success = await pasteDocumentsToContext(context.id, path, documentIds);
+      if (success) {
+        await fetchDocuments(); // Refresh documents
+        setCopiedDocuments([]); // Clear copied documents
+        showToast({
+          title: 'Success',
+          description: `${documentIds.length} document(s) pasted to "${path}"`
+        });
+      }
+      return success;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to paste documents';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+      return false;
+    }
+  };
+
   // Handle set context URL (manual button click)
   const handleSetContextUrl = async () => {
     if (!context || editableUrl === context.url) return;
@@ -758,6 +839,8 @@ export default function ContextDetailPage() {
                 onCopyPath={!isSharedContext ? treeOperations.copyPath : undefined}
                 onMergeUp={!isSharedContext ? treeOperations.mergeUp : undefined}
                 onMergeDown={!isSharedContext ? treeOperations.mergeDown : undefined}
+                onPasteDocuments={!isSharedContext ? handlePasteDocuments : undefined}
+                pastedDocumentIds={copiedDocuments}
               />
             ) : (
               <div className="text-center text-muted-foreground text-sm">
@@ -846,9 +929,9 @@ export default function ContextDetailPage() {
         </div>
 
         {/* Page Content */}
-        <div className="space-y-6 p-6">
+        <div className="flex flex-col gap-6 p-6 h-full">
           {/* Page Header */}
-          <div className="border-b pb-4">
+          <div className="border-b pb-4 flex-shrink-0">
             <h1 className="text-3xl font-bold tracking-tight">
               Context: {isSharedContext ? `${context.userId}/${context.id}` : context.id}
             </h1>
@@ -856,8 +939,8 @@ export default function ContextDetailPage() {
           </div>
 
           {/* Documents Section using DocumentList component */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
+          <div className="flex-1 flex flex-col min-h-0">
+            <div className="flex items-center justify-between mb-4 flex-shrink-0">
               <h2 className="text-xl font-semibold">Documents</h2>
               <div className="text-sm text-muted-foreground">
                 {Object.values(activeFilters).some(Boolean) || customBitmaps.length > 0 ? ' (filtered)' : ''}
@@ -865,17 +948,24 @@ export default function ContextDetailPage() {
             </div>
 
             {/* Use the DocumentList component for consistency with action handlers */}
-            <DocumentList
-              documents={workspaceDocuments}
-              isLoading={isLoadingDocuments}
-              contextPath={selectedPath}
-              totalCount={documentsTotalCount}
-              viewMode="table"
-              onRemoveDocument={handleRemoveDocument}
-              onDeleteDocument={handleDeleteDocument}
-              activeContextUrl={editableUrl}
-              currentContextUrl={context.url}
-            />
+            <div className="flex-1 border rounded-lg p-4 bg-card flex flex-col min-h-0">
+              <DocumentList
+                documents={workspaceDocuments}
+                isLoading={isLoadingDocuments}
+                contextPath={selectedPath}
+                totalCount={documentsTotalCount}
+                viewMode="table"
+                onRemoveDocument={selectedPath !== '/' ? handleRemoveDocument : undefined}
+                onDeleteDocument={handleDeleteDocument}
+                onRemoveDocuments={selectedPath !== '/' ? handleRemoveDocuments : undefined}
+                onDeleteDocuments={handleDeleteDocuments}
+                onCopyDocuments={handleCopyDocuments}
+                onPasteDocuments={handlePasteDocuments}
+                pastedDocumentIds={copiedDocuments}
+                activeContextUrl={editableUrl}
+                currentContextUrl={context.url}
+              />
+            </div>
           </div>
         </div>
       </div>
