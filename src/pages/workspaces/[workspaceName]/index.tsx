@@ -18,6 +18,7 @@ import {
   mergeUpWorkspacePath,
   mergeDownWorkspacePath,
   pasteDocumentsToWorkspacePath,
+  importDocumentsToWorkspacePath,
   removeWorkspaceDocuments,
   deleteWorkspaceDocuments,
   listWorkspaceLayers,
@@ -328,6 +329,32 @@ export default function WorkspaceDetailPage() {
       return success;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to paste documents';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+      return false;
+    }
+  };
+
+  const handleImportDocuments = async (documents: any[], contextPath: string): Promise<boolean> => {
+    if (!workspace) return false;
+    try {
+      const success = await importDocumentsToWorkspacePath(workspace.id, contextPath, documents);
+      if (success) {
+        // If the import is to the current selected path, refresh documents
+        if (contextPath === selectedPath) {
+          await fetchDocuments();
+        }
+        showToast({
+          title: 'Success',
+          description: `Imported ${documents.length} document(s) to "${contextPath}"`
+        });
+      }
+      return success;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to import documents';
       showToast({
         title: 'Error',
         description: message,
@@ -699,6 +726,7 @@ export default function WorkspaceDetailPage() {
               onDeleteDocuments={handleDeleteDocuments}
               onCopyDocuments={handleCopyDocuments}
               onPasteDocuments={handlePasteDocuments}
+              onImportDocuments={handleImportDocuments}
               pastedDocumentIds={copiedDocuments}
             />
           </div>
@@ -774,11 +802,24 @@ export default function WorkspaceDetailPage() {
             className="fixed z-50 min-w-[10rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
             style={{ left: layersContextMenu.x, top: layersContextMenu.y }}
           >
+            {copiedDocuments.length > 0 && (
+              <button
+                className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+                onClick={() => handlePasteToLayer(layersContextMenu.layer)}
+              >
+                Paste Documents ({copiedDocuments.length})
+              </button>
+            )}
             <button
-              className={`relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground ${copiedDocuments.length === 0 ? 'opacity-50 pointer-events-none' : ''}`}
-              onClick={() => handlePasteToLayer(layersContextMenu.layer)}
+              className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+              onClick={() => {
+                setLayersContextMenu(null);
+                // TODO: Implement import to specific layer path
+                // For now, import to current selected path
+                console.log('Import documents to layer:', layersContextMenu.layer);
+              }}
             >
-              Paste Documents {copiedDocuments.length > 0 ? `(${copiedDocuments.length})` : ''}
+              Import Documents
             </button>
           </div>
         </>,

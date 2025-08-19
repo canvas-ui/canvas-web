@@ -229,6 +229,21 @@ export async function pasteDocumentsToWorkspacePath(workspaceId: string, path: s
   }
 }
 
+export async function importDocumentsToWorkspacePath(workspaceId: string, path: string, documents: any[]): Promise<boolean> {
+  try {
+    // Import new documents to workspace at the specified path
+    const docs = Array.isArray(documents) ? documents : [documents]
+    await api.post<{ payload: any; message: string; status: string; statusCode: number }>(
+      `${API_ROUTES.workspaces}/${workspaceId}/documents`,
+      { documents: docs, contextSpec: path }
+    );
+    return true;
+  } catch (error) {
+    console.error(`Failed to import documents to workspace path ${path}:`, error);
+    throw error;
+  }
+}
+
 // Layers API
 export interface Layer {
   id: string;

@@ -290,3 +290,18 @@ export async function pasteDocumentsToContext(contextId: string, path: string, d
     throw error;
   }
 }
+
+// Import new documents to context via workspace (since contexts use workspace documents API)
+export async function importDocumentsToContext(workspaceId: string, contextPath: string, documents: any[]): Promise<boolean> {
+  try {
+    const docs = Array.isArray(documents) ? documents : [documents];
+    await api.post<{ payload: any; message: string; status: string; statusCode: number }>(
+      `${API_ROUTES.workspaces}/${workspaceId}/documents`,
+      { documents: docs, contextSpec: contextPath }
+    );
+    return true;
+  } catch (error) {
+    console.error(`Failed to import documents to context path ${contextPath}:`, error);
+    throw error;
+  }
+}

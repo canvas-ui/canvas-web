@@ -1,5 +1,5 @@
 import { Document } from '@/types/workspace'
-import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard } from 'lucide-react'
+import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload } from 'lucide-react'
 import { useState, useCallback } from 'react'
 import {
   Table,
@@ -23,6 +23,7 @@ interface DocumentListProps {
   onDeleteDocuments?: (documentIds: number[]) => void
   onCopyDocuments?: (documentIds: number[]) => void
   onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
+  onImportDocuments?: (documents: any[], contextPath: string) => Promise<boolean>
   pastedDocumentIds?: number[]
   viewMode?: 'card' | 'table'
   activeContextUrl?: string
@@ -51,6 +52,183 @@ interface DocumentDetailModalProps {
   document: Document | null
   isOpen: boolean
   onClose: () => void
+}
+
+interface ExportModalProps {
+  isOpen: boolean
+  onClose: () => void
+  documents: Document[]
+  selectedDocuments: Set<number>
+}
+
+interface ImportModalProps {
+  isOpen: boolean
+  onClose: () => void
+  onImport: (documents: any[]) => Promise<boolean>
+}
+
+function ExportModal({ isOpen, onClose, documents, selectedDocuments }: ExportModalProps) {
+  if (!isOpen) return null
+
+  const documentsToExport = selectedDocuments.size > 0
+    ? documents.filter(doc => selectedDocuments.has(doc.id))
+    : documents
+
+  const exportData = documentsToExport.map(doc => ({
+    schema: doc.schema,
+    schemaVersion: doc.schemaVersion,
+    data: doc.data,
+    metadata: doc.metadata
+  }))
+
+  const jsonString = JSON.stringify(exportData, null, 2)
+
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(jsonString)
+      alert('JSON data copied to clipboard!')
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-background border rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-bold">Export Documents</h2>
+              <p className="text-muted-foreground">
+                Exporting {documentsToExport.length} document{documentsToExport.length !== 1 ? 's' : ''}
+              </p>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-muted rounded-sm" title="Close">✕</button>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-semibold">JSON Data</h3>
+                <Button onClick={copyToClipboard} size="sm" className="flex items-center gap-2">
+                  <Copy className="h-4 w-4" />
+                  Copy to Clipboard
+                </Button>
+              </div>
+              <pre className="bg-muted p-4 rounded-lg text-sm overflow-auto max-h-96 border">
+                {jsonString}
+              </pre>
+            </div>
+          </div>
+
+          <div className="mt-8 pt-4 border-t flex justify-end">
+            <Button onClick={onClose}>Close</Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
+  const [jsonInput, setJsonInput] = useState('')
+  const [isImporting, setIsImporting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  if (!isOpen) return null
+
+  const validateAndImport = async () => {
+    setError(null)
+    if (!jsonInput.trim()) {
+      setError('Please enter JSON data')
+      return
+    }
+
+    try {
+      const parsed = JSON.parse(jsonInput)
+      const documents = Array.isArray(parsed) ? parsed : [parsed]
+
+      // Validate document structure
+      for (const doc of documents) {
+        if (!doc.schema || !doc.data) {
+          setError('Each document must have "schema" and "data" fields')
+          return
+        }
+      }
+
+      setIsImporting(true)
+      const success = await onImport(documents)
+      if (success) {
+        setJsonInput('')
+        onClose()
+      } else {
+        setError('Failed to import documents')
+      }
+    } catch (err) {
+      setError('Invalid JSON format')
+    } finally {
+      setIsImporting(false)
+    }
+  }
+
+  const handleClose = () => {
+    setJsonInput('')
+    setError(null)
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-background border rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-bold">Import Documents</h2>
+              <p className="text-muted-foreground">
+                Paste JSON data containing documents to import
+              </p>
+            </div>
+            <button onClick={handleClose} className="p-2 hover:bg-muted rounded-sm" title="Close">✕</button>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                JSON Data (single document or array of documents)
+              </label>
+              <textarea
+                value={jsonInput}
+                onChange={(e) => setJsonInput(e.target.value)}
+                className="w-full h-64 p-3 border rounded-lg font-mono text-sm"
+                placeholder='[{"schema": "data/abstraction/tab", "schemaVersion": "2.0", "data": {...}, "metadata": {...}}]'
+                disabled={isImporting}
+              />
+            </div>
+
+            {error && (
+              <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-lg border">
+                {error}
+              </div>
+            )}
+
+            <div className="text-xs text-muted-foreground">
+              <p><strong>Format:</strong> Each document must have "schema", "schemaVersion", "data", and "metadata" fields.</p>
+              <p><strong>Example schemas:</strong> "data/abstraction/tab", "data/abstraction/file", etc.</p>
+            </div>
+          </div>
+
+          <div className="mt-8 pt-4 border-t flex justify-between">
+            <Button variant="outline" onClick={handleClose} disabled={isImporting}>
+              Cancel
+            </Button>
+            <Button onClick={validateAndImport} disabled={isImporting || !jsonInput.trim()}>
+              {isImporting ? 'Importing...' : 'Import Documents'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function DocumentDetailModal({ document, isOpen, onClose }: DocumentDetailModalProps) {
@@ -301,10 +479,12 @@ function DocumentRow({ document, isSelected, onSelect, onRemoveDocument, onDelet
   )
 }
 
-export function DocumentList({ documents, isLoading, contextPath, totalCount, onRemoveDocument, onDeleteDocument, onRemoveDocuments, onDeleteDocuments, onCopyDocuments, onPasteDocuments, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl }: DocumentListProps) {
+export function DocumentList({ documents, isLoading, contextPath, totalCount, onRemoveDocument, onDeleteDocument, onRemoveDocuments, onDeleteDocuments, onCopyDocuments, onPasteDocuments, onImportDocuments, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl }: DocumentListProps) {
   const [selectedDocuments, setSelectedDocuments] = useState<Set<number>>(new Set())
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; documentIds: number[] } | null>(null)
   const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null)
+  const [showExportModal, setShowExportModal] = useState(false)
+  const [showImportModal, setShowImportModal] = useState(false)
 
   const handleDocumentSelect = useCallback((documentId: number, isSelected: boolean, isCtrlClick: boolean) => {
     setSelectedDocuments(prev => {
@@ -337,11 +517,15 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
   }, [onCopyDocuments, onRemoveDocument, onRemoveDocuments, onDeleteDocument, onDeleteDocuments])
 
   const handleEmptyAreaRightClick = useCallback((event: React.MouseEvent) => {
-    // Only show context menu if there are documents to paste
-    if (!pastedDocumentIds || pastedDocumentIds.length === 0 || !onPasteDocuments) return
+    // Show context menu if there are documents to paste or import functionality is available
+    const hasPasteOption = pastedDocumentIds && pastedDocumentIds.length > 0 && onPasteDocuments
+    const hasImportOption = onImportDocuments
+
+    if (!hasPasteOption && !hasImportOption) return
+
     event.preventDefault()
     setEmptyAreaContextMenu({ x: event.clientX, y: event.clientY })
-  }, [pastedDocumentIds, onPasteDocuments])
+  }, [pastedDocumentIds, onPasteDocuments, onImportDocuments])
 
   const handleEmptyAreaPaste = useCallback(async () => {
     if (!onPasteDocuments || !pastedDocumentIds || pastedDocumentIds.length === 0) return
@@ -353,6 +537,24 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
       setEmptyAreaContextMenu(null)
     }
   }, [onPasteDocuments, pastedDocumentIds, contextPath])
+
+  const handleSelectAll = useCallback(() => {
+    if (selectedDocuments.size === documents.length) {
+      setSelectedDocuments(new Set())
+    } else {
+      setSelectedDocuments(new Set(documents.map(doc => doc.id)))
+    }
+  }, [selectedDocuments.size, documents])
+
+  const handleImport = useCallback(async (importedDocuments: any[]) => {
+    if (!onImportDocuments) return false
+    try {
+      return await onImportDocuments(importedDocuments, contextPath)
+    } catch (error) {
+      console.error('Failed to import documents:', error)
+      return false
+    }
+  }, [onImportDocuments, contextPath])
 
   if (isLoading) {
     return (
@@ -379,6 +581,112 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
             {totalCount > documents.length && (<p className="text-xs text-muted-foreground">{totalCount} total (showing first {documents.length})</p>)}
           </div>
         </div>
+
+        {documents.length > 0 && (
+          <div className="flex items-center gap-2 mt-3 pt-3 border-t">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSelectAll}
+              className="flex items-center gap-2"
+            >
+              {selectedDocuments.size === documents.length ? (
+                <>
+                  <CheckSquare className="h-4 w-4" />
+                  Deselect All
+                </>
+              ) : (
+                <>
+                  <Square className="h-4 w-4" />
+                  Select All
+                </>
+              )}
+            </Button>
+
+            {selectedDocuments.size > 0 && (
+              <>
+                {(onRemoveDocument || onRemoveDocuments) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const selectedIds = Array.from(selectedDocuments)
+                      if (selectedIds.length === 1) {
+                        onRemoveDocument?.(selectedIds[0])
+                      } else {
+                        onRemoveDocuments?.(selectedIds)
+                      }
+                      setSelectedDocuments(new Set())
+                    }}
+                    className="flex items-center gap-2"
+                    title="Remove selected documents from context"
+                  >
+                    <X className="h-4 w-4" />
+                    Remove ({selectedDocuments.size})
+                  </Button>
+                )}
+
+                {(onDeleteDocument || onDeleteDocuments) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const selectedIds = Array.from(selectedDocuments)
+                      if (selectedIds.length === 1) {
+                        onDeleteDocument?.(selectedIds[0])
+                      } else {
+                        onDeleteDocuments?.(selectedIds)
+                      }
+                      setSelectedDocuments(new Set())
+                    }}
+                    className="flex items-center gap-2 text-destructive hover:text-destructive-foreground hover:bg-destructive"
+                    title="Delete selected documents permanently"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete ({selectedDocuments.size})
+                  </Button>
+                )}
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowExportModal(true)}
+                  className="flex items-center gap-2"
+                  title="Export selected documents"
+                >
+                  <Download className="h-4 w-4" />
+                  Export ({selectedDocuments.size})
+                </Button>
+              </>
+            )}
+
+            {selectedDocuments.size === 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowExportModal(true)}
+                className="flex items-center gap-2"
+                title="Export all documents"
+              >
+                <Download className="h-4 w-4" />
+                Export All
+              </Button>
+            )}
+
+            {onImportDocuments && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowImportModal(true)}
+                className="flex items-center gap-2"
+                title="Import documents"
+              >
+                <Upload className="h-4 w-4" />
+                Import
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       {documents.length === 0 ? (
@@ -455,13 +763,34 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
         <>
           <div className="fixed inset-0 z-40" onClick={() => setEmptyAreaContextMenu(null)} />
           <div className="fixed z-50 bg-background border rounded-lg shadow-lg py-1 min-w-[120px]" style={{ left: emptyAreaContextMenu.x, top: emptyAreaContextMenu.y }}>
-            <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={handleEmptyAreaPaste}>
-              <Clipboard className="h-3 w-3" />
-              Paste Documents ({pastedDocumentIds?.length || 0})
-            </button>
+            {pastedDocumentIds && pastedDocumentIds.length > 0 && (
+              <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={handleEmptyAreaPaste}>
+                <Clipboard className="h-3 w-3" />
+                Paste Documents ({pastedDocumentIds.length})
+              </button>
+            )}
+            {onImportDocuments && (
+              <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => { setEmptyAreaContextMenu(null); setShowImportModal(true) }}>
+                <Upload className="h-3 w-3" />
+                Import Documents
+              </button>
+            )}
           </div>
         </>, document.body
       )}
+
+      <ExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        documents={documents}
+        selectedDocuments={selectedDocuments}
+      />
+
+      <ImportModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onImport={handleImport}
+      />
     </div>
   )
 }

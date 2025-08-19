@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast-container';
 import { Save, Share, X, Plus, Settings, Info, Sidebar } from 'lucide-react';
-import { getContext, getSharedContext, updateContextUrl, grantContextAccess, revokeContextAccess, getContextTree, getContextDocuments, getSharedContextDocuments, removeDocumentsFromContext, deleteDocumentsFromContext, pasteDocumentsToContext } from '@/services/context';
+import { getContext, getSharedContext, updateContextUrl, grantContextAccess, revokeContextAccess, getContextTree, getContextDocuments, getSharedContextDocuments, removeDocumentsFromContext, deleteDocumentsFromContext, pasteDocumentsToContext, importDocumentsToContext } from '@/services/context';
 import socketService from '@/lib/socket';
 import { getCurrentUserFromToken } from '@/services/auth';
 import { TreeView } from '@/components/common/tree-view';
@@ -638,6 +638,30 @@ export default function ContextDetailPage() {
     }
   };
 
+  // Handle document import to path
+  const handleImportDocuments = async (documents: any[], contextPath: string): Promise<boolean> => {
+    if (!context) return false;
+    try {
+      const success = await importDocumentsToContext(context.workspaceId, contextPath, documents);
+      if (success) {
+        await fetchDocuments(); // Refresh documents
+        showToast({
+          title: 'Success',
+          description: `Imported ${documents.length} document(s) to "${contextPath}"`
+        });
+      }
+      return success;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to import documents';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+      return false;
+    }
+  };
+
   // Handle set context URL (manual button click)
   const handleSetContextUrl = async () => {
     if (!context || editableUrl === context.url) return;
@@ -961,6 +985,7 @@ export default function ContextDetailPage() {
                 onDeleteDocuments={handleDeleteDocuments}
                 onCopyDocuments={handleCopyDocuments}
                 onPasteDocuments={handlePasteDocuments}
+                onImportDocuments={!isSharedContext ? handleImportDocuments : undefined}
                 pastedDocumentIds={copiedDocuments}
                 activeContextUrl={editableUrl}
                 currentContextUrl={context.url}
