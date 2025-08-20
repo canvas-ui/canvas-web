@@ -15,7 +15,6 @@ import {
   startWorkspace,
   updateWorkspace,
   removeWorkspace,
-  purgeWorkspace,
 } from "@/services/workspace"
 
 
@@ -179,10 +178,8 @@ export default function WorkspacesPage() {
 
   const handleDestroyWorkspace = async (workspace: Workspace) => {
     try {
-      // First remove the workspace
+      // Remove the workspace (backend handles data destruction)
       await removeWorkspace(workspace.id)
-      // Then purge all its data
-      await purgeWorkspace(workspace.id)
 
       setWorkspaces(prev => prev.filter(ws => ws.id !== workspace.id))
       showToast({
@@ -295,9 +292,8 @@ export default function WorkspacesPage() {
 
   const handleDeleteWorkspace = async (workspace: Workspace) => {
     try {
-      // First remove the workspace, then purge all its data (similar to destroy)
+      // Remove the workspace (backend handles data destruction)
       await removeWorkspace(workspace.id)
-      await purgeWorkspace(workspace.id)
       setWorkspaces(prev => prev.filter(ws => ws.id !== workspace.id))
       showToast({
         title: 'Success',

@@ -83,14 +83,7 @@ export async function removeWorkspace(id: string): Promise<Workspace> {
   }
 }
 
-export async function purgeWorkspace(id: string): Promise<null> {
-  try {
-    return await api.delete<null>(`${API_ROUTES.workspaces}/${id}/purge`);
-  } catch (error) {
-    console.error(`Failed to purge workspace ${id}:`, error);
-    throw error;
-  }
-}
+
 
 // Get workspace tree
 export async function getWorkspaceTree(id: string): Promise<any> {
