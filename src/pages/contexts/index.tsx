@@ -49,9 +49,9 @@ export default function ContextsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [newContextId, setNewContextId] = useState("")
-  const [newContextUrl, setNewContextUrl] = useState("")
+  const [newContextUrl, setNewContextUrl] = useState("/")
   const [newContextDescription, setNewContextDescription] = useState("")
-  const [newContextBaseUrl, setNewContextBaseUrl] = useState("")
+  const [newContextBaseUrl, setNewContextBaseUrl] = useState("/")
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>("")
   const [isCreating, setIsCreating] = useState(false)
   const [editingContext, setEditingContext] = useState<ContextEntry | null>(null)
@@ -131,18 +131,7 @@ export default function ContextsPage() {
     fetchData();
   }, [fetchData]);
 
-  // Auto-populate the Context URL field when the workspace selection changes, but only if the user hasn't typed anything yet
-  useEffect(() => {
-    if (!selectedWorkspaceId) return;
-    const ws = workspaces.find(w => w.id === selectedWorkspaceId);
-    if (!ws) return;
 
-    // Only set a default if the field is empty or still has the initial placeholder value
-    if (!newContextUrl.trim() || newContextUrl.trim() === 'universe://') {
-      const defaultUrl = `workspace://${ws.name || ws.id}`;
-      setNewContextUrl(defaultUrl);
-    }
-  }, [selectedWorkspaceId, workspaces, newContextUrl]);
 
   useEffect(() => {
     if (!socketService.isConnected()) {
@@ -244,9 +233,9 @@ export default function ContextsPage() {
       // Create the context - the socket event will add it to the state
       const newContext = await createContext(newContextPayload);
       setNewContextId("");
-      setNewContextUrl("");
+      setNewContextUrl("/");
       setNewContextDescription("");
-      setNewContextBaseUrl("");
+      setNewContextBaseUrl("/");
       showToast({
         title: 'Success',
         description: 'Context created successfully'
@@ -413,7 +402,7 @@ export default function ContextsPage() {
               id="url"
               value={newContextUrl}
               onChange={(e) => setNewContextUrl(e.target.value)}
-              placeholder="e.g., user@host://project/path/resource"
+              placeholder="e.g., /project/path/resource"
               disabled={isCreating}
             />
           </div>
@@ -426,7 +415,7 @@ export default function ContextsPage() {
                 id="baseUrl"
                 value={newContextBaseUrl}
                 onChange={(e) => setNewContextBaseUrl(e.target.value)}
-                placeholder="e.g., /project/path"
+              placeholder="e.g., /base/path"
                 disabled={isCreating}
               />
             </div>
@@ -574,7 +563,7 @@ export default function ContextsPage() {
                   id="edit-context-url"
                   value={editingContext.url}
                   onChange={(e) => setEditingContext(prev => prev ? {...prev, url: e.target.value} : null)}
-                  placeholder="https://example.com/path"
+                placeholder="/project/path/resource"
                 />
               </div>
             </div>
@@ -587,7 +576,7 @@ export default function ContextsPage() {
                   id="edit-base-url"
                   value={editingContext.baseUrl || ''}
                   onChange={(e) => setEditingContext(prev => prev ? {...prev, baseUrl: e.target.value || null} : null)}
-                  placeholder="https://example.com"
+                placeholder="/base/path"
                 />
               </div>
               <div>
