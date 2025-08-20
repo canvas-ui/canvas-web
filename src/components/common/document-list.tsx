@@ -1,6 +1,7 @@
 import { Document } from '@/types/workspace'
-import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload } from 'lucide-react'
-import { useState, useCallback } from 'react'
+import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search } from 'lucide-react'
+import { useState, useCallback, useMemo } from 'react'
+import Fuse from 'fuse.js'
 import {
   Table,
   TableBody,
@@ -518,6 +519,42 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
   const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [showExportModal, setShowExportModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  // Fuse.js configuration for fuzzy search
+  const fuseOptions = useMemo(() => ({
+    keys: [
+      { name: 'data.title', weight: 0.4 },
+      { name: 'data.name', weight: 0.4 },
+      { name: 'data.filename', weight: 0.4 },
+      { name: 'data.url', weight: 0.3 },
+      { name: 'data.content', weight: 0.2 },
+      { name: 'data.description', weight: 0.2 },
+      { name: 'schema', weight: 0.1 }
+    ],
+    threshold: 0.4,
+    location: 0,
+    distance: 100,
+    minMatchCharLength: 1,
+    includeScore: true,
+    includeMatches: true,
+    ignoreLocation: true
+  }), [])
+
+  // Create Fuse instance
+  const fuse = useMemo(() => {
+    if (documents.length === 0) return null
+    return new Fuse(documents, fuseOptions)
+  }, [documents, fuseOptions])
+
+  // Filter documents based on search query
+  const filteredDocuments = useMemo(() => {
+    if (!searchQuery.trim()) return documents
+    if (!fuse) return documents
+
+    const searchResults = fuse.search(searchQuery)
+    return searchResults.map(result => result.item)
+  }, [documents, searchQuery, fuse])
 
   const handleDocumentSelect = useCallback((documentId: number, isSelected: boolean, isCtrlClick: boolean) => {
     setSelectedDocuments(prev => {
@@ -572,12 +609,12 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
   }, [onPasteDocuments, pastedDocumentIds, contextPath])
 
   const handleSelectAll = useCallback(() => {
-    if (selectedDocuments.size === documents.length) {
+    if (selectedDocuments.size === filteredDocuments.length) {
       setSelectedDocuments(new Set())
     } else {
-      setSelectedDocuments(new Set(documents.map(doc => doc.id)))
+      setSelectedDocuments(new Set(filteredDocuments.map(doc => doc.id)))
     }
-  }, [selectedDocuments.size, documents])
+  }, [selectedDocuments.size, filteredDocuments])
 
   const handleImport = useCallback(async (importedDocuments: any[]) => {
     if (!onImportDocuments) return false
@@ -610,8 +647,30 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
             {selectedDocuments.size > 0 && (<p className="text-xs text-blue-600 mt-1">{selectedDocuments.size} document{selectedDocuments.size !== 1 ? 's' : ''} selected</p>)}
           </div>
           <div className="text-right">
-            <p className="text-sm font-medium">{documents.length} documents</p>
+            <p className="text-sm font-medium">{searchQuery ? `${filteredDocuments.length} of ${documents.length}` : `${documents.length}`} documents</p>
             {totalCount > documents.length && (<p className="text-xs text-muted-foreground">{totalCount} total (showing first {documents.length})</p>)}
+          </div>
+        </div>
+
+        {/* Search Input */}
+        <div className="mt-3 relative">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search documents..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-input rounded-md bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -622,16 +681,17 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
               size="sm"
               onClick={handleSelectAll}
               className="flex items-center gap-2"
+              disabled={filteredDocuments.length === 0}
             >
-              {selectedDocuments.size === documents.length ? (
+              {selectedDocuments.size === filteredDocuments.length ? (
                 <>
                   <CheckSquare className="h-4 w-4" />
-                  Deselect All
+                  Deselect All{searchQuery && ` (${filteredDocuments.length})`}
                 </>
               ) : (
                 <>
                   <Square className="h-4 w-4" />
-                  Select All
+                  Select All{searchQuery && ` (${filteredDocuments.length})`}
                 </>
               )}
             </Button>
@@ -722,13 +782,29 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
         )}
       </div>
 
-      {documents.length === 0 ? (
+      {filteredDocuments.length === 0 ? (
         <div className="flex-1 flex items-center justify-center" onContextMenu={handleEmptyAreaRightClick}>
           <div className="text-center space-y-2">
             <File className="h-12 w-12 text-muted-foreground/50 mx-auto" />
-            <p className="text-sm text-muted-foreground">No documents found in this context</p>
-            <p className="text-xs text-muted-foreground">Path: <span className="font-mono">{contextPath}</span></p>
-            {pastedDocumentIds && pastedDocumentIds.length > 0 && (
+            <p className="text-sm text-muted-foreground">
+              {searchQuery ? 'No documents match your search' : 'No documents found in this context'}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {searchQuery ? (
+                <>Search: <span className="font-mono">"{searchQuery}"</span></>
+              ) : (
+                <>Path: <span className="font-mono">{contextPath}</span></>
+              )}
+            </p>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="text-xs text-primary hover:text-primary/80 underline mt-1"
+              >
+                Clear search
+              </button>
+            )}
+            {!searchQuery && pastedDocumentIds && pastedDocumentIds.length > 0 && (
               <p className="text-xs text-muted-foreground">Right-click to paste {pastedDocumentIds.length} document(s)</p>
             )}
           </div>
@@ -749,7 +825,7 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
               </TableRow>
             </TableHeader>
             <TableBody>
-              {documents.map((document) => (
+              {filteredDocuments.map((document) => (
                 <DocumentTableRow key={document.id} document={document} isSelected={selectedDocuments.has(document.id)} onSelect={handleDocumentSelect} onRemoveDocument={onRemoveDocument} onDeleteDocument={onDeleteDocument} onRightClick={handleDocumentRightClick} />
               ))}
             </TableBody>
@@ -758,7 +834,7 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
       ) : (
         <div className="flex-1 overflow-y-auto" onContextMenu={handleEmptyAreaRightClick}>
           <div className="space-y-3 pr-2">
-            {documents.map((document) => (
+            {filteredDocuments.map((document) => (
               <div key={document.id} onContextMenu={(e) => { e.stopPropagation(); handleDocumentRightClick(e, document.id); }}>
                 <DocumentRow document={document} isSelected={selectedDocuments.has(document.id)} onSelect={handleDocumentSelect} onRemoveDocument={onRemoveDocument} onDeleteDocument={onDeleteDocument} onRightClick={handleDocumentRightClick} />
               </div>
