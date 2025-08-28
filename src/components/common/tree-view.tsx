@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronRight, ChevronDown, Folder, FolderOpen, MoreHorizontal, Trash2, Plus, ArrowUp, ArrowDown, Clipboard } from 'lucide-react'
+import { ChevronRight, ChevronDown, Folder, FolderOpen, MoreHorizontal, Trash2, Plus, ArrowUp, ArrowDown, Clipboard, Minus } from 'lucide-react'
 import { TreeNode } from '@/types/workspace'
 import { cn } from '@/lib/utils'
 
@@ -17,6 +17,8 @@ interface TreeViewProps {
   onCopyPath?: (fromPath: string, toPath: string, recursive?: boolean) => Promise<boolean>
   onMergeUp?: (path: string) => Promise<boolean>
   onMergeDown?: (path: string) => Promise<boolean>
+  onSubtractUp?: (path: string) => Promise<boolean>
+  onSubtractDown?: (path: string) => Promise<boolean>
   onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
   pastedDocumentIds?: number[]
 }
@@ -34,6 +36,8 @@ interface TreeNodeProps {
   onCopyPath?: (fromPath: string, toPath: string, recursive?: boolean) => Promise<boolean>
   onMergeUp?: (path: string) => Promise<boolean>
   onMergeDown?: (path: string) => Promise<boolean>
+  onSubtractUp?: (path: string) => Promise<boolean>
+  onSubtractDown?: (path: string) => Promise<boolean>
   onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
   pastedDocumentIds?: number[]
   onDragStart: (path: string, event: React.DragEvent) => void
@@ -52,11 +56,13 @@ interface ContextMenuProps {
   onRemovePath?: (path: string, recursive?: boolean) => Promise<boolean>
   onMergeUp?: (path: string) => Promise<boolean>
   onMergeDown?: (path: string) => Promise<boolean>
+  onSubtractUp?: (path: string) => Promise<boolean>
+  onSubtractDown?: (path: string) => Promise<boolean>
   onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
   pastedDocumentIds?: number[]
 }
 
-function ContextMenu({ isOpen, onClose, x, y, path, onInsertPath, onRemovePath, onMergeUp, onMergeDown, onPasteDocuments, pastedDocumentIds }: ContextMenuProps) {
+function ContextMenu({ isOpen, onClose, x, y, path, onInsertPath, onRemovePath, onMergeUp, onMergeDown, onSubtractUp, onSubtractDown, onPasteDocuments, pastedDocumentIds }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
 
   const handleAction = async (action: string) => {
@@ -91,6 +97,16 @@ function ContextMenu({ isOpen, onClose, x, y, path, onInsertPath, onRemovePath, 
         case 'merge-down':
           if (onMergeDown) {
             await onMergeDown(path)
+          }
+          break
+        case 'subtract-up':
+          if (onSubtractUp) {
+            await onSubtractUp(path)
+          }
+          break
+        case 'subtract-down':
+          if (onSubtractDown) {
+            await onSubtractDown(path)
           }
           break
         case 'paste':
@@ -163,6 +179,21 @@ function ContextMenu({ isOpen, onClose, x, y, path, onInsertPath, onRemovePath, 
           <ArrowDown className="w-4 h-4 mr-2" />
           Merge Down
         </div>
+        <div className="my-1 h-px bg-border" />
+        <div
+          className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+          onClick={() => handleAction('subtract-up')}
+        >
+          <Minus className="w-4 h-4 mr-2" />
+          Subtract Up
+        </div>
+        <div
+          className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+          onClick={() => handleAction('subtract-down')}
+        >
+          <Minus className="w-4 h-4 mr-2" />
+          Subtract Down
+        </div>
       </div>
     </>, document.body
   )
@@ -181,6 +212,8 @@ function TreeNodeComponent({
   onCopyPath,
   onMergeUp,
   onMergeDown,
+  onSubtractUp,
+  onSubtractDown,
   onPasteDocuments,
   pastedDocumentIds,
   onDragStart,
@@ -299,6 +332,8 @@ function TreeNodeComponent({
         onRemovePath={onRemovePath}
         onMergeUp={onMergeUp}
         onMergeDown={onMergeDown}
+        onSubtractUp={onSubtractUp}
+        onSubtractDown={onSubtractDown}
         onPasteDocuments={onPasteDocuments}
         pastedDocumentIds={pastedDocumentIds}
       />
@@ -321,6 +356,8 @@ function TreeNodeComponent({
               onCopyPath={onCopyPath}
               onMergeUp={onMergeUp}
               onMergeDown={onMergeDown}
+              onSubtractUp={onSubtractUp}
+              onSubtractDown={onSubtractDown}
               onPasteDocuments={onPasteDocuments}
               pastedDocumentIds={pastedDocumentIds}
               onDragStart={onDragStart}
@@ -348,6 +385,8 @@ export function TreeView({
   onCopyPath,
   onMergeUp,
   onMergeDown,
+  onSubtractUp,
+  onSubtractDown,
   onPasteDocuments,
   pastedDocumentIds
 }: TreeViewProps) {
@@ -370,7 +409,13 @@ export function TreeView({
   }, [readOnly])
 
   const handleDragOver = useCallback((path: string, event: React.DragEvent) => {
-    if (readOnly || !draggedPath) return
+    if (readOnly) return
+
+    // Check if document is being dragged by looking at data transfer types
+    const hasDocumentData = event.dataTransfer.types.includes('application/json')
+
+    // Allow drag over if there's a dragged path or if it might be a document
+    if (!draggedPath && !hasDocumentData) return
 
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
@@ -387,18 +432,36 @@ export function TreeView({
   }, [readOnly, draggedPath])
 
   const handleDrop = useCallback(async (targetPath: string, event: React.DragEvent) => {
-    if (readOnly || !draggedPath) return
+    if (readOnly) return
 
     event.preventDefault()
     setDragOverPath(null)
     dragCounterRef.current = 0
 
-    const sourcePath = draggedPath
-    setDraggedPath(null)
-
-    if (sourcePath === targetPath) return
-
     try {
+      // Check if this is a document being dropped
+      const jsonData = event.dataTransfer.getData('application/json')
+      if (jsonData) {
+        try {
+          const dragData = JSON.parse(jsonData)
+          if (dragData.type === 'document' && onPasteDocuments) {
+            // Handle document drop
+            await onPasteDocuments(targetPath, [dragData.documentId])
+            return
+          }
+        } catch (parseError) {
+          // Fall through to handle as path drag & drop
+        }
+      }
+
+      // Handle path drag & drop
+      if (!draggedPath) return
+      
+      const sourcePath = draggedPath
+      setDraggedPath(null)
+
+      if (sourcePath === targetPath) return
+
       // Determine operation based on modifier keys
       const isCtrlPressed = event.ctrlKey
       const isShiftPressed = event.shiftKey
@@ -414,7 +477,7 @@ export function TreeView({
       console.error('Error during drop operation:', error)
       alert(`Drop operation failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
-  }, [readOnly, draggedPath, onCopyPath, onMovePath])
+  }, [readOnly, draggedPath, onCopyPath, onMovePath, onPasteDocuments])
 
   const handleDragLeave = useCallback(() => {
     dragCounterRef.current--
@@ -494,6 +557,8 @@ export function TreeView({
           onRemovePath={onRemovePath}
           onMergeUp={onMergeUp}
           onMergeDown={onMergeDown}
+          onSubtractUp={onSubtractUp}
+          onSubtractDown={onSubtractDown}
           onPasteDocuments={onPasteDocuments}
           pastedDocumentIds={pastedDocumentIds}
         />
@@ -514,6 +579,8 @@ export function TreeView({
             onCopyPath={onCopyPath}
             onMergeUp={onMergeUp}
             onMergeDown={onMergeDown}
+            onSubtractUp={onSubtractUp}
+            onSubtractDown={onSubtractDown}
             onPasteDocuments={onPasteDocuments}
             pastedDocumentIds={pastedDocumentIds}
             onDragStart={handleDragStart}

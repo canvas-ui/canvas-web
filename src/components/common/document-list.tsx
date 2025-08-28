@@ -415,7 +415,20 @@ function DocumentTableRow({ document, isSelected, onSelect, onRemoveDocument, on
 
   return (
     <>
-      <TableRow className={`cursor-pointer ${isSelected ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-muted/50'}`} onClick={handleDocumentClick} onContextMenu={handleRightClick}>
+      <TableRow 
+        className={`cursor-pointer ${isSelected ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-muted/50'}`} 
+        onClick={handleDocumentClick} 
+        onContextMenu={handleRightClick}
+        draggable={true}
+        onDragStart={(e) => {
+          e.dataTransfer.setData('application/json', JSON.stringify({
+            type: 'document',
+            documentId: document.id,
+            isShiftPressed: e.shiftKey
+          }))
+          e.dataTransfer.effectAllowed = e.shiftKey ? 'move' : 'copy'
+        }}
+      >
         <TableCell className="w-12">{isTabDocument ? <Globe className="h-4 w-4 text-blue-500" /> : <File className="h-4 w-4 text-blue-500" />}</TableCell>
         <TableCell className="font-medium max-w-xs">
           <div className="flex items-center gap-2">
@@ -482,7 +495,20 @@ function DocumentRow({ document, isSelected, onSelect, onRemoveDocument, onDelet
 
   return (
     <>
-      <div className={`border rounded-lg p-4 transition-colors cursor-pointer ${isSelected ? 'bg-blue-50 border-blue-300 ring-1 ring-blue-200' : ''} ${isTabDocument && !isSelected ? 'hover:bg-blue-50 hover:border-blue-200' : !isSelected ? 'hover:bg-accent/50' : ''}`} onClick={handleDocumentClick} onContextMenu={handleRightClick}>
+      <div 
+        className={`border rounded-lg p-4 transition-colors cursor-pointer ${isSelected ? 'bg-blue-50 border-blue-300 ring-1 ring-blue-200' : ''} ${isTabDocument && !isSelected ? 'hover:bg-blue-50 hover:border-blue-200' : !isSelected ? 'hover:bg-accent/50' : ''}`} 
+        onClick={handleDocumentClick} 
+        onContextMenu={handleRightClick}
+        draggable={true}
+        onDragStart={(e) => {
+          e.dataTransfer.setData('application/json', JSON.stringify({
+            type: 'document',
+            documentId: document.id,
+            isShiftPressed: e.shiftKey
+          }))
+          e.dataTransfer.effectAllowed = e.shiftKey ? 'move' : 'copy'
+        }}
+      >
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2 overflow-hidden">

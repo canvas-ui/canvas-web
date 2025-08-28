@@ -9,6 +9,7 @@ import { ProtectedRoute } from './components/auth/protected-route'
 import { PublicRoute } from './components/auth/public-route'
 import ContextsPage from './pages/contexts'
 import ContextDetailPage from './pages/contexts/[contextId]'
+import ContextFileManagerPage from './pages/contexts/[contextId]/file-manager'
 import ApiTokensPage from './pages/api-tokens'
 import AdminUsersPage from './pages/admin/users'
 import AdminWorkspacesPage from './pages/admin/workspaces'
@@ -47,7 +48,9 @@ function AppContent() {
           <Route path="workspaces/:workspaceName" element={<WorkspaceDetailPage />} />
           <Route path="contexts" element={<ContextsPage />} />
           <Route path="contexts/:contextId" element={<ContextDetailPage />} />
+          <Route path="contexts/:contextId/file-manager" element={<ContextFileManagerPage />} />
           <Route path="users/:userId/contexts/:contextId" element={<ContextDetailPage />} />
+          <Route path="users/:userId/contexts/:contextId/file-manager" element={<ContextFileManagerPage />} />
           <Route path="agents" element={<AgentsPage />} />
           <Route path="agents/:agentId" element={<AgentDetailPage />} />
           <Route path="api-tokens" element={<ApiTokensPage />} />
