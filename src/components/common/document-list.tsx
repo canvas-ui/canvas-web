@@ -1,5 +1,5 @@
 import { Document } from '@/types/workspace'
-import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
+import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link } from 'lucide-react'
 import { useState, useCallback, useMemo } from 'react'
 import Fuse from 'fuse.js'
 import {
@@ -23,6 +23,7 @@ interface DocumentListProps {
   onRemoveDocuments?: (documentIds: number[]) => void
   onDeleteDocuments?: (documentIds: number[]) => void
   onCopyDocuments?: (documentIds: number[]) => void
+  onCutDocuments?: (documentIds: number[]) => void
   onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
   onImportDocuments?: (documents: any[], contextPath: string) => Promise<boolean>
   pastedDocumentIds?: number[]
@@ -43,6 +44,7 @@ interface DocumentRowProps {
   onRemoveDocument?: (documentId: number) => void
   onDeleteDocument?: (documentId: number) => void
   onRightClick?: (event: React.MouseEvent, documentId: number) => void
+  onDragStart?: (event: React.DragEvent, documentId: number) => void
 }
 
 interface DocumentTableRowProps {
@@ -52,6 +54,7 @@ interface DocumentTableRowProps {
   onRemoveDocument?: (documentId: number) => void
   onDeleteDocument?: (documentId: number) => void
   onRightClick?: (event: React.MouseEvent, documentId: number) => void
+  onDragStart?: (event: React.DragEvent, documentId: number) => void
 }
 
 interface DocumentDetailModalProps {
@@ -371,11 +374,15 @@ function DocumentDetailModal({ document, isOpen, onClose }: DocumentDetailModalP
   )
 }
 
-function DocumentTableRow({ document, isSelected, onSelect, onRemoveDocument, onDeleteDocument, onRightClick }: DocumentTableRowProps) {
+function DocumentTableRow({ document, isSelected, onSelect, onRemoveDocument, onDeleteDocument, onRightClick, onDragStart }: DocumentTableRowProps) {
   const [showDetailModal, setShowDetailModal] = useState(false)
 
   const isTabDocument = document.schema === 'data/abstraction/tab'
   const tabUrl = isTabDocument ? document.data.url : null
+
+  const handleDragStart = (e: React.DragEvent) => {
+    onDragStart?.(e, document.id);
+  }
 
   const getDisplayTitle = () => {
     if (document.data.title) return document.data.title
@@ -420,7 +427,13 @@ function DocumentTableRow({ document, isSelected, onSelect, onRemoveDocument, on
 
   return (
     <>
-      <TableRow className={`cursor-pointer ${isSelected ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-muted/50'}`} onClick={handleDocumentClick} onContextMenu={handleRightClick}>
+      <TableRow
+        className={`cursor-pointer ${isSelected ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-muted/50'}`}
+        onClick={handleDocumentClick}
+        onContextMenu={handleRightClick}
+        draggable
+        onDragStart={handleDragStart}
+      >
         <TableCell className="w-12">{isTabDocument ? <Globe className="h-4 w-4 text-blue-500" /> : <File className="h-4 w-4 text-blue-500" />}</TableCell>
         <TableCell className="font-medium max-w-xs">
           <div className="flex items-center gap-2">
@@ -446,10 +459,14 @@ function DocumentTableRow({ document, isSelected, onSelect, onRemoveDocument, on
   )
 }
 
-function DocumentRow({ document, isSelected, onSelect, onRemoveDocument, onDeleteDocument, onRightClick }: DocumentRowProps) {
+function DocumentRow({ document, isSelected, onSelect, onRemoveDocument, onDeleteDocument, onRightClick, onDragStart }: DocumentRowProps) {
   const [showDetailModal, setShowDetailModal] = useState(false)
   const isTabDocument = document.schema === 'data/abstraction/tab'
   const tabUrl = isTabDocument ? document.data.url : null
+
+  const handleDragStart = (e: React.DragEvent) => {
+    onDragStart?.(e, document.id);
+  }
 
   const getDisplayTitle = () => {
     if (document.data.title) return document.data.title
@@ -487,7 +504,13 @@ function DocumentRow({ document, isSelected, onSelect, onRemoveDocument, onDelet
 
   return (
     <>
-      <div className={`border rounded-lg p-4 transition-colors cursor-pointer ${isSelected ? 'bg-blue-50 border-blue-300 ring-1 ring-blue-200' : ''} ${isTabDocument && !isSelected ? 'hover:bg-blue-50 hover:border-blue-200' : !isSelected ? 'hover:bg-accent/50' : ''}`} onClick={handleDocumentClick} onContextMenu={handleRightClick}>
+      <div
+        className={`border rounded-lg p-4 transition-colors cursor-pointer ${isSelected ? 'bg-blue-50 border-blue-300 ring-1 ring-blue-200' : ''} ${isTabDocument && !isSelected ? 'hover:bg-blue-50 hover:border-blue-200' : !isSelected ? 'hover:bg-accent/50' : ''}`}
+        onClick={handleDocumentClick}
+        onContextMenu={handleRightClick}
+        draggable
+        onDragStart={handleDragStart}
+      >
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2 overflow-hidden">
@@ -518,13 +541,27 @@ function DocumentRow({ document, isSelected, onSelect, onRemoveDocument, onDelet
   )
 }
 
-export function DocumentList({ documents, isLoading, contextPath, totalCount, onRemoveDocument, onDeleteDocument, onRemoveDocuments, onDeleteDocuments, onCopyDocuments, onPasteDocuments, onImportDocuments, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange }: DocumentListProps) {
+export function DocumentList({ documents, isLoading, contextPath, totalCount, onRemoveDocument, onDeleteDocument, onRemoveDocuments, onDeleteDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange }: DocumentListProps) {
   const [selectedDocuments, setSelectedDocuments] = useState<Set<number>>(new Set())
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; documentIds: number[] } | null>(null)
   const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [showExportModal, setShowExportModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+      // Handle drag start for selected documents
+  const handleMultiDragStart = useCallback((e: React.DragEvent, documentId: number) => {
+    const draggedIds = selectedDocuments.has(documentId)
+      ? Array.from(selectedDocuments)
+      : [documentId]
+
+    const dragData = {
+      type: 'document',
+      documentIds: draggedIds
+    };
+
+    e.dataTransfer.setData('application/json', JSON.stringify(dragData));
+    e.dataTransfer.effectAllowed = 'copyMove';
+  }, [selectedDocuments])
 
   // Fuse.js configuration for fuzzy search
   const fuseOptions = useMemo(() => ({
@@ -584,12 +621,36 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
   const handleContextMenuAction = useCallback((action: string, documentIds: number[]) => {
     switch (action) {
       case 'copy': onCopyDocuments?.(documentIds); break
+      case 'cut': onCutDocuments?.(documentIds); break
       case 'remove': documentIds.length === 1 ? onRemoveDocument?.(documentIds[0]) : onRemoveDocuments?.(documentIds); break
       case 'delete': documentIds.length === 1 ? onDeleteDocument?.(documentIds[0]) : onDeleteDocuments?.(documentIds); break
+      case 'view-details':
+        if (documentIds.length === 1) {
+          const document = documents.find(doc => doc.id === documentIds[0]);
+          if (document) {
+            // Find the document row and trigger the detail modal
+            const detailEvent = new CustomEvent('show-document-detail', { detail: { document } });
+            window.dispatchEvent(detailEvent);
+          }
+        }
+        break;
+      case 'open-url':
+        if (documentIds.length === 1) {
+          const document = documents.find(doc => doc.id === documentIds[0]);
+          if (document && document.schema === 'data/abstraction/tab' && document.data.url) {
+            window.open(document.data.url, '_blank', 'noopener,noreferrer');
+          }
+        }
+        break;
+      case 'copy-id':
+        if (documentIds.length === 1) {
+          navigator.clipboard.writeText(documentIds[0].toString());
+        }
+        break;
     }
     setContextMenu(null)
     setSelectedDocuments(new Set())
-  }, [onCopyDocuments, onRemoveDocument, onRemoveDocuments, onDeleteDocument, onDeleteDocuments])
+  }, [onCopyDocuments, onCutDocuments, onRemoveDocument, onRemoveDocuments, onDeleteDocument, onDeleteDocuments, documents])
 
   const handleEmptyAreaRightClick = useCallback((event: React.MouseEvent) => {
     // Show context menu if there are documents to paste or import functionality is available
@@ -696,12 +757,12 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
               </select>
               <span>per page</span>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">
                 Showing {Math.min((currentPage - 1) * pageSize + 1, totalCount)} - {Math.min(currentPage * pageSize, totalCount)} of {totalCount}
               </span>
-              
+
               <div className="flex items-center gap-1">
                 <Button
                   variant="outline"
@@ -721,11 +782,11 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                
+
                 <span className="px-3 py-1 text-sm font-medium">
                   Page {currentPage} of {Math.ceil(totalCount / pageSize)}
                 </span>
-                
+
                 <Button
                   variant="outline"
                   size="sm"
@@ -750,7 +811,7 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
         )}
 
         {documents.length > 0 && (
-          <div className="flex items-center gap-2 mt-3 pt-3 border-t">
+          <div className="flex items-center gap-2 mt-3 pt-3 border-t flex-wrap">
             <Button
               variant="outline"
               size="sm"
@@ -773,6 +834,36 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
 
             {selectedDocuments.size > 0 && (
               <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const selectedIds = Array.from(selectedDocuments)
+                    onCopyDocuments?.(selectedIds)
+                  }}
+                  className="flex items-center gap-2"
+                  title="Copy selected documents"
+                >
+                  <Copy className="h-4 w-4" />
+                  Copy ({selectedDocuments.size})
+                </Button>
+
+                {onCutDocuments && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const selectedIds = Array.from(selectedDocuments)
+                      onCutDocuments(selectedIds)
+                    }}
+                    className="flex items-center gap-2"
+                    title="Cut selected documents"
+                  >
+                    <Scissors className="h-4 w-4" />
+                    Cut ({selectedDocuments.size})
+                  </Button>
+                )}
+
                 {(onRemoveDocument || onRemoveDocuments) && (
                   <Button
                     variant="outline"
@@ -826,6 +917,19 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
                   Export ({selectedDocuments.size})
                 </Button>
               </>
+            )}
+
+            {pastedDocumentIds && pastedDocumentIds.length > 0 && onPasteDocuments && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onPasteDocuments(contextPath, pastedDocumentIds)}
+                className="flex items-center gap-2"
+                title="Paste documents to current context"
+              >
+                <Clipboard className="h-4 w-4" />
+                Paste ({pastedDocumentIds.length})
+              </Button>
             )}
 
             {selectedDocuments.size === 0 && (
@@ -901,7 +1005,7 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
             </TableHeader>
             <TableBody>
               {filteredDocuments.map((document) => (
-                <DocumentTableRow key={document.id} document={document} isSelected={selectedDocuments.has(document.id)} onSelect={handleDocumentSelect} onRemoveDocument={onRemoveDocument} onDeleteDocument={onDeleteDocument} onRightClick={handleDocumentRightClick} />
+                <DocumentTableRow key={document.id} document={document} isSelected={selectedDocuments.has(document.id)} onSelect={handleDocumentSelect} onRemoveDocument={onRemoveDocument} onDeleteDocument={onDeleteDocument} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
               ))}
             </TableBody>
           </Table>
@@ -911,7 +1015,7 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
           <div className="space-y-3 pr-2">
             {filteredDocuments.map((document) => (
               <div key={document.id} onContextMenu={(e) => { e.stopPropagation(); handleDocumentRightClick(e, document.id); }}>
-                <DocumentRow document={document} isSelected={selectedDocuments.has(document.id)} onSelect={handleDocumentSelect} onRemoveDocument={onRemoveDocument} onDeleteDocument={onDeleteDocument} onRightClick={handleDocumentRightClick} />
+                <DocumentRow document={document} isSelected={selectedDocuments.has(document.id)} onSelect={handleDocumentSelect} onRemoveDocument={onRemoveDocument} onDeleteDocument={onDeleteDocument} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
               </div>
             ))}
           </div>
@@ -926,11 +1030,43 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
               <Copy className="h-3 w-3" />
               Copy {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
             </button>
-            {(onRemoveDocument || onRemoveDocuments) && (
-              <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('remove', contextMenu.documentIds)}>
-                <Move className="h-3 w-3" />
-                Remove {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
+            {onCutDocuments && (
+              <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('cut', contextMenu.documentIds)}>
+                <Scissors className="h-3 w-3" />
+                Cut {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
               </button>
+            )}
+            {contextMenu.documentIds.length === 1 && (
+              <>
+                <div className="my-1 h-px bg-border" />
+                <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('view-details', contextMenu.documentIds)}>
+                  <Eye className="h-3 w-3" />
+                  View Details
+                </button>
+                {(() => {
+                  const document = documents.find(doc => doc.id === contextMenu.documentIds[0]);
+                  const isTabDocument = document?.schema === 'data/abstraction/tab';
+                  return isTabDocument && document?.data.url ? (
+                    <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('open-url', contextMenu.documentIds)}>
+                      <ExternalLink className="h-3 w-3" />
+                      Open URL
+                    </button>
+                  ) : null;
+                })()}
+                <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('copy-id', contextMenu.documentIds)}>
+                  <Link className="h-3 w-3" />
+                  Copy ID
+                </button>
+              </>
+            )}
+            {(onRemoveDocument || onRemoveDocuments) && (
+              <>
+                <div className="my-1 h-px bg-border" />
+                <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('remove', contextMenu.documentIds)}>
+                  <Move className="h-3 w-3" />
+                  Remove {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
+                </button>
+              </>
             )}
             {(onDeleteDocument || onDeleteDocuments) && (
               <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2 text-destructive" onClick={() => handleContextMenuAction('delete', contextMenu.documentIds)}>

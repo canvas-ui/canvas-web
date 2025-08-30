@@ -1,0 +1,674 @@
+import React, { useState, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import {
+  Copy,
+  Clipboard,
+  X,
+  Search,
+  Filter,
+  Tags,
+  Plus,
+  Key
+} from 'lucide-react';
+import { TreeView } from '@/components/common/tree-view';
+import { DocumentList } from '@/components/common/document-list';
+import { TokenManager } from '@/components/workspace/token-manager';
+import { Button } from '@/components/ui/button';
+import { TreeNode, Document } from '@/types/workspace';
+import { cn } from '@/lib/utils';
+
+interface FileManagerViewProps {
+  // Tree data
+  tree: TreeNode | null;
+  selectedPath: string;
+  onPathSelect: (path: string) => void;
+  isLoadingTree: boolean;
+
+  // Documents data
+  documents: Document[];
+  isLoadingDocuments: boolean;
+  totalCount: number;
+  currentPage: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+
+  // Tree operations
+  onInsertPath?: (path: string, autoCreateLayers?: boolean) => Promise<boolean>;
+  onRemovePath?: (path: string, recursive?: boolean) => Promise<boolean>;
+  onMovePath?: (fromPath: string, toPath: string, recursive?: boolean) => Promise<boolean>;
+  onCopyPath?: (fromPath: string, toPath: string, recursive?: boolean) => Promise<boolean>;
+  onMergeUp?: (path: string) => Promise<boolean>;
+  onMergeDown?: (path: string) => Promise<boolean>;
+  onSubtractUp?: (path: string) => Promise<boolean>;
+  onSubtractDown?: (path: string) => Promise<boolean>;
+
+  // Document operations
+  onRemoveDocument?: (documentId: number) => void;
+  onDeleteDocument?: (documentId: number) => void;
+  onRemoveDocuments?: (documentIds: number[]) => void;
+  onDeleteDocuments?: (documentIds: number[]) => void;
+  onCopyDocuments?: (documentIds: number[]) => void;
+  onCutDocuments?: (documentIds: number[]) => void;
+  onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>;
+  onImportDocuments?: (documents: any[], contextPath: string) => Promise<boolean>;
+
+  // Filter/schema data
+  schemas: string[];
+  selectedSchemas: string[];
+  onSchemaChange: (schemas: string[]) => void;
+  isLoadingSchemas: boolean;
+
+  // Clipboard state
+  copiedDocuments: number[];
+
+  // Workspace info for tokens
+  workspaceId: string;
+}
+
+interface ClipboardState {
+  documents: {
+    ids: number[];
+    operation: 'copy' | 'cut';
+  } | null;
+  paths: {
+    paths: string[];
+    operation: 'copy' | 'cut';
+  } | null;
+}
+
+interface FiltersTabProps {
+  schemas: string[];
+  selectedSchemas: string[];
+  onSchemaChange: (schemas: string[]) => void;
+  isLoadingSchemas: boolean;
+}
+
+interface TagsTabProps {
+  customTags: string[];
+  onTagsChange: (tags: string[]) => void;
+}
+
+function FiltersTab({ schemas, selectedSchemas, onSchemaChange, isLoadingSchemas }: FiltersTabProps) {
+  const getSchemaDisplayName = (schema: string) => {
+    const parts = schema.split('/');
+    return parts[parts.length - 1] || schema;
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h4 className="text-sm font-medium mb-3">Filter by Schema</h4>
+        {isLoadingSchemas ? (
+          <div className="text-sm text-muted-foreground">Loading schemas...</div>
+        ) : (
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {schemas.map((schema) => (
+              <label key={schema} className="flex items-center space-x-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={selectedSchemas.includes(schema)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      onSchemaChange([...selectedSchemas, schema]);
+                    } else {
+                      onSchemaChange(selectedSchemas.filter(s => s !== schema));
+                    }
+                  }}
+                  className="rounded border-gray-300"
+                />
+                <span title={schema}>
+                  {getSchemaDisplayName(schema)}
+                </span>
+              </label>
+            ))}
+            {selectedSchemas.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onSchemaChange([])}
+                className="w-full mt-2"
+              >
+                Clear Filters
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <h4 className="text-sm font-medium mb-3">Quick Filters</h4>
+        <div className="space-y-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full justify-start"
+            onClick={() => onSchemaChange(['data/abstraction/tab'])}
+          >
+            <Search className="w-4 h-4 mr-2" />
+            Web Tabs Only
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full justify-start"
+            onClick={() => onSchemaChange(['data/abstraction/file'])}
+          >
+            <Search className="w-4 h-4 mr-2" />
+            Files Only
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TagsTab({ customTags, onTagsChange }: TagsTabProps) {
+  const [newTag, setNewTag] = useState('');
+
+  const handleAddTag = () => {
+    if (newTag.trim() && !customTags.includes(newTag.trim())) {
+      onTagsChange([...customTags, newTag.trim()]);
+      setNewTag('');
+    }
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    onTagsChange(customTags.filter(tag => tag !== tagToRemove));
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h4 className="text-sm font-medium mb-3">Custom Tags</h4>
+        <div className="flex gap-2 mb-3">
+          <input
+            value={newTag}
+            onChange={(e) => setNewTag(e.target.value)}
+            placeholder="Add custom tag..."
+            className="flex-1 px-3 py-2 border border-input rounded-md bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleAddTag();
+              }
+            }}
+          />
+          <Button
+            size="sm"
+            onClick={handleAddTag}
+            disabled={!newTag.trim() || customTags.includes(newTag.trim())}
+          >
+            <Plus className="w-4 h-4" />
+          </Button>
+        </div>
+
+        <div className="space-y-1 max-h-40 overflow-y-auto">
+          {customTags.map((tag) => (
+            <div
+              key={tag}
+              className="flex items-center justify-between px-2 py-1 bg-muted rounded text-sm"
+            >
+              <span>{tag}</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleRemoveTag(tag)}
+                className="h-auto p-1 hover:bg-destructive hover:text-destructive-foreground"
+              >
+                <X className="w-3 h-3" />
+              </Button>
+            </div>
+          ))}
+          {customTags.length === 0 && (
+            <div className="text-sm text-muted-foreground text-center py-4">
+              No custom tags yet. Add tags to organize your documents.
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <h4 className="text-sm font-medium mb-3">Tag Actions</h4>
+        <div className="space-y-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full justify-start"
+            disabled={customTags.length === 0}
+          >
+            <Tags className="w-4 h-4 mr-2" />
+            Apply Tags to Selection
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full justify-start"
+            disabled={customTags.length === 0}
+          >
+            <Filter className="w-4 h-4 mr-2" />
+            Filter by Tags
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function FileManagerView({
+  tree,
+  selectedPath,
+  onPathSelect,
+  isLoadingTree,
+  documents,
+  isLoadingDocuments,
+  totalCount,
+  currentPage,
+  pageSize,
+  onPageChange,
+  onPageSizeChange,
+  onInsertPath,
+  onRemovePath,
+  onMovePath,
+  onCopyPath,
+  onMergeUp,
+  onMergeDown,
+  onSubtractUp,
+  onSubtractDown,
+  onRemoveDocument,
+  onDeleteDocument,
+  onRemoveDocuments,
+  onDeleteDocuments,
+  onCopyDocuments,
+  onCutDocuments,
+  onPasteDocuments,
+  onImportDocuments,
+  schemas,
+  selectedSchemas,
+  onSchemaChange,
+  isLoadingSchemas,
+  copiedDocuments,
+  workspaceId
+}: FileManagerViewProps) {
+  const [rightTab, setRightTab] = useState<'filters' | 'tags' | 'tokens'>('filters');
+  const [customTags, setCustomTags] = useState<string[]>([]);
+  const [clipboard, setClipboard] = useState<ClipboardState>({
+    documents: null,
+    paths: null
+  });
+  const [globalContextMenu, setGlobalContextMenu] = useState<{ x: number; y: number } | null>(null);
+
+  // Enhanced document operations with clipboard
+  const handleCopyDocuments = useCallback((documentIds: number[]) => {
+    setClipboard(prev => ({
+      ...prev,
+      documents: { ids: documentIds, operation: 'copy' }
+    }));
+    onCopyDocuments?.(documentIds);
+  }, [onCopyDocuments]);
+
+  const handleCutDocuments = useCallback((documentIds: number[]) => {
+    setClipboard(prev => ({
+      ...prev,
+      documents: { ids: documentIds, operation: 'cut' }
+    }));
+    onCutDocuments?.(documentIds);
+  }, [onCutDocuments]);
+
+  const handlePasteDocuments = useCallback(async (path: string) => {
+    if (!clipboard.documents || !onPasteDocuments) return false;
+
+    const success = await onPasteDocuments(path, clipboard.documents.ids);
+
+    // If it was a cut operation and paste succeeded, remove from original location
+    if (success && clipboard.documents.operation === 'cut') {
+      if (clipboard.documents.ids.length === 1) {
+        onRemoveDocument?.(clipboard.documents.ids[0]);
+      } else {
+        onRemoveDocuments?.(clipboard.documents.ids);
+      }
+    }
+
+    // Clear clipboard after successful paste
+    if (success) {
+      setClipboard(prev => ({ ...prev, documents: null }));
+    }
+
+    return success;
+  }, [clipboard.documents, onPasteDocuments, onRemoveDocument, onRemoveDocuments]);
+
+  // Enhanced path operations with clipboard
+  const handleCopyPath = useCallback(async (fromPath: string, toPath: string, recursive?: boolean) => {
+    if (!onCopyPath) return false;
+    return await onCopyPath(fromPath, toPath, recursive);
+  }, [onCopyPath]);
+
+  const handlePastePath = useCallback(async (targetPath: string) => {
+    if (!clipboard.paths) return false;
+
+    let allSuccess = true;
+    for (const sourcePath of clipboard.paths.paths) {
+      if (clipboard.paths.operation === 'cut') {
+        const success = await onMovePath?.(sourcePath, targetPath, false);
+        if (!success) allSuccess = false;
+      } else {
+        const success = await onCopyPath?.(sourcePath, targetPath, false);
+        if (!success) allSuccess = false;
+      }
+    }
+
+    if (allSuccess) {
+      setClipboard(prev => ({ ...prev, paths: null }));
+    }
+
+    return allSuccess;
+  }, [clipboard.paths, onMovePath, onCopyPath]);
+
+  // Global keyboard shortcuts
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    // Only handle shortcuts when focused on the file manager
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+      return; // Don't interfere with input fields
+    }
+
+    if (e.ctrlKey || e.metaKey) {
+      switch (e.key) {
+        case 'c':
+          // Copy operation - for now just show a message
+          e.preventDefault();
+          console.log('Copy shortcut pressed');
+          break;
+        case 'x':
+          // Cut operation - for now just show a message
+          e.preventDefault();
+          console.log('Cut shortcut pressed');
+          break;
+        case 'v':
+          // Paste to current path
+          e.preventDefault();
+          if (clipboard.documents) {
+            handlePasteDocuments(selectedPath);
+          } else if (clipboard.paths) {
+            handlePastePath(selectedPath);
+          }
+          break;
+        case 'a':
+          // Select all (could be implemented in DocumentList)
+          e.preventDefault();
+          console.log('Select all shortcut pressed');
+          break;
+      }
+    } else {
+      switch (e.key) {
+        case 'Delete':
+          // Delete selected items
+          e.preventDefault();
+          console.log('Delete shortcut pressed');
+          break;
+        case 'F2':
+          // Rename (could trigger rename modal)
+          e.preventDefault();
+          console.log('Rename shortcut pressed');
+          break;
+        case 'Escape':
+          // Clear selections/close modals
+          e.preventDefault();
+          setGlobalContextMenu(null);
+          break;
+      }
+    }
+  }, [clipboard, selectedPath, handlePasteDocuments, handlePastePath]);
+
+  // Add/remove keyboard event listener
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleKeyDown]);
+
+  // Global context menu for empty areas
+  const handleGlobalRightClick = useCallback((e: React.MouseEvent) => {
+    // Only show global context menu if we have something to paste or other global actions
+    const hasClipboard = clipboard.documents || clipboard.paths;
+    if (!hasClipboard) return;
+
+    e.preventDefault();
+    setGlobalContextMenu({ x: e.clientX, y: e.clientY });
+  }, [clipboard]);
+
+  const handleGlobalContextMenuAction = useCallback(async (action: string) => {
+    switch (action) {
+      case 'paste-documents':
+        if (clipboard.documents) {
+          await handlePasteDocuments(selectedPath);
+        }
+        break;
+      case 'paste-paths':
+        if (clipboard.paths) {
+          await handlePastePath(selectedPath);
+        }
+        break;
+      case 'new-folder':
+        if (onInsertPath) {
+          const folderName = prompt('Enter folder name:');
+          if (folderName) {
+            const newPath = selectedPath === '/' ? `/${folderName}` : `${selectedPath}/${folderName}`;
+            await onInsertPath(newPath, true);
+          }
+        }
+        break;
+    }
+    setGlobalContextMenu(null);
+  }, [clipboard, selectedPath, handlePasteDocuments, handlePastePath, onInsertPath]);
+
+  return (
+    <div
+      className="flex h-full gap-6"
+      onContextMenu={handleGlobalRightClick}
+    >
+      {/* Left Panel - Tree View */}
+      <div className="w-80 border rounded-lg bg-card flex flex-col">
+        <div className="p-4 border-b">
+          <h3 className="font-semibold text-sm text-muted-foreground mb-2">Workspace Tree</h3>
+          <p className="text-xs text-muted-foreground">
+            Right-click for context menu, drag to move/copy
+          </p>
+        </div>
+
+        <div className="flex-1 p-4 overflow-y-auto">
+          {isLoadingTree ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="text-center space-y-2">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto"></div>
+                <p className="text-xs text-muted-foreground">Loading tree...</p>
+              </div>
+            </div>
+          ) : tree ? (
+            <TreeView
+              tree={tree}
+              selectedPath={selectedPath}
+              onPathSelect={onPathSelect}
+              readOnly={false}
+              onInsertPath={onInsertPath}
+              onRemovePath={onRemovePath}
+              onMovePath={onMovePath}
+              onCopyPath={handleCopyPath}
+              onMergeUp={onMergeUp}
+              onMergeDown={onMergeDown}
+              onSubtractUp={onSubtractUp}
+              onSubtractDown={onSubtractDown}
+              onPasteDocuments={handlePasteDocuments}
+              pastedDocumentIds={clipboard.documents?.ids || copiedDocuments}
+            />
+          ) : (
+            <div className="text-center text-muted-foreground text-sm">
+              Failed to load workspace tree
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Center Panel - Document List */}
+      <div className="flex-1 border rounded-lg bg-card flex flex-col min-h-0">
+        <DocumentList
+          documents={documents}
+          isLoading={isLoadingDocuments}
+          contextPath={selectedPath}
+          totalCount={totalCount}
+          viewMode="table"
+          onRemoveDocument={selectedPath !== '/' ? onRemoveDocument : undefined}
+          onDeleteDocument={onDeleteDocument}
+          onRemoveDocuments={selectedPath !== '/' ? onRemoveDocuments : undefined}
+          onDeleteDocuments={onDeleteDocuments}
+          onCopyDocuments={handleCopyDocuments}
+          onCutDocuments={handleCutDocuments}
+          onPasteDocuments={handlePasteDocuments}
+          onImportDocuments={onImportDocuments}
+          pastedDocumentIds={clipboard.documents?.ids || copiedDocuments}
+          currentPage={currentPage}
+          pageSize={pageSize}
+          onPageChange={onPageChange}
+          onPageSizeChange={onPageSizeChange}
+        />
+      </div>
+
+      {/* Right Panel - Filters & Tags */}
+      <div className="w-80 border rounded-lg bg-card flex flex-col">
+                <div className="flex border-b">
+          <button
+            className={cn(
+              "flex-1 py-3 px-2 text-xs font-medium transition-colors",
+              rightTab === 'filters'
+                ? 'border-b-2 border-primary bg-background'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+            onClick={() => setRightTab('filters')}
+          >
+            <Filter className="w-3 h-3 mr-1 inline" />
+            Filters
+          </button>
+          <button
+            className={cn(
+              "flex-1 py-3 px-2 text-xs font-medium transition-colors",
+              rightTab === 'tags'
+                ? 'border-b-2 border-primary bg-background'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+            onClick={() => setRightTab('tags')}
+          >
+            <Tags className="w-3 h-3 mr-1 inline" />
+            Tags
+          </button>
+          <button
+            className={cn(
+              "flex-1 py-3 px-2 text-xs font-medium transition-colors",
+              rightTab === 'tokens'
+                ? 'border-b-2 border-primary bg-background'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+            onClick={() => setRightTab('tokens')}
+          >
+            <Key className="w-3 h-3 mr-1 inline" />
+            Tokens
+          </button>
+        </div>
+
+        <div className="flex-1 p-4 overflow-y-auto">
+          {rightTab === 'filters' ? (
+            <FiltersTab
+              schemas={schemas}
+              selectedSchemas={selectedSchemas}
+              onSchemaChange={onSchemaChange}
+              isLoadingSchemas={isLoadingSchemas}
+            />
+          ) : rightTab === 'tags' ? (
+            <TagsTab
+              customTags={customTags}
+              onTagsChange={setCustomTags}
+            />
+          ) : (
+            <TokenManager workspaceId={workspaceId} />
+          )}
+        </div>
+
+        {/* Clipboard Status */}
+        {(clipboard.documents || clipboard.paths) && (
+          <div className="border-t p-3 bg-muted/50">
+            <div className="text-xs text-muted-foreground mb-2">Clipboard:</div>
+            {clipboard.documents && (
+              <div className="flex items-center gap-2 text-xs">
+                <Copy className="w-3 h-3" />
+                <span>{clipboard.documents.ids.length} document(s)</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setClipboard(prev => ({ ...prev, documents: null }))}
+                  className="ml-auto h-auto p-1"
+                >
+                  <X className="w-3 h-3" />
+                </Button>
+              </div>
+            )}
+            {clipboard.paths && (
+              <div className="flex items-center gap-2 text-xs">
+                <Copy className="w-3 h-3" />
+                <span>{clipboard.paths.paths.length} folder(s)</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setClipboard(prev => ({ ...prev, paths: null }))}
+                  className="ml-auto h-auto p-1"
+                >
+                  <X className="w-3 h-3" />
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Global Context Menu */}
+      {globalContextMenu && createPortal(
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setGlobalContextMenu(null)} />
+          <div
+            className="fixed z-50 min-w-[10rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+            style={{ left: globalContextMenu.x, top: globalContextMenu.y }}
+          >
+            {clipboard.documents && (
+              <button
+                className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+                onClick={() => handleGlobalContextMenuAction('paste-documents')}
+              >
+                <Clipboard className="w-4 h-4 mr-2" />
+                Paste Documents ({clipboard.documents.ids.length})
+              </button>
+            )}
+            {clipboard.paths && (
+              <button
+                className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+                onClick={() => handleGlobalContextMenuAction('paste-paths')}
+              >
+                <Clipboard className="w-4 h-4 mr-2" />
+                Paste Folders ({clipboard.paths.paths.length})
+              </button>
+            )}
+            {(clipboard.documents || clipboard.paths) && (
+              <div className="my-1 h-px bg-border" />
+            )}
+            <button
+              className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+              onClick={() => handleGlobalContextMenuAction('new-folder')}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              New Folder
+            </button>
+          </div>
+        </>,
+        document.body
+      )}
+    </div>
+  );
+}

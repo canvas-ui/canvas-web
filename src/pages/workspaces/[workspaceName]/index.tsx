@@ -3,10 +3,7 @@ import { useParams } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { API_ROUTES } from '@/config/api';
 import { useToast } from '@/components/ui/toast-container';
-import { Button } from '@/components/ui/button';
-import { TreeView } from '@/components/common/tree-view';
-import { DocumentList } from '@/components/common/document-list';
-import { TokenManager } from '@/components/workspace/token-manager';
+import { FileManagerView } from '@/components/workspace/file-manager-view';
 import { createPortal } from 'react-dom';
 import {
   getWorkspaceTree,
@@ -29,7 +26,7 @@ import {
   unlockWorkspaceLayer,
   destroyWorkspaceLayer
 } from '@/services/workspace';
-import { getSchemas, getSchemaDisplayName } from '@/services/schemas';
+import { getSchemas } from '@/services/schemas';
 import { TreeNode, Document } from '@/types/workspace';
 
 // Using global Workspace interface from types/api.d.ts
@@ -48,7 +45,7 @@ export default function WorkspaceDetailPage() {
   const [schemas, setSchemas] = useState<string[]>([]);
   const [selectedSchemas, setSelectedSchemas] = useState<string[]>([]);
   const [isLoadingSchemas, setIsLoadingSchemas] = useState(false);
-  const [rightTab, setRightTab] = useState<'filter' | 'tokens'>('tokens');
+
   const [copiedDocuments, setCopiedDocuments] = useState<number[]>([]);
   const { showToast } = useToast();
 
@@ -433,6 +430,14 @@ export default function WorkspaceDetailPage() {
     });
   };
 
+  const handleCutDocuments = (documentIds: number[]) => {
+    setCopiedDocuments(documentIds);
+    showToast({
+      title: 'Success',
+      description: `${documentIds.length} document(s) cut to clipboard`
+    });
+  };
+
   // Handle document removal from workspace path
   const handleRemoveDocument = async (documentId: number) => {
     if (!workspace) return;
@@ -685,194 +690,106 @@ export default function WorkspaceDetailPage() {
           </div>
         </div>
 
-        {/* File Manager Layout */}
-        <div className="flex gap-6 h-[calc(100vh-300px)]">
-          {/* Left Panel - Tree View */}
-          <div className="w-80 border rounded-lg p-0 overflow-y-auto bg-card flex flex-col">
-            <div className="flex border-b">
-              <button
-                className={`flex-1 py-2 text-xs font-medium ${leftTab === 'tree' ? 'border-b-2 border-primary' : ''}`}
-                onClick={() => setLeftTab('tree')}
-              >
-                Workspace Tree
-              </button>
-              <button
-                className={`flex-1 py-2 text-xs font-medium ${leftTab === 'layers' ? 'border-b-2 border-primary' : ''}`}
-                onClick={() => setLeftTab('layers')}
-              >
-                Tree Layers
-              </button>
-            </div>
+        {/* Enhanced File Manager */}
+        <FileManagerView
+          tree={tree}
+          selectedPath={selectedPath}
+          onPathSelect={setSelectedPath}
+          isLoadingTree={isLoadingTree}
+          documents={documents}
+          isLoadingDocuments={isLoadingDocuments}
+          totalCount={documentsTotalCount}
+          currentPage={currentPage}
+          pageSize={pageSize}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+          onInsertPath={handleInsertPath}
+          onRemovePath={handleRemovePath}
+          onMovePath={handleMovePath}
+          onCopyPath={handleCopyPath}
+          onMergeUp={handleMergeUp}
+          onMergeDown={handleMergeDown}
+          onSubtractUp={handleSubtractUp}
+          onSubtractDown={handleSubtractDown}
+          onRemoveDocument={selectedPath !== '/' ? handleRemoveDocument : undefined}
+          onDeleteDocument={handleDeleteDocument}
+          onRemoveDocuments={selectedPath !== '/' ? handleRemoveDocuments : undefined}
+          onDeleteDocuments={handleDeleteDocuments}
+          onCopyDocuments={handleCopyDocuments}
+          onCutDocuments={handleCutDocuments}
+          onPasteDocuments={handlePasteDocuments}
+          onImportDocuments={handleImportDocuments}
+          schemas={schemas}
+          selectedSchemas={selectedSchemas}
+          onSchemaChange={setSelectedSchemas}
+          isLoadingSchemas={isLoadingSchemas}
+          copiedDocuments={copiedDocuments}
+          workspaceId={workspace.id}
+        />
 
-            <div className="p-4 flex-1 overflow-y-auto">
-              {leftTab === 'tree' ? (
-                isLoadingTree ? (
-                  <div className="flex items-center justify-center h-32">
-                    <div className="text-center space-y-2">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto"></div>
-                      <p className="text-xs text-muted-foreground">Loading tree...</p>
-                    </div>
-                  </div>
-                ) : tree ? (
-                  <TreeView
-                    tree={tree}
-                    selectedPath={selectedPath}
-                    onPathSelect={setSelectedPath}
-                    readOnly={false}
-                    title="Workspace Tree"
-                    subtitle="Right-click for context menu, drag to move/copy (Ctrl=copy, Shift=recursive)"
-                    onInsertPath={handleInsertPath}
-                    onRemovePath={handleRemovePath}
-                    onMovePath={handleMovePath}
-                    onCopyPath={handleCopyPath}
-                    onMergeUp={handleMergeUp}
-                    onMergeDown={handleMergeDown}
-                    onSubtractUp={handleSubtractUp}
-                    onSubtractDown={handleSubtractDown}
-                    onPasteDocuments={handlePasteDocuments}
-                    pastedDocumentIds={copiedDocuments}
-                  />
-                ) : (
-                  <div className="text-center text-muted-foreground text-sm">
-                    Failed to load workspace tree
-                  </div>
-                )
-              ) : (
-                <div>
-                  <div className="mb-2 text-sm text-muted-foreground">All Layers</div>
-                  {isLoadingLayers ? (
-                    <div className="text-xs text-muted-foreground">Loading layers...</div>
-                  ) : layers.length === 0 ? (
-                    <div className="text-xs text-muted-foreground">No layers</div>
-                  ) : (
-                    <ul className="space-y-1">
-                      {layers.map((layer) => (
-                        <li
-                          key={layer.id}
-                          className={`flex items-center justify-between px-2 py-1 rounded hover:bg-accent ${selectedLayerId === layer.id ? 'bg-accent' : ''} ${layer.name === '/' ? 'opacity-60 pointer-events-none' : ''}`}
-                          onContextMenu={(e) => handleLayerRightClick(e, layer)}
-                        >
-                          <button className="flex items-center gap-2 min-w-0 flex-1 text-left" onClick={() => handleSelectLayer(layer)} title={layer.description || layer.label}>
-                            {layer.color && (
-                              <span className="w-2 h-2 rounded-full border" style={{ backgroundColor: layer.color }} />
-                            )}
-                            <span className="truncate" title={layer.name}>{layer.name}</span>
-                            {(() => {
-                              const isLocked = layer.name === '/' || layer.locked === true || (Array.isArray(layer.lockedBy) && layer.lockedBy.length > 0)
-                              if (isLocked) {
-                                const lockedBy = Array.isArray(layer.lockedBy) ? layer.lockedBy : []
-                                return <span className="text-xs text-muted-foreground" title={lockedBy.length > 0 ? `Locked by: ${lockedBy.join(', ')}` : 'Locked'}>🔒</span>
-                              }
-                              return null
-                            })()}
-                          </button>
-                          {layer.name !== '/' && (
-                            <div className="flex items-center gap-1 ml-2">
-                              {(() => {
-                                const isLocked = layer.locked === true || (Array.isArray(layer.lockedBy) && layer.lockedBy.length > 0)
-                                return isLocked ? (
-                                  <button className="px-1 text-xs hover:bg-muted rounded" onClick={() => handleUnlockLayer(layer)} title="Unlock">Unlock</button>
-                                ) : (
-                                  <button className="px-1 text-xs hover:bg-muted rounded" onClick={() => handleLockLayer(layer)} title="Lock">Lock</button>
-                                )
-                              })()}
-                              <button className="px-1 text-xs hover:bg-muted rounded" onClick={() => handleRenameLayer(layer)} title="Rename">Rename</button>
-                              <button className="px-1 text-xs hover:bg-destructive/10 text-destructive rounded" onClick={() => handleDestroyLayer(layer)} title="Destroy">Destroy</button>
-                            </div>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Center Panel - Document List */}
-          <div className="flex-1 border rounded-lg p-4 bg-card flex flex-col min-h-0">
-            <DocumentList
-              documents={documents}
-              isLoading={isLoadingDocuments}
-              contextPath={selectedPath}
-              totalCount={documentsTotalCount}
-              viewMode="table"
-              onRemoveDocument={selectedPath !== '/' ? handleRemoveDocument : undefined}
-              onDeleteDocument={handleDeleteDocument}
-              onRemoveDocuments={selectedPath !== '/' ? handleRemoveDocuments : undefined}
-              onDeleteDocuments={handleDeleteDocuments}
-              onCopyDocuments={handleCopyDocuments}
-              onPasteDocuments={handlePasteDocuments}
-              onImportDocuments={handleImportDocuments}
-              pastedDocumentIds={copiedDocuments}
-              currentPage={currentPage}
-              pageSize={pageSize}
-              onPageChange={handlePageChange}
-              onPageSizeChange={handlePageSizeChange}
-            />
-          </div>
-
-          {/* Right Sidebar */}
-          <div className="w-80 border rounded-lg p-4 bg-card">
-            <div className="flex border-b mb-4">
-              <button
-                className={`flex-1 py-2 text-sm font-medium ${rightTab === 'tokens' ? 'border-b-2 border-primary' : ''}`}
-                onClick={() => setRightTab('tokens')}
-              >
-                Tokens
-              </button>
-              <button
-                className={`flex-1 py-2 text-sm font-medium ${rightTab === 'filter' ? 'border-b-2 border-primary' : ''}`}
-                onClick={() => setRightTab('filter')}
-              >
-                Filter
-              </button>
-            </div>
-
-            {rightTab === 'tokens' ? (
-              <TokenManager workspaceId={workspace.id} />
-            ) : (
-              <div>
-                <h3 className="text-lg font-semibold mb-4">Filter by Schema</h3>
-                {isLoadingSchemas ? (
-                  <div className="text-sm text-muted-foreground">Loading schemas...</div>
-                ) : (
-                  <div className="space-y-2 max-h-80 overflow-y-auto">
-                    {schemas.map((schema) => (
-                      <label key={schema} className="flex items-center space-x-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedSchemas.includes(schema)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedSchemas(prev => [...prev, schema])
-                            } else {
-                              setSelectedSchemas(prev => prev.filter(s => s !== schema))
-                            }
-                          }}
-                          className="rounded border-gray-300"
-                        />
-                        <span title={schema}>
-                          {getSchemaDisplayName(schema)}
-                        </span>
-                      </label>
-                    ))}
-                    {selectedSchemas.length > 0 && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSelectedSchemas([])}
-                        className="w-full mt-2"
-                      >
-                        Clear Filters
-                      </Button>
-                    )}
-                  </div>
-                )}
+        {/* Legacy Layers View - can be moved to a separate tab/modal later */}
+        {leftTab === 'layers' && (
+          <div className="mt-6 border rounded-lg p-4 bg-card">
+            <div className="mb-4">
+              <h3 className="font-semibold text-sm text-muted-foreground mb-2">Tree Layers</h3>
+              <div className="flex gap-2">
+                <button
+                  className="py-2 px-3 text-xs font-medium border rounded"
+                  onClick={() => setLeftTab('tree')}
+                >
+                  Back to File Manager
+                </button>
               </div>
+            </div>
+
+            {isLoadingLayers ? (
+              <div className="text-xs text-muted-foreground">Loading layers...</div>
+            ) : layers.length === 0 ? (
+              <div className="text-xs text-muted-foreground">No layers</div>
+            ) : (
+              <ul className="space-y-1">
+                {layers.map((layer) => (
+                  <li
+                    key={layer.id}
+                    className={`flex items-center justify-between px-2 py-1 rounded hover:bg-accent ${selectedLayerId === layer.id ? 'bg-accent' : ''} ${layer.name === '/' ? 'opacity-60 pointer-events-none' : ''}`}
+                    onContextMenu={(e) => handleLayerRightClick(e, layer)}
+                  >
+                    <button className="flex items-center gap-2 min-w-0 flex-1 text-left" onClick={() => handleSelectLayer(layer)} title={layer.description || layer.label}>
+                      {layer.color && (
+                        <span className="w-2 h-2 rounded-full border" style={{ backgroundColor: layer.color }} />
+                      )}
+                      <span className="truncate" title={layer.name}>{layer.name}</span>
+                      {(() => {
+                        const isLocked = layer.name === '/' || layer.locked === true || (Array.isArray(layer.lockedBy) && layer.lockedBy.length > 0)
+                        if (isLocked) {
+                          const lockedBy = Array.isArray(layer.lockedBy) ? layer.lockedBy : []
+                          return <span className="text-xs text-muted-foreground" title={lockedBy.length > 0 ? `Locked by: ${lockedBy.join(', ')}` : 'Locked'}>🔒</span>
+                        }
+                        return null
+                      })()}
+                    </button>
+                    {layer.name !== '/' && (
+                      <div className="flex items-center gap-1 ml-2">
+                        {(() => {
+                          const isLocked = layer.locked === true || (Array.isArray(layer.lockedBy) && layer.lockedBy.length > 0)
+                          return isLocked ? (
+                            <button className="px-1 text-xs hover:bg-muted rounded" onClick={() => handleUnlockLayer(layer)} title="Unlock">Unlock</button>
+                          ) : (
+                            <button className="px-1 text-xs hover:bg-muted rounded" onClick={() => handleLockLayer(layer)} title="Lock">Lock</button>
+                          )
+                        })()}
+                        <button className="px-1 text-xs hover:bg-muted rounded" onClick={() => handleRenameLayer(layer)} title="Rename">Rename</button>
+                        <button className="px-1 text-xs hover:bg-destructive/10 text-destructive rounded" onClick={() => handleDestroyLayer(layer)} title="Destroy">Destroy</button>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
-        </div>
+        )}
+
+
       </div>
 
       {/* Layers context menu */}

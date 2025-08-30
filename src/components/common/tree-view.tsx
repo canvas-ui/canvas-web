@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronRight, ChevronDown, Folder, FolderOpen, MoreHorizontal, Trash2, Plus, ArrowUp, ArrowDown, Clipboard, Minus } from 'lucide-react'
+import { ChevronRight, ChevronDown, Folder, FolderOpen, MoreHorizontal, Trash2, Plus, ArrowUp, ArrowDown, Clipboard, Minus, Copy, Scissors } from 'lucide-react'
 import { TreeNode } from '@/types/workspace'
 import { cn } from '@/lib/utils'
 
@@ -15,12 +15,16 @@ interface TreeViewProps {
   onRemovePath?: (path: string, recursive?: boolean) => Promise<boolean>
   onMovePath?: (fromPath: string, toPath: string, recursive?: boolean) => Promise<boolean>
   onCopyPath?: (fromPath: string, toPath: string, recursive?: boolean) => Promise<boolean>
+  onCopyPathToClipboard?: (path: string) => void
+  onCutPathToClipboard?: (path: string) => void
+  onPastePathFromClipboard?: (path: string) => Promise<boolean>
   onMergeUp?: (path: string) => Promise<boolean>
   onMergeDown?: (path: string) => Promise<boolean>
   onSubtractUp?: (path: string) => Promise<boolean>
   onSubtractDown?: (path: string) => Promise<boolean>
   onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
   pastedDocumentIds?: number[]
+  clipboardPaths?: string[]
 }
 
 interface TreeNodeProps {
@@ -34,12 +38,16 @@ interface TreeNodeProps {
   onRemovePath?: (path: string, recursive?: boolean) => Promise<boolean>
   onMovePath?: (fromPath: string, toPath: string, recursive?: boolean) => Promise<boolean>
   onCopyPath?: (fromPath: string, toPath: string, recursive?: boolean) => Promise<boolean>
+  onCopyPathToClipboard?: (path: string) => void
+  onCutPathToClipboard?: (path: string) => void
+  onPastePathFromClipboard?: (path: string) => Promise<boolean>
   onMergeUp?: (path: string) => Promise<boolean>
   onMergeDown?: (path: string) => Promise<boolean>
   onSubtractUp?: (path: string) => Promise<boolean>
   onSubtractDown?: (path: string) => Promise<boolean>
   onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
   pastedDocumentIds?: number[]
+  clipboardPaths?: string[]
   onDragStart: (path: string, event: React.DragEvent) => void
   onDragOver: (path: string, event: React.DragEvent) => void
   onDrop: (path: string, event: React.DragEvent) => void
@@ -54,15 +62,20 @@ interface ContextMenuProps {
   path: string
   onInsertPath?: (path: string, autoCreateLayers?: boolean) => Promise<boolean>
   onRemovePath?: (path: string, recursive?: boolean) => Promise<boolean>
+  onCopyPath?: (path: string) => void
+  onCutPath?: (path: string) => void
+  onPastePath?: (path: string) => Promise<boolean>
   onMergeUp?: (path: string) => Promise<boolean>
   onMergeDown?: (path: string) => Promise<boolean>
   onSubtractUp?: (path: string) => Promise<boolean>
   onSubtractDown?: (path: string) => Promise<boolean>
   onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
   pastedDocumentIds?: number[]
+  clipboardPaths?: string[]
+  clipboardDocuments?: number[]
 }
 
-function ContextMenu({ isOpen, onClose, x, y, path, onInsertPath, onRemovePath, onMergeUp, onMergeDown, onSubtractUp, onSubtractDown, onPasteDocuments, pastedDocumentIds }: ContextMenuProps) {
+function ContextMenu({ isOpen, onClose, x, y, path, onInsertPath, onRemovePath, onCopyPath, onCutPath, onPastePath, onMergeUp, onMergeDown, onSubtractUp, onSubtractDown, onPasteDocuments, pastedDocumentIds, clipboardPaths }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
 
   const handleAction = async (action: string) => {
@@ -109,7 +122,22 @@ function ContextMenu({ isOpen, onClose, x, y, path, onInsertPath, onRemovePath, 
             await onSubtractDown(path)
           }
           break
-        case 'paste':
+        case 'copy':
+          if (onCopyPath) {
+            onCopyPath(path)
+          }
+          break
+        case 'cut':
+          if (onCutPath) {
+            onCutPath(path)
+          }
+          break
+        case 'paste-paths':
+          if (onPastePath) {
+            await onPastePath(path)
+          }
+          break
+        case 'paste-documents':
           if (onPasteDocuments && pastedDocumentIds && pastedDocumentIds.length > 0) {
             await onPasteDocuments(path, pastedDocumentIds)
           }
@@ -138,12 +166,36 @@ function ContextMenu({ isOpen, onClose, x, y, path, onInsertPath, onRemovePath, 
           onClick={() => handleAction('insert')}
         >
           <Plus className="w-4 h-4 mr-2" />
-          Insert Path
+          New Folder
         </div>
+        <div className="my-1 h-px bg-border" />
+        <div
+          className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+          onClick={() => handleAction('copy')}
+        >
+          <Copy className="w-4 h-4 mr-2" />
+          Copy
+        </div>
+        <div
+          className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+          onClick={() => handleAction('cut')}
+        >
+          <Scissors className="w-4 h-4 mr-2" />
+          Cut
+        </div>
+        {clipboardPaths && clipboardPaths.length > 0 && (
+          <div
+            className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+            onClick={() => handleAction('paste-paths')}
+          >
+            <Clipboard className="w-4 h-4 mr-2" />
+            Paste Folders ({clipboardPaths.length})
+          </div>
+        )}
         {pastedDocumentIds && pastedDocumentIds.length > 0 && (
           <div
             className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
-            onClick={() => handleAction('paste')}
+            onClick={() => handleAction('paste-documents')}
           >
             <Clipboard className="w-4 h-4 mr-2" />
             Paste Documents ({pastedDocumentIds.length})
@@ -210,12 +262,16 @@ function TreeNodeComponent({
   onRemovePath,
   onMovePath,
   onCopyPath,
+  onCopyPathToClipboard,
+  onCutPathToClipboard,
+  onPastePathFromClipboard,
   onMergeUp,
   onMergeDown,
   onSubtractUp,
   onSubtractDown,
   onPasteDocuments,
   pastedDocumentIds,
+  clipboardPaths,
   onDragStart,
   onDragOver,
   onDrop,
@@ -330,12 +386,16 @@ function TreeNodeComponent({
         path={currentPath}
         onInsertPath={onInsertPath}
         onRemovePath={onRemovePath}
+        onCopyPath={onCopyPathToClipboard}
+        onCutPath={onCutPathToClipboard}
+        onPastePath={onPastePathFromClipboard}
         onMergeUp={onMergeUp}
         onMergeDown={onMergeDown}
         onSubtractUp={onSubtractUp}
         onSubtractDown={onSubtractDown}
         onPasteDocuments={onPasteDocuments}
         pastedDocumentIds={pastedDocumentIds}
+        clipboardPaths={clipboardPaths}
       />
 
       {/* Children */}
@@ -354,12 +414,16 @@ function TreeNodeComponent({
               onRemovePath={onRemovePath}
               onMovePath={onMovePath}
               onCopyPath={onCopyPath}
+              onCopyPathToClipboard={onCopyPathToClipboard}
+              onCutPathToClipboard={onCutPathToClipboard}
+              onPastePathFromClipboard={onPastePathFromClipboard}
               onMergeUp={onMergeUp}
               onMergeDown={onMergeDown}
               onSubtractUp={onSubtractUp}
               onSubtractDown={onSubtractDown}
               onPasteDocuments={onPasteDocuments}
               pastedDocumentIds={pastedDocumentIds}
+              clipboardPaths={clipboardPaths}
               onDragStart={onDragStart}
               onDragOver={onDragOver}
               onDrop={onDrop}
@@ -383,12 +447,16 @@ export function TreeView({
   onRemovePath,
   onMovePath,
   onCopyPath,
+  onCopyPathToClipboard,
+  onCutPathToClipboard,
+  onPastePathFromClipboard,
   onMergeUp,
   onMergeDown,
   onSubtractUp,
   onSubtractDown,
   onPasteDocuments,
-  pastedDocumentIds
+  pastedDocumentIds,
+  clipboardPaths
 }: TreeViewProps) {
   const [dragOverPath, setDragOverPath] = useState<string | null>(null)
   const [draggedPath, setDraggedPath] = useState<string | null>(null)
@@ -409,7 +477,10 @@ export function TreeView({
   }, [readOnly])
 
   const handleDragOver = useCallback((path: string, event: React.DragEvent) => {
-    if (readOnly || !draggedPath) return
+    if (readOnly) return
+
+    // Accept drops from documents or paths
+    if (!draggedPath && !event.dataTransfer.types.includes('application/json')) return
 
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
@@ -426,18 +497,38 @@ export function TreeView({
   }, [readOnly, draggedPath])
 
   const handleDrop = useCallback(async (targetPath: string, event: React.DragEvent) => {
-    if (readOnly || !draggedPath) return
+    if (readOnly) return
 
     event.preventDefault()
     setDragOverPath(null)
     dragCounterRef.current = 0
 
-    const sourcePath = draggedPath
-    setDraggedPath(null)
-
-    if (sourcePath === targetPath) return
-
     try {
+            // Check if it's a document being dragged
+      const dragData = event.dataTransfer.getData('application/json')
+
+      if (dragData) {
+        const parsedData = JSON.parse(dragData)
+
+        if (parsedData.type === 'document') {
+          // Handle document drop
+          const documentIds = parsedData.documentIds || [parsedData.documentId]
+
+          if (onPasteDocuments) {
+            // For now, always copy documents (could extend to move with shift key)
+            await onPasteDocuments(targetPath, documentIds)
+          }
+          return
+        }
+      }
+
+      // Handle path drag & drop
+      if (!draggedPath) return
+      const sourcePath = draggedPath
+      setDraggedPath(null)
+
+      if (sourcePath === targetPath) return
+
       // Determine operation based on modifier keys
       const isCtrlPressed = event.ctrlKey
       const isShiftPressed = event.shiftKey
@@ -453,7 +544,7 @@ export function TreeView({
       console.error('Error during drop operation:', error)
       alert(`Drop operation failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
-  }, [readOnly, draggedPath, onCopyPath, onMovePath])
+  }, [readOnly, draggedPath, onCopyPath, onMovePath, onPasteDocuments])
 
   const handleDragLeave = useCallback(() => {
     dragCounterRef.current--
@@ -531,12 +622,16 @@ export function TreeView({
           path="/"
           onInsertPath={onInsertPath}
           onRemovePath={onRemovePath}
+          onCopyPath={onCopyPathToClipboard}
+          onCutPath={onCutPathToClipboard}
+          onPastePath={onPastePathFromClipboard}
           onMergeUp={onMergeUp}
           onMergeDown={onMergeDown}
           onSubtractUp={onSubtractUp}
           onSubtractDown={onSubtractDown}
           onPasteDocuments={onPasteDocuments}
           pastedDocumentIds={pastedDocumentIds}
+          clipboardPaths={clipboardPaths}
         />
 
         {/* Child nodes */}
@@ -553,12 +648,16 @@ export function TreeView({
             onRemovePath={onRemovePath}
             onMovePath={onMovePath}
             onCopyPath={onCopyPath}
+            onCopyPathToClipboard={onCopyPathToClipboard}
+            onCutPathToClipboard={onCutPathToClipboard}
+            onPastePathFromClipboard={onPastePathFromClipboard}
             onMergeUp={onMergeUp}
             onMergeDown={onMergeDown}
             onSubtractUp={onSubtractUp}
             onSubtractDown={onSubtractDown}
             onPasteDocuments={onPasteDocuments}
             pastedDocumentIds={pastedDocumentIds}
+            clipboardPaths={clipboardPaths}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDrop={handleDrop}
