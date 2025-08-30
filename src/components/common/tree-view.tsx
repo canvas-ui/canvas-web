@@ -1,6 +1,6 @@
-import { useState, useRef, useCallback, useMemo } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronRight, ChevronDown, Folder, FolderOpen, MoreHorizontal, Trash2, Plus, ArrowUp, ArrowDown, Clipboard, Minus, Copy, Scissors } from 'lucide-react'
+import { ChevronRight, ChevronDown, Folder, FolderOpen, MoreHorizontal, Trash2, Plus, ArrowUp, ArrowDown, Clipboard, Minus, Copy, Scissors, Edit } from 'lucide-react'
 import { TreeNode } from '@/types/workspace'
 import { cn } from '@/lib/utils'
 
@@ -9,10 +9,9 @@ interface TreeViewProps {
   selectedPath: string
   onPathSelect: (path: string) => void
   readOnly?: boolean
-  title?: string
-  subtitle?: string
   onInsertPath?: (path: string, autoCreateLayers?: boolean) => Promise<boolean>
   onRemovePath?: (path: string, recursive?: boolean) => Promise<boolean>
+  onRenamePath?: (fromPath: string, newName: string) => Promise<boolean>
   onMovePath?: (fromPath: string, toPath: string, recursive?: boolean) => Promise<boolean>
   onCopyPath?: (fromPath: string, toPath: string, recursive?: boolean) => Promise<boolean>
   onCopyPathToClipboard?: (path: string) => void
@@ -36,6 +35,7 @@ interface TreeNodeProps {
   readOnly: boolean
   onInsertPath?: (path: string, autoCreateLayers?: boolean) => Promise<boolean>
   onRemovePath?: (path: string, recursive?: boolean) => Promise<boolean>
+  onRenamePath?: (fromPath: string, newName: string) => Promise<boolean>
   onMovePath?: (fromPath: string, toPath: string, recursive?: boolean) => Promise<boolean>
   onCopyPath?: (fromPath: string, toPath: string, recursive?: boolean) => Promise<boolean>
   onCopyPathToClipboard?: (path: string) => void
@@ -62,6 +62,7 @@ interface ContextMenuProps {
   path: string
   onInsertPath?: (path: string, autoCreateLayers?: boolean) => Promise<boolean>
   onRemovePath?: (path: string, recursive?: boolean) => Promise<boolean>
+  onRenamePath?: (fromPath: string, newName: string) => Promise<boolean>
   onCopyPath?: (path: string) => void
   onCutPath?: (path: string) => void
   onPastePath?: (path: string) => Promise<boolean>
@@ -75,7 +76,7 @@ interface ContextMenuProps {
   clipboardDocuments?: number[]
 }
 
-function ContextMenu({ isOpen, onClose, x, y, path, onInsertPath, onRemovePath, onCopyPath, onCutPath, onPastePath, onMergeUp, onMergeDown, onSubtractUp, onSubtractDown, onPasteDocuments, pastedDocumentIds, clipboardPaths }: ContextMenuProps) {
+function ContextMenu({ isOpen, onClose, x, y, path, onInsertPath, onRemovePath, onRenamePath, onCopyPath, onCutPath, onPastePath, onMergeUp, onMergeDown, onSubtractUp, onSubtractDown, onPasteDocuments, pastedDocumentIds, clipboardPaths }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
 
   const handleAction = async (action: string) => {
@@ -86,6 +87,13 @@ function ContextMenu({ isOpen, onClose, x, y, path, onInsertPath, onRemovePath, 
           if (newPath && onInsertPath) {
             const fullPath = path === '/' ? `/${newPath}` : `${path}/${newPath}`
             await onInsertPath(fullPath, true)
+          }
+          break
+        case 'rename':
+          const currentName = path.split('/').pop() || ''
+          const newName = prompt('Enter new name:', currentName)
+          if (newName && newName !== currentName && onRenamePath) {
+            await onRenamePath(path, newName)
           }
           break
         case 'remove':
@@ -168,6 +176,15 @@ function ContextMenu({ isOpen, onClose, x, y, path, onInsertPath, onRemovePath, 
           <Plus className="w-4 h-4 mr-2" />
           New Folder
         </div>
+        {path !== '/' && (
+          <div
+            className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+            onClick={() => handleAction('rename')}
+          >
+            <Edit className="w-4 h-4 mr-2" />
+            Rename
+          </div>
+        )}
         <div className="my-1 h-px bg-border" />
         <div
           className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
@@ -260,6 +277,7 @@ function TreeNodeComponent({
   readOnly,
   onInsertPath,
   onRemovePath,
+  onRenamePath,
   onMovePath,
   onCopyPath,
   onCopyPathToClipboard,
@@ -299,6 +317,7 @@ function TreeNodeComponent({
   const handleContextMenu = (e: React.MouseEvent) => {
     if (readOnly) return
     e.preventDefault()
+    e.stopPropagation()
     setContextMenu({ x: e.clientX, y: e.clientY })
   }
 
@@ -386,6 +405,7 @@ function TreeNodeComponent({
         path={currentPath}
         onInsertPath={onInsertPath}
         onRemovePath={onRemovePath}
+        onRenamePath={onRenamePath}
         onCopyPath={onCopyPathToClipboard}
         onCutPath={onCutPathToClipboard}
         onPastePath={onPastePathFromClipboard}
@@ -412,6 +432,7 @@ function TreeNodeComponent({
               readOnly={readOnly}
               onInsertPath={onInsertPath}
               onRemovePath={onRemovePath}
+              onRenamePath={onRenamePath}
               onMovePath={onMovePath}
               onCopyPath={onCopyPath}
               onCopyPathToClipboard={onCopyPathToClipboard}
@@ -441,10 +462,9 @@ export function TreeView({
   selectedPath,
   onPathSelect,
   readOnly = false,
-  title = 'Tree',
-  subtitle,
   onInsertPath,
   onRemovePath,
+  onRenamePath,
   onMovePath,
   onCopyPath,
   onCopyPathToClipboard,
@@ -463,11 +483,6 @@ export function TreeView({
   const [rootContextMenu, setRootContextMenu] = useState<{ x: number; y: number } | null>(null)
   const dragCounterRef = useRef(0)
 
-  const defaultSubtitle = useMemo(() => {
-    if (subtitle) return subtitle
-    return readOnly ? 'Read-only view (shared context)' : 'Right-click for context menu, drag to move/copy (Ctrl=copy, Shift=recursive)'
-  }, [subtitle, readOnly])
-
   const handleDragStart = useCallback((path: string, event: React.DragEvent) => {
     if (readOnly) return
 
@@ -479,17 +494,21 @@ export function TreeView({
   const handleDragOver = useCallback((path: string, event: React.DragEvent) => {
     if (readOnly) return
 
-    // Accept drops from documents or paths
-    if (!draggedPath && !event.dataTransfer.types.includes('application/json')) return
-
+    // Always prevent default to allow drop; we'll validate on drop
     event.preventDefault()
-    event.dataTransfer.dropEffect = 'move'
 
-    // Determine operation based on modifier keys
-    if (event.ctrlKey) {
+    // Check if this is a document drag by looking at the data types
+    const hasDocumentData = event.dataTransfer.types.includes('application/json')
+    const hasPathData = event.dataTransfer.types.includes('text/plain')
+
+    if (hasDocumentData) {
+      // For document drops, default to copy
       event.dataTransfer.dropEffect = 'copy'
-    } else if (event.shiftKey) {
-      event.dataTransfer.dropEffect = 'move'
+    } else if (hasPathData) {
+      // For path drops, default to move, allow copy with ctrl
+      event.dataTransfer.dropEffect = event.ctrlKey ? 'copy' : 'move'
+    } else {
+      event.dataTransfer.dropEffect = 'copy'
     }
 
     setDragOverPath(path)
@@ -513,7 +532,6 @@ export function TreeView({
         if (parsedData.type === 'document') {
           // Handle document drop
           const documentIds = parsedData.documentIds || [parsedData.documentId]
-
           if (onPasteDocuments) {
             // For now, always copy documents (could extend to move with shift key)
             await onPasteDocuments(targetPath, documentIds)
@@ -556,15 +574,12 @@ export function TreeView({
   const handleRootContextMenu = (e: React.MouseEvent) => {
     if (readOnly) return
     e.preventDefault()
+    e.stopPropagation()
     setRootContextMenu({ x: e.clientX, y: e.clientY })
   }
 
   return (
     <div className="w-full" onDragLeave={handleDragLeave}>
-      <div className="border-b pb-2 mb-2">
-        <h3 className="font-semibold text-sm text-muted-foreground">{title}</h3>
-        <p className="text-xs text-muted-foreground">{defaultSubtitle}</p>
-      </div>
 
       <div className="space-y-0.5">
         {/* Root node */}
@@ -622,6 +637,7 @@ export function TreeView({
           path="/"
           onInsertPath={onInsertPath}
           onRemovePath={onRemovePath}
+          onRenamePath={onRenamePath}
           onCopyPath={onCopyPathToClipboard}
           onCutPath={onCutPathToClipboard}
           onPastePath={onPastePathFromClipboard}
@@ -646,6 +662,7 @@ export function TreeView({
             readOnly={readOnly}
             onInsertPath={onInsertPath}
             onRemovePath={onRemovePath}
+            onRenamePath={onRenamePath}
             onMovePath={onMovePath}
             onCopyPath={onCopyPath}
             onCopyPathToClipboard={onCopyPathToClipboard}

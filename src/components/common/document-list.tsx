@@ -1,6 +1,6 @@
 import { Document } from '@/types/workspace'
 import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link } from 'lucide-react'
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import Fuse from 'fuse.js'
 import {
   Table,
@@ -151,14 +151,14 @@ function ExportModal({ isOpen, onClose, documents, selectedDocuments }: ExportMo
                   Copy to Clipboard
                 </Button>
               </div>
-                                          <textarea
-                className="w-full h-96 p-4 bg-muted border rounded-lg text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-                value={jsonString}
-                readOnly
-                autoFocus
-                onKeyDown={handleKeyDown}
-                onFocus={(e) => e.target.select()}
-              />
+            <textarea
+              className="w-full h-96 p-4 bg-muted border rounded-lg text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+              value={jsonString}
+              readOnly
+              autoFocus
+              onKeyDown={handleKeyDown}
+              onFocus={(e) => e.target.select()}
+            />
             </div>
           </div>
 
@@ -366,7 +366,7 @@ function DocumentDetailModal({ document, isOpen, onClose }: DocumentDetailModalP
           </div>
 
           <div className="mt-8 pt-4 border-t flex justify-end">
-            <button onClick={onClose} className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90">Close</button>
+            <Button onClick={onClose}>Close</Button>
           </div>
         </div>
       </div>
@@ -410,8 +410,27 @@ function DocumentTableRow({ document, isSelected, onSelect, onRemoveDocument, on
 
   const handleDocumentClick = (e: React.MouseEvent) => {
     const isCtrlClick = e.ctrlKey || e.metaKey
-    if (onSelect) { onSelect(document.id, !isSelected, isCtrlClick) }
-    if (!isCtrlClick) { if (isTabDocument && tabUrl) { window.open(tabUrl, '_blank', 'noopener,noreferrer') } else { setShowDetailModal(true) } }
+    if (onSelect) {
+      if (isCtrlClick) {
+        // For ctrl+click, toggle selection state
+        onSelect(document.id, !isSelected, isCtrlClick)
+      } else {
+        // For regular click, always select this document (and clear others)
+        onSelect(document.id, true, isCtrlClick)
+      }
+    }
+    if (!isCtrlClick) {
+      if (isTabDocument && tabUrl) {
+        window.open(tabUrl, '_blank', 'noopener,noreferrer')
+      } else {
+        setShowDetailModal(true)
+      }
+    }
+  }
+
+  const handleMouseDown = () => {
+    // Removed auto-selection logic to avoid race conditions with drag operations
+    // Drag will work based on current selection state, click will handle selection
   }
 
   const handleRightClick = (e: React.MouseEvent) => {
@@ -430,6 +449,7 @@ function DocumentTableRow({ document, isSelected, onSelect, onRemoveDocument, on
       <TableRow
         className={`cursor-pointer ${isSelected ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-muted/50'}`}
         onClick={handleDocumentClick}
+        onMouseDown={handleMouseDown}
         onContextMenu={handleRightClick}
         draggable
         onDragStart={handleDragStart}
@@ -493,8 +513,21 @@ function DocumentRow({ document, isSelected, onSelect, onRemoveDocument, onDelet
 
   const handleDocumentClick = (e: React.MouseEvent) => {
     const isCtrlClick = e.ctrlKey || e.metaKey
-    onSelect?.(document.id, !isSelected, isCtrlClick)
+    if (onSelect) {
+      if (isCtrlClick) {
+        // For ctrl+click, toggle selection state
+        onSelect(document.id, !isSelected, isCtrlClick)
+      } else {
+        // For regular click, always select this document (and clear others)
+        onSelect(document.id, true, isCtrlClick)
+      }
+    }
     if (!isCtrlClick) { if (isTabDocument && tabUrl) { window.open(tabUrl, '_blank', 'noopener,noreferrer') } else { setShowDetailModal(true) } }
+  }
+
+  const handleMouseDown = () => {
+    // Removed auto-selection logic to avoid race conditions with drag operations
+    // Drag will work based on current selection state, click will handle selection
   }
 
   const handleRightClick = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); if (onSelect && !isSelected) { onSelect(document.id, true, false) } onRightClick?.(e, document.id) }
@@ -507,6 +540,7 @@ function DocumentRow({ document, isSelected, onSelect, onRemoveDocument, onDelet
       <div
         className={`border rounded-lg p-4 transition-colors cursor-pointer ${isSelected ? 'bg-blue-50 border-blue-300 ring-1 ring-blue-200' : ''} ${isTabDocument && !isSelected ? 'hover:bg-blue-50 hover:border-blue-200' : !isSelected ? 'hover:bg-accent/50' : ''}`}
         onClick={handleDocumentClick}
+        onMouseDown={handleMouseDown}
         onContextMenu={handleRightClick}
         draggable
         onDragStart={handleDragStart}
@@ -548,11 +582,25 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
   const [showExportModal, setShowExportModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+
+  // Clear selection when context path changes
+  useEffect(() => {
+    setSelectedDocuments(new Set())
+  }, [contextPath])
       // Handle drag start for selected documents
   const handleMultiDragStart = useCallback((e: React.DragEvent, documentId: number) => {
-    const draggedIds = selectedDocuments.has(documentId)
-      ? Array.from(selectedDocuments)
-      : [documentId]
+    // Always ensure the dragged document is included
+    let draggedIds: number[];
+
+    if (selectedDocuments.has(documentId) && selectedDocuments.size > 1) {
+      // Document is part of a multi-selection, drag all selected documents
+      draggedIds = Array.from(selectedDocuments);
+    } else {
+      // Single document drag - either it's the only selected one or not selected at all
+      draggedIds = [documentId];
+      // Update selection to show this document is being dragged
+      setSelectedDocuments(new Set([documentId]));
+    }
 
     const dragData = {
       type: 'document',
@@ -561,6 +609,9 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
 
     e.dataTransfer.setData('application/json', JSON.stringify(dragData));
     e.dataTransfer.effectAllowed = 'copyMove';
+
+    // Add visual feedback for dragging
+    e.dataTransfer.setDragImage(e.currentTarget as Element, 0, 0);
   }, [selectedDocuments])
 
   // Fuse.js configuration for fuzzy search
@@ -618,7 +669,7 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
     setContextMenu({ x: event.clientX, y: event.clientY, documentIds: targetIds })
   }, [selectedDocuments])
 
-  const handleContextMenuAction = useCallback((action: string, documentIds: number[]) => {
+  const handleContextMenuAction = useCallback(async (action: string, documentIds: number[]) => {
     switch (action) {
       case 'copy': onCopyDocuments?.(documentIds); break
       case 'cut': onCutDocuments?.(documentIds); break
@@ -644,7 +695,28 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
         break;
       case 'copy-id':
         if (documentIds.length === 1) {
-          navigator.clipboard.writeText(documentIds[0].toString());
+          try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              await navigator.clipboard.writeText(documentIds[0].toString());
+            } else {
+              // Fallback for environments without clipboard API
+              const textArea = document.createElement('textarea');
+              textArea.value = documentIds[0].toString();
+              document.body.appendChild(textArea);
+              textArea.select();
+              document.execCommand('copy');
+              document.body.removeChild(textArea);
+            }
+          } catch (err) {
+            console.error('Failed to copy ID to clipboard:', err);
+            // Fallback method
+            const textArea = document.createElement('textarea');
+            textArea.value = documentIds[0].toString();
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+          }
         }
         break;
     }
@@ -660,6 +732,7 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
     if (!hasPasteOption && !hasImportOption) return
 
     event.preventDefault()
+    event.stopPropagation()
     setEmptyAreaContextMenu({ x: event.clientX, y: event.clientY })
   }, [pastedDocumentIds, onPasteDocuments, onImportDocuments])
 
@@ -704,7 +777,7 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div className="flex-1 flex flex-col min-h-0 p-4">
       <div className="border-b pb-3 mb-4 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div>

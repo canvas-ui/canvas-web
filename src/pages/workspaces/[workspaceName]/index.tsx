@@ -4,7 +4,7 @@ import { api } from '@/lib/api';
 import { API_ROUTES } from '@/config/api';
 import { useToast } from '@/components/ui/toast-container';
 import { FileManagerView } from '@/components/workspace/file-manager-view';
-import { createPortal } from 'react-dom';
+
 import {
   getWorkspaceTree,
   getWorkspaceDocuments,
@@ -46,18 +46,22 @@ export default function WorkspaceDetailPage() {
   const [selectedSchemas, setSelectedSchemas] = useState<string[]>([]);
   const [isLoadingSchemas, setIsLoadingSchemas] = useState(false);
 
-  const [copiedDocuments, setCopiedDocuments] = useState<number[]>([]);
+  // Clipboard state for copy/cut operations
+  const [clipboard, setClipboard] = useState<{
+    documentIds: number[];
+    operation: 'copy' | 'cut';
+    sourcePath: string;
+  } | null>(null);
   const { showToast } = useToast();
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
 
-  const [leftTab, setLeftTab] = useState<'tree' | 'layers'>('tree');
   const [layers, setLayers] = useState<any[]>([]);
   const [isLoadingLayers, setIsLoadingLayers] = useState(false);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
-  const [layersContextMenu, setLayersContextMenu] = useState<{ x: number; y: number; layer: any } | null>(null);
+
 
   // Reusable fetch functions
   const fetchTree = async () => {
@@ -169,10 +173,10 @@ export default function WorkspaceDetailPage() {
     setCurrentPage(1);
   }, [selectedPath, selectedSchemas]);
 
-  // Load layers when switching to layers tab
+  // Load layers when workspace loads
   useEffect(() => {
     const loadLayers = async () => {
-      if (!workspace || leftTab !== 'layers') return;
+      if (!workspace) return;
       try {
         setIsLoadingLayers(true);
         const data = await listWorkspaceLayers(workspace.id);
@@ -185,7 +189,7 @@ export default function WorkspaceDetailPage() {
       }
     };
     loadLayers();
-  }, [workspace, leftTab]);
+  }, [workspace]);
 
   // Tree operation handlers
   const handleInsertPath = async (path: string, autoCreateLayers: boolean = true): Promise<boolean> => {
@@ -248,6 +252,57 @@ export default function WorkspaceDetailPage() {
       return success;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to move path';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+      return false;
+    }
+  };
+
+  const handleRenamePath = async (fromPath: string, newName: string): Promise<boolean> => {
+    if (!workspace) return false;
+    try {
+      // Find the layer that corresponds to this path
+      // Convert path to layer name (remove leading slash)
+      const layerName = fromPath === '/' ? '/' : fromPath.substring(1);
+      const layer = layers?.find(l => l.name === layerName);
+
+      if (!layer) {
+        throw new Error(`No layer found for path "${fromPath}"`);
+      }
+
+      if (layer.name === '/') {
+        throw new Error('Cannot rename root layer');
+      }
+
+      // Extract parent path and construct new layer name
+      const pathParts = fromPath.split('/');
+      pathParts[pathParts.length - 1] = newName;
+      const newPath = pathParts.join('/');
+      const newLayerName = newPath === '/' ? '/' : newPath.substring(1);
+
+      await renameWorkspaceLayer(workspace.id, layer.id, newLayerName.toLowerCase());
+
+      // Refresh tree and layers
+      await fetchTree();
+      const data = await listWorkspaceLayers(workspace.id);
+      setLayers(data.sort((a, b) => a.name.localeCompare(b.name)));
+
+      showToast({
+        title: 'Success',
+        description: `Layer renamed from "${fromPath}" to "${newPath}"`
+      });
+
+      // If the renamed path was selected, update selection to new path
+      if (selectedPath === fromPath) {
+        setSelectedPath(newPath);
+      }
+
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to rename path';
       showToast({
         title: 'Error',
         description: message,
@@ -372,20 +427,26 @@ export default function WorkspaceDetailPage() {
     }
   };
 
-  const handlePasteDocuments = async (path: string, documentIds: number[]): Promise<boolean> => {
+      const handlePasteDocuments = async (path: string, documentIds: number[]): Promise<boolean> => {
     if (!workspace) return false;
+    console.log('handlePasteDocuments called:', { path, documentIds, clipboard });
     try {
+      console.log('About to call pasteDocumentsToWorkspacePath with:', { workspaceId: workspace.id, path, documentIds });
       const success = await pasteDocumentsToWorkspacePath(workspace.id, path, documentIds);
+      console.log('pasteDocumentsToWorkspacePath result:', success);
       if (success) {
         await fetchDocuments(); // Refresh documents
-        setCopiedDocuments([]); // Clear copied documents
+        if (clipboard) {
+          setClipboard(null); // Clear clipboard
+        }
         showToast({
           title: 'Success',
-          description: `${documentIds.length} document(s) pasted to "${path}"`
+          description: `${documentIds.length} document(s) ${clipboard?.operation === 'cut' ? 'moved' : 'pasted'} to "${path}"`
         });
       }
       return success;
     } catch (err) {
+      console.error('Error in handlePasteDocuments:', err);
       const message = err instanceof Error ? err.message : 'Failed to paste documents';
       showToast({
         title: 'Error',
@@ -423,7 +484,11 @@ export default function WorkspaceDetailPage() {
   };
 
   const handleCopyDocuments = (documentIds: number[]) => {
-    setCopiedDocuments(documentIds);
+    setClipboard({
+      documentIds,
+      operation: 'copy',
+      sourcePath: selectedPath
+    });
     showToast({
       title: 'Success',
       description: `${documentIds.length} document(s) copied to clipboard`
@@ -431,7 +496,12 @@ export default function WorkspaceDetailPage() {
   };
 
   const handleCutDocuments = (documentIds: number[]) => {
-    setCopiedDocuments(documentIds);
+    console.log('handleCutDocuments called:', { documentIds, selectedPath });
+    setClipboard({
+      documentIds,
+      operation: 'cut',
+      sourcePath: selectedPath
+    });
     showToast({
       title: 'Success',
       description: `${documentIds.length} document(s) cut to clipboard`
@@ -439,16 +509,19 @@ export default function WorkspaceDetailPage() {
   };
 
   // Handle document removal from workspace path
-  const handleRemoveDocument = async (documentId: number) => {
+  const handleRemoveDocument = async (documentId: number, fromPath?: string) => {
     if (!workspace) return;
+    const contextPath = fromPath || selectedPath;
     try {
-      await removeWorkspaceDocuments(workspace.id, [documentId], selectedPath);
-      // Update local state
-      setDocuments(prev => prev.filter(doc => doc.id !== documentId));
-      setDocumentsTotalCount(prev => Math.max(0, prev - 1));
+      await removeWorkspaceDocuments(workspace.id, [documentId], contextPath);
+      // Update local state only if removing from current path
+      if (contextPath === selectedPath) {
+        setDocuments(prev => prev.filter(doc => doc.id !== documentId));
+        setDocumentsTotalCount(prev => Math.max(0, prev - 1));
+      }
       showToast({
         title: 'Success',
-        description: 'Document removed from workspace path successfully.'
+        description: `Document removed from workspace path "${contextPath}" successfully.`
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to remove document';
@@ -483,18 +556,24 @@ export default function WorkspaceDetailPage() {
   };
 
   // Handle multiple document removal from workspace path
-  const handleRemoveDocuments = async (documentIds: number[]) => {
+  const handleRemoveDocuments = async (documentIds: number[], fromPath?: string) => {
     if (!workspace) return;
+    const contextPath = fromPath || selectedPath;
+    console.log('Workspace handleRemoveDocuments:', { documentIds, fromPath, contextPath, selectedPath });
     try {
-      await removeWorkspaceDocuments(workspace.id, documentIds, selectedPath);
-      // Update local state
-      setDocuments(prev => prev.filter(doc => !documentIds.includes(doc.id)));
-      setDocumentsTotalCount(prev => Math.max(0, prev - documentIds.length));
+      await removeWorkspaceDocuments(workspace.id, documentIds, contextPath);
+      console.log('Successfully removed documents from workspace');
+      // Update local state only if removing from current path
+      if (contextPath === selectedPath) {
+        setDocuments(prev => prev.filter(doc => !documentIds.includes(doc.id)));
+        setDocumentsTotalCount(prev => Math.max(0, prev - documentIds.length));
+      }
       showToast({
         title: 'Success',
-        description: `${documentIds.length} document(s) removed from workspace path successfully.`
+        description: `${documentIds.length} document(s) removed from workspace path "${contextPath}" successfully.`
       });
     } catch (err) {
+      console.error('Error removing documents:', err);
       const message = err instanceof Error ? err.message : 'Failed to remove documents';
       showToast({
         title: 'Error',
@@ -624,17 +703,7 @@ export default function WorkspaceDetailPage() {
     }
   };
 
-  const handleLayerRightClick = (e: React.MouseEvent, layer: any) => {
-    if (layer.name === '/') return;
-    e.preventDefault();
-    setLayersContextMenu({ x: e.clientX, y: e.clientY, layer });
-  };
 
-  const handlePasteToLayer = async (layer: any) => {
-    if (!workspace || copiedDocuments.length === 0) return;
-    await handlePasteDocuments(`/${layer.name}`, copiedDocuments);
-    setLayersContextMenu(null);
-  };
 
   if (isLoadingWorkspace) {
     return (
@@ -666,10 +735,10 @@ export default function WorkspaceDetailPage() {
   }
 
   return (
-    <div className="flex h-full gap-6">
+    <div className="flex h-full min-h-0 gap-6">
 
       {/* Main content */}
-      <div className="flex-1 space-y-6">
+      <div className="flex-1 min-w-0 space-y-6 min-h-0">
         {/* Page Header */}
         <div className="border-b pb-4">
           <h1 className="text-3xl font-bold tracking-tight">{workspace.label}</h1>
@@ -703,8 +772,17 @@ export default function WorkspaceDetailPage() {
           pageSize={pageSize}
           onPageChange={handlePageChange}
           onPageSizeChange={handlePageSizeChange}
+          layers={layers}
+          selectedLayerId={selectedLayerId}
+          isLoadingLayers={isLoadingLayers}
+          onSelectLayer={handleSelectLayer}
+          onRenameLayer={handleRenameLayer}
+          onLockLayer={handleLockLayer}
+          onUnlockLayer={handleUnlockLayer}
+          onDestroyLayer={handleDestroyLayer}
           onInsertPath={handleInsertPath}
           onRemovePath={handleRemovePath}
+          onRenamePath={handleRenamePath}
           onMovePath={handleMovePath}
           onCopyPath={handleCopyPath}
           onMergeUp={handleMergeUp}
@@ -723,106 +801,14 @@ export default function WorkspaceDetailPage() {
           selectedSchemas={selectedSchemas}
           onSchemaChange={setSelectedSchemas}
           isLoadingSchemas={isLoadingSchemas}
-          copiedDocuments={copiedDocuments}
+          copiedDocuments={clipboard?.documentIds || []}
           workspaceId={workspace.id}
         />
-
-        {/* Legacy Layers View - can be moved to a separate tab/modal later */}
-        {leftTab === 'layers' && (
-          <div className="mt-6 border rounded-lg p-4 bg-card">
-            <div className="mb-4">
-              <h3 className="font-semibold text-sm text-muted-foreground mb-2">Tree Layers</h3>
-              <div className="flex gap-2">
-                <button
-                  className="py-2 px-3 text-xs font-medium border rounded"
-                  onClick={() => setLeftTab('tree')}
-                >
-                  Back to File Manager
-                </button>
-              </div>
-            </div>
-
-            {isLoadingLayers ? (
-              <div className="text-xs text-muted-foreground">Loading layers...</div>
-            ) : layers.length === 0 ? (
-              <div className="text-xs text-muted-foreground">No layers</div>
-            ) : (
-              <ul className="space-y-1">
-                {layers.map((layer) => (
-                  <li
-                    key={layer.id}
-                    className={`flex items-center justify-between px-2 py-1 rounded hover:bg-accent ${selectedLayerId === layer.id ? 'bg-accent' : ''} ${layer.name === '/' ? 'opacity-60 pointer-events-none' : ''}`}
-                    onContextMenu={(e) => handleLayerRightClick(e, layer)}
-                  >
-                    <button className="flex items-center gap-2 min-w-0 flex-1 text-left" onClick={() => handleSelectLayer(layer)} title={layer.description || layer.label}>
-                      {layer.color && (
-                        <span className="w-2 h-2 rounded-full border" style={{ backgroundColor: layer.color }} />
-                      )}
-                      <span className="truncate" title={layer.name}>{layer.name}</span>
-                      {(() => {
-                        const isLocked = layer.name === '/' || layer.locked === true || (Array.isArray(layer.lockedBy) && layer.lockedBy.length > 0)
-                        if (isLocked) {
-                          const lockedBy = Array.isArray(layer.lockedBy) ? layer.lockedBy : []
-                          return <span className="text-xs text-muted-foreground" title={lockedBy.length > 0 ? `Locked by: ${lockedBy.join(', ')}` : 'Locked'}>🔒</span>
-                        }
-                        return null
-                      })()}
-                    </button>
-                    {layer.name !== '/' && (
-                      <div className="flex items-center gap-1 ml-2">
-                        {(() => {
-                          const isLocked = layer.locked === true || (Array.isArray(layer.lockedBy) && layer.lockedBy.length > 0)
-                          return isLocked ? (
-                            <button className="px-1 text-xs hover:bg-muted rounded" onClick={() => handleUnlockLayer(layer)} title="Unlock">Unlock</button>
-                          ) : (
-                            <button className="px-1 text-xs hover:bg-muted rounded" onClick={() => handleLockLayer(layer)} title="Lock">Lock</button>
-                          )
-                        })()}
-                        <button className="px-1 text-xs hover:bg-muted rounded" onClick={() => handleRenameLayer(layer)} title="Rename">Rename</button>
-                        <button className="px-1 text-xs hover:bg-destructive/10 text-destructive rounded" onClick={() => handleDestroyLayer(layer)} title="Destroy">Destroy</button>
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
 
 
       </div>
 
-      {/* Layers context menu */}
-      {layersContextMenu && createPortal(
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setLayersContextMenu(null)} />
-          <div
-            className="fixed z-50 min-w-[10rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
-            style={{ left: layersContextMenu.x, top: layersContextMenu.y }}
-          >
-            {copiedDocuments.length > 0 && (
-              <button
-                className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
-                onClick={() => handlePasteToLayer(layersContextMenu.layer)}
-              >
-                Paste Documents ({copiedDocuments.length})
-              </button>
-            )}
-            <button
-              className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
-              onClick={() => {
-                setLayersContextMenu(null);
-                // TODO: Implement import to specific layer path
-                // For now, import to current selected path
-                console.log('Import documents to layer:', layersContextMenu.layer);
-              }}
-            >
-              Import Documents
-            </button>
-          </div>
-        </>,
-        document.body
-      )}
+
     </div>
   );
 }

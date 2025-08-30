@@ -241,10 +241,12 @@ export async function pasteDocumentsToWorkspacePath(workspaceId: string, path: s
   try {
     // This would use the document insertion API with the specified path
     const ids = Array.isArray(documentIds) ? documentIds : [documentIds]
-    await api.post<{ payload: any; message: string; status: string; statusCode: number }>(
+    console.log('pasteDocumentsToWorkspacePath: Making API call with:', { workspaceId, path, ids });
+    const response = await api.post<{ payload: any; message: string; status: string; statusCode: number }>(
       `${API_ROUTES.workspaces}/${workspaceId}/documents`,
       { documentIds: ids, contextSpec: path }
     );
+    console.log('pasteDocumentsToWorkspacePath: API response:', response);
     return true;
   } catch (error) {
     console.error(`Failed to paste documents to workspace path ${path}:`, error);
@@ -316,14 +318,16 @@ export async function removeWorkspaceDocuments(
   contextSpec: string = '/',
   featureArray: string[] = []
 ): Promise<boolean> {
+  console.log('removeWorkspaceDocuments called:', { workspaceId, documentIds, contextSpec, featureArray });
   const params = new URLSearchParams()
   if (contextSpec) params.append('contextSpec', contextSpec)
   featureArray.forEach(f => params.append('featureArray', f))
   const headers = { 'Content-Type': 'application/json' }
-  await api.delete(`${API_ROUTES.workspaces}/${workspaceId}/documents/remove?${params.toString()}`, {
+  const response = await api.delete(`${API_ROUTES.workspaces}/${workspaceId}/documents/remove?${params.toString()}`, {
     headers,
     body: JSON.stringify(documentIds)
   } as any)
+  console.log('removeWorkspaceDocuments response:', response);
   return true
 }
 

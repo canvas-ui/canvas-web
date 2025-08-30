@@ -880,8 +880,6 @@ export default function ContextDetailPage() {
                 selectedPath={selectedPath}
                 onPathSelect={handlePathSelect}
                 readOnly={isSharedContext}
-                title="Context Tree"
-                subtitle={isSharedContext ? 'Read-only view (shared context)' : 'Right-click for context menu, drag to move/copy (Ctrl=copy, Shift=recursive)'}
                 onInsertPath={!isSharedContext ? treeOperations.insertPath : undefined}
                 onRemovePath={!isSharedContext ? treeOperations.removePath : undefined}
                 onMovePath={!isSharedContext ? treeOperations.movePath : undefined}

@@ -8,7 +8,11 @@ import {
   Filter,
   Tags,
   Plus,
-  Key
+  Key,
+  TreePine,
+  Layers,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import { TreeView } from '@/components/common/tree-view';
 import { DocumentList } from '@/components/common/document-list';
@@ -33,9 +37,21 @@ interface FileManagerViewProps {
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
 
+  // Layers data
+  layers?: any[];
+  selectedLayerId?: string | null;
+  isLoadingLayers?: boolean;
+  onSelectLayer?: (layer: any) => void;
+
+  onRenameLayer?: (layer: any) => Promise<void>;
+  onLockLayer?: (layer: any) => Promise<void>;
+  onUnlockLayer?: (layer: any) => Promise<void>;
+  onDestroyLayer?: (layer: any) => Promise<void>;
+
   // Tree operations
   onInsertPath?: (path: string, autoCreateLayers?: boolean) => Promise<boolean>;
   onRemovePath?: (path: string, recursive?: boolean) => Promise<boolean>;
+  onRenamePath?: (fromPath: string, newName: string) => Promise<boolean>;
   onMovePath?: (fromPath: string, toPath: string, recursive?: boolean) => Promise<boolean>;
   onCopyPath?: (fromPath: string, toPath: string, recursive?: boolean) => Promise<boolean>;
   onMergeUp?: (path: string) => Promise<boolean>;
@@ -44,9 +60,9 @@ interface FileManagerViewProps {
   onSubtractDown?: (path: string) => Promise<boolean>;
 
   // Document operations
-  onRemoveDocument?: (documentId: number) => void;
+  onRemoveDocument?: (documentId: number, fromPath?: string) => void;
   onDeleteDocument?: (documentId: number) => void;
-  onRemoveDocuments?: (documentIds: number[]) => void;
+  onRemoveDocuments?: (documentIds: number[], fromPath?: string) => void;
   onDeleteDocuments?: (documentIds: number[]) => void;
   onCopyDocuments?: (documentIds: number[]) => void;
   onCutDocuments?: (documentIds: number[]) => void;
@@ -70,6 +86,7 @@ interface ClipboardState {
   documents: {
     ids: number[];
     operation: 'copy' | 'cut';
+    sourcePath?: string;
   } | null;
   paths: {
     paths: string[];
@@ -267,8 +284,17 @@ export function FileManagerView({
   pageSize,
   onPageChange,
   onPageSizeChange,
+  layers,
+  selectedLayerId,
+  isLoadingLayers,
+  onSelectLayer,
+  onRenameLayer,
+  onLockLayer,
+  onUnlockLayer,
+  onDestroyLayer,
   onInsertPath,
   onRemovePath,
+  onRenamePath,
   onMovePath,
   onCopyPath,
   onMergeUp,
@@ -290,6 +316,7 @@ export function FileManagerView({
   copiedDocuments,
   workspaceId
 }: FileManagerViewProps) {
+  const [leftTab, setLeftTab] = useState<'tree' | 'layers'>('tree');
   const [rightTab, setRightTab] = useState<'filters' | 'tags' | 'tokens'>('filters');
   const [customTags, setCustomTags] = useState<string[]>([]);
   const [clipboard, setClipboard] = useState<ClipboardState>({
@@ -297,6 +324,7 @@ export function FileManagerView({
     paths: null
   });
   const [globalContextMenu, setGlobalContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [layerContextMenu, setLayerContextMenu] = useState<{ x: number; y: number; layer: any } | null>(null);
 
   // Enhanced document operations with clipboard
   const handleCopyDocuments = useCallback((documentIds: number[]) => {
@@ -308,24 +336,47 @@ export function FileManagerView({
   }, [onCopyDocuments]);
 
   const handleCutDocuments = useCallback((documentIds: number[]) => {
+    console.log('File-manager handleCutDocuments:', { documentIds, selectedPath });
     setClipboard(prev => ({
       ...prev,
-      documents: { ids: documentIds, operation: 'cut' }
+      documents: { ids: documentIds, operation: 'cut', sourcePath: selectedPath }
     }));
     onCutDocuments?.(documentIds);
-  }, [onCutDocuments]);
+  }, [onCutDocuments, selectedPath]);
 
   const handlePasteDocuments = useCallback(async (path: string) => {
     if (!clipboard.documents || !onPasteDocuments) return false;
 
-    const success = await onPasteDocuments(path, clipboard.documents.ids);
+    console.log('File-manager handlePasteDocuments:', {
+      path,
+      documentIds: clipboard.documents.ids,
+      operation: clipboard.documents.operation,
+      sourcePath: clipboard.documents.sourcePath
+    });
 
-    // If it was a cut operation and paste succeeded, remove from original location
+    const success = await onPasteDocuments(path, clipboard.documents.ids);
+    console.log('File-manager paste success:', success);
+
+        // If it was a cut operation and paste succeeded, remove from original location
     if (success && clipboard.documents.operation === 'cut') {
-      if (clipboard.documents.ids.length === 1) {
-        onRemoveDocument?.(clipboard.documents.ids[0]);
+      const sourcePath = clipboard.documents.sourcePath;
+      console.log('File-manager removing documents after cut:', {
+        documentIds: clipboard.documents.ids,
+        sourcePath,
+        isMultiple: clipboard.documents.ids.length > 1,
+        pastedDocumentIds: clipboard.documents.ids
+      });
+
+      // Verify that the document IDs we're trying to remove match what was pasted
+      const idsToRemove = clipboard.documents.ids;
+      console.log('Document IDs to remove:', idsToRemove);
+
+      if (idsToRemove.length === 1) {
+        console.log('Calling onRemoveDocument for single document:', idsToRemove[0]);
+        onRemoveDocument?.(idsToRemove[0], sourcePath);
       } else {
-        onRemoveDocuments?.(clipboard.documents.ids);
+        console.log('Calling onRemoveDocuments for multiple documents:', idsToRemove);
+        onRemoveDocuments?.(idsToRemove, sourcePath);
       }
     }
 
@@ -465,53 +516,171 @@ export function FileManagerView({
 
   return (
     <div
-      className="flex h-full gap-6"
+      className="flex h-auto min-h-0 gap-4"
       onContextMenu={handleGlobalRightClick}
     >
-      {/* Left Panel - Tree View */}
-      <div className="w-80 border rounded-lg bg-card flex flex-col">
-        <div className="p-4 border-b">
-          <h3 className="font-semibold text-sm text-muted-foreground mb-2">Workspace Tree</h3>
-          <p className="text-xs text-muted-foreground">
-            Right-click for context menu, drag to move/copy
-          </p>
+      {/* Left Panel - Tree View / Layers */}
+      <div className="w-72 min-w-72 border rounded-lg bg-card flex flex-col">
+        {/* Tab Header */}
+        <div className="flex border-b">
+          <button
+            className={cn(
+              "flex-1 py-3 px-2 text-xs font-medium transition-colors",
+              leftTab === 'tree'
+                ? 'border-b-2 border-primary bg-background'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+            onClick={() => setLeftTab('tree')}
+          >
+            <TreePine className="w-3 h-3 mr-1 inline" />
+            Tree
+          </button>
+          <button
+            className={cn(
+              "flex-1 py-3 px-2 text-xs font-medium transition-colors",
+              leftTab === 'layers'
+                ? 'border-b-2 border-primary bg-background'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+            onClick={() => setLeftTab('layers')}
+          >
+            <Layers className="w-3 h-3 mr-1 inline" />
+            Layers
+          </button>
         </div>
 
-        <div className="flex-1 p-4 overflow-y-auto">
-          {isLoadingTree ? (
-            <div className="flex items-center justify-center h-32">
-              <div className="text-center space-y-2">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto"></div>
-                <p className="text-xs text-muted-foreground">Loading tree...</p>
+        <div className="flex-1 flex flex-col min-h-0">
+          {leftTab === 'tree' ? (
+            <>
+              <div className="p-4 border-b">
+                <h3 className="font-semibold text-sm text-muted-foreground mb-2">Workspace Tree</h3>
+                <p className="text-xs text-muted-foreground">
+                  Right-click for context menu, drag to move/copy
+                </p>
               </div>
-            </div>
-          ) : tree ? (
-            <TreeView
-              tree={tree}
-              selectedPath={selectedPath}
-              onPathSelect={onPathSelect}
-              readOnly={false}
-              onInsertPath={onInsertPath}
-              onRemovePath={onRemovePath}
-              onMovePath={onMovePath}
-              onCopyPath={handleCopyPath}
-              onMergeUp={onMergeUp}
-              onMergeDown={onMergeDown}
-              onSubtractUp={onSubtractUp}
-              onSubtractDown={onSubtractDown}
-              onPasteDocuments={handlePasteDocuments}
-              pastedDocumentIds={clipboard.documents?.ids || copiedDocuments}
-            />
+
+              <div className="flex-1 p-4 overflow-y-auto">
+                {isLoadingTree ? (
+                  <div className="flex items-center justify-center h-32">
+                    <div className="text-center space-y-2">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto"></div>
+                      <p className="text-xs text-muted-foreground">Loading tree...</p>
+                    </div>
+                  </div>
+                ) : tree ? (
+                  <TreeView
+                    tree={tree}
+                    selectedPath={selectedPath}
+                    onPathSelect={onPathSelect}
+                    readOnly={false}
+                    onInsertPath={onInsertPath}
+                    onRemovePath={onRemovePath}
+                    onRenamePath={onRenamePath}
+                    onMovePath={onMovePath}
+                    onCopyPath={handleCopyPath}
+                    onMergeUp={onMergeUp}
+                    onMergeDown={onMergeDown}
+                    onSubtractUp={onSubtractUp}
+                    onSubtractDown={onSubtractDown}
+                    onPasteDocuments={handlePasteDocuments}
+                    pastedDocumentIds={clipboard.documents?.ids || copiedDocuments}
+                  />
+                ) : (
+                  <div className="text-center text-muted-foreground text-sm">
+                    Failed to load workspace tree
+                  </div>
+                )}
+              </div>
+            </>
           ) : (
-            <div className="text-center text-muted-foreground text-sm">
-              Failed to load workspace tree
-            </div>
+            <>
+              <div className="p-4 border-b">
+                <h3 className="font-semibold text-sm text-muted-foreground mb-2">Tree Layers</h3>
+                <p className="text-xs text-muted-foreground">
+                  Individual layers and their bitmaps
+                </p>
+              </div>
+
+              <div className="flex-1 p-4 overflow-y-auto">
+                {isLoadingLayers ? (
+                  <div className="text-xs text-muted-foreground">Loading layers...</div>
+                ) : !layers || layers.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">No layers</div>
+                ) : (
+                  <ul className="space-y-1">
+                    {layers.map((layer) => (
+                      <li
+                        key={layer.id}
+                        className={cn(
+                          "flex items-center justify-between px-2 py-1 rounded hover:bg-accent cursor-pointer text-sm",
+                          selectedLayerId === layer.id && 'bg-accent',
+                          layer.name === '/' && 'opacity-60'
+                        )}
+                        onClick={() => onSelectLayer?.(layer)}
+                        onContextMenu={(e) => {
+                          if (layer.name !== '/') {
+                            e.preventDefault();
+                            setLayerContextMenu({ x: e.clientX, y: e.clientY, layer });
+                          }
+                        }}
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          {layer.color && (
+                            <span className="w-2 h-2 rounded-full border flex-shrink-0" style={{ backgroundColor: layer.color }} />
+                          )}
+                          <span className="truncate" title={layer.description || layer.label}>
+                            {layer.name}
+                          </span>
+                          {(() => {
+                            const isLocked = layer.name === '/' || layer.locked === true || (Array.isArray(layer.lockedBy) && layer.lockedBy.length > 0)
+                            if (isLocked) {
+                              const lockedBy = Array.isArray(layer.lockedBy) ? layer.lockedBy : []
+                              return <span className="text-xs text-muted-foreground" title={lockedBy.length > 0 ? `Locked by: ${lockedBy.join(', ')}` : 'Locked'}>🔒</span>
+                            }
+                            return null
+                          })()}
+                        </div>
+                        {layer.name !== '/' && (
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {(() => {
+                              const isLocked = layer.locked === true || (Array.isArray(layer.lockedBy) && layer.lockedBy.length > 0);
+                              return (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0 hover:bg-muted"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if (isLocked && onUnlockLayer) {
+                                      await onUnlockLayer(layer);
+                                    } else if (!isLocked && onLockLayer) {
+                                      await onLockLayer(layer);
+                                    }
+                                  }}
+                                  title={isLocked ? 'Unlock layer' : 'Lock layer'}
+                                >
+                                  {isLocked ? (
+                                    <Unlock className="h-3 w-3" />
+                                  ) : (
+                                    <Lock className="h-3 w-3" />
+                                  )}
+                                </Button>
+                              );
+                            })()}
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </>
           )}
         </div>
       </div>
 
       {/* Center Panel - Document List */}
-      <div className="flex-1 border rounded-lg bg-card flex flex-col min-h-0">
+      <div className="flex-1 min-w-0 border rounded-lg bg-card flex flex-col min-h-0">
         <DocumentList
           documents={documents}
           isLoading={isLoadingDocuments}
@@ -535,8 +704,8 @@ export function FileManagerView({
       </div>
 
       {/* Right Panel - Filters & Tags */}
-      <div className="w-80 border rounded-lg bg-card flex flex-col">
-                <div className="flex border-b">
+      <div className="w-72 min-w-72 border rounded-lg bg-card flex flex-col">
+        <div className="flex border-b">
           <button
             className={cn(
               "flex-1 py-3 px-2 text-xs font-medium transition-colors",
@@ -664,6 +833,75 @@ export function FileManagerView({
             >
               <Plus className="w-4 h-4 mr-2" />
               New Folder
+            </button>
+          </div>
+        </>,
+        document.body
+      )}
+
+      {/* Layer Context Menu */}
+      {layerContextMenu && createPortal(
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setLayerContextMenu(null)} />
+          <div
+            className="fixed z-50 min-w-[10rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+            style={{ left: layerContextMenu.x, top: layerContextMenu.y }}
+          >
+            {copiedDocuments.length > 0 && (
+              <button
+                className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+                onClick={async () => {
+                  if (onPasteDocuments) {
+                    await onPasteDocuments(`/${layerContextMenu.layer.name}`, copiedDocuments);
+                  }
+                  setLayerContextMenu(null);
+                }}
+              >
+                <Clipboard className="w-4 h-4 mr-2" />
+                Paste Documents ({copiedDocuments.length})
+              </button>
+            )}
+
+            <button
+              className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+              onClick={async () => {
+                if (onRenameLayer) {
+                  await onRenameLayer(layerContextMenu.layer);
+                }
+                setLayerContextMenu(null);
+              }}
+            >
+              Rename Layer
+            </button>
+
+            <button
+              className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+              onClick={async () => {
+                const isLocked = layerContextMenu.layer.locked === true || (Array.isArray(layerContextMenu.layer.lockedBy) && layerContextMenu.layer.lockedBy.length > 0);
+                if (isLocked && onUnlockLayer) {
+                  await onUnlockLayer(layerContextMenu.layer);
+                } else if (!isLocked && onLockLayer) {
+                  await onLockLayer(layerContextMenu.layer);
+                }
+                setLayerContextMenu(null);
+              }}
+            >
+              {(() => {
+                const isLocked = layerContextMenu.layer.locked === true || (Array.isArray(layerContextMenu.layer.lockedBy) && layerContextMenu.layer.lockedBy.length > 0);
+                return isLocked ? 'Unlock Layer' : 'Lock Layer';
+              })()}
+            </button>
+
+            <button
+              className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground text-destructive"
+              onClick={async () => {
+                if (onDestroyLayer) {
+                  await onDestroyLayer(layerContextMenu.layer);
+                }
+                setLayerContextMenu(null);
+              }}
+            >
+              Destroy Layer
             </button>
           </div>
         </>,
