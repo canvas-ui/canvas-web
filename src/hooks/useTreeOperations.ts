@@ -105,12 +105,30 @@ export function useTreeOperations({ contextId, onRefresh }: UseTreeOperationsPro
     return true
   }, [apiCall])
 
+  const subtractUp = useCallback(async (path: string): Promise<boolean> => {
+    const result = await apiCall('POST', '/paths/subtract-up', { path })
+    if (!result.success) {
+      throw new Error(result.message || 'Failed to subtract up')
+    }
+    return true
+  }, [apiCall])
+
+  const subtractDown = useCallback(async (path: string): Promise<boolean> => {
+    const result = await apiCall('POST', '/paths/subtract-down', { path })
+    if (!result.success) {
+      throw new Error(result.message || 'Failed to subtract down')
+    }
+    return true
+  }, [apiCall])
+
   return {
     insertPath,
     removePath,
     movePath,
     copyPath,
     mergeUp,
-    mergeDown
+    mergeDown,
+    subtractUp,
+    subtractDown
   }
 }

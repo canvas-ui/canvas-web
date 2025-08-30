@@ -888,6 +888,8 @@ export default function ContextDetailPage() {
                 onCopyPath={!isSharedContext ? treeOperations.copyPath : undefined}
                 onMergeUp={!isSharedContext ? treeOperations.mergeUp : undefined}
                 onMergeDown={!isSharedContext ? treeOperations.mergeDown : undefined}
+                onSubtractUp={!isSharedContext ? treeOperations.subtractUp : undefined}
+                onSubtractDown={!isSharedContext ? treeOperations.subtractDown : undefined}
                 onPasteDocuments={!isSharedContext ? handlePasteDocuments : undefined}
                 pastedDocumentIds={copiedDocuments}
               />

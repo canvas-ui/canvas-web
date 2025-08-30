@@ -17,6 +17,8 @@ import {
   copyWorkspacePath,
   mergeUpWorkspacePath,
   mergeDownWorkspacePath,
+  subtractUpWorkspacePath,
+  subtractDownWorkspacePath,
   pasteDocumentsToWorkspacePath,
   importDocumentsToWorkspacePath,
   removeWorkspaceDocuments,
@@ -318,6 +320,52 @@ export default function WorkspaceDetailPage() {
       return success;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to merge down';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+      return false;
+    }
+  };
+
+  const handleSubtractUp = async (path: string): Promise<boolean> => {
+    if (!workspace) return false;
+    try {
+      const success = await subtractUpWorkspacePath(workspace.id, path);
+      if (success) {
+        await fetchTree(); // Refresh tree
+        showToast({
+          title: 'Success',
+          description: `Path "${path}" subtracted up successfully`
+        });
+      }
+      return success;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to subtract up';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+      return false;
+    }
+  };
+
+  const handleSubtractDown = async (path: string): Promise<boolean> => {
+    if (!workspace) return false;
+    try {
+      const success = await subtractDownWorkspacePath(workspace.id, path);
+      if (success) {
+        await fetchTree(); // Refresh tree
+        showToast({
+          title: 'Success',
+          description: `Path "${path}" subtracted down successfully`
+        });
+      }
+      return success;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to subtract down';
       showToast({
         title: 'Error',
         description: message,
@@ -679,6 +727,8 @@ export default function WorkspaceDetailPage() {
                     onCopyPath={handleCopyPath}
                     onMergeUp={handleMergeUp}
                     onMergeDown={handleMergeDown}
+                    onSubtractUp={handleSubtractUp}
+                    onSubtractDown={handleSubtractDown}
                     onPasteDocuments={handlePasteDocuments}
                     pastedDocumentIds={copiedDocuments}
                   />

@@ -17,6 +17,8 @@ The new unified `TreeView` component replaces both the previous `ContextTreeView
   - Remove Path (Recursive)
   - Merge Up
   - Merge Down
+  - Subtract Up
+  - Subtract Down
 - **Read-only Mode**: Toggle to disable all write operations
 - **Visual Feedback**: Drag-over highlighting and visual cues
 - **API Integration**: Built-in integration with tree API endpoints
@@ -130,6 +132,8 @@ The component integrates with the following tree API endpoints:
 | `onCopyPath` | `(fromPath: string, toPath: string, recursive?: boolean) => Promise<boolean>` | - | Copy path callback |
 | `onMergeUp` | `(path: string) => Promise<boolean>` | - | Merge up callback |
 | `onMergeDown` | `(path: string) => Promise<boolean>` | - | Merge down callback |
+| `onSubtractUp` | `(path: string) => Promise<boolean>` | - | Subtract up callback |
+| `onSubtractDown` | `(path: string) => Promise<boolean>` | - | Subtract down callback |
 
 ### useTreeOperations Hook
 
@@ -140,7 +144,9 @@ const {
   movePath,
   copyPath,
   mergeUp,
-  mergeDown
+  mergeDown,
+  subtractUp,
+  subtractDown
 } = useTreeOperations({
   contextId: string,
   onRefresh?: () => void
