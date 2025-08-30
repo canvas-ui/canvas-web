@@ -138,7 +138,7 @@ export async function getContextDocuments(
   featureArray: string[] = [],
   filterArray: string[] = [],
   options: Record<string, any> = {}
-): Promise<DocumentResponse['data']> {
+): Promise<DocumentResponse['data'] & { count?: number; totalCount?: number }> {
   try {
     const params = new URLSearchParams();
     featureArray.forEach(feature => params.append('featureArray', feature));
@@ -149,12 +149,20 @@ export async function getContextDocuments(
     if (options.includeClientContext !== undefined) {
       params.append('includeClientContext', options.includeClientContext.toString());
     }
+    if (options.limit !== undefined) params.append('limit', options.limit.toString());
+    if (options.offset !== undefined) params.append('offset', options.offset.toString());
+    if (options.page !== undefined) params.append('page', options.page.toString());
+    
     const url = `${API_ROUTES.contexts}/${id}/documents${params.toString() ? '?' + params.toString() : ''}`;
-    const response = await api.get<{ payload: DocumentResponse['data']; count: number }>(url);
+    const response = await api.get<{ payload: DocumentResponse['data']; count: number; totalCount: number }>(url);
 
     // Handle the correct API response structure where documents are directly in payload
     if (Array.isArray(response.payload)) {
-      return response.payload;
+      // Attach pagination metadata to the array
+      const result = response.payload as DocumentResponse['data'] & { count?: number; totalCount?: number };
+      result.count = response.count;
+      result.totalCount = response.totalCount;
+      return result;
     } else {
       console.warn('getContextDocuments: response.payload is not an array:', response.payload);
       return [];
@@ -171,7 +179,7 @@ export async function getSharedContextDocuments(
   featureArray: string[] = [],
   filterArray: string[] = [],
   options: Record<string, any> = {}
-): Promise<DocumentResponse['data']> {
+): Promise<DocumentResponse['data'] & { count?: number; totalCount?: number }> {
   try {
     const params = new URLSearchParams();
     featureArray.forEach(feature => params.append('featureArray', feature));
@@ -182,12 +190,20 @@ export async function getSharedContextDocuments(
     if (options.includeClientContext !== undefined) {
       params.append('includeClientContext', options.includeClientContext.toString());
     }
+    if (options.limit !== undefined) params.append('limit', options.limit.toString());
+    if (options.offset !== undefined) params.append('offset', options.offset.toString());
+    if (options.page !== undefined) params.append('page', options.page.toString());
+    
     const url = `${API_ROUTES.users}/${ownerId}/contexts/${contextId}/documents${params.toString() ? '?' + params.toString() : ''}`;
-    const response = await api.get<{ payload: DocumentResponse['data']; count: number }>(url);
+    const response = await api.get<{ payload: DocumentResponse['data']; count: number; totalCount: number }>(url);
 
     // Handle the correct API response structure where documents are directly in payload
     if (Array.isArray(response.payload)) {
-      return response.payload;
+      // Attach pagination metadata to the array
+      const result = response.payload as DocumentResponse['data'] & { count?: number; totalCount?: number };
+      result.count = response.count;
+      result.totalCount = response.totalCount;
+      return result;
     } else {
       console.warn('getSharedContextDocuments: response.payload is not an array:', response.payload);
       return [];

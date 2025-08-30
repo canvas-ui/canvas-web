@@ -99,19 +99,23 @@ export async function getWorkspaceTree(id: string): Promise<any> {
 export async function getWorkspaceDocuments(
   id: string,
   contextSpec: string = '/',
-  featureArray: string[] = []
-): Promise<any> {
+  featureArray: string[] = [],
+  options: { limit?: number; offset?: number; page?: number } = {}
+): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }> {
   try {
     const params = new URLSearchParams();
     if (contextSpec !== '/') params.append('contextSpec', contextSpec);
     if (featureArray.length > 0) {
       featureArray.forEach(feature => params.append('featureArray', feature));
     }
+    if (options.limit !== undefined) params.append('limit', options.limit.toString());
+    if (options.offset !== undefined) params.append('offset', options.offset.toString());
+    if (options.page !== undefined) params.append('page', options.page.toString());
 
     const queryString = params.toString();
     const url = `${API_ROUTES.workspaces}/${id}/documents${queryString ? '?' + queryString : ''}`;
 
-    return await api.get<any>(url);
+    return await api.get<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }>(url);
   } catch (error) {
     console.error(`Failed to get workspace documents ${id}:`, error);
     throw error;

@@ -28,7 +28,7 @@ import {
   destroyWorkspaceLayer
 } from '@/services/workspace';
 import { getSchemas, getSchemaDisplayName } from '@/services/schemas';
-import { TreeNode, Document, DocumentsResponse } from '@/types/workspace';
+import { TreeNode, Document } from '@/types/workspace';
 
 // Using global Workspace interface from types/api.d.ts
 
@@ -49,6 +49,10 @@ export default function WorkspaceDetailPage() {
   const [rightTab, setRightTab] = useState<'filter' | 'tokens'>('tokens');
   const [copiedDocuments, setCopiedDocuments] = useState<number[]>([]);
   const { showToast } = useToast();
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
 
   const [leftTab, setLeftTab] = useState<'tree' | 'layers'>('tree');
   const [layers, setLayers] = useState<any[]>([]);
@@ -81,10 +85,14 @@ export default function WorkspaceDetailPage() {
     if (!workspaceName) return;
     setIsLoadingDocuments(true);
     try {
-      const response = await getWorkspaceDocuments(workspaceName, selectedPath, selectedSchemas);
-      const documentsData = response.payload as DocumentsResponse;
-      setDocuments(documentsData.data || []);
-      setDocumentsTotalCount(documentsData.count || 0);
+      const response = await getWorkspaceDocuments(workspaceName, selectedPath, selectedSchemas, {
+        limit: pageSize,
+        page: currentPage
+      });
+      // response.payload is directly an array of documents, not an object with 'data' property
+      const documents = response.payload as Document[];
+      setDocuments(documents || []);
+      setDocumentsTotalCount(response.totalCount || response.count || 0);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch documents';
       showToast({
@@ -152,10 +160,15 @@ export default function WorkspaceDetailPage() {
     loadSchemas();
   }, []);
 
-  // Fetch documents when path or schema filters change
+  // Fetch documents when path, schema filters, or pagination changes
   useEffect(() => {
     fetchDocuments();
-  }, [workspaceName, selectedPath, selectedSchemas]);
+  }, [workspaceName, selectedPath, selectedSchemas, currentPage, pageSize]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedPath, selectedSchemas]);
 
   // Load layers when switching to layers tab
   useEffect(() => {
@@ -460,6 +473,16 @@ export default function WorkspaceDetailPage() {
     }
   };
 
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handlePageSizeChange = (newPageSize: number) => {
+    setPageSize(newPageSize);
+    setCurrentPage(1); // Reset to first page when changing page size
+  };
+
   // Layer tab interactions
   const handleSelectLayer = async (layer: any) => {
     setSelectedLayerId(layer.id);
@@ -467,10 +490,14 @@ export default function WorkspaceDetailPage() {
     if (workspace) {
       setIsLoadingDocuments(true);
       try {
-        const response = await getWorkspaceDocuments(workspace.id, `/${layer.name}`, selectedSchemas);
-        const documentsData = response.payload as DocumentsResponse;
-        setDocuments(documentsData.data || []);
-        setDocumentsTotalCount(documentsData.count || 0);
+        const response = await getWorkspaceDocuments(workspace.id, `/${layer.name}`, selectedSchemas, {
+          limit: pageSize,
+          page: currentPage
+        });
+        // response.payload is directly an array of documents, not an object with 'data' property
+        const documents = response.payload as Document[];
+        setDocuments(documents || []);
+        setDocumentsTotalCount(response.totalCount || response.count || 0);
         setSelectedPath(`/${layer.name}`);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to fetch layer documents';
@@ -728,6 +755,10 @@ export default function WorkspaceDetailPage() {
               onPasteDocuments={handlePasteDocuments}
               onImportDocuments={handleImportDocuments}
               pastedDocumentIds={copiedDocuments}
+              currentPage={currentPage}
+              pageSize={pageSize}
+              onPageChange={handlePageChange}
+              onPageSizeChange={handlePageSizeChange}
             />
           </div>
 

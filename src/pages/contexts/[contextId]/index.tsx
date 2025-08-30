@@ -126,6 +126,10 @@ export default function ContextDetailPage() {
   // Document copy/paste state
   const [copiedDocuments, setCopiedDocuments] = useState<number[]>([]);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+
   // Get current user to check if they're the owner
   const currentUser = getCurrentUserFromToken();
   const isOwner = currentUser && context && currentUser.id === context.userId;
@@ -207,6 +211,16 @@ export default function ContextDetailPage() {
     }));
   };
 
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handlePageSizeChange = (newPageSize: number) => {
+    setPageSize(newPageSize);
+    setCurrentPage(1); // Reset to first page when changing page size
+  };
+
   // Fetch documents with feature filters
   const fetchDocuments = useCallback(async () => {
     if (!contextId) return;
@@ -223,13 +237,19 @@ export default function ContextDetailPage() {
       // Add custom bitmaps
       featureArray.push(...customBitmaps);
 
-      // Use REST API to get documents with filters
+      // Use REST API to get documents with filters and pagination
       const documentsData = isSharedContext && userId
-        ? await getSharedContextDocuments(userId, contextId, featureArray, [], {})
-        : await getContextDocuments(contextId, featureArray, [], {});
+        ? await getSharedContextDocuments(userId, contextId, featureArray, [], {
+            limit: pageSize,
+            page: currentPage
+          })
+        : await getContextDocuments(contextId, featureArray, [], {
+            limit: pageSize,
+            page: currentPage
+          });
 
       setWorkspaceDocuments(convertToWorkspaceDocuments(documentsData));
-      setDocumentsTotalCount(documentsData.length);
+      setDocumentsTotalCount(documentsData.totalCount || documentsData.count || documentsData.length);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch documents';
       showToast({
@@ -242,7 +262,7 @@ export default function ContextDetailPage() {
     } finally {
       setIsLoadingDocuments(false);
     }
-  }, [contextId, activeFilters, customBitmaps, userId, isSharedContext]);
+  }, [contextId, activeFilters, customBitmaps, userId, isSharedContext, currentPage, pageSize]);
 
   // Fetch context details
   const fetchContextDetails = useCallback(async () => {
@@ -315,6 +335,11 @@ export default function ContextDetailPage() {
     if (!context || !contextId) return;
     fetchDocuments();
   }, [context?.id, activeFilters, customBitmaps, contextId, userId, isSharedContext, fetchDocuments]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeFilters, customBitmaps]);
 
   // Fetch tree when tree view opens
   useEffect(() => {
@@ -989,6 +1014,10 @@ export default function ContextDetailPage() {
                 pastedDocumentIds={copiedDocuments}
                 activeContextUrl={editableUrl}
                 currentContextUrl={context.url}
+                currentPage={currentPage}
+                pageSize={pageSize}
+                onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
               />
             </div>
           </div>

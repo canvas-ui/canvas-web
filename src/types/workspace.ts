@@ -52,6 +52,7 @@ export interface Document {
 export interface DocumentsResponse {
   data: Document[]
   count: number
+  totalCount?: number
   error: string | null
 }
 

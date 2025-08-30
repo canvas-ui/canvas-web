@@ -1,5 +1,5 @@
 import { Document } from '@/types/workspace'
-import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search } from 'lucide-react'
+import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { useState, useCallback, useMemo } from 'react'
 import Fuse from 'fuse.js'
 import {
@@ -29,6 +29,11 @@ interface DocumentListProps {
   viewMode?: 'card' | 'table'
   activeContextUrl?: string
   currentContextUrl?: string
+  // Pagination props
+  currentPage?: number
+  pageSize?: number
+  onPageChange?: (page: number) => void
+  onPageSizeChange?: (pageSize: number) => void
 }
 
 interface DocumentRowProps {
@@ -513,7 +518,7 @@ function DocumentRow({ document, isSelected, onSelect, onRemoveDocument, onDelet
   )
 }
 
-export function DocumentList({ documents, isLoading, contextPath, totalCount, onRemoveDocument, onDeleteDocument, onRemoveDocuments, onDeleteDocuments, onCopyDocuments, onPasteDocuments, onImportDocuments, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl }: DocumentListProps) {
+export function DocumentList({ documents, isLoading, contextPath, totalCount, onRemoveDocument, onDeleteDocument, onRemoveDocuments, onDeleteDocuments, onCopyDocuments, onPasteDocuments, onImportDocuments, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange }: DocumentListProps) {
   const [selectedDocuments, setSelectedDocuments] = useState<Set<number>>(new Set())
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; documentIds: number[] } | null>(null)
   const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null)
@@ -673,6 +678,76 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
             )}
           </div>
         </div>
+
+        {/* Pagination Controls */}
+        {onPageChange && totalCount > pageSize && (
+          <div className="flex items-center justify-between mt-3 pt-3 border-t">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>Show:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => onPageSizeChange?.(Number(e.target.value))}
+                className="px-2 py-1 border rounded text-sm"
+              >
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
+              </select>
+              <span>per page</span>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">
+                Showing {Math.min((currentPage - 1) * pageSize + 1, totalCount)} - {Math.min(currentPage * pageSize, totalCount)} of {totalCount}
+              </span>
+              
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onPageChange(1)}
+                  disabled={currentPage === 1}
+                  className="p-1"
+                >
+                  <ChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onPageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="p-1"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                
+                <span className="px-3 py-1 text-sm font-medium">
+                  Page {currentPage} of {Math.ceil(totalCount / pageSize)}
+                </span>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onPageChange(currentPage + 1)}
+                  disabled={currentPage >= Math.ceil(totalCount / pageSize)}
+                  className="p-1"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onPageChange(Math.ceil(totalCount / pageSize))}
+                  disabled={currentPage >= Math.ceil(totalCount / pageSize)}
+                  className="p-1"
+                >
+                  <ChevronsRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {documents.length > 0 && (
           <div className="flex items-center gap-2 mt-3 pt-3 border-t">
