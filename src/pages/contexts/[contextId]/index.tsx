@@ -1,9 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast-container';
-import { Save, Share, X, Plus, Settings, Info, Sidebar, Folders } from 'lucide-react';
+import { Save, Share, X, Plus, Settings, Info, Sidebar } from 'lucide-react';
 import { getContext, getSharedContext, updateContextUrl, grantContextAccess, revokeContextAccess, getContextTree, getContextDocuments, getSharedContextDocuments, removeDocumentsFromContext, deleteDocumentsFromContext, pasteDocumentsToContext, importDocumentsToContext } from '@/services/context';
 import socketService from '@/lib/socket';
 import { getCurrentUserFromToken } from '@/services/auth';
@@ -86,7 +86,6 @@ interface ContextDocument {
 
 export default function ContextDetailPage() {
   const { contextId, userId } = useParams<{ contextId: string; userId?: string }>();
-  const navigate = useNavigate();
   const [context, setContext] = useState<ContextData | null>(null);
   const [tree, setTree] = useState<TreeNode | null>(null);
   const [workspaceDocuments, setWorkspaceDocuments] = useState<WorkspaceDocument[]>([]);
@@ -889,22 +888,6 @@ export default function ContextDetailPage() {
             title="Toggle tree view"
           >
             <Sidebar className="h-4 w-4" />
-          </Button>
-
-          {/* File Manager Button */}
-          <Button
-            onClick={() => {
-              const baseUrl = userId 
-                ? `/users/${userId}/contexts/${contextId}/file-manager`
-                : `/contexts/${contextId}/file-manager`
-              navigate(baseUrl)
-            }}
-            variant="outline"
-            size="sm"
-            className="p-2"
-            title="Open file manager view"
-          >
-            <Folders className="h-4 w-4" />
           </Button>
 
           {/* Context URL Input */}

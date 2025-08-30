@@ -207,32 +207,6 @@ export async function mergeDownWorkspacePath(workspaceId: string, path: string):
   }
 }
 
-export async function subtractUpWorkspacePath(workspaceId: string, path: string): Promise<boolean> {
-  try {
-    const response = await api.post<{ payload: boolean; message: string; status: string; statusCode: number }>(
-      `${API_ROUTES.workspaces}/${workspaceId}/tree/paths/subtract-up`,
-      { path }
-    );
-    return response.payload;
-  } catch (error) {
-    console.error(`Failed to subtract up workspace path ${path}:`, error);
-    throw error;
-  }
-}
-
-export async function subtractDownWorkspacePath(workspaceId: string, path: string): Promise<boolean> {
-  try {
-    const response = await api.post<{ payload: boolean; message: string; status: string; statusCode: number }>(
-      `${API_ROUTES.workspaces}/${workspaceId}/tree/paths/subtract-down`,
-      { path }
-    );
-    return response.payload;
-  } catch (error) {
-    console.error(`Failed to subtract down workspace path ${path}:`, error);
-    throw error;
-  }
-}
-
 export async function pasteDocumentsToWorkspacePath(workspaceId: string, path: string, documentIds: number[]): Promise<boolean> {
   try {
     // This would use the document insertion API with the specified path
