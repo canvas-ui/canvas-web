@@ -1,50 +1,80 @@
-# Canvas web frontend (React + TypeScript + Vite)
+# Canvas web frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+- Bundled with [Canvas Server](https://github.com/canvas-ai/canvas-server)  
+- For standalone deployment, see the installation section below
 
-Currently, two official plugins are available:
+## Screenshots
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### Workspace Management
+![Main Dashboard](./public/screenshots/s1.png)
 
-## Expanding the ESLint configuration
+### Workspace Detail
 
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
+Workspace connected to a browser running [canvas-browser-extension](https://github.com/canvas-ai/canvas-browser-extensions)
+![Workspace Management](./public/screenshots/s2.png)
 
-- Configure the top-level `parserOptions` property like this:
+### Context detail
 
-```js
-export default tseslint.config({
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+Context-bound browser with real-time data sync
+![Settings & Configuration](./public/screenshots/s3.png)
+
+## Installation (standalone)
+
+### Prerequisites
+- Node.js >= 20.0.0
+- npm or yarn package manager
+
+### Setup
+1. **Clone this repository**
+   ```bash
+   git clone https://github.com/canvas-ai/canvas-web
+   cd canvas-web
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Build the web frontend**
+   ```bash
+   npm run build
+   ```
+
+### Development
+```bash
+# Start development server
+npm run dev
+
+# Build for production
+npm run build
+
+# Preview production build
+npm run preview
+
+# Lint code
+npm run lint
 ```
 
-- Replace `tseslint.configs.recommended` to `tseslint.configs.recommendedTypeChecked` or `tseslint.configs.strictTypeChecked`
-- Optionally add `...tseslint.configs.stylisticTypeChecked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and update the config:
+## Configuration
 
-```js
-// eslint.config.js
-import react from 'eslint-plugin-react'
+### Remote Access
+```bash
+# Copy environment template
+cp .env.example .env
 
-export default tseslint.config({
-  // Set the react version
-  settings: { react: { version: '18.3' } },
-  plugins: {
-    // Add the react plugin
-    react,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended rules
-    ...react.configs.recommended.rules,
-    ...react.configs['jsx-runtime'].rules,
-  },
-})
+# Update Canvas Server API URL for remote access
+VITE_API_URL=http://your-server:8001
 ```
+
+### Environment Variables
+| Variable | Default |
+|----------|---------|
+| `VITE_API_URL` | `http://localhost:8001` |
+| `CANVAS_API_PORT` | `8001` |
+| `CANVAS_API_HOST` | `0.0.0.0` | 
+| `CANVAS_API_PROTOCOL` | `http` |
+
+## License
+
+Licensed under AGPL-3.0-or-later. See main project LICENSE file. 
