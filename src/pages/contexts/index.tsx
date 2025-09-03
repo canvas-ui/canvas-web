@@ -543,53 +543,44 @@ export default function ContextsPage() {
         <div className="space-y-4">
           <h2 className="text-xl font-semibold">Edit Context</h2>
           <form onSubmit={handleSaveContextEdit} className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label htmlFor="edit-context-id" className="block text-sm font-medium mb-1">
-                  Context ID (read-only)
-                </label>
-                <Input
-                  id="edit-context-id"
-                  value={editingContext.id}
-                  disabled
-                  className="bg-muted"
-                />
-              </div>
-              <div>
-                <label htmlFor="edit-context-url" className="block text-sm font-medium mb-1">
-                  Context URL
-                </label>
-                <Input
-                  id="edit-context-url"
-                  value={editingContext.url}
-                  onChange={(e) => setEditingContext(prev => prev ? {...prev, url: e.target.value} : null)}
-                placeholder="/project/path/resource"
-                />
-              </div>
+            <div>
+              <label htmlFor="edit-context-id" className="block text-sm font-medium mb-1">
+                Context ID (read-only)
+              </label>
+              <Input
+                id="edit-context-id"
+                value={editingContext.id}
+                disabled
+                className="bg-muted"
+              />
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label htmlFor="edit-base-url" className="block text-sm font-medium mb-1">
-                  Base URL (optional)
-                </label>
-                <Input
-                  id="edit-base-url"
-                  value={editingContext.baseUrl || ''}
-                  onChange={(e) => setEditingContext(prev => prev ? {...prev, baseUrl: e.target.value || null} : null)}
+            <div>
+              <label htmlFor="edit-context-url" className="block text-sm font-medium mb-1">
+                Context URL
+              </label>
+              <Input
+                id="edit-context-url"
+                value={editingContext.url}
+                onChange={(e) => setEditingContext(prev => prev ? {...prev, url: e.target.value} : null)}
+                placeholder="workspace://path or /path"
+              />
+              <p className="text-sm text-muted-foreground mt-1">
+                Use format: workspace://path or /path for current workspace
+              </p>
+            </div>
+            <div>
+              <label htmlFor="edit-base-url" className="block text-sm font-medium mb-1">
+                Base URL (optional)
+              </label>
+              <Input
+                id="edit-base-url"
+                value={editingContext.baseUrl || ''}
+                onChange={(e) => setEditingContext(prev => prev ? {...prev, baseUrl: e.target.value || null} : null)}
                 placeholder="/base/path"
-                />
-              </div>
-              <div>
-                <label htmlFor="edit-path" className="block text-sm font-medium mb-1">
-                  Path (optional)
-                </label>
-                <Input
-                  id="edit-path"
-                  value={editingContext.path || ''}
-                  onChange={(e) => setEditingContext(prev => prev ? {...prev, path: e.target.value || null} : null)}
-                  placeholder="/path"
-                />
-              </div>
+              />
+              <p className="text-sm text-muted-foreground mt-1">
+                Restricts context navigation to this base path
+              </p>
             </div>
             <div className="flex gap-2">
               <Button type="submit">
