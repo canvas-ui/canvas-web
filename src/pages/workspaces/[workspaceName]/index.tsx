@@ -28,7 +28,7 @@ import {
 } from '@/services/workspace';
 import { getSchemas } from '@/services/schemas';
 import { TreeNode, Document } from '@/types/workspace';
-import { parseUrlFilters, extractWorkspacePath, buildWorkspaceUrl, UrlFilters } from '@/utils/url-params';
+import { parseUrlFilters, extractWorkspacePath, buildWorkspaceUrl, sanitizeUrlPath, UrlFilters } from '@/utils/url-params';
 
 // Using global Workspace interface from types/api.d.ts
 
@@ -332,8 +332,9 @@ export default function WorkspaceDetailPage() {
 
       // If the renamed path was selected, update selection to new path
       if (selectedPath === fromPath) {
-        setSelectedPath(newPath);
-        updateUrl(newPath);
+        const sanitizedNewPath = sanitizeUrlPath(newPath);
+        setSelectedPath(sanitizedNewPath);
+        updateUrl(sanitizedNewPath);
       }
 
       return true;
@@ -666,7 +667,7 @@ export default function WorkspaceDetailPage() {
         const documents = response.payload as Document[];
         setDocuments(documents || []);
         setDocumentsTotalCount(response.totalCount || response.count || 0);
-        const newPath = `/${layer.name}`;
+        const newPath = sanitizeUrlPath(`/${layer.name}`);
         setSelectedPath(newPath);
         updateUrl(newPath);
       } catch (err) {
@@ -803,8 +804,9 @@ export default function WorkspaceDetailPage() {
           tree={tree}
           selectedPath={selectedPath}
           onPathSelect={(path: string) => {
-            setSelectedPath(path);
-            updateUrl(path);
+            const sanitizedPath = sanitizeUrlPath(path);
+            setSelectedPath(sanitizedPath);
+            updateUrl(sanitizedPath);
           }}
           isLoadingTree={isLoadingTree}
           documents={documents}

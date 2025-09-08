@@ -2,6 +2,19 @@
  * Utilities for handling URL parameters for features and filters
  */
 
+/**
+ * Sanitize URL path by removing duplicate slashes and ensuring proper format
+ */
+export function sanitizeUrlPath(path: string): string {
+  if (!path) return '/';
+
+  // Replace multiple consecutive slashes with single slash
+  const sanitized = path.replace(/\/+/g, '/');
+
+  // Ensure path starts with slash
+  return sanitized.startsWith('/') ? sanitized : `/${sanitized}`;
+}
+
 export interface UrlFilters {
   features: string[];
   filters: string[];
@@ -45,7 +58,7 @@ export function extractWorkspacePath(pathname: string, workspaceName: string): s
   const prefix = `/workspaces/${workspaceName}`;
   if (pathname.startsWith(prefix)) {
     const remainingPath = pathname.slice(prefix.length);
-    return remainingPath || '/';
+    return sanitizeUrlPath(remainingPath || '/');
   }
   return '/';
 }
@@ -54,7 +67,8 @@ export function extractWorkspacePath(pathname: string, workspaceName: string): s
  * Build workspace URL with path and filters
  */
 export function buildWorkspaceUrl(workspaceName: string, path: string, filters?: UrlFilters): string {
-  const basePath = `/workspaces/${workspaceName}${path === '/' ? '' : path}`;
+  const sanitizedPath = sanitizeUrlPath(path);
+  const basePath = `/workspaces/${workspaceName}${sanitizedPath === '/' ? '' : sanitizedPath}`;
 
   if (!filters || (filters.features.length === 0 && filters.filters.length === 0)) {
     return basePath;
