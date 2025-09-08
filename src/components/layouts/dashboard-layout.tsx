@@ -1,6 +1,6 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom"
 import { useState, useEffect, useCallback } from "react"
-import { LogOut, Briefcase, Network, KeyRound, Infinity, ChevronRight, Users, FolderOpen, Brain } from "lucide-react"
+import { LogOut, LayoutGrid, Layers3, KeyRound, Infinity, ChevronRight, Users, FolderOpen, Brain } from "lucide-react"
 import { api } from "@/lib/api"
 import socketService from "@/lib/socket"
 import { useToast } from "@/components/ui/toast-container"
@@ -318,11 +318,11 @@ function DashboardSidebar() {
                   className="flex items-center"
                   type="button"
                 >
-                  <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                  <div className="flex aspect-square size-8 items-center justify-center text-sidebar-primary-foreground">
                     <img
-                      src='/images/logo_128x128.png'
+                      src="/images/logo-wr_128x128.png"
                       alt="Canvas Logo"
-                      className="size-4"
+                      className="size-6"
                     />
                   </div>
                   <div className="grid flex-1 text-left text-sm leading-tight">
@@ -372,7 +372,7 @@ function DashboardSidebar() {
                     }}
                     tooltip="Manage your workspaces"
                   >
-                    <Briefcase className="size-4" />
+                    <LayoutGrid className="size-4" />
                     <span>Workspaces</span>
                     <ChevronRight
                       className={`ml-auto size-4 transition-transform ${isWorkspacesOpen ? 'rotate-90' : ''}`}
@@ -446,7 +446,7 @@ function DashboardSidebar() {
                     }}
                     tooltip="Browse and manage contexts"
                   >
-                    <Network className="size-4" />
+                    <Layers3 className="size-4" />
                     <span>Contexts</span>
                     <ChevronRight
                       className={`ml-auto size-4 transition-transform ${isContextsOpen ? 'rotate-90' : ''}`}

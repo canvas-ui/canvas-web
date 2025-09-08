@@ -69,7 +69,7 @@ export default function HomePage() {
       {/* Page Header */}
       <div className="border-b pb-4 text-center">
         <h1 className="text-3xl font-bold tracking-tight">
-          {successMessage ? successMessage : "Welcome to your Universe ..indexed!"}
+          {successMessage ? successMessage : "Control Center"}
         </h1>
         {!successMessage && <p className="text-muted-foreground mt-2">&#8734;</p>}
       </div>

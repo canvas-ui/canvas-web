@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { API_ROUTES } from '@/config/api';
 import { useToast } from '@/components/ui/toast-container';
@@ -28,11 +28,14 @@ import {
 } from '@/services/workspace';
 import { getSchemas } from '@/services/schemas';
 import { TreeNode, Document } from '@/types/workspace';
+import { parseUrlFilters, extractWorkspacePath, buildWorkspaceUrl, UrlFilters } from '@/utils/url-params';
 
 // Using global Workspace interface from types/api.d.ts
 
 export default function WorkspaceDetailPage() {
   const { workspaceName } = useParams<{ workspaceName: string }>();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [tree, setTree] = useState<TreeNode | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -45,6 +48,9 @@ export default function WorkspaceDetailPage() {
   const [schemas, setSchemas] = useState<string[]>([]);
   const [selectedSchemas, setSelectedSchemas] = useState<string[]>([]);
   const [isLoadingSchemas, setIsLoadingSchemas] = useState(false);
+
+  // URL-based features and filters
+  const [urlFilters, setUrlFilters] = useState<UrlFilters>({ features: [], filters: [] });
 
   // Clipboard state for copy/cut operations
   const [clipboard, setClipboard] = useState<{
@@ -62,6 +68,32 @@ export default function WorkspaceDetailPage() {
   const [isLoadingLayers, setIsLoadingLayers] = useState(false);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
 
+  // Initialize path and filters from URL
+  useEffect(() => {
+    if (!workspaceName) return;
+
+    // Extract path from URL
+    const pathFromUrl = extractWorkspacePath(location.pathname, workspaceName);
+    setSelectedPath(pathFromUrl);
+
+    // Parse filters from URL search params
+    const searchParams = new URLSearchParams(location.search);
+    const parsedFilters = parseUrlFilters(searchParams);
+    setUrlFilters(parsedFilters);
+  }, [location.pathname, location.search, workspaceName]);
+
+  // Update URL when path or filters change
+  const updateUrl = (newPath: string, newFilters?: UrlFilters) => {
+    if (!workspaceName) return;
+
+    const filters = newFilters || urlFilters;
+    const newUrl = buildWorkspaceUrl(workspaceName, newPath, filters);
+
+    // Only navigate if URL is different
+    if (newUrl !== location.pathname + location.search) {
+      navigate(newUrl, { replace: true });
+    }
+  };
 
   // Reusable fetch functions
   const fetchTree = async () => {
@@ -88,7 +120,10 @@ export default function WorkspaceDetailPage() {
     if (!workspaceName) return;
     setIsLoadingDocuments(true);
     try {
-      const response = await getWorkspaceDocuments(workspaceName, selectedPath, selectedSchemas, {
+      // Combine selected schemas with URL features as additional schema filters
+      const allSchemas = [...selectedSchemas, ...urlFilters.features];
+
+      const response = await getWorkspaceDocuments(workspaceName, selectedPath, allSchemas, {
         limit: pageSize,
         page: currentPage
       });
@@ -163,15 +198,15 @@ export default function WorkspaceDetailPage() {
     loadSchemas();
   }, []);
 
-  // Fetch documents when path, schema filters, or pagination changes
+  // Fetch documents when path, schema filters, URL filters, or pagination changes
   useEffect(() => {
     fetchDocuments();
-  }, [workspaceName, selectedPath, selectedSchemas, currentPage, pageSize]);
+  }, [workspaceName, selectedPath, selectedSchemas, urlFilters, currentPage, pageSize]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedPath, selectedSchemas]);
+  }, [selectedPath, selectedSchemas, urlFilters]);
 
   // Load layers when workspace loads
   useEffect(() => {
@@ -298,6 +333,7 @@ export default function WorkspaceDetailPage() {
       // If the renamed path was selected, update selection to new path
       if (selectedPath === fromPath) {
         setSelectedPath(newPath);
+        updateUrl(newPath);
       }
 
       return true;
@@ -630,7 +666,9 @@ export default function WorkspaceDetailPage() {
         const documents = response.payload as Document[];
         setDocuments(documents || []);
         setDocumentsTotalCount(response.totalCount || response.count || 0);
-        setSelectedPath(`/${layer.name}`);
+        const newPath = `/${layer.name}`;
+        setSelectedPath(newPath);
+        updateUrl(newPath);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to fetch layer documents';
         showToast({ title: 'Error', description: message, variant: 'destructive' });
@@ -696,6 +734,7 @@ export default function WorkspaceDetailPage() {
       if (selectedLayerId === layer.id) {
         setSelectedLayerId(null);
         setSelectedPath('/');
+        updateUrl('/');
         fetchDocuments();
       }
     } catch (err) {
@@ -763,7 +802,10 @@ export default function WorkspaceDetailPage() {
         <FileManagerView
           tree={tree}
           selectedPath={selectedPath}
-          onPathSelect={setSelectedPath}
+          onPathSelect={(path: string) => {
+            setSelectedPath(path);
+            updateUrl(path);
+          }}
           isLoadingTree={isLoadingTree}
           documents={documents}
           isLoadingDocuments={isLoadingDocuments}
@@ -798,8 +840,22 @@ export default function WorkspaceDetailPage() {
           onPasteDocuments={handlePasteDocuments}
           onImportDocuments={handleImportDocuments}
           schemas={schemas}
-          selectedSchemas={selectedSchemas}
-          onSchemaChange={setSelectedSchemas}
+          selectedSchemas={[...selectedSchemas, ...urlFilters.features]}
+          onSchemaChange={(newSchemas) => {
+            // Split into URL features and manual selections
+            const urlFeatures = newSchemas.filter(schema => schema.startsWith('data/abstraction/'));
+            const manualSchemas = newSchemas.filter(schema => !schema.startsWith('data/abstraction/'));
+
+            // Update manual selections
+            setSelectedSchemas(manualSchemas);
+
+            // Update URL features if they changed
+            if (JSON.stringify(urlFeatures.sort()) !== JSON.stringify(urlFilters.features.sort())) {
+              const newFilters = { features: urlFeatures, filters: urlFilters.filters };
+              setUrlFilters(newFilters);
+              updateUrl(selectedPath, newFilters);
+            }
+          }}
           isLoadingSchemas={isLoadingSchemas}
           copiedDocuments={clipboard?.documentIds || []}
           workspaceId={workspace.id}

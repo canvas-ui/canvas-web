@@ -45,6 +45,7 @@ function AppContent() {
           <Route path="home" element={<HomePage />} />
           <Route path="workspaces" element={<WorkspacesPage />} />
           <Route path="workspaces/:workspaceName" element={<WorkspaceDetailPage />} />
+          <Route path="workspaces/:workspaceName/*" element={<WorkspaceDetailPage />} />
           <Route path="contexts" element={<ContextsPage />} />
           <Route path="contexts/:contextId" element={<ContextDetailPage />} />
           <Route path="users/:userId/contexts/:contextId" element={<ContextDetailPage />} />

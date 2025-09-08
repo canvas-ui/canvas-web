@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast-container';
@@ -12,6 +12,7 @@ import { useTreeOperations } from '@/hooks/useTreeOperations';
 import { DocumentDetailModal } from '@/components/context/document-detail-modal';
 import { DocumentList } from '@/components/common/document-list';
 import { TreeNode, Document as WorkspaceDocument } from '@/types/workspace';
+import { parseUrlFilters, buildContextUrl, parseFeatureFilters, featureFiltersToArray, UrlFilters } from '@/utils/url-params';
 
 // Simple debounce utility function
 const debounce = (func: Function, delay: number) => {
@@ -86,6 +87,8 @@ interface ContextDocument {
 
 export default function ContextDetailPage() {
   const { contextId, userId } = useParams<{ contextId: string; userId?: string }>();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [context, setContext] = useState<ContextData | null>(null);
   const [tree, setTree] = useState<TreeNode | null>(null);
   const [workspaceDocuments, setWorkspaceDocuments] = useState<WorkspaceDocument[]>([]);
@@ -130,12 +133,44 @@ export default function ContextDetailPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
 
+  // URL-based filters
+  const [urlFilters, setUrlFilters] = useState<UrlFilters>({ features: [], filters: [] });
+
   // Get current user to check if they're the owner
   const currentUser = getCurrentUserFromToken();
   const isOwner = currentUser && context && currentUser.id === context.userId;
 
   // Check if this is a shared context route
   const isSharedContext = Boolean(userId);
+
+  // Initialize filters from URL and sync changes
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const parsedFilters = parseUrlFilters(searchParams);
+    setUrlFilters(parsedFilters);
+
+    // Parse features and update toolbox state
+    const featureFilters = parseFeatureFilters(parsedFilters.features);
+    setActiveFilters({
+      tabs: featureFilters.tabs,
+      notes: featureFilters.notes,
+      todo: featureFilters.todo
+    });
+    setCustomBitmaps(featureFilters.customBitmaps);
+  }, [location.search]);
+
+  // Update URL when filters change
+  const updateUrl = (newFilters?: UrlFilters) => {
+    if (!contextId) return;
+
+    const filters = newFilters || urlFilters;
+    const newUrl = buildContextUrl(contextId, userId, filters);
+
+    // Only navigate if URL is different
+    if (newUrl !== location.pathname + location.search) {
+      navigate(newUrl, { replace: true });
+    }
+  };
 
   // Close all right sidebars
   const closeAllRightSidebars = () => {
@@ -227,15 +262,26 @@ export default function ContextDetailPage() {
 
     setIsLoadingDocuments(true);
     try {
-      const featureArray = [];
+      // Combine activeFilters, customBitmaps, and URL features
+      const featureArray = [...urlFilters.features];
 
-      // Add feature filters based on toolbox settings
-      if (activeFilters.tabs) featureArray.push('data/abstraction/tab');
-      if (activeFilters.notes) featureArray.push('data/abstraction/note');
-      if (activeFilters.todo) featureArray.push('data/abstraction/todo');
+      // Also include UI state for immediate feedback (before URL updates)
+      if (activeFilters.tabs && !featureArray.includes('data/abstraction/tab')) {
+        featureArray.push('data/abstraction/tab');
+      }
+      if (activeFilters.notes && !featureArray.includes('data/abstraction/note')) {
+        featureArray.push('data/abstraction/note');
+      }
+      if (activeFilters.todo && !featureArray.includes('data/abstraction/todo')) {
+        featureArray.push('data/abstraction/todo');
+      }
 
-      // Add custom bitmaps
-      featureArray.push(...customBitmaps);
+      // Add custom bitmaps that aren't already in URL features
+      customBitmaps.forEach(bitmap => {
+        if (!featureArray.includes(bitmap)) {
+          featureArray.push(bitmap);
+        }
+      });
 
       // Use REST API to get documents with filters and pagination
       const documentsData = isSharedContext && userId
@@ -262,7 +308,7 @@ export default function ContextDetailPage() {
     } finally {
       setIsLoadingDocuments(false);
     }
-  }, [contextId, activeFilters, customBitmaps, userId, isSharedContext, currentPage, pageSize]);
+  }, [contextId, activeFilters, customBitmaps, urlFilters, userId, isSharedContext, currentPage, pageSize]);
 
   // Fetch context details
   const fetchContextDetails = useCallback(async () => {
@@ -339,7 +385,7 @@ export default function ContextDetailPage() {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeFilters, customBitmaps]);
+  }, [activeFilters, customBitmaps, urlFilters]);
 
   // Fetch tree when tree view opens
   useEffect(() => {
@@ -753,23 +799,53 @@ export default function ContextDetailPage() {
 
   // Handle toolbox filter changes
   const handleFilterToggle = (filter: keyof typeof activeFilters) => {
-    setActiveFilters(prev => ({
-      ...prev,
-      [filter]: !prev[filter]
-    }));
+    const newActiveFilters = {
+      ...activeFilters,
+      [filter]: !activeFilters[filter]
+    };
+    setActiveFilters(newActiveFilters);
+
+    // Update URL with new filters
+    const features = featureFiltersToArray({
+      ...newActiveFilters,
+      customBitmaps
+    });
+    const newFilters = { features, filters: urlFilters.filters };
+    setUrlFilters(newFilters);
+    updateUrl(newFilters);
   };
 
   // Handle custom bitmap addition
   const handleAddCustomBitmap = () => {
     if (newBitmapInput.trim() && !customBitmaps.includes(newBitmapInput.trim())) {
-      setCustomBitmaps(prev => [...prev, newBitmapInput.trim()]);
+      const newCustomBitmaps = [...customBitmaps, newBitmapInput.trim()];
+      setCustomBitmaps(newCustomBitmaps);
       setNewBitmapInput('');
+
+      // Update URL with new filters
+      const features = featureFiltersToArray({
+        ...activeFilters,
+        customBitmaps: newCustomBitmaps
+      });
+      const newFilters = { features, filters: urlFilters.filters };
+      setUrlFilters(newFilters);
+      updateUrl(newFilters);
     }
   };
 
   // Handle custom bitmap removal
   const handleRemoveCustomBitmap = (bitmap: string) => {
-    setCustomBitmaps(prev => prev.filter(b => b !== bitmap));
+    const newCustomBitmaps = customBitmaps.filter(b => b !== bitmap);
+    setCustomBitmaps(newCustomBitmaps);
+
+    // Update URL with new filters
+    const features = featureFiltersToArray({
+      ...activeFilters,
+      customBitmaps: newCustomBitmaps
+    });
+    const newFilters = { features, filters: urlFilters.filters };
+    setUrlFilters(newFilters);
+    updateUrl(newFilters);
   };
 
   // Handle grant access
