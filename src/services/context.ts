@@ -85,7 +85,7 @@ export async function getContext(id: string): Promise<Context> {
 
 export async function getSharedContext(ownerId: string, contextId: string): Promise<Context> {
   try {
-    const response = await api.get<{ payload: Context }>(`${API_ROUTES.users}/${ownerId}/contexts/${contextId}`);
+    const response = await api.get<{ payload: Context }>(`/pub/contexts/${contextId}`);
     if (response && response.payload) {
       return response.payload;
     }
@@ -152,7 +152,7 @@ export async function getContextDocuments(
     if (options.limit !== undefined) params.append('limit', options.limit.toString());
     if (options.offset !== undefined) params.append('offset', options.offset.toString());
     if (options.page !== undefined) params.append('page', options.page.toString());
-    
+
     const url = `${API_ROUTES.contexts}/${id}/documents${params.toString() ? '?' + params.toString() : ''}`;
     const response = await api.get<{ payload: DocumentResponse['data']; count: number; totalCount: number }>(url);
 
@@ -193,13 +193,11 @@ export async function getSharedContextDocuments(
     if (options.limit !== undefined) params.append('limit', options.limit.toString());
     if (options.offset !== undefined) params.append('offset', options.offset.toString());
     if (options.page !== undefined) params.append('page', options.page.toString());
-    
-    const url = `${API_ROUTES.users}/${ownerId}/contexts/${contextId}/documents${params.toString() ? '?' + params.toString() : ''}`;
+
+    const url = `/pub/contexts/${contextId}/documents${params.toString() ? '?' + params.toString() : ''}`;
     const response = await api.get<{ payload: DocumentResponse['data']; count: number; totalCount: number }>(url);
 
-    // Handle the correct API response structure where documents are directly in payload
     if (Array.isArray(response.payload)) {
-      // Attach pagination metadata to the array
       const result = response.payload as DocumentResponse['data'] & { count?: number; totalCount?: number };
       result.count = response.count;
       result.totalCount = response.totalCount;
@@ -218,7 +216,7 @@ export async function getSharedContextDocuments(
 export async function grantContextAccess(ownerId: string, contextId: string, sharedWithUserId: string, accessLevel: string): Promise<{ message: string }> {
   try {
     const response = await api.post<{ payload: string }>(
-      `${API_ROUTES.users}/${ownerId}/contexts/${contextId}/shares`,
+      `/pub/contexts/${ownerId}/contexts/${contextId}/shares`,
       { sharedWithUserId, accessLevel }
     );
     return { message: response.payload || 'Context access granted' };
@@ -231,7 +229,7 @@ export async function grantContextAccess(ownerId: string, contextId: string, sha
 export async function revokeContextAccess(ownerId: string, contextId: string, sharedWithUserId: string): Promise<{ message:string }> {
   try {
     const response = await api.delete<{ payload: string }>(
-      `${API_ROUTES.users}/${ownerId}/contexts/${contextId}/shares/${sharedWithUserId}`
+      `/pub/contexts/${ownerId}/contexts/${contextId}/shares/${sharedWithUserId}`
     );
     return { message: response.payload || 'Context access revoked' };
   } catch (error) {

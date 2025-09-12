@@ -368,6 +368,9 @@ export default function WorkspacesPage() {
         </form>
       </div>
 
+      {/* Open Shared Resource */}
+      <OpenSharedResource />
+
       {/* Your Workspaces Section */}
       <div className="space-y-4">
         <h2 className="text-xl font-semibold">Your Workspaces</h2>
@@ -472,5 +475,57 @@ export default function WorkspacesPage() {
     </div>
   )
 }
+
+function OpenSharedResource() {
+  const { showToast } = useToast()
+  const [url, setUrl] = useState('')
+  const [token, setToken] = useState('')
+  const [isOpening, setIsOpening] = useState(false)
+
+  const parse = (input: string) => {
+    try {
+      const u = new URL(input)
+      return u
+    } catch {
+      return null
+    }
+  }
+
+  const handleOpen = async () => {
+    const u = parse(url.trim())
+    if (!u) {
+      showToast({ title: 'Error', description: 'Invalid URL', variant: 'destructive' })
+      return
+    }
+    if (!token.trim().startsWith('canvas-')) {
+      showToast({ title: 'Error', description: 'Invalid access token', variant: 'destructive' })
+      return
+    }
+
+    setIsOpening(true)
+    try {
+      // Navigate to shared viewer to keep UI minimal and reusable
+      const q = new URLSearchParams({ url: url.trim(), token: token.trim() }).toString()
+      window.location.href = `/shared?${q}`
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to open shared resource', variant: 'destructive' })
+    } finally {
+      setIsOpening(false)
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <h2 className="text-xl font-semibold">Open Shared Resource</h2>
+      <div className="grid gap-2 md:grid-cols-3">
+        <Input placeholder="Shared URL (e.g., https://host/rest/v2/pub/workspaces/ID)" value={url} onChange={(e) => setUrl(e.target.value)} />
+        <Input placeholder="Access token (canvas-...)" value={token} onChange={(e) => setToken(e.target.value)} />
+        <Button onClick={handleOpen} disabled={isOpening || !url.trim() || !token.trim()}>Open</Button>
+      </div>
+      <p className="text-sm text-muted-foreground">We use your provided URL and token to fetch via the remote's public API.</p>
+    </div>
+  )
+}
+
 
 

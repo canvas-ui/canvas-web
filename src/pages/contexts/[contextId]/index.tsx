@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast-container';
 import { Save, Share, X, Plus, Settings, Info, Sidebar } from 'lucide-react';
+import { ContextTokenManager } from '@/components/context/token-manager';
 import { getContext, getSharedContext, updateContextUrl, grantContextAccess, revokeContextAccess, getContextTree, getContextDocuments, getSharedContextDocuments, removeDocumentsFromContext, deleteDocumentsFromContext, pasteDocumentsToContext, importDocumentsToContext } from '@/services/context';
 import socketService from '@/lib/socket';
 import { getCurrentUserFromToken } from '@/services/auth';
@@ -13,6 +14,7 @@ import { DocumentDetailModal } from '@/components/context/document-detail-modal'
 import { DocumentList } from '@/components/common/document-list';
 import { TreeNode, Document as WorkspaceDocument } from '@/types/workspace';
 import { parseUrlFilters, buildContextUrl, parseFeatureFilters, featureFiltersToArray, UrlFilters } from '@/utils/url-params';
+import { adminUserService } from '@/services/admin';
 
 // Simple debounce utility function
 const debounce = (func: Function, delay: number) => {
@@ -116,6 +118,9 @@ export default function ContextDetailPage() {
   });
   const [customBitmaps, setCustomBitmaps] = useState<string[]>([]);
   const [newBitmapInput, setNewBitmapInput] = useState('');
+
+  // Map userId -> email for rendering ACL entries
+  const [aclUserMap, setAclUserMap] = useState<Record<string, string>>({});
 
   // Sharing state
   const [shareEmail, setShareEmail] = useState('');
@@ -370,6 +375,27 @@ export default function ContextDetailPage() {
     }
     setIsLoading(false);
   }, [contextId, userId, isSharedContext]);
+  // Resolve user IDs in ACL to emails for display (best effort)
+  useEffect(() => {
+    const resolveAclEmails = async () => {
+      if (!context || !context.acl) return;
+      const entries = Object.keys(context.acl);
+      const unresolvedIds = entries.filter((k) => typeof k === 'string' && !k.includes('@') && !aclUserMap[k]);
+      if (unresolvedIds.length === 0) return;
+      const updates: Record<string, string> = {};
+      await Promise.all(unresolvedIds.map(async (uid) => {
+        try {
+          const user = await adminUserService.getUser(uid);
+          if (user?.email) updates[uid] = user.email;
+        } catch (_) { /* ignore, non-admins may not resolve */ }
+      }));
+      if (Object.keys(updates).length > 0) {
+        setAclUserMap((prev) => ({ ...prev, ...updates }));
+      }
+    };
+    resolveAclEmails();
+  }, [context?.acl]);
+
 
   // Initial data fetch
   useEffect(() => {
@@ -1235,7 +1261,7 @@ export default function ContextDetailPage() {
                           <span className="text-xs font-medium">O</span>
                         </div>
                         <div>
-                          <div className="text-sm font-medium">{context.userId}</div>
+                          <div className="text-sm font-medium">{(isOwner && (currentUser?.email)) || ((userId && userId.includes('@')) ? userId : context.userId)}</div>
                           <div className="text-xs text-muted-foreground">Owner</div>
                         </div>
                       </div>
@@ -1243,16 +1269,18 @@ export default function ContextDetailPage() {
                     </div>
 
                     {/* Shared Users */}
-                    {Object.entries(context.acl || {}).map(([userEmail, permission]) => (
-                      <div key={userEmail} className="flex items-center justify-between p-2 border rounded">
+                    {Object.entries(context.acl || {}).map(([aclKey, permission]) => {
+                      const displayEmail = aclKey.includes('@') ? aclKey : (aclUserMap[aclKey] || aclKey)
+                      return (
+                      <div key={aclKey} className="flex items-center justify-between p-2 border rounded">
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 rounded-full bg-secondary/10 flex items-center justify-center">
                             <span className="text-xs font-medium">
-                              {userEmail.charAt(0).toUpperCase()}
+                              {displayEmail.charAt(0).toUpperCase()}
                             </span>
                           </div>
                           <div>
-                            <div className="text-sm font-medium">{userEmail}</div>
+                            <div className="text-sm font-medium">{displayEmail}</div>
                             <div className="text-xs text-muted-foreground">
                               {permission === 'documentRead' && 'Read Only'}
                               {permission === 'documentWrite' && 'Read + Append'}
@@ -1261,7 +1289,7 @@ export default function ContextDetailPage() {
                           </div>
                         </div>
                         <Button
-                          onClick={() => handleRevokeAccess(userEmail)}
+                          onClick={() => handleRevokeAccess(displayEmail)}
                           variant="outline"
                           size="sm"
                           className="h-6 w-6 p-0"
@@ -1269,7 +1297,8 @@ export default function ContextDetailPage() {
                           <X className="h-3 w-3" />
                         </Button>
                       </div>
-                    ))}
+                      )
+                    })}
 
                     {(!context.acl || Object.keys(context.acl).length === 0) && (
                       <div className="text-center py-4 text-muted-foreground text-sm">
@@ -1277,6 +1306,12 @@ export default function ContextDetailPage() {
                       </div>
                     )}
                   </div>
+                </div>
+
+                {/* Token-based sharing */}
+                <div className="mt-6">
+                  <h4 className="font-medium mb-3">Token-based Sharing</h4>
+                  <ContextTokenManager contextId={context.id} />
                 </div>
               </div>
             )}

@@ -306,6 +306,9 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
         </div>
       )}
 
+      {/* Email-based shares (local users only) */}
+      <WorkspaceEmailShares workspaceId={workspaceId} />
+
       {isLoading ? (
         <div className="text-center py-4">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto"></div>
@@ -373,4 +376,84 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
       )}
     </div>
   );
+}
+
+function WorkspaceEmailShares({ workspaceId }: { workspaceId: string }) {
+  const { showToast } = useToast()
+  const [email, setEmail] = useState('')
+  const [permissions, setPermissions] = useState<('read' | 'write' | 'admin')[]>(['read'])
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [shares, setShares] = useState<Array<{ userEmail: string; permissions: string[]; description?: string; grantedAt?: string }>>([])
+
+  const loadShares = async () => {
+    try {
+      const res = await api.get<{ payload: typeof shares }>(`/workspaces/${workspaceId}/shares`)
+      setShares(res.payload || [])
+    } catch (e) {
+      // silent
+    }
+  }
+
+  useEffect(() => { loadShares() }, [workspaceId])
+
+  const addShare = async () => {
+    if (!email.trim()) return
+    try {
+      setIsSubmitting(true)
+      await api.post(`/workspaces/${workspaceId}/shares`, { userEmail: email.trim(), permissions })
+      setEmail('')
+      setPermissions(['read'])
+      await loadShares()
+      showToast({ title: 'Success', description: 'Access granted' })
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to grant access', variant: 'destructive' })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const revokeShare = async (userEmail: string) => {
+    try {
+      await api.delete(`/workspaces/${workspaceId}/shares/${encodeURIComponent(userEmail)}`)
+      await loadShares()
+      showToast({ title: 'Success', description: 'Access revoked' })
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to revoke', variant: 'destructive' })
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <h4 className="font-medium">Email-based Shares</h4>
+      <div className="flex gap-2 flex-wrap items-center">
+        <Input placeholder="user@local.server" value={email} onChange={(e) => setEmail(e.target.value)} className="max-w-xs" />
+        <div className="flex gap-2">
+          {['read','write','admin'].map(p => (
+            <label key={p} className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={permissions.includes(p as any)} onChange={(e) => {
+                if (e.target.checked) setPermissions([...permissions, p as any])
+                else setPermissions(permissions.filter(x => x !== (p as any)))
+              }} />
+              {p}
+            </label>
+          ))}
+        </div>
+        <Button size="sm" onClick={addShare} disabled={isSubmitting}>Add</Button>
+      </div>
+
+      {shares.length > 0 && (
+        <div className="space-y-2">
+          {shares.map((s) => (
+            <div key={s.userEmail} className="flex items-center justify-between border rounded p-2">
+              <div className="text-sm">
+                <div className="font-medium">{s.userEmail}</div>
+                <div className="text-xs text-muted-foreground">{s.permissions.join(', ')}{s.grantedAt ? ` • ${new Date(s.grantedAt).toLocaleDateString()}` : ''}</div>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => revokeShare(s.userEmail)} className="text-destructive hover:text-destructive">Revoke</Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }

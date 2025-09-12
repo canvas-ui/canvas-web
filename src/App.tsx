@@ -10,6 +10,7 @@ import { PublicRoute } from './components/auth/public-route'
 import ContextsPage from './pages/contexts'
 import ContextDetailPage from './pages/contexts/[contextId]'
 import ApiTokensPage from './pages/api-tokens'
+import SharedViewerPage from './pages/shared'
 import AdminUsersPage from './pages/admin/users'
 import AdminWorkspacesPage from './pages/admin/workspaces'
 import AgentsPage from './pages/agents'
@@ -52,6 +53,7 @@ function AppContent() {
           <Route path="agents" element={<AgentsPage />} />
           <Route path="agents/:agentId" element={<AgentDetailPage />} />
           <Route path="api-tokens" element={<ApiTokensPage />} />
+          <Route path="shared" element={<SharedViewerPage />} />
 
           {/* Admin routes */}
           <Route path="admin/users" element={<AdminUsersPage />} />
