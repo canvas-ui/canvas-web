@@ -982,6 +982,8 @@ export default function ContextDetailPage() {
                 selectedPath={selectedPath}
                 onPathSelect={handlePathSelect}
                 readOnly={isSharedContext}
+                defaultExpanded={false}
+                expandedPath={selectedPath !== '/' ? selectedPath : undefined}
                 onInsertPath={!isSharedContext ? treeOperations.insertPath : undefined}
                 onRemovePath={!isSharedContext ? treeOperations.removePath : undefined}
                 onMovePath={!isSharedContext ? treeOperations.movePath : undefined}

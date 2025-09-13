@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronRight, ChevronDown, Folder, FolderOpen, MoreHorizontal, Trash2, Plus, ArrowUp, ArrowDown, Clipboard, Minus, Copy, Scissors, Edit } from 'lucide-react'
 import { TreeNode } from '@/types/workspace'
@@ -9,6 +9,8 @@ interface TreeViewProps {
   selectedPath: string
   onPathSelect: (path: string) => void
   readOnly?: boolean
+  defaultExpanded?: boolean
+  expandedPath?: string
   onInsertPath?: (path: string, autoCreateLayers?: boolean) => Promise<boolean>
   onRemovePath?: (path: string, recursive?: boolean) => Promise<boolean>
   onRenamePath?: (fromPath: string, newName: string) => Promise<boolean>
@@ -33,6 +35,8 @@ interface TreeNodeProps {
   selectedPath: string
   onPathSelect: (path: string) => void
   readOnly: boolean
+  defaultExpanded?: boolean
+  expandedPath?: string
   onInsertPath?: (path: string, autoCreateLayers?: boolean) => Promise<boolean>
   onRemovePath?: (path: string, recursive?: boolean) => Promise<boolean>
   onRenamePath?: (fromPath: string, newName: string) => Promise<boolean>
@@ -275,6 +279,8 @@ function TreeNodeComponent({
   selectedPath,
   onPathSelect,
   readOnly,
+  defaultExpanded = false,
+  expandedPath,
   onInsertPath,
   onRemovePath,
   onRenamePath,
@@ -295,18 +301,45 @@ function TreeNodeComponent({
   onDrop,
   dragOverPath
 }: TreeNodeProps) {
-  const [isExpanded, setIsExpanded] = useState(true)
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
-
   // Build the current path
   const currentPath = parentPath === '/' ? `/${node.name}` : `${parentPath}/${node.name}`
+
+  // Determine if this node should be automatically expanded due to expandedPath
+  const shouldBeAutoExpanded = () => {
+    if (expandedPath && expandedPath !== '/') {
+      // If we have an expanded path, check if current path is part of that path
+      const normalizedExpandedPath = expandedPath.startsWith('/') ? expandedPath : `/${expandedPath}`
+      const normalizedCurrentPath = currentPath.startsWith('/') ? currentPath : `/${currentPath}`
+
+      // Node should be expanded if the expanded path starts with this node's path
+      return normalizedExpandedPath.startsWith(normalizedCurrentPath) && normalizedExpandedPath !== normalizedCurrentPath
+    }
+    return defaultExpanded
+  }
+
+  // Track manual expansion state separately from automatic expansion
+  const [manuallyExpanded, setManuallyExpanded] = useState<boolean | null>(null)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
+
   const isSelected = selectedPath === currentPath
   const hasChildren = node.children && node.children.length > 0
   const isDragOver = dragOverPath === currentPath
 
+  // Determine final expansion state: manual override takes precedence, otherwise use auto-expansion
+  const isExpanded = manuallyExpanded !== null ? manuallyExpanded : shouldBeAutoExpanded()
+
+  // Update auto-expansion when expandedPath changes, but don't override manual expansion
+  useEffect(() => {
+    if (manuallyExpanded === null) {
+      // Only update if user hasn't manually interacted with this node
+      // The state will update automatically due to shouldBeAutoExpanded() in the computed isExpanded
+    }
+  }, [expandedPath, manuallyExpanded])
+
   const handleToggle = () => {
     if (hasChildren) {
-      setIsExpanded(!isExpanded)
+      // Mark as manually expanded/collapsed to override automatic behavior
+      setManuallyExpanded(!isExpanded)
     }
   }
 
@@ -430,6 +463,8 @@ function TreeNodeComponent({
               selectedPath={selectedPath}
               onPathSelect={onPathSelect}
               readOnly={readOnly}
+              defaultExpanded={defaultExpanded}
+              expandedPath={expandedPath}
               onInsertPath={onInsertPath}
               onRemovePath={onRemovePath}
               onRenamePath={onRenamePath}
@@ -462,6 +497,8 @@ export function TreeView({
   selectedPath,
   onPathSelect,
   readOnly = false,
+  defaultExpanded = false,
+  expandedPath,
   onInsertPath,
   onRemovePath,
   onRenamePath,
@@ -660,6 +697,8 @@ export function TreeView({
             selectedPath={selectedPath}
             onPathSelect={onPathSelect}
             readOnly={readOnly}
+            defaultExpanded={defaultExpanded}
+            expandedPath={expandedPath}
             onInsertPath={onInsertPath}
             onRemovePath={onRemovePath}
             onRenamePath={onRenamePath}

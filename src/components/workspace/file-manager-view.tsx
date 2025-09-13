@@ -573,6 +573,8 @@ export function FileManagerView({
                     selectedPath={selectedPath}
                     onPathSelect={onPathSelect}
                     readOnly={false}
+                    defaultExpanded={false}
+                    expandedPath={selectedPath !== '/' ? selectedPath : undefined}
                     onInsertPath={onInsertPath}
                     onRemovePath={onRemovePath}
                     onRenamePath={onRenamePath}
