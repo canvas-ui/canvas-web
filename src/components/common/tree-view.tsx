@@ -531,12 +531,30 @@ export function TreeView({
   const handleDragOver = useCallback((path: string, event: React.DragEvent) => {
     if (readOnly) return
 
-    // Always prevent default to allow drop; we'll validate on drop
-    event.preventDefault()
-
     // Check if this is a document drag by looking at the data types
     const hasDocumentData = event.dataTransfer.types.includes('application/json')
     const hasPathData = event.dataTransfer.types.includes('text/plain')
+
+    // For path drag operations, validate the operation before allowing drop
+    if (hasPathData && draggedPath && !event.ctrlKey) {
+      const normalizedSource = draggedPath.endsWith('/') ? draggedPath.slice(0, -1) : draggedPath
+      const normalizedTarget = path.endsWith('/') ? path.slice(0, -1) : path
+      
+      // Check if this would be an invalid move operation
+      const isInvalidMove = (
+        normalizedTarget.startsWith(normalizedSource + '/') || // Target is descendant of source
+        normalizedSource === normalizedTarget || // Target is same as source
+        normalizedTarget === (normalizedSource.substring(0, normalizedSource.lastIndexOf('/')) || '/') // Target is direct parent of source
+      )
+      
+      if (isInvalidMove) {
+        event.dataTransfer.dropEffect = 'none'
+        return // Don't set drag over path for invalid operations
+      }
+    }
+
+    // Always prevent default to allow drop for valid operations
+    event.preventDefault()
 
     if (hasDocumentData) {
       // For document drops, default to copy
@@ -584,8 +602,34 @@ export function TreeView({
 
       if (sourcePath === targetPath) return
 
-      // Determine operation based on modifier keys
+      // Validate move operation to prevent invalid path operations
       const isCtrlPressed = event.ctrlKey
+      
+      if (!isCtrlPressed) {
+        // For move operations, check if target is an ancestor or descendant of source
+        const normalizedSource = sourcePath.endsWith('/') ? sourcePath.slice(0, -1) : sourcePath
+        const normalizedTarget = targetPath.endsWith('/') ? targetPath.slice(0, -1) : targetPath
+        
+        // Prevent moving a path into its own descendant
+        if (normalizedTarget.startsWith(normalizedSource + '/')) {
+          alert(`Cannot move "${sourcePath}" into its own subdirectory "${targetPath}"`)
+          return
+        }
+        
+        // Prevent moving a path onto its direct parent (which would be a no-op)
+        const sourceParent = normalizedSource.substring(0, normalizedSource.lastIndexOf('/')) || '/'
+        if (normalizedTarget === sourceParent) {
+          alert(`Cannot move "${sourcePath}" to its current parent directory "${targetPath}"`)
+          return
+        }
+        
+        // Prevent moving a path onto itself
+        if (normalizedSource === normalizedTarget) {
+          return
+        }
+      }
+
+      // Determine operation based on modifier keys
       const isShiftPressed = event.shiftKey
 
       if (isCtrlPressed && onCopyPath) {

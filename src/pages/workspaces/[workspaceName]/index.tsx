@@ -208,6 +208,17 @@ export default function WorkspaceDetailPage() {
     setCurrentPage(1);
   }, [selectedPath, selectedSchemas, urlFilters]);
 
+  // Helper function to refresh layers
+  const refreshLayers = async () => {
+    if (!workspace) return;
+    try {
+      const data = await listWorkspaceLayers(workspace.id);
+      setLayers(data.sort((a, b) => a.name.localeCompare(b.name)));
+    } catch (err) {
+      console.error('Failed to refresh layers:', err);
+    }
+  };
+
   // Load layers when workspace loads
   useEffect(() => {
     const loadLayers = async () => {
@@ -233,6 +244,7 @@ export default function WorkspaceDetailPage() {
       const success = await insertWorkspacePath(workspace.id, path, autoCreateLayers);
       if (success) {
         await fetchTree(); // Refresh tree
+        await refreshLayers(); // Refresh layers
         showToast({
           title: 'Success',
           description: `Path "${path}" created successfully`
@@ -256,6 +268,7 @@ export default function WorkspaceDetailPage() {
       const success = await removeWorkspacePath(workspace.id, path, recursive);
       if (success) {
         await fetchTree(); // Refresh tree
+        await refreshLayers(); // Refresh layers
         showToast({
           title: 'Success',
           description: `Path "${path}" removed successfully`
@@ -279,6 +292,7 @@ export default function WorkspaceDetailPage() {
       const success = await moveWorkspacePath(workspace.id, fromPath, toPath, recursive);
       if (success) {
         await fetchTree(); // Refresh tree
+        await refreshLayers(); // Refresh layers
         showToast({
           title: 'Success',
           description: `Path moved from "${fromPath}" to "${toPath}"`
@@ -355,6 +369,7 @@ export default function WorkspaceDetailPage() {
       const success = await copyWorkspacePath(workspace.id, fromPath, toPath, recursive);
       if (success) {
         await fetchTree(); // Refresh tree
+        await refreshLayers(); // Refresh layers
         showToast({
           title: 'Success',
           description: `Path copied from "${fromPath}" to "${toPath}"`
@@ -378,6 +393,7 @@ export default function WorkspaceDetailPage() {
       const success = await mergeUpWorkspacePath(workspace.id, path);
       if (success) {
         await fetchTree(); // Refresh tree
+        await refreshLayers(); // Refresh layers
         showToast({
           title: 'Success',
           description: `Path "${path}" merged up successfully`
@@ -401,6 +417,7 @@ export default function WorkspaceDetailPage() {
       const success = await mergeDownWorkspacePath(workspace.id, path);
       if (success) {
         await fetchTree(); // Refresh tree
+        await refreshLayers(); // Refresh layers
         showToast({
           title: 'Success',
           description: `Path "${path}" merged down successfully`
@@ -424,6 +441,7 @@ export default function WorkspaceDetailPage() {
       const success = await subtractUpWorkspacePath(workspace.id, path);
       if (success) {
         await fetchTree(); // Refresh tree
+        await refreshLayers(); // Refresh layers
         showToast({
           title: 'Success',
           description: `Path "${path}" subtracted up successfully`
@@ -447,6 +465,7 @@ export default function WorkspaceDetailPage() {
       const success = await subtractDownWorkspacePath(workspace.id, path);
       if (success) {
         await fetchTree(); // Refresh tree
+        await refreshLayers(); // Refresh layers
         showToast({
           title: 'Success',
           description: `Path "${path}" subtracted down successfully`
