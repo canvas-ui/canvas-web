@@ -12,10 +12,6 @@ import {
   removeWorkspacePath,
   moveWorkspacePath,
   copyWorkspacePath,
-  mergeUpWorkspacePath,
-  mergeDownWorkspacePath,
-  subtractUpWorkspacePath,
-  subtractDownWorkspacePath,
   pasteDocumentsToWorkspacePath,
   importDocumentsToWorkspacePath,
   removeWorkspaceDocuments,
@@ -29,6 +25,7 @@ import {
 import { getSchemas } from '@/services/schemas';
 import { TreeNode, Document } from '@/types/workspace';
 import { parseUrlFilters, extractWorkspacePath, buildWorkspaceUrl, sanitizeUrlPath, UrlFilters } from '@/utils/url-params';
+import { useTreeOperations } from '@/hooks/useTreeOperations';
 
 // Using global Workspace interface from types/api.d.ts
 
@@ -67,6 +64,28 @@ export default function WorkspaceDetailPage() {
   const [layers, setLayers] = useState<any[]>([]);
   const [isLoadingLayers, setIsLoadingLayers] = useState(false);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
+  // Tree operations (layer merge/subtract) - initialized after fetchTree is defined via lazy wrapper
+  const treeOps = useTreeOperations({ workspaceId: (workspace?.name || ''), onRefresh: () => fetchTree() });
+
+  const handleMergeLayer = async (layerId: string, targetLayers: string[]) => {
+    if (!workspace) return false as any;
+    await treeOps.mergeLayer(layerId, targetLayers);
+    await fetchTree();
+    const data = await listWorkspaceLayers(workspace.id);
+    setLayers(data.sort((a, b) => a.name.localeCompare(b.name)));
+    showToast({ title: 'Success', description: 'Layer merged successfully' });
+    return true;
+  };
+
+  const handleSubtractLayer = async (layerId: string, targetLayers: string[]) => {
+    if (!workspace) return false as any;
+    await treeOps.subtractLayer(layerId, targetLayers);
+    await fetchTree();
+    const data = await listWorkspaceLayers(workspace.id);
+    setLayers(data.sort((a, b) => a.name.localeCompare(b.name)));
+    showToast({ title: 'Success', description: 'Layer subtracted successfully' });
+    return true;
+  };
 
   // Initialize path and filters from URL
   useEffect(() => {
@@ -387,101 +406,6 @@ export default function WorkspaceDetailPage() {
     }
   };
 
-  const handleMergeUp = async (path: string): Promise<boolean> => {
-    if (!workspace) return false;
-    try {
-      const success = await mergeUpWorkspacePath(workspace.id, path);
-      if (success) {
-        await fetchTree(); // Refresh tree
-        await refreshLayers(); // Refresh layers
-        showToast({
-          title: 'Success',
-          description: `Path "${path}" merged up successfully`
-        });
-      }
-      return success;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to merge up';
-      showToast({
-        title: 'Error',
-        description: message,
-        variant: 'destructive'
-      });
-      return false;
-    }
-  };
-
-  const handleMergeDown = async (path: string): Promise<boolean> => {
-    if (!workspace) return false;
-    try {
-      const success = await mergeDownWorkspacePath(workspace.id, path);
-      if (success) {
-        await fetchTree(); // Refresh tree
-        await refreshLayers(); // Refresh layers
-        showToast({
-          title: 'Success',
-          description: `Path "${path}" merged down successfully`
-        });
-      }
-      return success;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to merge down';
-      showToast({
-        title: 'Error',
-        description: message,
-        variant: 'destructive'
-      });
-      return false;
-    }
-  };
-
-  const handleSubtractUp = async (path: string): Promise<boolean> => {
-    if (!workspace) return false;
-    try {
-      const success = await subtractUpWorkspacePath(workspace.id, path);
-      if (success) {
-        await fetchTree(); // Refresh tree
-        await refreshLayers(); // Refresh layers
-        showToast({
-          title: 'Success',
-          description: `Path "${path}" subtracted up successfully`
-        });
-      }
-      return success;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to subtract up';
-      showToast({
-        title: 'Error',
-        description: message,
-        variant: 'destructive'
-      });
-      return false;
-    }
-  };
-
-  const handleSubtractDown = async (path: string): Promise<boolean> => {
-    if (!workspace) return false;
-    try {
-      const success = await subtractDownWorkspacePath(workspace.id, path);
-      if (success) {
-        await fetchTree(); // Refresh tree
-        await refreshLayers(); // Refresh layers
-        showToast({
-          title: 'Success',
-          description: `Path "${path}" subtracted down successfully`
-        });
-      }
-      return success;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to subtract down';
-      showToast({
-        title: 'Error',
-        description: message,
-        variant: 'destructive'
-      });
-      return false;
-    }
-  };
 
       const handlePasteDocuments = async (path: string, documentIds: number[]): Promise<boolean> => {
     if (!workspace) return false;
@@ -848,10 +772,8 @@ export default function WorkspaceDetailPage() {
           onRenamePath={handleRenamePath}
           onMovePath={handleMovePath}
           onCopyPath={handleCopyPath}
-          onMergeUp={handleMergeUp}
-          onMergeDown={handleMergeDown}
-          onSubtractUp={handleSubtractUp}
-          onSubtractDown={handleSubtractDown}
+          onMergeLayer={handleMergeLayer}
+          onSubtractLayer={handleSubtractLayer}
           onRemoveDocument={selectedPath !== '/' ? handleRemoveDocument : undefined}
           onDeleteDocument={handleDeleteDocument}
           onRemoveDocuments={selectedPath !== '/' ? handleRemoveDocuments : undefined}

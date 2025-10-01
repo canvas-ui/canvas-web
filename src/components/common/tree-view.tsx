@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronRight, ChevronDown, Folder, FolderOpen, MoreHorizontal, Trash2, Plus, ArrowUp, ArrowDown, Clipboard, Minus, Copy, Scissors, Edit } from 'lucide-react'
+import { ChevronRight, ChevronDown, Folder, FolderOpen, MoreHorizontal, Trash2, Plus, Clipboard, Copy, Scissors, Edit, Layers } from 'lucide-react'
 import { TreeNode } from '@/types/workspace'
 import { cn } from '@/lib/utils'
 
@@ -19,13 +19,15 @@ interface TreeViewProps {
   onCopyPathToClipboard?: (path: string) => void
   onCutPathToClipboard?: (path: string) => void
   onPastePathFromClipboard?: (path: string) => Promise<boolean>
-  onMergeUp?: (path: string) => Promise<boolean>
-  onMergeDown?: (path: string) => Promise<boolean>
-  onSubtractUp?: (path: string) => Promise<boolean>
-  onSubtractDown?: (path: string) => Promise<boolean>
+  onMergeLayer?: (layerId: string, targetLayers: string[]) => Promise<any>
+  onSubtractLayer?: (layerId: string, targetLayers: string[]) => Promise<any>
   onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
   pastedDocumentIds?: number[]
   clipboardPaths?: string[]
+  // Layer selection for merge/subtract
+  sourceLayerPath?: string | null
+  targetLayerPaths?: Set<string>
+  onLayerSelectionChange?: (sourcePath: string | null, targetPaths: Set<string>) => void
 }
 
 interface TreeNodeProps {
@@ -45,10 +47,8 @@ interface TreeNodeProps {
   onCopyPathToClipboard?: (path: string) => void
   onCutPathToClipboard?: (path: string) => void
   onPastePathFromClipboard?: (path: string) => Promise<boolean>
-  onMergeUp?: (path: string) => Promise<boolean>
-  onMergeDown?: (path: string) => Promise<boolean>
-  onSubtractUp?: (path: string) => Promise<boolean>
-  onSubtractDown?: (path: string) => Promise<boolean>
+  onMergeLayer?: (layerId: string, targetLayers: string[]) => Promise<any>
+  onSubtractLayer?: (layerId: string, targetLayers: string[]) => Promise<any>
   onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
   pastedDocumentIds?: number[]
   clipboardPaths?: string[]
@@ -56,6 +56,11 @@ interface TreeNodeProps {
   onDragOver: (path: string, event: React.DragEvent) => void
   onDrop: (path: string, event: React.DragEvent) => void
   dragOverPath: string | null
+  tree: TreeNode
+  // Layer selection
+  sourceLayerPath?: string | null
+  targetLayerPaths?: Set<string>
+  onLayerSelectionChange?: (sourcePath: string | null, targetPaths: Set<string>) => void
 }
 
 interface ContextMenuProps {
@@ -70,18 +75,21 @@ interface ContextMenuProps {
   onCopyPath?: (path: string) => void
   onCutPath?: (path: string) => void
   onPastePath?: (path: string) => Promise<boolean>
-  onMergeUp?: (path: string) => Promise<boolean>
-  onMergeDown?: (path: string) => Promise<boolean>
-  onSubtractUp?: (path: string) => Promise<boolean>
-  onSubtractDown?: (path: string) => Promise<boolean>
+  onMergeLayer?: (layerId: string, targetLayers: string[]) => Promise<any>
+  onSubtractLayer?: (layerId: string, targetLayers: string[]) => Promise<any>
   onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
   pastedDocumentIds?: number[]
   clipboardPaths?: string[]
   clipboardDocuments?: number[]
+  tree: TreeNode
+  sourceLayerPath?: string | null
+  targetLayerPaths?: Set<string>
 }
 
-function ContextMenu({ isOpen, onClose, x, y, path, onInsertPath, onRemovePath, onRenamePath, onCopyPath, onCutPath, onPastePath, onMergeUp, onMergeDown, onSubtractUp, onSubtractDown, onPasteDocuments, pastedDocumentIds, clipboardPaths }: ContextMenuProps) {
+function ContextMenu({ isOpen, onClose, x, y, path, onInsertPath, onRemovePath, onRenamePath, onCopyPath, onCutPath, onPastePath, onMergeLayer, onSubtractLayer, onPasteDocuments, pastedDocumentIds, clipboardPaths, sourceLayerPath, targetLayerPaths }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
+
+  const hasValidLayerSelection = sourceLayerPath && targetLayerPaths && targetLayerPaths.size > 0
 
   const handleAction = async (action: string) => {
     try {
@@ -114,24 +122,18 @@ function ContextMenu({ isOpen, onClose, x, y, path, onInsertPath, onRemovePath, 
             }
           }
           break
-        case 'merge-up':
-          if (onMergeUp) {
-            await onMergeUp(path)
+        case 'merge-layer':
+          if (onMergeLayer && sourceLayerPath && targetLayerPaths) {
+            const sourceLayerName = sourceLayerPath.split('/').filter(Boolean).pop() || sourceLayerPath
+            const targetLayerNames = Array.from(targetLayerPaths).map(p => p.split('/').filter(Boolean).pop() || p)
+            await onMergeLayer(sourceLayerName, targetLayerNames)
           }
           break
-        case 'merge-down':
-          if (onMergeDown) {
-            await onMergeDown(path)
-          }
-          break
-        case 'subtract-up':
-          if (onSubtractUp) {
-            await onSubtractUp(path)
-          }
-          break
-        case 'subtract-down':
-          if (onSubtractDown) {
-            await onSubtractDown(path)
+        case 'subtract-layer':
+          if (onSubtractLayer && sourceLayerPath && targetLayerPaths) {
+            const sourceLayerName = sourceLayerPath.split('/').filter(Boolean).pop() || sourceLayerPath
+            const targetLayerNames = Array.from(targetLayerPaths).map(p => p.split('/').filter(Boolean).pop() || p)
+            await onSubtractLayer(sourceLayerName, targetLayerNames)
           }
           break
         case 'copy':
@@ -237,36 +239,25 @@ function ContextMenu({ isOpen, onClose, x, y, path, onInsertPath, onRemovePath, 
           <Trash2 className="w-4 h-4 mr-2" />
           Remove Path (Recursive)
         </div>
-        <div className="my-1 h-px bg-border" />
-        <div
-          className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
-          onClick={() => handleAction('merge-up')}
-        >
-          <ArrowUp className="w-4 h-4 mr-2" />
-          Merge Up
-        </div>
-        <div
-          className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
-          onClick={() => handleAction('merge-down')}
-        >
-          <ArrowDown className="w-4 h-4 mr-2" />
-          Merge Down
-        </div>
-        <div className="my-1 h-px bg-border" />
-        <div
-          className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
-          onClick={() => handleAction('subtract-up')}
-        >
-          <Minus className="w-4 h-4 mr-2" />
-          Subtract Up
-        </div>
-        <div
-          className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
-          onClick={() => handleAction('subtract-down')}
-        >
-          <Minus className="w-4 h-4 mr-2" />
-          Subtract Down
-        </div>
+        {hasValidLayerSelection && <div className="my-1 h-px bg-border" />}
+        {onMergeLayer && hasValidLayerSelection && (
+          <div
+            className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+            onClick={() => handleAction('merge-layer')}
+          >
+            <Layers className="w-4 h-4 mr-2" />
+            Merge Layer (source: {sourceLayerPath?.split('/').pop()}, targets: {targetLayerPaths?.size})
+          </div>
+        )}
+        {onSubtractLayer && hasValidLayerSelection && (
+          <div
+            className="relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+            onClick={() => handleAction('subtract-layer')}
+          >
+            <Layers className="w-4 h-4 mr-2" />
+            Subtract Layer (source: {sourceLayerPath?.split('/').pop()}, targets: {targetLayerPaths?.size})
+          </div>
+        )}
       </div>
     </>, document.body
   )
@@ -289,17 +280,19 @@ function TreeNodeComponent({
   onCopyPathToClipboard,
   onCutPathToClipboard,
   onPastePathFromClipboard,
-  onMergeUp,
-  onMergeDown,
-  onSubtractUp,
-  onSubtractDown,
+  onMergeLayer,
+  onSubtractLayer,
   onPasteDocuments,
   pastedDocumentIds,
   clipboardPaths,
   onDragStart,
   onDragOver,
   onDrop,
-  dragOverPath
+  dragOverPath,
+  tree,
+  sourceLayerPath,
+  targetLayerPaths,
+  onLayerSelectionChange
 }: TreeNodeProps) {
   // Build the current path
   const currentPath = parentPath === '/' ? `/${node.name}` : `${parentPath}/${node.name}`
@@ -325,6 +318,10 @@ function TreeNodeComponent({
   const hasChildren = node.children && node.children.length > 0
   const isDragOver = dragOverPath === currentPath
 
+  // Layer selection state
+  const isSourceLayer = sourceLayerPath === currentPath
+  const isTargetLayer = targetLayerPaths?.has(currentPath) || false
+
   // Determine final expansion state: manual override takes precedence, otherwise use auto-expansion
   const isExpanded = manuallyExpanded !== null ? manuallyExpanded : shouldBeAutoExpanded()
 
@@ -343,7 +340,28 @@ function TreeNodeComponent({
     }
   }
 
-  const handleSelect = () => {
+  const handleSelect = (e: React.MouseEvent) => {
+    // Layer selection logic for merge/subtract operations
+    if (onLayerSelectionChange && (onMergeLayer || onSubtractLayer)) {
+      if (e.ctrlKey || e.metaKey) {
+        // Ctrl+click: toggle this path as a target (red) if we have a source
+        if (sourceLayerPath && currentPath !== sourceLayerPath) {
+          const newTargets = new Set(targetLayerPaths || [])
+          if (newTargets.has(currentPath)) {
+            newTargets.delete(currentPath)
+          } else {
+            newTargets.add(currentPath)
+          }
+          onLayerSelectionChange(sourceLayerPath, newTargets)
+        }
+        return // Don't change selectedPath on Ctrl+click
+      } else {
+        // Normal click: set as source (blue) and clear targets
+        onLayerSelectionChange(currentPath, new Set())
+      }
+    }
+
+    // Normal path selection
     onPathSelect(currentPath)
   }
 
@@ -358,10 +376,13 @@ function TreeNodeComponent({
     <div>
       <div
         className={cn(
-          "flex items-center py-1 px-2 rounded-sm text-sm relative group cursor-pointer hover:bg-accent hover:text-accent-foreground",
+          "flex items-center py-1 px-2 rounded-sm text-sm relative group cursor-pointer",
           readOnly && "opacity-75",
-          isSelected && "bg-accent text-accent-foreground",
-          isDragOver && !readOnly && "bg-blue-100 border-2 border-blue-300"
+          isSourceLayer && "bg-blue-100 hover:bg-blue-200",
+          !isSourceLayer && isTargetLayer && "bg-red-100 hover:bg-red-200",
+          !isSourceLayer && !isTargetLayer && isSelected && "bg-accent text-accent-foreground",
+          !isSourceLayer && !isTargetLayer && !isSelected && "hover:bg-accent hover:text-accent-foreground",
+          isDragOver && !readOnly && "border-2 border-blue-300"
         )}
         style={{ paddingLeft: `${level * 16 + 8}px` }}
         onClick={handleSelect}
@@ -442,13 +463,14 @@ function TreeNodeComponent({
         onCopyPath={onCopyPathToClipboard}
         onCutPath={onCutPathToClipboard}
         onPastePath={onPastePathFromClipboard}
-        onMergeUp={onMergeUp}
-        onMergeDown={onMergeDown}
-        onSubtractUp={onSubtractUp}
-        onSubtractDown={onSubtractDown}
+        onMergeLayer={onMergeLayer}
+        onSubtractLayer={onSubtractLayer}
         onPasteDocuments={onPasteDocuments}
         pastedDocumentIds={pastedDocumentIds}
+        sourceLayerPath={sourceLayerPath}
+        targetLayerPaths={targetLayerPaths}
         clipboardPaths={clipboardPaths}
+        tree={tree}
       />
 
       {/* Children */}
@@ -473,10 +495,8 @@ function TreeNodeComponent({
               onCopyPathToClipboard={onCopyPathToClipboard}
               onCutPathToClipboard={onCutPathToClipboard}
               onPastePathFromClipboard={onPastePathFromClipboard}
-              onMergeUp={onMergeUp}
-              onMergeDown={onMergeDown}
-              onSubtractUp={onSubtractUp}
-              onSubtractDown={onSubtractDown}
+              onMergeLayer={onMergeLayer}
+              onSubtractLayer={onSubtractLayer}
               onPasteDocuments={onPasteDocuments}
               pastedDocumentIds={pastedDocumentIds}
               clipboardPaths={clipboardPaths}
@@ -484,6 +504,10 @@ function TreeNodeComponent({
               onDragOver={onDragOver}
               onDrop={onDrop}
               dragOverPath={dragOverPath}
+              tree={tree}
+              sourceLayerPath={sourceLayerPath}
+              targetLayerPaths={targetLayerPaths}
+              onLayerSelectionChange={onLayerSelectionChange}
             />
           ))}
         </div>
@@ -507,18 +531,36 @@ export function TreeView({
   onCopyPathToClipboard,
   onCutPathToClipboard,
   onPastePathFromClipboard,
-  onMergeUp,
-  onMergeDown,
-  onSubtractUp,
-  onSubtractDown,
+  onMergeLayer,
+  onSubtractLayer,
   onPasteDocuments,
   pastedDocumentIds,
-  clipboardPaths
+  clipboardPaths,
+  sourceLayerPath: externalSourceLayerPath,
+  targetLayerPaths: externalTargetLayerPaths,
+  onLayerSelectionChange: externalOnLayerSelectionChange
 }: TreeViewProps) {
   const [dragOverPath, setDragOverPath] = useState<string | null>(null)
   const [draggedPath, setDraggedPath] = useState<string | null>(null)
   const [rootContextMenu, setRootContextMenu] = useState<{ x: number; y: number } | null>(null)
   const dragCounterRef = useRef(0)
+
+  // Internal layer selection state (if not provided externally)
+  const [internalSourceLayerPath, setInternalSourceLayerPath] = useState<string | null>(null)
+  const [internalTargetLayerPaths, setInternalTargetLayerPaths] = useState<Set<string>>(new Set())
+
+  // Use external state if provided, otherwise use internal state
+  const sourceLayerPath = externalSourceLayerPath !== undefined ? externalSourceLayerPath : internalSourceLayerPath
+  const targetLayerPaths = externalTargetLayerPaths !== undefined ? externalTargetLayerPaths : internalTargetLayerPaths
+
+  const handleLayerSelectionChange = useCallback((sourcePath: string | null, targetPaths: Set<string>) => {
+    if (externalOnLayerSelectionChange) {
+      externalOnLayerSelectionChange(sourcePath, targetPaths)
+    } else {
+      setInternalSourceLayerPath(sourcePath)
+      setInternalTargetLayerPaths(targetPaths)
+    }
+  }, [externalOnLayerSelectionChange])
 
   const handleDragStart = useCallback((path: string, event: React.DragEvent) => {
     if (readOnly) return
@@ -539,14 +581,14 @@ export function TreeView({
     if (hasPathData && draggedPath && !event.ctrlKey) {
       const normalizedSource = draggedPath.endsWith('/') ? draggedPath.slice(0, -1) : draggedPath
       const normalizedTarget = path.endsWith('/') ? path.slice(0, -1) : path
-      
+
       // Check if this would be an invalid move operation
       const isInvalidMove = (
         normalizedTarget.startsWith(normalizedSource + '/') || // Target is descendant of source
         normalizedSource === normalizedTarget || // Target is same as source
         normalizedTarget === (normalizedSource.substring(0, normalizedSource.lastIndexOf('/')) || '/') // Target is direct parent of source
       )
-      
+
       if (isInvalidMove) {
         event.dataTransfer.dropEffect = 'none'
         return // Don't set drag over path for invalid operations
@@ -604,25 +646,25 @@ export function TreeView({
 
       // Validate move operation to prevent invalid path operations
       const isCtrlPressed = event.ctrlKey
-      
+
       if (!isCtrlPressed) {
         // For move operations, check if target is an ancestor or descendant of source
         const normalizedSource = sourcePath.endsWith('/') ? sourcePath.slice(0, -1) : sourcePath
         const normalizedTarget = targetPath.endsWith('/') ? targetPath.slice(0, -1) : targetPath
-        
+
         // Prevent moving a path into its own descendant
         if (normalizedTarget.startsWith(normalizedSource + '/')) {
           alert(`Cannot move "${sourcePath}" into its own subdirectory "${targetPath}"`)
           return
         }
-        
+
         // Prevent moving a path onto its direct parent (which would be a no-op)
         const sourceParent = normalizedSource.substring(0, normalizedSource.lastIndexOf('/')) || '/'
         if (normalizedTarget === sourceParent) {
           alert(`Cannot move "${sourcePath}" to its current parent directory "${targetPath}"`)
           return
         }
-        
+
         // Prevent moving a path onto itself
         if (normalizedSource === normalizedTarget) {
           return
@@ -722,13 +764,14 @@ export function TreeView({
           onCopyPath={onCopyPathToClipboard}
           onCutPath={onCutPathToClipboard}
           onPastePath={onPastePathFromClipboard}
-          onMergeUp={onMergeUp}
-          onMergeDown={onMergeDown}
-          onSubtractUp={onSubtractUp}
-          onSubtractDown={onSubtractDown}
+          onMergeLayer={onMergeLayer}
+          onSubtractLayer={onSubtractLayer}
           onPasteDocuments={onPasteDocuments}
           pastedDocumentIds={pastedDocumentIds}
           clipboardPaths={clipboardPaths}
+          tree={tree}
+          sourceLayerPath={sourceLayerPath}
+          targetLayerPaths={targetLayerPaths}
         />
 
         {/* Child nodes */}
@@ -751,10 +794,8 @@ export function TreeView({
             onCopyPathToClipboard={onCopyPathToClipboard}
             onCutPathToClipboard={onCutPathToClipboard}
             onPastePathFromClipboard={onPastePathFromClipboard}
-            onMergeUp={onMergeUp}
-            onMergeDown={onMergeDown}
-            onSubtractUp={onSubtractUp}
-            onSubtractDown={onSubtractDown}
+            onMergeLayer={onMergeLayer}
+            onSubtractLayer={onSubtractLayer}
             onPasteDocuments={onPasteDocuments}
             pastedDocumentIds={pastedDocumentIds}
             clipboardPaths={clipboardPaths}
@@ -762,6 +803,10 @@ export function TreeView({
             onDragOver={handleDragOver}
             onDrop={handleDrop}
             dragOverPath={dragOverPath}
+            tree={tree}
+            sourceLayerPath={sourceLayerPath}
+            targetLayerPaths={targetLayerPaths}
+            onLayerSelectionChange={handleLayerSelectionChange}
           />
         ))}
       </div>

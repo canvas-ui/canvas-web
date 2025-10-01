@@ -988,10 +988,8 @@ export default function ContextDetailPage() {
                 onRemovePath={!isSharedContext ? treeOperations.removePath : undefined}
                 onMovePath={!isSharedContext ? treeOperations.movePath : undefined}
                 onCopyPath={!isSharedContext ? treeOperations.copyPath : undefined}
-                onMergeUp={!isSharedContext ? treeOperations.mergeUp : undefined}
-                onMergeDown={!isSharedContext ? treeOperations.mergeDown : undefined}
-                onSubtractUp={!isSharedContext ? treeOperations.subtractUp : undefined}
-                onSubtractDown={!isSharedContext ? treeOperations.subtractDown : undefined}
+                onMergeLayer={!isSharedContext ? treeOperations.mergeLayer : undefined}
+                onSubtractLayer={!isSharedContext ? treeOperations.subtractLayer : undefined}
                 onPasteDocuments={!isSharedContext ? handlePasteDocuments : undefined}
                 pastedDocumentIds={copiedDocuments}
               />

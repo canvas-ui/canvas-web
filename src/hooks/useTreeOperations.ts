@@ -2,7 +2,8 @@ import { useCallback } from 'react'
 import { API_ROUTES } from '@/config/api'
 
 interface UseTreeOperationsProps {
-  contextId: string
+  contextId?: string
+  workspaceId?: string
   onRefresh?: () => void
 }
 
@@ -13,7 +14,7 @@ interface ApiResponse {
   message?: string
 }
 
-export function useTreeOperations({ contextId, onRefresh }: UseTreeOperationsProps) {
+export function useTreeOperations({ contextId, workspaceId, onRefresh }: UseTreeOperationsProps) {
   const apiCall = useCallback(async (method: string, endpoint: string, body?: any): Promise<ApiResponse> => {
     try {
       const token = localStorage.getItem('authToken')
@@ -21,7 +22,12 @@ export function useTreeOperations({ contextId, onRefresh }: UseTreeOperationsPro
         throw new Error('Authentication token not found')
       }
 
-      const response = await fetch(`${API_ROUTES.contexts}/${contextId}/tree${endpoint}`, {
+      // Determine base URL based on whether we're working with a workspace or context
+      const baseUrl = workspaceId
+        ? `${API_ROUTES.workspaces}/${workspaceId}/tree`
+        : `${API_ROUTES.contexts}/${contextId}/tree`
+
+      const response = await fetch(`${baseUrl}${endpoint}`, {
         method,
         headers: {
           'Content-Type': 'application/json',
@@ -55,7 +61,7 @@ export function useTreeOperations({ contextId, onRefresh }: UseTreeOperationsPro
         message: error instanceof Error ? error.message : 'Unknown error occurred'
       }
     }
-  }, [contextId, onRefresh])
+  }, [contextId, workspaceId, onRefresh])
 
   const insertPath = useCallback(async (path: string, autoCreateLayers: boolean = true): Promise<boolean> => {
     const result = await apiCall('POST', '/paths', { path, autoCreateLayers })
@@ -121,6 +127,22 @@ export function useTreeOperations({ contextId, onRefresh }: UseTreeOperationsPro
     return true
   }, [apiCall])
 
+  const mergeLayer = useCallback(async (layerId: string, targetLayers: string[]): Promise<any> => {
+    const result = await apiCall('POST', '/layers/merge', { layerId, targetLayers })
+    if (!result.success) {
+      throw new Error(result.message || 'Failed to merge layer')
+    }
+    return result.data
+  }, [apiCall])
+
+  const subtractLayer = useCallback(async (layerId: string, targetLayers: string[]): Promise<any> => {
+    const result = await apiCall('POST', '/layers/subtract', { layerId, targetLayers })
+    if (!result.success) {
+      throw new Error(result.message || 'Failed to subtract layer')
+    }
+    return result.data
+  }, [apiCall])
+
   return {
     insertPath,
     removePath,
@@ -129,6 +151,8 @@ export function useTreeOperations({ contextId, onRefresh }: UseTreeOperationsPro
     mergeUp,
     mergeDown,
     subtractUp,
-    subtractDown
+    subtractDown,
+    mergeLayer,
+    subtractLayer
   }
 }

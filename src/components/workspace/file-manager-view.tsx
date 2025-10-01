@@ -54,10 +54,8 @@ interface FileManagerViewProps {
   onRenamePath?: (fromPath: string, newName: string) => Promise<boolean>;
   onMovePath?: (fromPath: string, toPath: string, recursive?: boolean) => Promise<boolean>;
   onCopyPath?: (fromPath: string, toPath: string, recursive?: boolean) => Promise<boolean>;
-  onMergeUp?: (path: string) => Promise<boolean>;
-  onMergeDown?: (path: string) => Promise<boolean>;
-  onSubtractUp?: (path: string) => Promise<boolean>;
-  onSubtractDown?: (path: string) => Promise<boolean>;
+  onMergeLayer?: (layerId: string, targetLayers: string[]) => Promise<any>;
+  onSubtractLayer?: (layerId: string, targetLayers: string[]) => Promise<any>;
 
   // Document operations
   onRemoveDocument?: (documentId: number, fromPath?: string) => void;
@@ -297,10 +295,8 @@ export function FileManagerView({
   onRenamePath,
   onMovePath,
   onCopyPath,
-  onMergeUp,
-  onMergeDown,
-  onSubtractUp,
-  onSubtractDown,
+  onMergeLayer,
+  onSubtractLayer,
   onRemoveDocument,
   onDeleteDocument,
   onRemoveDocuments,
@@ -325,6 +321,9 @@ export function FileManagerView({
   });
   const [globalContextMenu, setGlobalContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [layerContextMenu, setLayerContextMenu] = useState<{ x: number; y: number; layer: any } | null>(null);
+  // Layer selection for merge/subtract operations
+  const [sourceLayerName, setSourceLayerName] = useState<string | null>(null);
+  const [targetLayerNames, setTargetLayerNames] = useState<Set<string>>(new Set());
 
   // Enhanced document operations with clipboard
   const handleCopyDocuments = useCallback((documentIds: number[]) => {
@@ -580,10 +579,8 @@ export function FileManagerView({
                     onRenamePath={onRenamePath}
                     onMovePath={onMovePath}
                     onCopyPath={handleCopyPath}
-                    onMergeUp={onMergeUp}
-                    onMergeDown={onMergeDown}
-                    onSubtractUp={onSubtractUp}
-                    onSubtractDown={onSubtractDown}
+                    onMergeLayer={onMergeLayer}
+                    onSubtractLayer={onSubtractLayer}
                     onPasteDocuments={handlePasteDocuments}
                     pastedDocumentIds={clipboard.documents?.ids || copiedDocuments}
                   />
@@ -599,7 +596,7 @@ export function FileManagerView({
               <div className="p-4 border-b">
                 <h3 className="font-semibold text-sm text-muted-foreground mb-2">Tree Layers</h3>
                 <p className="text-xs text-muted-foreground">
-                  Individual layers and their bitmaps
+                  Click to set source (blue). Ctrl-click targets (red). Right-click for actions.
                 </p>
               </div>
 
@@ -610,15 +607,40 @@ export function FileManagerView({
                   <div className="text-xs text-muted-foreground">No layers</div>
                 ) : (
                   <ul className="space-y-1">
-                    {layers.map((layer) => (
+                    {layers.map((layer) => {
+                      const isSource = sourceLayerName === layer.name;
+                      const isTarget = targetLayerNames.has(layer.name);
+                      return (
                       <li
                         key={layer.id}
                         className={cn(
-                          "flex items-center justify-between px-2 py-1 rounded hover:bg-accent cursor-pointer text-sm",
+                          "flex items-center justify-between px-2 py-1 rounded cursor-pointer text-sm",
                           selectedLayerId === layer.id && 'bg-accent',
-                          layer.name === '/' && 'opacity-60'
+                          layer.name === '/' && 'opacity-60',
+                          isSource && 'bg-blue-100',
+                          !isSource && isTarget && 'bg-red-100',
+                          !isSource && !isTarget && 'hover:bg-accent'
                         )}
-                        onClick={() => onSelectLayer?.(layer)}
+                        onClick={(e) => {
+                          // Selection behavior: first click sets source (blue), Ctrl+click toggles targets (red)
+                          if (e.ctrlKey) {
+                            // Ctrl+click: toggle this layer as a target (red) if we have a source
+                            if (sourceLayerName && layer.name !== sourceLayerName) {
+                              const newSet = new Set(targetLayerNames);
+                              if (newSet.has(layer.name)) {
+                                newSet.delete(layer.name);
+                              } else {
+                                newSet.add(layer.name);
+                              }
+                              setTargetLayerNames(newSet);
+                            }
+                          } else {
+                            // Normal click: set as source (blue) and clear targets
+                            setSourceLayerName(layer.name);
+                            setTargetLayerNames(new Set());
+                          }
+                          onSelectLayer?.(layer);
+                        }}
                         onContextMenu={(e) => {
                           if (layer.name !== '/') {
                             e.preventDefault();
@@ -672,7 +694,8 @@ export function FileManagerView({
                           </div>
                         )}
                       </li>
-                    ))}
+                      )
+                    })}
                   </ul>
                 )}
               </div>
@@ -849,6 +872,34 @@ export function FileManagerView({
             className="fixed z-50 min-w-[10rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
             style={{ left: layerContextMenu.x, top: layerContextMenu.y }}
           >
+            {/* Merge / Subtract only when selection is valid */}
+            {sourceLayerName && targetLayerNames.size > 0 && (
+              <>
+                <button
+                  className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+                  onClick={async () => {
+                    if (onMergeLayer && sourceLayerName) {
+                      await onMergeLayer(sourceLayerName, Array.from(targetLayerNames));
+                    }
+                    setLayerContextMenu(null);
+                  }}
+                >
+                  Merge Layer (source: {sourceLayerName}, targets: {targetLayerNames.size})
+                </button>
+                <button
+                  className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+                  onClick={async () => {
+                    if (onSubtractLayer && sourceLayerName) {
+                      await onSubtractLayer(sourceLayerName, Array.from(targetLayerNames));
+                    }
+                    setLayerContextMenu(null);
+                  }}
+                >
+                  Subtract Layer (source: {sourceLayerName}, targets: {targetLayerNames.size})
+                </button>
+                <div className="my-1 h-px bg-border" />
+              </>
+            )}
             {copiedDocuments.length > 0 && (
               <button
                 className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
