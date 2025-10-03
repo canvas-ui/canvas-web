@@ -272,42 +272,6 @@ export default function WorkspacesPage() {
     navigate(`/workspaces/${workspaceName}`)
   }
 
-  const handleRemoveWorkspace = async (workspace: Workspace) => {
-    try {
-      await removeWorkspace(workspace.id)
-      setWorkspaces(prev => prev.filter(ws => ws.id !== workspace.id))
-      showToast({
-        title: 'Success',
-        description: `Workspace '${workspace.label || workspace.name}' has been removed.`
-      })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to remove workspace'
-      showToast({
-        title: 'Error',
-        description: message,
-        variant: 'destructive'
-      })
-    }
-  }
-
-  const handleDeleteWorkspace = async (workspace: Workspace) => {
-    try {
-      // Remove the workspace (backend handles data destruction)
-      await removeWorkspace(workspace.id)
-      setWorkspaces(prev => prev.filter(ws => ws.id !== workspace.id))
-      showToast({
-        title: 'Success',
-        description: `Workspace '${workspace.label || workspace.name}' has been deleted permanently.`
-      })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete workspace'
-      showToast({
-        title: 'Error',
-        description: message,
-        variant: 'destructive'
-      })
-    }
-  }
 
   return (
     <div className="space-y-6">
@@ -405,8 +369,6 @@ export default function WorkspacesPage() {
                   onEnter={handleEnterWorkspace}
                   onEdit={handleEditWorkspace}
                   onDestroy={handleDestroyWorkspace}
-                  onRemove={handleRemoveWorkspace}
-                  onDelete={handleDeleteWorkspace}
                 />
               );
             })}

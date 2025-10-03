@@ -21,11 +21,9 @@ interface WorkspaceCardProps {
   onEnter: (name: string) => void;
   onEdit?: (workspace: Workspace) => void;
   onDestroy?: (workspace: Workspace) => void;
-  onRemove?: (workspace: Workspace) => void;
-  onDelete?: (workspace: Workspace) => void;
 }
 
-export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onDestroy, onRemove, onDelete }: WorkspaceCardProps) {
+export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onDestroy }: WorkspaceCardProps) {
   const [isDestroyDialogOpen, setIsDestroyDialogOpen] = useState(false);
   const isActive = workspace.status === 'active';
   const isUniverse = workspace.type === 'universe' || workspace.name === 'universe';
@@ -127,7 +125,7 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onD
               </Button>
             )}
 
-            {/* Destroy/Delete Button - enabled when workspace is stopped or not_found */}
+            {/* Destroy/Delete Button - enabled when workspace is stopped */}
             {onDestroy && !isUniverse && (
               <AlertDialog open={isDestroyDialogOpen} onOpenChange={setIsDestroyDialogOpen}>
                 <AlertDialogTrigger asChild>
@@ -135,7 +133,7 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onD
                     variant="outline"
                     size="icon"
                     title="Delete Workspace"
-                    disabled={isActive || isError}
+                    disabled={isActive}
                     className="text-destructive hover:text-destructive hover:bg-destructive/10"
                   >
                     <Trash2 className="h-4 w-4" />
