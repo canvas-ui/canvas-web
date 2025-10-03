@@ -1,13 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./card";
 import { Button } from "./button";
-import { Play, Square, DoorOpen, Trash2, Edit, MoreVertical, Move } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "./dropdown-menu";
+import { Play, Square, DoorOpen, Trash2, Edit } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,8 +12,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "./alert-dialog";
-import { useState, useCallback } from "react";
-import { createPortal } from "react-dom";
+import { useState } from "react";
 
 interface WorkspaceCardProps {
   workspace: Workspace;
@@ -35,7 +27,6 @@ interface WorkspaceCardProps {
 
 export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onDestroy, onRemove, onDelete }: WorkspaceCardProps) {
   const [isDestroyDialogOpen, setIsDestroyDialogOpen] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const isActive = workspace.status === 'active';
   const isUniverse = workspace.type === 'universe' || workspace.name === 'universe';
   const isError = workspace.status === 'error';
@@ -80,26 +71,9 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onD
     }
   };
 
-  const handleRightClick = useCallback((event: React.MouseEvent) => {
-    event.preventDefault();
-    setContextMenu({ x: event.clientX, y: event.clientY });
-  }, []);
-
-  const handleContextMenuAction = useCallback((action: string) => {
-    switch (action) {
-      case 'remove':
-        onRemove?.(workspace);
-        break;
-      case 'delete':
-        onDelete?.(workspace);
-        break;
-    }
-    setContextMenu(null);
-  }, [workspace, onRemove, onDelete]);
-
   return (
     <>
-      <Card className={`relative ${borderColorClass}`} style={borderStyle} onContextMenu={handleRightClick}>
+      <Card className={`relative ${borderColorClass}`} style={borderStyle}>
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
@@ -140,67 +114,56 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onD
               </Button>
             )}
 
-            {/* More Actions Menu */}
-            {(onEdit || onDestroy) && !isUniverse && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
+            {/* Edit Button */}
+            {onEdit && !isUniverse && (
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => onEdit(workspace)}
+                title="Edit Workspace"
+                disabled={isError || isNotFound}
+              >
+                <Edit className="h-4 w-4" />
+              </Button>
+            )}
+
+            {/* Destroy/Delete Button - enabled when workspace is stopped or not_found */}
+            {onDestroy && !isUniverse && (
+              <AlertDialog open={isDestroyDialogOpen} onOpenChange={setIsDestroyDialogOpen}>
+                <AlertDialogTrigger asChild>
                   <Button
                     variant="outline"
                     size="icon"
-                    title="More actions"
-                    disabled={isError || isNotFound}
+                    title="Delete Workspace"
+                    disabled={isActive || isError}
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
                   >
-                    <MoreVertical className="h-4 w-4" />
+                    <Trash2 className="h-4 w-4" />
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {onEdit && (
-                    <DropdownMenuItem onClick={() => onEdit(workspace)}>
-                      <Edit className="mr-2 h-4 w-4" />
-                      Edit Workspace
-                    </DropdownMenuItem>
-                  )}
-                  {onEdit && onDestroy && <DropdownMenuSeparator />}
-                  {onDestroy && (
-                    <AlertDialog open={isDestroyDialogOpen} onOpenChange={setIsDestroyDialogOpen}>
-                      <AlertDialogTrigger asChild>
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onSelect={(e: Event) => {
-                            e.preventDefault();
-                            setIsDestroyDialogOpen(true);
-                          }}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Destroy Workspace
-                        </DropdownMenuItem>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Destroy Workspace</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Are you sure you want to destroy the workspace "{workspace.label || workspace.name}"?
-                            <br /><br />
-                            <strong>This action cannot be undone.</strong> All data associated with this workspace, including documents, contexts, and configurations will be permanently removed.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => {
-                              onDestroy(workspace);
-                              setIsDestroyDialogOpen(false);
-                            }}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                          >
-                            Destroy Workspace
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete Workspace</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to delete the workspace "{workspace.label || workspace.name}"?
+                      <br /><br />
+                      <strong>This action cannot be undone.</strong> All data associated with this workspace, including documents, contexts, and configurations will be permanently removed.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => {
+                        onDestroy(workspace);
+                        setIsDestroyDialogOpen(false);
+                      }}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Delete Workspace
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             )}
           </div>
         </div>
@@ -221,27 +184,6 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onD
         </div>
       </CardContent>
       </Card>
-
-      {/* Context Menu */}
-      {contextMenu && createPortal(
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setContextMenu(null)} />
-          <div className="fixed z-50 bg-background border rounded-lg shadow-lg py-1 min-w-[120px]" style={{ left: contextMenu.x, top: contextMenu.y }}>
-            {onRemove && !isUniverse && (
-              <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('remove')}>
-                <Move className="h-3 w-3" />
-                Remove
-              </button>
-            )}
-            {onDelete && (
-              <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2 text-destructive" onClick={() => handleContextMenuAction('delete')}>
-                <Trash2 className="h-3 w-3" />
-                Delete
-              </button>
-            )}
-          </div>
-        </>, document.body
-      )}
     </>
   );
 }
