@@ -85,7 +85,7 @@ export async function getContext(id: string): Promise<Context> {
 
 export async function getSharedContext(ownerId: string, contextId: string): Promise<Context> {
   try {
-    const response = await api.get<{ payload: Context }>(`/pub/contexts/${contextId}`);
+    const response = await api.get<{ payload: Context }>(`/pub/contexts/${ownerId}/contexts/${contextId}`);
     if (response && response.payload) {
       return response.payload;
     }
@@ -194,7 +194,8 @@ export async function getSharedContextDocuments(
     if (options.offset !== undefined) params.append('offset', options.offset.toString());
     if (options.page !== undefined) params.append('page', options.page.toString());
 
-    const url = `/pub/contexts/${contextId}/documents${params.toString() ? '?' + params.toString() : ''}`;
+    // Use authenticated route since user is logged in - backend will resolve shared context
+    const url = `${API_ROUTES.contexts}/${contextId}/documents${params.toString() ? '?' + params.toString() : ''}`;
     const response = await api.get<{ payload: DocumentResponse['data']; count: number; totalCount: number }>(url);
 
     if (Array.isArray(response.payload)) {

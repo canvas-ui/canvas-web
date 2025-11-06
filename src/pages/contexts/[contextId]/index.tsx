@@ -379,9 +379,24 @@ export default function ContextDetailPage() {
   useEffect(() => {
     const resolveAclEmails = async () => {
       if (!context || !context.acl) return;
-      const entries = Object.keys(context.acl);
-      const unresolvedIds = entries.filter((k) => typeof k === 'string' && !k.includes('@') && !aclUserMap[k]);
+
+      // Extract user IDs from both old and new ACL formats
+      const unresolvedIds: string[] = [];
+
+      // New format: acl.users[email] (already has emails, no need to resolve)
+      // Old format: acl[userId] = accessLevel (need to resolve userId to email)
+      Object.entries(context.acl).forEach(([key, value]) => {
+        // Skip the nested 'users' object from new format
+        if (key === 'users') return;
+
+        // Only try to resolve if it's not an email and not already resolved
+        if (typeof key === 'string' && !key.includes('@') && !aclUserMap[key] && typeof value === 'string') {
+          unresolvedIds.push(key);
+        }
+      });
+
       if (unresolvedIds.length === 0) return;
+
       const updates: Record<string, string> = {};
       await Promise.all(unresolvedIds.map(async (uid) => {
         try {
@@ -389,6 +404,7 @@ export default function ContextDetailPage() {
           if (user?.email) updates[uid] = user.email;
         } catch (_) { /* ignore, non-admins may not resolve */ }
       }));
+
       if (Object.keys(updates).length > 0) {
         setAclUserMap((prev) => ({ ...prev, ...updates }));
       }
@@ -882,13 +898,30 @@ export default function ContextDetailPage() {
     try {
       await grantContextAccess(context.userId, context.id, shareEmail.trim(), sharePermission);
 
-      setContext(prev => prev ? {
-        ...prev,
-        acl: {
-          ...prev.acl,
-          [shareEmail.trim()]: sharePermission
+      // Update state with new ACL format
+      setContext(prev => {
+        if (!prev) return null;
+
+        const newAcl = { ...prev.acl };
+
+        // Ensure users object exists
+        if (!newAcl.users) {
+          newAcl.users = {};
         }
-      } : null);
+
+        // Add new share in new format
+        newAcl.users[shareEmail.trim()] = {
+          accessLevel: sharePermission,
+          userId: '', // Will be filled by backend
+          grantedAt: new Date().toISOString(),
+          grantedBy: context.userId
+        };
+
+        return {
+          ...prev,
+          acl: newAcl
+        };
+      });
 
       setShareEmail('');
 
@@ -917,7 +950,16 @@ export default function ContextDetailPage() {
       setContext(prev => {
         if (!prev) return null;
         const newAcl = { ...prev.acl };
-        delete newAcl[userEmail];
+
+        // Handle both old and new ACL formats
+        if (newAcl.users && newAcl.users[userEmail]) {
+          // New format: remove from nested users object
+          delete newAcl.users[userEmail];
+        } else {
+          // Old format: remove from flat structure
+          delete newAcl[userEmail];
+        }
+
         return {
           ...prev,
           acl: newAcl
@@ -1269,42 +1311,76 @@ export default function ContextDetailPage() {
                     </div>
 
                     {/* Shared Users */}
-                    {Object.entries(context.acl || {}).map(([aclKey, permission]) => {
-                      const displayEmail = aclKey.includes('@') ? aclKey : (aclUserMap[aclKey] || aclKey)
-                      return (
-                      <div key={aclKey} className="flex items-center justify-between p-2 border rounded">
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-secondary/10 flex items-center justify-center">
-                            <span className="text-xs font-medium">
-                              {displayEmail.charAt(0).toUpperCase()}
-                            </span>
-                          </div>
-                          <div>
-                            <div className="text-sm font-medium">{displayEmail}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {permission === 'documentRead' && 'Read Only'}
-                              {permission === 'documentWrite' && 'Read + Append'}
-                              {permission === 'documentReadWrite' && 'Full Access'}
-                            </div>
-                          </div>
-                        </div>
-                        <Button
-                          onClick={() => handleRevokeAccess(displayEmail)}
-                          variant="outline"
-                          size="sm"
-                          className="h-6 w-6 p-0"
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                      )
-                    })}
+                    {(() => {
+                      // Handle both old and new ACL formats
+                      const aclEntries: Array<[string, string]> = [];
 
-                    {(!context.acl || Object.keys(context.acl).length === 0) && (
-                      <div className="text-center py-4 text-muted-foreground text-sm">
-                        No users have been granted access to this context.
-                      </div>
-                    )}
+                      if (context.acl) {
+                        // Check for new format (acl.users)
+                        if (context.acl.users && typeof context.acl.users === 'object') {
+                          Object.entries(context.acl.users).forEach(([email, shareData]: [string, any]) => {
+                            const accessLevel = shareData.accessLevel || shareData;
+                            aclEntries.push([email, accessLevel]);
+                          });
+                        } else {
+                          // Old format: flat structure with userId/email as key
+                          Object.entries(context.acl).forEach(([key, value]) => {
+                            // Skip nested objects (like 'users' key)
+                            if (typeof value === 'string') {
+                              aclEntries.push([key, value]);
+                            }
+                          });
+                        }
+                      }
+
+                      return aclEntries.map(([aclKey, permission]) => {
+                        const displayEmail = aclKey.includes('@') ? aclKey : (aclUserMap[aclKey] || aclKey);
+                        return (
+                          <div key={aclKey} className="flex items-center justify-between p-2 border rounded">
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-full bg-secondary/10 flex items-center justify-center">
+                                <span className="text-xs font-medium">
+                                  {displayEmail.charAt(0).toUpperCase()}
+                                </span>
+                              </div>
+                              <div>
+                                <div className="text-sm font-medium">{displayEmail}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {permission === 'documentRead' && 'Read Only'}
+                                  {permission === 'documentWrite' && 'Read + Append'}
+                                  {permission === 'documentReadWrite' && 'Full Access'}
+                                </div>
+                              </div>
+                            </div>
+                            <Button
+                              onClick={() => handleRevokeAccess(displayEmail)}
+                              variant="outline"
+                              size="sm"
+                              className="h-6 w-6 p-0"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        );
+                      });
+                    })()}
+
+                    {(() => {
+                      // Check if there are any ACL entries (handle both formats)
+                      const hasEntries = context.acl && (
+                        (context.acl.users && Object.keys(context.acl.users).length > 0) ||
+                        Object.entries(context.acl).some(([_key, value]) => typeof value === 'string')
+                      );
+
+                      if (!hasEntries) {
+                        return (
+                          <div className="text-center py-4 text-muted-foreground text-sm">
+                            No users have been granted access to this context.
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                 </div>
 
