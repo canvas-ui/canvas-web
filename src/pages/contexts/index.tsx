@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/toast-container"
-import { Plus, Trash, DoorOpen, Edit } from "lucide-react"
+import { Plus, Trash, DoorOpen, Edit, Share2 } from "lucide-react"
 import {
   Table,
   TableBody,
@@ -39,7 +39,12 @@ interface ContextEntry {
   featureBitmapArray: string[];
   filterArray: string[];
   pendingUrl: string | null;
-  description?: string | null; // Kept as optional if used by create form/logic
+  description?: string | null;
+  // Shared context fields
+  type?: string; // 'shared' for shared contexts
+  isShared?: boolean; // True if this is a shared context
+  ownerEmail?: string; // Email of the context owner
+  sharedVia?: string | any; // Access level or share metadata
 }
 
 export default function ContextsPage() {
@@ -352,7 +357,7 @@ export default function ContextsPage() {
       {/* Page Header */}
       <div className="border-b pb-4">
         <h1 className="text-3xl font-bold tracking-tight">Contexts</h1>
-        <p className="text-muted-foreground mt-2">Create and manage contexts in your workspaces</p>
+        <p className="text-muted-foreground mt-2">Create and manage contexts in your workspaces. View contexts shared with you.</p>
       </div>
 
       {/* Create New Context Section */}
@@ -444,7 +449,7 @@ export default function ContextsPage() {
 
       {/* Your Contexts Section */}
       <div className="space-y-4">
-        <h2 className="text-xl font-semibold">Your Contexts</h2>
+        <h2 className="text-xl font-semibold">Your Contexts & Shared Contexts</h2>
 
         {isLoading && <p className="text-center text-muted-foreground">Loading contexts...</p>}
 
@@ -463,8 +468,9 @@ export default function ContextsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Type</TableHead>
                   <TableHead>ID</TableHead>
-                  <TableHead>User ID</TableHead>
+                  <TableHead>Owner</TableHead>
                   <TableHead>Context URL</TableHead>
                   <TableHead>Workspace ID</TableHead>
                   <TableHead>Base URL</TableHead>
@@ -485,10 +491,28 @@ export default function ContextsPage() {
 
                   const createdAtDisplay = context.createdAt ? new Date(context.createdAt).toLocaleDateString() : '-';
                   const updatedAtDisplay = context.updatedAt ? new Date(context.updatedAt).toLocaleDateString() : '-';
+                  const isShared = context.isShared || context.type === 'shared';
+                  const ownerDisplay = isShared ? (context.ownerEmail || context.userId || '-') : 'You';
+                  const accessLevel = isShared && context.sharedVia ?
+                    (typeof context.sharedVia === 'string' ? context.sharedVia : context.sharedVia.accessLevel || '-') :
+                    '-';
+
                   return (
                     <TableRow key={`${context.userId}-${context.id}`}>
+                      <TableCell>
+                        {isShared ? (
+                          <div className="flex items-center gap-1 text-blue-600" title={`Shared with you (${accessLevel})`}>
+                            <Share2 className="h-4 w-4" />
+                            <span className="text-xs">Shared</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Owned</span>
+                        )}
+                      </TableCell>
                       <TableCell className="font-mono text-sm">{context.id || '-'}</TableCell>
-                      <TableCell className="font-mono text-sm">{context.userId || '-'}</TableCell>
+                      <TableCell className="font-mono text-sm" title={isShared ? `Owned by: ${ownerDisplay}` : 'You are the owner'}>
+                        {ownerDisplay}
+                      </TableCell>
                       <TableCell className="font-mono text-sm max-w-xs truncate" title={context.url || '-'}>
                         {context.url || '-'}
                       </TableCell>
@@ -500,23 +524,25 @@ export default function ContextsPage() {
                       <TableCell>{updatedAtDisplay}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEditContext(context)}
-                            title="Edit Context"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
+                          {!isShared && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEditContext(context)}
+                              title="Edit Context"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => handleOpenContext(context)}
-                            title="Open Context Details"
+                            title={isShared ? "Open Shared Context" : "Open Context Details"}
                           >
                             <DoorOpen className="h-4 w-4" />
                           </Button>
-                                                    {!(context.url && (context.url.endsWith('/default') || context.url.includes('://default'))) && (
+                          {!isShared && !(context.url && (context.url.endsWith('/default') || context.url.includes('://default'))) && (
                             <Button
                               variant="outline"
                               size="sm"
