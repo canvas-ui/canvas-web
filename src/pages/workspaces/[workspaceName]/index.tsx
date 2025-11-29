@@ -334,31 +334,34 @@ export default function WorkspaceDetailPage() {
   const handleRenamePath = async (fromPath: string, newName: string): Promise<boolean> => {
     if (!workspace) return false;
     try {
-      // Find the layer that corresponds to this path
-      // Convert path to layer name (remove leading slash)
-      const layerName = fromPath === '/' ? '/' : fromPath.substring(1);
-      const layer = layers?.find(l => l.name === layerName);
-
-      if (!layer) {
-        throw new Error(`No layer found for path "${fromPath}"`);
-      }
-
-      if (layer.name === '/') {
+      if (fromPath === '/') {
         throw new Error('Cannot rename root layer');
       }
 
-      // Extract parent path and construct new layer name
-      const pathParts = fromPath.split('/');
-      pathParts[pathParts.length - 1] = newName;
-      const newPath = pathParts.join('/');
-      const newLayerName = newPath === '/' ? '/' : newPath.substring(1);
+      // Extract the current layer name from the path (last segment)
+      const pathParts = fromPath.split('/').filter(Boolean);
+      const currentLayerName = pathParts[pathParts.length - 1];
 
-      await renameWorkspaceLayer(workspace.name, layer.id, newLayerName);
+      // Find the layer by its name (just the leaf segment)
+      const layer = layers?.find(l => l.name === currentLayerName);
+
+      if (!layer) {
+        throw new Error(`No layer found for path "${fromPath}" (layer name: "${currentLayerName}")`);
+      }
+
+      // Layer names are just the leaf segment, not the full path
+      // The backend will handle this correctly
+      await renameWorkspaceLayer(workspace.name, layer.id, newName);
 
       // Refresh tree and layers
       await fetchTree();
       const data = await listWorkspaceLayers(workspace.name);
       setLayers(data.sort((a, b) => a.name.localeCompare(b.name)));
+
+      // Construct the new path using the pathParts from above
+      const newPathParts = [...pathParts];
+      newPathParts[newPathParts.length - 1] = newName;
+      const newPath = '/' + newPathParts.join('/');
 
       showToast({
         title: 'Success',
