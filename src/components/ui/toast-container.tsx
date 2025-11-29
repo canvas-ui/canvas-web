@@ -42,7 +42,7 @@ export function ToastContainer({ children }: { children?: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ showToast }}>
       <ToastProvider>
-        {children}
+        {children as any}
         {toasts.map((toast) => (
           <Toast key={toast.id} variant={toast.variant}>
             <div className="grid gap-1">
