@@ -45,6 +45,7 @@ export default function WorkspaceDetailPage() {
   const [schemas, setSchemas] = useState<string[]>([]);
   const [selectedSchemas, setSelectedSchemas] = useState<string[]>([]);
   const [isLoadingSchemas, setIsLoadingSchemas] = useState(false);
+  const [treeVersion, setTreeVersion] = useState(0);
 
   // URL-based features and filters
   const [urlFilters, setUrlFilters] = useState<UrlFilters>({ features: [], filters: [] });
@@ -71,7 +72,7 @@ export default function WorkspaceDetailPage() {
     if (!workspace) return false as any;
     await treeOps.mergeLayer(layerId, targetLayers);
     await fetchTree();
-    const data = await listWorkspaceLayers(workspace.id);
+    const data = await listWorkspaceLayers(workspace.name);
     setLayers(data.sort((a, b) => a.name.localeCompare(b.name)));
     showToast({ title: 'Success', description: 'Layer merged successfully' });
     return true;
@@ -81,7 +82,7 @@ export default function WorkspaceDetailPage() {
     if (!workspace) return false as any;
     await treeOps.subtractLayer(layerId, targetLayers);
     await fetchTree();
-    const data = await listWorkspaceLayers(workspace.id);
+    const data = await listWorkspaceLayers(workspace.name);
     setLayers(data.sort((a, b) => a.name.localeCompare(b.name)));
     showToast({ title: 'Success', description: 'Layer subtracted successfully' });
     return true;
@@ -121,6 +122,7 @@ export default function WorkspaceDetailPage() {
     try {
       const response = await getWorkspaceTree(workspaceName);
       setTree(response.payload as TreeNode);
+      setTreeVersion(prev => prev + 1); // Force tree re-render
       setError(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch workspace tree';
@@ -231,7 +233,7 @@ export default function WorkspaceDetailPage() {
   const refreshLayers = async () => {
     if (!workspace) return;
     try {
-      const data = await listWorkspaceLayers(workspace.id);
+      const data = await listWorkspaceLayers(workspace.name);
       setLayers(data.sort((a, b) => a.name.localeCompare(b.name)));
     } catch (err) {
       console.error('Failed to refresh layers:', err);
@@ -244,7 +246,7 @@ export default function WorkspaceDetailPage() {
       if (!workspace) return;
       try {
         setIsLoadingLayers(true);
-        const data = await listWorkspaceLayers(workspace.id);
+        const data = await listWorkspaceLayers(workspace.name);
         // sort by name; include root and handle it as disabled in UI
         setLayers(data.sort((a, b) => a.name.localeCompare(b.name)));
       } catch (err) {
@@ -260,7 +262,7 @@ export default function WorkspaceDetailPage() {
   const handleInsertPath = async (path: string, autoCreateLayers: boolean = true): Promise<boolean> => {
     if (!workspace) return false;
     try {
-      const success = await insertWorkspacePath(workspace.id, path, autoCreateLayers);
+      const success = await insertWorkspacePath(workspace.name, path, autoCreateLayers);
       if (success) {
         await fetchTree(); // Refresh tree
         await refreshLayers(); // Refresh layers
@@ -284,7 +286,7 @@ export default function WorkspaceDetailPage() {
   const handleRemovePath = async (path: string, recursive: boolean = false): Promise<boolean> => {
     if (!workspace) return false;
     try {
-      const success = await removeWorkspacePath(workspace.id, path, recursive);
+      const success = await removeWorkspacePath(workspace.name, path, recursive);
       if (success) {
         await fetchTree(); // Refresh tree
         await refreshLayers(); // Refresh layers
@@ -308,7 +310,7 @@ export default function WorkspaceDetailPage() {
   const handleMovePath = async (fromPath: string, toPath: string, recursive: boolean = false): Promise<boolean> => {
     if (!workspace) return false;
     try {
-      const success = await moveWorkspacePath(workspace.id, fromPath, toPath, recursive);
+      const success = await moveWorkspacePath(workspace.name, fromPath, toPath, recursive);
       if (success) {
         await fetchTree(); // Refresh tree
         await refreshLayers(); // Refresh layers
@@ -351,11 +353,11 @@ export default function WorkspaceDetailPage() {
       const newPath = pathParts.join('/');
       const newLayerName = newPath === '/' ? '/' : newPath.substring(1);
 
-      await renameWorkspaceLayer(workspace.id, layer.id, newLayerName.toLowerCase());
+      await renameWorkspaceLayer(workspace.name, layer.id, newLayerName);
 
       // Refresh tree and layers
       await fetchTree();
-      const data = await listWorkspaceLayers(workspace.id);
+      const data = await listWorkspaceLayers(workspace.name);
       setLayers(data.sort((a, b) => a.name.localeCompare(b.name)));
 
       showToast({
@@ -385,7 +387,7 @@ export default function WorkspaceDetailPage() {
   const handleCopyPath = async (fromPath: string, toPath: string, recursive: boolean = false): Promise<boolean> => {
     if (!workspace) return false;
     try {
-      const success = await copyWorkspacePath(workspace.id, fromPath, toPath, recursive);
+      const success = await copyWorkspacePath(workspace.name, fromPath, toPath, recursive);
       if (success) {
         await fetchTree(); // Refresh tree
         await refreshLayers(); // Refresh layers
@@ -411,8 +413,8 @@ export default function WorkspaceDetailPage() {
     if (!workspace) return false;
     console.log('handlePasteDocuments called:', { path, documentIds, clipboard });
     try {
-      console.log('About to call pasteDocumentsToWorkspacePath with:', { workspaceId: workspace.id, path, documentIds });
-      const success = await pasteDocumentsToWorkspacePath(workspace.id, path, documentIds);
+      console.log('About to call pasteDocumentsToWorkspacePath with:', { workspaceId: workspace.name, path, documentIds });
+      const success = await pasteDocumentsToWorkspacePath(workspace.name, path, documentIds);
       console.log('pasteDocumentsToWorkspacePath result:', success);
       if (success) {
         await fetchDocuments(); // Refresh documents
@@ -440,7 +442,7 @@ export default function WorkspaceDetailPage() {
   const handleImportDocuments = async (documents: any[], contextPath: string): Promise<boolean> => {
     if (!workspace) return false;
     try {
-      const success = await importDocumentsToWorkspacePath(workspace.id, contextPath, documents);
+      const success = await importDocumentsToWorkspacePath(workspace.name, contextPath, documents);
       if (success) {
         // If the import is to the current selected path, refresh documents
         if (contextPath === selectedPath) {
@@ -493,7 +495,7 @@ export default function WorkspaceDetailPage() {
     if (!workspace) return;
     const contextPath = fromPath || selectedPath;
     try {
-      await removeWorkspaceDocuments(workspace.id, [documentId], contextPath);
+      await removeWorkspaceDocuments(workspace.name, [documentId], contextPath);
       // Update local state only if removing from current path
       if (contextPath === selectedPath) {
         setDocuments(prev => prev.filter(doc => doc.id !== documentId));
@@ -517,7 +519,7 @@ export default function WorkspaceDetailPage() {
   const handleDeleteDocument = async (documentId: number) => {
     if (!workspace) return;
     try {
-      await deleteWorkspaceDocuments(workspace.id, [documentId], selectedPath);
+      await deleteWorkspaceDocuments(workspace.name, [documentId], selectedPath);
       // Update local state
       setDocuments(prev => prev.filter(doc => doc.id !== documentId));
       setDocumentsTotalCount(prev => Math.max(0, prev - 1));
@@ -541,7 +543,7 @@ export default function WorkspaceDetailPage() {
     const contextPath = fromPath || selectedPath;
     console.log('Workspace handleRemoveDocuments:', { documentIds, fromPath, contextPath, selectedPath });
     try {
-      await removeWorkspaceDocuments(workspace.id, documentIds, contextPath);
+      await removeWorkspaceDocuments(workspace.name, documentIds, contextPath);
       console.log('Successfully removed documents from workspace');
       // Update local state only if removing from current path
       if (contextPath === selectedPath) {
@@ -567,7 +569,7 @@ export default function WorkspaceDetailPage() {
   const handleDeleteDocuments = async (documentIds: number[]) => {
     if (!workspace) return;
     try {
-      await deleteWorkspaceDocuments(workspace.id, documentIds, selectedPath);
+      await deleteWorkspaceDocuments(workspace.name, documentIds, selectedPath);
       // Update local state
       setDocuments(prev => prev.filter(doc => !documentIds.includes(doc.id)));
       setDocumentsTotalCount(prev => Math.max(0, prev - documentIds.length));
@@ -602,7 +604,7 @@ export default function WorkspaceDetailPage() {
     if (workspace) {
       setIsLoadingDocuments(true);
       try {
-        const response = await getWorkspaceDocuments(workspace.id, `/${layer.name}`, selectedSchemas, {
+        const response = await getWorkspaceDocuments(workspace.name, `/${layer.name}`, selectedSchemas, {
           limit: pageSize,
           page: currentPage
         });
@@ -625,14 +627,14 @@ export default function WorkspaceDetailPage() {
   const handleRenameLayer = async (layer: any) => {
     if (!workspace) return;
     if (layer.name === '/') return;
-    const newName = prompt('Enter new layer name (lowercase):', layer.name);
+    const newName = prompt('Enter new layer name:', layer.name);
     if (!newName || newName === layer.name) return;
     try {
-      await renameWorkspaceLayer(workspace.id, layer.id, newName.toLowerCase());
+      await renameWorkspaceLayer(workspace.name, layer.id, newName);
       showToast({ title: 'Success', description: `Layer renamed to ${newName}` });
       // reload list and possibly tree
       await fetchTree();
-      const data = await listWorkspaceLayers(workspace.id);
+      const data = await listWorkspaceLayers(workspace.name);
       setLayers(data.sort((a, b) => a.name.localeCompare(b.name)));
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to rename layer', variant: 'destructive' });
@@ -641,11 +643,11 @@ export default function WorkspaceDetailPage() {
 
   const handleLockLayer = async (layer: any) => {
     if (!workspace) return;
-    const lockBy = workspace.id; // simple placeholder lockBy
+    const lockBy = workspace.name; // simple placeholder lockBy
     try {
-      await lockWorkspaceLayer(workspace.id, layer.id, lockBy);
+      await lockWorkspaceLayer(workspace.name, layer.id, lockBy);
       showToast({ title: 'Success', description: `Layer locked` });
-      const data = await listWorkspaceLayers(workspace.id);
+      const data = await listWorkspaceLayers(workspace.name);
       setLayers(data.sort((a, b) => a.name.localeCompare(b.name)));
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to lock layer', variant: 'destructive' });
@@ -654,11 +656,11 @@ export default function WorkspaceDetailPage() {
 
   const handleUnlockLayer = async (layer: any) => {
     if (!workspace) return;
-    const lockBy = workspace.id; // simple placeholder lockBy
+    const lockBy = workspace.name; // simple placeholder lockBy
     try {
-      await unlockWorkspaceLayer(workspace.id, layer.id, lockBy);
+      await unlockWorkspaceLayer(workspace.name, layer.id, lockBy);
       showToast({ title: 'Success', description: `Layer unlocked` });
-      const data = await listWorkspaceLayers(workspace.id);
+      const data = await listWorkspaceLayers(workspace.name);
       setLayers(data.sort((a, b) => a.name.localeCompare(b.name)));
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to unlock layer', variant: 'destructive' });
@@ -670,10 +672,10 @@ export default function WorkspaceDetailPage() {
     if (layer.name === '/') return;
     if (!confirm(`Destroy layer "${layer.name}"? This cannot be undone.`)) return;
     try {
-      await destroyWorkspaceLayer(workspace.id, layer.id);
+      await destroyWorkspaceLayer(workspace.name, layer.id);
       showToast({ title: 'Success', description: 'Layer destroyed' });
       await fetchTree();
-      const data = await listWorkspaceLayers(workspace.id);
+      const data = await listWorkspaceLayers(workspace.name);
       setLayers(data.sort((a, b) => a.name.localeCompare(b.name)));
       if (selectedLayerId === layer.id) {
         setSelectedLayerId(null);
@@ -744,6 +746,7 @@ export default function WorkspaceDetailPage() {
 
         {/* Enhanced File Manager */}
         <FileManagerView
+          key={`workspace-tree-${treeVersion}`}
           tree={tree}
           selectedPath={selectedPath}
           onPathSelect={(path: string) => {
@@ -801,7 +804,7 @@ export default function WorkspaceDetailPage() {
           }}
           isLoadingSchemas={isLoadingSchemas}
           copiedDocuments={clipboard?.documentIds || []}
-          workspaceId={workspace.id}
+          workspaceId={workspace.name}
         />
 
 

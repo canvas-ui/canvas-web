@@ -102,6 +102,7 @@ export default function ContextDetailPage() {
   const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
   const [isLoadingTree, setIsLoadingTree] = useState(false);
   const [documentsTotalCount, setDocumentsTotalCount] = useState(0);
+  const [treeVersion, setTreeVersion] = useState(0);
   const { showToast } = useToast();
 
   // Sidebar states
@@ -218,6 +219,7 @@ export default function ContextDetailPage() {
 
       if (treeData) {
         setTree(treeData);
+        setTreeVersion(prev => prev + 1); // Force tree re-render
       } else {
         console.warn('No tree data received from API');
         setTree(null);
@@ -1020,6 +1022,7 @@ export default function ContextDetailPage() {
               </div>
             ) : tree ? (
               <TreeView
+                key={`context-tree-${treeVersion}`}
                 tree={tree}
                 selectedPath={selectedPath}
                 onPathSelect={handlePathSelect}

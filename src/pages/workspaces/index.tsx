@@ -150,7 +150,7 @@ export default function WorkspacesPage() {
         color: editingWorkspace.color,
       };
 
-      const updatedWorkspace = await updateWorkspace(editingWorkspace.id, payloadToUpdate);
+      const updatedWorkspace = await updateWorkspace(editingWorkspace.name, payloadToUpdate);
 
       setWorkspaces(prev => prev.map(ws =>
         ws.id === updatedWorkspace.id ? updatedWorkspace : ws
@@ -179,7 +179,7 @@ export default function WorkspacesPage() {
   const handleDestroyWorkspace = async (workspace: Workspace) => {
     try {
       // Remove the workspace (backend handles data destruction)
-      await removeWorkspace(workspace.id)
+      await removeWorkspace(workspace.name)
 
       setWorkspaces(prev => prev.filter(ws => ws.id !== workspace.id))
       showToast({
