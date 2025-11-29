@@ -12,11 +12,13 @@ import {
   TreePine,
   Layers,
   Lock,
-  Unlock
+  Unlock,
+  Settings2
 } from 'lucide-react';
 import { TreeView } from '@/components/common/tree-view';
 import { DocumentList } from '@/components/common/document-list';
 import { TokenManager } from '@/components/workspace/token-manager';
+import { ServicesPanel } from '@/components/workspace/services-panel';
 import { Button } from '@/components/ui/button';
 import { TreeNode, Document } from '@/types/workspace';
 import { cn } from '@/lib/utils';
@@ -313,7 +315,7 @@ export function FileManagerView({
   workspaceId
 }: FileManagerViewProps) {
   const [leftTab, setLeftTab] = useState<'tree' | 'layers'>('tree');
-  const [rightTab, setRightTab] = useState<'filters' | 'tags' | 'tokens'>('filters');
+  const [rightTab, setRightTab] = useState<'filters' | 'tags' | 'tokens' | 'services'>('filters');
   const [customTags, setCustomTags] = useState<string[]>([]);
   const [clipboard, setClipboard] = useState<ClipboardState>({
     documents: null,
@@ -767,6 +769,18 @@ export function FileManagerView({
             <Key className="w-3 h-3 mr-1 inline" />
             Tokens
           </button>
+          <button
+            className={cn(
+              "flex-1 py-3 px-2 text-xs font-medium transition-colors",
+              rightTab === 'services'
+                ? 'border-b-2 border-primary bg-background'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+            onClick={() => setRightTab('services')}
+          >
+            <Settings2 className="w-3 h-3 mr-1 inline" />
+            Services
+          </button>
         </div>
 
         <div className="flex-1 p-4 overflow-y-auto">
@@ -782,8 +796,10 @@ export function FileManagerView({
               customTags={customTags}
               onTagsChange={setCustomTags}
             />
-          ) : (
+          ) : rightTab === 'tokens' ? (
             <TokenManager workspaceId={workspaceId} />
+          ) : (
+            <ServicesPanel workspaceId={workspaceId} />
           )}
         </div>
 
