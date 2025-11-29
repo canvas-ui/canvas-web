@@ -4,6 +4,7 @@ import { api } from '@/lib/api';
 import { API_ROUTES } from '@/config/api';
 import { useToast } from '@/components/ui/toast-container';
 import { FileManagerView } from '@/components/workspace/file-manager-view';
+import { ServicesPanel } from '@/components/workspace/services-panel';
 
 import {
   getWorkspaceTree,
@@ -729,21 +730,29 @@ export default function WorkspaceDetailPage() {
       <div className="flex-1 min-w-0 space-y-6 min-h-0">
         {/* Page Header */}
         <div className="border-b pb-4">
-          <h1 className="text-3xl font-bold tracking-tight">{workspace.label}</h1>
-          <p className="text-muted-foreground mt-2">{workspace.description || 'No description available'}</p>
-          <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-            <span>Status: <span className="font-mono">{workspace.status}</span></span>
-            <span>Owner: {workspace.owner}</span>
-            {workspace.color && (
-              <div className="flex items-center gap-2">
-                <span>Color:</span>
-                <div
-                  className="w-4 h-4 rounded border"
-                  style={{ backgroundColor: workspace.color }}
-                />
-                <span className="font-mono text-xs">{workspace.color}</span>
+          <div className="flex items-start justify-between gap-6">
+            <div className="flex-1">
+              <h1 className="text-3xl font-bold tracking-tight">{workspace.label}</h1>
+              <p className="text-muted-foreground mt-2">{workspace.description || 'No description available'}</p>
+              <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                <span>Status: <span className="font-mono">{workspace.status}</span></span>
+                <span>Owner: {workspace.owner}</span>
+                {workspace.color && (
+                  <div className="flex items-center gap-2">
+                    <span>Color:</span>
+                    <div
+                      className="w-4 h-4 rounded border"
+                      style={{ backgroundColor: workspace.color }}
+                    />
+                    <span className="font-mono text-xs">{workspace.color}</span>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
+            {/* Services Panel - Right side */}
+            <div className="w-80 flex-shrink-0">
+              <ServicesPanel workspaceId={workspace.name} />
+            </div>
           </div>
         </div>
 

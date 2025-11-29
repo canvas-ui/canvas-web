@@ -347,3 +347,68 @@ export async function deleteWorkspaceDocuments(
   } as any)
   return true
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Workspace Services API
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface WorkspaceServiceStatus {
+  enabled: boolean;
+  initialized?: boolean;
+  path?: string;
+  transports?: string[];
+}
+
+export interface WorkspaceServicesStatus {
+  dotfiles: WorkspaceServiceStatus;
+  home: WorkspaceServiceStatus;
+}
+
+/**
+ * Get status of all services for a workspace
+ */
+export async function getWorkspaceServicesStatus(workspaceId: string): Promise<WorkspaceServicesStatus> {
+  try {
+    const response = await api.get<{ payload: WorkspaceServicesStatus }>(`${API_ROUTES.workspaces}/${workspaceId}/services`);
+    return response.payload;
+  } catch (error) {
+    console.error(`Failed to get workspace services status:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Enable a service for a workspace
+ */
+export async function enableWorkspaceService(
+  workspaceId: string,
+  serviceName: 'dotfiles' | 'home'
+): Promise<{ success: boolean; path?: string }> {
+  try {
+    const response = await api.post<{ payload: { success: boolean; path?: string } }>(
+      `${API_ROUTES.workspaces}/${workspaceId}/services/${serviceName}/enable`
+    );
+    return response.payload;
+  } catch (error) {
+    console.error(`Failed to enable ${serviceName} service:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Disable a service for a workspace
+ */
+export async function disableWorkspaceService(
+  workspaceId: string,
+  serviceName: 'dotfiles' | 'home'
+): Promise<{ success: boolean }> {
+  try {
+    const response = await api.post<{ payload: { success: boolean } }>(
+      `${API_ROUTES.workspaces}/${workspaceId}/services/${serviceName}/disable`
+    );
+    return response.payload;
+  } catch (error) {
+    console.error(`Failed to disable ${serviceName} service:`, error);
+    throw error;
+  }
+}
