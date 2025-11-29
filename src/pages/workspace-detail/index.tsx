@@ -7,7 +7,7 @@ import { TreeView } from '@/components/common/tree-view';
 import { DocumentList } from '@/components/workspace/document-list';
 import { TokenManager } from '@/components/workspace/token-manager';
 import { getWorkspaceTree, getWorkspaceDocuments } from '@/services/workspace';
-import { TreeNode, Document, DocumentsResponse } from '@/types/workspace';
+import { TreeNode, Document } from '@/types/workspace';
 
 // Using global Workspace interface from types/api.d.ts
 
@@ -90,9 +90,8 @@ export default function WorkspaceDetailPage() {
       setIsLoadingDocuments(true);
       try {
         const response = await getWorkspaceDocuments(workspaceName, selectedPath);
-        const documentsData = response.payload as DocumentsResponse;
-        setDocuments(documentsData.data || []);
-        setDocumentsTotalCount(documentsData.count || 0);
+        setDocuments(response.payload || []);
+        setDocumentsTotalCount(response.count || response.totalCount || 0);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to fetch documents';
         showToast({

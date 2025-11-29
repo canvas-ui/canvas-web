@@ -11,6 +11,8 @@ interface TreeViewProps {
   readOnly?: boolean
   defaultExpanded?: boolean
   expandedPath?: string
+  title?: string
+  subtitle?: string
   onInsertPath?: (path: string, autoCreateLayers?: boolean) => Promise<boolean>
   onRemovePath?: (path: string, recursive?: boolean) => Promise<boolean>
   onRenamePath?: (fromPath: string, newName: string) => Promise<boolean>
@@ -21,6 +23,8 @@ interface TreeViewProps {
   onPastePathFromClipboard?: (path: string) => Promise<boolean>
   onMergeLayer?: (layerId: string, targetLayers: string[]) => Promise<any>
   onSubtractLayer?: (layerId: string, targetLayers: string[]) => Promise<any>
+  onMergeUp?: (path: string) => Promise<boolean>
+  onMergeDown?: (path: string) => Promise<boolean>
   onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
   pastedDocumentIds?: number[]
   clipboardPaths?: string[]
@@ -523,6 +527,8 @@ export function TreeView({
   readOnly = false,
   defaultExpanded = false,
   expandedPath,
+  title: _title,
+  subtitle: _subtitle,
   onInsertPath,
   onRemovePath,
   onRenamePath,
@@ -533,6 +539,8 @@ export function TreeView({
   onPastePathFromClipboard,
   onMergeLayer,
   onSubtractLayer,
+  onMergeUp: _onMergeUp,
+  onMergeDown: _onMergeDown,
   onPasteDocuments,
   pastedDocumentIds,
   clipboardPaths,
