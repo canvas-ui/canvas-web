@@ -1,4 +1,24 @@
+import { useEffect } from "react"
+import { getCurrentUserFromToken } from "@/services/auth"
+
 export default function AdminAgentsPage() {
+  const currentUser = getCurrentUserFromToken()
+  const isCurrentUserAdmin = currentUser?.userType === 'admin'
+
+  useEffect(() => {
+    if (!isCurrentUserAdmin) {
+      // Access denied - component will render error message
+    }
+  }, [isCurrentUserAdmin])
+
+  if (!isCurrentUserAdmin) {
+    return (
+      <div className="text-center space-y-4">
+        <div className="text-destructive">Access denied. Admin privileges required.</div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Page Header */}

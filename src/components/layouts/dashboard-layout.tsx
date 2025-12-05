@@ -1,9 +1,11 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom"
 import { useState, useEffect, useCallback } from "react"
-import { LogOut, LayoutGrid, Layers3, Settings, FolderOpen, Brain, Shield, Server } from "lucide-react"
+import { LogOut, LayoutGrid, Layers3, Settings, FolderOpen, Brain, Shield, Server, ChevronDown, ChevronRight, Users } from "lucide-react"
 import { api } from "@/lib/api"
 import { useToast } from "@/components/ui/toast-container"
 import { getCurrentUserFromToken } from "@/services/auth"
+import { listContexts } from "@/services/context"
+import { listWorkspaces } from "@/services/workspace"
 import {
   Sidebar,
   SidebarContent,
@@ -16,6 +18,9 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton,
   SidebarProvider,
   SidebarRail,
   SidebarSeparator,
@@ -30,12 +35,54 @@ function DashboardSidebar() {
   const navigate = useNavigate()
   const { showToast } = useToast()
   const [user, setUser] = useState<{ id: string; email: string; userType: string } | null>(null)
+  const [contextsOpen, setContextsOpen] = useState(false)
+  const [workspacesOpen, setWorkspacesOpen] = useState(false)
+  const [contexts, setContexts] = useState<any[]>([])
+  const [workspaces, setWorkspaces] = useState<any[]>([])
+  const [isLoadingContexts, setIsLoadingContexts] = useState(false)
+  const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(false)
+  const [hasFetchedContexts, setHasFetchedContexts] = useState(false)
+  const [hasFetchedWorkspaces, setHasFetchedWorkspaces] = useState(false)
 
   // Get user information from token
   useEffect(() => {
     const currentUser = getCurrentUserFromToken()
     setUser(currentUser)
   }, [])
+
+  // Fetch contexts when submenu opens
+  useEffect(() => {
+    if (contextsOpen && !hasFetchedContexts && !isLoadingContexts) {
+      setIsLoadingContexts(true)
+      listContexts()
+        .then(data => {
+          setContexts(data || [])
+          setHasFetchedContexts(true)
+        })
+        .catch(err => {
+          console.error('Failed to fetch contexts:', err)
+          setHasFetchedContexts(true)
+        })
+        .finally(() => setIsLoadingContexts(false))
+    }
+  }, [contextsOpen, hasFetchedContexts, isLoadingContexts])
+
+  // Fetch workspaces when submenu opens
+  useEffect(() => {
+    if (workspacesOpen && !hasFetchedWorkspaces && !isLoadingWorkspaces) {
+      setIsLoadingWorkspaces(true)
+      listWorkspaces()
+        .then(data => {
+          setWorkspaces(data || [])
+          setHasFetchedWorkspaces(true)
+        })
+        .catch(err => {
+          console.error('Failed to fetch workspaces:', err)
+          setHasFetchedWorkspaces(true)
+        })
+        .finally(() => setIsLoadingWorkspaces(false))
+    }
+  }, [workspacesOpen, hasFetchedWorkspaces, isLoadingWorkspaces])
 
   const isActive = (path: string) => {
     return location.pathname === path || location.pathname.startsWith(path + "/")
@@ -113,14 +160,61 @@ function DashboardSidebar() {
                     tooltip="Manage your contexts"
                   >
                     <button
-                      onClick={() => navigateTo('/contexts')}
-                      className="flex items-center"
+                      onClick={() => {
+                        const wasOpen = contextsOpen
+                        setContextsOpen(!contextsOpen)
+                        if (!wasOpen) {
+                          navigateTo('/contexts')
+                        }
+                      }}
+                      className="flex items-center justify-between w-full"
                       type="button"
                     >
-                      <Layers3 className="size-4" />
-                      <span>Contexts</span>
+                      <div className="flex items-center">
+                        <Layers3 className="size-4" />
+                        <span>Contexts</span>
+                      </div>
+                      {contextsOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
                     </button>
                   </SidebarMenuButton>
+                  {contextsOpen && (
+                    <SidebarMenuSub>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton
+                          asChild
+                          isActive={location.pathname === '/contexts'}
+                        >
+                          <button
+                            onClick={() => navigateTo('/contexts')}
+                            type="button"
+                          >
+                            <span>All Contexts</span>
+                          </button>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      {isLoadingContexts ? (
+                        <SidebarMenuSubItem>
+                          <span className="text-xs text-muted-foreground px-2">Loading...</span>
+                        </SidebarMenuSubItem>
+                      ) : (
+                        contexts.slice(0, 10).map((context) => (
+                          <SidebarMenuSubItem key={context.id}>
+                            <SidebarMenuSubButton
+                              asChild
+                              isActive={location.pathname === `/contexts/${context.id}`}
+                            >
+                              <button
+                                onClick={() => navigateTo(`/contexts/${context.id}`)}
+                                type="button"
+                              >
+                                <span className="truncate">{context.id}</span>
+                              </button>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))
+                      )}
+                    </SidebarMenuSub>
+                  )}
                 </SidebarMenuItem>
 
                 <SidebarMenuItem>
@@ -130,14 +224,61 @@ function DashboardSidebar() {
                     tooltip="Manage your workspaces"
                   >
                     <button
-                      onClick={() => navigateTo('/workspaces')}
-                      className="flex items-center"
+                      onClick={() => {
+                        const wasOpen = workspacesOpen
+                        setWorkspacesOpen(!workspacesOpen)
+                        if (!wasOpen) {
+                          navigateTo('/workspaces')
+                        }
+                      }}
+                      className="flex items-center justify-between w-full"
                       type="button"
                     >
-                      <LayoutGrid className="size-4" />
-                      <span>Workspaces</span>
+                      <div className="flex items-center">
+                        <LayoutGrid className="size-4" />
+                        <span>Workspaces</span>
+                      </div>
+                      {workspacesOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
                     </button>
                   </SidebarMenuButton>
+                  {workspacesOpen && (
+                    <SidebarMenuSub>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton
+                          asChild
+                          isActive={location.pathname === '/workspaces'}
+                        >
+                          <button
+                            onClick={() => navigateTo('/workspaces')}
+                            type="button"
+                          >
+                            <span>All Workspaces</span>
+                          </button>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      {isLoadingWorkspaces ? (
+                        <SidebarMenuSubItem>
+                          <span className="text-xs text-muted-foreground px-2">Loading...</span>
+                        </SidebarMenuSubItem>
+                      ) : (
+                        workspaces.slice(0, 10).map((workspace) => (
+                          <SidebarMenuSubItem key={workspace.id}>
+                            <SidebarMenuSubButton
+                              asChild
+                              isActive={location.pathname === `/workspaces/${workspace.name}`}
+                            >
+                              <button
+                                onClick={() => navigateTo(`/workspaces/${workspace.name}`)}
+                                type="button"
+                              >
+                                <span className="truncate">{workspace.label || workspace.name}</span>
+                              </button>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))
+                      )}
+                    </SidebarMenuSub>
+                  )}
                 </SidebarMenuItem>
 
                 <SidebarMenuItem>
@@ -203,6 +344,23 @@ function DashboardSidebar() {
                 <SidebarGroupLabel>Administration</SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive('/admin/users')}
+                        tooltip="Manage all users"
+                      >
+                        <button
+                          onClick={() => navigateTo('/admin/users')}
+                          className="flex items-center"
+                          type="button"
+                        >
+                          <Users className="size-4" />
+                          <span>All Users</span>
+                        </button>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+
                     <SidebarMenuItem>
                       <SidebarMenuButton
                         asChild
@@ -374,6 +532,7 @@ function DashboardSidebar() {
                 {location.pathname.startsWith('/agents/') && location.pathname !== '/agents' && 'Agent Details'}
                 {location.pathname === '/roles' && 'Roles'}
                 {location.pathname === '/remotes' && 'Remotes'}
+                {location.pathname === '/admin/users' && 'User Management'}
                 {location.pathname === '/admin/contexts' && 'All Contexts'}
                 {location.pathname === '/admin/workspaces' && 'All Workspaces'}
                 {location.pathname === '/admin/agents' && 'All Agents'}

@@ -15,6 +15,7 @@ import AdminWorkspacesPage from './pages/admin/workspaces'
 import AdminContextsPage from './pages/admin/contexts'
 import AdminAgentsPage from './pages/admin/agents'
 import AdminRolesPage from './pages/admin/roles'
+import AdminUsersPage from './pages/admin/users'
 import AgentsPage from './pages/agents'
 import AgentDetailPage from './pages/agents/[agentId]'
 import RolesPage from './pages/roles'
@@ -62,6 +63,7 @@ function AppContent() {
           <Route path="shared" element={<SharedViewerPage />} />
 
           {/* Admin routes */}
+          <Route path="admin/users" element={<AdminUsersPage />} />
           <Route path="admin/contexts" element={<AdminContextsPage />} />
           <Route path="admin/workspaces" element={<AdminWorkspacesPage />} />
           <Route path="admin/agents" element={<AdminAgentsPage />} />
