@@ -1,6 +1,6 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom"
 import { useState, useEffect, useCallback } from "react"
-import { LogOut, LayoutGrid, Layers3, Settings, FolderOpen, Brain, Shield, Server, ChevronDown, ChevronRight, Users } from "lucide-react"
+import { LogOut, LayoutGrid, Layers3, Settings, FolderOpen, Brain, Shield, Server, Users, PanelLeftClose, PanelLeftOpen } from "lucide-react"
 import { api } from "@/lib/api"
 import { useToast } from "@/components/ui/toast-container"
 import { getCurrentUserFromToken } from "@/services/auth"
@@ -18,31 +18,75 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubItem,
-  SidebarMenuSubButton,
   SidebarProvider,
   SidebarRail,
   SidebarSeparator,
   SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+
+function NavList({ title, items, type, isLoading, navigateTo, currentPath, className, onClose }: any) {
+  return (
+    <div className={`bg-sidebar flex flex-col h-full shrink-0 ${className}`}>
+      <div className="p-4 border-b h-[60px] flex items-center justify-between font-semibold text-sm shrink-0">
+        <span>{title}</span>
+        {onClose && (
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onClose}>
+              <PanelLeftClose className="h-4 w-4" />
+            </Button>
+        )}
+      </div>
+      <div className="flex-1 overflow-y-auto py-2">
+        <div className="px-2 mb-2">
+           <button
+             onClick={() => navigateTo(`/${type}`)}
+             className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${currentPath === `/${type}` ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : 'text-muted-foreground'}`}
+           >
+             All {title}
+           </button>
+        </div>
+        {isLoading ? (
+          <div className="px-5 py-2 text-xs text-muted-foreground">Loading...</div>
+        ) : (
+          <div className="space-y-1 px-2">
+            {items.map((item: any) => {
+               const path = type === 'contexts' ? `/contexts/${item.id}` : `/workspaces/${item.name}`;
+               const isActive = currentPath === path;
+               return (
+                <button
+                  key={item.id}
+                  onClick={() => navigateTo(path)}
+                  className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground truncate ${isActive ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : 'text-muted-foreground'}`}
+                  title={type === 'contexts' ? item.id : (item.label || item.name)}
+                >
+                  {type === 'contexts' ? item.id : (item.label || item.name)}
+                </button>
+               )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 // Separate component for sidebar content
 function DashboardSidebar() {
   const location = useLocation()
   const navigate = useNavigate()
   const { showToast } = useToast()
+  const { isMobile, setOpen: setSidebarOpen } = useSidebar()
   const [user, setUser] = useState<{ id: string; email: string; userType: string } | null>(null)
-  const [contextsOpen, setContextsOpen] = useState(false)
-  const [workspacesOpen, setWorkspacesOpen] = useState(false)
+
   const [contexts, setContexts] = useState<any[]>([])
   const [workspaces, setWorkspaces] = useState<any[]>([])
   const [isLoadingContexts, setIsLoadingContexts] = useState(false)
   const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(false)
   const [hasFetchedContexts, setHasFetchedContexts] = useState(false)
   const [hasFetchedWorkspaces, setHasFetchedWorkspaces] = useState(false)
+  const [secondarySidebarOpen, setSecondarySidebarOpen] = useState(true)
 
   // Get user information from token
   useEffect(() => {
@@ -50,9 +94,34 @@ function DashboardSidebar() {
     setUser(currentUser)
   }, [])
 
-  // Fetch contexts when submenu opens
+  const isActive = useCallback((path: string) => {
+    return location.pathname === path || location.pathname.startsWith(path + "/")
+  }, [location.pathname])
+
+  const isContextsActive = isActive('/contexts')
+  const isWorkspacesActive = isActive('/workspaces')
+
+  const pathSegments = location.pathname.split('/').filter(Boolean)
+  const isDetailView = pathSegments.length > 1 && (pathSegments[0] === 'contexts' || pathSegments[0] === 'workspaces')
+
+  // Auto-collapse main sidebar when secondary menu is open to save space
   useEffect(() => {
-    if (contextsOpen && !hasFetchedContexts && !isLoadingContexts) {
+    if ((isContextsActive || isWorkspacesActive) && secondarySidebarOpen && !isMobile) {
+        setSidebarOpen(false)
+    }
+  }, [isContextsActive, isWorkspacesActive, secondarySidebarOpen, isMobile, setSidebarOpen])
+
+  // Re-open secondary sidebar when navigating to a section, but only if it's not explicitly closed?
+  // Actually, let's just open it when switching main sections if the user navigates to the root
+  useEffect(() => {
+      if (location.pathname === '/contexts' || location.pathname === '/workspaces') {
+          setSecondarySidebarOpen(true)
+      }
+  }, [location.pathname])
+
+  // Fetch contexts when active
+  useEffect(() => {
+    if (isContextsActive && !hasFetchedContexts && !isLoadingContexts) {
       setIsLoadingContexts(true)
       listContexts()
         .then(data => {
@@ -65,11 +134,11 @@ function DashboardSidebar() {
         })
         .finally(() => setIsLoadingContexts(false))
     }
-  }, [contextsOpen, hasFetchedContexts, isLoadingContexts])
+  }, [isContextsActive, hasFetchedContexts, isLoadingContexts])
 
-  // Fetch workspaces when submenu opens
+  // Fetch workspaces when active
   useEffect(() => {
-    if (workspacesOpen && !hasFetchedWorkspaces && !isLoadingWorkspaces) {
+    if (isWorkspacesActive && !hasFetchedWorkspaces && !isLoadingWorkspaces) {
       setIsLoadingWorkspaces(true)
       listWorkspaces()
         .then(data => {
@@ -82,11 +151,7 @@ function DashboardSidebar() {
         })
         .finally(() => setIsLoadingWorkspaces(false))
     }
-  }, [workspacesOpen, hasFetchedWorkspaces, isLoadingWorkspaces])
-
-  const isActive = (path: string) => {
-    return location.pathname === path || location.pathname.startsWith(path + "/")
-  }
+  }, [isWorkspacesActive, hasFetchedWorkspaces, isLoadingWorkspaces])
 
   const handleLogout = async () => {
     try {
@@ -156,129 +221,41 @@ function DashboardSidebar() {
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
-                    isActive={isActive('/contexts')}
+                    isActive={isContextsActive}
                     tooltip="Manage your contexts"
                   >
                     <button
                       onClick={() => {
-                        const wasOpen = contextsOpen
-                        setContextsOpen(!contextsOpen)
-                        if (!wasOpen) {
                           navigateTo('/contexts')
-                        }
+                          setSecondarySidebarOpen(true)
                       }}
-                      className="flex items-center justify-between w-full"
+                      className="flex items-center"
                       type="button"
                     >
-                      <div className="flex items-center">
-                        <Layers3 className="size-4" />
-                        <span>Contexts</span>
-                      </div>
-                      {contextsOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+                      <Layers3 className="size-4" />
+                      <span>Contexts</span>
                     </button>
                   </SidebarMenuButton>
-                  {contextsOpen && (
-                    <SidebarMenuSub>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton
-                          asChild
-                          isActive={location.pathname === '/contexts'}
-                        >
-                          <button
-                            onClick={() => navigateTo('/contexts')}
-                            type="button"
-                          >
-                            <span>All Contexts</span>
-                          </button>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                      {isLoadingContexts ? (
-                        <SidebarMenuSubItem>
-                          <span className="text-xs text-muted-foreground px-2">Loading...</span>
-                        </SidebarMenuSubItem>
-                      ) : (
-                        contexts.slice(0, 10).map((context) => (
-                          <SidebarMenuSubItem key={context.id}>
-                            <SidebarMenuSubButton
-                              asChild
-                              isActive={location.pathname === `/contexts/${context.id}`}
-                            >
-                              <button
-                                onClick={() => navigateTo(`/contexts/${context.id}`)}
-                                type="button"
-                              >
-                                <span className="truncate">{context.id}</span>
-                              </button>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        ))
-                      )}
-                    </SidebarMenuSub>
-                  )}
                 </SidebarMenuItem>
 
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
-                    isActive={isActive('/workspaces')}
+                    isActive={isWorkspacesActive}
                     tooltip="Manage your workspaces"
                   >
                     <button
                       onClick={() => {
-                        const wasOpen = workspacesOpen
-                        setWorkspacesOpen(!workspacesOpen)
-                        if (!wasOpen) {
                           navigateTo('/workspaces')
-                        }
+                          setSecondarySidebarOpen(true)
                       }}
-                      className="flex items-center justify-between w-full"
+                      className="flex items-center"
                       type="button"
                     >
-                      <div className="flex items-center">
-                        <LayoutGrid className="size-4" />
-                        <span>Workspaces</span>
-                      </div>
-                      {workspacesOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+                      <LayoutGrid className="size-4" />
+                      <span>Workspaces</span>
                     </button>
                   </SidebarMenuButton>
-                  {workspacesOpen && (
-                    <SidebarMenuSub>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton
-                          asChild
-                          isActive={location.pathname === '/workspaces'}
-                        >
-                          <button
-                            onClick={() => navigateTo('/workspaces')}
-                            type="button"
-                          >
-                            <span>All Workspaces</span>
-                          </button>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                      {isLoadingWorkspaces ? (
-                        <SidebarMenuSubItem>
-                          <span className="text-xs text-muted-foreground px-2">Loading...</span>
-                        </SidebarMenuSubItem>
-                      ) : (
-                        workspaces.slice(0, 10).map((workspace) => (
-                          <SidebarMenuSubItem key={workspace.id}>
-                            <SidebarMenuSubButton
-                              asChild
-                              isActive={location.pathname === `/workspaces/${workspace.name}`}
-                            >
-                              <button
-                                onClick={() => navigateTo(`/workspaces/${workspace.name}`)}
-                                type="button"
-                              >
-                                <span className="truncate">{workspace.label || workspace.name}</span>
-                              </button>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        ))
-                      )}
-                    </SidebarMenuSub>
-                  )}
                 </SidebarMenuItem>
 
                 <SidebarMenuItem>
@@ -514,11 +491,16 @@ function DashboardSidebar() {
       </Sidebar>
 
       <SidebarInset>
-        {/* Header */}
-        <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
-          <div className="flex items-center gap-2 px-4">
+        {/* Header spans full width of the content area (including secondary sidebar if present) */}
+        <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12 border-b px-4">
+          <div className="flex items-center gap-2">
             <SidebarTrigger className="-ml-1" />
             <div className="h-4 w-px bg-sidebar-border" />
+            {(isContextsActive || isWorkspacesActive) && !secondarySidebarOpen && (
+                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setSecondarySidebarOpen(true)}>
+                    <PanelLeftOpen className="h-4 w-4" />
+                 </Button>
+            )}
             <nav className="flex items-center space-x-1 text-sm text-muted-foreground">
               <span className="font-medium text-foreground">
                 {location.pathname === '/home' && 'Home'}
@@ -542,28 +524,58 @@ function DashboardSidebar() {
           </div>
         </header>
 
-        {/* Main content */}
-        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-          <Outlet />
-        </div>
+        <div className="flex flex-1 overflow-hidden">
+          {/* Secondary Sidebar */}
+          {isContextsActive && secondarySidebarOpen && (!isMobile || !isDetailView) && (
+            <NavList
+              title="Contexts"
+              items={contexts}
+              type="contexts"
+              isLoading={isLoadingContexts}
+              navigateTo={navigateTo}
+              currentPath={location.pathname}
+              className={isMobile ? "w-full border-r-0" : "w-64 border-r"}
+              onClose={() => setSecondarySidebarOpen(false)}
+            />
+          )}
+          {isWorkspacesActive && secondarySidebarOpen && (!isMobile || !isDetailView) && (
+            <NavList
+              title="Workspaces"
+              items={workspaces}
+              type="workspaces"
+              isLoading={isLoadingWorkspaces}
+              navigateTo={navigateTo}
+              currentPath={location.pathname}
+              className={isMobile ? "w-full border-r-0" : "w-64 border-r"}
+              onClose={() => setSecondarySidebarOpen(false)}
+            />
+          )}
 
-        {/* Footer */}
-        <footer className="border-t py-4">
-          <div className="container mx-auto px-4 flex justify-between items-center text-sm text-muted-foreground">
-            <div>© {new Date().getFullYear()} Canvas. All rights reserved.</div>
-            <a
-              href="https://github.com/canvas-ai"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center hover:text-foreground"
-            >
-              <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 mr-2">
-                <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
-              </svg>
-              GitHub
-            </a>
+          {/* Main Content Area */}
+          <div className={`flex flex-col flex-1 min-w-0 overflow-hidden ${isMobile && !isDetailView && (isContextsActive || isWorkspacesActive) && secondarySidebarOpen ? 'hidden' : ''}`}>
+            <main className="flex-1 overflow-auto p-4">
+              <Outlet />
+            </main>
+
+            {/* Footer */}
+            <footer className="border-t py-4 shrink-0 bg-background z-10">
+              <div className="container mx-auto px-4 flex justify-between items-center text-sm text-muted-foreground">
+                <div>© {new Date().getFullYear()} Canvas. All rights reserved.</div>
+                <a
+                  href="https://github.com/canvas-ai"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center hover:text-foreground"
+                >
+                  <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 mr-2">
+                    <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+                  </svg>
+                  GitHub
+                </a>
+              </div>
+            </footer>
           </div>
-        </footer>
+        </div>
       </SidebarInset>
     </>
   )
