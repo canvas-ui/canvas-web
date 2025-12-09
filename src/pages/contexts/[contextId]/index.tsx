@@ -369,9 +369,15 @@ export default function ContextDetailPage() {
       const message = err instanceof Error ? err.message : `Failed to fetch context ${contextId}`;
       setError(message);
       setContext(null);
+
+      // Check if it's a workspace activation error
+      const isWorkspaceInactive = message.includes('not active') || message.includes('Database not initialized');
+
       showToast({
         title: 'Error',
-        description: message,
+        description: isWorkspaceInactive
+          ? `${message}\n\nGo to Workspaces and start the workspace before accessing this context.`
+          : message,
         variant: 'destructive'
       });
     }

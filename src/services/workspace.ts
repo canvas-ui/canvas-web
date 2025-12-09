@@ -52,6 +52,16 @@ export async function startWorkspace(id: string): Promise<Workspace> {
   }
 }
 
+export async function stopWorkspace(id: string): Promise<Workspace> {
+  try {
+    const response = await api.post<{ payload: Workspace; message: string; status: string; statusCode: number }>(`${API_ROUTES.workspaces}/${id}/stop`);
+    return response.payload;
+  } catch (error) {
+    console.error('Failed to stop workspace:', error);
+    throw error;
+  }
+}
+
 // openWorkspace and closeWorkspace should also operate with the global Workspace type.
 export async function openWorkspace(id: string): Promise<Workspace> {
   try {

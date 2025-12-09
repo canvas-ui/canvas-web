@@ -20,7 +20,9 @@ import {
   renameWorkspaceLayer,
   lockWorkspaceLayer,
   unlockWorkspaceLayer,
-  destroyWorkspaceLayer
+  destroyWorkspaceLayer,
+  startWorkspace,
+  stopWorkspace
 } from '@/services/workspace';
 import { getSchemas } from '@/services/schemas';
 import { TreeNode, Document } from '@/types/workspace';
@@ -65,6 +67,8 @@ export default function WorkspaceDetailPage() {
   const [layers, setLayers] = useState<any[]>([]);
   const [isLoadingLayers, setIsLoadingLayers] = useState(false);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
+  const [isStartingWorkspace, setIsStartingWorkspace] = useState(false);
+  const [isStoppingWorkspace, setIsStoppingWorkspace] = useState(false);
   // Tree operations (layer merge/subtract) - initialized after fetchTree is defined via lazy wrapper
   const treeOps = useTreeOperations({ workspaceId: (workspace?.name || ''), onRefresh: () => fetchTree() });
 
@@ -600,6 +604,53 @@ export default function WorkspaceDetailPage() {
     setCurrentPage(1); // Reset to first page when changing page size
   };
 
+  const handleStartWorkspace = async () => {
+    if (!workspace) return;
+    setIsStartingWorkspace(true);
+    try {
+      const updated = await startWorkspace(workspace.name);
+      setWorkspace(updated);
+      showToast({
+        title: 'Success',
+        description: 'Workspace started successfully'
+      });
+      // Refresh tree and documents
+      await fetchTree();
+      await fetchDocuments();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to start workspace';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+    } finally {
+      setIsStartingWorkspace(false);
+    }
+  };
+
+  const handleStopWorkspace = async () => {
+    if (!workspace) return;
+    setIsStoppingWorkspace(true);
+    try {
+      const updated = await stopWorkspace(workspace.name);
+      setWorkspace(updated);
+      showToast({
+        title: 'Success',
+        description: 'Workspace stopped successfully'
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to stop workspace';
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      });
+    } finally {
+      setIsStoppingWorkspace(false);
+    }
+  };
+
   // Layer tab interactions
   const handleSelectLayer = async (layer: any) => {
     setSelectedLayerId(layer.id);
@@ -729,21 +780,50 @@ export default function WorkspaceDetailPage() {
       <div className="flex-1 min-w-0 space-y-6 min-h-0">
         {/* Page Header */}
         <div className="border-b pb-4">
-          <h1 className="text-3xl font-bold tracking-tight">{workspace.label}</h1>
-          <p className="text-muted-foreground mt-2">{workspace.description || 'No description available'}</p>
-          <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-            <span>Status: <span className="font-mono">{workspace.status}</span></span>
-            <span>Owner: {workspace.owner}</span>
-            {workspace.color && (
-              <div className="flex items-center gap-2">
-                <span>Color:</span>
-                <div
-                  className="w-4 h-4 rounded border"
-                  style={{ backgroundColor: workspace.color }}
-                />
-                <span className="font-mono text-xs">{workspace.color}</span>
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <h1 className="text-3xl font-bold tracking-tight">{workspace.label}</h1>
+              <p className="text-muted-foreground mt-2">{workspace.description || 'No description available'}</p>
+              <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <span>Status:</span>
+                  {workspace.status === 'active' && <span className="inline-block w-2 h-2 rounded-full bg-green-500" title="Running" />}
+                  {(workspace.status === 'inactive' || workspace.status === 'available') && <span className="inline-block w-2 h-2 rounded-full bg-gray-400" title="Stopped" />}
+                  {workspace.status === 'error' && <span className="inline-block w-2 h-2 rounded-full bg-red-500" title="Error" />}
+                  <span className="font-mono">{workspace.status}</span>
+                </div>
+                <span>Owner: {workspace.owner}</span>
+                {workspace.color && (
+                  <div className="flex items-center gap-2">
+                    <span>Color:</span>
+                    <div
+                      className="w-4 h-4 rounded border"
+                      style={{ backgroundColor: workspace.color }}
+                    />
+                    <span className="font-mono text-xs">{workspace.color}</span>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
+            <div className="flex gap-2">
+              {workspace.status === 'active' ? (
+                <button
+                  onClick={handleStopWorkspace}
+                  disabled={isStoppingWorkspace}
+                  className="px-4 py-2 text-sm border rounded-md hover:bg-accent disabled:opacity-50"
+                >
+                  {isStoppingWorkspace ? 'Stopping...' : 'Stop'}
+                </button>
+              ) : (
+                <button
+                  onClick={handleStartWorkspace}
+                  disabled={isStartingWorkspace}
+                  className="px-4 py-2 text-sm border rounded-md hover:bg-accent disabled:opacity-50"
+                >
+                  {isStartingWorkspace ? 'Starting...' : 'Start'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

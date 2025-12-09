@@ -11,8 +11,8 @@ import { useSocket } from "@/hooks/useSocket"
 import {
   listWorkspaces,
   createWorkspace,
-  closeWorkspace,
   startWorkspace,
+  stopWorkspace,
   updateWorkspace,
   removeWorkspace,
 } from "@/services/workspace"
@@ -234,7 +234,7 @@ export default function WorkspacesPage() {
 
   const handleStopWorkspace = async (workspaceName: string) => {
     try {
-      const updatedWorkspace = await closeWorkspace(workspaceName)
+      const updatedWorkspace = await stopWorkspace(workspaceName)
       // The service now returns the updated workspace object directly
       setWorkspaces(prev => prev.map(ws => ws.name === updatedWorkspace.name ? (updatedWorkspace as Workspace) : ws))
       showToast({

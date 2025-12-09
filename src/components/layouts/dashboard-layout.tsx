@@ -27,6 +27,20 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 
+function getWorkspaceStatusIndicator(status: string) {
+  switch (status) {
+    case 'active':
+      return <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-2" title="Running" />
+    case 'inactive':
+    case 'available':
+      return <span className="inline-block w-2 h-2 rounded-full bg-gray-400 mr-2" title="Stopped" />
+    case 'error':
+      return <span className="inline-block w-2 h-2 rounded-full bg-red-500 mr-2" title="Error" />
+    default:
+      return <span className="inline-block w-2 h-2 rounded-full bg-gray-400 mr-2" title={status} />
+  }
+}
+
 function NavList({ title, items, type, isLoading, navigateTo, currentPath, className, onClose }: any) {
   return (
     <div className={`bg-sidebar flex flex-col h-full shrink-0 ${className}`}>
@@ -54,14 +68,21 @@ function NavList({ title, items, type, isLoading, navigateTo, currentPath, class
             {items.map((item: any) => {
                const path = type === 'contexts' ? `/contexts/${item.id}` : `/workspaces/${item.name}`;
                const isActive = currentPath === path;
+               const isInactive = type === 'workspaces' && item.status !== 'active';
                return (
                 <button
                   key={item.id}
-                  onClick={() => navigateTo(path)}
-                  className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground truncate ${isActive ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : 'text-muted-foreground'}`}
-                  title={type === 'contexts' ? item.id : (item.label || item.name)}
+                  onClick={() => !isInactive && navigateTo(path)}
+                  disabled={isInactive}
+                  className={`w-full flex items-center text-left px-3 py-2 text-sm rounded-md transition-colors ${
+                    isInactive
+                      ? 'opacity-50 cursor-not-allowed'
+                      : 'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                  } ${isActive ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : 'text-muted-foreground'}`}
+                  title={type === 'contexts' ? item.id : `${item.label || item.name}${isInactive ? ' (inactive - start to access)' : ''}`}
                 >
-                  {type === 'contexts' ? item.id : (item.label || item.name)}
+                  {type === 'workspaces' && getWorkspaceStatusIndicator(item.status)}
+                  <span className="truncate">{type === 'contexts' ? item.id : (item.label || item.name)}</span>
                 </button>
                )
             })}

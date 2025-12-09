@@ -38,7 +38,8 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onD
       case 'active':
         return 'bg-green-500';
       case 'inactive':
-        return 'bg-yellow-500';
+      case 'available':
+        return 'bg-gray-400';
       case 'error':
         return 'bg-red-500';
       case 'not_found':
