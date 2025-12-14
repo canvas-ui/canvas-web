@@ -30,6 +30,10 @@ export const API_ROUTES = {
     workspaces: `${API_URL}/admin/workspaces`,
   },
 
+  // Roles
+  roles: `${API_URL}/roles`,
+  roleTemplates: `${API_URL}/role-templates`,
+
   // WebSocket
   ws: WS_URL
 }
