@@ -250,13 +250,11 @@ export async function subtractDownWorkspacePath(workspaceId: string, path: strin
 export async function pasteDocumentsToWorkspacePath(workspaceId: string, path: string, documentIds: number[]): Promise<boolean> {
   try {
     // This would use the document insertion API with the specified path
-    const ids = Array.isArray(documentIds) ? documentIds : [documentIds]
-    console.log('pasteDocumentsToWorkspacePath: Making API call with:', { workspaceId, path, ids });
+    const ids = normalizeDocumentIds(Array.isArray(documentIds) ? documentIds : [documentIds])
     const response = await api.post<{ payload: any; message: string; status: string; statusCode: number }>(
       `${API_ROUTES.workspaces}/${workspaceId}/documents`,
       { documentIds: ids, contextSpec: path }
     );
-    console.log('pasteDocumentsToWorkspacePath: API response:', response);
     return true;
   } catch (error) {
     console.error(`Failed to paste documents to workspace path ${path}:`, error);
@@ -321,40 +319,49 @@ export async function destroyWorkspaceLayer(workspaceId: string, layerId: string
   return true
 }
 
-// Document removal/deletion helpers
+// ─────────────────────────────────────────────────────────────────────────
+// Workspace documents
+// ─────────────────────────────────────────────────────────────────────────
+
+function normalizeDocumentIds(documentIds: readonly (string | number)[]): number[] {
+  const ids = documentIds.map((v) => (typeof v === 'number' ? v : Number(v)))
+  if (ids.some((n) => !Number.isFinite(n))) {
+    throw new Error(`Invalid document ID(s): expected numbers (or numeric strings), got ${JSON.stringify(documentIds)}`)
+  }
+  return ids
+}
+
 export async function removeWorkspaceDocuments(
   workspaceId: string,
-  documentIds: number[],
+  documentIds: readonly (string | number)[],
   contextSpec: string = '/',
   featureArray: string[] = []
 ): Promise<boolean> {
-  console.log('removeWorkspaceDocuments called:', { workspaceId, documentIds, contextSpec, featureArray });
   const params = new URLSearchParams()
   if (contextSpec) params.append('contextSpec', contextSpec)
   featureArray.forEach(f => params.append('featureArray', f))
-  const headers = { 'Content-Type': 'application/json' }
-  const response = await api.delete(`${API_ROUTES.workspaces}/${workspaceId}/documents/remove?${params.toString()}`, {
-    headers,
-    body: JSON.stringify(documentIds)
-  } as any)
-  console.log('removeWorkspaceDocuments response:', response);
+  const ids = normalizeDocumentIds(documentIds)
+  await api.delete(`${API_ROUTES.workspaces}/${workspaceId}/documents/remove?${params.toString()}`, {
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(ids),
+  })
   return true
 }
 
 export async function deleteWorkspaceDocuments(
   workspaceId: string,
-  documentIds: number[],
+  documentIds: readonly (string | number)[],
   contextSpec: string = '/',
   featureArray: string[] = []
 ): Promise<boolean> {
   const params = new URLSearchParams()
   if (contextSpec) params.append('contextSpec', contextSpec)
   featureArray.forEach(f => params.append('featureArray', f))
-  const headers = { 'Content-Type': 'application/json' }
+  const ids = normalizeDocumentIds(documentIds)
   await api.delete(`${API_ROUTES.workspaces}/${workspaceId}/documents?${params.toString()}`, {
-    headers,
-    body: JSON.stringify(documentIds)
-  } as any)
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(ids),
+  })
   return true
 }
 
