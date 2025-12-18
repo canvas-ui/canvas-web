@@ -251,7 +251,7 @@ export async function pasteDocumentsToWorkspacePath(workspaceId: string, path: s
   try {
     // This would use the document insertion API with the specified path
     const ids = normalizeDocumentIds(Array.isArray(documentIds) ? documentIds : [documentIds])
-    const response = await api.post<{ payload: any; message: string; status: string; statusCode: number }>(
+    await api.post<{ payload: any; message: string; status: string; statusCode: number }>(
       `${API_ROUTES.workspaces}/${workspaceId}/documents`,
       { documentIds: ids, contextSpec: path }
     );
