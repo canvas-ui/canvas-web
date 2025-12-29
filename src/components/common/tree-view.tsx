@@ -636,19 +636,21 @@ export function TreeView({
     const hasDocumentData = event.dataTransfer.types.includes('application/json')
     const hasPathData = event.dataTransfer.types.includes('text/plain')
 
-    // For path drag operations, validate the operation before allowing drop
+    // For path drag operations, validate the operation before allowing drop.
+    // Note: "drop on parent is a no-op" only applies to MOVE, not COPY.
     if (hasPathData && draggedPath) {
       const normalizedSource = draggedPath.endsWith('/') ? draggedPath.slice(0, -1) : draggedPath
       const normalizedTarget = path.endsWith('/') ? path.slice(0, -1) : path
 
-      // Check if this would be an invalid move operation
-      const isInvalidMove = (
-        normalizedTarget.startsWith(normalizedSource + '/') || // Target is descendant of source
-        normalizedSource === normalizedTarget || // Target is same as source
-        normalizedTarget === (normalizedSource.substring(0, normalizedSource.lastIndexOf('/')) || '/') // Target is direct parent of source
-      )
+      const isCopy = event.ctrlKey || event.metaKey
+      const sourceParent = normalizedSource.substring(0, normalizedSource.lastIndexOf('/')) || '/'
 
-      if (isInvalidMove) {
+      const isInvalidOperation =
+        normalizedTarget.startsWith(normalizedSource + '/') || // Target is descendant of source (copy or move)
+        normalizedSource === normalizedTarget || // Target is same as source (copy or move)
+        (!isCopy && normalizedTarget === sourceParent) // Target is direct parent of source (move-only no-op)
+
+      if (isInvalidOperation) {
         event.dataTransfer.dropEffect = 'none'
         return // Don't set drag over path for invalid operations
       }
