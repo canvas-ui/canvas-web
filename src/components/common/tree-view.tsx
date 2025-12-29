@@ -597,6 +597,7 @@ export function TreeView({
     if (!onMovePath && !onCopyPath) return false
 
     const { mode, paths } = internalClipboard
+    let didSomething = false
 
     for (const fromPath of paths) {
       if (!fromPath || fromPath === targetPath) continue
@@ -604,11 +605,16 @@ export function TreeView({
       if (mode === 'cut') {
         if (!onMovePath) return false
         await onMovePath(fromPath, targetPath, false)
+        didSomething = true
       } else {
         if (!onCopyPath) return false
         await onCopyPath(fromPath, targetPath, false)
+        didSomething = true
       }
     }
+
+    // Don't clear clipboard if paste was effectively a no-op (e.g. cut /a then paste onto /a)
+    if (!didSomething) return false
 
     if (mode === 'cut') {
       setInternalClipboard(null)
