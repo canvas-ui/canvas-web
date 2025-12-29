@@ -12,6 +12,7 @@ import { useTreeOperations } from '@/hooks/useTreeOperations';
 import { DocumentDetailModal } from '@/components/context/document-detail-modal';
 import { DocumentList } from '@/components/workspace/document-list';
 import { TreeNode, Document as WorkspaceDocument } from '@/types/workspace';
+import { renameWorkspaceLayer } from '@/services/workspace';
 
 // Simple debounce utility function
 const debounce = (func: Function, delay: number) => {
@@ -188,6 +189,54 @@ export default function ContextDetailPage() {
       setIsLoadingTree(false);
     }
   }, [contextId, showToast]);
+
+  const findTreeNodeByPath = useCallback((root: TreeNode, path: string): TreeNode | null => {
+    if (!path || path === '/') return root
+    const parts = path.split('/').filter(Boolean)
+    let node: TreeNode = root
+    for (const part of parts) {
+      const next = node.children?.find((c) => c.name === part)
+      if (!next) return null
+      node = next
+    }
+    return node
+  }, [])
+
+  const handleRenamePath = useCallback(async (fromPath: string, newName: string): Promise<boolean> => {
+    if (!context || !tree) return false
+    if (fromPath === '/') {
+      showToast({ title: 'Error', description: 'Cannot rename root layer', variant: 'destructive' })
+      return false
+    }
+
+    try {
+      const node = findTreeNodeByPath(tree, fromPath)
+      if (!node) throw new Error(`Path not found: ${fromPath}`)
+
+      await renameWorkspaceLayer(context.workspaceId, node.id, newName)
+      await fetchContextTree()
+
+      const parts = fromPath.split('/').filter(Boolean)
+      parts[parts.length - 1] = newName
+      const newPath = '/' + parts.join('/')
+
+      if (selectedPath === fromPath) {
+        setSelectedPath(newPath)
+      } else if (selectedPath.startsWith(fromPath + '/')) {
+        setSelectedPath(newPath + selectedPath.slice(fromPath.length))
+      }
+
+      showToast({ title: 'Success', description: `Layer renamed to "${newName}"` })
+      return true
+    } catch (err) {
+      showToast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to rename layer',
+        variant: 'destructive'
+      })
+      return false
+    }
+  }, [context, tree, findTreeNodeByPath, fetchContextTree, selectedPath, showToast])
 
   // Initialize tree operations hook for context tree management
   const treeOperations = useTreeOperations({
@@ -770,6 +819,7 @@ export default function ContextDetailPage() {
                 subtitle={isSharedContext ? 'Read-only view (shared context)' : 'Right-click for context menu, drag to move/copy (Ctrl=copy, Shift=recursive)'}
                 onInsertPath={!isSharedContext ? treeOperations.insertPath : undefined}
                 onRemovePath={!isSharedContext ? treeOperations.removePath : undefined}
+                onRenamePath={!isSharedContext ? handleRenamePath : undefined}
                 onMovePath={!isSharedContext ? treeOperations.movePath : undefined}
                 onCopyPath={!isSharedContext ? treeOperations.copyPath : undefined}
                 onMergeUp={!isSharedContext ? treeOperations.mergeUp : undefined}

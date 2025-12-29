@@ -6,6 +6,7 @@ import { useToast } from '@/components/ui/toast-container';
 import { Save, Share, X, Plus, Settings, Info, Sidebar } from 'lucide-react';
 import { ContextTokenManager } from '@/components/context/token-manager';
 import { getContext, getSharedContext, updateContextUrl, grantContextAccess, revokeContextAccess, getContextTree, getContextDocuments, getSharedContextDocuments, removeDocumentsFromContext, deleteDocumentsFromContext, pasteDocumentsToContext, importDocumentsToContext } from '@/services/context';
+import { renameWorkspaceLayer } from '@/services/workspace';
 import socketService from '@/lib/socket';
 import { getCurrentUserFromToken } from '@/services/auth';
 import { TreeView } from '@/components/common/tree-view';
@@ -102,7 +103,6 @@ export default function ContextDetailPage() {
   const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
   const [isLoadingTree, setIsLoadingTree] = useState(false);
   const [documentsTotalCount, setDocumentsTotalCount] = useState(0);
-  const [treeVersion, setTreeVersion] = useState(0);
   const { showToast } = useToast();
 
   // Sidebar states
@@ -219,7 +219,6 @@ export default function ContextDetailPage() {
 
       if (treeData) {
         setTree(treeData);
-        setTreeVersion(prev => prev + 1); // Force tree re-render
       } else {
         console.warn('No tree data received from API');
         setTree(null);
@@ -238,6 +237,57 @@ export default function ContextDetailPage() {
       setIsLoadingTree(false);
     }
   }, [contextId, showToast]);
+
+  const findTreeNodeByPath = useCallback((root: TreeNode, path: string): TreeNode | null => {
+    if (!path || path === '/') return root
+    const parts = path.split('/').filter(Boolean)
+    let node: TreeNode = root
+    for (const part of parts) {
+      const next = node.children?.find((c) => c.name === part)
+      if (!next) return null
+      node = next
+    }
+    return node
+  }, [])
+
+  const handleRenamePath = useCallback(async (fromPath: string, newName: string): Promise<boolean> => {
+    if (!context || !tree) return false
+    if (fromPath === '/') {
+      showToast({ title: 'Error', description: 'Cannot rename root layer', variant: 'destructive' })
+      return false
+    }
+
+    try {
+      const node = findTreeNodeByPath(tree, fromPath)
+      if (!node) throw new Error(`Path not found: ${fromPath}`)
+
+      const workspaceKey = context.workspaceName || context.workspaceId
+      await renameWorkspaceLayer(workspaceKey, node.id, newName)
+
+      // Refresh tree (keep TreeView mounted so expansion state survives)
+      await fetchContextTree()
+
+      // If selection is inside renamed subtree, update it to the new path
+      const parts = fromPath.split('/').filter(Boolean)
+      parts[parts.length - 1] = newName
+      const newPath = '/' + parts.join('/')
+      if (selectedPath === fromPath) {
+        setSelectedPath(newPath)
+      } else if (selectedPath.startsWith(fromPath + '/')) {
+        setSelectedPath(newPath + selectedPath.slice(fromPath.length))
+      }
+
+      showToast({ title: 'Success', description: `Layer renamed to "${newName}"` })
+      return true
+    } catch (err) {
+      showToast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to rename layer',
+        variant: 'destructive'
+      })
+      return false
+    }
+  }, [context, tree, findTreeNodeByPath, fetchContextTree, selectedPath, showToast])
 
   // Initialize tree operations hook for context tree management
   const treeOperations = useTreeOperations({
@@ -1028,7 +1078,6 @@ export default function ContextDetailPage() {
               </div>
             ) : tree ? (
               <TreeView
-                key={`context-tree-${treeVersion}`}
                 tree={tree}
                 selectedPath={selectedPath}
                 onPathSelect={handlePathSelect}
@@ -1037,6 +1086,7 @@ export default function ContextDetailPage() {
                 expandedPath={selectedPath !== '/' ? selectedPath : undefined}
                 onInsertPath={!isSharedContext ? treeOperations.insertPath : undefined}
                 onRemovePath={!isSharedContext ? treeOperations.removePath : undefined}
+                onRenamePath={!isSharedContext ? handleRenamePath : undefined}
                 onMovePath={!isSharedContext ? treeOperations.movePath : undefined}
                 onCopyPath={!isSharedContext ? treeOperations.copyPath : undefined}
                 onMergeLayer={!isSharedContext ? treeOperations.mergeLayer : undefined}

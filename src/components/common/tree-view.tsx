@@ -4,6 +4,9 @@ import { ChevronRight, ChevronDown, Folder, FolderOpen, MoreHorizontal, Trash2, 
 import { TreeNode } from '@/types/workspace'
 import { cn } from '@/lib/utils'
 
+type TreeClipboardMode = 'copy' | 'cut'
+type TreeClipboard = { mode: TreeClipboardMode; paths: string[] }
+
 interface TreeViewProps {
   tree: TreeNode
   selectedPath: string
@@ -552,6 +555,10 @@ export function TreeView({
   const [draggedPath, setDraggedPath] = useState<string | null>(null)
   const [rootContextMenu, setRootContextMenu] = useState<{ x: number; y: number } | null>(null)
   const dragCounterRef = useRef(0)
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  // Internal path clipboard (used when no external clipboard is provided)
+  const [internalClipboard, setInternalClipboard] = useState<TreeClipboard | null>(null)
 
   // Internal layer selection state (if not provided externally)
   const [internalSourceLayerPath, setInternalSourceLayerPath] = useState<string | null>(null)
@@ -570,12 +577,56 @@ export function TreeView({
     }
   }, [externalOnLayerSelectionChange])
 
+  const effectiveClipboardPaths = clipboardPaths ?? internalClipboard?.paths ?? []
+
+  const handleCopyPathToClipboardInternal = useCallback((path: string) => {
+    if (readOnly) return
+    if (!path || path === '/') return
+    setInternalClipboard({ mode: 'copy', paths: [path] })
+  }, [readOnly])
+
+  const handleCutPathToClipboardInternal = useCallback((path: string) => {
+    if (readOnly) return
+    if (!path || path === '/') return
+    setInternalClipboard({ mode: 'cut', paths: [path] })
+  }, [readOnly])
+
+  const handlePastePathFromClipboardInternal = useCallback(async (targetPath: string): Promise<boolean> => {
+    if (readOnly) return false
+    if (!internalClipboard || internalClipboard.paths.length === 0) return false
+    if (!onMovePath && !onCopyPath) return false
+
+    const { mode, paths } = internalClipboard
+
+    for (const fromPath of paths) {
+      if (!fromPath || fromPath === targetPath) continue
+
+      if (mode === 'cut') {
+        if (!onMovePath) return false
+        await onMovePath(fromPath, targetPath, false)
+      } else {
+        if (!onCopyPath) return false
+        await onCopyPath(fromPath, targetPath, false)
+      }
+    }
+
+    if (mode === 'cut') {
+      setInternalClipboard(null)
+    }
+    return true
+  }, [readOnly, internalClipboard, onMovePath, onCopyPath])
+
+  const effectiveCopyToClipboard = onCopyPathToClipboard ?? handleCopyPathToClipboardInternal
+  const effectiveCutToClipboard = onCutPathToClipboard ?? handleCutPathToClipboardInternal
+  const effectivePasteFromClipboard = onPastePathFromClipboard ?? handlePastePathFromClipboardInternal
+
   const handleDragStart = useCallback((path: string, event: React.DragEvent) => {
     if (readOnly) return
 
     setDraggedPath(path)
     event.dataTransfer.setData('text/plain', path)
-    event.dataTransfer.effectAllowed = 'move'
+    // Allow Ctrl-drag to copy (copyMove), not only move.
+    event.dataTransfer.effectAllowed = 'copyMove'
   }, [readOnly])
 
   const handleDragOver = useCallback((path: string, event: React.DragEvent) => {
@@ -586,7 +637,7 @@ export function TreeView({
     const hasPathData = event.dataTransfer.types.includes('text/plain')
 
     // For path drag operations, validate the operation before allowing drop
-    if (hasPathData && draggedPath && !event.ctrlKey) {
+    if (hasPathData && draggedPath) {
       const normalizedSource = draggedPath.endsWith('/') ? draggedPath.slice(0, -1) : draggedPath
       const normalizedTarget = path.endsWith('/') ? path.slice(0, -1) : path
 
@@ -709,8 +760,34 @@ export function TreeView({
     setRootContextMenu({ x: e.clientX, y: e.clientY })
   }
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (readOnly) return
+
+    const isMod = e.ctrlKey || e.metaKey
+    if (!isMod) return
+
+    const key = e.key.toLowerCase()
+    if (key === 'c') {
+      e.preventDefault()
+      effectiveCopyToClipboard(selectedPath)
+    } else if (key === 'x') {
+      e.preventDefault()
+      effectiveCutToClipboard(selectedPath)
+    } else if (key === 'v') {
+      e.preventDefault()
+      void effectivePasteFromClipboard(selectedPath)
+    }
+  }
+
   return (
-    <div className="w-full" onDragLeave={handleDragLeave}>
+    <div
+      ref={rootRef}
+      className="w-full outline-none"
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      onMouseDown={() => rootRef.current?.focus()}
+      onDragLeave={handleDragLeave}
+    >
 
       <div className="space-y-0.5">
         {/* Root node */}
@@ -769,14 +846,14 @@ export function TreeView({
           onInsertPath={onInsertPath}
           onRemovePath={onRemovePath}
           onRenamePath={onRenamePath}
-          onCopyPath={onCopyPathToClipboard}
-          onCutPath={onCutPathToClipboard}
-          onPastePath={onPastePathFromClipboard}
+          onCopyPath={effectiveCopyToClipboard}
+          onCutPath={effectiveCutToClipboard}
+          onPastePath={effectivePasteFromClipboard}
           onMergeLayer={onMergeLayer}
           onSubtractLayer={onSubtractLayer}
           onPasteDocuments={onPasteDocuments}
           pastedDocumentIds={pastedDocumentIds}
-          clipboardPaths={clipboardPaths}
+          clipboardPaths={effectiveClipboardPaths}
           tree={tree}
           sourceLayerPath={sourceLayerPath}
           targetLayerPaths={targetLayerPaths}
@@ -799,14 +876,14 @@ export function TreeView({
             onRenamePath={onRenamePath}
             onMovePath={onMovePath}
             onCopyPath={onCopyPath}
-            onCopyPathToClipboard={onCopyPathToClipboard}
-            onCutPathToClipboard={onCutPathToClipboard}
-            onPastePathFromClipboard={onPastePathFromClipboard}
+            onCopyPathToClipboard={effectiveCopyToClipboard}
+            onCutPathToClipboard={effectiveCutToClipboard}
+            onPastePathFromClipboard={effectivePasteFromClipboard}
             onMergeLayer={onMergeLayer}
             onSubtractLayer={onSubtractLayer}
             onPasteDocuments={onPasteDocuments}
             pastedDocumentIds={pastedDocumentIds}
-            clipboardPaths={clipboardPaths}
+            clipboardPaths={effectiveClipboardPaths}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDrop={handleDrop}

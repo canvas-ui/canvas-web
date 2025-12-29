@@ -274,6 +274,7 @@ function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
 }
 
 function DocumentDetailModal({ document, isOpen, onClose }: DocumentDetailModalProps) {
+  const [showRawJson, setShowRawJson] = useState(false)
   if (!isOpen || !document) return null
 
   const formatDate = (dateString: string) => {
@@ -296,7 +297,12 @@ function DocumentDetailModal({ document, isOpen, onClose }: DocumentDetailModalP
               <h2 className="text-2xl font-bold">Document Details</h2>
               <p className="text-muted-foreground">ID: {document.id}</p>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-muted rounded-sm" title="Close">✕</button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowRawJson(v => !v)}>
+                {showRawJson ? 'View Data' : 'View Raw JSON'}
+              </Button>
+              <button onClick={onClose} className="p-2 hover:bg-muted rounded-sm" title="Close">✕</button>
+            </div>
           </div>
 
           <div className="space-y-6">
@@ -312,8 +318,8 @@ function DocumentDetailModal({ document, isOpen, onClose }: DocumentDetailModalP
             </div>
 
             <div>
-              <h3 className="font-semibold mb-3">Document Data</h3>
-              <pre className="bg-muted p-4 rounded-lg text-sm overflow-x-auto">{JSON.stringify(document.data, null, 2)}</pre>
+              <h3 className="font-semibold mb-3">{showRawJson ? 'Raw Document JSON' : 'Document Data'}</h3>
+              <pre className="bg-muted p-4 rounded-lg text-sm overflow-x-auto">{JSON.stringify(showRawJson ? document : document.data, null, 2)}</pre>
             </div>
 
             <div>
