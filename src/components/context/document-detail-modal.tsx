@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -46,6 +47,7 @@ interface DocumentDetailModalProps {
 }
 
 export function DocumentDetailModal({ document, isOpen, onClose }: DocumentDetailModalProps) {
+  const [showRawJson, setShowRawJson] = useState(false);
   if (!isOpen || !document) return null;
 
   const formatDate = (dateString: string) => {
@@ -69,15 +71,25 @@ export function DocumentDetailModal({ document, isOpen, onClose }: DocumentDetai
               <h2 className="text-2xl font-bold">Document Details</h2>
               <p className="text-muted-foreground">ID: {document.id}</p>
             </div>
-            <Button
-              onClick={onClose}
-              variant="ghost"
-              size="sm"
-              className="p-2"
-              title="Close"
-            >
-              <X className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => setShowRawJson(v => !v)}
+                variant="outline"
+                size="sm"
+                title="Toggle raw JSON view"
+              >
+                {showRawJson ? 'View Data' : 'View Raw JSON'}
+              </Button>
+              <Button
+                onClick={onClose}
+                variant="ghost"
+                size="sm"
+                className="p-2"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
 
           {/* Content */}
@@ -107,9 +119,9 @@ export function DocumentDetailModal({ document, isOpen, onClose }: DocumentDetai
 
             {/* Document Data */}
             <div>
-              <h3 className="font-semibold mb-3">Document Data</h3>
+              <h3 className="font-semibold mb-3">{showRawJson ? 'Raw Document JSON' : 'Document Data'}</h3>
               <pre className="bg-muted p-4 rounded-lg text-sm overflow-x-auto">
-                {JSON.stringify(document.data, null, 2)}
+                {JSON.stringify(showRawJson ? document : document.data, null, 2)}
               </pre>
             </div>
 

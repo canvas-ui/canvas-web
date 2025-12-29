@@ -47,7 +47,6 @@ export default function WorkspaceDetailPage() {
   const [schemas, setSchemas] = useState<string[]>([]);
   const [selectedSchemas, setSelectedSchemas] = useState<string[]>([]);
   const [isLoadingSchemas, setIsLoadingSchemas] = useState(false);
-  const [treeVersion, setTreeVersion] = useState(0);
 
   // URL-based features and filters
   const [urlFilters, setUrlFilters] = useState<UrlFilters>({ features: [], filters: [] });
@@ -126,7 +125,6 @@ export default function WorkspaceDetailPage() {
     try {
       const response = await getWorkspaceTree(workspaceName);
       setTree(response.payload as TreeNode);
-      setTreeVersion(prev => prev + 1); // Force tree re-render
       setError(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch workspace tree';
@@ -829,7 +827,6 @@ export default function WorkspaceDetailPage() {
 
         {/* Enhanced File Manager */}
         <FileManagerView
-          key={`workspace-tree-${treeVersion}`}
           tree={tree}
           selectedPath={selectedPath}
           onPathSelect={(path: string) => {
