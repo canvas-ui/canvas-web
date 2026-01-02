@@ -16,6 +16,15 @@ interface UserFormData {
   status: 'active' | 'inactive' | 'pending' | 'deleted';
 }
 
+type PasswordPolicy = {
+  minLength?: number;
+  maxLength?: number;
+  requireUppercase?: boolean;
+  requireLowercase?: boolean;
+  requireNumbers?: boolean;
+  requireSpecialChars?: boolean;
+}
+
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<AdminUser[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -24,6 +33,7 @@ export default function AdminUsersPage() {
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [requireEmailVerification, setRequireEmailVerification] = useState<boolean>(false)
+  const [passwordPolicy, setPasswordPolicy] = useState<PasswordPolicy | null>(null)
   const [filters, setFilters] = useState({
     status: '',
     userType: '',
@@ -58,11 +68,47 @@ export default function AdminUsersPage() {
         const conf = await getAuthConfig()
         const req = !!conf?.strategies?.local?.requireEmailVerification
         setRequireEmailVerification(req)
+        setPasswordPolicy(conf?.strategies?.local?.passwordPolicy || null)
       } catch (_) {
         setRequireEmailVerification(false)
+        setPasswordPolicy(null)
       }
     })()
   }, [isCurrentUserAdmin])
+
+  const validateUsername = (name: string) => {
+    const username = name.trim().toLowerCase()
+    if (username.length < 3 || username.length > 39) return 'Username must be 3-39 characters long'
+    if (!/^[a-z0-9_-]+$/.test(username)) return 'Username can only contain lowercase letters, numbers, underscores, and hyphens'
+    return null
+  }
+
+  const validatePassword = (password: string) => {
+    const p = password || ''
+    const policy = passwordPolicy || {}
+    const minLength = policy.minLength ?? 12
+    const maxLength = policy.maxLength ?? 128
+    const unmet: string[] = []
+    if (p.length < minLength) unmet.push(`at least ${minLength} characters`)
+    if (p.length > maxLength) unmet.push(`no more than ${maxLength} characters`)
+    if ((policy.requireUppercase ?? true) && !/[A-Z]/.test(p)) unmet.push('an uppercase letter')
+    if ((policy.requireLowercase ?? true) && !/[a-z]/.test(p)) unmet.push('a lowercase letter')
+    if ((policy.requireNumbers ?? true) && !/[0-9]/.test(p)) unmet.push('a number')
+    if ((policy.requireSpecialChars ?? true) && !/[^A-Za-z0-9]/.test(p)) unmet.push('a special character')
+    return unmet.length ? `Password must contain ${unmet.join(', ').replace(/, ([^,]*)$/, ' and $1')}.` : null
+  }
+
+  const passwordHint = () => {
+    const policy = passwordPolicy || {}
+    const parts = []
+    const minLength = policy.minLength ?? 12
+    parts.push(`${minLength}+ chars`)
+    if (policy.requireUppercase ?? true) parts.push('uppercase')
+    if (policy.requireLowercase ?? true) parts.push('lowercase')
+    if (policy.requireNumbers ?? true) parts.push('number')
+    if (policy.requireSpecialChars ?? true) parts.push('special')
+    return parts.join(', ')
+  }
   const formatDate = (value?: string) => {
     if (!value) return '-'
     const d = new Date(value)
@@ -119,10 +165,26 @@ export default function AdminUsersPage() {
       return
     }
 
+    const usernameError = validateUsername(formData.name)
+    if (usernameError) {
+      showToast({ title: 'Validation Error', description: usernameError, variant: 'destructive' })
+      return
+    }
+
+    if (!formData.password.trim()) {
+      showToast({ title: 'Validation Error', description: 'Password is required', variant: 'destructive' })
+      return
+    }
+    const passwordError = validatePassword(formData.password)
+    if (passwordError) {
+      showToast({ title: 'Validation Error', description: passwordError, variant: 'destructive' })
+      return
+    }
+
     setIsCreating(true)
     try {
       const userData: CreateUserData = {
-        name: formData.name.trim(),
+        name: formData.name.trim().toLowerCase(),
         email: formData.email.trim(),
         userType: formData.userType,
         status: formData.status
@@ -135,13 +197,18 @@ export default function AdminUsersPage() {
 
       await adminService.users.createUser(userData)
 
+      // If verification is required and user is pending, trigger verification email
+      if (requireEmailVerification && formData.status === 'pending') {
+        try { await requestEmailVerification(formData.email.trim()) } catch (_) {}
+      }
+
       // Reset form
       setFormData({
         name: '',
         email: '',
         password: '',
         userType: 'user',
-        status: 'active'
+        status: requireEmailVerification ? 'pending' : 'active'
       })
       setIsModalOpen(false)
 
@@ -166,10 +233,23 @@ export default function AdminUsersPage() {
     e.preventDefault()
     if (!editingUser) return
 
+    const usernameError = validateUsername(formData.name)
+    if (usernameError) {
+      showToast({ title: 'Validation Error', description: usernameError, variant: 'destructive' })
+      return
+    }
+    if (formData.password.trim()) {
+      const passwordError = validatePassword(formData.password)
+      if (passwordError) {
+        showToast({ title: 'Validation Error', description: passwordError, variant: 'destructive' })
+        return
+      }
+    }
+
     setIsCreating(true)
     try {
       const userData: UpdateUserData = {
-        name: formData.name.trim(),
+        name: formData.name.trim().toLowerCase(),
         email: formData.email.trim(),
         userType: formData.userType,
         status: formData.status
@@ -231,7 +311,7 @@ export default function AdminUsersPage() {
       email: '',
       password: '',
       userType: 'user',
-      status: 'active'
+      status: requireEmailVerification ? 'pending' : 'active'
     })
     setIsModalOpen(true)
   }
@@ -429,7 +509,7 @@ export default function AdminUsersPage() {
                   id="name"
                   type="text"
                   value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value.toLowerCase().replace(/\s+/g, '') }))}
                   placeholder="Enter username"
                   disabled={isCreating}
                   required
@@ -467,7 +547,7 @@ export default function AdminUsersPage() {
                 />
                 {!editingUser && (
                   <p className="text-xs text-muted-foreground mt-1">
-                    Must be at least 8 characters long
+                    Must satisfy: {passwordHint()}
                   </p>
                 )}
               </div>
