@@ -175,6 +175,11 @@ export default function AdminUsersPage() {
         status: formData.status
       }
 
+      // Only reset password if provided
+      if (formData.password.trim()) {
+        userData.password = formData.password
+      }
+
       await adminService.users.updateUser(editingUser.id, userData)
 
       setEditingUser(null)

@@ -23,6 +23,7 @@ export interface CreateUserData {
 export interface UpdateUserData {
   name?: string;
   email?: string;
+  password?: string;
   userType?: 'user' | 'admin';
   status?: 'active' | 'inactive' | 'pending' | 'deleted';
 }
