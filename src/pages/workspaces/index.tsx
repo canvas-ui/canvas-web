@@ -467,7 +467,8 @@ function OpenSharedResource() {
     setIsOpening(true)
     try {
       // Navigate to shared viewer to keep UI minimal and reusable
-      const q = new URLSearchParams({ url: url.trim(), token: token.trim() }).toString()
+      sessionStorage.setItem('sharedToken:last', token.trim())
+      const q = new URLSearchParams({ url: url.trim() }).toString()
       window.location.href = `/shared?${q}`
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to open shared resource', variant: 'destructive' })

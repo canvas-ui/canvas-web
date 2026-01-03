@@ -21,10 +21,13 @@ interface Workspace {
   name: string
   description: string
   owner: string
+  ownerEmail?: string
   createdAt: string
   updatedAt: string
   status: 'available' | 'not_found' | 'error' | 'active' | 'inactive' | 'removed' | 'destroyed'
   type?: string
+  isShared?: boolean
+  sharedVia?: any
   color?: string
   label?: string
   acl: {

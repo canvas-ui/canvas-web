@@ -29,6 +29,8 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onD
   const isUniverse = workspace.type === 'universe' || workspace.name === 'universe';
   const isError = workspace.status === 'error';
   const isNotFound = workspace.status === 'not_found';
+  const isShared = (workspace as any).isShared === true || workspace.type === 'shared';
+  const sharedFrom = (workspace as any).ownerEmail || workspace.owner;
 
   const borderColorClass = workspace.color ? '' : 'border-slate-300'; // Default border color
   const borderStyle = workspace.color ? { borderLeftColor: workspace.color, borderLeftWidth: '4px' } : { borderLeftWidth: '4px' };
@@ -77,7 +79,9 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onD
         <div className="flex items-center justify-between">
           <div>
             <CardTitle>{workspace.label || workspace.name}</CardTitle>
-            <CardDescription>{workspace.description}</CardDescription>
+            <CardDescription>
+              {isShared ? `Shared from ${sharedFrom}` : (workspace.description || '')}
+            </CardDescription>
           </div>
           <div className="flex items-center gap-2">
             {!isActive ? (
@@ -178,6 +182,11 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onD
           {isUniverse && (
             <span className="ml-2 rounded-full bg-primary/10 px-2 py-1 text-xs text-primary">
               Universe
+            </span>
+          )}
+          {isShared && (
+            <span className="ml-2 rounded-full bg-blue-500/10 px-2 py-1 text-xs text-blue-700">
+              Shared
             </span>
           )}
         </div>

@@ -25,7 +25,7 @@ export default function SharedViewerPage() {
 
   const initialUrlRaw = params.get('url') || ''
   const initialUrl = normalizeResourceUrl(initialUrlRaw)
-  const initialToken = params.get('token') || ''
+  const initialToken = sessionStorage.getItem('sharedToken:last') || ''
 
   const [resourceUrl, setResourceUrl] = useState(initialUrl)
   const [token, setToken] = useState(initialToken)
@@ -42,10 +42,7 @@ export default function SharedViewerPage() {
     } catch { return 'unknown' }
   }, [resourceUrl])
 
-  const buildWithToken = (base: string) => {
-    const hasQuery = base.includes('?')
-    return `${base}${hasQuery ? '&' : '?'}token=${encodeURIComponent(token)}`
-  }
+  const authHeaders = () => ({ Authorization: `Bearer ${token.trim()}` })
 
   const load = async () => {
     if (!resourceUrl || !token) return
@@ -53,10 +50,10 @@ export default function SharedViewerPage() {
     try {
       const normalized = normalizeResourceUrl(resourceUrl)
       // Fetch meta
-      const metaResp = await api.get<any>(buildWithToken(normalized), { skipAuth: true })
+      const metaResp = await api.get<any>(normalized, { skipAuth: true, headers: authHeaders() })
       setMeta(metaResp.payload || metaResp)
       // Fetch documents
-      const docsResp = await api.get<any>(buildWithToken(`${normalized}/documents`), { skipAuth: true })
+      const docsResp = await api.get<any>(`${normalized}/documents`, { skipAuth: true, headers: authHeaders() })
       const list = (docsResp.payload && Array.isArray(docsResp.payload.data)) ? docsResp.payload.data : (Array.isArray(docsResp.payload) ? docsResp.payload : docsResp.data || [])
       setDocuments(Array.isArray(list) ? list : [])
     } catch (err) {

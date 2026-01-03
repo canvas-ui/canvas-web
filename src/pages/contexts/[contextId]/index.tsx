@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast-container';
 import { Save, Share, X, Plus, Settings, Info, Sidebar } from 'lucide-react';
 import { ContextTokenManager } from '@/components/context/token-manager';
-import { getContext, getSharedContext, updateContextUrl, grantContextAccess, revokeContextAccess, getContextTree, getContextDocuments, getSharedContextDocuments, removeDocumentsFromContext, deleteDocumentsFromContext, pasteDocumentsToContext, importDocumentsToContext } from '@/services/context';
+import { getContext, updateContextUrl, grantContextAccess, revokeContextAccess, getContextTree, getContextDocuments, removeDocumentsFromContext, deleteDocumentsFromContext, pasteDocumentsToContext, importDocumentsToContext } from '@/services/context';
 import { renameWorkspaceLayer } from '@/services/workspace';
 import socketService from '@/lib/socket';
 import { getCurrentUserFromToken } from '@/services/auth';
@@ -89,9 +89,10 @@ interface ContextDocument {
 }
 
 export default function ContextDetailPage() {
-  const { contextId, userId } = useParams<{ contextId: string; userId?: string }>();
+  const { contextId } = useParams<{ contextId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
+  const ownerId = new URLSearchParams(location.search).get('ownerId') || undefined;
   const [context, setContext] = useState<ContextData | null>(null);
   const [tree, setTree] = useState<TreeNode | null>(null);
   const [workspaceDocuments, setWorkspaceDocuments] = useState<WorkspaceDocument[]>([]);
@@ -146,8 +147,7 @@ export default function ContextDetailPage() {
   const currentUser = getCurrentUserFromToken();
   const isOwner = currentUser && context && currentUser.id === context.userId;
 
-  // Check if this is a shared context route
-  const isSharedContext = Boolean(userId);
+  const isSharedContext = Boolean(ownerId);
 
   // Initialize filters from URL and sync changes
   useEffect(() => {
@@ -170,7 +170,7 @@ export default function ContextDetailPage() {
     if (!contextId) return;
 
     const filters = newFilters || urlFilters;
-    const newUrl = buildContextUrl(contextId, userId, filters);
+    const newUrl = buildContextUrl(contextId, filters);
 
     // Only navigate if URL is different
     if (newUrl !== location.pathname + location.search) {
@@ -214,7 +214,7 @@ export default function ContextDetailPage() {
     setIsLoadingTree(true);
     try {
       console.log(`Fetching context tree for contextId: ${contextId}`);
-      const treeData = await getContextTree(contextId);
+      const treeData = await getContextTree(contextId, ownerId);
       console.log('Context tree fetched:', treeData);
 
       if (treeData) {
@@ -341,15 +341,10 @@ export default function ContextDetailPage() {
       });
 
       // Use REST API to get documents with filters and pagination
-      const documentsData = isSharedContext && userId
-        ? await getSharedContextDocuments(userId, contextId, featureArray, [], {
+      const documentsData = await getContextDocuments(contextId, featureArray, [], {
             limit: pageSize,
             page: currentPage
-          })
-        : await getContextDocuments(contextId, featureArray, [], {
-            limit: pageSize,
-            page: currentPage
-          });
+          }, ownerId);
 
       setWorkspaceDocuments(convertToWorkspaceDocuments(documentsData));
       setDocumentsTotalCount(documentsData.totalCount || documentsData.count || documentsData.length);
@@ -365,15 +360,15 @@ export default function ContextDetailPage() {
     } finally {
       setIsLoadingDocuments(false);
     }
-  }, [contextId, activeFilters, customBitmaps, urlFilters, userId, isSharedContext, currentPage, pageSize]);
+  }, [contextId, activeFilters, customBitmaps, urlFilters, ownerId, isSharedContext, currentPage, pageSize]);
 
   // Fetch context details
   const fetchContextDetails = useCallback(async () => {
     if (!contextId) return;
     setIsLoading(true);
     try {
-      const fetchedContext = isSharedContext && userId
-        ? await getSharedContext(userId, contextId)
+      const fetchedContext = isSharedContext
+        ? await getContext(contextId, ownerId)
         : await getContext(contextId);
 
       if (!fetchedContext) {
@@ -432,7 +427,7 @@ export default function ContextDetailPage() {
       });
     }
     setIsLoading(false);
-  }, [contextId, userId, isSharedContext]);
+  }, [contextId, ownerId, isSharedContext]);
   // Resolve user IDs in ACL to emails for display (best effort)
   useEffect(() => {
     const resolveAclEmails = async () => {
@@ -480,7 +475,7 @@ export default function ContextDetailPage() {
   useEffect(() => {
     if (!context || !contextId) return;
     fetchDocuments();
-  }, [context?.id, activeFilters, customBitmaps, contextId, userId, isSharedContext, fetchDocuments]);
+  }, [context?.id, activeFilters, customBitmaps, contextId, ownerId, isSharedContext, fetchDocuments]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -686,7 +681,7 @@ export default function ContextDetailPage() {
     if (!context) return;
 
     try {
-      await removeDocumentsFromContext(context.id, [documentId]);
+      await removeDocumentsFromContext(context.id, [documentId], ownerId);
 
       // Update local state instead of refetching
       setWorkspaceDocuments(prev => prev.filter(doc => doc.id !== documentId));
@@ -711,7 +706,7 @@ export default function ContextDetailPage() {
     if (!context) return;
 
     try {
-      await deleteDocumentsFromContext(context.id, [documentId]);
+      await deleteDocumentsFromContext(context.id, [documentId], ownerId);
 
       // Update local state instead of refetching
       setWorkspaceDocuments(prev => prev.filter(doc => doc.id !== documentId));
@@ -744,7 +739,7 @@ export default function ContextDetailPage() {
   const handleRemoveDocuments = async (documentIds: number[]) => {
     if (!context) return;
     try {
-      await removeDocumentsFromContext(context.id, documentIds);
+      await removeDocumentsFromContext(context.id, documentIds, ownerId);
       // Update local state
       setWorkspaceDocuments(prev => prev.filter(doc => !documentIds.includes(doc.id)));
       setDocumentsTotalCount(prev => Math.max(0, prev - documentIds.length));
@@ -766,7 +761,7 @@ export default function ContextDetailPage() {
   const handleDeleteDocuments = async (documentIds: number[]) => {
     if (!context) return;
     try {
-      await deleteDocumentsFromContext(context.id, documentIds);
+      await deleteDocumentsFromContext(context.id, documentIds, ownerId);
       // Update local state
       setWorkspaceDocuments(prev => prev.filter(doc => !documentIds.includes(doc.id)));
       setDocumentsTotalCount(prev => Math.max(0, prev - documentIds.length));
@@ -788,7 +783,7 @@ export default function ContextDetailPage() {
   const handlePasteDocuments = async (path: string, documentIds: number[]): Promise<boolean> => {
     if (!context) return false;
     try {
-      const success = await pasteDocumentsToContext(context.id, path, documentIds);
+      const success = await pasteDocumentsToContext(context.id, path, documentIds, ownerId);
       if (success) {
         await fetchDocuments(); // Refresh documents
         setCopiedDocuments([]); // Clear copied documents
@@ -839,7 +834,7 @@ export default function ContextDetailPage() {
 
     setIsSaving(true);
     try {
-      const response = await updateContextUrl(context.id, editableUrl);
+      const response = await updateContextUrl(context.id, editableUrl, ownerId);
       let updatedContextData: ContextData | null = null;
 
       if ((response as any)?.payload?.context?.id && typeof (response as any)?.payload?.context?.url === 'string') {
@@ -954,7 +949,7 @@ export default function ContextDetailPage() {
 
     setIsSharing(true);
     try {
-      await grantContextAccess(context.userId, context.id, shareEmail.trim(), sharePermission);
+      await grantContextAccess(context.id, shareEmail.trim(), sharePermission);
 
       // Update state with new ACL format
       setContext(prev => {
@@ -1003,7 +998,7 @@ export default function ContextDetailPage() {
     if (!context) return;
 
     try {
-      await revokeContextAccess(context.userId, context.id, userEmail);
+      await revokeContextAccess(context.id, userEmail);
 
       setContext(prev => {
         if (!prev) return null;
@@ -1362,7 +1357,7 @@ export default function ContextDetailPage() {
                           <span className="text-xs font-medium">O</span>
                         </div>
                         <div>
-                          <div className="text-sm font-medium">{(isOwner && (currentUser?.email)) || ((userId && userId.includes('@')) ? userId : context.userId)}</div>
+                          <div className="text-sm font-medium">{(isOwner && (currentUser?.email)) || (ownerId || context.userId)}</div>
                           <div className="text-xs text-muted-foreground">Owner</div>
                         </div>
                       </div>

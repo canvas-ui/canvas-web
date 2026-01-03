@@ -66,12 +66,18 @@ function NavList({ title, items, type, isLoading, navigateTo, currentPath, class
         ) : (
           <div className="space-y-1 px-2">
             {items.map((item: any) => {
-               const path = type === 'contexts' ? `/contexts/${item.id}` : `/workspaces/${item.name}`;
+               const isShared = item?.isShared === true || item?.type === 'shared';
+               const path = type === 'contexts'
+                 ? (isShared ? `/contexts/${item.id}?ownerId=${encodeURIComponent(item.userId)}` : `/contexts/${item.id}`)
+                 : `/workspaces/${item.name}`;
                const isActive = currentPath === path;
                const isInactive = type === 'workspaces' && item.status !== 'active';
+               const secondary = type === 'contexts'
+                 ? (isShared ? `from ${item.ownerEmail || item.userId}` : '')
+                 : (isShared ? `from ${item.ownerEmail || item.owner}` : '');
                return (
                 <button
-                  key={item.id}
+                  key={type === 'contexts' ? `${item.userId || 'unknown'}-${item.id}` : (item.id || item.name)}
                   onClick={() => !isInactive && navigateTo(path)}
                   disabled={isInactive}
                   className={`w-full flex items-center text-left px-3 py-2 text-sm rounded-md transition-colors ${
@@ -82,7 +88,21 @@ function NavList({ title, items, type, isLoading, navigateTo, currentPath, class
                   title={type === 'contexts' ? item.id : `${item.label || item.name}${isInactive ? ' (inactive - start to access)' : ''}`}
                 >
                   {type === 'workspaces' && getWorkspaceStatusIndicator(item.status)}
-                  <span className="truncate">{type === 'contexts' ? item.id : (item.label || item.name)}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-2">
+                      <span className="truncate">{type === 'contexts' ? item.id : (item.label || item.name)}</span>
+                      {isShared && (
+                        <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] text-blue-700 shrink-0">
+                          Shared
+                        </span>
+                      )}
+                    </span>
+                    {secondary && (
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {secondary}
+                      </span>
+                    )}
+                  </span>
                 </button>
                )
             })}

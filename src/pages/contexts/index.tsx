@@ -15,7 +15,6 @@ import {
 import socketService from "@/lib/socket"
 import { listContexts, createContext, deleteContext } from "@/services/context"
 import { listWorkspaces } from "@/services/workspace"
-import { getCurrentUserFromToken } from "@/services/auth"
 import { logAndExtractError } from "@/lib/error-utils"
 
 // Using global Workspace type from types/api.d.ts
@@ -310,14 +309,8 @@ export default function ContextsPage() {
   }
 
   const handleOpenContext = (context: ContextEntry) => {
-    const currentUser = getCurrentUserFromToken()
-    const isSharedContext = currentUser && context.userId !== currentUser.id
-
-    if (isSharedContext) {
-      navigate(`/users/${context.userId}/contexts/${context.id}`)
-    } else {
-      navigate(`/contexts/${context.id}`)
-    }
+    const isShared = context.isShared || context.type === 'shared'
+    navigate(isShared ? `/contexts/${context.id}?ownerId=${encodeURIComponent(context.userId)}` : `/contexts/${context.id}`)
   }
 
   const handleEditContext = (context: ContextEntry) => {

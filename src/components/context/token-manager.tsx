@@ -7,7 +7,7 @@ import { api } from '@/lib/api'
 
 interface ContextToken {
   tokenHash: string
-  permissions: ('documentRead' | 'documentWrite' | 'documentReadWrite')[]
+  permissions: ('documentRead' | 'documentAppend' | 'documentWrite' | 'documentReadWrite')[]
   description: string
   createdAt: string
   expiresAt: string | null
@@ -25,7 +25,7 @@ export function ContextTokenManager({ contextId }: ContextTokenManagerProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [isCreating, setIsCreating] = useState(false)
   const [newTokenDescription, setNewTokenDescription] = useState('')
-  const [newTokenPermissions, setNewTokenPermissions] = useState<('documentRead' | 'documentWrite' | 'documentReadWrite')[]>(['documentRead'])
+  const [newTokenPermissions, setNewTokenPermissions] = useState<('documentRead' | 'documentAppend' | 'documentWrite' | 'documentReadWrite')[]>(['documentRead'])
   const [newTokenExpiry, setNewTokenExpiry] = useState('')
   const [neverExpires, setNeverExpires] = useState(true)
   const [showNewTokenForm, setShowNewTokenForm] = useState(false)
@@ -157,7 +157,7 @@ export function ContextTokenManager({ contextId }: ContextTokenManagerProps) {
           <div>
             <label className="text-sm font-medium mb-2 block">Permissions</label>
             <div className="flex gap-2 flex-wrap">
-              {['documentRead', 'documentWrite', 'documentReadWrite'].map((permission) => (
+              {['documentRead', 'documentAppend', 'documentWrite', 'documentReadWrite'].map((permission) => (
                 <label key={permission} className="flex items-center gap-2">
                   <input
                     type="checkbox"

@@ -1,10 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useLocation } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast-container';
 import { Save, Share, X, Plus, Settings, Info, Sidebar } from 'lucide-react';
-import { getContext, getSharedContext, updateContextUrl, grantContextAccess, revokeContextAccess, getContextTree, getContextDocuments, getSharedContextDocuments, removeDocumentsFromContext, deleteDocumentsFromContext } from '@/services/context';
+import { getContext, updateContextUrl, grantContextAccess, revokeContextAccess, getContextTree, getContextDocuments, removeDocumentsFromContext, deleteDocumentsFromContext } from '@/services/context';
 import socketService from '@/lib/socket';
 import { getCurrentUserFromToken } from '@/services/auth';
 import { TreeView } from '@/components/common/tree-view';
@@ -85,7 +85,9 @@ interface ContextDocument {
 }
 
 export default function ContextDetailPage() {
-  const { contextId, userId } = useParams<{ contextId: string; userId?: string }>();
+  const { contextId } = useParams<{ contextId: string }>();
+  const location = useLocation();
+  const ownerId = new URLSearchParams(location.search).get('ownerId') || undefined;
   const [context, setContext] = useState<ContextData | null>(null);
   const [tree, setTree] = useState<TreeNode | null>(null);
   const [workspaceDocuments, setWorkspaceDocuments] = useState<WorkspaceDocument[]>([]);
@@ -127,8 +129,7 @@ export default function ContextDetailPage() {
   const currentUser = getCurrentUserFromToken();
   const isOwner = currentUser && context && currentUser.id === context.userId;
 
-  // Check if this is a shared context route
-  const isSharedContext = Boolean(userId);
+  const isSharedContext = Boolean(ownerId);
 
   // Close all right sidebars
   const closeAllRightSidebars = () => {
@@ -166,7 +167,7 @@ export default function ContextDetailPage() {
     setIsLoadingTree(true);
     try {
       console.log(`Fetching context tree for contextId: ${contextId}`);
-      const treeData = await getContextTree(contextId);
+      const treeData = await getContextTree(contextId, ownerId);
       console.log('Context tree fetched:', treeData);
 
       if (treeData) {
@@ -269,9 +270,7 @@ export default function ContextDetailPage() {
       featureArray.push(...customBitmaps);
 
       // Use REST API to get documents with filters
-      const documentsData = isSharedContext && userId
-        ? await getSharedContextDocuments(userId, contextId, featureArray, [], {})
-        : await getContextDocuments(contextId, featureArray, [], {});
+      const documentsData = await getContextDocuments(contextId, featureArray, [], {}, ownerId);
 
       setWorkspaceDocuments(convertToWorkspaceDocuments(documentsData));
       setDocumentsTotalCount(documentsData.length);
@@ -287,15 +286,15 @@ export default function ContextDetailPage() {
     } finally {
       setIsLoadingDocuments(false);
     }
-  }, [contextId, activeFilters, customBitmaps, userId, isSharedContext]);
+  }, [contextId, activeFilters, customBitmaps, ownerId, isSharedContext]);
 
   // Fetch context details
   const fetchContextDetails = useCallback(async () => {
     if (!contextId) return;
     setIsLoading(true);
     try {
-      const fetchedContext = isSharedContext && userId
-        ? await getSharedContext(userId, contextId)
+      const fetchedContext = isSharedContext
+        ? await getContext(contextId, ownerId)
         : await getContext(contextId);
 
       if (!fetchedContext) {
@@ -347,7 +346,7 @@ export default function ContextDetailPage() {
       });
     }
     setIsLoading(false);
-  }, [contextId, userId, isSharedContext]);
+  }, [contextId, ownerId, isSharedContext]);
 
   // Initial data fetch
   useEffect(() => {
@@ -358,7 +357,7 @@ export default function ContextDetailPage() {
   useEffect(() => {
     if (!context || !contextId) return;
     fetchDocuments();
-  }, [context?.id, activeFilters, customBitmaps, contextId, userId, isSharedContext, fetchDocuments]);
+  }, [context?.id, activeFilters, customBitmaps, contextId, ownerId, isSharedContext, fetchDocuments]);
 
   // Fetch tree when tree view opens
   useEffect(() => {
@@ -559,7 +558,7 @@ export default function ContextDetailPage() {
     if (!context) return;
 
     try {
-      await removeDocumentsFromContext(context.id, [documentId]);
+      await removeDocumentsFromContext(context.id, [documentId], ownerId);
 
       // Update local state instead of refetching
       setWorkspaceDocuments(prev => prev.filter(doc => doc.id !== documentId));
@@ -584,7 +583,7 @@ export default function ContextDetailPage() {
     if (!context) return;
 
     try {
-      await deleteDocumentsFromContext(context.id, [documentId]);
+      await deleteDocumentsFromContext(context.id, [documentId], ownerId);
 
       // Update local state instead of refetching
       setWorkspaceDocuments(prev => prev.filter(doc => doc.id !== documentId));
@@ -610,7 +609,7 @@ export default function ContextDetailPage() {
 
     setIsSaving(true);
     try {
-      const response = await updateContextUrl(context.id, editableUrl);
+      const response = await updateContextUrl(context.id, editableUrl, ownerId);
       let updatedContextData: ContextData | null = null;
 
       if ((response as any)?.payload?.context?.id && typeof (response as any)?.payload?.context?.url === 'string') {
@@ -713,7 +712,7 @@ export default function ContextDetailPage() {
 
     setIsSharing(true);
     try {
-      await grantContextAccess(context.userId, context.id, shareEmail.trim(), sharePermission);
+      await grantContextAccess(context.id, shareEmail.trim(), sharePermission);
 
       setContext(prev => prev ? {
         ...prev,
@@ -745,7 +744,7 @@ export default function ContextDetailPage() {
     if (!context) return;
 
     try {
-      await revokeContextAccess(context.userId, context.id, userEmail);
+      await revokeContextAccess(context.id, userEmail);
 
       setContext(prev => {
         if (!prev) return null;

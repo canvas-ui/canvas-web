@@ -81,8 +81,8 @@ export function buildWorkspaceUrl(workspaceName: string, path: string, filters?:
 /**
  * Build context URL with filters
  */
-export function buildContextUrl(contextId: string, userId?: string, filters?: UrlFilters): string {
-  const basePath = userId ? `/users/${userId}/contexts/${contextId}` : `/contexts/${contextId}`;
+export function buildContextUrl(contextId: string, filters?: UrlFilters): string {
+  const basePath = `/contexts/${contextId}`;
 
   if (!filters || (filters.features.length === 0 && filters.filters.length === 0)) {
     return basePath;
