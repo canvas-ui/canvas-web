@@ -612,6 +612,7 @@ export default function WorkspaceDetailPage() {
         title: 'Success',
         description: 'Workspace started successfully'
       });
+      window.dispatchEvent(new CustomEvent('workspaces:refresh'))
       // Refresh tree and documents
       await fetchTree();
       await fetchDocuments();
@@ -637,6 +638,7 @@ export default function WorkspaceDetailPage() {
         title: 'Success',
         description: 'Workspace stopped successfully'
       });
+      window.dispatchEvent(new CustomEvent('workspaces:refresh'))
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to stop workspace';
       showToast({

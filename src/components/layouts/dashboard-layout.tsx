@@ -177,6 +177,21 @@ function DashboardSidebar() {
     }
   }, [isLoadingContexts])
 
+  const fetchWorkspaces = useCallback(async () => {
+    if (isLoadingWorkspaces) return
+    setIsLoadingWorkspaces(true)
+    try {
+      const data = await listWorkspaces()
+      setWorkspaces(data || [])
+      setHasFetchedWorkspaces(true)
+    } catch (err) {
+      console.error('Failed to fetch workspaces:', err)
+      setHasFetchedWorkspaces(true)
+    } finally {
+      setIsLoadingWorkspaces(false)
+    }
+  }, [isLoadingWorkspaces])
+
   useEffect(() => {
     if (isContextsActive && !hasFetchedContexts) {
       fetchContexts()
@@ -252,22 +267,70 @@ function DashboardSidebar() {
     return () => window.removeEventListener('contexts:refresh', handleRefresh)
   }, [])
 
-  // Fetch workspaces when active
   useEffect(() => {
-    if (isWorkspacesActive && !hasFetchedWorkspaces && !isLoadingWorkspaces) {
-      setIsLoadingWorkspaces(true)
-      listWorkspaces()
-        .then(data => {
-          setWorkspaces(data || [])
-          setHasFetchedWorkspaces(true)
-        })
-        .catch(err => {
-          console.error('Failed to fetch workspaces:', err)
-          setHasFetchedWorkspaces(true)
-        })
-        .finally(() => setIsLoadingWorkspaces(false))
+    if (isWorkspacesActive && !hasFetchedWorkspaces) {
+      fetchWorkspaces()
     }
-  }, [isWorkspacesActive, hasFetchedWorkspaces, isLoadingWorkspaces])
+  }, [isWorkspacesActive, hasFetchedWorkspaces, fetchWorkspaces])
+
+  // Keep workspace status in sidebar up to date
+  useEffect(() => {
+    if (!isWorkspacesActive) return
+
+    const subscribe = () => socketService.emit('subscribe', { channel: 'workspace' })
+    const unsubscribe = () => socketService.emit('unsubscribe', { channel: 'workspace' })
+    const offConnect = socketService.on('connect', subscribe)
+
+    subscribe()
+
+    const handleWorkspaceStatusChanged = (data: any) => {
+      const workspaceId = data?.workspaceId ?? data?.id
+      const status = data?.status
+      if (!workspaceId || !status) return
+      setWorkspaces(prev => prev.map(ws => ws?.id === workspaceId ? { ...ws, status } : ws))
+    }
+
+    const handleWorkspaceCreated = (data: any) => {
+      const ws = data?.workspace ?? data
+      if (!ws?.id) return
+      setWorkspaces(prev => {
+        if (prev.some((w) => w?.id === ws.id)) return prev
+        return [...prev, ws]
+      })
+    }
+
+    const handleWorkspaceDeleted = (data: any) => {
+      const workspaceId = data?.workspaceId ?? data?.id
+      if (!workspaceId) return
+      setWorkspaces(prev => prev.filter(ws => ws?.id !== workspaceId))
+    }
+
+    const workspaceEventMap: Array<[string, Function]> = [
+      ['workspace:status:changed', handleWorkspaceStatusChanged],
+      ['workspace.status.changed', handleWorkspaceStatusChanged],
+      ['workspace:created', handleWorkspaceCreated],
+      ['workspace.created', handleWorkspaceCreated],
+      ['workspace:deleted', handleWorkspaceDeleted],
+      ['workspace.deleted', handleWorkspaceDeleted],
+    ]
+
+    workspaceEventMap.forEach(([event, handler]) => socketService.on(event, handler))
+
+    return () => {
+      unsubscribe()
+      offConnect?.()
+      workspaceEventMap.forEach(([event, handler]) => socketService.off(event, handler))
+    }
+  }, [isWorkspacesActive])
+
+  // Manual refresh fallback (when sockets are unreliable)
+  useEffect(() => {
+    const handleRefresh = () => {
+      setHasFetchedWorkspaces(false)
+    }
+    window.addEventListener('workspaces:refresh', handleRefresh)
+    return () => window.removeEventListener('workspaces:refresh', handleRefresh)
+  }, [])
 
   const handleLogout = async () => {
     try {

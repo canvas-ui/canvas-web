@@ -205,6 +205,7 @@ export default function WorkspacesPage() {
         title: 'Success',
         description: `Workspace '${updatedWorkspace.label || updatedWorkspace.name}' started.`
       })
+      window.dispatchEvent(new CustomEvent('workspaces:refresh'))
     } catch (err) {
       console.error('Workspace start error:', err);
 
@@ -241,6 +242,7 @@ export default function WorkspacesPage() {
         title: 'Success',
         description: `Workspace '${updatedWorkspace.label || updatedWorkspace.name}' stopped.`
       })
+      window.dispatchEvent(new CustomEvent('workspaces:refresh'))
     } catch (err) {
       console.error('Workspace stop error:', err);
 
