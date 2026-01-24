@@ -21,9 +21,6 @@ class SocketService {
   private registeredHandlers: Set<string> = new Set() // Track what's been registered to prevent duplicates
   private baseUrl: string
   private connectionId: string = '';
-  private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
-  private heartbeatTimeout: ReturnType<typeof setTimeout> | null = null;
-  private lastPongTime: number = 0;
 
   constructor() {
     // Use the WS_URL directly from config
@@ -115,61 +112,6 @@ class SocketService {
 
     // Clear registered handlers tracking
     this.registeredHandlers.clear();
-    this.stopHeartbeat();
-  }
-
-  private startHeartbeat() {
-    // Stop existing heartbeat if it exists
-    this.stopHeartbeat();
-
-    // Set up new heartbeat
-    this.lastPongTime = Date.now();
-
-    this.heartbeatInterval = setInterval(() => {
-      if (!this.socket || !this.connected) {
-        this.stopHeartbeat();
-        return;
-      }
-
-      // Check if we haven't received a pong in too long
-      if (Date.now() - this.lastPongTime > 30000) { // 30 seconds
-        console.warn('No pong received for 30 seconds, reconnecting socket');
-        this.reconnect();
-        return;
-      }
-
-      try {
-        // Send ping and set timeout for pong
-        this.socket.emit('ping');
-
-        // Set timeout to check for pong response
-        if (this.heartbeatTimeout) {
-          clearTimeout(this.heartbeatTimeout);
-        }
-
-        this.heartbeatTimeout = setTimeout(() => {
-          if (this.connected) {
-            console.warn('Ping timeout, reconnecting socket');
-            this.reconnect();
-          }
-        }, 5000); // 5 second timeout for pong
-      } catch (e) {
-        console.error('Error sending heartbeat:', e);
-        this.reconnect();
-      }
-    }, 15000); // Send ping every 15 seconds
-  }
-
-  private stopHeartbeat() {
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
-    }
-
-    if (this.heartbeatTimeout) {
-      clearTimeout(this.heartbeatTimeout);
-      this.heartbeatTimeout = null;
-    }
   }
 
   private setupDefaultHandlers() {
@@ -184,9 +126,6 @@ class SocketService {
 
       // Register any pending handlers
       this.registerHandlers()
-
-      // Start heartbeat to detect broken connections
-      this.startHeartbeat()
     })
 
     this.socket.on('disconnect', (reason: string) => {
@@ -199,9 +138,6 @@ class SocketService {
       });
       this.connected = false
       this.pending = false
-
-      // Stop heartbeat
-      this.stopHeartbeat()
 
       // Handle reconnection for transport close (which often happens when an extension is removed)
       if (reason === 'transport close' && this.reconnectAttempts < this.maxReconnectAttempts) {
@@ -229,9 +165,6 @@ class SocketService {
       console.error('🔍 DEBUG: Full error object:', error)
       this.connected = false
       this.pending = false
-
-      // Stop heartbeat on connection error
-      this.stopHeartbeat()
     })
 
     this.socket.on('error', (error: any) => {
@@ -241,15 +174,6 @@ class SocketService {
     // Add handler for authenticated event
     this.socket.on('authenticated', (data: any) => {
       console.log('Socket authenticated:', data)
-    })
-
-    // Add handler for pong
-    this.socket.on('pong', () => {
-      this.lastPongTime = Date.now()
-      if (this.heartbeatTimeout) {
-        clearTimeout(this.heartbeatTimeout)
-        this.heartbeatTimeout = null
-      }
     })
 
     // Add handler for connection change events
@@ -358,7 +282,6 @@ class SocketService {
 
   // Disconnect socket
   disconnect() {
-    this.stopHeartbeat()
     if (this.socket) {
       this.socket.disconnect()
       this.socket = null
