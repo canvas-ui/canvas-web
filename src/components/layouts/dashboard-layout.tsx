@@ -186,13 +186,12 @@ function DashboardSidebar() {
   // Listen to socket events for context updates
   useEffect(() => {
     if (!isContextsActive) return
+    const subscribe = () => socketService.emit('subscribe', { channel: 'context' })
+    const unsubscribe = () => socketService.emit('unsubscribe', { channel: 'context' })
 
-    if (!socketService.isConnected()) {
-      socketService.reconnect()
-      return
-    }
-
-    socketService.emit('subscribe', { channel: 'context' })
+    // Subscribe immediately (and also after (re)connect)
+    const offConnect = socketService.on('connect', subscribe)
+    subscribe()
 
     const handleContextCreated = (data: any) => {
       if (!data || !data.id || !data.userId) return
@@ -211,8 +210,9 @@ function DashboardSidebar() {
     }
 
     const handleContextDeleted = (data: { contextId: string }) => {
-      if (!data || !data.contextId) return
-      setContexts(prev => prev.filter(ctx => ctx && ctx.id !== data.contextId))
+      const contextId = (data as any)?.contextId ?? (data as any)?.id
+      if (!contextId) return
+      setContexts(prev => prev.filter(ctx => ctx && ctx.id !== contextId))
     }
 
     const handleContextUrlChanged = (data: any) => {
@@ -222,17 +222,24 @@ function DashboardSidebar() {
       ))
     }
 
-    socketService.on('context:created', handleContextCreated)
-    socketService.on('context:updated', handleContextUpdated)
-    socketService.on('context:deleted', handleContextDeleted)
-    socketService.on('context:url:changed', handleContextUrlChanged)
+    // Support both dot & colon notations (server has been inconsistent)
+    const contextEventMap: Array<[string, Function]> = [
+      ['context:created', handleContextCreated],
+      ['context.created', handleContextCreated],
+      ['context:updated', handleContextUpdated],
+      ['context.updated', handleContextUpdated],
+      ['context:deleted', handleContextDeleted],
+      ['context.deleted', handleContextDeleted],
+      ['context:url:changed', handleContextUrlChanged],
+      ['context.url.set', handleContextUrlChanged],
+      ['context:url:set', handleContextUrlChanged],
+    ]
+    contextEventMap.forEach(([event, handler]) => socketService.on(event, handler))
 
     return () => {
-      socketService.emit('unsubscribe', { channel: 'context' })
-      socketService.off('context:created', handleContextCreated)
-      socketService.off('context:updated', handleContextUpdated)
-      socketService.off('context:deleted', handleContextDeleted)
-      socketService.off('context:url:changed', handleContextUrlChanged)
+      unsubscribe()
+      offConnect?.()
+      contextEventMap.forEach(([event, handler]) => socketService.off(event, handler))
     }
   }, [isContextsActive])
 
