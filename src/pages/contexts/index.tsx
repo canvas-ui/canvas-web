@@ -12,6 +12,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import socketService from "@/lib/socket"
 import { listContexts, createContext, deleteContext } from "@/services/context"
 import { listWorkspaces } from "@/services/workspace"
@@ -59,6 +69,7 @@ export default function ContextsPage() {
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>("")
   const [isCreating, setIsCreating] = useState(false)
   const [editingContext, setEditingContext] = useState<ContextEntry | null>(null)
+  const [deletingContextId, setDeletingContextId] = useState<string | null>(null)
   const { showToast } = useToast()
 
   useEffect(() => {
@@ -240,6 +251,8 @@ export default function ContextsPage() {
       setNewContextUrl("/");
       setNewContextDescription("");
       setNewContextBaseUrl("/");
+      // Refresh the list to ensure it's up-to-date
+      await fetchData();
       showToast({
         title: 'Success',
         description: 'Context created successfully'
@@ -271,12 +284,18 @@ export default function ContextsPage() {
       return
     }
 
-    if (!confirm('Are you sure you want to delete this context? This action cannot be undone.')) {
-      return
-    }
+    setDeletingContextId(contextId)
+  }
+
+  const confirmDeleteContext = async () => {
+    if (!deletingContextId) return
+
     try {
-      await deleteContext(contextId)
-      setContexts(prev => prev.filter(ctx => ctx.id !== contextId))
+      await deleteContext(deletingContextId)
+      // Refresh the list to ensure it's up-to-date
+      await fetchData()
+      // Notify sidebar to refresh its list
+      window.dispatchEvent(new CustomEvent('contexts:refresh'))
       showToast({
         title: 'Success',
         description: 'Context deleted successfully'
@@ -305,6 +324,8 @@ export default function ContextsPage() {
         description: errorMessage,
         variant: 'destructive'
       })
+    } finally {
+      setDeletingContextId(null)
     }
   }
 
@@ -535,13 +556,14 @@ export default function ContextsPage() {
                           >
                             <DoorOpen className="h-4 w-4" />
                           </Button>
-                          {!isShared && !(context.url && (context.url.endsWith('/default') || context.url.includes('://default'))) && (
+                          {!isShared && (
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => handleDeleteContext(context.id)}
-                              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                              title="Delete Context"
+                              disabled={!!(context.url && (context.url.endsWith('/default') || context.url.includes('://default')))}
+                              className="text-destructive hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 disabled:cursor-not-allowed"
+                              title={context.url && (context.url.endsWith('/default') || context.url.includes('://default')) ? 'Cannot delete default context' : 'Delete Context'}
                             >
                               <Trash className="h-4 w-4" />
                             </Button>
@@ -616,6 +638,27 @@ export default function ContextsPage() {
           </form>
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deletingContextId !== null} onOpenChange={(open) => !open && setDeletingContextId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Context</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this context? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteContext}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

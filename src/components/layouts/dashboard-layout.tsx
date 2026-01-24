@@ -6,6 +6,7 @@ import { useToast } from "@/components/ui/toast-container"
 import { getCurrentUserFromToken } from "@/services/auth"
 import { listContexts } from "@/services/context"
 import { listWorkspaces } from "@/services/workspace"
+import socketService from "@/lib/socket"
 import {
   Sidebar,
   SidebarContent,
@@ -161,21 +162,88 @@ function DashboardSidebar() {
   }, [location.pathname])
 
   // Fetch contexts when active
-  useEffect(() => {
-    if (isContextsActive && !hasFetchedContexts && !isLoadingContexts) {
-      setIsLoadingContexts(true)
-      listContexts()
-        .then(data => {
-          setContexts(data || [])
-          setHasFetchedContexts(true)
-        })
-        .catch(err => {
-          console.error('Failed to fetch contexts:', err)
-          setHasFetchedContexts(true)
-        })
-        .finally(() => setIsLoadingContexts(false))
+  const fetchContexts = useCallback(async () => {
+    if (isLoadingContexts) return
+    setIsLoadingContexts(true)
+    try {
+      const data = await listContexts()
+      setContexts(data || [])
+      setHasFetchedContexts(true)
+    } catch (err) {
+      console.error('Failed to fetch contexts:', err)
+      setHasFetchedContexts(true)
+    } finally {
+      setIsLoadingContexts(false)
     }
-  }, [isContextsActive, hasFetchedContexts, isLoadingContexts])
+  }, [isLoadingContexts])
+
+  useEffect(() => {
+    if (isContextsActive && !hasFetchedContexts) {
+      fetchContexts()
+    }
+  }, [isContextsActive, hasFetchedContexts, fetchContexts])
+
+  // Listen to socket events for context updates
+  useEffect(() => {
+    if (!isContextsActive) return
+
+    if (!socketService.isConnected()) {
+      socketService.reconnect()
+      return
+    }
+
+    socketService.emit('subscribe', { channel: 'context' })
+
+    const handleContextCreated = (data: any) => {
+      if (!data || !data.id || !data.userId) return
+      setContexts(prev => {
+        const exists = prev.some(ctx => ctx && ctx.id === data.id && ctx.userId === data.userId)
+        if (exists) return prev
+        return [...prev, data]
+      })
+    }
+
+    const handleContextUpdated = (data: any) => {
+      if (!data || !data.id || !data.userId) return
+      setContexts(prev => prev.map(ctx =>
+        (ctx && ctx.id === data.id && ctx.userId === data.userId) ? { ...ctx, ...data } : ctx
+      ))
+    }
+
+    const handleContextDeleted = (data: { contextId: string }) => {
+      if (!data || !data.contextId) return
+      setContexts(prev => prev.filter(ctx => ctx && ctx.id !== data.contextId))
+    }
+
+    const handleContextUrlChanged = (data: any) => {
+      if (!data || !data.id || !data.userId) return
+      setContexts(prev => prev.map(ctx =>
+        (ctx && ctx.id === data.id && ctx.userId === data.userId) ? { ...ctx, ...data } : ctx
+      ))
+    }
+
+    socketService.on('context:created', handleContextCreated)
+    socketService.on('context:updated', handleContextUpdated)
+    socketService.on('context:deleted', handleContextDeleted)
+    socketService.on('context:url:changed', handleContextUrlChanged)
+
+    return () => {
+      socketService.emit('unsubscribe', { channel: 'context' })
+      socketService.off('context:created', handleContextCreated)
+      socketService.off('context:updated', handleContextUpdated)
+      socketService.off('context:deleted', handleContextDeleted)
+      socketService.off('context:url:changed', handleContextUrlChanged)
+    }
+  }, [isContextsActive])
+
+  // Listen for manual refresh events (fallback when socket events are unreliable)
+  useEffect(() => {
+    const handleRefresh = () => {
+      setHasFetchedContexts(false)
+    }
+    window.addEventListener('contexts:refresh', handleRefresh)
+    return () => window.removeEventListener('contexts:refresh', handleRefresh)
+  }, [])
 
   // Fetch workspaces when active
   useEffect(() => {
