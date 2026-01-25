@@ -26,6 +26,15 @@ const debounce = (func: Function, delay: number) => {
   };
 };
 
+function contextUrlToPath(url: string, workspaceName?: string): string {
+  if (!url || !workspaceName) return '/';
+  const prefix = `${workspaceName}://`;
+  if (!url.startsWith(prefix)) return '/';
+  const raw = url.slice(prefix.length);
+  const clean = raw.replace(/^\/+/, '').replace(/\/+$/, '');
+  return clean ? `/${clean}` : '/';
+}
+
 // Interface based on the GET /contexts and GET /contexts/:id API payloads
 interface ContextData {
   id: string;
@@ -385,6 +394,15 @@ export default function ContextDetailPage() {
       console.log('Context URL:', fetchedContext.url);
 
       // Convert Context to ContextData format
+      const workspaceId =
+        (fetchedContext as any).workspaceId ||
+        (typeof (fetchedContext as any).workspace === 'string' ? (fetchedContext as any).workspace : (fetchedContext as any).workspace?.id) ||
+        '';
+      const workspaceName =
+        (typeof (fetchedContext as any).workspaceName === 'string' ? (fetchedContext as any).workspaceName : undefined) ||
+        (typeof (fetchedContext as any).workspace === 'string' ? (fetchedContext as any).workspace : (fetchedContext as any).workspace?.name) ||
+        '';
+
       const contextData: ContextData = {
         id: fetchedContext.id,
         userId: fetchedContext.userId,
@@ -392,8 +410,8 @@ export default function ContextDetailPage() {
         baseUrl: fetchedContext.baseUrl || null,
         path: fetchedContext.path || null,
         pathArray: fetchedContext.pathArray || [],
-        workspaceId: fetchedContext.workspaceId || fetchedContext.workspace,
-        workspaceName: fetchedContext.workspaceName || fetchedContext.workspace,
+        workspaceId,
+        workspaceName,
         acl: (fetchedContext as any).acl || {},
         createdAt: fetchedContext.createdAt,
         updatedAt: fetchedContext.updatedAt,
@@ -409,6 +427,7 @@ export default function ContextDetailPage() {
 
       setContext(contextData);
       setEditableUrl(contextData.url);
+      setSelectedPath(contextUrlToPath(contextData.url, contextData.workspaceName));
       setError(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : `Failed to fetch context ${contextId}`;
@@ -681,7 +700,7 @@ export default function ContextDetailPage() {
     if (!context) return;
 
     try {
-      await removeDocumentsFromContext(context.id, [documentId], ownerId);
+      await removeDocumentsFromContext(context.id, [documentId], ownerId, selectedPath);
 
       // Update local state instead of refetching
       setWorkspaceDocuments(prev => prev.filter(doc => doc.id !== documentId));
@@ -706,7 +725,7 @@ export default function ContextDetailPage() {
     if (!context) return;
 
     try {
-      await deleteDocumentsFromContext(context.id, [documentId], ownerId);
+      await deleteDocumentsFromContext(context.id, [documentId], ownerId, selectedPath);
 
       // Update local state instead of refetching
       setWorkspaceDocuments(prev => prev.filter(doc => doc.id !== documentId));
@@ -739,7 +758,7 @@ export default function ContextDetailPage() {
   const handleRemoveDocuments = async (documentIds: number[]) => {
     if (!context) return;
     try {
-      await removeDocumentsFromContext(context.id, documentIds, ownerId);
+      await removeDocumentsFromContext(context.id, documentIds, ownerId, selectedPath);
       // Update local state
       setWorkspaceDocuments(prev => prev.filter(doc => !documentIds.includes(doc.id)));
       setDocumentsTotalCount(prev => Math.max(0, prev - documentIds.length));
@@ -761,7 +780,7 @@ export default function ContextDetailPage() {
   const handleDeleteDocuments = async (documentIds: number[]) => {
     if (!context) return;
     try {
-      await deleteDocumentsFromContext(context.id, documentIds, ownerId);
+      await deleteDocumentsFromContext(context.id, documentIds, ownerId, selectedPath);
       // Update local state
       setWorkspaceDocuments(prev => prev.filter(doc => !documentIds.includes(doc.id)));
       setDocumentsTotalCount(prev => Math.max(0, prev - documentIds.length));
@@ -857,6 +876,7 @@ export default function ContextDetailPage() {
       if (updatedContextData) {
         setContext(updatedContextData);
         setEditableUrl(updatedContextData.url);
+        setSelectedPath(contextUrlToPath(updatedContextData.url, (updatedContextData as any).workspaceName || context.workspaceName));
         // Only refetch documents if URL actually changed since this affects filtering
         fetchDocuments();
         showToast({

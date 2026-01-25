@@ -226,13 +226,22 @@ export async function getContextTree(id: string, ownerId?: string): Promise<any>
 }
 
 // Remove documents from a context (non-destructive, just unlink)
-export async function removeDocumentsFromContext(contextId: string, documentIds: (string|number)[] | string | number, ownerId?: string): Promise<{ message: string }> {
+export async function removeDocumentsFromContext(
+  contextId: string,
+  documentIds: (string | number)[] | string | number,
+  ownerId?: string,
+  contextSpec?: string
+): Promise<{ message: string }> {
   try {
     // Ensure documentIds is always an array
     const idsArray = Array.isArray(documentIds) ? documentIds : [documentIds];
 
+    const params = new URLSearchParams();
+    if (contextSpec && contextSpec !== '/') params.append('contextSpec', contextSpec);
+    const endpoint = `${API_ROUTES.contexts}/${contextId}/documents/remove${params.toString() ? `?${params.toString()}` : ''}`;
+
     const response = await api.delete<{ payload: string }>(
-        withOwnerId(`${API_ROUTES.contexts}/${contextId}/documents/remove`, ownerId),
+        withOwnerId(endpoint, ownerId),
         {
           body: JSON.stringify(idsArray),
           headers: { 'Content-Type': 'application/json' }
@@ -246,13 +255,22 @@ export async function removeDocumentsFromContext(contextId: string, documentIds:
 }
 
 // Permanently delete documents from DB (owner-only)
-export async function deleteDocumentsFromContext(contextId: string, documentIds: (string|number)[] | string | number, ownerId?: string): Promise<{ message: string }> {
+export async function deleteDocumentsFromContext(
+  contextId: string,
+  documentIds: (string | number)[] | string | number,
+  ownerId?: string,
+  contextSpec?: string
+): Promise<{ message: string }> {
   try {
     // Ensure documentIds is always an array
     const idsArray = Array.isArray(documentIds) ? documentIds : [documentIds];
 
+    const params = new URLSearchParams();
+    if (contextSpec && contextSpec !== '/') params.append('contextSpec', contextSpec);
+    const endpoint = `${API_ROUTES.contexts}/${contextId}/documents${params.toString() ? `?${params.toString()}` : ''}`;
+
     return await api.delete<{ message: string }>(
-      withOwnerId(`${API_ROUTES.contexts}/${contextId}/documents`, ownerId),
+      withOwnerId(endpoint, ownerId),
       {
         body: JSON.stringify(idsArray),
         headers: { 'Content-Type': 'application/json' }
