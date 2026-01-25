@@ -514,14 +514,11 @@ export default function ContextDetailPage() {
 
     const subscribe = () => {
       console.log(`📡 Subscribing to context events for context ${contextId}`);
-      // Support both subscription shapes (older web-ui used topic/id; newer uses channel)
-      socketService.emit('subscribe', { topic: 'context', id: contextId });
       socketService.emit('subscribe', { channel: `context:${contextId}` });
     };
 
     const unsubscribe = () => {
       console.log(`Unsubscribing from context events for context ${contextId}`);
-      socketService.emit('unsubscribe', { topic: 'context', id: contextId });
       socketService.emit('unsubscribe', { channel: `context:${contextId}` });
     };
 
@@ -529,10 +526,7 @@ export default function ContextDetailPage() {
     const offConnect = socketService.on('connect', subscribe);
     subscribe();
 
-    const onSubscriptionConfirmed = (data: any) => {
-      console.log('🔍 DEBUG: Subscription confirmed:', data);
-    };
-    socketService.on('subscription:confirmed', onSubscriptionConfirmed);
+    // NOTE: server acks subscriptions via `subscribed` / `unsubscribed` (not `subscription:confirmed`)
 
     // Event deduplication - track recent events to prevent duplicates
     const recentEvents = new Map<string, number>();
@@ -706,7 +700,6 @@ export default function ContextDetailPage() {
     // Cleanup function
     return () => {
       offConnect();
-      socketService.off('subscription:confirmed', onSubscriptionConfirmed);
       unsubscribe();
 
       // Clean up context event listeners
