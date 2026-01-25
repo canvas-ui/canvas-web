@@ -669,6 +669,16 @@ export default function ContextDetailPage() {
       }
     };
 
+    // Document events (these are the canonical signals for doc changes)
+    // Note: Context.insertDocumentArray emits `document.inserted` but NOT `context.updated`,
+    // so listening to document.* is required for reliable realtime updates.
+    const handleDocumentChanged = (data: any) => {
+      const id = data?.contextId || data?.id || data?.context?.id;
+      if (id !== contextId) return;
+      if (!shouldProcessEvent('document:changed', data)) return;
+      fetchDocuments();
+    };
+
     // Register context events (support both dot & colon notations)
     const contextEventMap = [
       ['context.updated', 'context:updated', handleContextUpdateReceived],
@@ -677,7 +687,15 @@ export default function ContextDetailPage() {
       ['context.unlocked', 'context:unlocked', handleContextLockStatusChanged],
       ['context.deleted', 'context:deleted', handleContextDeleted],
       ['context.acl.updated', 'context:acl:updated', handleContextAclUpdated],
-      ['context.acl.revoked', 'context:acl:revoked', handleContextAclRevoked]
+      ['context.acl.revoked', 'context:acl:revoked', handleContextAclRevoked],
+
+      // Document events (dot notation from core)
+      ['document.inserted', 'document.inserted', handleDocumentChanged],
+      ['document.updated', 'document.updated', handleDocumentChanged],
+      ['document.removed', 'document.removed', handleDocumentChanged],
+      ['document.removed.batch', 'document.removed.batch', handleDocumentChanged],
+      ['document.deleted', 'document.deleted', handleDocumentChanged],
+      ['document.deleted.batch', 'document.deleted.batch', handleDocumentChanged],
     ] as const;
 
     contextEventMap.forEach(([dotEvent, colonEvent, handler]) => {
