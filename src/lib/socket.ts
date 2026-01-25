@@ -17,8 +17,8 @@ class SocketService {
   private pending: boolean = false
   private reconnectAttempts: number = 0
   private maxReconnectAttempts: number = 5
-  private handlers: Map<string, Function[]> = new Map()
-  private registeredHandlers: Set<string> = new Set() // Track what's been registered to prevent duplicates
+  private handlers: Map<string, Set<Function>> = new Map()
+  private socketWrappers: Map<string, Map<Function, Function>> = new Map()
   private baseUrl: string
   private connectionId: string = '';
 
@@ -110,8 +110,8 @@ class SocketService {
       this.socket = null;
     }
 
-    // Clear registered handlers tracking
-    this.registeredHandlers.clear();
+    // Clear wrapper tracking (we keep handlers so they can be rebound on reconnect)
+    this.socketWrappers.clear();
   }
 
   private setupDefaultHandlers() {
@@ -139,8 +139,8 @@ class SocketService {
       this.connected = false
       this.pending = false
 
-      // Handle reconnection for transport close (which often happens when an extension is removed)
-      if (reason === 'transport close' && this.reconnectAttempts < this.maxReconnectAttempts) {
+      // Auto-reconnect on most disconnect reasons (except explicit client disconnect)
+      if (reason !== 'io client disconnect' && this.reconnectAttempts < this.maxReconnectAttempts) {
         console.log(`🔄 Attempting reconnection (${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`)
         this.reconnectAttempts++
         // Wait a bit before trying to reconnect
@@ -185,80 +185,60 @@ class SocketService {
   private registerHandlers() {
     if (!this.socket) return
 
-    // Register all pending handlers, but avoid duplicates
+    // Register all pending handlers
     this.handlers.forEach((callbacks, event) => {
-      callbacks.forEach((callback, index) => {
-        const handlerKey = `${event}:${index}`;
-
-        // Skip if this specific handler is already registered
-        if (this.registeredHandlers.has(handlerKey)) {
-          return;
-        }
-
-        this.socket?.on(event, (...args: any[]) => {
-          callback(...args)
-        });
-
-        this.registeredHandlers.add(handlerKey);
+      callbacks.forEach((callback) => {
+        this.attach(event, callback)
       })
     })
   }
 
+  private attach(event: string, callback: Function) {
+    if (!this.socket) return
+    let eventWrappers = this.socketWrappers.get(event)
+    if (!eventWrappers) {
+      eventWrappers = new Map()
+      this.socketWrappers.set(event, eventWrappers)
+    }
+    if (eventWrappers.has(callback)) return
+
+    const wrapper = (...args: any[]) => callback(...args)
+    eventWrappers.set(callback, wrapper)
+    this.socket.on(event, wrapper as any)
+  }
+
+  private detach(event: string, callback: Function) {
+    if (!this.socket) return
+    const eventWrappers = this.socketWrappers.get(event)
+    const wrapper = eventWrappers?.get(callback)
+    if (!wrapper) return
+    this.socket.off(event, wrapper as any)
+    eventWrappers?.delete(callback)
+    if (eventWrappers && eventWrappers.size === 0) {
+      this.socketWrappers.delete(event)
+    }
+  }
+
   // Add event handler
   on(event: string, callback: Function) {
-    if (!this.handlers.has(event)) {
-      this.handlers.set(event, [])
-    }
+    if (!this.handlers.has(event)) this.handlers.set(event, new Set())
+    const set = this.handlers.get(event)!
+    if (set.has(callback)) return () => this.off(event, callback)
+    set.add(callback)
 
-    const handlers = this.handlers.get(event)
-    if (handlers) {
-      // Check if this exact callback is already registered
-      if (handlers.indexOf(callback) === -1) {
-        handlers.push(callback)
-      } else {
-        console.warn(`Duplicate handler registration prevented for event: ${event}`);
-        return () => this.off(event, callback); // Return cleanup function anyway
-      }
-    }
-
-    // Register with socket if connected
-    if (this.socket && this.connected) {
-      const handlerKey = `${event}:${handlers!.length - 1}`;
-
-      // Only register if not already registered
-      if (!this.registeredHandlers.has(handlerKey)) {
-        this.socket.on(event, (...args: any[]) => {
-          callback(...args)
-        });
-        this.registeredHandlers.add(handlerKey);
-      }
-    }
+    if (this.socket && this.connected) this.attach(event, callback)
 
     return () => this.off(event, callback)
   }
 
   // Remove event handler
   off(event: string, callback: Function) {
-    const handlers = this.handlers.get(event)
-    if (handlers) {
-      const index = handlers.indexOf(callback)
-      if (index !== -1) {
-        handlers.splice(index, 1)
-
-        // Also remove from registered handlers tracking
-        const handlerKey = `${event}:${index}`;
-        this.registeredHandlers.delete(handlerKey);
-
-        // Clean up the Map entry if no handlers left
-        if (handlers.length === 0) {
-          this.handlers.delete(event);
-        }
-      }
-    }
-
-    // If socket is connected, we should also remove the listener from the socket
-    // However, Socket.IO doesn't provide a way to remove a specific wrapped function
-    // So we rely on the cleanupSocket() method during reconnections
+    const set = this.handlers.get(event)
+    if (!set) return
+    if (!set.has(callback)) return
+    set.delete(callback)
+    if (set.size === 0) this.handlers.delete(event)
+    this.detach(event, callback)
   }
 
   // Emit event to server
