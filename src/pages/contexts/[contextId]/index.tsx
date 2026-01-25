@@ -512,25 +512,27 @@ export default function ContextDetailPage() {
   useEffect(() => {
     if (!contextId) return;
 
-    // Debug: Check socket connection status
-    console.log(`🔍 DEBUG: WebSocket connection status:`, {
-      isConnected: socketService.isConnected(),
-      contextId: contextId
-    });
+    const subscribe = () => {
+      console.log(`📡 Subscribing to context events for context ${contextId}`);
+      // Support both subscription shapes (older web-ui used topic/id; newer uses channel)
+      socketService.emit('subscribe', { topic: 'context', id: contextId });
+      socketService.emit('subscribe', { channel: `context:${contextId}` });
+    };
 
-    if (!socketService.isConnected()) {
-      console.log('🔍 DEBUG: Socket not connected, attempting to reconnect...');
-      socketService.reconnect();
-      return;
-    }
+    const unsubscribe = () => {
+      console.log(`Unsubscribing from context events for context ${contextId}`);
+      socketService.emit('unsubscribe', { topic: 'context', id: contextId });
+      socketService.emit('unsubscribe', { channel: `context:${contextId}` });
+    };
 
-    console.log(`📡 Subscribing to context events for context ${contextId}`);
-    socketService.emit('subscribe', { channel: `context:${contextId}` });
+    // Subscribe now (emit() will auto-connect if needed), and resubscribe on reconnect.
+    const offConnect = socketService.on('connect', subscribe);
+    subscribe();
 
-    // Add a debug listener to verify subscription worked
-    socketService.on('subscription:confirmed', (data: any) => {
+    const onSubscriptionConfirmed = (data: any) => {
       console.log('🔍 DEBUG: Subscription confirmed:', data);
-    });
+    };
+    socketService.on('subscription:confirmed', onSubscriptionConfirmed);
 
     // Event deduplication - track recent events to prevent duplicates
     const recentEvents = new Map<string, number>();
@@ -553,7 +555,8 @@ export default function ContextDetailPage() {
       const now = Date.now();
 
       // Create unique key for this event based on type and relevant identifiers
-      let eventKey = `${eventType}:${data.contextId || contextId}`;
+      const ctxId = data?.id || data?.contextId || data?.context?.id || contextId;
+      let eventKey = `${eventType}:${ctxId}`;
       if (data.documentId) eventKey += `:doc:${data.documentId}`;
       if (data.documentIds?.length) eventKey += `:docs:${data.documentIds.sort().join(',')}`;
       if (data.operation) eventKey += `:op:${data.operation}`;
@@ -581,26 +584,31 @@ export default function ContextDetailPage() {
 
     // Context-specific events
     const handleContextUpdateReceived = (data: { context: Partial<ContextData> }) => {
-      if (data.context && data.context.id === contextId) {
-        if (!shouldProcessEvent('context:updated', data.context)) return;
+      const ctx = (data as any)?.context || (data as any);
+      if (ctx && (ctx.id === contextId || ctx.contextId === contextId)) {
+        if (!shouldProcessEvent('context:updated', ctx)) return;
 
         console.log('Context update event received:', data);
-        setContext(prev => prev ? { ...prev, ...data.context } as ContextData : null);
-        if (data.context.url) {
-          setEditableUrl(data.context.url);
+        setContext(prev => prev ? { ...prev, ...ctx } as ContextData : null);
+        if (ctx.url) {
+          setEditableUrl(ctx.url);
+          setSelectedPath(contextUrlToPath(ctx.url, context?.workspaceName));
         }
         // Context updates can affect document filtering, so refresh documents
         fetchDocuments();
       }
     };
 
-    const handleContextUrlChanged = (data: { id: string; url: string }) => {
-      if (data.id === contextId) {
+    const handleContextUrlChanged = (data: any) => {
+      const id = data?.id || data?.contextId || data?.context?.id;
+      const url = data?.url || data?.context?.url;
+      if (id === contextId && typeof url === 'string') {
         if (!shouldProcessEvent('context:url:changed', data)) return;
 
         console.log('Context URL changed event received:', data);
-        setContext(prev => prev ? { ...prev, url: data.url } : null);
-        setEditableUrl(data.url);
+        setContext(prev => prev ? { ...prev, url } : null);
+        setEditableUrl(url);
+        setSelectedPath(contextUrlToPath(url, context?.workspaceName));
         // URL change affects document filtering, so refresh documents
         fetchDocuments();
       }
@@ -679,8 +687,9 @@ export default function ContextDetailPage() {
 
     // Cleanup function
     return () => {
-      console.log(`Unsubscribing from context events for context ${contextId}`);
-      socketService.emit('unsubscribe', { channel: `context:${contextId}` });
+      offConnect();
+      socketService.off('subscription:confirmed', onSubscriptionConfirmed);
+      unsubscribe();
 
       // Clean up context event listeners
       contextEventMap.forEach(([dotEvent, colonEvent, handler]) => {
