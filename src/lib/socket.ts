@@ -19,6 +19,7 @@ class SocketService {
   private maxReconnectAttempts: number = 5
   private handlers: Map<string, Set<Function>> = new Map()
   private socketWrappers: Map<string, Map<Function, Function>> = new Map()
+  private desiredSubscriptions: Set<string> = new Set()
   private baseUrl: string
   private connectionId: string = '';
 
@@ -126,6 +127,16 @@ class SocketService {
 
       // Register any pending handlers
       this.registerHandlers()
+
+      // Re-subscribe to remembered channels after reconnect/server restart.
+      // Subscriptions are server-memory only; without this, reconnect "works" but no events arrive.
+      for (const channel of this.desiredSubscriptions) {
+        try {
+          this.socket?.emit('subscribe', { channel })
+        } catch (e) {
+          console.warn('Failed to re-subscribe to channel:', channel, e)
+        }
+      }
     })
 
     this.socket.on('disconnect', (reason: string) => {
@@ -243,6 +254,17 @@ class SocketService {
 
   // Emit event to server
   emit(event: string, ...args: any[]) {
+    // Track desired subscriptions so we can auto-resubscribe after reconnects.
+    if (event === 'subscribe') {
+      const payload = args?.[0]
+      const channel = payload?.channel
+      if (typeof channel === 'string' && channel) this.desiredSubscriptions.add(channel)
+    } else if (event === 'unsubscribe') {
+      const payload = args?.[0]
+      const channel = payload?.channel
+      if (typeof channel === 'string' && channel) this.desiredSubscriptions.delete(channel)
+    }
+
     if (this.socket && this.connected) {
       try {
         this.socket.emit(event, ...args)
@@ -268,6 +290,7 @@ class SocketService {
       this.connected = false
       this.pending = false
       this.reconnectAttempts = 0
+      this.desiredSubscriptions.clear()
     }
   }
 
