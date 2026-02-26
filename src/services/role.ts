@@ -133,17 +133,6 @@ export const roleService = {
   },
 
   /**
-   * Update role
-   */
-  async updateRole(roleId: string, updates: Partial<CreateRoleData>): Promise<Role> {
-    const response = await api.put<{ success: boolean; role: Role }>(
-      `${API_ROUTES.roles}/${roleId}`,
-      updates
-    );
-    return response.role;
-  },
-
-  /**
    * Delete role
    */
   async deleteRole(roleId: string, force: boolean = false): Promise<void> {

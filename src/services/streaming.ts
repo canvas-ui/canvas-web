@@ -143,7 +143,7 @@ export class AnthropicConnector {
     const { agentId, messageId, onMessage, onError, onComplete, signal } = options;
 
     try {
-      const response = await fetch(`${this.baseUrl}/chat`, {
+      const response = await fetch(`${this.baseUrl}/chat/stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -154,7 +154,6 @@ export class AnthropicConnector {
           message,
           agentId,
           messageId,
-          stream: true,
         }),
         signal,
       });

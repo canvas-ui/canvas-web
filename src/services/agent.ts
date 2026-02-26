@@ -273,10 +273,9 @@ export class AgentService {
     onComplete?: () => void
   ): Promise<void> {
     try {
-      await api.stream(`${API_URL}/agents/${agentId}/chat`, {
+      await api.stream(`${API_URL}/agents/${agentId}/chat/stream`, {
         message,
         messageId,
-        stream: true,
       }, {
         onChunk: (chunk: string) => {
           try {
@@ -561,13 +560,12 @@ export async function chatWithAgentStream(
 ): Promise<void> {
   const { onMessage, onError, onComplete, context, mcpContext, maxTokens, temperature } = options;
 
-  await api.stream(`${API_URL}/agents/${agentId}/chat`, {
+  await api.stream(`${API_URL}/agents/${agentId}/chat/stream`, {
     message,
     context,
     mcpContext,
     maxTokens,
     temperature,
-    stream: true
   }, {
     onChunk: (chunk: string) => {
       try {
@@ -623,7 +621,6 @@ export async function chatWithAgentFallback(
       mcpContext,
       maxTokens,
       temperature,
-      stream: false
     });
 
     if (onMessage) {

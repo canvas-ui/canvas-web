@@ -1,6 +1,6 @@
 import { API_ROUTES } from '@/config/api'
 import { api } from '@/lib/api'
-import { openWorkspace } from './workspace'
+import { startWorkspace } from './workspace'
 import socketService from '@/lib/socket'
 import { jwtDecode } from 'jwt-decode'
 
@@ -76,10 +76,10 @@ export async function loginUser(email: string, password: string, strategy: strin
 
       // After successful login, attempt to open the universe workspace immediately
       try {
-        console.log('Attempting to open universe workspace after login');
-        await openWorkspace('universe');
+        console.log('Attempting to start universe workspace after login');
+        await startWorkspace('universe');
       } catch (error) {
-        console.warn('Failed to automatically open universe workspace:', error);
+        console.warn('Failed to automatically start universe workspace:', error);
       }
 
       return response;
@@ -92,10 +92,10 @@ export async function loginUser(email: string, password: string, strategy: strin
       // Connect WebSocket after successful login
       socketService.connect(loginData.payload.token);
 
-      // After successful login, attempt to open the universe workspace immediately
+      // After successful login, attempt to start the universe workspace immediately
       try {
-        console.log('Attempting to open universe workspace after login');
-        await openWorkspace('universe');
+        console.log('Attempting to start universe workspace after login');
+        await startWorkspace('universe');
       } catch (error) {
         console.warn('Failed to automatically open universe workspace:', error);
       }

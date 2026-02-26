@@ -62,26 +62,6 @@ export async function stopWorkspace(id: string): Promise<Workspace> {
   }
 }
 
-// openWorkspace and closeWorkspace should also operate with the global Workspace type.
-export async function openWorkspace(id: string): Promise<Workspace> {
-  try {
-    const response = await api.post<{ payload: Workspace; message: string; status: string; statusCode: number }>(`${API_ROUTES.workspaces}/${id}/open`);
-    return response.payload;
-  } catch (error) {
-    console.error(`Failed to open workspace ${id}:`, error);
-    throw error;
-  }
-}
-
-export async function closeWorkspace(id: string): Promise<Workspace> {
-  try {
-    const response = await api.post<{ payload: Workspace; message: string; status: string; statusCode: number }>(`${API_ROUTES.workspaces}/${id}/close`);
-    return response.payload;
-  } catch (error) {
-    console.error('Failed to close workspace:', error);
-    throw error;
-  }
-}
 
 export async function removeWorkspace(id: string): Promise<Workspace> {
   try {
@@ -134,7 +114,7 @@ export async function getWorkspaceDocuments(
 
 export async function updateWorkspace(id: string, payload: Partial<CreateWorkspacePayload>): Promise<Workspace> {
   try {
-    const response = await api.put<{ payload: Workspace; message: string; status: string; statusCode: number }>(`${API_ROUTES.workspaces}/${id}`, payload);
+    const response = await api.patch<{ payload: Workspace; message: string; status: string; statusCode: number }>(`${API_ROUTES.workspaces}/${id}`, payload);
     return response.payload;
   } catch (error) {
     console.error('Failed to update workspace:', error);
