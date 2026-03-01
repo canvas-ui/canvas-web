@@ -818,8 +818,6 @@ export default function ContextDetailPage() {
                 onRenamePath={!isSharedContext ? handleRenamePath : undefined}
                 onMovePath={!isSharedContext ? treeOperations.movePath : undefined}
                 onCopyPath={!isSharedContext ? treeOperations.copyPath : undefined}
-                onMergeUp={!isSharedContext ? treeOperations.mergeUp : undefined}
-                onMergeDown={!isSharedContext ? treeOperations.mergeDown : undefined}
               />
             ) : (
               <div className="text-center text-muted-foreground text-sm">

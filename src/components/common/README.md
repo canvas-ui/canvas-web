@@ -72,8 +72,6 @@ const treeOperations = useTreeOperations({
   onRemovePath={treeOperations.removePath}
   onMovePath={treeOperations.movePath}
   onCopyPath={treeOperations.copyPath}
-  onMergeUp={treeOperations.mergeUp}
-  onMergeDown={treeOperations.mergeDown}
 />
 ```
 
@@ -111,8 +109,8 @@ The component integrates with the following tree API endpoints:
 - `DELETE /api/contexts/:id/tree/paths` - Remove path
 - `POST /api/contexts/:id/tree/paths/move` - Move path
 - `POST /api/contexts/:id/tree/paths/copy` - Copy path
-- `POST /api/contexts/:id/tree/paths/merge-up` - Merge up
-- `POST /api/contexts/:id/tree/paths/merge-down` - Merge down
+- `POST /api/contexts/:id/tree/layers/merge` - Merge layer bitmaps
+- `POST /api/contexts/:id/tree/layers/subtract` - Subtract layer bitmaps
 
 ## Props Reference
 
@@ -130,10 +128,8 @@ The component integrates with the following tree API endpoints:
 | `onRemovePath` | `(path: string, recursive?: boolean) => Promise<boolean>` | - | Remove path callback |
 | `onMovePath` | `(fromPath: string, toPath: string, recursive?: boolean) => Promise<boolean>` | - | Move path callback |
 | `onCopyPath` | `(fromPath: string, toPath: string, recursive?: boolean) => Promise<boolean>` | - | Copy path callback |
-| `onMergeUp` | `(path: string) => Promise<boolean>` | - | Merge up callback |
-| `onMergeDown` | `(path: string) => Promise<boolean>` | - | Merge down callback |
-| `onSubtractUp` | `(path: string) => Promise<boolean>` | - | Subtract up callback |
-| `onSubtractDown` | `(path: string) => Promise<boolean>` | - | Subtract down callback |
+| `onMergeLayer` | `(layerId: string, targetLayers: string[]) => Promise<any>` | - | Merge layer callback |
+| `onSubtractLayer` | `(layerId: string, targetLayers: string[]) => Promise<any>` | - | Subtract layer callback |
 
 ### useTreeOperations Hook
 
@@ -143,10 +139,8 @@ const {
   removePath,
   movePath,
   copyPath,
-  mergeUp,
-  mergeDown,
-  subtractUp,
-  subtractDown
+  mergeLayer,
+  subtractLayer
 } = useTreeOperations({
   contextId: string,
   onRefresh?: () => void

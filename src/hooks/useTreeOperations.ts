@@ -95,38 +95,6 @@ export function useTreeOperations({ contextId, workspaceId, onRefresh }: UseTree
     return true
   }, [apiCall])
 
-  const mergeUp = useCallback(async (path: string): Promise<boolean> => {
-    const result = await apiCall('POST', '/paths/merge-up', { path })
-    if (!result.success) {
-      throw new Error(result.message || 'Failed to merge up')
-    }
-    return true
-  }, [apiCall])
-
-  const mergeDown = useCallback(async (path: string): Promise<boolean> => {
-    const result = await apiCall('POST', '/paths/merge-down', { path })
-    if (!result.success) {
-      throw new Error(result.message || 'Failed to merge down')
-    }
-    return true
-  }, [apiCall])
-
-  const subtractUp = useCallback(async (path: string): Promise<boolean> => {
-    const result = await apiCall('POST', '/paths/subtract-up', { path })
-    if (!result.success) {
-      throw new Error(result.message || 'Failed to subtract up')
-    }
-    return true
-  }, [apiCall])
-
-  const subtractDown = useCallback(async (path: string): Promise<boolean> => {
-    const result = await apiCall('POST', '/paths/subtract-down', { path })
-    if (!result.success) {
-      throw new Error(result.message || 'Failed to subtract down')
-    }
-    return true
-  }, [apiCall])
-
   const mergeLayer = useCallback(async (layerId: string, targetLayers: string[]): Promise<any> => {
     const result = await apiCall('POST', '/layers/merge', { layerId, targetLayers })
     if (!result.success) {
@@ -148,10 +116,6 @@ export function useTreeOperations({ contextId, workspaceId, onRefresh }: UseTree
     removePath,
     movePath,
     copyPath,
-    mergeUp,
-    mergeDown,
-    subtractUp,
-    subtractDown,
     mergeLayer,
     subtractLayer
   }

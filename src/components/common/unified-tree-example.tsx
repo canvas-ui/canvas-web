@@ -55,8 +55,6 @@ export function UnifiedTreeExample({
       onRemovePath={treeOperations?.removePath}
       onMovePath={treeOperations?.movePath}
       onCopyPath={treeOperations?.copyPath}
-      onMergeUp={treeOperations?.mergeUp}
-      onMergeDown={treeOperations?.mergeDown}
     />
   )
 }
