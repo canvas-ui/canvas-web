@@ -36,6 +36,8 @@ interface DocumentListProps {
   pageSize?: number
   onPageChange?: (page: number) => void
   onPageSizeChange?: (pageSize: number) => void
+  onPurgeDocuments?: () => void
+  disablePurgeDocuments?: boolean
 }
 
 interface DocumentRowProps {
@@ -564,7 +566,7 @@ function DocumentRow({ document, isSelected, onSelect, onRemoveDocument, onDelet
   )
 }
 
-export function DocumentList({ documents, isLoading, contextPath, totalCount, onRemoveDocument, onDeleteDocument, onRemoveDocuments, onDeleteDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange }: DocumentListProps) {
+export function DocumentList({ documents, isLoading, contextPath, totalCount, onRemoveDocument, onDeleteDocument, onRemoveDocuments, onDeleteDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false }: DocumentListProps) {
   const [selectedDocuments, setSelectedDocuments] = useState<Set<number>>(new Set())
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; documentIds: number[] } | null>(null)
   const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null)
@@ -884,15 +886,29 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
               {selectedDocuments.size === filteredDocuments.length ? (
                 <>
                   <CheckSquare className="h-4 w-4" />
-                  Deselect All{searchQuery && ` (${filteredDocuments.length})`}
+                  Deselect Page{searchQuery && ` (${filteredDocuments.length})`}
                 </>
               ) : (
                 <>
                   <Square className="h-4 w-4" />
-                  Select All{searchQuery && ` (${filteredDocuments.length})`}
+                  Select Page{searchQuery && ` (${filteredDocuments.length})`}
                 </>
               )}
             </Button>
+
+            {onPurgeDocuments && totalCount > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onPurgeDocuments}
+                disabled={disablePurgeDocuments || Boolean(searchQuery)}
+                className="flex items-center gap-2 text-destructive hover:text-destructive-foreground hover:bg-destructive"
+                title={disablePurgeDocuments || searchQuery ? 'Purge is disabled while local search is active' : 'Delete all documents matching the current server-side filters across all pages'}
+              >
+                <Trash2 className="h-4 w-4" />
+                Purge All ({totalCount})
+              </Button>
+            )}
 
             {selectedDocuments.size > 0 && (
               <>

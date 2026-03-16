@@ -16,6 +16,7 @@ import {
   importDocumentsToWorkspacePath,
   removeWorkspaceDocuments,
   deleteWorkspaceDocuments,
+  purgeWorkspaceDocuments,
   listWorkspaceLayers,
   renameWorkspaceLayer,
   lockWorkspaceLayer,
@@ -592,6 +593,32 @@ export default function WorkspaceDetailPage() {
     }
   };
 
+  const handlePurgeDocuments = async () => {
+    if (!workspace || documentsTotalCount === 0) return;
+
+    const confirmation = window.prompt(`Type PURGE to permanently delete all ${documentsTotalCount} matching documents.`)
+    if (confirmation !== 'PURGE') {
+      return
+    }
+
+    try {
+      const allSchemas = [...selectedSchemas, ...urlFilters.features]
+      const result = await purgeWorkspaceDocuments(workspace.name, selectedPath, allSchemas, urlFilters.filters)
+      await fetchDocuments()
+      showToast({
+        title: 'Success',
+        description: `${result.deleted} document(s) purged from the workspace successfully.`
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to purge documents'
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      })
+    }
+  };
+
   // Pagination handlers
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -863,6 +890,7 @@ export default function WorkspaceDetailPage() {
           onDeleteDocument={handleDeleteDocument}
           onRemoveDocuments={selectedPath !== '/' ? handleRemoveDocuments : undefined}
           onDeleteDocuments={handleDeleteDocuments}
+          onPurgeDocuments={handlePurgeDocuments}
           onCopyDocuments={handleCopyDocuments}
           onCutDocuments={handleCutDocuments}
           onPasteDocuments={handlePasteDocuments}

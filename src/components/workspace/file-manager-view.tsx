@@ -64,6 +64,7 @@ interface FileManagerViewProps {
   onDeleteDocument?: (documentId: number) => void;
   onRemoveDocuments?: (documentIds: number[], fromPath?: string) => void;
   onDeleteDocuments?: (documentIds: number[]) => void;
+  onPurgeDocuments?: () => void;
   onCopyDocuments?: (documentIds: number[]) => void;
   onCutDocuments?: (documentIds: number[]) => void;
   onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>;
@@ -303,6 +304,7 @@ export function FileManagerView({
   onDeleteDocument,
   onRemoveDocuments,
   onDeleteDocuments,
+  onPurgeDocuments,
   onCopyDocuments,
   onCutDocuments,
   onPasteDocuments,
@@ -718,6 +720,7 @@ export function FileManagerView({
           onDeleteDocument={onDeleteDocument}
           onRemoveDocuments={selectedPath !== '/' ? onRemoveDocuments : undefined}
           onDeleteDocuments={onDeleteDocuments}
+          onPurgeDocuments={onPurgeDocuments}
           onCopyDocuments={handleCopyDocuments}
           onCutDocuments={handleCutDocuments}
           onPasteDocuments={handlePasteDocuments}

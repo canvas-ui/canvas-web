@@ -298,6 +298,22 @@ export async function deleteWorkspaceDocuments(
   return true
 }
 
+export async function purgeWorkspaceDocuments(
+  workspaceId: string,
+  contextSpec: string = '/',
+  featureArray: string[] = [],
+  filterArray: string[] = []
+): Promise<{ requested: number; deleted: number }> {
+  const params = new URLSearchParams()
+  if (contextSpec) params.append('contextSpec', contextSpec)
+  featureArray.forEach(f => params.append('featureArray', f))
+  filterArray.forEach(f => params.append('filterArray', f))
+  const response = await api.delete<{ payload: { requested: number; deleted: number } }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/documents/purge?${params.toString()}`
+  )
+  return response.payload
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // Workspace Services API
 // ─────────────────────────────────────────────────────────────────────────
