@@ -322,6 +322,7 @@ export interface WorkspaceImapMailbox {
   folder: string;
   mode: 'poll';
   pollInterval: number;
+  initialSyncDays: number;
   lastUid: number;
   lastSyncAt: string | null;
   lastError: string | null;
@@ -433,6 +434,7 @@ export interface WorkspaceImapMailboxInput {
   folder?: string;
   mode?: 'poll';
   pollInterval?: number;
+  initialSyncDays?: number;
   lastUid?: number;
 }
 

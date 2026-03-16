@@ -1,6 +1,7 @@
 import { Document } from '@/types/workspace'
-import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2 } from 'lucide-react'
+import { File, Calendar, Hash, Eye, ExternalLink, Globe, Mail, X, Trash2 } from 'lucide-react'
 import { useState } from 'react'
+import { getDocumentDisplayInfo } from '@/lib/document-display'
 
 interface DocumentListProps {
   documents: Document[]
@@ -189,34 +190,7 @@ function DocumentRow({ document, onRemoveDocument, onDeleteDocument }: DocumentR
   // Check if this is a tab document
   const isTabDocument = document.schema === 'data/abstraction/tab'
   const tabUrl = isTabDocument ? document.data.url : null
-
-  // Extract the main title/content fields from document data
-  const getDisplayTitle = () => {
-    if (document.data.title) return document.data.title
-    if (document.data.name) return document.data.name
-    if (document.data.filename) return document.data.filename
-    if (isTabDocument && document.data.url) {
-      // For tabs, show a cleaned up URL as title
-      try {
-        const url = new URL(document.data.url)
-        return url.hostname + url.pathname
-      } catch {
-        return document.data.url
-      }
-    }
-    return `Document ${document.id}`
-  }
-
-  const getDisplayContent = () => {
-    if (document.data.content) {
-      const content = String(document.data.content)
-      return content.length > 100 ? content.substring(0, 100) + '...' : content
-    }
-    if (document.data.description) return document.data.description
-    if (document.data.summary) return document.data.summary
-    if (isTabDocument && document.data.url) return `Tab: ${document.data.url}`
-    return ''
-  }
+  const display = getDocumentDisplayInfo(document)
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -291,26 +265,34 @@ function DocumentRow({ document, onRemoveDocument, onDeleteDocument }: DocumentR
           <div className="flex-1 min-w-0">
             {/* Header row */}
             <div className="flex items-center gap-2 mb-2 overflow-hidden">
-              {isTabDocument ? (
+              {display.icon === 'globe' ? (
                 <Globe className="h-4 w-4 text-blue-500 flex-shrink-0" />
+              ) : display.icon === 'mail' ? (
+                <Mail className="h-4 w-4 text-blue-500 flex-shrink-0" />
               ) : (
                 <File className="h-4 w-4 text-blue-500 flex-shrink-0" />
               )}
-              <h4 className="font-medium truncate min-w-0 flex-1 max-w-[640px]" title={getDisplayTitle()}>
-                {getDisplayTitle()}
+              <h4 className="font-medium truncate min-w-0 flex-1 max-w-[640px]" title={display.title}>
+                {display.title}
               </h4>
-              {isTabDocument && (
+              {display.isExternal && (
                 <ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />
               )}
               <span className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded border flex-shrink-0">
-                {getSchemaDisplayName(document.schema)}
+                {display.schemaLabel}
               </span>
             </div>
 
+            {display.subtitle && (
+              <p className="text-xs text-muted-foreground mb-2 truncate" title={display.subtitle}>
+                {display.subtitle}
+              </p>
+            )}
+
             {/* Content preview */}
-            {getDisplayContent() && (
+            {display.preview && (
               <p className="text-sm text-muted-foreground mb-3 line-clamp-2 break-all overflow-hidden">
-                {getDisplayContent()}
+                {display.preview}
               </p>
             )}
 

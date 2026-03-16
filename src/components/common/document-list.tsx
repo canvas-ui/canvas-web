@@ -1,5 +1,5 @@
 import { Document } from '@/types/workspace'
-import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link } from 'lucide-react'
+import { File, Calendar, Hash, Eye, ExternalLink, Globe, Mail, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link } from 'lucide-react'
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import Fuse from 'fuse.js'
 import {
@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { createPortal } from 'react-dom'
+import { getDocumentDisplayInfo } from '@/lib/document-display'
 
 interface DocumentListProps {
   documents: Document[]
@@ -385,24 +386,13 @@ function DocumentTableRow({ document, isSelected, onSelect, onRemoveDocument, on
 
   const isTabDocument = document.schema === 'data/abstraction/tab'
   const tabUrl = isTabDocument ? document.data.url : null
+  const display = getDocumentDisplayInfo(document)
 
   const handleDragStart = (e: React.DragEvent) => {
     onDragStart?.(e, document.id);
   }
 
-  const getDisplayTitle = () => {
-    if (document.data.title) return document.data.title
-    if (document.data.name) return document.data.name
-    if (document.data.filename) return document.data.filename
-    if (isTabDocument && document.data.url) {
-      try { const url = new URL(document.data.url); return url.hostname + url.pathname } catch { return document.data.url }
-    }
-    return `Document ${document.id}`
-  }
-
   const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-
-  const getSchemaDisplayName = (schema: string) => { const parts = schema.split('/'); return parts[parts.length - 1] || schema }
 
   const getPrimaryChecksum = () => {
     if (document.checksumArray && document.checksumArray.length > 0) {
@@ -460,14 +450,21 @@ function DocumentTableRow({ document, isSelected, onSelect, onRemoveDocument, on
         draggable
         onDragStart={handleDragStart}
       >
-        <TableCell className="w-12">{isTabDocument ? <Globe className="h-4 w-4 text-blue-500" /> : <File className="h-4 w-4 text-blue-500" />}</TableCell>
+        <TableCell className="w-12">
+          {display.icon === 'globe' ? <Globe className="h-4 w-4 text-blue-500" /> : display.icon === 'mail' ? <Mail className="h-4 w-4 text-blue-500" /> : <File className="h-4 w-4 text-blue-500" />}
+        </TableCell>
         <TableCell className="font-medium max-w-xs">
-          <div className="flex items-center gap-2">
-            <span className="truncate" title={getDisplayTitle()}>{getDisplayTitle()}</span>
-            {isTabDocument && (<ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />)}
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="truncate" title={display.title}>{display.title}</span>
+              {display.isExternal && (<ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />)}
+            </div>
+            {display.subtitle && (
+              <div className="truncate text-xs text-muted-foreground" title={display.subtitle}>{display.subtitle}</div>
+            )}
           </div>
         </TableCell>
-        <TableCell><span className="px-2 py-1 text-xs bg-muted rounded border">{getSchemaDisplayName(document.schema)}</span></TableCell>
+        <TableCell><span className="px-2 py-1 text-xs bg-muted rounded border">{display.schemaLabel}</span></TableCell>
         <TableCell className="text-xs text-muted-foreground">{document.id}</TableCell>
         <TableCell className="text-xs text-muted-foreground">{primaryChecksum && (<span className="font-mono" title={`${primaryChecksum.algo} checksum`}>{primaryChecksum.hash}</span>)}</TableCell>
         <TableCell className="text-xs text-muted-foreground">{formatDate(document.createdAt)}</TableCell>
@@ -489,29 +486,13 @@ function DocumentRow({ document, isSelected, onSelect, onRemoveDocument, onDelet
   const [showDetailModal, setShowDetailModal] = useState(false)
   const isTabDocument = document.schema === 'data/abstraction/tab'
   const tabUrl = isTabDocument ? document.data.url : null
+  const display = getDocumentDisplayInfo(document)
 
   const handleDragStart = (e: React.DragEvent) => {
     onDragStart?.(e, document.id);
   }
 
-  const getDisplayTitle = () => {
-    if (document.data.title) return document.data.title
-    if (document.data.name) return document.data.name
-    if (document.data.filename) return document.data.filename
-    if (isTabDocument && document.data.url) { try { const url = new URL(document.data.url); return url.hostname + url.pathname } catch { return document.data.url } }
-    return `Document ${document.id}`
-  }
-
-  const getDisplayContent = () => {
-    if (document.data.content) { const content = String(document.data.content); return content.length > 100 ? content.substring(0, 100) + '...' : content }
-    if (document.data.description) return document.data.description
-    if (document.data.summary) return document.data.summary
-    if (isTabDocument && document.data.url) return `Tab: ${document.data.url}`
-    return ''
-  }
-
   const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-  const getSchemaDisplayName = (schema: string) => { const parts = schema.split('/'); return parts[parts.length - 1] || schema }
 
   const getPrimaryChecksum = () => { if (document.checksumArray && document.checksumArray.length > 0) { const primary = document.checksumArray.find(c => c.startsWith(document.indexOptions?.primaryChecksumAlgorithm || 'sha1')); if (primary) { const [algo, hash] = primary.split('/'); return { algo, hash: hash.substring(0, 8) + '...' } } } return null }
 
@@ -554,13 +535,15 @@ function DocumentRow({ document, isSelected, onSelect, onRemoveDocument, onDelet
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2 overflow-hidden">
-              {isTabDocument ? (<Globe className="h-4 w-4 text-blue-500 flex-shrink-0" />) : (<File className="h-4 w-4 text-blue-500 flex-shrink-0" />)}
-              <h4 className="font-medium truncate min-w-0 flex-1 max-w-[640px]" title={getDisplayTitle()}>{getDisplayTitle()}</h4>
-              {isTabDocument && (<ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />)}
-              <span className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded border flex-shrink-0">{getSchemaDisplayName(document.schema)}</span>
+              {display.icon === 'globe' ? (<Globe className="h-4 w-4 text-blue-500 flex-shrink-0" />) : display.icon === 'mail' ? (<Mail className="h-4 w-4 text-blue-500 flex-shrink-0" />) : (<File className="h-4 w-4 text-blue-500 flex-shrink-0" />)}
+              <h4 className="font-medium truncate min-w-0 flex-1 max-w-[640px]" title={display.title}>{display.title}</h4>
+              {display.isExternal && (<ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />)}
+              <span className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded border flex-shrink-0">{display.schemaLabel}</span>
             </div>
 
-            {getDisplayContent() && (<p className="text-sm text-muted-foreground mb-3 line-clamp-2 break-all overflow-hidden">{getDisplayContent()}</p>)}
+            {display.subtitle && (<p className="text-xs text-muted-foreground mb-2 truncate" title={display.subtitle}>{display.subtitle}</p>)}
+
+            {display.preview && (<p className="text-sm text-muted-foreground mb-3 line-clamp-2 break-all overflow-hidden">{display.preview}</p>)}
 
             <div className="flex items-center gap-4 text-xs text-muted-foreground overflow-hidden">
               <div className="flex items-center gap-1 flex-shrink-0"><span className="font-medium">ID:</span><span className="font-mono truncate max-w-[60px]" title={`ID: ${document.id}`}>{document.id}</span></div>

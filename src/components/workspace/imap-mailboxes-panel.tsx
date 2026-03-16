@@ -34,6 +34,7 @@ const EMPTY_MAILBOX: WorkspaceImapMailboxInput = {
   folder: 'INBOX',
   mode: 'poll',
   pollInterval: 60000,
+  initialSyncDays: 30,
   lastUid: 0,
 };
 
@@ -50,6 +51,7 @@ function toFormState(mailbox: WorkspaceImapMailbox): WorkspaceImapMailboxInput {
     folder: mailbox.folder,
     mode: mailbox.mode,
     pollInterval: mailbox.pollInterval,
+    initialSyncDays: mailbox.initialSyncDays,
     lastUid: mailbox.lastUid,
   };
 }
@@ -281,6 +283,11 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
         <div className="grid gap-2">
           <Label htmlFor="imap-poll">Poll Interval (ms)</Label>
           <Input id="imap-poll" type="number" value={String(form.pollInterval || 60000)} onChange={(event) => handleChange('pollInterval', Number(event.target.value || 60000))} />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="imap-lookback">Initial Sync Lookback (days)</Label>
+          <Input id="imap-lookback" type="number" min="0" value={String(form.initialSyncDays ?? 30)} onChange={(event) => handleChange('initialSyncDays', Number(event.target.value || 0))} />
+          <p className="text-xs text-muted-foreground">Used only when `lastUid` is `0`. Set `0` to sync the whole mailbox.</p>
         </div>
         <div className="flex flex-wrap gap-4 text-xs">
           <label className="flex items-center gap-2">
