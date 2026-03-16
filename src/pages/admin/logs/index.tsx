@@ -19,6 +19,25 @@ function mergeLogBuffer(entries: AdminLogEntry[]) {
   return entries.slice(-MAX_CLIENT_LOGS)
 }
 
+function getLogLineColor(entry: AdminLogEntry) {
+  switch (entry.levelLabel) {
+    case "fatal":
+      return "text-red-300"
+    case "error":
+      return "text-red-400"
+    case "warn":
+      return "text-yellow-300"
+    case "info":
+      return "text-sky-300"
+    case "debug":
+      return "text-slate-300"
+    case "trace":
+      return "text-zinc-500"
+    default:
+      return "text-green-400"
+  }
+}
+
 export default function AdminLogsPage() {
   const currentUser = getCurrentUserFromToken()
   const isCurrentUserAdmin = currentUser?.userType === "admin"
@@ -241,7 +260,12 @@ export default function AdminLogsPage() {
           ) : (
             <div className="whitespace-pre-wrap break-words">
               {logs.map((entry, index) => (
-                <div key={`${entry.time || "log"}-${index}`}>{entry.line}</div>
+                <div
+                  key={`${entry.time || "log"}-${index}`}
+                  className={getLogLineColor(entry)}
+                >
+                  {entry.line}
+                </div>
               ))}
             </div>
           )}
