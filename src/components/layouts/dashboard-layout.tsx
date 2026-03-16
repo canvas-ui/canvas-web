@@ -1,6 +1,6 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom"
 import { useState, useEffect, useCallback } from "react"
-import { LogOut, LayoutGrid, Layers3, Settings, FolderOpen, Brain, Shield, Server, Users, PanelLeftClose, PanelLeftOpen } from "lucide-react"
+import { LogOut, LayoutGrid, Layers3, Settings, FolderOpen, Brain, Shield, Server, Users, PanelLeftClose, PanelLeftOpen, FileText } from "lucide-react"
 import { api } from "@/lib/api"
 import { useToast } from "@/components/ui/toast-container"
 import { getCurrentUserFromToken } from "@/services/auth"
@@ -520,6 +520,23 @@ function DashboardSidebar() {
                     <SidebarMenuItem>
                       <SidebarMenuButton
                         asChild
+                        isActive={isActive('/admin/logs')}
+                        tooltip="View server logs"
+                      >
+                        <button
+                          onClick={() => navigateTo('/admin/logs')}
+                          className="flex items-center"
+                          type="button"
+                        >
+                          <FileText className="size-4" />
+                          <span>Server Logs</span>
+                        </button>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        asChild
                         isActive={isActive('/admin/contexts')}
                         tooltip="Manage all contexts"
                       >
@@ -697,6 +714,7 @@ function DashboardSidebar() {
                 {location.pathname === '/admin/contexts' && 'All Contexts'}
                 {location.pathname === '/admin/workspaces' && 'All Workspaces'}
                 {location.pathname === '/admin/agents' && 'All Agents'}
+                {location.pathname === '/admin/logs' && 'Server Logs'}
                 {location.pathname === '/admin/roles' && 'All Roles'}
               </span>
             </nav>

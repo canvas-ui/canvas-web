@@ -28,6 +28,8 @@ export const API_ROUTES = {
   admin: {
     users: `${API_URL}/admin/users`,
     workspaces: `${API_URL}/admin/workspaces`,
+    logs: `${API_URL}/admin/logs`,
+    logsStream: `${API_URL}/admin/logs/stream`,
   },
 
   // Roles

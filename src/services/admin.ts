@@ -54,6 +54,47 @@ export interface CreateWorkspaceData {
   metadata?: Record<string, any>;
 }
 
+export interface AdminLogEntry {
+  time: string | null;
+  level: number | null;
+  levelLabel: string;
+  module: string | null;
+  msg: string;
+  line: string;
+  raw: string;
+}
+
+export interface AdminLogFilters {
+  tail?: number;
+  level?: string;
+  module?: string;
+}
+
+function buildLogQuery(filters: AdminLogFilters = {}): string {
+  const params = new URLSearchParams();
+
+  if (filters.tail) params.set('tail', String(filters.tail));
+  if (filters.level) params.set('level', filters.level);
+  if (filters.module) params.set('module', filters.module);
+
+  const query = params.toString();
+  return query ? `?${query}` : '';
+}
+
+function getStreamHeaders(): HeadersInit {
+  const token = localStorage.getItem('authToken');
+  if (!token) {
+    throw new Error('Authentication required');
+  }
+
+  const appName = localStorage.getItem('appName') || window.location.hostname;
+  return {
+    Authorization: `Bearer ${token}`,
+    'X-App-Name': appName,
+    Accept: 'text/event-stream',
+  };
+}
+
 // User Management Services
 export const adminUserService = {
   /**
@@ -129,8 +170,103 @@ export const adminWorkspaceService = {
   },
 };
 
+export const adminLogService = {
+  async getLogs(filters: AdminLogFilters = {}): Promise<AdminLogEntry[]> {
+    const response = await api.get<ApiResponse<{ logs: AdminLogEntry[] }>>(
+      `${API_ROUTES.admin.logs}${buildLogQuery(filters)}`
+    );
+    return response.payload.logs || [];
+  },
+
+  async streamLogs(
+    filters: AdminLogFilters = {},
+    options: {
+      signal?: AbortSignal;
+      onEntry?: (entry: AdminLogEntry) => void;
+      onError?: (error: Error) => void;
+    } = {}
+  ): Promise<void> {
+    const { signal, onEntry, onError } = options;
+
+    try {
+      const response = await fetch(`${API_ROUTES.admin.logsStream}${buildLogQuery(filters)}`, {
+        method: 'GET',
+        headers: getStreamHeaders(),
+        credentials: 'include',
+        signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to open log stream (${response.status})`);
+      }
+
+      if (!response.body) {
+        throw new Error('Streaming is not supported by this browser');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      const flushEvent = (eventBlock: string) => {
+        const lines = eventBlock.split('\n');
+        let eventName = 'message';
+        const dataLines: string[] = [];
+
+        for (const line of lines) {
+          if (!line || line.startsWith(':')) continue;
+          if (line.startsWith('event:')) {
+            eventName = line.slice(6).trim();
+            continue;
+          }
+          if (line.startsWith('data:')) {
+            dataLines.push(line.slice(5).trim());
+          }
+        }
+
+        if (eventName !== 'log' || dataLines.length === 0) {
+          return;
+        }
+
+        const payload = JSON.parse(dataLines.join('\n')) as AdminLogEntry;
+        onEntry?.(payload);
+      };
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const events = buffer.split('\n\n');
+          buffer = events.pop() || '';
+
+          for (const eventBlock of events) {
+            flushEvent(eventBlock);
+          }
+        }
+
+        if (buffer.trim()) {
+          flushEvent(buffer);
+        }
+      } finally {
+        reader.releaseLock();
+      }
+    } catch (error) {
+      if (signal?.aborted) {
+        return;
+      }
+
+      const streamError = error instanceof Error ? error : new Error(String(error));
+      onError?.(streamError);
+      throw streamError;
+    }
+  },
+};
+
 // Combined admin service
 export const adminService = {
   users: adminUserService,
   workspaces: adminWorkspaceService,
+  logs: adminLogService,
 };
