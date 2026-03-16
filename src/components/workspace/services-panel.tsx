@@ -7,6 +7,7 @@ import {
   WorkspaceServicesStatus
 } from '@/services/workspace';
 import { HooksPanel } from '@/components/workspace/hooks-panel';
+import { ImapMailboxesPanel } from '@/components/workspace/imap-mailboxes-panel';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 
 interface ServicesPanelProps {
@@ -172,6 +173,7 @@ export function ServicesPanel({ workspaceId }: ServicesPanelProps) {
         </p>
       )}
 
+      <ImapMailboxesPanel workspaceId={workspaceId} enabled={imapStatus.enabled} />
       <HooksPanel workspaceId={workspaceId} />
     </div>
   );

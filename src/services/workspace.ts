@@ -311,6 +311,28 @@ export interface WorkspaceServiceStatus {
   activeMailboxCount?: number;
 }
 
+export interface WorkspaceImapMailbox {
+  id: string;
+  enabled: boolean;
+  host: string;
+  port: number;
+  tls: boolean;
+  allowSelfSigned: boolean;
+  user: string;
+  folder: string;
+  mode: 'poll';
+  pollInterval: number;
+  lastUid: number;
+  lastSyncAt: string | null;
+  lastError: string | null;
+  passwordConfigured: boolean;
+  runtime: {
+    active: boolean;
+    syncing: boolean;
+    status: string;
+  };
+}
+
 export interface WorkspaceServicesStatus {
   dotfiles: WorkspaceServiceStatus;
   home?: WorkspaceServiceStatus;
@@ -395,6 +417,85 @@ export async function saveWorkspaceHook(workspaceId: string, hookPath: string, c
 export async function deleteWorkspaceHook(workspaceId: string, hookPath: string): Promise<{ path: string }> {
   const response = await api.delete<{ payload: { path: string } }>(
     `${API_ROUTES.workspaces}/${workspaceId}/hooks/${encodeURIComponent(hookPath).replace(/%2F/g, '/')}`
+  );
+  return response.payload;
+}
+
+export interface WorkspaceImapMailboxInput {
+  id?: string;
+  enabled?: boolean;
+  host: string;
+  port?: number;
+  tls?: boolean;
+  allowSelfSigned?: boolean;
+  user: string;
+  password?: string;
+  folder?: string;
+  mode?: 'poll';
+  pollInterval?: number;
+  lastUid?: number;
+}
+
+export async function listWorkspaceImapMailboxes(workspaceId: string): Promise<WorkspaceImapMailbox[]> {
+  const response = await api.get<{ payload: WorkspaceImapMailbox[] }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/services/imap/mailboxes`
+  );
+  return response.payload || [];
+}
+
+export async function createWorkspaceImapMailbox(
+  workspaceId: string,
+  payload: WorkspaceImapMailboxInput
+): Promise<WorkspaceImapMailbox> {
+  const response = await api.post<{ payload: WorkspaceImapMailbox }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/services/imap/mailboxes`,
+    payload
+  );
+  return response.payload;
+}
+
+export async function updateWorkspaceImapMailbox(
+  workspaceId: string,
+  mailboxId: string,
+  payload: Partial<WorkspaceImapMailboxInput>
+): Promise<WorkspaceImapMailbox> {
+  const response = await api.patch<{ payload: WorkspaceImapMailbox }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/services/imap/mailboxes/${encodeURIComponent(mailboxId)}`,
+    payload
+  );
+  return response.payload;
+}
+
+export async function deleteWorkspaceImapMailbox(workspaceId: string, mailboxId: string): Promise<void> {
+  await api.delete(
+    `${API_ROUTES.workspaces}/${workspaceId}/services/imap/mailboxes/${encodeURIComponent(mailboxId)}`
+  );
+}
+
+export async function testWorkspaceImapMailbox(workspaceId: string, mailboxId: string): Promise<unknown> {
+  const response = await api.post<{ payload: unknown }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/services/imap/mailboxes/${encodeURIComponent(mailboxId)}/test`
+  );
+  return response.payload;
+}
+
+export async function syncWorkspaceImapMailbox(workspaceId: string, mailboxId: string): Promise<unknown> {
+  const response = await api.post<{ payload: unknown }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/services/imap/mailboxes/${encodeURIComponent(mailboxId)}/sync`
+  );
+  return response.payload;
+}
+
+export async function startWorkspaceImapMailbox(workspaceId: string, mailboxId: string): Promise<unknown> {
+  const response = await api.post<{ payload: unknown }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/services/imap/mailboxes/${encodeURIComponent(mailboxId)}/start`
+  );
+  return response.payload;
+}
+
+export async function stopWorkspaceImapMailbox(workspaceId: string, mailboxId: string): Promise<unknown> {
+  const response = await api.post<{ payload: unknown }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/services/imap/mailboxes/${encodeURIComponent(mailboxId)}/stop`
   );
   return response.payload;
 }
