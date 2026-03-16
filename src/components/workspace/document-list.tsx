@@ -202,11 +202,6 @@ function DocumentRow({ document, onRemoveDocument, onDeleteDocument }: DocumentR
     })
   }
 
-  const getSchemaDisplayName = (schema: string) => {
-    const parts = schema.split('/')
-    return parts[parts.length - 1] || schema
-  }
-
   const getPrimaryChecksum = () => {
     if (document.checksumArray && document.checksumArray.length > 0) {
       const primary = document.checksumArray.find(c =>
