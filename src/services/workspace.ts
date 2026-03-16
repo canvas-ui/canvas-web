@@ -1,5 +1,6 @@
 import { API_ROUTES } from '@/config/api';
 import { api } from '@/lib/api';
+import type { TreeNode } from '@/types/workspace';
 // GLOBAL Workspace type from src/types/api.d.ts will be used.
 // No local Workspace interface should be defined here.
 
@@ -76,9 +77,13 @@ export async function removeWorkspace(id: string): Promise<Workspace> {
 
 
 // Get workspace tree
-export async function getWorkspaceTree(id: string): Promise<unknown> {
+export async function getWorkspaceTree(
+  id: string
+): Promise<{ payload: TreeNode; status: string; statusCode: number; message: string }> {
   try {
-    return await api.get<unknown>(`${API_ROUTES.workspaces}/${id}/tree`);
+    return await api.get<{ payload: TreeNode; status: string; statusCode: number; message: string }>(
+      `${API_ROUTES.workspaces}/${id}/tree`
+    );
   } catch (error) {
     console.error(`Failed to get workspace tree ${id}:`, error);
     throw error;
