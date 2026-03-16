@@ -6,6 +6,7 @@ import {
   disableWorkspaceService,
   WorkspaceServicesStatus
 } from '@/services/workspace';
+import { HooksPanel } from '@/components/workspace/hooks-panel';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 
 interface ServicesPanelProps {
@@ -22,7 +23,7 @@ export function ServicesPanel({ workspaceId }: ServicesPanelProps) {
     try {
       const status = await getWorkspaceServicesStatus(workspaceId);
       setServices(status);
-    } catch (err) {
+    } catch {
       console.error('Failed to fetch services status:', err);
     } finally {
       setIsLoading(false);
@@ -33,7 +34,7 @@ export function ServicesPanel({ workspaceId }: ServicesPanelProps) {
     fetchServices();
   }, [fetchServices]);
 
-  const handleToggleService = async (serviceName: 'dotfiles' | 'home', currentlyEnabled: boolean) => {
+  const handleToggleService = async (serviceName: 'dotfiles' | 'home' | 'imap', currentlyEnabled: boolean) => {
     setToggling(serviceName);
     try {
       if (currentlyEnabled) {
@@ -50,7 +51,7 @@ export function ServicesPanel({ workspaceId }: ServicesPanelProps) {
         });
       }
       await fetchServices();
-    } catch (err) {
+    } catch {
       showToast({
         title: 'Error',
         description: `Failed to toggle ${serviceName} service`,
@@ -74,6 +75,9 @@ export function ServicesPanel({ workspaceId }: ServicesPanelProps) {
     return null;
   }
 
+  const homeStatus = services.home || { enabled: false, initialized: false, transports: [] };
+  const imapStatus = services.imap || { enabled: false, initialized: false, mailboxCount: 0, activeMailboxCount: 0 };
+
   const serviceItems = [
     {
       id: 'dotfiles',
@@ -85,7 +89,13 @@ export function ServicesPanel({ workspaceId }: ServicesPanelProps) {
       id: 'home',
       name: 'Home',
       description: 'WebDAV file storage',
-      status: services.home,
+      status: homeStatus,
+    },
+    {
+      id: 'imap',
+      name: 'IMAP',
+      description: `Mailbox ingestion${imapStatus.mailboxCount ? ` (${imapStatus.activeMailboxCount || 0}/${imapStatus.mailboxCount} active)` : ''}`,
+      status: imapStatus,
     },
   ] as const;
 
@@ -146,11 +156,13 @@ export function ServicesPanel({ workspaceId }: ServicesPanelProps) {
         );
       })}
 
-      {services.home.transports && services.home.enabled && (
+      {homeStatus.transports && homeStatus.enabled && (
         <p className="text-xs text-muted-foreground pt-1 border-t">
-          Transports: {services.home.transports.join(', ')}
+          Transports: {homeStatus.transports.join(', ')}
         </p>
       )}
+
+      <HooksPanel workspaceId={workspaceId} />
     </div>
   );
 }

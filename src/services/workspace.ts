@@ -76,9 +76,9 @@ export async function removeWorkspace(id: string): Promise<Workspace> {
 
 
 // Get workspace tree
-export async function getWorkspaceTree(id: string): Promise<any> {
+export async function getWorkspaceTree(id: string): Promise<unknown> {
   try {
-    return await api.get<any>(`${API_ROUTES.workspaces}/${id}/tree`);
+    return await api.get<unknown>(`${API_ROUTES.workspaces}/${id}/tree`);
   } catch (error) {
     console.error(`Failed to get workspace tree ${id}:`, error);
     throw error;
@@ -179,7 +179,7 @@ export async function pasteDocumentsToWorkspacePath(workspaceId: string, path: s
   try {
     // This would use the document insertion API with the specified path
     const ids = normalizeDocumentIds(Array.isArray(documentIds) ? documentIds : [documentIds])
-    await api.post<{ payload: any; message: string; status: string; statusCode: number }>(
+    await api.post<{ payload: unknown; message: string; status: string; statusCode: number }>(
       `${API_ROUTES.workspaces}/${workspaceId}/documents`,
       { documentIds: ids, contextSpec: path }
     );
@@ -190,11 +190,11 @@ export async function pasteDocumentsToWorkspacePath(workspaceId: string, path: s
   }
 }
 
-export async function importDocumentsToWorkspacePath(workspaceId: string, path: string, documents: any[]): Promise<boolean> {
+export async function importDocumentsToWorkspacePath(workspaceId: string, path: string, documents: unknown[]): Promise<boolean> {
   try {
     // Import new documents to workspace at the specified path
     const docs = Array.isArray(documents) ? documents : [documents]
-    await api.post<{ payload: any; message: string; status: string; statusCode: number }>(
+    await api.post<{ payload: unknown; message: string; status: string; statusCode: number }>(
       `${API_ROUTES.workspaces}/${workspaceId}/documents`,
       { documents: docs, contextSpec: path }
     );
@@ -302,11 +302,14 @@ export interface WorkspaceServiceStatus {
   initialized?: boolean;
   path?: string;
   transports?: string[];
+  mailboxCount?: number;
+  activeMailboxCount?: number;
 }
 
 export interface WorkspaceServicesStatus {
   dotfiles: WorkspaceServiceStatus;
-  home: WorkspaceServiceStatus;
+  home?: WorkspaceServiceStatus;
+  imap?: WorkspaceServiceStatus;
 }
 
 /**
@@ -327,7 +330,7 @@ export async function getWorkspaceServicesStatus(workspaceId: string): Promise<W
  */
 export async function enableWorkspaceService(
   workspaceId: string,
-  serviceName: 'dotfiles' | 'home'
+  serviceName: 'dotfiles' | 'home' | 'imap'
 ): Promise<{ success: boolean; path?: string }> {
   try {
     const response = await api.post<{ payload: { success: boolean; path?: string } }>(
@@ -345,7 +348,7 @@ export async function enableWorkspaceService(
  */
 export async function disableWorkspaceService(
   workspaceId: string,
-  serviceName: 'dotfiles' | 'home'
+  serviceName: 'dotfiles' | 'home' | 'imap'
 ): Promise<{ success: boolean }> {
   try {
     const response = await api.post<{ payload: { success: boolean } }>(
@@ -356,4 +359,37 @@ export async function disableWorkspaceService(
     console.error(`Failed to disable ${serviceName} service:`, error);
     throw error;
   }
+}
+
+export interface WorkspaceHookFile {
+  path: string;
+  size?: number;
+  modifiedAt?: string;
+}
+
+export async function listWorkspaceHooks(workspaceId: string): Promise<WorkspaceHookFile[]> {
+  const response = await api.get<{ payload: WorkspaceHookFile[] }>(`${API_ROUTES.workspaces}/${workspaceId}/hooks`);
+  return response.payload || [];
+}
+
+export async function getWorkspaceHook(workspaceId: string, hookPath: string): Promise<{ path: string; content: string }> {
+  const response = await api.get<{ payload: { path: string; content: string } }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/hooks/${encodeURIComponent(hookPath).replace(/%2F/g, '/')}`
+  );
+  return response.payload;
+}
+
+export async function saveWorkspaceHook(workspaceId: string, hookPath: string, content: string): Promise<{ path: string }> {
+  const response = await api.put<{ payload: { path: string } }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/hooks/${encodeURIComponent(hookPath).replace(/%2F/g, '/')}`,
+    { content }
+  );
+  return response.payload;
+}
+
+export async function deleteWorkspaceHook(workspaceId: string, hookPath: string): Promise<{ path: string }> {
+  const response = await api.delete<{ payload: { path: string } }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/hooks/${encodeURIComponent(hookPath).replace(/%2F/g, '/')}`
+  );
+  return response.payload;
 }
