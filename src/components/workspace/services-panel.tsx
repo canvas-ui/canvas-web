@@ -17,14 +17,17 @@ export function ServicesPanel({ workspaceId }: ServicesPanelProps) {
   const [services, setServices] = useState<WorkspaceServicesStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const { showToast } = useToast();
 
   const fetchServices = useCallback(async () => {
     try {
       const status = await getWorkspaceServicesStatus(workspaceId);
       setServices(status);
+      setLoadError(null);
     } catch {
-      console.error('Failed to fetch services status:', err);
+      console.error('Failed to fetch services status');
+      setLoadError('Failed to load workspace services');
     } finally {
       setIsLoading(false);
     }
@@ -72,7 +75,14 @@ export function ServicesPanel({ workspaceId }: ServicesPanelProps) {
   }
 
   if (!services) {
-    return null;
+    return (
+      <div className="space-y-2">
+        <h4 className="text-sm font-medium">Workspace Services</h4>
+        <p className="text-xs text-muted-foreground">
+          {loadError || 'No workspace service data available.'}
+        </p>
+      </div>
+    );
   }
 
   const homeStatus = services.home || { enabled: false, initialized: false, transports: [] };
