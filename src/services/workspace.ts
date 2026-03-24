@@ -4,6 +4,8 @@ import type { TreeNode } from '@/types/workspace';
 // GLOBAL Workspace type from src/types/api.d.ts will be used.
 // No local Workspace interface should be defined here.
 
+export const INCOMING_ROOT_CONTEXT = '/.incoming'
+
 // listWorkspaces should return a Promise where Workspace is the global type.
 export async function listWorkspaces(): Promise<Workspace[]> {
   try {
@@ -95,7 +97,7 @@ export async function getWorkspaceDocuments(
   id: string,
   contextSpec: string = '/',
   featureArray: string[] = [],
-  options: { limit?: number; offset?: number; page?: number } = {}
+  options: { limit?: number; offset?: number; page?: number; includeIncoming?: boolean } = {}
 ): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }> {
   try {
     const params = new URLSearchParams();
@@ -103,6 +105,7 @@ export async function getWorkspaceDocuments(
     if (featureArray.length > 0) {
       featureArray.forEach(feature => params.append('featureArray', feature));
     }
+    if (options.includeIncoming) params.append('includeIncoming', 'true')
     if (options.limit !== undefined) params.append('limit', options.limit.toString());
     if (options.offset !== undefined) params.append('offset', options.offset.toString());
     if (options.page !== undefined) params.append('page', options.page.toString());
@@ -302,12 +305,14 @@ export async function purgeWorkspaceDocuments(
   workspaceId: string,
   contextSpec: string = '/',
   featureArray: string[] = [],
-  filterArray: string[] = []
+  filterArray: string[] = [],
+  options: { includeIncoming?: boolean } = {}
 ): Promise<{ requested: number; deleted: number }> {
   const params = new URLSearchParams()
   if (contextSpec) params.append('contextSpec', contextSpec)
   featureArray.forEach(f => params.append('featureArray', f))
   filterArray.forEach(f => params.append('filterArray', f))
+  if (options.includeIncoming) params.append('includeIncoming', 'true')
   const response = await api.delete<{ payload: { requested: number; deleted: number } }>(
     `${API_ROUTES.workspaces}/${workspaceId}/documents/purge?${params.toString()}`
   )
