@@ -10,12 +10,28 @@ type CreateContextPayload = Pick<Context, 'id' | 'url'> &
                             Partial<Pick<Context, 'description' | 'baseUrl'>> &
                             { workspaceId: string };
 
+type UnknownRecord = Record<string, unknown>;
+type PaginationOptions = {
+  includeServerContext?: boolean;
+  includeClientContext?: boolean;
+  limit?: number;
+  offset?: number;
+  page?: number;
+};
+
+interface ApiPayload<T = unknown> {
+  payload: T;
+  message?: string;
+  status?: string;
+  statusCode?: number;
+}
+
 interface DocumentResponse {
   data: Array<{
     id: number;
     schema: string;
     schemaVersion: string;
-    data: Record<string, any>;
+    data: UnknownRecord;
     metadata: {
       contentType: string;
       contentEncoding: string;
@@ -31,7 +47,7 @@ interface DocumentResponse {
         embeddingModel: string;
         embeddingDimensions: number;
         embeddingProvider: string;
-        embeddingProviderOptions: Record<string, any>;
+        embeddingProviderOptions: UnknownRecord;
         chunking: {
           type: string;
           chunkSize: number;
@@ -42,9 +58,9 @@ interface DocumentResponse {
     createdAt: string;
     updatedAt: string;
     checksumArray: string[];
-    embeddingsArray: any[];
+    embeddingsArray: unknown[];
     parentId: string | null;
-    versions: any[];
+    versions: unknown[];
     versionNumber: number;
     latestVersion: number;
   }>;
@@ -137,13 +153,13 @@ export async function getContextDocuments(
   id: string,
   featureArray: string[] = [],
   filterArray: string[] = [],
-  options: Record<string, any> = {},
+  options: PaginationOptions = {},
   ownerId?: string
 ): Promise<DocumentResponse['data'] & { count?: number; totalCount?: number }> {
   try {
     const params = new URLSearchParams();
-    featureArray.forEach(feature => params.append('featureArray', feature));
-    filterArray.forEach(filter => params.append('filterArray', filter));
+    featureArray.forEach(feature => params.append('allOf', feature));
+    filterArray.forEach(filter => params.append('filters', filter));
     if (ownerId) params.append('ownerId', ownerId);
     if (options.includeServerContext !== undefined) {
       params.append('includeServerContext', options.includeServerContext.toString());
@@ -179,7 +195,7 @@ export async function getSharedContextDocuments(
   contextId: string,
   featureArray: string[] = [],
   filterArray: string[] = [],
-  options: Record<string, any> = {},
+  options: PaginationOptions = {},
   ownerId?: string
 ): Promise<DocumentResponse['data'] & { count?: number; totalCount?: number }> {
   return await getContextDocuments(contextId, featureArray, filterArray, options, ownerId);
@@ -188,11 +204,11 @@ export async function getSharedContextDocuments(
 // Context sharing functions
 export async function grantContextAccess(contextId: string, sharedWithUserId: string, accessLevel: string): Promise<{ message: string }> {
   try {
-    const response = await api.post<{ payload: any }>(
+    const response = await api.post<ApiPayload<UnknownRecord>>(
       `${API_ROUTES.contexts}/${contextId}/shares`,
       { userEmail: sharedWithUserId, accessLevel }
     );
-    return { message: (response as any).payload?.message || 'Context access granted' };
+    return { message: response.message || 'Context access granted' };
   } catch (error) {
     console.error(`Failed to grant context access:`, error);
     throw error;
@@ -201,20 +217,20 @@ export async function grantContextAccess(contextId: string, sharedWithUserId: st
 
 export async function revokeContextAccess(contextId: string, sharedWithUserId: string): Promise<{ message:string }> {
   try {
-    const response = await api.delete<{ payload: any }>(
+    const response = await api.delete<ApiPayload<UnknownRecord>>(
       `${API_ROUTES.contexts}/${contextId}/shares/${encodeURIComponent(sharedWithUserId)}`
     );
-    return { message: (response as any).payload?.message || 'Context access revoked' };
+    return { message: response.message || 'Context access revoked' };
   } catch (error) {
     console.error(`Failed to revoke context access:`, error);
     throw error;
   }
 }
 
-export async function getContextTree(id: string, ownerId?: string): Promise<any> {
+export async function getContextTree(id: string, ownerId?: string): Promise<UnknownRecord> {
   try {
     const endpoint = withOwnerId(`${API_ROUTES.contexts}/${id}/tree`, ownerId);
-    const response = await api.get<{ payload: any }>(endpoint);
+    const response = await api.get<ApiPayload<UnknownRecord>>(endpoint);
     if (response && response.payload) {
       return response.payload;
     }
@@ -230,14 +246,14 @@ export async function removeDocumentsFromContext(
   contextId: string,
   documentIds: (string | number)[] | string | number,
   ownerId?: string,
-  contextSpec?: string
+  _contextSpec?: string
 ): Promise<{ message: string }> {
   try {
+    void _contextSpec;
     // Ensure documentIds is always an array
     const idsArray = Array.isArray(documentIds) ? documentIds : [documentIds];
 
     const params = new URLSearchParams();
-    if (contextSpec && contextSpec !== '/') params.append('contextSpec', contextSpec);
     const endpoint = `${API_ROUTES.contexts}/${contextId}/documents/remove${params.toString() ? `?${params.toString()}` : ''}`;
 
     const response = await api.delete<{ payload: string }>(
@@ -259,14 +275,14 @@ export async function deleteDocumentsFromContext(
   contextId: string,
   documentIds: (string | number)[] | string | number,
   ownerId?: string,
-  contextSpec?: string
+  _contextSpec?: string
 ): Promise<{ message: string }> {
   try {
+    void _contextSpec;
     // Ensure documentIds is always an array
     const idsArray = Array.isArray(documentIds) ? documentIds : [documentIds];
 
     const params = new URLSearchParams();
-    if (contextSpec && contextSpec !== '/') params.append('contextSpec', contextSpec);
     const endpoint = `${API_ROUTES.contexts}/${contextId}/documents${params.toString() ? `?${params.toString()}` : ''}`;
 
     return await api.delete<{ message: string }>(
@@ -286,9 +302,9 @@ export async function deleteDocumentsFromContext(
 export async function pasteDocumentsToContext(contextId: string, path: string, documentIds: number[], ownerId?: string): Promise<boolean> {
   try {
     const ids = Array.isArray(documentIds) ? documentIds : [documentIds];
-    await api.post<{ payload: any; message: string; status: string; statusCode: number }>(
+    await api.post<ApiPayload>(
       withOwnerId(`${API_ROUTES.contexts}/${contextId}/documents`, ownerId),
-      { documentIds: ids, contextSpec: path }
+      { documentIds: ids, context: path }
     );
     return true;
   } catch (error) {
@@ -298,12 +314,12 @@ export async function pasteDocumentsToContext(contextId: string, path: string, d
 }
 
 // Import new documents to context via workspace (since contexts use workspace documents API)
-export async function importDocumentsToContext(workspaceId: string, contextPath: string, documents: any[]): Promise<boolean> {
+export async function importDocumentsToContext(workspaceId: string, contextPath: string, documents: UnknownRecord[]): Promise<boolean> {
   try {
     const docs = Array.isArray(documents) ? documents : [documents];
-    await api.post<{ payload: any; message: string; status: string; statusCode: number }>(
+    await api.post<ApiPayload>(
       `${API_ROUTES.workspaces}/${workspaceId}/documents`,
-      { documents: docs, contextSpec: contextPath }
+      { documents: docs, treeNameOrTreeId: 'ContextTree', context: contextPath }
     );
     return true;
   } catch (error) {

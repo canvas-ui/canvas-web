@@ -5,6 +5,24 @@ import type { TreeNode } from '@/types/workspace';
 // No local Workspace interface should be defined here.
 
 export const INCOMING_ROOT_CONTEXT = '/.incoming'
+export const DEFAULT_WORKSPACE_TREE_NAME = 'ContextTree'
+
+function appendWorkspaceContext(params: URLSearchParams, contextSpec: string = '/') {
+  params.append('treeNameOrTreeId', DEFAULT_WORKSPACE_TREE_NAME)
+  if (contextSpec) params.append('context', contextSpec)
+}
+
+function appendAllOf(params: URLSearchParams, featureArray: string[] = []) {
+  featureArray.filter(Boolean).forEach(feature => params.append('allOf', feature))
+}
+
+function appendFilters(params: URLSearchParams, filterArray: string[] = []) {
+  filterArray.filter(Boolean).forEach(filter => params.append('filters', filter))
+}
+
+function getWorkspaceTreeBaseRoute(workspaceId: string) {
+  return `${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(DEFAULT_WORKSPACE_TREE_NAME)}`
+}
 
 // listWorkspaces should return a Promise where Workspace is the global type.
 export async function listWorkspaces(): Promise<Workspace[]> {
@@ -84,7 +102,7 @@ export async function getWorkspaceTree(
 ): Promise<{ payload: TreeNode; status: string; statusCode: number; message: string }> {
   try {
     return await api.get<{ payload: TreeNode; status: string; statusCode: number; message: string }>(
-      `${API_ROUTES.workspaces}/${id}/tree`
+      getWorkspaceTreeBaseRoute(id)
     );
   } catch (error) {
     console.error(`Failed to get workspace tree ${id}:`, error);
@@ -101,10 +119,8 @@ export async function getWorkspaceDocuments(
 ): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }> {
   try {
     const params = new URLSearchParams();
-    if (contextSpec !== '/') params.append('contextSpec', contextSpec);
-    if (featureArray.length > 0) {
-      featureArray.forEach(feature => params.append('featureArray', feature));
-    }
+    appendWorkspaceContext(params, contextSpec)
+    appendAllOf(params, featureArray)
     if (options.includeIncoming) params.append('includeIncoming', 'true')
     if (options.limit !== undefined) params.append('limit', options.limit.toString());
     if (options.offset !== undefined) params.append('offset', options.offset.toString());
@@ -134,7 +150,7 @@ export async function updateWorkspace(id: string, payload: Partial<CreateWorkspa
 export async function insertWorkspacePath(workspaceId: string, path: string, autoCreateLayers: boolean = true): Promise<boolean> {
   try {
     const response = await api.post<{ payload: boolean; message: string; status: string; statusCode: number }>(
-      `${API_ROUTES.workspaces}/${workspaceId}/tree/paths`,
+      `${getWorkspaceTreeBaseRoute(workspaceId)}/paths`,
       { path, autoCreateLayers }
     );
     return response.payload;
@@ -148,7 +164,7 @@ export async function removeWorkspacePath(workspaceId: string, path: string, rec
   try {
     const params = new URLSearchParams({ path, recursive: recursive.toString() });
     const response = await api.delete<{ payload: boolean; message: string; status: string; statusCode: number }>(
-      `${API_ROUTES.workspaces}/${workspaceId}/tree/paths?${params.toString()}`
+      `${getWorkspaceTreeBaseRoute(workspaceId)}/paths?${params.toString()}`
     );
     return response.payload;
   } catch (error) {
@@ -160,7 +176,7 @@ export async function removeWorkspacePath(workspaceId: string, path: string, rec
 export async function moveWorkspacePath(workspaceId: string, fromPath: string, toPath: string, recursive: boolean = false): Promise<boolean> {
   try {
     const response = await api.post<{ payload: boolean; message: string; status: string; statusCode: number }>(
-      `${API_ROUTES.workspaces}/${workspaceId}/tree/paths/move`,
+      `${getWorkspaceTreeBaseRoute(workspaceId)}/paths/move`,
       { from: fromPath, to: toPath, recursive }
     );
     return response.payload;
@@ -173,7 +189,7 @@ export async function moveWorkspacePath(workspaceId: string, fromPath: string, t
 export async function copyWorkspacePath(workspaceId: string, fromPath: string, toPath: string, recursive: boolean = false): Promise<boolean> {
   try {
     const response = await api.post<{ payload: boolean; message: string; status: string; statusCode: number }>(
-      `${API_ROUTES.workspaces}/${workspaceId}/tree/paths/copy`,
+      `${getWorkspaceTreeBaseRoute(workspaceId)}/paths/copy`,
       { from: fromPath, to: toPath, recursive }
     );
     return response.payload;
@@ -189,7 +205,7 @@ export async function pasteDocumentsToWorkspacePath(workspaceId: string, path: s
     const ids = normalizeDocumentIds(Array.isArray(documentIds) ? documentIds : [documentIds])
     await api.post<{ payload: unknown; message: string; status: string; statusCode: number }>(
       `${API_ROUTES.workspaces}/${workspaceId}/documents`,
-      { documentIds: ids, contextSpec: path }
+      { documentIds: ids, treeNameOrTreeId: DEFAULT_WORKSPACE_TREE_NAME, context: path }
     );
     return true;
   } catch (error) {
@@ -204,7 +220,7 @@ export async function importDocumentsToWorkspacePath(workspaceId: string, path: 
     const docs = Array.isArray(documents) ? documents : [documents]
     await api.post<{ payload: unknown; message: string; status: string; statusCode: number }>(
       `${API_ROUTES.workspaces}/${workspaceId}/documents`,
-      { documents: docs, contextSpec: path }
+      { documents: docs, treeNameOrTreeId: DEFAULT_WORKSPACE_TREE_NAME, context: path }
     );
     return true;
   } catch (error) {
@@ -274,8 +290,8 @@ export async function removeWorkspaceDocuments(
   featureArray: string[] = []
 ): Promise<boolean> {
   const params = new URLSearchParams()
-  if (contextSpec) params.append('contextSpec', contextSpec)
-  featureArray.forEach(f => params.append('featureArray', f))
+  appendWorkspaceContext(params, contextSpec)
+  appendAllOf(params, featureArray)
   const ids = normalizeDocumentIds(documentIds)
   await api.delete(`${API_ROUTES.workspaces}/${workspaceId}/documents/remove?${params.toString()}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -291,8 +307,8 @@ export async function deleteWorkspaceDocuments(
   featureArray: string[] = []
 ): Promise<boolean> {
   const params = new URLSearchParams()
-  if (contextSpec) params.append('contextSpec', contextSpec)
-  featureArray.forEach(f => params.append('featureArray', f))
+  appendWorkspaceContext(params, contextSpec)
+  appendAllOf(params, featureArray)
   const ids = normalizeDocumentIds(documentIds)
   await api.delete(`${API_ROUTES.workspaces}/${workspaceId}/documents?${params.toString()}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -309,9 +325,9 @@ export async function purgeWorkspaceDocuments(
   options: { includeIncoming?: boolean } = {}
 ): Promise<{ requested: number; deleted: number }> {
   const params = new URLSearchParams()
-  if (contextSpec) params.append('contextSpec', contextSpec)
-  featureArray.forEach(f => params.append('featureArray', f))
-  filterArray.forEach(f => params.append('filterArray', f))
+  appendWorkspaceContext(params, contextSpec)
+  appendAllOf(params, featureArray)
+  appendFilters(params, filterArray)
   if (options.includeIncoming) params.append('includeIncoming', 'true')
   const response = await api.delete<{ payload: { requested: number; deleted: number } }>(
     `${API_ROUTES.workspaces}/${workspaceId}/documents/purge?${params.toString()}`
