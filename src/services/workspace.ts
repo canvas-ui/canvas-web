@@ -241,33 +241,33 @@ export interface Layer {
   lockedBy?: string[];
 }
 
-export async function listWorkspaceLayers(workspaceId: string): Promise<Layer[]> {
-  const res = await api.get<{ payload: Layer[] }>(`${API_ROUTES.workspaces}/${workspaceId}/layers`)
+export async function listWorkspaceLayers(workspaceId: string, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<Layer[]> {
+  const res = await api.get<{ payload: Layer[] }>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers`)
   return res.payload || []
 }
 
-export async function getWorkspaceLayer(workspaceId: string, layerId: string): Promise<Layer> {
-  const res = await api.get<{ payload: Layer }>(`${API_ROUTES.workspaces}/${workspaceId}/layers/${layerId}`)
+export async function getWorkspaceLayer(workspaceId: string, layerId: string, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<Layer> {
+  const res = await api.get<{ payload: Layer }>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers/${layerId}`)
   return res.payload
 }
 
-export async function renameWorkspaceLayer(workspaceId: string, layerId: string, newName: string): Promise<Layer> {
-  const res = await api.patch<{ payload: Layer }>(`${API_ROUTES.workspaces}/${workspaceId}/layers/${layerId}`, { name: newName })
+export async function renameWorkspaceLayer(workspaceId: string, layerId: string, newName: string, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<Layer> {
+  const res = await api.patch<{ payload: Layer }>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers/${layerId}`, { name: newName })
   return res.payload
 }
 
-export async function lockWorkspaceLayer(workspaceId: string, layerId: string, lockBy: string): Promise<boolean> {
-  await api.post(`${API_ROUTES.workspaces}/${workspaceId}/layers/${layerId}/lock`, { lockBy })
+export async function lockWorkspaceLayer(workspaceId: string, layerId: string, lockBy: string, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<boolean> {
+  await api.post(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers/${layerId}/lock`, { lockBy })
   return true
 }
 
-export async function unlockWorkspaceLayer(workspaceId: string, layerId: string, lockBy: string): Promise<boolean> {
-  await api.post(`${API_ROUTES.workspaces}/${workspaceId}/layers/${layerId}/unlock`, { lockBy })
+export async function unlockWorkspaceLayer(workspaceId: string, layerId: string, lockBy: string, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<boolean> {
+  await api.post(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers/${layerId}/unlock`, { lockBy })
   return true
 }
 
-export async function destroyWorkspaceLayer(workspaceId: string, layerId: string): Promise<boolean> {
-  await api.delete(`${API_ROUTES.workspaces}/${workspaceId}/layers/${layerId}`)
+export async function destroyWorkspaceLayer(workspaceId: string, layerId: string, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<boolean> {
+  await api.delete(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers/${layerId}`)
   return true
 }
 
