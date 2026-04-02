@@ -1,5 +1,6 @@
 import { API_ROUTES } from '@/config/api';
 import { api } from '@/lib/api';
+import type { TreeNode } from '@/types/workspace';
 // Removed import for Context and Workspace as they are global types from src/types/api.d.ts
 
 // Type for the payload when creating a context
@@ -227,10 +228,10 @@ export async function revokeContextAccess(contextId: string, sharedWithUserId: s
   }
 }
 
-export async function getContextTree(id: string, ownerId?: string): Promise<UnknownRecord> {
+export async function getContextTree(id: string, ownerId?: string): Promise<TreeNode> {
   try {
     const endpoint = withOwnerId(`${API_ROUTES.contexts}/${id}/tree`, ownerId);
-    const response = await api.get<ApiPayload<UnknownRecord>>(endpoint);
+    const response = await api.get<ApiPayload<TreeNode>>(endpoint);
     if (response && response.payload) {
       return response.payload;
     }
