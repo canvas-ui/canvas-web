@@ -26,6 +26,9 @@ import { cn } from '@/lib/utils';
 interface FileManagerViewProps {
   // Tree data
   tree: TreeNode | null;
+  workspaceTrees?: any[];
+  selectedTreeName?: string;
+  onSelectTree?: (treeName: string, treeType: string) => void;
   selectedPath: string;
   onPathSelect: (path: string) => void;
   isLoadingTree: boolean;
@@ -275,6 +278,9 @@ function TagsTab({ customTags, onTagsChange }: TagsTabProps) {
 
 export function FileManagerView({
   tree,
+  workspaceTrees,
+  selectedTreeName,
+  onSelectTree,
   selectedPath,
   onPathSelect,
   isLoadingTree,
@@ -316,7 +322,7 @@ export function FileManagerView({
   copiedDocuments,
   workspaceId
 }: FileManagerViewProps) {
-  const [leftTab, setLeftTab] = useState<'tree' | 'layers'>('tree');
+  const [leftTab, setLeftTab] = useState<string>(selectedTreeName || 'tree');
   const [rightTab, setRightTab] = useState<'filters' | 'tags' | 'tokens' | 'services'>('filters');
   const [customTags, setCustomTags] = useState<string[]>([]);
   const [clipboard, setClipboard] = useState<ClipboardState>({
@@ -328,6 +334,13 @@ export function FileManagerView({
   // Layer selection for merge/subtract operations
   const [sourceLayerName, setSourceLayerName] = useState<string | null>(null);
   const [targetLayerNames, setTargetLayerNames] = useState<Set<string>>(new Set());
+
+  // Sync leftTab when selectedTreeName changes from parent
+  useEffect(() => {
+    if (selectedTreeName && leftTab !== 'layers') {
+      setLeftTab(selectedTreeName);
+    }
+  }, [selectedTreeName]);
 
   // Enhanced document operations with clipboard
   const handleCopyDocuments = useCallback((documentIds: number[]) => {
@@ -525,35 +538,72 @@ export function FileManagerView({
       {/* Left Panel - Tree View / Layers */}
       <div className="w-72 min-w-72 border rounded-lg bg-card flex flex-col">
         {/* Tab Header */}
-        <div className="flex border-b">
-          <button
-            className={cn(
-              "flex-1 py-3 px-2 text-xs font-medium transition-colors",
-              leftTab === 'tree'
-                ? 'border-b-2 border-primary bg-background'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-            onClick={() => setLeftTab('tree')}
-          >
-            <TreePine className="w-3 h-3 mr-1 inline" />
-            Tree
-          </button>
-          <button
-            className={cn(
-              "flex-1 py-3 px-2 text-xs font-medium transition-colors",
-              leftTab === 'layers'
-                ? 'border-b-2 border-primary bg-background'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-            onClick={() => setLeftTab('layers')}
-          >
-            <Layers className="w-3 h-3 mr-1 inline" />
-            Layers
-          </button>
+        <div className="flex border-b overflow-x-auto">
+          {workspaceTrees && workspaceTrees.length > 0 ? (
+            <>
+              {workspaceTrees.map((t) => (
+                <button
+                  key={t.id ?? t.name}
+                  className={cn(
+                    "flex-shrink-0 py-3 px-3 text-xs font-medium transition-colors whitespace-nowrap",
+                    leftTab === t.name
+                      ? 'border-b-2 border-primary bg-background'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                  onClick={() => {
+                    setLeftTab(t.name);
+                    onSelectTree?.(t.name, t.type);
+                  }}
+                >
+                  <TreePine className="w-3 h-3 mr-1 inline" />
+                  {t.name}
+                </button>
+              ))}
+              <button
+                className={cn(
+                  "flex-shrink-0 py-3 px-3 text-xs font-medium transition-colors",
+                  leftTab === 'layers'
+                    ? 'border-b-2 border-primary bg-background'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+                onClick={() => setLeftTab('layers')}
+              >
+                <Layers className="w-3 h-3 mr-1 inline" />
+                Layers
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                className={cn(
+                  "flex-1 py-3 px-2 text-xs font-medium transition-colors",
+                  leftTab !== 'layers'
+                    ? 'border-b-2 border-primary bg-background'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+                onClick={() => setLeftTab('tree')}
+              >
+                <TreePine className="w-3 h-3 mr-1 inline" />
+                Tree
+              </button>
+              <button
+                className={cn(
+                  "flex-1 py-3 px-2 text-xs font-medium transition-colors",
+                  leftTab === 'layers'
+                    ? 'border-b-2 border-primary bg-background'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+                onClick={() => setLeftTab('layers')}
+              >
+                <Layers className="w-3 h-3 mr-1 inline" />
+                Layers
+              </button>
+            </>
+          )}
         </div>
 
         <div className="flex-1 flex flex-col min-h-0">
-          {leftTab === 'tree' ? (
+          {leftTab !== 'layers' ? (
             <>
               <div className="p-4 border-b">
                 <h3 className="font-semibold text-sm text-muted-foreground mb-2">Workspace Tree</h3>

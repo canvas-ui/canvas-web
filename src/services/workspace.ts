@@ -96,6 +96,17 @@ export async function removeWorkspace(id: string): Promise<Workspace> {
 
 
 
+// List all trees for a workspace
+export async function listWorkspaceTrees(workspaceId: string): Promise<any[]> {
+  try {
+    const res = await api.get<{ payload: any[] }>(`${API_ROUTES.workspaces}/${workspaceId}/trees`);
+    return res.payload || [];
+  } catch (error) {
+    console.error(`Failed to list workspace trees ${workspaceId}:`, error);
+    throw error;
+  }
+}
+
 // Get workspace tree
 export async function getWorkspaceTree(
   id: string
@@ -110,16 +121,33 @@ export async function getWorkspaceTree(
   }
 }
 
+// Get a specific tree by name
+export async function getWorkspaceTreeByName(
+  workspaceId: string,
+  treeName: string
+): Promise<{ payload: TreeNode; status: string; statusCode: number; message: string }> {
+  try {
+    return await api.get<{ payload: TreeNode; status: string; statusCode: number; message: string }>(
+      `${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}`
+    );
+  } catch (error) {
+    console.error(`Failed to get workspace tree ${workspaceId}/${treeName}:`, error);
+    throw error;
+  }
+}
+
 // Get workspace documents
 export async function getWorkspaceDocuments(
   id: string,
   contextSpec: string = '/',
   featureArray: string[] = [],
-  options: { limit?: number; offset?: number; page?: number; includeIncoming?: boolean } = {}
+  options: { limit?: number; offset?: number; page?: number; includeIncoming?: boolean; treeName?: string; treeType?: string } = {}
 ): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }> {
   try {
     const params = new URLSearchParams();
-    appendWorkspaceContext(params, contextSpec)
+    params.append('treeNameOrTreeId', options.treeName || DEFAULT_WORKSPACE_TREE_NAME)
+    if (options.treeType) params.append('treeType', options.treeType)
+    if (contextSpec) params.append('context', contextSpec)
     appendAllOf(params, featureArray)
     if (options.includeIncoming) params.append('includeIncoming', 'true')
     if (options.limit !== undefined) params.append('limit', options.limit.toString());

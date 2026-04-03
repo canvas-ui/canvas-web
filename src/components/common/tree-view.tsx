@@ -366,6 +366,11 @@ function TreeNodeComponent({
       }
     }
 
+    // Expand the folder if it has children and isn't already expanded
+    if (hasChildren && !isExpanded) {
+      setManuallyExpanded(true)
+    }
+
     // Normal path selection
     onPathSelect(currentPath)
   }
@@ -436,8 +441,8 @@ function TreeNodeComponent({
               title={`Color: ${node.color}`}
             />
           )}
-          <span className="truncate" title={node.description || node.label}>
-            {node.label}
+          <span className="truncate" title={node.description || node.label || node.name}>
+            {node.label || node.name}
           </span>
         </div>
 

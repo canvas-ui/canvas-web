@@ -6,7 +6,8 @@ import { useToast } from '@/components/ui/toast-container';
 import { FileManagerView } from '@/components/workspace/file-manager-view';
 
 import {
-  getWorkspaceTree,
+  getWorkspaceTreeByName,
+  listWorkspaceTrees,
   getWorkspaceDocuments,
   insertWorkspacePath,
   removeWorkspacePath,
@@ -23,7 +24,8 @@ import {
   unlockWorkspaceLayer,
   destroyWorkspaceLayer,
   startWorkspace,
-  stopWorkspace
+  stopWorkspace,
+  DEFAULT_WORKSPACE_TREE_NAME
 } from '@/services/workspace';
 import { getSchemas } from '@/services/schemas';
 import { TreeNode, Document } from '@/types/workspace';
@@ -67,6 +69,9 @@ export default function WorkspaceDetailPage() {
   const [layers, setLayers] = useState<any[]>([]);
   const [isLoadingLayers, setIsLoadingLayers] = useState(false);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
+  const [workspaceTrees, setWorkspaceTrees] = useState<any[]>([]);
+  const [selectedTreeName, setSelectedTreeName] = useState<string>(DEFAULT_WORKSPACE_TREE_NAME);
+  const [selectedTreeType, setSelectedTreeType] = useState<string>('context');
   const [isStartingWorkspace, setIsStartingWorkspace] = useState(false);
   const [isStoppingWorkspace, setIsStoppingWorkspace] = useState(false);
   // Tree operations (layer merge/subtract) - initialized after fetchTree is defined via lazy wrapper
@@ -120,11 +125,11 @@ export default function WorkspaceDetailPage() {
   };
 
   // Reusable fetch functions
-  const fetchTree = async () => {
+  const fetchTree = async (treeName?: string) => {
     if (!workspaceName) return;
     setIsLoadingTree(true);
     try {
-      const response = await getWorkspaceTree(workspaceName);
+      const response = await getWorkspaceTreeByName(workspaceName, treeName || selectedTreeName);
       setTree(response.payload as TreeNode);
       setError(null);
     } catch (err) {
@@ -149,7 +154,9 @@ export default function WorkspaceDetailPage() {
 
       const response = await getWorkspaceDocuments(workspaceName, selectedPath, allSchemas, {
         limit: pageSize,
-        page: currentPage
+        page: currentPage,
+        treeName: selectedTreeName,
+        treeType: selectedTreeType
       });
       // response.payload is directly an array of documents, not an object with 'data' property
       const documents = response.payload as Document[];
@@ -178,12 +185,24 @@ export default function WorkspaceDetailPage() {
       try {
         const response = await api.get<ApiResponse<{ workspace: Workspace } | Workspace>>(`${API_ROUTES.workspaces}/${workspaceName}`);
 
+        let ws: Workspace;
         if (response.payload && 'workspace' in response.payload) {
-          setWorkspace(response.payload.workspace as Workspace);
+          ws = response.payload.workspace as Workspace;
         } else {
-          setWorkspace(response.payload as Workspace);
+          ws = response.payload as Workspace;
         }
+        setWorkspace(ws);
         setError(null);
+
+        // Auto-start workspace if it's not active so documents can be queried
+        if (ws.status !== 'active') {
+          try {
+            const started = await startWorkspace(ws.name);
+            setWorkspace(started);
+          } catch (startErr) {
+            console.warn('Failed to auto-start workspace:', startErr);
+          }
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : `Failed to fetch workspace ${workspaceName}`;
         setError(message);
@@ -199,6 +218,14 @@ export default function WorkspaceDetailPage() {
     };
 
     fetchWorkspace();
+  }, [workspaceName]);
+
+  // Fetch all trees for the workspace
+  useEffect(() => {
+    if (!workspaceName) return;
+    listWorkspaceTrees(workspaceName)
+      .then(trees => setWorkspaceTrees(trees))
+      .catch(err => console.error('Failed to list workspace trees:', err));
   }, [workspaceName]);
 
   // Fetch workspace tree
@@ -222,10 +249,10 @@ export default function WorkspaceDetailPage() {
     loadSchemas();
   }, []);
 
-  // Fetch documents when path, schema filters, URL filters, or pagination changes
+  // Fetch documents when path, schema filters, URL filters, pagination, or workspace status changes
   useEffect(() => {
     fetchDocuments();
-  }, [workspaceName, selectedPath, selectedSchemas, urlFilters, currentPage, pageSize]);
+  }, [workspaceName, selectedPath, selectedSchemas, urlFilters, currentPage, pageSize, workspace?.status, selectedTreeName, selectedTreeType]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -678,6 +705,13 @@ export default function WorkspaceDetailPage() {
     }
   };
 
+  // Tree tab selection
+  const handleSelectTree = async (treeName: string, treeType: string = 'context') => {
+    setSelectedTreeName(treeName);
+    setSelectedTreeType(treeType);
+    await fetchTree(treeName);
+  };
+
   // Layer tab interactions
   const handleSelectLayer = async (layer: any) => {
     setSelectedLayerId(layer.id);
@@ -687,7 +721,9 @@ export default function WorkspaceDetailPage() {
       try {
         const response = await getWorkspaceDocuments(workspace.name, `/${layer.name}`, selectedSchemas, {
           limit: pageSize,
-          page: currentPage
+          page: currentPage,
+          treeName: selectedTreeName,
+          treeType: selectedTreeType
         });
         // response.payload is directly an array of documents, not an object with 'data' property
         const documents = response.payload as Document[];
@@ -857,6 +893,9 @@ export default function WorkspaceDetailPage() {
         {/* Enhanced File Manager */}
         <FileManagerView
           tree={tree}
+          workspaceTrees={workspaceTrees}
+          selectedTreeName={selectedTreeName}
+          onSelectTree={handleSelectTree}
           selectedPath={selectedPath}
           onPathSelect={(path: string) => {
             const sanitizedPath = sanitizeUrlPath(path);
