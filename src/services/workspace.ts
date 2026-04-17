@@ -5,7 +5,7 @@ import type { TreeNode } from '@/types/workspace';
 // No local Workspace interface should be defined here.
 
 export const INCOMING_ROOT_CONTEXT = '/.incoming'
-export const DEFAULT_WORKSPACE_TREE_NAME = 'default'
+export const DEFAULT_WORKSPACE_TREE_NAME = 'context'
 
 function appendWorkspaceContext(params: URLSearchParams, contextSpec: string = '/') {
   params.append('treeNameOrTreeId', DEFAULT_WORKSPACE_TREE_NAME)

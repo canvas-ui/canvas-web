@@ -58,6 +58,8 @@ interface Context {
   baseUrl?: string
   path?: string
   pathArray?: string[]
+  color?: string
+  ownerEmail?: string
   locked?: boolean
   serverContextArray?: any[]
   clientContextArray?: any[]

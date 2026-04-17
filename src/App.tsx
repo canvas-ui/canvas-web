@@ -19,9 +19,12 @@ import AdminRolesPage from './pages/admin/roles'
 import AdminUsersPage from './pages/admin/users'
 import AgentsPage from './pages/agents'
 import AgentDetailPage from './pages/agents/[agentId]'
+import WorkspaceSettingsPage from './pages/workspaces/[workspaceName]/settings'
+import ContextSettingsPage from './pages/contexts/[contextId]/settings'
+import AgentSettingsPage from './pages/agents/[agentId]/settings'
 import RolesPage from './pages/roles'
 import RemotesPage from './pages/remotes'
-import { DashboardLayout } from './components/layouts/dashboard-layout'
+import { AppShell } from './components/shell/AppShell'
 import { ToastContainer, useToast } from './components/ui/toast-container'
 import { setGlobalErrorHandler } from './lib/error-handler'
 
@@ -47,16 +50,19 @@ function AppContent() {
         <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
 
         {/* Dashboard layout for authenticated routes */}
-        <Route path="/" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
+        <Route path="/" element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
           <Route index element={<Navigate to="/workspaces" replace />} />
           <Route path="home" element={<HomePage />} />
           <Route path="workspaces" element={<WorkspacesPage />} />
           <Route path="workspaces/:workspaceName" element={<WorkspaceDetailPage />} />
+          <Route path="workspaces/:workspaceName/settings" element={<WorkspaceSettingsPage />} />
           <Route path="workspaces/:workspaceName/*" element={<WorkspaceDetailPage />} />
           <Route path="contexts" element={<ContextsPage />} />
           <Route path="contexts/:contextId" element={<ContextDetailPage />} />
+          <Route path="contexts/:contextId/settings" element={<ContextSettingsPage />} />
           <Route path="agents" element={<AgentsPage />} />
           <Route path="agents/:agentId" element={<AgentDetailPage />} />
+          <Route path="agents/:agentId/settings" element={<AgentSettingsPage />} />
           <Route path="roles" element={<RolesPage />} />
           <Route path="remotes" element={<RemotesPage />} />
           <Route path="api-tokens" element={<ApiTokensPage />} />
