@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast-container'
 import { M2Header } from '@/components/menu/shared/M2Header'
 import { useMenu } from '@/components/shell/menu-context'
-import { getContext, createContext, updateContextUrl, deleteContext } from '@/services/context'
+import { getContext, createContext, updateContext, updateContextUrl, deleteContext } from '@/services/context'
 import { listWorkspaces } from '@/services/workspace'
 
 export function ContextM2Form() {
@@ -15,12 +15,15 @@ export function ContextM2Form() {
 
   // Create mode state
   const [newId, setNewId] = useState('')
+  const [newName, setNewName] = useState('')
   const [newUrl, setNewUrl] = useState('/')
+  const [newBaseUrl, setNewBaseUrl] = useState('')
   const [newWorkspaceId, setNewWorkspaceId] = useState('')
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
 
   // Edit mode state
   const [context, setContext] = useState<Context | null>(null)
+  const [editName, setEditName] = useState('')
   const [editUrl, setEditUrl] = useState('')
 
   const [isSaving, setIsSaving] = useState(false)
@@ -38,6 +41,7 @@ export function ContextM2Form() {
       try {
         const ctx = await getContext(entityId!)
         setContext(ctx)
+        setEditName(ctx.name || '')
         setEditUrl(ctx.url || '')
       } catch {
         showToast({ title: 'Error', description: 'Failed to load context', variant: 'destructive' })
@@ -51,7 +55,13 @@ export function ContextM2Form() {
     if (!newId.trim() || !newWorkspaceId) return
     setIsSaving(true)
     try {
-      await createContext({ id: newId.trim(), url: newUrl.trim() || '/', workspaceId: newWorkspaceId })
+      await createContext({
+        id: newId.trim(),
+        name: newName.trim() || undefined,
+        url: newUrl.trim() || '/',
+        baseUrl: newBaseUrl.trim() || undefined,
+        workspaceId: newWorkspaceId,
+      })
       window.dispatchEvent(new CustomEvent('contexts:refresh'))
       showToast({ title: 'Created', description: `Context "${newId}" created` })
       closeM2()
@@ -67,7 +77,10 @@ export function ContextM2Form() {
     if (!entityId) return
     setIsSaving(true)
     try {
-      await updateContextUrl(entityId, editUrl)
+      await Promise.all([
+        updateContextUrl(entityId, editUrl),
+        updateContext(entityId, { name: editName.trim() || null }),
+      ])
       window.dispatchEvent(new CustomEvent('contexts:refresh'))
       showToast({ title: 'Saved', description: 'Context updated' })
     } catch (err) {
@@ -96,7 +109,7 @@ export function ContextM2Form() {
   return (
     <div className="flex flex-col h-full">
       <M2Header
-        title={isCreate ? 'New Context' : `Edit — ${entityId}`}
+        title={isCreate ? 'New Context' : `Edit — ${context?.name || entityId}`}
         onBack={closeM2}
       />
 
@@ -109,6 +122,15 @@ export function ContextM2Form() {
                 value={newId}
                 onChange={e => setNewId(e.target.value)}
                 placeholder="my-context"
+                className="mt-1 h-8 text-sm font-mono"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Name <span className="text-muted-foreground/60">(optional)</span></label>
+              <Input
+                value={newName}
+                onChange={e => setNewName(e.target.value)}
+                placeholder="My Context"
                 className="mt-1 h-8 text-sm"
               />
             </div>
@@ -118,6 +140,15 @@ export function ContextM2Form() {
                 value={newUrl}
                 onChange={e => setNewUrl(e.target.value)}
                 placeholder="workspace://path"
+                className="mt-1 h-8 text-sm font-mono"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Base URL <span className="text-muted-foreground/60">(optional)</span></label>
+              <Input
+                value={newBaseUrl}
+                onChange={e => setNewBaseUrl(e.target.value)}
+                placeholder="workspace://base/path"
                 className="mt-1 h-8 text-sm font-mono"
               />
             </div>
@@ -144,6 +175,15 @@ export function ContextM2Form() {
               <div className="mt-1 h-8 px-2 flex items-center text-sm text-muted-foreground bg-muted rounded-md font-mono">
                 {entityId}
               </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Name <span className="text-muted-foreground/60">(optional)</span></label>
+              <Input
+                value={editName}
+                onChange={e => setEditName(e.target.value)}
+                placeholder="My Context"
+                className="mt-1 h-8 text-sm"
+              />
             </div>
             {context?.workspaceName && (
               <div>

@@ -47,6 +47,7 @@ interface Workspace {
 
 interface Context {
   id: string
+  name?: string | null
   url: string
   description?: string
   createdAt: string
@@ -54,6 +55,7 @@ interface Context {
   workspace: string
   workspaceId?: string
   workspaceName?: string
+  workspaceActive?: boolean
   userId: string
   baseUrl?: string
   path?: string

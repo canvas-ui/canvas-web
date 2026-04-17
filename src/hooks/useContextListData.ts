@@ -69,6 +69,11 @@ export function useContextListData(enabled: boolean) {
       ))
     }
 
+    const handleWorkspaceStatusChanged = () => {
+      hasFetched.current = false
+      fetch()
+    }
+
     const events: Array<[string, Function]> = [
       ['context:created', handleCreated],
       ['context.created', handleCreated],
@@ -79,6 +84,8 @@ export function useContextListData(enabled: boolean) {
       ['context:url:changed', handleUrlChanged],
       ['context.url.set', handleUrlChanged],
       ['context:url:set', handleUrlChanged],
+      ['workspace:status:changed', handleWorkspaceStatusChanged],
+      ['workspace.status.changed', handleWorkspaceStatusChanged],
     ]
     events.forEach(([e, h]) => socketService.on(e, h))
 

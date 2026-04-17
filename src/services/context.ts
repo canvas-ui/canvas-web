@@ -8,7 +8,7 @@ import type { TreeNode } from '@/types/workspace';
 // Global Context type already includes most of these. We need to ensure `workspace` is `workspaceId` for the POST.
 // And make sure other non-provided fields are optional or handled.
 type CreateContextPayload = Pick<Context, 'id' | 'url'> &
-                            Partial<Pick<Context, 'description' | 'baseUrl'>> &
+                            Partial<Pick<Context, 'name' | 'description' | 'baseUrl'>> &
                             { workspaceId: string };
 
 type UnknownRecord = Record<string, unknown>;
@@ -120,6 +120,20 @@ export async function createContext(contextData: CreateContextPayload): Promise<
     throw new Error('Created context data not found in API response');
   } catch (error) {
     console.error('Failed to create context:', error);
+    throw error;
+  }
+}
+
+export async function updateContext(id: string, updates: { name?: string | null }, ownerId?: string): Promise<Context> {
+  try {
+    const endpoint = withOwnerId(`${API_ROUTES.contexts}/${id}`, ownerId);
+    const response = await api.put<{ payload: { context: Context } }>(endpoint, updates);
+    if (response?.payload?.context) {
+      return response.payload.context;
+    }
+    throw new Error('Updated context data not found in API response');
+  } catch (error) {
+    console.error(`Failed to update context ${id}:`, error);
     throw error;
   }
 }
