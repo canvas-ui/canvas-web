@@ -124,7 +124,7 @@ export async function createContext(contextData: CreateContextPayload): Promise<
   }
 }
 
-export async function updateContext(id: string, updates: { name?: string | null }, ownerId?: string): Promise<Context> {
+export async function updateContext(id: string, updates: { name?: string | null; baseUrl?: string | null }, ownerId?: string): Promise<Context> {
   try {
     const endpoint = withOwnerId(`${API_ROUTES.contexts}/${id}`, ownerId);
     const response = await api.put<{ payload: { context: Context } }>(endpoint, updates);
@@ -367,7 +367,7 @@ export async function importDocumentsToContext(workspaceId: string, contextPath:
     const docs = Array.isArray(documents) ? documents : [documents];
     await api.post<ApiPayload>(
       `${API_ROUTES.workspaces}/${workspaceId}/documents`,
-      { documents: docs, tree: 'context', context: contextPath }
+      { documents: docs, treeType: 'context', context: contextPath }
     );
     return true;
   } catch (error) {

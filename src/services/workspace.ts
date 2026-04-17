@@ -232,13 +232,12 @@ export async function copyWorkspacePath(workspaceId: string, fromPath: string, t
   }
 }
 
-export async function pasteDocumentsToWorkspacePath(workspaceId: string, path: string, documentIds: number[]): Promise<boolean> {
+export async function pasteDocumentsToWorkspacePath(workspaceId: string, path: string, documentIds: number[], treeName = DEFAULT_WORKSPACE_TREE_NAME, treeType: 'context' | 'directory' = 'context'): Promise<boolean> {
   try {
-    // This would use the document insertion API with the specified path
     const ids = normalizeDocumentIds(Array.isArray(documentIds) ? documentIds : [documentIds])
     await api.post<{ payload: unknown; message: string; status: string; statusCode: number }>(
       `${API_ROUTES.workspaces}/${workspaceId}/documents`,
-      { documentIds: ids, tree: DEFAULT_WORKSPACE_TREE_NAME, context: path }
+      { documentIds: ids, treeNameOrTreeId: treeName, treeType, context: path }
     );
     return true;
   } catch (error) {
@@ -247,13 +246,12 @@ export async function pasteDocumentsToWorkspacePath(workspaceId: string, path: s
   }
 }
 
-export async function importDocumentsToWorkspacePath(workspaceId: string, path: string, documents: unknown[]): Promise<boolean> {
+export async function importDocumentsToWorkspacePath(workspaceId: string, path: string, documents: unknown[], treeName = DEFAULT_WORKSPACE_TREE_NAME, treeType: 'context' | 'directory' = 'context'): Promise<boolean> {
   try {
-    // Import new documents to workspace at the specified path
     const docs = Array.isArray(documents) ? documents : [documents]
     await api.post<{ payload: unknown; message: string; status: string; statusCode: number }>(
       `${API_ROUTES.workspaces}/${workspaceId}/documents`,
-      { documents: docs, tree: DEFAULT_WORKSPACE_TREE_NAME, context: path }
+      { documents: docs, treeNameOrTreeId: treeName, treeType, context: path }
     );
     return true;
   } catch (error) {

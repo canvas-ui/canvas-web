@@ -59,7 +59,7 @@ export function DefaultCanvas({
         <span className="text-sm text-foreground truncate">{urlDisplay}</span>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         <DocumentList
           documents={documents}
           isLoading={isLoading}

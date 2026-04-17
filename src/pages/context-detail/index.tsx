@@ -906,7 +906,7 @@ export default function ContextDetailPage() {
         </div>
 
         {/* Page Content */}
-        <div className="flex-1 overflow-y-auto space-y-6 p-6">
+        <div className="space-y-6 p-6">
           {/* Page Header */}
           <div className="border-b pb-4">
             <h1 className="text-3xl font-bold tracking-tight">

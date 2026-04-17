@@ -3,9 +3,18 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast-container'
 import { M2Header } from '@/components/menu/shared/M2Header'
+import { MenuTreeView } from '@/components/menu/shared/MenuTreeView'
 import { useMenu } from '@/components/shell/menu-context'
-import { getContext, createContext, updateContext, updateContextUrl, deleteContext } from '@/services/context'
+import { getContext, createContext, updateContext, updateContextUrl, deleteContext, getContextTree } from '@/services/context'
 import { listWorkspaces } from '@/services/workspace'
+import { cn } from '@/lib/utils'
+import type { TreeNode } from '@/types/workspace'
+
+function urlToPath(url: string): string {
+  const m = url.match(/:\/\/(.*)$/)
+  if (m) return '/' + m[1].replace(/^\/+/, '')
+  return url.startsWith('/') ? url : '/' + url
+}
 
 export function ContextM2Form() {
   const { state, closeM2 } = useMenu()
@@ -25,6 +34,11 @@ export function ContextM2Form() {
   const [context, setContext] = useState<Context | null>(null)
   const [editName, setEditName] = useState('')
   const [editUrl, setEditUrl] = useState('')
+  const [editBaseUrl, setEditBaseUrl] = useState('')
+  const [tree, setTree] = useState<TreeNode | null>(null)
+  const [isLoadingTree, setIsLoadingTree] = useState(false)
+  const [showTree, setShowTree] = useState(false)
+  const [treeTarget, setTreeTarget] = useState<'url' | 'baseUrl'>('url')
 
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -43,9 +57,13 @@ export function ContextM2Form() {
         setContext(ctx)
         setEditName(ctx.name || '')
         setEditUrl(ctx.url || '')
+        setEditBaseUrl(ctx.baseUrl || '')
       } catch {
         showToast({ title: 'Error', description: 'Failed to load context', variant: 'destructive' })
+        return
       }
+      setIsLoadingTree(true)
+      getContextTree(entityId!).then(t => setTree(t)).catch(() => {}).finally(() => setIsLoadingTree(false))
     }
     load()
   }, [entityId])
@@ -79,7 +97,7 @@ export function ContextM2Form() {
     try {
       await Promise.all([
         updateContextUrl(entityId, editUrl),
-        updateContext(entityId, { name: editName.trim() || null }),
+        updateContext(entityId, { name: editName.trim() || null, baseUrl: editBaseUrl.trim() || null }),
       ])
       window.dispatchEvent(new CustomEvent('contexts:refresh'))
       showToast({ title: 'Saved', description: 'Context updated' })
@@ -104,6 +122,15 @@ export function ContextM2Form() {
     } finally {
       setIsDeleting(false)
     }
+  }
+
+  const handleTreeSelect = (path: string) => {
+    const full = context?.workspaceName
+      ? `${context.workspaceName}://${path.replace(/^\//, '')}`
+      : path
+    if (treeTarget === 'url') setEditUrl(full)
+    else setEditBaseUrl(full)
+    setShowTree(false)
   }
 
   return (
@@ -201,6 +228,72 @@ export function ContextM2Form() {
                 className="mt-1 h-8 text-sm font-mono"
               />
             </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Base URL <span className="text-muted-foreground/60">(optional)</span></label>
+              <Input
+                value={editBaseUrl}
+                onChange={e => setEditBaseUrl(e.target.value)}
+                placeholder="workspace://base/path"
+                className="mt-1 h-8 text-sm font-mono"
+              />
+            </div>
+
+            {/* Tree picker */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setShowTree(v => !v)}
+                  className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                >
+                  {showTree ? 'Hide tree' : 'Pick from tree…'}
+                </button>
+                {showTree && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-muted-foreground">→</span>
+                    <button
+                      type="button"
+                      onClick={() => setTreeTarget('url')}
+                      className={cn(
+                        'px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors',
+                        treeTarget === 'url'
+                          ? 'bg-accent text-foreground'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+                      )}
+                    >
+                      URL
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTreeTarget('baseUrl')}
+                      className={cn(
+                        'px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors',
+                        treeTarget === 'baseUrl'
+                          ? 'bg-accent text-foreground'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+                      )}
+                    >
+                      Base URL
+                    </button>
+                  </div>
+                )}
+              </div>
+              {showTree && (
+                <div className="border border-border rounded-md overflow-hidden">
+                  <div className="max-h-52 overflow-y-auto">
+                    <MenuTreeView
+                      root={tree}
+                      selectedPath={urlToPath(treeTarget === 'url' ? editUrl : editBaseUrl)}
+                      onSelect={handleTreeSelect}
+                      isLoading={isLoadingTree}
+                      readOnly
+                      rootLabel={context?.workspaceName}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
             <Button type="submit" className="w-full h-8 text-sm" disabled={isSaving}>
               {isSaving ? 'Saving…' : 'Save Changes'}
             </Button>

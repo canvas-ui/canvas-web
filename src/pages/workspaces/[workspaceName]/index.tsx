@@ -207,10 +207,12 @@ export default function WorkspaceDetailPage() {
     showToast({ title: 'Cut', description: `${documentIds.length} document(s) cut to clipboard` });
   };
 
+  const selectedTreeType: 'context' | 'directory' = selectedTreeName === 'directory' ? 'directory' : 'context';
+
   const handlePasteDocuments = async (path: string, documentIds: number[]): Promise<boolean> => {
     if (!workspace) return false;
     try {
-      const success = await pasteDocumentsToWorkspacePath(workspace.name, path, documentIds);
+      const success = await pasteDocumentsToWorkspacePath(workspace.name, path, documentIds, selectedTreeName, selectedTreeType);
       if (success) {
         await fetchDocuments();
         setClipboard(null);
@@ -226,7 +228,7 @@ export default function WorkspaceDetailPage() {
   const handleImportDocuments = async (docs: any[], contextPath: string): Promise<boolean> => {
     if (!workspace) return false;
     try {
-      const success = await importDocumentsToWorkspacePath(workspace.name, contextPath, docs);
+      const success = await importDocumentsToWorkspacePath(workspace.name, contextPath, docs, selectedTreeName, selectedTreeType);
       if (success) {
         if (contextPath === selectedPath) await fetchDocuments();
         showToast({ title: 'Success', description: `Imported ${docs.length} document(s) to "${contextPath}"` });
