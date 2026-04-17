@@ -829,7 +829,7 @@ export default function ContextDetailPage() {
       )}
 
       {/* Main Content */}
-      <div className={`flex-1 transition-all duration-300 ${anyRightSidebarOpen ? 'mr-96' : ''}`}>
+      <div className={`flex-1 flex flex-col min-h-0 transition-all duration-300 ${anyRightSidebarOpen ? 'mr-96' : ''}`}>
         {/* Browser-like Toolbar */}
         <div className="flex items-center gap-2 p-2 border rounded-md shadow-sm bg-background">
           {/* Tree View Toggle */}
@@ -906,7 +906,7 @@ export default function ContextDetailPage() {
         </div>
 
         {/* Page Content */}
-        <div className="space-y-6 p-6">
+        <div className="flex-1 overflow-y-auto space-y-6 p-6">
           {/* Page Header */}
           <div className="border-b pb-4">
             <h1 className="text-3xl font-bold tracking-tight">
