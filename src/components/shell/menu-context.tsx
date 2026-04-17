@@ -5,7 +5,7 @@ import { getCurrentUserFromToken } from '@/services/auth'
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type MenuSection = 'contexts' | 'workspaces' | 'agents' | 'roles' | 'admin' | 'settings' | null
-export type M2View = 'detail' | 'form' | 'chat' | null
+export type M2View = 'detail' | 'form' | 'chat' | 'settings' | null
 
 export interface MenuState {
   activeSection: MenuSection
@@ -20,7 +20,7 @@ type MenuAction =
   | { type: 'SET_SECTION'; section: MenuSection }
   | { type: 'TOGGLE_SECTION'; section: MenuSection }
   | { type: 'CLOSE_M1' }
-  | { type: 'OPEN_M2'; view: M2View; entityId?: string }
+  | { type: 'OPEN_M2'; view: M2View; entityId?: string | null }
   | { type: 'CLOSE_M2' }
   | { type: 'SELECT_ENTITY'; entityId: string | null }
   | { type: 'SYNC_FROM_URL'; section: MenuSection; entityId: string | null }
@@ -32,7 +32,7 @@ interface MenuContextValue {
   setSection: (section: MenuSection) => void
   toggleSection: (section: MenuSection) => void
   closeM1: () => void
-  openM2: (view: M2View, entityId?: string) => void
+  openM2: (view: M2View, entityId?: string | null) => void
   closeM2: () => void
   selectEntity: (entityId: string | null) => void
 }
@@ -81,7 +81,7 @@ function menuReducer(state: MenuState, action: MenuAction): MenuState {
         ...state,
         m2Open: true,
         m2View: action.view,
-        selectedEntityId: action.entityId ?? state.selectedEntityId,
+        selectedEntityId: action.entityId !== undefined ? action.entityId : state.selectedEntityId,
       }
 
     case 'CLOSE_M2':
@@ -183,7 +183,7 @@ export function MenuProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'CLOSE_M1' })
   }, [])
 
-  const openM2 = useCallback((view: M2View, entityId?: string) => {
+  const openM2 = useCallback((view: M2View, entityId?: string | null) => {
     dispatch({ type: 'OPEN_M2', view, entityId })
   }, [])
 

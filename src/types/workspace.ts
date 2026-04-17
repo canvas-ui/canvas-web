@@ -6,6 +6,7 @@ export interface TreeNode {
   label: string
   description: string
   color: string | null
+  locked?: boolean
   children: TreeNode[]
 }
 

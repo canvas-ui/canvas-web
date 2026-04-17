@@ -10,12 +10,9 @@ import {
   Plus,
   Key,
   TreePine,
-  Layers,
-  Lock,
-  Unlock,
   Settings2
 } from 'lucide-react';
-import { TreeView } from '@/components/common/tree-view';
+import { MenuTreeView } from '@/components/menu/shared/MenuTreeView';
 import { DocumentList } from '@/components/common/document-list';
 import { TokenManager } from '@/components/workspace/token-manager';
 import { ServicesPanel } from '@/components/workspace/services-panel';
@@ -42,23 +39,14 @@ interface FileManagerViewProps {
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
 
-  // Layers data
-  layers?: any[];
-  selectedLayerId?: string | null;
-  isLoadingLayers?: boolean;
-  onSelectLayer?: (layer: any) => void;
-
-  onRenameLayer?: (layer: any) => Promise<void>;
-  onLockLayer?: (layer: any) => Promise<void>;
-  onUnlockLayer?: (layer: any) => Promise<void>;
-  onDestroyLayer?: (layer: any) => Promise<void>;
-
   // Tree operations
   onInsertPath?: (path: string, autoCreateLayers?: boolean) => Promise<boolean>;
   onRemovePath?: (path: string, recursive?: boolean) => Promise<boolean>;
   onRenamePath?: (fromPath: string, newName: string) => Promise<boolean>;
   onMovePath?: (fromPath: string, toPath: string, recursive?: boolean) => Promise<boolean>;
   onCopyPath?: (fromPath: string, toPath: string, recursive?: boolean) => Promise<boolean>;
+  onLockLayer?: (layerId: string) => Promise<boolean>;
+  onUnlockLayer?: (layerId: string) => Promise<boolean>;
   onMergeLayer?: (layerId: string, targetLayers: string[]) => Promise<any>;
   onSubtractLayer?: (layerId: string, targetLayers: string[]) => Promise<any>;
 
@@ -291,14 +279,8 @@ export function FileManagerView({
   pageSize,
   onPageChange,
   onPageSizeChange,
-  layers,
-  selectedLayerId,
-  isLoadingLayers,
-  onSelectLayer,
-  onRenameLayer,
   onLockLayer,
   onUnlockLayer,
-  onDestroyLayer,
   onInsertPath,
   onRemovePath,
   onRenamePath,
@@ -330,14 +312,10 @@ export function FileManagerView({
     paths: null
   });
   const [globalContextMenu, setGlobalContextMenu] = useState<{ x: number; y: number } | null>(null);
-  const [layerContextMenu, setLayerContextMenu] = useState<{ x: number; y: number; layer: any } | null>(null);
-  // Layer selection for merge/subtract operations
-  const [sourceLayerName, setSourceLayerName] = useState<string | null>(null);
-  const [targetLayerNames, setTargetLayerNames] = useState<Set<string>>(new Set());
 
   // Sync leftTab when selectedTreeName changes from parent
   useEffect(() => {
-    if (selectedTreeName && leftTab !== 'layers') {
+    if (selectedTreeName) {
       setLeftTab(selectedTreeName);
     }
   }, [selectedTreeName]);
@@ -403,12 +381,6 @@ export function FileManagerView({
 
     return success;
   }, [clipboard.documents, onPasteDocuments, onRemoveDocument, onRemoveDocuments]);
-
-  // Enhanced path operations with clipboard
-  const handleCopyPath = useCallback(async (fromPath: string, toPath: string, recursive?: boolean) => {
-    if (!onCopyPath) return false;
-    return await onCopyPath(fromPath, toPath, recursive);
-  }, [onCopyPath]);
 
   const handlePastePath = useCallback(async (targetPath: string) => {
     if (!clipboard.paths) return false;
@@ -535,226 +507,48 @@ export function FileManagerView({
       className="flex h-auto min-h-0 gap-4"
       onContextMenu={handleGlobalRightClick}
     >
-      {/* Left Panel - Tree View / Layers */}
+      {/* Left Panel - Tree View */}
       <div className="w-72 min-w-72 border rounded-lg bg-card flex flex-col">
-        {/* Tab Header */}
-        <div className="flex border-b overflow-x-auto">
-          {workspaceTrees && workspaceTrees.length > 0 ? (
-            <>
-              {workspaceTrees.map((t) => (
-                <button
-                  key={t.id ?? t.name}
-                  className={cn(
-                    "flex-shrink-0 py-3 px-3 text-xs font-medium transition-colors whitespace-nowrap",
-                    leftTab === t.name
-                      ? 'border-b-2 border-primary bg-background'
-                      : 'text-muted-foreground hover:text-foreground'
-                  )}
-                  onClick={() => {
-                    setLeftTab(t.name);
-                    onSelectTree?.(t.name);
-                  }}
-                >
-                  <TreePine className="w-3 h-3 mr-1 inline" />
-                  {t.name}
-                </button>
-              ))}
+        {/* Tab Header — only shown when multiple trees exist */}
+        {workspaceTrees && workspaceTrees.length > 1 && (
+          <div className="flex border-b overflow-x-auto">
+            {workspaceTrees.map((t) => (
               <button
+                key={t.id ?? t.name}
                 className={cn(
-                  "flex-shrink-0 py-3 px-3 text-xs font-medium transition-colors",
-                  leftTab === 'layers'
+                  "flex-shrink-0 py-3 px-3 text-xs font-medium transition-colors whitespace-nowrap",
+                  leftTab === t.name
                     ? 'border-b-2 border-primary bg-background'
                     : 'text-muted-foreground hover:text-foreground'
                 )}
-                onClick={() => setLeftTab('layers')}
-              >
-                <Layers className="w-3 h-3 mr-1 inline" />
-                Layers
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                className={cn(
-                  "flex-1 py-3 px-2 text-xs font-medium transition-colors",
-                  leftTab !== 'layers'
-                    ? 'border-b-2 border-primary bg-background'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-                onClick={() => setLeftTab('tree')}
+                onClick={() => {
+                  setLeftTab(t.name);
+                  onSelectTree?.(t.name);
+                }}
               >
                 <TreePine className="w-3 h-3 mr-1 inline" />
-                Tree
+                {t.name}
               </button>
-              <button
-                className={cn(
-                  "flex-1 py-3 px-2 text-xs font-medium transition-colors",
-                  leftTab === 'layers'
-                    ? 'border-b-2 border-primary bg-background'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-                onClick={() => setLeftTab('layers')}
-              >
-                <Layers className="w-3 h-3 mr-1 inline" />
-                Layers
-              </button>
-            </>
-          )}
-        </div>
+            ))}
+          </div>
+        )}
 
-        <div className="flex-1 flex flex-col min-h-0">
-          {leftTab !== 'layers' ? (
-            <>
-              <div className="p-4 border-b">
-                <h3 className="font-semibold text-sm text-muted-foreground mb-2">Workspace Tree</h3>
-                <p className="text-xs text-muted-foreground">
-                  Right-click for context menu, drag to move/copy
-                </p>
-              </div>
-
-              <div className="flex-1 p-4 overflow-y-auto">
-                {isLoadingTree ? (
-                  <div className="flex items-center justify-center h-32">
-                    <div className="text-center space-y-2">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto"></div>
-                      <p className="text-xs text-muted-foreground">Loading tree...</p>
-                    </div>
-                  </div>
-                ) : tree ? (
-                  <TreeView
-                    tree={tree}
-                    selectedPath={selectedPath}
-                    onPathSelect={onPathSelect}
-                    readOnly={false}
-                    defaultExpanded={false}
-                    expandedPath={selectedPath !== '/' ? selectedPath : undefined}
-                    onInsertPath={onInsertPath}
-                    onRemovePath={onRemovePath}
-                    onRenamePath={onRenamePath}
-                    onMovePath={onMovePath}
-                    onCopyPath={handleCopyPath}
-                    onMergeLayer={onMergeLayer}
-                    onSubtractLayer={onSubtractLayer}
-                    onPasteDocuments={handlePasteDocuments}
-                    pastedDocumentIds={clipboard.documents?.ids || copiedDocuments}
-                  />
-                ) : (
-                  <div className="text-center text-muted-foreground text-sm">
-                    Failed to load workspace tree
-                  </div>
-                )}
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="p-4 border-b">
-                <h3 className="font-semibold text-sm text-muted-foreground mb-2">Tree Layers</h3>
-                <p className="text-xs text-muted-foreground">
-                  Click to set source (blue). Ctrl-click targets (red). Right-click for actions.
-                </p>
-              </div>
-
-              <div className="flex-1 p-4 overflow-y-auto">
-                {isLoadingLayers ? (
-                  <div className="text-xs text-muted-foreground">Loading layers...</div>
-                ) : !layers || layers.length === 0 ? (
-                  <div className="text-xs text-muted-foreground">No layers</div>
-                ) : (
-                  <ul className="space-y-1">
-                    {layers.map((layer) => {
-                      const isSource = sourceLayerName === layer.name;
-                      const isTarget = targetLayerNames.has(layer.name);
-                      return (
-                      <li
-                        key={layer.id}
-                        className={cn(
-                          "flex items-center justify-between px-2 py-1 rounded cursor-pointer text-sm",
-                          selectedLayerId === layer.id && 'bg-accent',
-                          layer.name === '/' && 'opacity-60',
-                          isSource && 'bg-blue-100',
-                          !isSource && isTarget && 'bg-red-100',
-                          !isSource && !isTarget && 'hover:bg-accent'
-                        )}
-                        onClick={(e) => {
-                          // Selection behavior: first click sets source (blue), Ctrl+click toggles targets (red)
-                          if (e.ctrlKey) {
-                            // Ctrl+click: toggle this layer as a target (red) if we have a source
-                            if (sourceLayerName && layer.name !== sourceLayerName) {
-                              const newSet = new Set(targetLayerNames);
-                              if (newSet.has(layer.name)) {
-                                newSet.delete(layer.name);
-                              } else {
-                                newSet.add(layer.name);
-                              }
-                              setTargetLayerNames(newSet);
-                            }
-                          } else {
-                            // Normal click: set as source (blue) and clear targets
-                            setSourceLayerName(layer.name);
-                            setTargetLayerNames(new Set());
-                          }
-                          onSelectLayer?.(layer);
-                        }}
-                        onContextMenu={(e) => {
-                          if (layer.name !== '/') {
-                            e.preventDefault();
-                            setLayerContextMenu({ x: e.clientX, y: e.clientY, layer });
-                          }
-                        }}
-                      >
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          {layer.color && (
-                            <span className="w-2 h-2 rounded-full border flex-shrink-0" style={{ backgroundColor: layer.color }} />
-                          )}
-                          <span className="truncate" title={layer.description || layer.label}>
-                            {layer.name}
-                          </span>
-                          {(() => {
-                            const isLocked = layer.name === '/' || layer.locked === true || (Array.isArray(layer.lockedBy) && layer.lockedBy.length > 0)
-                            if (isLocked) {
-                              const lockedBy = Array.isArray(layer.lockedBy) ? layer.lockedBy : []
-                              return <span className="text-xs text-muted-foreground" title={lockedBy.length > 0 ? `Locked by: ${lockedBy.join(', ')}` : 'Locked'}>🔒</span>
-                            }
-                            return null
-                          })()}
-                        </div>
-                        {layer.name !== '/' && (
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            {(() => {
-                              const isLocked = layer.locked === true || (Array.isArray(layer.lockedBy) && layer.lockedBy.length > 0);
-                              return (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 w-6 p-0 hover:bg-muted"
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    if (isLocked && onUnlockLayer) {
-                                      await onUnlockLayer(layer);
-                                    } else if (!isLocked && onLockLayer) {
-                                      await onLockLayer(layer);
-                                    }
-                                  }}
-                                  title={isLocked ? 'Unlock layer' : 'Lock layer'}
-                                >
-                                  {isLocked ? (
-                                    <Unlock className="h-3 w-3" />
-                                  ) : (
-                                    <Lock className="h-3 w-3" />
-                                  )}
-                                </Button>
-                              );
-                            })()}
-                          </div>
-                        )}
-                      </li>
-                      )
-                    })}
-                  </ul>
-                )}
-              </div>
-            </>
-          )}
+        <div className="flex-1 overflow-y-auto min-h-0">
+          <MenuTreeView
+            root={tree}
+            selectedPath={selectedPath}
+            onSelect={onPathSelect}
+            isLoading={isLoadingTree}
+            onInsertPath={onInsertPath}
+            onRemovePath={onRemovePath}
+            onRenamePath={onRenamePath}
+            onMovePath={onMovePath}
+            onCopyPath={onCopyPath}
+            onLockLayer={onLockLayer}
+            onUnlockLayer={onUnlockLayer}
+            onMergeLayer={onMergeLayer}
+            onSubtractLayer={onSubtractLayer}
+          />
         </div>
       </div>
 
@@ -933,102 +727,6 @@ export function FileManagerView({
         document.body
       )}
 
-      {/* Layer Context Menu */}
-      {layerContextMenu && createPortal(
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setLayerContextMenu(null)} />
-          <div
-            className="fixed z-50 min-w-[10rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
-            style={{ left: layerContextMenu.x, top: layerContextMenu.y }}
-          >
-            {/* Merge / Subtract only when selection is valid */}
-            {sourceLayerName && targetLayerNames.size > 0 && (
-              <>
-                <button
-                  className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
-                  onClick={async () => {
-                    if (onMergeLayer && sourceLayerName) {
-                      await onMergeLayer(sourceLayerName, Array.from(targetLayerNames));
-                    }
-                    setLayerContextMenu(null);
-                  }}
-                >
-                  Merge Layer (source: {sourceLayerName}, targets: {targetLayerNames.size})
-                </button>
-                <button
-                  className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
-                  onClick={async () => {
-                    if (onSubtractLayer && sourceLayerName) {
-                      await onSubtractLayer(sourceLayerName, Array.from(targetLayerNames));
-                    }
-                    setLayerContextMenu(null);
-                  }}
-                >
-                  Subtract Layer (source: {sourceLayerName}, targets: {targetLayerNames.size})
-                </button>
-                <div className="my-1 h-px bg-border" />
-              </>
-            )}
-            {copiedDocuments.length > 0 && (
-              <button
-                className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
-                onClick={async () => {
-                  if (onPasteDocuments) {
-                    await onPasteDocuments(`/${layerContextMenu.layer.name}`, copiedDocuments);
-                  }
-                  setLayerContextMenu(null);
-                }}
-              >
-                <Clipboard className="w-4 h-4 mr-2" />
-                Paste Documents ({copiedDocuments.length})
-              </button>
-            )}
-
-            <button
-              className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
-              onClick={async () => {
-                if (onRenameLayer) {
-                  await onRenameLayer(layerContextMenu.layer);
-                }
-                setLayerContextMenu(null);
-              }}
-            >
-              Rename Layer
-            </button>
-
-            <button
-              className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
-              onClick={async () => {
-                const isLocked = layerContextMenu.layer.locked === true || (Array.isArray(layerContextMenu.layer.lockedBy) && layerContextMenu.layer.lockedBy.length > 0);
-                if (isLocked && onUnlockLayer) {
-                  await onUnlockLayer(layerContextMenu.layer);
-                } else if (!isLocked && onLockLayer) {
-                  await onLockLayer(layerContextMenu.layer);
-                }
-                setLayerContextMenu(null);
-              }}
-            >
-              {(() => {
-                const isLocked = layerContextMenu.layer.locked === true || (Array.isArray(layerContextMenu.layer.lockedBy) && layerContextMenu.layer.lockedBy.length > 0);
-                return isLocked ? 'Unlock Layer' : 'Lock Layer';
-              })()}
-            </button>
-
-            <button
-              className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground text-destructive"
-              onClick={async () => {
-                if (onDestroyLayer) {
-                  await onDestroyLayer(layerContextMenu.layer);
-                }
-                setLayerContextMenu(null);
-              }}
-            >
-              Destroy Layer
-            </button>
-          </div>
-        </>,
-        document.body
-      )}
     </div>
   );
 }

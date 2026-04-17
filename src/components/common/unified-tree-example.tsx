@@ -51,10 +51,10 @@ export function UnifiedTreeExample({
       title={title}
       subtitle={subtitle}
       // Pass tree operations if available (only for context trees with API access)
-      onInsertPath={treeOperations?.insertPath}
-      onRemovePath={treeOperations?.removePath}
-      onMovePath={treeOperations?.movePath}
-      onCopyPath={treeOperations?.copyPath}
+      onInsertPath={treeOperations?.onInsertPath}
+      onRemovePath={treeOperations?.onRemovePath}
+      onMovePath={treeOperations?.onMovePath}
+      onCopyPath={treeOperations?.onCopyPath}
     />
   )
 }

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { Plus, Play, Square, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useMenu } from '@/components/shell/menu-context'
@@ -18,15 +17,14 @@ function StatusDot({ status }: { status: string }) {
 }
 
 export function AgentList() {
-  const navigate = useNavigate()
-  const { state, selectEntity } = useMenu()
+  const { state, selectEntity, openM2 } = useMenu()
   const { agents, isLoading } = useAgentListData(state.activeSection === 'agents')
   const { showToast } = useToast()
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
 
   const handleSelect = (agent: any) => {
     selectEntity(agent.id)
-    navigate(`/agents/${agent.id}`)
+    openM2('chat', agent.id)
   }
 
   const handleStart = async (e: React.MouseEvent, agent: any) => {
@@ -62,7 +60,7 @@ export function AgentList() {
         <span className="text-sm font-semibold">Agents</span>
         <button
           type="button"
-          onClick={() => navigate('/agents')}
+          onClick={() => openM2('form', null)}
           className="flex items-center justify-center w-6 h-6 rounded-full bg-foreground text-background hover:opacity-80 transition-opacity"
         >
           <Plus className="w-3.5 h-3.5" />
@@ -130,7 +128,7 @@ export function AgentList() {
                         onClick={(e) => {
                           e.stopPropagation()
                           selectEntity(agent.id)
-                          navigate(`/agents/${agent.id}/settings`)
+                          openM2('settings', agent.id)
                         }}
                         className="flex items-center justify-center w-6 h-6 rounded hover:bg-muted-foreground/10 text-muted-foreground transition-colors"
                         title="Settings"

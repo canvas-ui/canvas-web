@@ -298,6 +298,16 @@ export async function destroyWorkspaceLayer(workspaceId: string, layerId: string
   return true
 }
 
+export async function mergeWorkspaceLayer(workspaceId: string, layerId: string, targetLayers: string[], treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<any> {
+  const res = await api.post<{ payload: any }>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers/merge`, { layerId, targetLayers })
+  return res.payload
+}
+
+export async function subtractWorkspaceLayer(workspaceId: string, layerId: string, targetLayers: string[], treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<any> {
+  const res = await api.post<{ payload: any }>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers/subtract`, { layerId, targetLayers })
+  return res.payload
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // Workspace documents
 // ─────────────────────────────────────────────────────────────────────────

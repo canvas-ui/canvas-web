@@ -314,6 +314,39 @@ export async function pasteDocumentsToContext(contextId: string, path: string, d
   }
 }
 
+// ─── Context tree path operations ─────────────────────────────────────────────
+
+export async function insertContextPath(contextId: string, path: string, autoCreateLayers = true): Promise<boolean> {
+  const response = await api.post<ApiPayload<boolean>>(`${API_ROUTES.contexts}/${contextId}/tree/paths`, { path, autoCreateLayers })
+  return response.payload ?? true
+}
+
+export async function removeContextPath(contextId: string, path: string, recursive = false): Promise<boolean> {
+  const params = new URLSearchParams({ path, recursive: recursive.toString() })
+  const response = await api.delete<ApiPayload<boolean>>(`${API_ROUTES.contexts}/${contextId}/tree/paths?${params}`)
+  return response.payload ?? true
+}
+
+export async function moveContextPath(contextId: string, from: string, to: string, recursive = false): Promise<boolean> {
+  const response = await api.post<ApiPayload<boolean>>(`${API_ROUTES.contexts}/${contextId}/tree/paths/move`, { from, to, recursive })
+  return response.payload ?? true
+}
+
+export async function copyContextPath(contextId: string, from: string, to: string, recursive = false): Promise<boolean> {
+  const response = await api.post<ApiPayload<boolean>>(`${API_ROUTES.contexts}/${contextId}/tree/paths/copy`, { from, to, recursive })
+  return response.payload ?? true
+}
+
+export async function mergeContextLayer(contextId: string, layerId: string, targetLayers: string[]): Promise<any> {
+  const response = await api.post<ApiPayload<any>>(`${API_ROUTES.contexts}/${contextId}/tree/layers/merge`, { layerId, targetLayers })
+  return response.payload
+}
+
+export async function subtractContextLayer(contextId: string, layerId: string, targetLayers: string[]): Promise<any> {
+  const response = await api.post<ApiPayload<any>>(`${API_ROUTES.contexts}/${contextId}/tree/layers/subtract`, { layerId, targetLayers })
+  return response.payload
+}
+
 // Import new documents to context via workspace (since contexts use workspace documents API)
 export async function importDocumentsToContext(workspaceId: string, contextPath: string, documents: UnknownRecord[]): Promise<boolean> {
   try {

@@ -813,11 +813,11 @@ export default function ContextDetailPage() {
                 readOnly={isSharedContext}
                 title="Context Tree"
                 subtitle={isSharedContext ? 'Read-only view (shared context)' : 'Right-click for context menu, drag to move/copy (Ctrl=copy, Shift=recursive)'}
-                onInsertPath={!isSharedContext ? treeOperations.insertPath : undefined}
-                onRemovePath={!isSharedContext ? treeOperations.removePath : undefined}
+                onInsertPath={!isSharedContext ? treeOperations.onInsertPath : undefined}
+                onRemovePath={!isSharedContext ? treeOperations.onRemovePath : undefined}
                 onRenamePath={!isSharedContext ? handleRenamePath : undefined}
-                onMovePath={!isSharedContext ? treeOperations.movePath : undefined}
-                onCopyPath={!isSharedContext ? treeOperations.copyPath : undefined}
+                onMovePath={!isSharedContext ? treeOperations.onMovePath : undefined}
+                onCopyPath={!isSharedContext ? treeOperations.onCopyPath : undefined}
               />
             ) : (
               <div className="text-center text-muted-foreground text-sm">

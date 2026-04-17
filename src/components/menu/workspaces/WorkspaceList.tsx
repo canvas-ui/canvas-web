@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { Plus, Play, Square, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useMenu } from '@/components/shell/menu-context'
@@ -17,16 +16,14 @@ function StatusDot({ status }: { status: string }) {
 }
 
 export function WorkspaceList() {
-  const navigate = useNavigate()
-  const { state, selectEntity } = useMenu()
+  const { state, selectEntity, openM2 } = useMenu()
   const { workspaces, isLoading } = useWorkspaceListData(state.activeSection === 'workspaces')
   const { showToast } = useToast()
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
 
   const handleSelect = (ws: Workspace) => {
-    if (ws.status !== 'active') return
     selectEntity(ws.name)
-    navigate(`/workspaces/${ws.name}`)
+    openM2('detail', ws.name)
   }
 
   const handleStart = async (e: React.MouseEvent, ws: Workspace) => {
@@ -64,7 +61,7 @@ export function WorkspaceList() {
         <span className="text-sm font-semibold">Workspaces</span>
         <button
           type="button"
-          onClick={() => navigate('/workspaces')}
+          onClick={() => openM2('form', null)}
           className="flex items-center justify-center w-6 h-6 rounded-full bg-foreground text-background hover:opacity-80 transition-opacity"
         >
           <Plus className="w-3.5 h-3.5" />
@@ -88,12 +85,12 @@ export function WorkspaceList() {
                 <div
                   key={ws.id || ws.name}
                   className={cn(
-                    'group relative rounded-md px-3 py-2.5 transition-all shadow-sm hover:shadow',
+                    'group relative rounded-md px-3 py-2.5 cursor-pointer transition-all shadow-sm hover:shadow',
                     isActive
                       ? 'bg-accent shadow'
                       : isInactive
-                        ? 'bg-card opacity-60 hover:opacity-80'
-                        : 'bg-card hover:bg-accent/50 cursor-pointer',
+                        ? 'bg-card opacity-60 hover:opacity-80 hover:bg-accent/30'
+                        : 'bg-card hover:bg-accent/50',
                   )}
                   style={{ borderRight: `6px solid ${ws.color || 'transparent'}`, borderRadius: ws.color ? '6px 0 0 6px' : undefined }}
                   onClick={() => handleSelect(ws)}
@@ -138,7 +135,7 @@ export function WorkspaceList() {
                         onClick={(e) => {
                           e.stopPropagation()
                           selectEntity(ws.name)
-                          navigate(`/workspaces/${ws.name}/settings`)
+                          openM2('form', ws.name)
                         }}
                         className="flex items-center justify-center w-6 h-6 rounded hover:bg-muted-foreground/10 text-muted-foreground transition-colors"
                         title="Settings"

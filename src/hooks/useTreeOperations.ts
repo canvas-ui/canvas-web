@@ -1,122 +1,123 @@
+/**
+ * useTreeOperations — unified hook for context and workspace tree path/layer operations.
+ * Callbacks are named to match MenuTreeViewProps so they can be spread directly.
+ *
+ * Usage:
+ *   const ops = useTreeOperations({ contextId: 'myCtx', onRefresh })
+ *   const ops = useTreeOperations({ workspaceId: 'myWs', treeName: 'directory', onRefresh })
+ */
 import { useCallback } from 'react'
-import { API_ROUTES } from '@/config/api'
+import {
+  insertContextPath, removeContextPath, moveContextPath, copyContextPath,
+  mergeContextLayer, subtractContextLayer,
+} from '@/services/context'
+import {
+  insertWorkspacePath, removeWorkspacePath, moveWorkspacePath, copyWorkspacePath,
+  mergeWorkspaceLayer, subtractWorkspaceLayer,
+  lockWorkspaceLayer, unlockWorkspaceLayer,
+  DEFAULT_WORKSPACE_TREE_NAME,
+} from '@/services/workspace'
 
-interface UseTreeOperationsProps {
+interface UseTreeOperationsOptions {
   contextId?: string
   workspaceId?: string
+  treeName?: string   // workspace tree name; defaults to DEFAULT_WORKSPACE_TREE_NAME
   onRefresh?: () => void
 }
 
-interface ApiResponse {
-  status: number
-  success: boolean
-  data?: any
-  message?: string
-}
+export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh }: UseTreeOperationsOptions) {
+  const wsTree = treeName || DEFAULT_WORKSPACE_TREE_NAME
 
-export function useTreeOperations({ contextId, workspaceId, onRefresh }: UseTreeOperationsProps) {
-  const apiCall = useCallback(async (method: string, endpoint: string, body?: any): Promise<ApiResponse> => {
-    try {
-      const token = localStorage.getItem('authToken')
-      if (!token) {
-        throw new Error('Authentication token not found')
-      }
+  const refresh = useCallback(() => {
+    if (onRefresh) setTimeout(onRefresh, 100)
+  }, [onRefresh])
 
-      // Determine base URL based on whether we're working with a workspace or context
-      const baseUrl = workspaceId
-        ? `${API_ROUTES.workspaces}/${workspaceId}/tree`
-        : `${API_ROUTES.contexts}/${contextId}/tree`
+  const onInsertPath = useCallback(async (path: string, autoCreateLayers = true): Promise<boolean> => {
+    let result: boolean
+    if (contextId) result = await insertContextPath(contextId, path, autoCreateLayers)
+    else if (workspaceId) result = await insertWorkspacePath(workspaceId, path, autoCreateLayers)
+    else return false
+    refresh()
+    return result
+  }, [contextId, workspaceId, refresh])
 
-      const response = await fetch(`${baseUrl}${endpoint}`, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: body ? JSON.stringify(body) : undefined
-      })
+  const onRemovePath = useCallback(async (path: string, recursive = false): Promise<boolean> => {
+    let result: boolean
+    if (contextId) result = await removeContextPath(contextId, path, recursive)
+    else if (workspaceId) result = await removeWorkspacePath(workspaceId, path, recursive)
+    else return false
+    refresh()
+    return result
+  }, [contextId, workspaceId, refresh])
 
-      const data = await response.json()
+  // Rename = move to same parent with a new last segment
+  const onRenamePath = useCallback(async (fromPath: string, newName: string): Promise<boolean> => {
+    const parts = fromPath.split('/')
+    parts[parts.length - 1] = newName
+    const toPath = parts.join('/')
+    let result: boolean
+    if (contextId) result = await moveContextPath(contextId, fromPath, toPath, false)
+    else if (workspaceId) result = await moveWorkspacePath(workspaceId, fromPath, toPath, false)
+    else return false
+    refresh()
+    return result
+  }, [contextId, workspaceId, refresh])
 
-      if (!response.ok) {
-        throw new Error(data.message || `HTTP error! status: ${response.status}`)
-      }
+  const onMovePath = useCallback(async (from: string, to: string, recursive = false): Promise<boolean> => {
+    let result: boolean
+    if (contextId) result = await moveContextPath(contextId, from, to, recursive)
+    else if (workspaceId) result = await moveWorkspacePath(workspaceId, from, to, recursive)
+    else return false
+    refresh()
+    return result
+  }, [contextId, workspaceId, refresh])
 
-      // Refresh tree data after successful operations
-      if (onRefresh && response.ok) {
-        setTimeout(onRefresh, 100) // Small delay to ensure backend is updated
-      }
+  const onCopyPath = useCallback(async (from: string, to: string, recursive = false): Promise<boolean> => {
+    let result: boolean
+    if (contextId) result = await copyContextPath(contextId, from, to, recursive)
+    else if (workspaceId) result = await copyWorkspacePath(workspaceId, from, to, recursive)
+    else return false
+    refresh()
+    return result
+  }, [contextId, workspaceId, refresh])
 
-      return {
-        status: response.status,
-        success: true,
-        data: data.data,
-        message: data.message
-      }
-    } catch (error) {
-      console.error(`API call failed for ${method} ${endpoint}:`, error)
-      return {
-        status: 500,
-        success: false,
-        message: error instanceof Error ? error.message : 'Unknown error occurred'
-      }
-    }
-  }, [contextId, workspaceId, onRefresh])
+  const onMergeLayer = useCallback(async (layerId: string, targetLayers: string[]): Promise<any> => {
+    let result: any
+    if (contextId) result = await mergeContextLayer(contextId, layerId, targetLayers)
+    else if (workspaceId) result = await mergeWorkspaceLayer(workspaceId, layerId, targetLayers, wsTree)
+    else return null
+    refresh()
+    return result
+  }, [contextId, workspaceId, wsTree, refresh])
 
-  const insertPath = useCallback(async (path: string, autoCreateLayers: boolean = true): Promise<boolean> => {
-    const result = await apiCall('POST', '/paths', { path, autoCreateLayers })
-    if (!result.success) {
-      throw new Error(result.message || 'Failed to insert path')
-    }
-    return true
-  }, [apiCall])
+  const onSubtractLayer = useCallback(async (layerId: string, targetLayers: string[]): Promise<any> => {
+    let result: any
+    if (contextId) result = await subtractContextLayer(contextId, layerId, targetLayers)
+    else if (workspaceId) result = await subtractWorkspaceLayer(workspaceId, layerId, targetLayers, wsTree)
+    else return null
+    refresh()
+    return result
+  }, [contextId, workspaceId, wsTree, refresh])
 
-  const removePath = useCallback(async (path: string, recursive: boolean = false): Promise<boolean> => {
-    const result = await apiCall('DELETE', `/paths?path=${encodeURIComponent(path)}&recursive=${recursive}`)
-    if (!result.success) {
-      throw new Error(result.message || 'Failed to remove path')
-    }
-    return true
-  }, [apiCall])
+  // Lock/unlock only supported for workspace trees
+  const onLockLayer = useCallback(async (layerId: string): Promise<boolean> => {
+    if (!workspaceId) return false
+    const result = await lockWorkspaceLayer(workspaceId, layerId, workspaceId, wsTree)
+    refresh()
+    return result
+  }, [workspaceId, wsTree, refresh])
 
-  const movePath = useCallback(async (fromPath: string, toPath: string, recursive: boolean = false): Promise<boolean> => {
-    const result = await apiCall('POST', '/paths/move', { from: fromPath, to: toPath, recursive })
-    if (!result.success) {
-      throw new Error(result.message || 'Failed to move path')
-    }
-    return true
-  }, [apiCall])
-
-  const copyPath = useCallback(async (fromPath: string, toPath: string, recursive: boolean = false): Promise<boolean> => {
-    const result = await apiCall('POST', '/paths/copy', { from: fromPath, to: toPath, recursive })
-    if (!result.success) {
-      throw new Error(result.message || 'Failed to copy path')
-    }
-    return true
-  }, [apiCall])
-
-  const mergeLayer = useCallback(async (layerId: string, targetLayers: string[]): Promise<any> => {
-    const result = await apiCall('POST', '/layers/merge', { layerId, targetLayers })
-    if (!result.success) {
-      throw new Error(result.message || 'Failed to merge layer')
-    }
-    return result.data
-  }, [apiCall])
-
-  const subtractLayer = useCallback(async (layerId: string, targetLayers: string[]): Promise<any> => {
-    const result = await apiCall('POST', '/layers/subtract', { layerId, targetLayers })
-    if (!result.success) {
-      throw new Error(result.message || 'Failed to subtract layer')
-    }
-    return result.data
-  }, [apiCall])
+  const onUnlockLayer = useCallback(async (layerId: string): Promise<boolean> => {
+    if (!workspaceId) return false
+    const result = await unlockWorkspaceLayer(workspaceId, layerId, workspaceId, wsTree)
+    refresh()
+    return result
+  }, [workspaceId, wsTree, refresh])
 
   return {
-    insertPath,
-    removePath,
-    movePath,
-    copyPath,
-    mergeLayer,
-    subtractLayer
+    onInsertPath, onRemovePath, onRenamePath, onMovePath, onCopyPath,
+    onMergeLayer, onSubtractLayer,
+    onLockLayer: workspaceId ? onLockLayer : undefined,
+    onUnlockLayer: workspaceId ? onUnlockLayer : undefined,
   }
 }
