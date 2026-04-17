@@ -68,7 +68,7 @@ export function ContextM2Detail() {
     onRefresh: () => { if (entityId) loadTree(entityId) },
   })
 
-  // Tree node click: preview path (requires confirm before URL update)
+  // Regular tree node click: preview path before committing
   const handleTreeSelect = (path: string) => {
     setPendingPath(path)
   }
@@ -167,9 +167,7 @@ export function ContextM2Detail() {
         </div>
       )}
 
-      {/* Scrollable area: tree + documents */}
       <div className="flex-1 overflow-y-auto">
-        {/* Tree section */}
         <div className="text-[10px] text-muted-foreground px-3 pt-2 pb-1 font-medium uppercase tracking-wide shrink-0">
           {context?.workspaceName || 'Workspace'} · context tree
         </div>
@@ -179,6 +177,7 @@ export function ContextM2Detail() {
           pendingPath={pendingPath}
           onSelect={handleTreeSelect}
           isLoading={isLoadingTree}
+          rootLabel={context?.workspaceName}
           {...ops}
         />
       </div>

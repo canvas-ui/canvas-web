@@ -22,6 +22,7 @@ export function WorkspaceM2() {
   const [isLoadingContext, setIsLoadingContext] = useState(false)
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(false)
   const [selectedPath, setSelectedPath] = useState('/')
+  const [contentPath, setContentPath] = useState<string | null>(null)
 
   const loadTree = useCallback(async (name: string, tab: TreeTab) => {
     const setLoading = tab === 'context' ? setIsLoadingContext : setIsLoadingDirectory
@@ -80,15 +81,27 @@ export function WorkspaceM2() {
   const handleTabChange = (tab: TreeTab) => {
     setActiveTab(tab)
     setSelectedPath('/')
+    setContentPath(null)
   }
 
   const handlePathSelect = (path: string) => {
+    setContentPath(null)
     setSelectedPath(path)
     const params = new URLSearchParams()
     params.set('tree', activeTab)
     if (path !== '/') params.set('path', path)
     navigate(`/workspaces/${wsName}?${params.toString()}`)
   }
+
+  const handleShowContent = useCallback((path: string) => {
+    setSelectedPath(path)
+    setContentPath(path)
+    const params = new URLSearchParams()
+    params.set('tree', activeTab)
+    if (path !== '/') params.set('path', path)
+    params.set('layer', '1')
+    navigate(`/workspaces/${wsName}?${params.toString()}`)
+  }, [wsName, activeTab, navigate])
 
   return (
     <div className="flex flex-col h-full">
@@ -139,8 +152,11 @@ export function WorkspaceM2() {
         <MenuTreeView
           root={activeTree}
           selectedPath={selectedPath}
+          contentPath={contentPath}
           onSelect={handlePathSelect}
+          onShowContent={handleShowContent}
           isLoading={isLoading}
+          rootLabel={wsName ?? undefined}
           {...ops}
         />
       </div>

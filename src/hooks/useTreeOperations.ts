@@ -28,8 +28,8 @@ interface UseTreeOperationsOptions {
 export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh }: UseTreeOperationsOptions) {
   const wsTree = treeName || DEFAULT_WORKSPACE_TREE_NAME
 
-  const refresh = useCallback(() => {
-    if (onRefresh) setTimeout(onRefresh, 100)
+  const refresh = useCallback((delay = 150) => {
+    if (onRefresh) setTimeout(onRefresh, delay)
   }, [onRefresh])
 
   const onInsertPath = useCallback(async (path: string, autoCreateLayers = true): Promise<boolean> => {
@@ -103,14 +103,14 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
   const onLockLayer = useCallback(async (layerId: string): Promise<boolean> => {
     if (!workspaceId) return false
     const result = await lockWorkspaceLayer(workspaceId, layerId, workspaceId, wsTree)
-    refresh()
+    refresh(300) // extra delay to ensure lock state is committed before re-fetch
     return result
   }, [workspaceId, wsTree, refresh])
 
   const onUnlockLayer = useCallback(async (layerId: string): Promise<boolean> => {
     if (!workspaceId) return false
     const result = await unlockWorkspaceLayer(workspaceId, layerId, workspaceId, wsTree)
-    refresh()
+    refresh(300)
     return result
   }, [workspaceId, wsTree, refresh])
 

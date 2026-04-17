@@ -1,8 +1,10 @@
 import { Document } from '@/types/workspace'
 import { DocumentList } from '@/components/common/document-list'
 
+type CanvasUrlType = 'context' | 'directory' | 'context-layer' | 'directory-layer'
+
 interface DefaultCanvasProps {
-  urlType: 'context' | 'directory'
+  urlType: CanvasUrlType
   urlDisplay: string
   contextPath: string
   documents: Document[]
@@ -52,7 +54,7 @@ export function DefaultCanvas({
     <div className="flex flex-col h-full min-h-0 bg-background">
       <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/20 shrink-0">
         <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-muted border text-muted-foreground shrink-0">
-          [{urlType}]
+          [{urlType.replace('-', ':')}]
         </span>
         <span className="font-mono text-sm text-foreground truncate">{urlDisplay}</span>
       </div>

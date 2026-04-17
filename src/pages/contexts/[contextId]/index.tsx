@@ -60,8 +60,10 @@ export default function ContextDetailPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
 
+  const layerParam = new URLSearchParams(location.search).get('layer');
   const isSharedContext = Boolean(ownerId);
   const selectedPath = context ? contextUrlToPath(context.url, context.workspaceName) : '/';
+  const urlType = layerParam ? 'context-layer' : 'context';
 
   const fetchDocuments = useCallback(async () => {
     if (!contextId) return;
@@ -298,7 +300,7 @@ export default function ContextDetailPage() {
   return (
     <div className="flex flex-col h-full min-h-0">
       <DefaultCanvas
-        urlType="context"
+        urlType={urlType}
         urlDisplay={context.url}
         contextPath={selectedPath}
         documents={documents}

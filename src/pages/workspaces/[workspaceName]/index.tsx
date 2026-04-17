@@ -44,6 +44,7 @@ export default function WorkspaceDetailPage() {
   const selectedPath = sanitizeUrlPath(decodeURIComponent(searchParams.get('path') || '/'));
   const selectedTreeName = searchParams.get('tree') || DEFAULT_WORKSPACE_TREE_NAME;
 
+  const isLayerView = searchParams.get('layer') === '1';
   const urlDisplay = workspaceName
     ? `${workspaceName}://${selectedPath === '/' ? '' : selectedPath.replace(/^\//, '')}`
     : '';
@@ -300,7 +301,7 @@ export default function WorkspaceDetailPage() {
       {/* Canvas */}
       <div className="flex-1 min-h-0">
         <DefaultCanvas
-          urlType={selectedTreeName === 'directory' ? 'directory' : 'context'}
+          urlType={isLayerView ? (selectedTreeName === 'directory' ? 'directory-layer' : 'context-layer') : (selectedTreeName === 'directory' ? 'directory' : 'context')}
           urlDisplay={urlDisplay}
           contextPath={selectedPath}
           documents={documents}

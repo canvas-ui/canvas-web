@@ -14,12 +14,12 @@ export function M2Header({ title, onBack, action, className }: M2HeaderProps) {
       <button
         type="button"
         onClick={onBack}
-        className="flex items-center justify-center w-8 h-8 rounded hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+        className="flex items-center gap-0.5 h-8 rounded px-1 hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors flex-1 min-w-0"
         title="Back"
       >
-        <ChevronLeft className="w-4 h-4" />
+        <ChevronLeft className="w-4 h-4 shrink-0" />
+        <span className="text-sm font-semibold truncate">{title}</span>
       </button>
-      <span className="text-sm font-semibold truncate flex-1">{title}</span>
       {action && <div className="shrink-0">{action}</div>}
     </div>
   )
