@@ -28,7 +28,7 @@ interface FileManagerViewProps {
   tree: TreeNode | null;
   workspaceTrees?: any[];
   selectedTreeName?: string;
-  onSelectTree?: (treeName: string, treeType: string) => void;
+  onSelectTree?: (treeName: string) => void;
   selectedPath: string;
   onPathSelect: (path: string) => void;
   isLoadingTree: boolean;
@@ -552,7 +552,7 @@ export function FileManagerView({
                   )}
                   onClick={() => {
                     setLeftTab(t.name);
-                    onSelectTree?.(t.name, t.type);
+                    onSelectTree?.(t.name);
                   }}
                 >
                   <TreePine className="w-3 h-3 mr-1 inline" />

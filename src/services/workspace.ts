@@ -8,7 +8,7 @@ export const INCOMING_ROOT_CONTEXT = '/.incoming'
 export const DEFAULT_WORKSPACE_TREE_NAME = 'context'
 
 function appendWorkspaceContext(params: URLSearchParams, contextSpec: string = '/') {
-  params.append('treeNameOrTreeId', DEFAULT_WORKSPACE_TREE_NAME)
+  params.append('tree', DEFAULT_WORKSPACE_TREE_NAME)
   if (contextSpec) params.append('context', contextSpec)
 }
 
@@ -141,12 +141,11 @@ export async function getWorkspaceDocuments(
   id: string,
   contextSpec: string = '/',
   featureArray: string[] = [],
-  options: { limit?: number; offset?: number; page?: number; includeIncoming?: boolean; treeName?: string; treeType?: string } = {}
+  options: { limit?: number; offset?: number; page?: number; includeIncoming?: boolean; treeName?: string } = {}
 ): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }> {
   try {
     const params = new URLSearchParams();
-    params.append('treeNameOrTreeId', options.treeName || DEFAULT_WORKSPACE_TREE_NAME)
-    if (options.treeType) params.append('treeType', options.treeType)
+    params.append('tree', options.treeName || DEFAULT_WORKSPACE_TREE_NAME)
     if (contextSpec) params.append('context', contextSpec)
     appendAllOf(params, featureArray)
     if (options.includeIncoming) params.append('includeIncoming', 'true')
@@ -233,7 +232,7 @@ export async function pasteDocumentsToWorkspacePath(workspaceId: string, path: s
     const ids = normalizeDocumentIds(Array.isArray(documentIds) ? documentIds : [documentIds])
     await api.post<{ payload: unknown; message: string; status: string; statusCode: number }>(
       `${API_ROUTES.workspaces}/${workspaceId}/documents`,
-      { documentIds: ids, treeNameOrTreeId: DEFAULT_WORKSPACE_TREE_NAME, context: path }
+      { documentIds: ids, tree: DEFAULT_WORKSPACE_TREE_NAME, context: path }
     );
     return true;
   } catch (error) {
@@ -248,7 +247,7 @@ export async function importDocumentsToWorkspacePath(workspaceId: string, path: 
     const docs = Array.isArray(documents) ? documents : [documents]
     await api.post<{ payload: unknown; message: string; status: string; statusCode: number }>(
       `${API_ROUTES.workspaces}/${workspaceId}/documents`,
-      { documents: docs, treeNameOrTreeId: DEFAULT_WORKSPACE_TREE_NAME, context: path }
+      { documents: docs, tree: DEFAULT_WORKSPACE_TREE_NAME, context: path }
     );
     return true;
   } catch (error) {

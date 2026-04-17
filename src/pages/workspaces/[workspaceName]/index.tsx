@@ -71,7 +71,6 @@ export default function WorkspaceDetailPage() {
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
   const [workspaceTrees, setWorkspaceTrees] = useState<any[]>([]);
   const [selectedTreeName, setSelectedTreeName] = useState<string>(DEFAULT_WORKSPACE_TREE_NAME);
-  const [selectedTreeType, setSelectedTreeType] = useState<string>('context');
   const [isStartingWorkspace, setIsStartingWorkspace] = useState(false);
   const [isStoppingWorkspace, setIsStoppingWorkspace] = useState(false);
   // Tree operations (layer merge/subtract) - initialized after fetchTree is defined via lazy wrapper
@@ -156,7 +155,6 @@ export default function WorkspaceDetailPage() {
         limit: pageSize,
         page: currentPage,
         treeName: selectedTreeName,
-        treeType: selectedTreeType
       });
       // response.payload is directly an array of documents, not an object with 'data' property
       const documents = response.payload as Document[];
@@ -252,7 +250,7 @@ export default function WorkspaceDetailPage() {
   // Fetch documents when path, schema filters, URL filters, pagination, or workspace status changes
   useEffect(() => {
     fetchDocuments();
-  }, [workspaceName, selectedPath, selectedSchemas, urlFilters, currentPage, pageSize, workspace?.status, selectedTreeName, selectedTreeType]);
+  }, [workspaceName, selectedPath, selectedSchemas, urlFilters, currentPage, pageSize, workspace?.status, selectedTreeName]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -706,9 +704,8 @@ export default function WorkspaceDetailPage() {
   };
 
   // Tree tab selection
-  const handleSelectTree = async (treeName: string, treeType: string = 'context') => {
+  const handleSelectTree = async (treeName: string) => {
     setSelectedTreeName(treeName);
-    setSelectedTreeType(treeType);
     await fetchTree(treeName);
   };
 
@@ -723,7 +720,6 @@ export default function WorkspaceDetailPage() {
           limit: pageSize,
           page: currentPage,
           treeName: selectedTreeName,
-          treeType: selectedTreeType
         });
         // response.payload is directly an array of documents, not an object with 'data' property
         const documents = response.payload as Document[];

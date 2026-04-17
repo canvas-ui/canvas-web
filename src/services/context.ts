@@ -320,7 +320,7 @@ export async function importDocumentsToContext(workspaceId: string, contextPath:
     const docs = Array.isArray(documents) ? documents : [documents];
     await api.post<ApiPayload>(
       `${API_ROUTES.workspaces}/${workspaceId}/documents`,
-      { documents: docs, treeNameOrTreeId: 'context', context: contextPath }
+      { documents: docs, tree: 'context', context: contextPath }
     );
     return true;
   } catch (error) {
