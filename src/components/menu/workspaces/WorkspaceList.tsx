@@ -85,15 +85,15 @@ export function WorkspaceList() {
                 <div
                   key={ws.id || ws.name}
                   className={cn(
-                    'group relative rounded-md px-3 py-2.5 cursor-pointer transition-all shadow-sm hover:shadow',
+                    'group relative rounded-md px-3 py-2.5 transition-all shadow-sm',
                     isActive
-                      ? 'bg-accent shadow'
+                      ? 'bg-accent shadow cursor-pointer hover:shadow'
                       : isInactive
-                        ? 'bg-card opacity-60 hover:opacity-80 hover:bg-accent/30'
-                        : 'bg-card hover:bg-accent/50',
+                        ? 'bg-card opacity-60 cursor-not-allowed'
+                        : 'bg-card hover:bg-accent/50 cursor-pointer hover:shadow',
                   )}
                   style={{ borderRight: `6px solid ${ws.color || 'transparent'}`, borderRadius: ws.color ? '6px 0 0 6px' : undefined }}
-                  onClick={() => handleSelect(ws)}
+                  onClick={() => { if (!isInactive) handleSelect(ws) }}
                 >
                   {/* Top row: label + controls */}
                   <div className="flex items-start gap-2">

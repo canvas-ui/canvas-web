@@ -56,7 +56,7 @@ export function DefaultCanvas({
         <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-muted border text-muted-foreground shrink-0">
           [{urlType.replace('-', ':')}]
         </span>
-        <span className="font-mono text-sm text-foreground truncate">{urlDisplay}</span>
+        <span className="text-sm text-foreground truncate">{urlDisplay}</span>
       </div>
 
       <div className="flex-1 min-h-0 overflow-hidden">

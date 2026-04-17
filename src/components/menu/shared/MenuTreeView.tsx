@@ -1,11 +1,10 @@
 /**
  * MenuTreeView — card-style tree for M2 panels.
- * Each node renders as a small card.  Supports full tree operations via
- * context-menu: new folder, rename, remove, copy/cut/paste,
- * lock/unlock layer, show layer content, merge/subtract layers.
- * Ctrl/⌘-click to multi-select source + targets for merge/subtract.
+ * Supports full tree operations via context-menu: new folder (inline),
+ * rename, remove, copy/cut/paste, lock/unlock layer, show layer content,
+ * merge/subtract layers. Ctrl/⌘-click to multi-select source + targets.
  */
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ChevronRight, ChevronDown,
@@ -34,8 +33,10 @@ export interface MenuTreeViewProps {
   onCopyPath?: (from: string, to: string, recursive?: boolean) => Promise<boolean>
   onLockLayer?: (layerId: string) => Promise<boolean>
   onUnlockLayer?: (layerId: string) => Promise<boolean>
+  onDestroyLayer?: (layerId: string) => Promise<boolean>
   onMergeLayer?: (layerId: string, targetLayers: string[]) => Promise<any>
   onSubtractLayer?: (layerId: string, targetLayers: string[]) => Promise<any>
+  searchQuery?: string
 }
 
 type ClipboardMode = 'copy' | 'cut'
@@ -53,11 +54,12 @@ interface CtxMenuProps {
   sourceLayer: LayerRef | null
   targetLayers: Map<string, string>
   clipboard: Clip | null
-  onInsert?: MenuTreeViewProps['onInsertPath']
+  onStartInlineCreate: (parentPath: string) => void
   onRemove?: MenuTreeViewProps['onRemovePath']
   onRename?: MenuTreeViewProps['onRenamePath']
   onLock?: MenuTreeViewProps['onLockLayer']
   onUnlock?: MenuTreeViewProps['onUnlockLayer']
+  onDestroy?: MenuTreeViewProps['onDestroyLayer']
   onMerge?: MenuTreeViewProps['onMergeLayer']
   onSubtract?: MenuTreeViewProps['onSubtractLayer']
   onCopy: (path: string) => void
@@ -68,8 +70,8 @@ interface CtxMenuProps {
 function CtxMenu({
   x, y, node, path, onClose, onShowContent,
   sourceLayer, targetLayers, clipboard,
-  onInsert, onRemove, onRename,
-  onLock, onUnlock, onMerge, onSubtract,
+  onStartInlineCreate, onRemove, onRename,
+  onLock, onUnlock, onDestroy, onMerge, onSubtract,
   onCopy, onCut, onPaste,
 }: CtxMenuProps) {
 
@@ -111,13 +113,16 @@ function CtxMenu({
 
         {onShowContent && <div className="my-1 h-px bg-border" />}
 
-        {/* Structure ops — disabled for locked layers */}
-        {onInsert && item(<Plus className="w-3 h-3" />, 'New folder here', async () => {
-          const name = prompt('Folder name:')
-          if (!name) return
-          const full = path === '/' ? `/${name}` : `${path}/${name}`
-          await onInsert(full, true)
-        })}
+        {/* New folder — inline */}
+        <button
+          type="button"
+          className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-accent rounded-sm text-left"
+          onClick={() => { onStartInlineCreate(path); onClose() }}
+        >
+          <Plus className="w-3 h-3" />
+          New folder here
+        </button>
+
         {path !== '/' && !node.locked && onRename && item(<Edit2 className="w-3 h-3" />, 'Rename', async () => {
           const cur = path.split('/').pop() || ''
           const n = prompt('New name:', cur)
@@ -149,8 +154,8 @@ function CtxMenu({
           </>
         )}
 
-        {/* Lock / unlock */}
-        {(onLock || onUnlock) && (
+        {/* Lock / unlock / destroy */}
+        {(onLock || onUnlock || onDestroy) && (
           <>
             <div className="my-1 h-px bg-border" />
             {node.locked
@@ -161,6 +166,12 @@ function CtxMenu({
                   await onLock(node.id)
                 }))
             }
+            {path !== '/' && !node.locked && onDestroy && item(
+              <Trash2 className="w-3 h-3" />, 'Destroy layer', async () => {
+                if (confirm(`Permanently destroy layer "${node.label || node.name}" and its bitmap?`))
+                  await onDestroy(node.id)
+              }, true
+            )}
           </>
         )}
 
@@ -192,10 +203,53 @@ function CtxMenu({
   )
 }
 
+// ─── Inline create input ──────────────────────────────────────────────────────
+
+interface InlineCreateProps {
+  onConfirm: (name: string) => void
+  onCancel: () => void
+}
+
+function InlineCreateInput({ onConfirm, onCancel }: InlineCreateProps) {
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
+
+  const commit = () => {
+    const val = inputRef.current?.value.trim() ?? ''
+    if (val) onConfirm(val)
+    else onCancel()
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 rounded-l-md px-2 py-1.5 bg-card border border-primary/50 shadow-sm text-xs">
+      <ChevronRight className="w-3 h-3 opacity-0 shrink-0" />
+      <input
+        ref={inputRef}
+        className="flex-1 bg-transparent outline-none min-w-0 text-xs placeholder:text-muted-foreground"
+        placeholder="folder name…"
+        onKeyDown={e => {
+          if (e.key === 'Enter') { e.preventDefault(); commit() }
+          if (e.key === 'Escape') onCancel()
+        }}
+        onBlur={commit}
+      />
+    </div>
+  )
+}
+
 // ─── Tree node card ───────────────────────────────────────────────────────────
 
 function buildPath(parent: string, name: string) {
   return parent === '/' ? `/${name}` : `${parent}/${name}`
+}
+
+function nodeMatchesSearch(node: TreeNode, parentPath: string, query: string): boolean {
+  const path = buildPath(parentPath, node.name)
+  if (path.toLowerCase().includes(query) || (node.label || '').toLowerCase().includes(query)) return true
+  return node.children?.some(c => nodeMatchesSearch(c, path, query)) ?? false
 }
 
 interface CardNodeProps {
@@ -209,24 +263,34 @@ interface CardNodeProps {
   sourceLayer: LayerRef | null
   targetLayers: Map<string, string>
   clipboard: Clip | null
+  searchQuery: string
+  inlineCreateParent: string | null
   onSelect: (path: string) => void
   onShowContent?: (path: string) => void
   onCtrl: (path: string, id: string) => void
   onCtxMenu: (e: React.MouseEvent, path: string, node: TreeNode) => void
+  onConfirmCreate: (parentPath: string, name: string) => void
+  onCancelCreate: () => void
 }
 
 function CardNode({
   node, parentPath, depth, selectedPath, pendingPath, contentPath, readOnly,
-  sourceLayer, targetLayers, clipboard,
+  sourceLayer, targetLayers, clipboard, searchQuery,
+  inlineCreateParent,
   onSelect, onShowContent, onCtrl, onCtxMenu,
+  onConfirmCreate, onCancelCreate,
 }: CardNodeProps) {
 
   const path = buildPath(parentPath, node.name)
 
-  // Auto-expand only nodes that are ancestors of the selected path (evaluated once at mount)
+  if (searchQuery && !nodeMatchesSearch(node, parentPath, searchQuery)) return null
+
   const [expanded, setExpanded] = useState(() =>
     selectedPath !== '/' && (selectedPath === path || selectedPath.startsWith(path + '/'))
   )
+
+  // Auto-expand when inline create targets this node
+  const shouldExpand = expanded || inlineCreateParent === path || (searchQuery.length > 0)
 
   const hasChildren = node.children && node.children.length > 0
   const isSelected = selectedPath === path
@@ -259,13 +323,13 @@ function CardNode({
       >
         <button
           type="button"
-          className={cn('shrink-0 text-muted-foreground hover:text-foreground', !hasChildren && 'invisible')}
+          className={cn('shrink-0 text-muted-foreground hover:text-foreground', !hasChildren && inlineCreateParent !== path && 'invisible')}
           onClick={e => { e.stopPropagation(); setExpanded(v => !v) }}
         >
-          {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+          {shouldExpand ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
         </button>
 
-        {node.locked && <Lock className="w-2.5 h-2.5 shrink-0 text-muted-foreground" />}
+        {node.locked && <Lock className="w-2.5 h-2.5 shrink-0 text-amber-500" />}
 
         <span className="flex-1 truncate font-medium">{node.label || node.name}</span>
 
@@ -286,9 +350,15 @@ function CardNode({
         )}
       </div>
 
-      {hasChildren && expanded && (
+      {shouldExpand && (hasChildren || inlineCreateParent === path) && (
         <div className="ml-3 mt-0.5 space-y-0.5">
-          {node.children.map(child => (
+          {inlineCreateParent === path && (
+            <InlineCreateInput
+              onConfirm={name => onConfirmCreate(path, name)}
+              onCancel={onCancelCreate}
+            />
+          )}
+          {node.children?.map(child => (
             <CardNode
               key={child.id || child.name}
               node={child}
@@ -301,10 +371,14 @@ function CardNode({
               sourceLayer={sourceLayer}
               targetLayers={targetLayers}
               clipboard={clipboard}
+              searchQuery={searchQuery}
+              inlineCreateParent={inlineCreateParent}
               onSelect={onSelect}
               onShowContent={onShowContent}
               onCtrl={onCtrl}
               onCtxMenu={onCtxMenu}
+              onConfirmCreate={onConfirmCreate}
+              onCancelCreate={onCancelCreate}
             />
           ))}
         </div>
@@ -319,13 +393,17 @@ export function MenuTreeView({
   root, selectedPath, pendingPath, onSelect, isLoading = false, readOnly = false,
   rootLabel, contentPath, onShowContent,
   onInsertPath, onRemovePath, onRenamePath, onMovePath, onCopyPath,
-  onLockLayer, onUnlockLayer, onMergeLayer, onSubtractLayer,
+  onLockLayer, onUnlockLayer, onDestroyLayer, onMergeLayer, onSubtractLayer,
+  searchQuery = '',
 }: MenuTreeViewProps) {
 
   const [clipboard, setClipboard] = useState<Clip | null>(null)
   const [sourceLayer, setSourceLayer] = useState<LayerRef | null>(null)
   const [targetLayers, setTargetLayers] = useState<Map<string, string>>(new Map())
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; path: string; node: TreeNode } | null>(null)
+  const [inlineCreateParent, setInlineCreateParent] = useState<string | null>(null)
+
+  const q = searchQuery.toLowerCase().trim()
 
   const openCtxMenu = useCallback((e: React.MouseEvent, path: string, node: TreeNode) => {
     e.stopPropagation()
@@ -361,11 +439,28 @@ export function MenuTreeView({
     }
   }, [clipboard, onMovePath, onCopyPath])
 
+  const handleConfirmCreate = useCallback(async (parentPath: string, name: string) => {
+    setInlineCreateParent(null)
+    if (!onInsertPath) return
+    const full = parentPath === '/' ? `/${name}` : `${parentPath}/${name}`
+    try { await onInsertPath(full, true) } catch (err) { alert(err instanceof Error ? err.message : String(err)) }
+  }, [onInsertPath])
+
+  const handleCancelCreate = useCallback(() => setInlineCreateParent(null), [])
+
   if (isLoading) return <div className="px-3 py-3 text-xs text-muted-foreground">Loading tree…</div>
   if (!root) return <div className="px-3 py-3 text-xs text-muted-foreground">No tree available</div>
-  if (!root.children?.length) return <div className="px-3 py-3 text-xs text-muted-foreground">Empty tree</div>
 
   const hasSelection = sourceLayer || targetLayers.size > 0
+
+  // Shared props for CardNode
+  const cardProps = {
+    selectedPath, pendingPath, contentPath, readOnly,
+    sourceLayer, targetLayers, clipboard, searchQuery: q,
+    inlineCreateParent,
+    onSelect, onShowContent, onCtrl: handleCtrl, onCtxMenu: openCtxMenu,
+    onConfirmCreate: handleConfirmCreate, onCancelCreate: handleCancelCreate,
+  }
 
   return (
     <div className="px-2 py-1.5 space-y-0.5">
@@ -386,43 +481,68 @@ export function MenuTreeView({
         </div>
       )}
 
-      {/* Root "/" node */}
-      {rootLabel && (
-        <div
-          className={cn(
-            'group relative flex items-center gap-1.5 rounded-l-md px-2 py-1.5 cursor-pointer transition-all',
-            'shadow-sm hover:shadow text-xs',
-            selectedPath === '/' && !contentPath
-              ? 'bg-accent shadow'
-              : 'bg-card hover:bg-accent/40',
-          )}
-          style={{ borderRight: '4px solid transparent' }}
-          onClick={() => onSelect('/')}
-        >
-          <ChevronRight className="w-3 h-3 opacity-0 shrink-0" />
-          <span className="flex-1 font-medium truncate">/ <span className="text-muted-foreground font-normal">[{rootLabel}]</span></span>
-        </div>
-      )}
+      {/* Root "/" node — always shown, children indented below */}
+      <div
+        className={cn(
+          'group relative flex items-center gap-1.5 rounded-l-md px-2 py-1.5 cursor-pointer transition-all',
+          'shadow-sm hover:shadow text-xs',
+          selectedPath === '/' && !contentPath ? 'bg-accent shadow' : 'bg-card hover:bg-accent/40',
+        )}
+        style={{ borderRight: '4px solid transparent' }}
+        onClick={() => onSelect('/')}
+        onContextMenu={e => {
+          if (!readOnly && onInsertPath) {
+            e.preventDefault()
+            const x = Math.min(e.clientX, window.innerWidth - 190)
+            const y = Math.min(e.clientY, window.innerHeight - 260)
+            // use root as a pseudo-node for ctx menu
+            const pseudoNode = { id: '', name: '/', label: '/', type: 'root', description: '', color: null, locked: false, children: [] } as unknown as TreeNode
+            setCtxMenu({ x, y, path: '/', node: pseudoNode })
+          }
+        }}
+      >
+        <ChevronDown className="w-3 h-3 shrink-0 text-muted-foreground" />
+        <span className="flex-1 font-medium truncate">
+          / {rootLabel && <span className="text-muted-foreground font-normal">[{rootLabel}]</span>}
+        </span>
+        {!readOnly && onInsertPath && (
+          <button
+            type="button"
+            className="shrink-0 opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-muted-foreground/10 text-muted-foreground"
+            onClick={e => {
+              e.stopPropagation()
+              const x = Math.min(e.clientX, window.innerWidth - 190)
+              const y = Math.min(e.clientY, window.innerHeight - 260)
+              const pseudoNode = { id: '', name: '/', label: '/', type: 'root', description: '', color: null, locked: false, children: [] } as unknown as TreeNode
+              setCtxMenu({ x, y, path: '/', node: pseudoNode })
+            }}
+          >
+            <MoreHorizontal className="w-3 h-3" />
+          </button>
+        )}
+      </div>
 
-      {root.children.map(child => (
-        <CardNode
-          key={child.id || child.name}
-          node={child}
-          parentPath="/"
-          depth={0}
-          selectedPath={selectedPath}
-          pendingPath={pendingPath}
-          contentPath={contentPath}
-          readOnly={readOnly}
-          sourceLayer={sourceLayer}
-          targetLayers={targetLayers}
-          clipboard={clipboard}
-          onSelect={onSelect}
-          onShowContent={onShowContent}
-          onCtrl={handleCtrl}
-          onCtxMenu={openCtxMenu}
-        />
-      ))}
+      {/* Children indented under root */}
+      <div className="ml-3 space-y-0.5">
+        {inlineCreateParent === '/' && (
+          <InlineCreateInput
+            onConfirm={name => handleConfirmCreate('/', name)}
+            onCancel={handleCancelCreate}
+          />
+        )}
+        {root.children?.map(child => (
+          <CardNode
+            key={child.id || child.name}
+            node={child}
+            parentPath="/"
+            depth={0}
+            {...cardProps}
+          />
+        ))}
+        {(!root.children?.length && inlineCreateParent !== '/') && (
+          <div className="px-2 py-1.5 text-xs text-muted-foreground">Empty tree</div>
+        )}
+      </div>
 
       {ctxMenu && (
         <CtxMenu
@@ -435,11 +555,12 @@ export function MenuTreeView({
           sourceLayer={sourceLayer}
           targetLayers={targetLayers}
           clipboard={clipboard}
-          onInsert={!readOnly ? onInsertPath : undefined}
+          onStartInlineCreate={path => setInlineCreateParent(path)}
           onRemove={!readOnly ? onRemovePath : undefined}
           onRename={!readOnly ? onRenamePath : undefined}
           onLock={!readOnly ? onLockLayer : undefined}
           onUnlock={!readOnly ? onUnlockLayer : undefined}
+          onDestroy={!readOnly ? onDestroyLayer : undefined}
           onMerge={!readOnly ? onMergeLayer : undefined}
           onSubtract={!readOnly ? onSubtractLayer : undefined}
           onCopy={path => setClipboard({ mode: 'copy', path })}

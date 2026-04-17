@@ -20,8 +20,14 @@ function appendFilters(params: URLSearchParams, filterArray: string[] = []) {
   filterArray.filter(Boolean).forEach(filter => params.append('filters', filter))
 }
 
-function getWorkspaceTreeBaseRoute(workspaceId: string) {
-  return `${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(DEFAULT_WORKSPACE_TREE_NAME)}`
+function getWorkspaceTreeBaseRoute(workspaceId: string, treeName = DEFAULT_WORKSPACE_TREE_NAME) {
+  return `${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}`
+}
+
+export async function getWorkspace(id: string): Promise<Workspace> {
+  const response = await api.get<{ payload: { workspace: Workspace } | Workspace }>(`${API_ROUTES.workspaces}/${id}`)
+  const p = response.payload
+  return (p && 'workspace' in p) ? p.workspace : p as Workspace
 }
 
 // listWorkspaces should return a Promise where Workspace is the global type.
@@ -174,10 +180,10 @@ export async function updateWorkspace(id: string, payload: Partial<CreateWorkspa
 }
 
 // Workspace tree operations
-export async function insertWorkspacePath(workspaceId: string, path: string, autoCreateLayers: boolean = true): Promise<boolean> {
+export async function insertWorkspacePath(workspaceId: string, path: string, autoCreateLayers = true, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<boolean> {
   try {
     const response = await api.post<{ payload: boolean; message: string; status: string; statusCode: number }>(
-      `${getWorkspaceTreeBaseRoute(workspaceId)}/paths`,
+      `${getWorkspaceTreeBaseRoute(workspaceId, treeName)}/paths`,
       { path, autoCreateLayers }
     );
     return response.payload;
@@ -187,11 +193,11 @@ export async function insertWorkspacePath(workspaceId: string, path: string, aut
   }
 }
 
-export async function removeWorkspacePath(workspaceId: string, path: string, recursive: boolean = false): Promise<boolean> {
+export async function removeWorkspacePath(workspaceId: string, path: string, recursive = false, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<boolean> {
   try {
     const params = new URLSearchParams({ path, recursive: recursive.toString() });
     const response = await api.delete<{ payload: boolean; message: string; status: string; statusCode: number }>(
-      `${getWorkspaceTreeBaseRoute(workspaceId)}/paths?${params.toString()}`
+      `${getWorkspaceTreeBaseRoute(workspaceId, treeName)}/paths?${params.toString()}`
     );
     return response.payload;
   } catch (error) {
@@ -200,10 +206,10 @@ export async function removeWorkspacePath(workspaceId: string, path: string, rec
   }
 }
 
-export async function moveWorkspacePath(workspaceId: string, fromPath: string, toPath: string, recursive: boolean = false): Promise<boolean> {
+export async function moveWorkspacePath(workspaceId: string, fromPath: string, toPath: string, recursive = false, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<boolean> {
   try {
     const response = await api.post<{ payload: boolean; message: string; status: string; statusCode: number }>(
-      `${getWorkspaceTreeBaseRoute(workspaceId)}/paths/move`,
+      `${getWorkspaceTreeBaseRoute(workspaceId, treeName)}/paths/move`,
       { from: fromPath, to: toPath, recursive }
     );
     return response.payload;
@@ -213,10 +219,10 @@ export async function moveWorkspacePath(workspaceId: string, fromPath: string, t
   }
 }
 
-export async function copyWorkspacePath(workspaceId: string, fromPath: string, toPath: string, recursive: boolean = false): Promise<boolean> {
+export async function copyWorkspacePath(workspaceId: string, fromPath: string, toPath: string, recursive = false, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<boolean> {
   try {
     const response = await api.post<{ payload: boolean; message: string; status: string; statusCode: number }>(
-      `${getWorkspaceTreeBaseRoute(workspaceId)}/paths/copy`,
+      `${getWorkspaceTreeBaseRoute(workspaceId, treeName)}/paths/copy`,
       { from: fromPath, to: toPath, recursive }
     );
     return response.payload;

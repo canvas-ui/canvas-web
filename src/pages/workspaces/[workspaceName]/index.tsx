@@ -269,7 +269,10 @@ export default function WorkspaceDetailPage() {
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Compact workspace status bar */}
-      <div className="flex items-center gap-3 px-4 py-2 border-b shrink-0">
+      <div
+        className="flex items-center gap-3 px-4 py-2 border-b shrink-0"
+        style={workspace.color ? { borderLeft: `8px solid ${workspace.color}` } : undefined}
+      >
         <span
           className={`w-2 h-2 rounded-full shrink-0 ${
             workspace.status === 'active' ? 'bg-green-500' :

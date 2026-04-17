@@ -14,7 +14,7 @@ import {
 import {
   insertWorkspacePath, removeWorkspacePath, moveWorkspacePath, copyWorkspacePath,
   mergeWorkspaceLayer, subtractWorkspaceLayer,
-  lockWorkspaceLayer, unlockWorkspaceLayer,
+  lockWorkspaceLayer, unlockWorkspaceLayer, destroyWorkspaceLayer,
   DEFAULT_WORKSPACE_TREE_NAME,
 } from '@/services/workspace'
 
@@ -35,20 +35,20 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
   const onInsertPath = useCallback(async (path: string, autoCreateLayers = true): Promise<boolean> => {
     let result: boolean
     if (contextId) result = await insertContextPath(contextId, path, autoCreateLayers)
-    else if (workspaceId) result = await insertWorkspacePath(workspaceId, path, autoCreateLayers)
+    else if (workspaceId) result = await insertWorkspacePath(workspaceId, path, autoCreateLayers, wsTree)
     else return false
     refresh()
     return result
-  }, [contextId, workspaceId, refresh])
+  }, [contextId, workspaceId, wsTree, refresh])
 
   const onRemovePath = useCallback(async (path: string, recursive = false): Promise<boolean> => {
     let result: boolean
     if (contextId) result = await removeContextPath(contextId, path, recursive)
-    else if (workspaceId) result = await removeWorkspacePath(workspaceId, path, recursive)
+    else if (workspaceId) result = await removeWorkspacePath(workspaceId, path, recursive, wsTree)
     else return false
     refresh()
     return result
-  }, [contextId, workspaceId, refresh])
+  }, [contextId, workspaceId, wsTree, refresh])
 
   // Rename = move to same parent with a new last segment
   const onRenamePath = useCallback(async (fromPath: string, newName: string): Promise<boolean> => {
@@ -57,29 +57,29 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     const toPath = parts.join('/')
     let result: boolean
     if (contextId) result = await moveContextPath(contextId, fromPath, toPath, false)
-    else if (workspaceId) result = await moveWorkspacePath(workspaceId, fromPath, toPath, false)
+    else if (workspaceId) result = await moveWorkspacePath(workspaceId, fromPath, toPath, false, wsTree)
     else return false
     refresh()
     return result
-  }, [contextId, workspaceId, refresh])
+  }, [contextId, workspaceId, wsTree, refresh])
 
   const onMovePath = useCallback(async (from: string, to: string, recursive = false): Promise<boolean> => {
     let result: boolean
     if (contextId) result = await moveContextPath(contextId, from, to, recursive)
-    else if (workspaceId) result = await moveWorkspacePath(workspaceId, from, to, recursive)
+    else if (workspaceId) result = await moveWorkspacePath(workspaceId, from, to, recursive, wsTree)
     else return false
     refresh()
     return result
-  }, [contextId, workspaceId, refresh])
+  }, [contextId, workspaceId, wsTree, refresh])
 
   const onCopyPath = useCallback(async (from: string, to: string, recursive = false): Promise<boolean> => {
     let result: boolean
     if (contextId) result = await copyContextPath(contextId, from, to, recursive)
-    else if (workspaceId) result = await copyWorkspacePath(workspaceId, from, to, recursive)
+    else if (workspaceId) result = await copyWorkspacePath(workspaceId, from, to, recursive, wsTree)
     else return false
     refresh()
     return result
-  }, [contextId, workspaceId, refresh])
+  }, [contextId, workspaceId, wsTree, refresh])
 
   const onMergeLayer = useCallback(async (layerId: string, targetLayers: string[]): Promise<any> => {
     let result: any
@@ -114,10 +114,18 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     return result
   }, [workspaceId, wsTree, refresh])
 
+  const onDestroyLayer = useCallback(async (layerId: string): Promise<boolean> => {
+    if (!workspaceId) return false
+    const result = await destroyWorkspaceLayer(workspaceId, layerId, wsTree)
+    refresh()
+    return result
+  }, [workspaceId, wsTree, refresh])
+
   return {
     onInsertPath, onRemovePath, onRenamePath, onMovePath, onCopyPath,
     onMergeLayer, onSubtractLayer,
     onLockLayer: workspaceId ? onLockLayer : undefined,
     onUnlockLayer: workspaceId ? onUnlockLayer : undefined,
+    onDestroyLayer: workspaceId ? onDestroyLayer : undefined,
   }
 }
