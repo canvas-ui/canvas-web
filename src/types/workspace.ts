@@ -1,4 +1,24 @@
-// Workspace tree node structure
+// Canvas querySpec — features may be a string array (treated as anyOf)
+// or the explicit object form. Filters are SynapsD filter strings
+// (bitmap keys or "datetime:..." expressions).
+export interface CanvasFeatureBuckets {
+  allOf?: string[]
+  anyOf?: string[]
+  noneOf?: string[]
+}
+
+export interface CanvasQuerySpec {
+  features: string[] | CanvasFeatureBuckets | null
+  filters: string[]
+}
+
+// Opaque metadata blob the backend never introspects. Any layer can carry it
+// (UI styling, share info, applet config, etc.); for canvases it usually
+// contains a `ui` block plus future share/applet keys.
+export type LayerMetadata = Record<string, unknown>
+
+// Workspace tree node structure. `querySpec` is only present on canvas-typed
+// nodes; `metadata` is always emitted (defaults to {}).
 export interface TreeNode {
   id: string
   type: string
@@ -7,7 +27,33 @@ export interface TreeNode {
   description: string
   color: string | null
   locked?: boolean
+  lockedBy?: string[]
+  metadata?: LayerMetadata
+  querySpec?: CanvasQuerySpec
   children: TreeNode[]
+}
+
+// Canonical canvas payload returned by /workspaces/:wid/canvases endpoints.
+export interface Canvas {
+  schemaVersion: string
+  id: string
+  type: 'canvas'
+  name: string
+  label: string
+  description: string
+  color: string | null
+  locked: boolean
+  lockedBy: string[]
+  metadata: LayerMetadata
+  acl: Record<string, unknown>
+  querySpec: CanvasQuerySpec
+  // Joined fields the route adds for convenience
+  treeId: string
+  treeName: string
+  path: string | null
+  // Only present on the top-level /canvases alias responses
+  workspaceId?: string
+  workspaceName?: string
 }
 
 // Document structure from API

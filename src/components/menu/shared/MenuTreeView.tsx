@@ -9,7 +9,7 @@ import { createPortal } from 'react-dom'
 import {
   ChevronRight, ChevronDown,
   Plus, Trash2, Edit2, Copy, Scissors, Clipboard,
-  Layers, MoreHorizontal, Lock, Unlock, Eye,
+  Layers, LayoutDashboard, MoreHorizontal, Lock, Unlock, Eye,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { TreeNode } from '@/types/workspace'
@@ -308,6 +308,7 @@ function CardNode({
   const isContent = contentPath === path
   const isSource = sourceLayer?.path === path
   const isTarget = targetLayers.has(path)
+  const isCanvas = node.type === 'canvas'
 
   const handleClick = (e: React.MouseEvent) => {
     if (e.ctrlKey || e.metaKey) { onCtrl(path, node.id); return }
@@ -325,7 +326,9 @@ function CardNode({
           isContent && !isSource && !isTarget && 'bg-yellow-100 dark:bg-yellow-800/40 ring-1 ring-yellow-400/50',
           !isSource && !isTarget && !isContent && isSelected && 'bg-accent shadow',
           !isSource && !isTarget && !isContent && !isSelected && isPending && 'bg-accent/50',
-          !isSource && !isTarget && !isContent && !isSelected && !isPending && 'bg-card hover:bg-accent/40',
+          !isSource && !isTarget && !isContent && !isSelected && !isPending && (
+            isCanvas ? 'bg-violet-50 dark:bg-violet-950/20 hover:bg-violet-100 dark:hover:bg-violet-900/30' : 'bg-card hover:bg-accent/40'
+          ),
         )}
         style={{ borderRight: node.color ? `4px solid ${node.color}` : '4px solid transparent' }}
         onClick={handleClick}
@@ -338,6 +341,10 @@ function CardNode({
         >
           {shouldExpand ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
         </button>
+
+        {isCanvas && (
+          <LayoutDashboard className="w-3 h-3 shrink-0 text-violet-500" aria-label="Canvas" />
+        )}
 
         {node.locked && <Lock className="w-2.5 h-2.5 shrink-0 text-amber-500" />}
 

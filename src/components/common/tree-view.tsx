@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronRight, ChevronDown, Folder, FolderOpen, MoreHorizontal, Trash2, Plus, Clipboard, Copy, Scissors, Edit, Layers } from 'lucide-react'
+import { ChevronRight, ChevronDown, Folder, FolderOpen, LayoutDashboard, MoreHorizontal, Trash2, Plus, Clipboard, Copy, Scissors, Edit, Layers } from 'lucide-react'
 import { TreeNode } from '@/types/workspace'
 import { cn } from '@/lib/utils'
 
@@ -423,9 +423,14 @@ function TreeNodeComponent({
           )}
         </div>
 
-        {/* Folder icon */}
-        <div className="flex items-center justify-center w-4 h-4 mr-2">
-          {hasChildren && isExpanded ? (
+        {/* Node icon — canvases get a dashboard glyph in violet, regular layers a folder */}
+        <div
+          className="flex items-center justify-center w-4 h-4 mr-2"
+          title={node.type === 'canvas' ? 'Canvas' : undefined}
+        >
+          {node.type === 'canvas' ? (
+            <LayoutDashboard className="h-3 w-3 text-violet-500" />
+          ) : hasChildren && isExpanded ? (
             <FolderOpen className="h-3 w-3 text-blue-500" />
           ) : (
             <Folder className="h-3 w-3 text-blue-500" />
