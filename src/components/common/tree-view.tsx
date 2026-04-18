@@ -601,15 +601,18 @@ export function TreeView({
     let didSomething = false
 
     for (const fromPath of paths) {
-      if (!fromPath || fromPath === targetPath) continue
+      if (!fromPath) continue
+      const baseName = fromPath.split('/').filter(Boolean).pop() ?? fromPath
+      const destPath = targetPath === '/' ? `/${baseName}` : `${targetPath}/${baseName}`
+      if (fromPath === destPath) continue
 
       if (mode === 'cut') {
         if (!onMovePath) return false
-        await onMovePath(fromPath, targetPath, false)
+        await onMovePath(fromPath, destPath, false)
         didSomething = true
       } else {
         if (!onCopyPath) return false
-        await onCopyPath(fromPath, targetPath, false)
+        await onCopyPath(fromPath, destPath, false)
         didSomething = true
       }
     }

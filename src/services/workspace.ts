@@ -147,11 +147,12 @@ export async function getWorkspaceDocuments(
   id: string,
   contextSpec: string = '/',
   featureArray: string[] = [],
-  options: { limit?: number; offset?: number; page?: number; includeIncoming?: boolean; treeName?: string } = {}
+  options: { limit?: number; offset?: number; page?: number; includeIncoming?: boolean; treeName?: string; treeType?: string } = {}
 ): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }> {
   try {
     const params = new URLSearchParams();
-    params.append('tree', options.treeName || DEFAULT_WORKSPACE_TREE_NAME)
+    params.append('treeNameOrTreeId', options.treeName || DEFAULT_WORKSPACE_TREE_NAME)
+    if (options.treeType) params.append('treeType', options.treeType)
     if (contextSpec) params.append('context', contextSpec)
     appendAllOf(params, featureArray)
     if (options.includeIncoming) params.append('includeIncoming', 'true')
@@ -165,6 +166,26 @@ export async function getWorkspaceDocuments(
     return await api.get<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }>(url);
   } catch (error) {
     console.error(`Failed to get workspace documents ${id}:`, error);
+    throw error;
+  }
+}
+
+export async function getWorkspaceLayerDocuments(
+  id: string,
+  treeName: string,
+  layerId: string,
+  options: { limit?: number; offset?: number; page?: number } = {}
+): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }> {
+  try {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.append('limit', options.limit.toString());
+    if (options.offset !== undefined) params.append('offset', options.offset.toString());
+    if (options.page !== undefined) params.append('page', options.page.toString());
+    const queryString = params.toString();
+    const url = `${API_ROUTES.workspaces}/${id}/trees/${encodeURIComponent(treeName)}/layers/${encodeURIComponent(layerId)}/documents${queryString ? '?' + queryString : ''}`;
+    return await api.get<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }>(url);
+  } catch (error) {
+    console.error(`Failed to get workspace layer documents ${id}/${treeName}/${layerId}:`, error);
     throw error;
   }
 }

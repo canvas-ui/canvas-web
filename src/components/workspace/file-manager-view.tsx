@@ -387,11 +387,14 @@ export function FileManagerView({
 
     let allSuccess = true;
     for (const sourcePath of clipboard.paths.paths) {
+      const baseName = sourcePath.split('/').filter(Boolean).pop() ?? sourcePath;
+      const destPath = targetPath === '/' ? `/${baseName}` : `${targetPath}/${baseName}`;
+      if (sourcePath === destPath) continue;
       if (clipboard.paths.operation === 'cut') {
-        const success = await onMovePath?.(sourcePath, targetPath, false);
+        const success = await onMovePath?.(sourcePath, destPath, false);
         if (!success) allSuccess = false;
       } else {
-        const success = await onCopyPath?.(sourcePath, targetPath, false);
+        const success = await onCopyPath?.(sourcePath, destPath, false);
         if (!success) allSuccess = false;
       }
     }

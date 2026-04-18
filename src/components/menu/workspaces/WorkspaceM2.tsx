@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import { M2Header } from '@/components/menu/shared/M2Header'
 import { MenuTreeView } from '@/components/menu/shared/MenuTreeView'
 import { useMenu } from '@/components/shell/menu-context'
-import { getWorkspace, getWorkspaceTreeByName, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer } from '@/services/workspace'
+import { getWorkspace, getWorkspaceTreeByName, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer, pasteDocumentsToWorkspacePath } from '@/services/workspace'
 import type { Layer } from '@/services/workspace'
 import { useTreeOperations } from '@/hooks/useTreeOperations'
 import type { TreeNode } from '@/types/workspace'
@@ -41,6 +41,13 @@ export function WorkspaceM2() {
   const [selectedPath, setSelectedPath] = useState('/')
   const [contentPath, setContentPath] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [docClipboard, setDocClipboard] = useState<{ documentIds: number[]; operation: 'copy' | 'cut' } | null>(null)
+
+  useEffect(() => {
+    const handler = (e: CustomEvent) => setDocClipboard(e.detail ?? null)
+    window.addEventListener('documents:clipboard', handler as EventListener)
+    return () => window.removeEventListener('documents:clipboard', handler as EventListener)
+  }, [])
 
   const loadTree = useCallback(async (name: string, tab: 'context' | 'directory') => {
     const setLoading = tab === 'context' ? setIsLoadingContext : setIsLoadingDirectory
@@ -247,7 +254,7 @@ export function WorkspaceM2() {
             onSelect={layer => {
               const params = new URLSearchParams()
               params.set('tree', 'context')
-              params.set('path', `/${layer.name}`)
+              params.set('layerId', layer.id)
               params.set('layer', '1')
               navigate(`/workspaces/${wsName}?${params.toString()}`)
             }}
@@ -279,6 +286,13 @@ export function WorkspaceM2() {
             isLoading={isLoadingTree}
             rootLabel={wsName ?? undefined}
             searchQuery={searchQuery}
+            pastedDocumentIds={docClipboard?.documentIds}
+            onPasteDocuments={docClipboard && wsName ? async (path, ids) => {
+              const treeType: 'context' | 'directory' = activeTab === 'directory' ? 'directory' : 'context'
+              const success = await pasteDocumentsToWorkspacePath(wsName, path, ids, treeType, treeType)
+              if (success) setDocClipboard(null)
+              return success
+            } : undefined}
             {...ops}
           />
         )}

@@ -37,6 +37,8 @@ export interface MenuTreeViewProps {
   onMergeLayer?: (layerId: string, targetLayers: string[]) => Promise<any>
   onSubtractLayer?: (layerId: string, targetLayers: string[]) => Promise<any>
   searchQuery?: string
+  pastedDocumentIds?: number[]
+  onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
 }
 
 type ClipboardMode = 'copy' | 'cut'
@@ -65,6 +67,8 @@ interface CtxMenuProps {
   onCopy: (path: string) => void
   onCut: (path: string) => void
   onPaste: (target: string) => Promise<void>
+  pastedDocumentIds?: number[]
+  onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
 }
 
 function CtxMenu({
@@ -73,6 +77,7 @@ function CtxMenu({
   onStartInlineCreate, onRemove, onRename,
   onLock, onUnlock, onDestroy, onMerge, onSubtract,
   onCopy, onCut, onPaste,
+  pastedDocumentIds, onPasteDocuments,
 }: CtxMenuProps) {
 
   const canMergeSubtract = sourceLayer && targetLayers.size > 0 && sourceLayer.path === path
@@ -139,6 +144,11 @@ function CtxMenu({
           <Clipboard className="w-3 h-3" />,
           `Paste (${clipboard.mode})`,
           async () => onPaste(path),
+        )}
+        {pastedDocumentIds && pastedDocumentIds.length > 0 && onPasteDocuments && item(
+          <Clipboard className="w-3 h-3" />,
+          `Paste ${pastedDocumentIds.length} document(s)`,
+          async () => { await onPasteDocuments(path, pastedDocumentIds) },
         )}
 
         {/* Remove — disabled for locked layers */}
@@ -393,6 +403,7 @@ export function MenuTreeView({
   root, selectedPath, pendingPath, onSelect, isLoading = false, readOnly = false,
   rootLabel, contentPath, onShowContent,
   onInsertPath, onRemovePath, onRenamePath, onMovePath, onCopyPath,
+  pastedDocumentIds, onPasteDocuments,
   onLockLayer, onUnlockLayer, onDestroyLayer, onMergeLayer, onSubtractLayer,
   searchQuery = '',
 }: MenuTreeViewProps) {
@@ -431,11 +442,14 @@ export function MenuTreeView({
 
   const handlePaste = useCallback(async (target: string) => {
     if (!clipboard || !onMovePath || !onCopyPath) return
+    const baseName = clipboard.path.split('/').filter(Boolean).pop() ?? clipboard.path
+    const destPath = target === '/' ? `/${baseName}` : `${target}/${baseName}`
+    if (clipboard.path === destPath) return
     if (clipboard.mode === 'cut') {
-      await onMovePath(clipboard.path, target, false)
+      await onMovePath(clipboard.path, destPath, false)
       setClipboard(null)
     } else {
-      await onCopyPath(clipboard.path, target, false)
+      await onCopyPath(clipboard.path, destPath, false)
     }
   }, [clipboard, onMovePath, onCopyPath])
 
@@ -566,6 +580,8 @@ export function MenuTreeView({
           onCopy={path => setClipboard({ mode: 'copy', path })}
           onCut={path => setClipboard({ mode: 'cut', path })}
           onPaste={handlePaste}
+          pastedDocumentIds={pastedDocumentIds}
+          onPasteDocuments={onPasteDocuments}
         />
       )}
     </div>

@@ -6,6 +6,7 @@ import { useToast } from '@/components/ui/toast-container';
 import { DefaultCanvas } from '@/components/canvas/DefaultCanvas';
 import {
   getWorkspaceDocuments,
+  getWorkspaceLayerDocuments,
   pasteDocumentsToWorkspacePath,
   importDocumentsToWorkspacePath,
   removeWorkspaceDocuments,
@@ -45,6 +46,7 @@ export default function WorkspaceDetailPage() {
   const selectedTreeName = searchParams.get('tree') || DEFAULT_WORKSPACE_TREE_NAME;
 
   const isLayerView = searchParams.get('layer') === '1';
+  const selectedLayerId = searchParams.get('layerId') || null;
   const urlDisplay = workspaceName
     ? `${workspaceName}://${selectedPath === '/' ? '' : selectedPath.replace(/^\//, '')}`
     : '';
@@ -92,11 +94,21 @@ export default function WorkspaceDetailPage() {
     if (!workspaceName) return;
     setIsLoadingDocuments(true);
     try {
-      const response = await getWorkspaceDocuments(workspaceName, selectedPath, [], {
-        limit: pageSize,
-        page: currentPage,
-        treeName: selectedTreeName,
-      });
+      let response;
+      if (isLayerView && selectedLayerId) {
+        response = await getWorkspaceLayerDocuments(workspaceName, selectedTreeName, selectedLayerId, {
+          limit: pageSize,
+          page: currentPage,
+        });
+      } else {
+        const selectedTreeType: 'context' | 'directory' = selectedTreeName === 'directory' ? 'directory' : 'context';
+        response = await getWorkspaceDocuments(workspaceName, selectedPath, [], {
+          limit: pageSize,
+          page: currentPage,
+          treeName: selectedTreeName,
+          treeType: selectedTreeType,
+        });
+      }
       setDocuments((response.payload as Document[]) || []);
       setDocumentsTotalCount(response.totalCount || response.count || 0);
     } catch (err) {
@@ -107,7 +119,7 @@ export default function WorkspaceDetailPage() {
     } finally {
       setIsLoadingDocuments(false);
     }
-  }, [workspaceName, selectedPath, selectedTreeName, currentPage, pageSize, workspace?.status]);
+  }, [workspaceName, selectedPath, selectedTreeName, selectedLayerId, isLayerView, currentPage, pageSize, workspace?.status]);
 
   useEffect(() => {
     fetchDocuments();
@@ -115,7 +127,7 @@ export default function WorkspaceDetailPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedPath, selectedTreeName]);
+  }, [selectedPath, selectedTreeName, selectedLayerId]);
 
   const handleStartWorkspace = async () => {
     if (!workspace) return;
@@ -199,11 +211,13 @@ export default function WorkspaceDetailPage() {
 
   const handleCopyDocuments = (documentIds: number[]) => {
     setClipboard({ documentIds, operation: 'copy' });
+    window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: { documentIds, operation: 'copy' } }));
     showToast({ title: 'Copied', description: `${documentIds.length} document(s) copied to clipboard` });
   };
 
   const handleCutDocuments = (documentIds: number[]) => {
     setClipboard({ documentIds, operation: 'cut' });
+    window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: { documentIds, operation: 'cut' } }));
     showToast({ title: 'Cut', description: `${documentIds.length} document(s) cut to clipboard` });
   };
 
@@ -216,6 +230,7 @@ export default function WorkspaceDetailPage() {
       if (success) {
         await fetchDocuments();
         setClipboard(null);
+        window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: null }));
         showToast({ title: 'Success', description: `${documentIds.length} document(s) ${clipboard?.operation === 'cut' ? 'moved' : 'pasted'} to "${path}"` });
       }
       return success;
