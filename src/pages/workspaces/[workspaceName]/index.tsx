@@ -11,6 +11,7 @@ import {
   importDocumentsToWorkspacePath,
   removeWorkspaceDocuments,
   deleteWorkspaceDocuments,
+  evictWorkspaceDocuments,
   purgeWorkspaceDocuments,
   startWorkspace,
   stopWorkspace,
@@ -210,6 +211,44 @@ export default function WorkspaceDetailPage() {
     }
   };
 
+  const handleDestroyDocument = async (documentId: number) => {
+    if (!workspace) return;
+    try {
+      const result = await evictWorkspaceDocuments(workspace.name, [documentId]);
+      if (result.failed?.length) {
+        const f = result.failed[0];
+        const msg = f.backends
+          ? `${f.reason} (${f.backends.join(', ')})`
+          : f.reason;
+        showToast({ title: 'Error', description: msg, variant: 'destructive' });
+        return;
+      }
+      setDocuments(prev => prev.filter(doc => doc.id !== documentId));
+      setDocumentsTotalCount(prev => Math.max(0, prev - 1));
+      showToast({ title: 'Destroyed', description: 'Document removed from all backends.' });
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to destroy document', variant: 'destructive' });
+    }
+  };
+
+  const handleDestroyDocuments = async (documentIds: number[]) => {
+    if (!workspace) return;
+    try {
+      const result = await evictWorkspaceDocuments(workspace.name, documentIds);
+      const succeededIds = new Set(result.successful?.map(r => r.id) ?? []);
+      setDocuments(prev => prev.filter(doc => !succeededIds.has(doc.id)));
+      setDocumentsTotalCount(prev => Math.max(0, prev - succeededIds.size));
+      const msg = [
+        result.successful?.length ? `${result.successful.length} destroyed` : null,
+        result.failed?.length ? `${result.failed.length} failed` : null,
+        result.skipped?.length ? `${result.skipped.length} skipped` : null,
+      ].filter(Boolean).join(', ');
+      showToast({ title: 'Done', description: msg || 'No documents destroyed' });
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to destroy documents', variant: 'destructive' });
+    }
+  };
+
   const handleCopyDocuments = (documentIds: number[]) => {
     setClipboard({ documentIds, operation: 'copy' });
     window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: { documentIds, operation: 'copy' } }));
@@ -334,8 +373,10 @@ export default function WorkspaceDetailPage() {
           onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }}
           onRemoveDocument={selectedPath !== '/' ? handleRemoveDocument : undefined}
           onDeleteDocument={handleDeleteDocument}
+          onDestroyDocument={handleDestroyDocument}
           onRemoveDocuments={selectedPath !== '/' ? handleRemoveDocuments : undefined}
           onDeleteDocuments={handleDeleteDocuments}
+          onDestroyDocuments={handleDestroyDocuments}
           onCopyDocuments={handleCopyDocuments}
           onCutDocuments={handleCutDocuments}
           onPasteDocuments={handlePasteDocuments}

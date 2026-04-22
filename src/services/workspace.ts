@@ -379,6 +379,28 @@ export async function deleteWorkspaceDocuments(
   return true
 }
 
+export interface EvictResult {
+  successful: { id: number; action: string; backendsCleared?: string[]; remainingBackends?: string[] }[]
+  failed: { id: number; reason: string; backends?: string[] }[]
+  skipped: { id: number; reason: string }[]
+}
+
+export async function evictWorkspaceDocuments(
+  workspaceId: string,
+  documentIds: readonly (string | number)[],
+  backends?: string[]
+): Promise<EvictResult> {
+  const ids = normalizeDocumentIds(documentIds)
+  const response = await api.delete<{ payload: EvictResult }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/documents/evict`,
+    {
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(backends ? { documentIds: ids, backends } : { documentIds: ids }),
+    }
+  )
+  return response.payload
+}
+
 export async function purgeWorkspaceDocuments(
   workspaceId: string,
   contextSpec: string = '/',

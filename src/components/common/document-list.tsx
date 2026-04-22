@@ -21,8 +21,10 @@ interface DocumentListProps {
   totalCount: number
   onRemoveDocument?: (documentId: number) => void
   onDeleteDocument?: (documentId: number) => void
+  onDestroyDocument?: (documentId: number) => void
   onRemoveDocuments?: (documentIds: number[]) => void
   onDeleteDocuments?: (documentIds: number[]) => void
+  onDestroyDocuments?: (documentIds: number[]) => void
   onCopyDocuments?: (documentIds: number[]) => void
   onCutDocuments?: (documentIds: number[]) => void
   onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
@@ -566,7 +568,7 @@ function DocumentRow({ document, isSelected, onSelect, onRemoveDocument, onDelet
   )
 }
 
-export function DocumentList({ documents, isLoading, contextPath, totalCount, onRemoveDocument, onDeleteDocument, onRemoveDocuments, onDeleteDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false }: DocumentListProps) {
+export function DocumentList({ documents, isLoading, contextPath, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false }: DocumentListProps) {
   const [selectedDocuments, setSelectedDocuments] = useState<Set<number>>(new Set())
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; documentIds: number[] } | null>(null)
   const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null)
@@ -666,6 +668,7 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
       case 'cut': onCutDocuments?.(documentIds); break
       case 'remove': documentIds.length === 1 ? onRemoveDocument?.(documentIds[0]) : onRemoveDocuments?.(documentIds); break
       case 'delete': documentIds.length === 1 ? onDeleteDocument?.(documentIds[0]) : onDeleteDocuments?.(documentIds); break
+      case 'destroy': documentIds.length === 1 ? onDestroyDocument?.(documentIds[0]) : onDestroyDocuments?.(documentIds); break
       case 'view-details':
         if (documentIds.length === 1) {
           const document = documents.find(doc => doc.id === documentIds[0]);
@@ -713,7 +716,7 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
     }
     setContextMenu(null)
     setSelectedDocuments(new Set())
-  }, [onCopyDocuments, onCutDocuments, onRemoveDocument, onRemoveDocuments, onDeleteDocument, onDeleteDocuments, documents])
+  }, [onCopyDocuments, onCutDocuments, onRemoveDocument, onRemoveDocuments, onDeleteDocument, onDeleteDocuments, onDestroyDocument, onDestroyDocuments, documents])
 
   const handleEmptyAreaRightClick = useCallback((event: React.MouseEvent) => {
     // Show context menu if there are documents to paste or import functionality is available
@@ -977,10 +980,30 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
                       setSelectedDocuments(new Set())
                     }}
                     className="flex items-center gap-2 text-destructive hover:text-destructive-foreground hover:bg-destructive"
-                    title="Delete selected documents permanently"
+                    title="Delete from index (data stays on backends)"
                   >
                     <Trash2 className="h-4 w-4" />
-                    Delete ({selectedDocuments.size})
+                    Delete from index ({selectedDocuments.size})
+                  </Button>
+                )}
+                {(onDestroyDocument || onDestroyDocuments) && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => {
+                      const selectedIds = Array.from(selectedDocuments)
+                      if (selectedIds.length === 1) {
+                        onDestroyDocument?.(selectedIds[0])
+                      } else {
+                        onDestroyDocuments?.(selectedIds)
+                      }
+                      setSelectedDocuments(new Set())
+                    }}
+                    className="flex items-center gap-2"
+                    title="Destroy: delete from all storage backends and index"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Destroy ({selectedDocuments.size})
                   </Button>
                 )}
 
@@ -1149,7 +1172,13 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
             {(onDeleteDocument || onDeleteDocuments) && (
               <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2 text-destructive" onClick={() => handleContextMenuAction('delete', contextMenu.documentIds)}>
                 <Trash2 className="h-3 w-3" />
-                Delete {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
+                Delete from index {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
+              </button>
+            )}
+            {(onDestroyDocument || onDestroyDocuments) && (
+              <button className="w-full text-left px-3 py-1 hover:bg-destructive hover:text-destructive-foreground text-sm flex items-center gap-2 text-destructive font-medium" onClick={() => handleContextMenuAction('destroy', contextMenu.documentIds)}>
+                <Trash2 className="h-3 w-3" />
+                Destroy {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
               </button>
             )}
           </div>

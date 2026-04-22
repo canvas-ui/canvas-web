@@ -16,8 +16,10 @@ interface DefaultCanvasProps {
   onPageSizeChange: (pageSize: number) => void
   onRemoveDocument?: (documentId: number) => void
   onDeleteDocument?: (documentId: number) => void
+  onDestroyDocument?: (documentId: number) => void
   onRemoveDocuments?: (documentIds: number[]) => void
   onDeleteDocuments?: (documentIds: number[]) => void
+  onDestroyDocuments?: (documentIds: number[]) => void
   onCopyDocuments?: (documentIds: number[]) => void
   onCutDocuments?: (documentIds: number[]) => void
   onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
@@ -40,8 +42,10 @@ export function DefaultCanvas({
   onPageSizeChange,
   onRemoveDocument,
   onDeleteDocument,
+  onDestroyDocument,
   onRemoveDocuments,
   onDeleteDocuments,
+  onDestroyDocuments,
   onCopyDocuments,
   onCutDocuments,
   onPasteDocuments,
@@ -72,8 +76,10 @@ export function DefaultCanvas({
           onPageSizeChange={onPageSizeChange}
           onRemoveDocument={onRemoveDocument}
           onDeleteDocument={onDeleteDocument}
+          onDestroyDocument={onDestroyDocument}
           onRemoveDocuments={onRemoveDocuments}
           onDeleteDocuments={onDeleteDocuments}
+          onDestroyDocuments={onDestroyDocuments}
           onCopyDocuments={onCopyDocuments}
           onCutDocuments={onCutDocuments}
           onPasteDocuments={onPasteDocuments}
