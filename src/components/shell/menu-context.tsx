@@ -99,6 +99,8 @@ function menuReducer(state: MenuState, action: MenuAction): MenuState {
         activeSection: action.section,
         m1Open: action.section !== null,
         selectedEntityId: action.entityId,
+        m2Open: action.entityId !== null,
+        m2View: action.entityId !== null ? 'detail' : null,
       }
     }
 
