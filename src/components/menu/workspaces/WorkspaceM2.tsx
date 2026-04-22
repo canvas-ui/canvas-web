@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Settings, ExternalLink, GitBranch, FolderTree, Layers, Search, Lock, Unlock, Edit2, Trash2 } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { M2Header } from '@/components/menu/shared/M2Header'
 import { MenuTreeView } from '@/components/menu/shared/MenuTreeView'
@@ -40,17 +40,24 @@ export function WorkspaceM2() {
   const { state, closeM2, openM2 } = useMenu()
   const wsName = state.selectedEntityId
   const navigate = useNavigate()
+  const location = useLocation()
+
+  // Derive initial tab and path from the current URL so that direct links auto-navigate
+  const urlParams = new URLSearchParams(location.search)
+  const urlTree = urlParams.get('tree')
+  const urlPath = urlParams.get('path') ? decodeURIComponent(urlParams.get('path')!) : '/'
+  const initialTab: TreeTab = urlTree === 'directory' ? 'directory' : 'context'
 
   const [wsLabel, setWsLabel] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<TreeTab>('context')
+  const [activeTab, setActiveTab] = useState<TreeTab>(initialTab)
   const [contextTree, setContextTree] = useState<TreeNode | null>(null)
   const [directoryTree, setDirectoryTree] = useState<TreeNode | null>(null)
   const [layers, setLayers] = useState<Layer[]>([])
   const [isLoadingContext, setIsLoadingContext] = useState(false)
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(false)
   const [isLoadingLayers, setIsLoadingLayers] = useState(false)
-  const [selectedPath, setSelectedPath] = useState('/')
-  const [contentPath, setContentPath] = useState<string | null>(null)
+  const [selectedPath, setSelectedPath] = useState(urlPath)
+  const [contentPath, setContentPath] = useState<string | null>(urlPath !== '/' ? urlPath : null)
   const [searchQuery, setSearchQuery] = useState('')
   const [docClipboard, setDocClipboard] = useState<{ documentIds: number[]; operation: 'copy' | 'cut' } | null>(null)
 
@@ -153,6 +160,17 @@ export function WorkspaceM2() {
       socketService.off('context.path.changed', handleContextPathChanged)
     }
   }, [wsName, refreshAll])
+
+  // Sync active tab and selected path when URL search params change externally
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const tree = params.get('tree')
+    const path = params.get('path') ? decodeURIComponent(params.get('path')!) : '/'
+    const tab: TreeTab = tree === 'directory' ? 'directory' : 'context'
+    setActiveTab(tab)
+    setSelectedPath(path)
+    setContentPath(path !== '/' ? path : null)
+  }, [location.search])
 
   const ops = useTreeOperations({
     workspaceId: wsName ?? undefined,

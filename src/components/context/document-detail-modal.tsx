@@ -125,33 +125,20 @@ export function DocumentDetailModal({ document, isOpen, onClose }: DocumentDetai
               </pre>
             </div>
 
-            {/* Metadata */}
-            <div>
-              <h3 className="font-semibold mb-3">Metadata</h3>
-              <div className="grid gap-3 text-sm">
-                <div>
-                  <span className="font-medium">Content Type:</span>
-                  <span className="ml-2">{document.metadata.contentType}</span>
+            {/* Locations */}
+            {Array.isArray((document as any).locations) && (document as any).locations.length > 0 && (
+              <div>
+                <h3 className="font-semibold mb-3">Locations</h3>
+                <div className="space-y-1">
+                  {(document as any).locations.map((loc: any, index: number) => (
+                    <div key={index} className="font-mono text-xs text-muted-foreground">{loc?.url ?? JSON.stringify(loc)}</div>
+                  ))}
                 </div>
-                <div>
-                  <span className="font-medium">Content Encoding:</span>
-                  <span className="ml-2">{document.metadata.contentEncoding}</span>
-                </div>
-                {document.metadata.dataPaths.length > 0 && (
-                  <div>
-                    <span className="font-medium">Data Paths:</span>
-                    <div className="ml-2 mt-1">
-                      {document.metadata.dataPaths.map((path, index) => (
-                        <div key={index} className="font-mono text-xs">{path}</div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
-            </div>
+            )}
 
             {/* Checksums */}
-            {document.checksumArray.length > 0 && (
+            {Array.isArray(document.checksumArray) && document.checksumArray.length > 0 && (
               <div>
                 <h3 className="font-semibold mb-3">Checksums</h3>
                 <div className="space-y-2">
@@ -167,37 +154,6 @@ export function DocumentDetailModal({ document, isOpen, onClose }: DocumentDetai
                 </div>
               </div>
             )}
-
-            {/* Index Options */}
-            <div>
-              <h3 className="font-semibold mb-3">Index Options</h3>
-              <div className="space-y-3 text-sm">
-                <div>
-                  <span className="font-medium">Primary Checksum Algorithm:</span>
-                  <span className="ml-2">{document.indexOptions.primaryChecksumAlgorithm}</span>
-                </div>
-                <div>
-                  <span className="font-medium">FTS Search Fields:</span>
-                  <div className="ml-2 mt-1">
-                    {document.indexOptions.ftsSearchFields.map((field, index) => (
-                      <span key={index} className="inline-block bg-muted px-2 py-1 rounded text-xs mr-2 mb-1">
-                        {field}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <span className="font-medium">Vector Embedding Fields:</span>
-                  <div className="ml-2 mt-1">
-                    {document.indexOptions.vectorEmbeddingFields.map((field, index) => (
-                      <span key={index} className="inline-block bg-muted px-2 py-1 rounded text-xs mr-2 mb-1">
-                        {field}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
 
           {/* Footer */}
