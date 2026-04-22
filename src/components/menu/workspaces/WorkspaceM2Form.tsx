@@ -5,7 +5,8 @@ import { useToast } from '@/components/ui/toast-container'
 import { M2Header } from '@/components/menu/shared/M2Header'
 import { useMenu } from '@/components/shell/menu-context'
 import { generateNiceRandomHexColor } from '@/utils/color'
-import { listWorkspaces, createWorkspace, updateWorkspace, removeWorkspace } from '@/services/workspace'
+import { listWorkspaces, createWorkspace, updateWorkspace, removeWorkspace, getWorkspaceServicesStatus, enableWorkspaceService, disableWorkspaceService } from '@/services/workspace'
+import type { WorkspaceServicesStatus } from '@/services/workspace'
 
 export function WorkspaceM2Form() {
   const { state, closeM2 } = useMenu()
@@ -20,12 +21,17 @@ export function WorkspaceM2Form() {
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isDestroying, setIsDestroying] = useState(false)
+  const [services, setServices] = useState<WorkspaceServicesStatus | null>(null)
+  const [togglingService, setTogglingService] = useState<string | null>(null)
 
   useEffect(() => {
     if (isCreate) return
     async function load() {
       try {
-        const all = await listWorkspaces()
+        const [all, svcStatus] = await Promise.all([
+          listWorkspaces(),
+          getWorkspaceServicesStatus(entityId!).catch(() => null),
+        ])
         const ws = all.find(w => w.name === entityId)
         if (ws) {
           setWorkspace(ws)
@@ -33,6 +39,7 @@ export function WorkspaceM2Form() {
           setDescription(ws.description || '')
           setColor(ws.color || '#FFFFFF')
         }
+        setServices(svcStatus)
       } catch {
         showToast({ title: 'Error', description: 'Failed to load workspace', variant: 'destructive' })
       }
@@ -68,6 +75,25 @@ export function WorkspaceM2Form() {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Save failed', variant: 'destructive' })
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleToggleService = async (serviceName: 'home' | 'dotfiles' | 'imap', currentlyEnabled: boolean) => {
+    if (!entityId) return
+    setTogglingService(serviceName)
+    try {
+      if (currentlyEnabled) {
+        await disableWorkspaceService(entityId, serviceName)
+      } else {
+        await enableWorkspaceService(entityId, serviceName)
+      }
+      const updated = await getWorkspaceServicesStatus(entityId)
+      setServices(updated)
+      showToast({ title: currentlyEnabled ? 'Disabled' : 'Enabled', description: `${serviceName} service ${currentlyEnabled ? 'disabled' : 'enabled'}` })
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed', variant: 'destructive' })
+    } finally {
+      setTogglingService(null)
     }
   }
 
@@ -136,6 +162,28 @@ export function WorkspaceM2Form() {
             {isSaving ? (isCreate ? 'Creating…' : 'Saving…') : (isCreate ? 'Create Workspace' : 'Save Changes')}
           </Button>
         </form>
+
+        {!isCreate && services && (
+          <div className="border-t pt-4 space-y-3">
+            <div className="text-xs font-medium text-muted-foreground">Services</div>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs font-medium">Home / WebDAV</div>
+                <div className="text-xs text-muted-foreground">File access via WebDAV protocol</div>
+              </div>
+              <button
+                type="button"
+                disabled={togglingService === 'home'}
+                onClick={() => handleToggleService('home', !!services.home?.enabled)}
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none disabled:opacity-50 ${services.home?.enabled ? 'bg-primary' : 'bg-muted-foreground/30'}`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${services.home?.enabled ? 'translate-x-4' : 'translate-x-0'}`}
+                />
+              </button>
+            </div>
+          </div>
+        )}
 
         {!isCreate && (
           <div className="border-t pt-4 space-y-2">
