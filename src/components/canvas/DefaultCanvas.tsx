@@ -1,7 +1,7 @@
 import { Document } from '@/types/workspace'
 import { DocumentList } from '@/components/common/document-list'
 
-type CanvasUrlType = 'context' | 'directory' | 'context-layer' | 'directory-layer'
+type CanvasUrlType = 'context' | 'canvas' | 'directory' | 'context-layer' | 'directory-layer'
 
 interface DefaultCanvasProps {
   urlType: CanvasUrlType

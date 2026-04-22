@@ -47,6 +47,7 @@ export default function WorkspaceDetailPage() {
 
   const isLayerView = searchParams.get('layer') === '1';
   const selectedLayerId = searchParams.get('layerId') || null;
+  const selectedNodeType = searchParams.get('nodeType') || null;
   const urlDisplay = workspaceName
     ? `${workspaceName}://${selectedPath === '/' ? '' : selectedPath.replace(/^\//, '')}`
     : '';
@@ -321,7 +322,7 @@ export default function WorkspaceDetailPage() {
       {/* Canvas */}
       <div className="flex-1 min-h-0">
         <DefaultCanvas
-          urlType={isLayerView ? (selectedTreeName === 'directory' ? 'directory-layer' : 'context-layer') : (selectedTreeName === 'directory' ? 'directory' : 'context')}
+          urlType={isLayerView ? (selectedTreeName === 'directory' ? 'directory-layer' : 'context-layer') : (selectedTreeName === 'directory' ? 'directory' : selectedNodeType === 'canvas' ? 'canvas' : 'context')}
           urlDisplay={urlDisplay}
           contextPath={selectedPath}
           documents={documents}

@@ -13,6 +13,17 @@ import socketService from '@/lib/socket'
 
 type TreeTab = 'context' | 'directory' | 'layers'
 
+function findNodeByPath(root: TreeNode | null, path: string): TreeNode | null {
+  if (!root || path === '/') return root
+  const parts = path.split('/').filter(Boolean)
+  let node: TreeNode | null = root
+  for (const part of parts) {
+    node = node?.children?.find(c => c.name === part) ?? null
+    if (!node) return null
+  }
+  return node
+}
+
 const TAB_ICONS: Record<TreeTab, React.ReactNode> = {
   context: <GitBranch className="w-3.5 h-3.5" />,
   directory: <FolderTree className="w-3.5 h-3.5" />,
@@ -165,6 +176,8 @@ export function WorkspaceM2() {
     const params = new URLSearchParams()
     params.set('tree', activeTab === 'layers' ? 'context' : activeTab)
     if (path !== '/') params.set('path', path)
+    const node = findNodeByPath(activeTree, path)
+    if (node?.type === 'canvas') params.set('nodeType', 'canvas')
     navigate(`/workspaces/${wsName}?${params.toString()}`)
   }
 

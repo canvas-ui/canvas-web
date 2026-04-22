@@ -386,7 +386,7 @@ function TreeNodeComponent({
     <div>
       <div
         className={cn(
-          "flex items-center py-1 px-2 rounded-sm text-sm relative group cursor-pointer",
+          "flex items-center py-1.5 px-2 rounded-sm text-sm relative group cursor-pointer",
           readOnly && "opacity-75",
           isSourceLayer && "bg-blue-100 hover:bg-blue-200",
           !isSourceLayer && isTargetLayer && "bg-red-100 hover:bg-red-200",
@@ -394,7 +394,7 @@ function TreeNodeComponent({
           !isSourceLayer && !isTargetLayer && !isSelected && "hover:bg-accent hover:text-accent-foreground",
           isDragOver && !readOnly && "border-2 border-blue-300"
         )}
-        style={{ paddingLeft: `${level * 16 + 8}px` }}
+        style={{ paddingLeft: `${level * 16 + 10}px` }}
         onClick={handleSelect}
         onContextMenu={handleContextMenu}
         draggable={!readOnly}
@@ -810,7 +810,7 @@ export function TreeView({
         {/* Root node */}
         <div
           className={cn(
-            "flex items-center py-1 px-2 rounded-sm text-sm group cursor-pointer hover:bg-accent hover:text-accent-foreground",
+            "flex items-center py-1.5 px-2 rounded-sm text-sm group cursor-pointer hover:bg-accent hover:text-accent-foreground",
             readOnly && "opacity-75",
             selectedPath === '/' && "bg-accent text-accent-foreground",
             dragOverPath === '/' && !readOnly && "bg-blue-100 border-2 border-blue-300"

@@ -108,7 +108,7 @@ function CtxMenu({
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
       <div
-        className="fixed z-50 min-w-[11rem] overflow-hidden rounded-md border bg-popover p-1 shadow-md"
+        className="fixed z-50 min-w-[11rem] overflow-hidden rounded-md border bg-popover p-1 shadow-lg"
         style={{ left: x, top: y }}
       >
         {/* Show layer content — workspace tree only */}
@@ -319,8 +319,8 @@ function CardNode({
     <div>
       <div
         className={cn(
-          'group relative flex items-center gap-1.5 rounded-l-md px-2 py-1.5 cursor-pointer transition-all',
-          'shadow-sm hover:shadow text-xs',
+          'group relative flex items-center gap-1.5 rounded-l-md px-2 py-2 cursor-pointer transition-all',
+          'shadow hover:shadow-md text-xs',
           isSource && 'ring-1 ring-blue-500/40 bg-blue-500/10',
           isTarget && !isSource && 'ring-1 ring-amber-500/40 bg-amber-500/10',
           isContent && !isSource && !isTarget && 'bg-yellow-100 dark:bg-yellow-800/40 ring-1 ring-yellow-400/50',
@@ -346,8 +346,6 @@ function CardNode({
           <LayoutDashboard className="w-3 h-3 shrink-0 text-violet-500" aria-label="Canvas" />
         )}
 
-        {node.locked && <Lock className="w-2.5 h-2.5 shrink-0 text-amber-500" />}
-
         <span className="flex-1 truncate font-medium">{node.label || node.name}</span>
 
         {node.description && (
@@ -355,6 +353,8 @@ function CardNode({
             {node.description}
           </span>
         )}
+
+        {node.locked && <Lock className="w-2.5 h-2.5 shrink-0 text-amber-500" />}
 
         {!readOnly && (
           <button
@@ -368,7 +368,7 @@ function CardNode({
       </div>
 
       {shouldExpand && (hasChildren || inlineCreateParent === path) && (
-        <div className="ml-3 mt-0.5 space-y-0.5">
+        <div className="ml-3.5 mt-0.5 space-y-0.5">
           {inlineCreateParent === path && (
             <InlineCreateInput
               onConfirm={name => onConfirmCreate(path, name)}
@@ -505,9 +505,9 @@ export function MenuTreeView({
       {/* Root "/" node — always shown, children indented below */}
       <div
         className={cn(
-          'group relative flex items-center gap-1.5 rounded-l-md px-2 py-1.5 cursor-pointer transition-all',
-          'shadow-sm hover:shadow text-xs',
-          selectedPath === '/' && !contentPath ? 'bg-accent shadow' : 'bg-card hover:bg-accent/40',
+          'group relative flex items-center gap-1.5 rounded-l-md px-2 py-2 cursor-pointer transition-all',
+          'shadow hover:shadow-md text-xs',
+          selectedPath === '/' && !contentPath ? 'bg-accent shadow-md' : 'bg-card hover:bg-accent/40',
         )}
         style={{ borderRight: '4px solid transparent' }}
         onClick={() => onSelect('/')}
@@ -544,7 +544,7 @@ export function MenuTreeView({
       </div>
 
       {/* Children indented under root */}
-      <div className="ml-3 space-y-0.5">
+      <div className="ml-3.5 space-y-0.5">
         {inlineCreateParent === '/' && (
           <InlineCreateInput
             onConfirm={name => handleConfirmCreate('/', name)}
