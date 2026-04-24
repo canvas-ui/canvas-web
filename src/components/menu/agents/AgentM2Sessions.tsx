@@ -59,14 +59,22 @@ export function AgentM2Sessions() {
     return sessions.sessions.find((session) => session.isCurrent) || null
   }, [sessions])
 
-  const openChat = () => navigate(`/agents/${agentId}`)
+  const routeAgentId = agent?.name || agentId
+  const getRouteSessionId = (session?: AgentSessionSummary | null) => session?.slug || session?.id
+  const openChat = (session?: AgentSessionSummary | string | null) => {
+    const sessionId = typeof session === 'string' ? session : getRouteSessionId(session)
+    navigate(sessionId
+      ? `/agents/${encodeURIComponent(routeAgentId)}/${encodeURIComponent(sessionId)}`
+      : `/agents/${encodeURIComponent(routeAgentId)}`)
+  }
 
   const handleCreateNew = async () => {
     try {
-      await create({ mode: 'persistent', name: newSessionName.trim() || undefined })
+      const result = await create({ mode: 'persistent', name: newSessionName.trim() || undefined })
       setCreatingNew(false)
       setNewSessionName('')
-      openChat()
+      const createdSession = result.sessions.sessions.find((session) => session.id === result.current.sessionId)
+      openChat(createdSession || result.current.sessionId)
     } catch (createError) {
       showToast({
         title: 'Error',
@@ -78,8 +86,9 @@ export function AgentM2Sessions() {
 
   const handleExperimental = async () => {
     try {
-      await create({ mode: 'experimental' })
-      openChat()
+      const result = await create({ mode: 'experimental' })
+      const experimentalSession = result.sessions.sessions.find((session) => session.id === result.current.sessionId)
+      openChat(experimentalSession || result.current.sessionId)
     } catch (createError) {
       showToast({
         title: 'Error',
@@ -109,7 +118,7 @@ export function AgentM2Sessions() {
       } else {
         await select({ mode: 'persistent', sessionId: session.id })
       }
-      openChat()
+      openChat(session)
     } catch (selectError) {
       showToast({
         title: 'Error',
@@ -122,9 +131,13 @@ export function AgentM2Sessions() {
   const handleRename = async (session: AgentSessionSummary) => {
     if (!editingName.trim()) return
     try {
-      await rename(session.id, editingName.trim())
+      const result = await rename(session.id, editingName.trim())
+      const renamedSession = result.sessions.sessions.find((entry) => entry.id === session.id)
       setEditingSessionId(null)
       setEditingName('')
+      if (selectedSession?.id === session.id) {
+        openChat(renamedSession || session)
+      }
     } catch (renameError) {
       showToast({
         title: 'Error',
@@ -158,7 +171,7 @@ export function AgentM2Sessions() {
         action={
           <button
             type="button"
-            onClick={() => navigate(`/agents/${agentId}/settings`)}
+            onClick={() => navigate(`/agents/${encodeURIComponent(routeAgentId)}/settings`)}
             className="flex h-8 w-8 items-center justify-center rounded hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors"
             title="Agent settings"
           >

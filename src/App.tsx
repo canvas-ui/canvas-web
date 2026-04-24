@@ -61,6 +61,7 @@ function AppContent() {
           <Route path="contexts/:contextId/settings" element={<ContextSettingsPage />} />
           <Route path="agents" element={<AgentsPage />} />
           <Route path="agents/:agentId" element={<AgentDetailPage />} />
+          <Route path="agents/:agentId/:sessionId" element={<AgentDetailPage />} />
           <Route path="agents/:agentId/settings" element={<AgentDetailPage />} />
           <Route path="roles" element={<RolesPage />} />
           <Route path="remotes" element={<RemotesPage />} />

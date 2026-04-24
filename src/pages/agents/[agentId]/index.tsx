@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Bot, Cpu, Image as ImageIcon, MessageCircle, Play, Settings, Square, X } from 'lucide-react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import StreamingChatMessageComponent from '@/components/agent/StreamingChatMessage'
 import { useAgentSessions } from '@/components/agent/agent-session-context'
 import { useMenu } from '@/components/shell/menu-context'
@@ -8,15 +8,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast-container'
 import { useAgentChat } from '@/hooks/useAgentChat'
-import { type Agent, type AgentImageContent, getAgent, getAgentStatus, startAgent, stopAgent } from '@/services/agent'
+import { type Agent, type AgentImageContent, type ChatMessage, getAgent, getAgentStatus, startAgent, stopAgent } from '@/services/agent'
 
 function useSessionGuard(agentId: string) {
   const { sessions, create } = useAgentSessions(agentId)
   const hasSession = (sessions?.sessions.length ?? 0) > 0
 
   const ensureSession = async () => {
-    if (hasSession) return
-    await create({ mode: 'persistent' })
+    if (hasSession) return null
+    return create({ mode: 'persistent' })
   }
 
   return { hasSession, ensureSession }
@@ -49,15 +49,20 @@ async function fileToAgentImage(file: File): Promise<PendingImage> {
 
 function AgentConversation({
   agentId,
+  routeAgentId,
+  initialMessages,
   llmProvider,
   sessionKey,
 }: {
   agentId: string
+  routeAgentId: string
+  initialMessages?: ChatMessage[]
   llmProvider?: Agent['llmProvider']
   sessionKey: string
 }) {
   const { showToast } = useToast()
   const { hasSession, ensureSession } = useSessionGuard(agentId)
+  const navigate = useNavigate()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const chatInputRef = useRef<HTMLInputElement>(null)
   const [currentMessage, setCurrentMessage] = useState('')
@@ -74,7 +79,11 @@ function AgentConversation({
     stopStreaming,
   } = useAgentChat({
     agentId,
+    initialMessages,
+    historyKey: sessionKey,
+    loadHistory: false,
     llmProvider,
+    enableWebSocket: false,
     onError: (chatError) => {
       showToast({
         title: 'Chat Error',
@@ -102,7 +111,10 @@ function AgentConversation({
     setCurrentMessage('')
     try {
       // Auto-create a session transparently if this is a fresh agent with no sessions yet
-      await ensureSession()
+      const sessionResult = await ensureSession()
+      if (sessionResult?.current.sessionId) {
+        navigate(`/agents/${encodeURIComponent(routeAgentId)}/${encodeURIComponent(sessionResult.current.sessionId)}`, { replace: true })
+      }
       await sendMessage(message, {
         images: pendingImages.map(({ id: _id, ...image }) => image),
       })
@@ -247,7 +259,7 @@ function AgentConversation({
 }
 
 export default function AgentDetailPage() {
-  const { agentId } = useParams<{ agentId: string }>()
+  const { agentId, sessionId } = useParams<{ agentId: string; sessionId?: string }>()
   const { showToast } = useToast()
   const { selectEntity, openM2 } = useMenu()
   const [agent, setAgent] = useState<Agent | null>(null)
@@ -255,7 +267,8 @@ export default function AgentDetailPage() {
   const [isStarting, setIsStarting] = useState(false)
   const [isStopping, setIsStopping] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const { current, sessions, refresh } = useAgentSessions(agentId || '')
+  const lastMissingSessionRef = useRef<string | null>(null)
+  const { current, sessions, refresh, select } = useAgentSessions(agentId || '')
 
   const selectedSession = useMemo(() => {
     if (!sessions?.sessions) return null
@@ -295,6 +308,37 @@ export default function AgentDetailPage() {
 
     loadPageData()
   }, [agentId, refresh, selectEntity, showToast])
+
+  useEffect(() => {
+    if (!agentId || !sessionId || !sessions) return
+
+    const targetSessionId = decodeURIComponent(sessionId)
+    const targetSession = sessions.sessions.find((session) => (
+      session.id === targetSessionId || session.slug === targetSessionId
+    ))
+    if (current?.mode === 'persistent' && targetSession && current.sessionId === targetSession.id) return
+
+    if (!targetSession) {
+      if (lastMissingSessionRef.current !== targetSessionId) {
+        lastMissingSessionRef.current = targetSessionId
+        showToast({
+          title: 'Session not found',
+          description: targetSessionId,
+          variant: 'destructive',
+        })
+      }
+      return
+    }
+
+    lastMissingSessionRef.current = null
+    select({ mode: 'persistent', sessionId: targetSession.id }).catch((selectError) => {
+      showToast({
+        title: 'Session Error',
+        description: selectError instanceof Error ? selectError.message : 'Failed to select session',
+        variant: 'destructive',
+      })
+    })
+  }, [agentId, sessionId, sessions, current?.mode, current?.sessionId, select, showToast])
 
   useEffect(() => {
     if (!agentId) return
@@ -424,6 +468,8 @@ export default function AgentDetailPage() {
         <AgentConversation
           key={sessionViewKey}
           agentId={agent.id}
+          routeAgentId={agent.name || agent.id}
+          initialMessages={current?.messages || []}
           llmProvider={agent.llmProvider}
           sessionKey={sessionViewKey}
         />

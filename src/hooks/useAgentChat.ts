@@ -19,6 +19,8 @@ import {
 export interface UseAgentChatOptions {
   agentId: string;
   initialMessages?: ChatMessage[];
+  historyKey?: string;
+  loadHistory?: boolean;
   onError?: (error: Error) => void;
   enableWebSocket?: boolean;
   enableSSE?: boolean;
@@ -67,6 +69,8 @@ export function useAgentChat(options: UseAgentChatOptions) {
   const {
     agentId,
     initialMessages = [],
+    historyKey,
+    loadHistory = true,
     onError,
     enableWebSocket = true,
     enableSSE = true,
@@ -86,7 +90,7 @@ export function useAgentChat(options: UseAgentChatOptions) {
   useEffect(() => {
     let cancelled = false;
 
-    if (!agentId) {
+    if (!agentId || !loadHistory) {
       setMessages(convertToStreamingMessages(initialMessages));
       return;
     }
@@ -105,7 +109,7 @@ export function useAgentChat(options: UseAgentChatOptions) {
     return () => {
       cancelled = true;
     };
-  }, [agentId]);
+  }, [agentId, loadHistory, historyKey]);
 
   // Refs for managing state
   const abortControllerRef = useRef<AbortController | null>(null);

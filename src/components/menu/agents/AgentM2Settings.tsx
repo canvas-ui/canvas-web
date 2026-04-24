@@ -116,6 +116,7 @@ export function AgentM2Settings() {
     const compiledSystemPrompt = buildSystemPrompt(idRole, idIdentity, idInstructions)
 
     return {
+      name: idName.trim(),
       label: idLabel.trim(),
       description: idDescription.trim() || undefined,
       color: idColor,
@@ -154,9 +155,13 @@ export function AgentM2Settings() {
     if (!entityId) return
     setIsSaving(true)
     try {
-      await updateAgent(entityId, buildPayload())
+      const updatedAgent = await updateAgent(entityId, buildPayload())
+      setAgent(updatedAgent)
       window.dispatchEvent(new CustomEvent('agents:refresh'))
       showToast({ title: 'Saved', description: 'Agent updated' })
+      if (updatedAgent.name && updatedAgent.name !== agent?.name && location.pathname.startsWith('/agents/')) {
+        navigate(`/agents/${encodeURIComponent(updatedAgent.name)}/settings`, { replace: true })
+      }
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Save failed', variant: 'destructive' })
     } finally {
@@ -196,8 +201,9 @@ export function AgentM2Settings() {
   }
 
   const handleBack = () => {
-    if (entityId && location.pathname === `/agents/${entityId}/settings`) {
-      navigate(`/agents/${entityId}`)
+    const routeAgentId = agent?.name || entityId
+    if (routeAgentId && location.pathname.endsWith('/settings')) {
+      navigate(`/agents/${encodeURIComponent(routeAgentId)}`)
       return
     }
     closeM2()
@@ -233,18 +239,13 @@ export function AgentM2Settings() {
       <div className="flex-1 overflow-y-auto">
         {tab === 'identity' && (
           <div className="p-4 space-y-3">
-            {isCreate && (
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">Name (ID)</label>
-                <Input value={idName} onChange={e => setIdName(e.target.value)} placeholder="my-agent" className="mt-1 h-8 text-sm" />
-              </div>
-            )}
-            {!isCreate && (
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">Agent ID</label>
-                <div className="mt-1 h-8 px-2 flex items-center text-xs text-muted-foreground bg-muted rounded-md font-mono">{entityId}</div>
-              </div>
-            )}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Name</label>
+              <Input value={idName} onChange={e => setIdName(e.target.value)} placeholder="lucy" className="mt-1 h-8 text-sm" />
+              {!isCreate && (
+                <div className="mt-1 text-[10px] text-muted-foreground">ID: <span className="font-mono">{agent?.id || entityId}</span></div>
+              )}
+            </div>
             <div>
               <label className="text-xs font-medium text-muted-foreground">Label</label>
               <Input value={idLabel} onChange={e => setIdLabel(e.target.value)} placeholder="Display name" className="mt-1 h-8 text-sm" />

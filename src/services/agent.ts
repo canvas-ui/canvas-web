@@ -78,6 +78,7 @@ export interface AgentSession {
 
 export interface AgentSessionSummary {
   id: string;
+  slug?: string;
   path: string;
   cwd: string;
   name?: string;
@@ -276,6 +277,24 @@ export function convertAgentSessionMessages(messages: any[] = []): ChatMessage[]
         : {}),
     }))
     .filter((message) => message.content || message.metadata?.reasoning);
+}
+
+function normalizeAgentSessionPayload(payload: any): AgentSession {
+  return {
+    mode: payload?.mode,
+    sessionId: payload?.sessionId,
+    sessionFile: payload?.sessionFile,
+    thinkingLevel: payload?.thinkingLevel,
+    model: payload?.model,
+    messages: convertAgentSessionMessages(payload?.messages || []),
+  };
+}
+
+function normalizeAgentSessionMutationResult(payload: any): AgentSessionMutationResult {
+  return {
+    current: normalizeAgentSessionPayload(payload?.current),
+    sessions: payload?.sessions,
+  };
 }
 
 // Agent creation data interface
@@ -603,23 +622,8 @@ export async function getAgent(agentId: string): Promise<Agent> {
 }
 
 export async function getAgentSession(agentId: string): Promise<AgentSession> {
-  const response = await api.get<{ payload: {
-    mode?: 'persistent' | 'experimental' | 'incognito';
-    sessionId?: string;
-    sessionFile?: string;
-    thinkingLevel?: string;
-    model?: { provider?: string; modelId?: string };
-    messages?: any[];
-  } }>(`${API_URL}/agents/${agentId}/session`);
-
-  return {
-    mode: response.payload?.mode,
-    sessionId: response.payload?.sessionId,
-    sessionFile: response.payload?.sessionFile,
-    thinkingLevel: response.payload?.thinkingLevel,
-    model: response.payload?.model,
-    messages: convertAgentSessionMessages(response.payload?.messages || []),
-  };
+  const response = await api.get<{ payload: any }>(`${API_URL}/agents/${agentId}/session`);
+  return normalizeAgentSessionPayload(response.payload);
 }
 
 export async function listAgentSessions(agentId: string): Promise<AgentSessionList> {
@@ -632,7 +636,7 @@ export async function createAgentSession(
   data: { mode: 'persistent' | 'experimental' | 'incognito'; name?: string }
 ): Promise<AgentSessionMutationResult> {
   const response = await api.post<{ payload: AgentSessionMutationResult }>(`${API_URL}/agents/${agentId}/sessions`, data);
-  return response.payload;
+  return normalizeAgentSessionMutationResult(response.payload);
 }
 
 export async function selectAgentSession(
@@ -640,7 +644,7 @@ export async function selectAgentSession(
   data: { mode: 'persistent' | 'experimental' | 'incognito'; sessionId?: string }
 ): Promise<AgentSessionMutationResult> {
   const response = await api.put<{ payload: AgentSessionMutationResult }>(`${API_URL}/agents/${agentId}/session`, data);
-  return response.payload;
+  return normalizeAgentSessionMutationResult(response.payload);
 }
 
 export async function renameAgentSession(
@@ -649,7 +653,7 @@ export async function renameAgentSession(
   data: { name: string }
 ): Promise<AgentSessionMutationResult> {
   const response = await api.patch<{ payload: AgentSessionMutationResult }>(`${API_URL}/agents/${agentId}/sessions/${sessionId}`, data);
-  return response.payload;
+  return normalizeAgentSessionMutationResult(response.payload);
 }
 
 export async function deleteAgentSession(
@@ -657,7 +661,7 @@ export async function deleteAgentSession(
   sessionId: string
 ): Promise<AgentSessionMutationResult> {
   const response = await api.delete<{ payload: AgentSessionMutationResult }>(`${API_URL}/agents/${agentId}/sessions/${sessionId}`);
-  return response.payload;
+  return normalizeAgentSessionMutationResult(response.payload);
 }
 
 /**

@@ -27,7 +27,7 @@ export function AgentList() {
   const handleSelect = (agent: any) => {
     selectEntity(agent.id)
     openM2('detail', agent.id)
-    navigate(`/agents/${agent.id}`)
+    navigate(`/agents/${encodeURIComponent(agent.name || agent.id)}`)
   }
 
   const handleStart = async (e: React.MouseEvent, agent: any) => {

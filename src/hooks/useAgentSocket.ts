@@ -50,6 +50,8 @@ export function useAgentSocket(options: UseAgentSocketOptions = {}) {
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const optionsRef = useRef(options);
+  const socketRef = useRef<Socket | null>(null);
+  const isConnectingRef = useRef(false);
 
   // Update options ref when they change
   useEffect(() => {
@@ -57,6 +59,9 @@ export function useAgentSocket(options: UseAgentSocketOptions = {}) {
   }, [options]);
 
   const connect = useCallback(() => {
+    if (!optionsRef.current.agentId) return;
+    if (socketRef.current || isConnectingRef.current) return;
+
     const token = localStorage.getItem('authToken');
     if (!token) {
       console.warn('No auth token available for WebSocket connection');
@@ -66,6 +71,7 @@ export function useAgentSocket(options: UseAgentSocketOptions = {}) {
     // Log token type for debugging
     console.log(`[WebSocket] Using token type: ${token.startsWith('canvas-') ? 'API' : 'JWT'}, length: ${token.length}`);
 
+    isConnectingRef.current = true;
     setIsConnecting(true);
 
     const socketInstance = io(API_ROUTES.ws, {
@@ -82,12 +88,14 @@ export function useAgentSocket(options: UseAgentSocketOptions = {}) {
     socketInstance.on('connect', () => {
       console.log('Agent WebSocket connected successfully');
       setIsConnected(true);
+      isConnectingRef.current = false;
       setIsConnecting(false);
     });
 
     socketInstance.on('connect_error', (error) => {
       console.error('Agent WebSocket connection error:', error);
       setIsConnected(false);
+      isConnectingRef.current = false;
       setIsConnecting(false);
 
       // If auth error, try to refresh token or fallback to SSE
@@ -99,6 +107,7 @@ export function useAgentSocket(options: UseAgentSocketOptions = {}) {
     socketInstance.on('disconnect', (reason) => {
       console.log('Agent WebSocket disconnected:', reason);
       setIsConnected(false);
+      isConnectingRef.current = false;
       setIsConnecting(false);
     });
 
@@ -130,17 +139,22 @@ export function useAgentSocket(options: UseAgentSocketOptions = {}) {
       console.log('Chat stream started:', data);
     });
 
+    socketRef.current = socketInstance;
     setSocket(socketInstance);
   }, []);
 
   const disconnect = useCallback(() => {
-    if (socket) {
-      socket.close();
-      setSocket(null);
-      setIsConnected(false);
-      setIsConnecting(false);
+    const activeSocket = socketRef.current;
+    if (activeSocket) {
+      activeSocket.removeAllListeners();
+      activeSocket.close();
     }
-  }, [socket]);
+    socketRef.current = null;
+    isConnectingRef.current = false;
+    setSocket(null);
+    setIsConnected(false);
+    setIsConnecting(false);
+  }, []);
 
   // Backend uses agent:subscribe instead of agent:join
   const joinAgentChannel = useCallback((agentId: string) => {
@@ -176,12 +190,17 @@ export function useAgentSocket(options: UseAgentSocketOptions = {}) {
 
   // Auto-connect effect
   useEffect(() => {
+    if (!options.agentId) {
+      disconnect();
+      return;
+    }
+
     connect();
 
     return () => {
       disconnect();
     };
-  }, []);
+  }, [options.agentId, connect, disconnect]);
 
   // Join/leave agent channel when agentId changes
   useEffect(() => {
