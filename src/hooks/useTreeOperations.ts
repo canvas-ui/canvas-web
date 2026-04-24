@@ -17,6 +17,7 @@ import {
   lockWorkspaceLayer, unlockWorkspaceLayer, destroyWorkspaceLayer,
   DEFAULT_WORKSPACE_TREE_NAME,
 } from '@/services/workspace'
+import { createCanvas } from '@/services/canvas'
 
 interface UseTreeOperationsOptions {
   contextId?: string
@@ -121,11 +122,24 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     return result
   }, [workspaceId, wsTree, refresh])
 
+  const onCreateCanvas = useCallback(async (path: string): Promise<boolean> => {
+    if (!workspaceId) return false
+    try {
+      await createCanvas(workspaceId, { path, treeName: wsTree })
+      refresh()
+      return true
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err))
+      return false
+    }
+  }, [workspaceId, wsTree, refresh])
+
   return {
     onInsertPath, onRemovePath, onRenamePath, onMovePath, onCopyPath,
     onMergeLayer, onSubtractLayer,
     onLockLayer: workspaceId ? onLockLayer : undefined,
     onUnlockLayer: workspaceId ? onUnlockLayer : undefined,
     onDestroyLayer: workspaceId ? onDestroyLayer : undefined,
+    onCreateCanvas: workspaceId ? onCreateCanvas : undefined,
   }
 }

@@ -27,6 +27,7 @@ export interface MenuTreeViewProps {
   contentPath?: string | null
   onShowContent?: (path: string) => void
   onInsertPath?: (path: string, autoCreateLayers?: boolean) => Promise<boolean>
+  onCreateCanvas?: (path: string) => Promise<boolean>
   onRemovePath?: (path: string, recursive?: boolean) => Promise<boolean>
   onRenamePath?: (fromPath: string, newName: string) => Promise<boolean>
   onMovePath?: (from: string, to: string, recursive?: boolean) => Promise<boolean>
@@ -56,7 +57,8 @@ interface CtxMenuProps {
   sourceLayer: LayerRef | null
   targetLayers: Map<string, string>
   clipboard: Clip | null
-  onStartInlineCreate: (parentPath: string) => void
+  onStartInlineCreate: (parentPath: string, isCanvas?: boolean) => void
+  hasCreateCanvas?: boolean
   onRemove?: MenuTreeViewProps['onRemovePath']
   onRename?: MenuTreeViewProps['onRenamePath']
   onLock?: MenuTreeViewProps['onLockLayer']
@@ -74,7 +76,7 @@ interface CtxMenuProps {
 function CtxMenu({
   x, y, node, path, onClose, onShowContent,
   sourceLayer, targetLayers, clipboard,
-  onStartInlineCreate, onRemove, onRename,
+  onStartInlineCreate, hasCreateCanvas, onRemove, onRename,
   onLock, onUnlock, onDestroy, onMerge, onSubtract,
   onCopy, onCut, onPaste,
   pastedDocumentIds, onPasteDocuments,
@@ -122,11 +124,23 @@ function CtxMenu({
         <button
           type="button"
           className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-accent rounded-sm text-left"
-          onClick={() => { onStartInlineCreate(path); onClose() }}
+          onClick={() => { onStartInlineCreate(path, false); onClose() }}
         >
           <Plus className="w-3 h-3" />
           New folder here
         </button>
+
+        {/* New canvas — inline, workspace trees only */}
+        {hasCreateCanvas && path !== '/' && (
+          <button
+            type="button"
+            className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-accent rounded-sm text-left"
+            onClick={() => { onStartInlineCreate(path, true); onClose() }}
+          >
+            <LayoutDashboard className="w-3 h-3 text-violet-500" />
+            New canvas here
+          </button>
+        )}
 
         {path !== '/' && !node.locked && onRename && item(<Edit2 className="w-3 h-3" />, 'Rename', async () => {
           const cur = path.split('/').pop() || ''
@@ -218,9 +232,10 @@ function CtxMenu({
 interface InlineCreateProps {
   onConfirm: (name: string) => void
   onCancel: () => void
+  placeholder?: string
 }
 
-function InlineCreateInput({ onConfirm, onCancel }: InlineCreateProps) {
+function InlineCreateInput({ onConfirm, onCancel, placeholder = 'folder name…' }: InlineCreateProps) {
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -239,7 +254,7 @@ function InlineCreateInput({ onConfirm, onCancel }: InlineCreateProps) {
       <input
         ref={inputRef}
         className="flex-1 bg-transparent outline-none min-w-0 text-xs placeholder:text-muted-foreground"
-        placeholder="folder name…"
+        placeholder={placeholder}
         onKeyDown={e => {
           if (e.key === 'Enter') { e.preventDefault(); commit() }
           if (e.key === 'Escape') onCancel()
@@ -275,6 +290,7 @@ interface CardNodeProps {
   clipboard: Clip | null
   searchQuery: string
   inlineCreateParent: string | null
+  inlineCreateIsCanvas: boolean
   onSelect: (path: string) => void
   onShowContent?: (path: string) => void
   onCtrl: (path: string, id: string) => void
@@ -286,7 +302,7 @@ interface CardNodeProps {
 function CardNode({
   node, parentPath, depth, selectedPath, pendingPath, contentPath, readOnly,
   sourceLayer, targetLayers, clipboard, searchQuery,
-  inlineCreateParent,
+  inlineCreateParent, inlineCreateIsCanvas,
   onSelect, onShowContent, onCtrl, onCtxMenu,
   onConfirmCreate, onCancelCreate,
 }: CardNodeProps) {
@@ -305,7 +321,7 @@ function CardNode({
   const hasChildren = node.children && node.children.length > 0
   const isSelected = selectedPath === path
   const isPending = pendingPath === path
-  const isContent = contentPath === path
+
   const isSource = sourceLayer?.path === path
   const isTarget = targetLayers.has(path)
   const isCanvas = node.type === 'canvas'
@@ -323,12 +339,9 @@ function CardNode({
           'shadow hover:shadow-md text-xs',
           isSource && 'ring-1 ring-blue-500/40 bg-blue-500/10',
           isTarget && !isSource && 'ring-1 ring-amber-500/40 bg-amber-500/10',
-          isContent && !isSource && !isTarget && 'bg-yellow-100 dark:bg-yellow-800/40 ring-1 ring-yellow-400/50',
-          !isSource && !isTarget && !isContent && isSelected && 'bg-accent shadow',
-          !isSource && !isTarget && !isContent && !isSelected && isPending && 'bg-accent/50',
-          !isSource && !isTarget && !isContent && !isSelected && !isPending && (
-            isCanvas ? 'bg-violet-50 dark:bg-violet-950/20 hover:bg-violet-100 dark:hover:bg-violet-900/30' : 'bg-card hover:bg-accent/40'
-          ),
+          !isSource && !isTarget && isSelected && 'bg-primary/[0.06]',
+          !isSource && !isTarget && !isSelected && isPending && 'bg-primary/[0.03]',
+          !isSource && !isTarget && !isSelected && !isPending && 'bg-card hover:bg-primary/[0.04]',
         )}
         style={{ borderRight: node.color ? `4px solid ${node.color}` : '4px solid transparent' }}
         onClick={handleClick}
@@ -373,6 +386,7 @@ function CardNode({
             <InlineCreateInput
               onConfirm={name => onConfirmCreate(path, name)}
               onCancel={onCancelCreate}
+              placeholder={inlineCreateIsCanvas ? 'canvas name…' : undefined}
             />
           )}
           {node.children?.map(child => (
@@ -390,6 +404,7 @@ function CardNode({
               clipboard={clipboard}
               searchQuery={searchQuery}
               inlineCreateParent={inlineCreateParent}
+              inlineCreateIsCanvas={inlineCreateIsCanvas}
               onSelect={onSelect}
               onShowContent={onShowContent}
               onCtrl={onCtrl}
@@ -409,7 +424,7 @@ function CardNode({
 export function MenuTreeView({
   root, selectedPath, pendingPath, onSelect, isLoading = false, readOnly = false,
   rootLabel, contentPath, onShowContent,
-  onInsertPath, onRemovePath, onRenamePath, onMovePath, onCopyPath,
+  onInsertPath, onCreateCanvas, onRemovePath, onRenamePath, onMovePath, onCopyPath,
   pastedDocumentIds, onPasteDocuments,
   onLockLayer, onUnlockLayer, onDestroyLayer, onMergeLayer, onSubtractLayer,
   searchQuery = '',
@@ -420,6 +435,7 @@ export function MenuTreeView({
   const [targetLayers, setTargetLayers] = useState<Map<string, string>>(new Map())
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; path: string; node: TreeNode } | null>(null)
   const [inlineCreateParent, setInlineCreateParent] = useState<string | null>(null)
+  const [inlineCreateIsCanvas, setInlineCreateIsCanvas] = useState(false)
 
   const q = searchQuery.toLowerCase().trim()
 
@@ -461,13 +477,25 @@ export function MenuTreeView({
   }, [clipboard, onMovePath, onCopyPath])
 
   const handleConfirmCreate = useCallback(async (parentPath: string, name: string) => {
+    const isCanvas = inlineCreateIsCanvas
     setInlineCreateParent(null)
-    if (!onInsertPath) return
+    setInlineCreateIsCanvas(false)
     const full = parentPath === '/' ? `/${name}` : `${parentPath}/${name}`
-    try { await onInsertPath(full, true) } catch (err) { alert(err instanceof Error ? err.message : String(err)) }
-  }, [onInsertPath])
+    try {
+      if (isCanvas) {
+        if (onCreateCanvas) await onCreateCanvas(full)
+      } else {
+        if (onInsertPath) await onInsertPath(full, true)
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err))
+    }
+  }, [onInsertPath, onCreateCanvas, inlineCreateIsCanvas])
 
-  const handleCancelCreate = useCallback(() => setInlineCreateParent(null), [])
+  const handleCancelCreate = useCallback(() => {
+    setInlineCreateParent(null)
+    setInlineCreateIsCanvas(false)
+  }, [])
 
   if (isLoading) return <div className="px-3 py-3 text-xs text-muted-foreground">Loading tree…</div>
   if (!root) return <div className="px-3 py-3 text-xs text-muted-foreground">No tree available</div>
@@ -478,7 +506,7 @@ export function MenuTreeView({
   const cardProps = {
     selectedPath, pendingPath, contentPath, readOnly,
     sourceLayer, targetLayers, clipboard, searchQuery: q,
-    inlineCreateParent,
+    inlineCreateParent, inlineCreateIsCanvas,
     onSelect, onShowContent, onCtrl: handleCtrl, onCtxMenu: openCtxMenu,
     onConfirmCreate: handleConfirmCreate, onCancelCreate: handleCancelCreate,
   }
@@ -507,7 +535,7 @@ export function MenuTreeView({
         className={cn(
           'group relative flex items-center gap-1.5 rounded-l-md px-2 py-2 cursor-pointer transition-all',
           'shadow hover:shadow-md text-xs',
-          selectedPath === '/' && !contentPath ? 'bg-accent shadow-md' : 'bg-card hover:bg-accent/40',
+          selectedPath === '/' && !contentPath ? 'bg-primary/[0.06]' : 'bg-card hover:bg-primary/[0.04]',
         )}
         style={{ borderRight: '4px solid transparent' }}
         onClick={() => onSelect('/')}
@@ -549,6 +577,7 @@ export function MenuTreeView({
           <InlineCreateInput
             onConfirm={name => handleConfirmCreate('/', name)}
             onCancel={handleCancelCreate}
+            placeholder={inlineCreateIsCanvas ? 'canvas name…' : undefined}
           />
         )}
         {root.children?.map(child => (
@@ -576,7 +605,8 @@ export function MenuTreeView({
           sourceLayer={sourceLayer}
           targetLayers={targetLayers}
           clipboard={clipboard}
-          onStartInlineCreate={path => setInlineCreateParent(path)}
+          onStartInlineCreate={(path, isCanvas = false) => { setInlineCreateParent(path); setInlineCreateIsCanvas(isCanvas) }}
+          hasCreateCanvas={!!onCreateCanvas}
           onRemove={!readOnly ? onRemovePath : undefined}
           onRename={!readOnly ? onRenamePath : undefined}
           onLock={!readOnly ? onLockLayer : undefined}

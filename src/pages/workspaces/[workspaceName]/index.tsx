@@ -1,9 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useLocation } from 'react-router-dom';
+import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { API_ROUTES } from '@/config/api';
 import { useToast } from '@/components/ui/toast-container';
 import { DefaultCanvas } from '@/components/canvas/DefaultCanvas';
+import type { CanvasInfo } from '@/components/canvas/DefaultCanvas';
+import { getCanvas, createCanvas } from '@/services/canvas';
 import {
   getWorkspaceDocuments,
   getWorkspaceLayerDocuments,
@@ -23,6 +25,7 @@ import { sanitizeUrlPath } from '@/utils/url-params';
 export default function WorkspaceDetailPage() {
   const { workspaceName } = useParams<{ workspaceName: string }>();
   const location = useLocation();
+  const navigate = useNavigate();
   const { showToast } = useToast();
 
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
@@ -38,6 +41,11 @@ export default function WorkspaceDetailPage() {
     operation: 'copy' | 'cut';
   } | null>(null);
 
+  const [canvasInfo, setCanvasInfo] = useState<CanvasInfo | null>(null);
+  const [saveAsCanvasOpen, setSaveAsCanvasOpen] = useState(false);
+  const [saveAsCanvasName, setSaveAsCanvasName] = useState('');
+  const [saveAsCanvasLoading, setSaveAsCanvasLoading] = useState(false);
+
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
 
@@ -49,6 +57,7 @@ export default function WorkspaceDetailPage() {
   const isLayerView = searchParams.get('layer') === '1';
   const selectedLayerId = searchParams.get('layerId') || null;
   const selectedNodeType = searchParams.get('nodeType') || null;
+  const selectedCanvasId = searchParams.get('canvasId') || null;
   const urlDisplay = workspaceName
     ? `${workspaceName}://${selectedPath === '/' ? '' : selectedPath.replace(/^\//, '')}`
     : '';
@@ -130,6 +139,14 @@ export default function WorkspaceDetailPage() {
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedPath, selectedTreeName, selectedLayerId]);
+
+  // Fetch canvas metadata when a canvas node is selected
+  useEffect(() => {
+    if (!selectedCanvasId || !workspaceName) { setCanvasInfo(null); return; }
+    getCanvas(workspaceName, selectedCanvasId, selectedTreeName)
+      .then(c => setCanvasInfo({ label: c.label, description: c.description, color: c.color }))
+      .catch(() => setCanvasInfo(null));
+  }, [workspaceName, selectedCanvasId, selectedTreeName]);
 
   const handleStartWorkspace = async () => {
     if (!workspace) return;
@@ -308,6 +325,34 @@ export default function WorkspaceDetailPage() {
     }
   };
 
+  const handleSaveAsCanvas = () => {
+    const defaultName = selectedPath === '/' ? 'canvas' : (selectedPath.split('/').pop() || 'canvas');
+    setSaveAsCanvasName(defaultName);
+    setSaveAsCanvasOpen(true);
+  };
+
+  const handleConfirmSaveAsCanvas = async () => {
+    if (!workspaceName || !saveAsCanvasName.trim()) return;
+    setSaveAsCanvasLoading(true);
+    try {
+      const name = saveAsCanvasName.trim();
+      const path = selectedPath === '/' ? `/${name}` : `${selectedPath}/${name}`;
+      const canvas = await createCanvas(workspaceName, { path, treeName: selectedTreeName });
+      setSaveAsCanvasOpen(false);
+      window.dispatchEvent(new CustomEvent('workspace:tree:refresh', { detail: { workspaceName } }));
+      const params = new URLSearchParams();
+      params.set('tree', selectedTreeName);
+      if (path !== '/') params.set('path', path);
+      params.set('nodeType', 'canvas');
+      params.set('canvasId', canvas.id);
+      navigate(`/workspaces/${workspaceName}?${params.toString()}`);
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to create canvas', variant: 'destructive' });
+    } finally {
+      setSaveAsCanvasLoading(false);
+    }
+  };
+
   if (isLoadingWorkspace) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -384,8 +429,52 @@ export default function WorkspaceDetailPage() {
           pastedDocumentIds={clipboard?.documentIds}
           onPurgeDocuments={handlePurgeDocuments}
           disablePurgeDocuments={false}
+          canvasInfo={canvasInfo ?? undefined}
+          onSaveAsCanvas={selectedNodeType !== 'canvas' && !isLayerView ? handleSaveAsCanvas : undefined}
         />
       </div>
+
+      {/* Save as canvas dialog */}
+      {saveAsCanvasOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-card rounded-lg border shadow-xl p-5 w-80 space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold">Save view as canvas</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Creates a canvas under <span className="font-mono">{selectedPath === '/' ? '/' : selectedPath}</span>
+              </p>
+            </div>
+            <input
+              className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+              placeholder="Canvas name…"
+              value={saveAsCanvasName}
+              onChange={e => setSaveAsCanvasName(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleConfirmSaveAsCanvas();
+                if (e.key === 'Escape') setSaveAsCanvasOpen(false);
+              }}
+              autoFocus
+            />
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setSaveAsCanvasOpen(false)}
+                className="px-3 py-1.5 text-xs border rounded-md hover:bg-accent"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSaveAsCanvas}
+                disabled={!saveAsCanvasName.trim() || saveAsCanvasLoading}
+                className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
+              >
+                {saveAsCanvasLoading ? 'Creating…' : 'Create canvas'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

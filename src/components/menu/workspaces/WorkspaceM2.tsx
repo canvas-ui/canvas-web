@@ -42,10 +42,11 @@ export function WorkspaceM2() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  // Derive initial tab and path from the current URL so that direct links auto-navigate
+  // Derive tab and path from the current URL on every render
   const urlParams = new URLSearchParams(location.search)
   const urlTree = urlParams.get('tree')
   const urlPath = urlParams.get('path') ? decodeURIComponent(urlParams.get('path')!) : '/'
+  const urlIsLayer = urlParams.get('layer') === '1'
   const initialTab: TreeTab = urlTree === 'directory' ? 'directory' : 'context'
 
   const [wsLabel, setWsLabel] = useState<string | null>(null)
@@ -57,7 +58,7 @@ export function WorkspaceM2() {
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(false)
   const [isLoadingLayers, setIsLoadingLayers] = useState(false)
   const [selectedPath, setSelectedPath] = useState(urlPath)
-  const [contentPath, setContentPath] = useState<string | null>(urlPath !== '/' ? urlPath : null)
+  const [contentPath, setContentPath] = useState<string | null>(urlIsLayer && urlPath !== '/' ? urlPath : null)
   const [searchQuery, setSearchQuery] = useState('')
   const [docClipboard, setDocClipboard] = useState<{ documentIds: number[]; operation: 'copy' | 'cut' } | null>(null)
 
@@ -66,6 +67,12 @@ export function WorkspaceM2() {
     window.addEventListener('documents:clipboard', handler as EventListener)
     return () => window.removeEventListener('documents:clipboard', handler as EventListener)
   }, [])
+
+  // Keep selectedPath in sync with the URL — handles external navigation (back/forward,
+  // direct links, workspace-detail navigation) where setSelectedPath is never called.
+  useEffect(() => {
+    setSelectedPath(urlPath)
+  }, [urlPath])
 
   const loadTree = useCallback(async (name: string, tab: 'context' | 'directory') => {
     const setLoading = tab === 'context' ? setIsLoadingContext : setIsLoadingDirectory
@@ -142,6 +149,16 @@ export function WorkspaceM2() {
     if (wsName) refreshAll(wsName)
   }, [wsName, refreshAll])
 
+  // Refresh tree when a canvas is created from the detail page
+  useEffect(() => {
+    if (!wsName) return
+    const handler = (e: CustomEvent) => {
+      if (e.detail?.workspaceName === wsName) refreshAll(wsName)
+    }
+    window.addEventListener('workspace:tree:refresh', handler as EventListener)
+    return () => window.removeEventListener('workspace:tree:refresh', handler as EventListener)
+  }, [wsName, refreshAll])
+
   // Subscribe to workspace channel and refresh trees when a context changes its path
   // (which locks/unlocks layers, so trees must reflect updated lock state)
   useEffect(() => {
@@ -195,7 +212,10 @@ export function WorkspaceM2() {
     params.set('tree', activeTab === 'layers' ? 'context' : activeTab)
     if (path !== '/') params.set('path', path)
     const node = findNodeByPath(activeTree, path)
-    if (node?.type === 'canvas') params.set('nodeType', 'canvas')
+    if (node?.type === 'canvas') {
+      params.set('nodeType', 'canvas')
+      if (node.id) params.set('canvasId', node.id)
+    }
     navigate(`/workspaces/${wsName}?${params.toString()}`)
   }
 
