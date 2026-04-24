@@ -7,6 +7,7 @@ import { M2Header } from '@/components/menu/shared/M2Header'
 import { useMenu } from '@/components/shell/menu-context'
 import { generateNiceRandomHexColor } from '@/utils/color'
 import { getAgent, updateAgent, deleteAgent, createAgent, type Agent, type CreateAgentData } from '@/services/agent'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 type SettingsTab = 'identity' | 'provider' | 'models' | 'tools' | 'memory' | 'integrations'
 
@@ -56,6 +57,8 @@ export function AgentM2Settings() {
   const entityId = state.selectedEntityId
   const isCreate = !entityId
   const { showToast } = useToast()
+  const location = useLocation()
+  const navigate = useNavigate()
   const [tab, setTab] = useState<SettingsTab>('identity')
   const [agent, setAgent] = useState<Agent | null>(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -192,11 +195,19 @@ export function AgentM2Settings() {
     }
   }
 
+  const handleBack = () => {
+    if (entityId && location.pathname === `/agents/${entityId}/settings`) {
+      navigate(`/agents/${entityId}`)
+      return
+    }
+    closeM2()
+  }
+
   return (
     <div className="flex flex-col h-full">
       <M2Header
         title={isCreate ? 'New Agent' : (agent?.label || agent?.name || entityId || 'Agent')}
-        onBack={closeM2}
+        onBack={handleBack}
       />
 
       {/* Tab bar */}

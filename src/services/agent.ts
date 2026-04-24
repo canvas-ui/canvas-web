@@ -28,6 +28,81 @@ export interface AgentSkill {
   disableModelInvocation?: boolean;
 }
 
+export interface AgentResponseUsageCost {
+  input?: number;
+  output?: number;
+  cacheRead?: number;
+  cacheWrite?: number;
+  total?: number;
+}
+
+export interface AgentResponseUsage {
+  input?: number;
+  output?: number;
+  cacheRead?: number;
+  cacheWrite?: number;
+  totalTokens?: number;
+  cost?: AgentResponseUsageCost;
+}
+
+export interface AgentResponseMetadata {
+  api?: string;
+  provider?: string;
+  model?: string;
+  stopReason?: string;
+  timestamp?: string | number;
+  responseId?: string;
+  usage?: AgentResponseUsage;
+  toolCalls?: any[];
+  reasoning?: string;
+}
+
+export interface AgentImageContent {
+  type: 'image';
+  data: string;
+  mimeType: string;
+  name?: string;
+}
+
+export interface AgentSession {
+  mode?: 'persistent' | 'experimental' | 'incognito';
+  sessionId?: string;
+  sessionFile?: string;
+  thinkingLevel?: string;
+  model?: {
+    provider?: string;
+    modelId?: string;
+  };
+  messages: ChatMessage[];
+}
+
+export interface AgentSessionSummary {
+  id: string;
+  path: string;
+  cwd: string;
+  name?: string;
+  parentSessionPath?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+  firstMessage: string;
+  allMessagesText: string;
+  isCurrent: boolean;
+  isExperimental?: boolean;
+}
+
+export interface AgentSessionList {
+  mode: 'persistent' | 'experimental' | 'incognito';
+  currentSessionId?: string;
+  currentSessionPath?: string;
+  sessions: AgentSessionSummary[];
+}
+
+export interface AgentSessionMutationResult {
+  current: AgentSession;
+  sessions: AgentSessionList;
+}
+
 // Main Agent interface used throughout the application
 export interface Agent {
   id: string;
@@ -124,11 +199,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: string;
-  metadata?: {
-    model?: string;
-    provider?: string;
-    toolCalls?: any[];
-  };
+  metadata?: AgentResponseMetadata;
 }
 
 function extractAgentMessageText(message: any): string {
@@ -144,6 +215,67 @@ function extractAgentMessageText(message: any): string {
     .map((block: any) => block.text)
     .join('\n');
   return text || '';
+}
+
+export function extractAgentMessageReasoning(message: any): string {
+  if (!message) return '';
+  if (typeof message?.metadata?.reasoning === 'string' && message.metadata.reasoning.trim()) {
+    return message.metadata.reasoning.trim();
+  }
+  if (!Array.isArray(message.content)) return '';
+  return message.content
+    .filter((block: any) => block?.type === 'thinking' || block?.type === 'reasoning')
+    .map((block: any) => {
+      if (typeof block?.thinking === 'string') return block.thinking;
+      if (typeof block?.reasoning === 'string') return block.reasoning;
+      if (typeof block?.text === 'string') return block.text;
+      return '';
+    })
+    .filter(Boolean)
+    .join('\n')
+    .trim();
+}
+
+export function extractAgentMessageMetadata(message: any): AgentResponseMetadata | undefined {
+  if (!message) return undefined;
+
+  const reasoning = extractAgentMessageReasoning(message);
+  const metadata: AgentResponseMetadata = {
+    ...(message.api ? { api: message.api } : {}),
+    ...(message.provider ? { provider: message.provider } : {}),
+    ...(message.model ? { model: message.model } : {}),
+    ...(message.stopReason ? { stopReason: message.stopReason } : {}),
+    ...(message.timestamp !== undefined ? { timestamp: message.timestamp } : {}),
+    ...(message.responseId ? { responseId: message.responseId } : {}),
+    ...(message.usage ? { usage: message.usage } : {}),
+    ...(message.metadata?.toolCalls ? { toolCalls: message.metadata.toolCalls } : {}),
+    ...(reasoning ? { reasoning } : {}),
+  };
+
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
+}
+
+function normalizeMessageTimestamp(timestamp: string | number | undefined): string {
+  if (typeof timestamp === 'number') return new Date(timestamp).toISOString();
+  if (typeof timestamp === 'string') {
+    const parsed = new Date(timestamp);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+  }
+  return new Date().toISOString();
+}
+
+export function convertAgentSessionMessages(messages: any[] = []): ChatMessage[] {
+  return messages
+    .filter((message: any) => message?.role === 'user' || message?.role === 'assistant')
+    .map((message: any) => ({
+      role: message.role,
+      content: extractAgentMessageText(message),
+      timestamp: normalizeMessageTimestamp(message.timestamp),
+      ...(message.role === 'assistant'
+        ? { metadata: extractAgentMessageMetadata(message) }
+        : {}),
+    }))
+    .filter((message) => message.content || message.metadata?.reasoning);
 }
 
 // Agent creation data interface
@@ -470,6 +602,64 @@ export async function getAgent(agentId: string): Promise<Agent> {
   return response.payload;
 }
 
+export async function getAgentSession(agentId: string): Promise<AgentSession> {
+  const response = await api.get<{ payload: {
+    mode?: 'persistent' | 'experimental' | 'incognito';
+    sessionId?: string;
+    sessionFile?: string;
+    thinkingLevel?: string;
+    model?: { provider?: string; modelId?: string };
+    messages?: any[];
+  } }>(`${API_URL}/agents/${agentId}/session`);
+
+  return {
+    mode: response.payload?.mode,
+    sessionId: response.payload?.sessionId,
+    sessionFile: response.payload?.sessionFile,
+    thinkingLevel: response.payload?.thinkingLevel,
+    model: response.payload?.model,
+    messages: convertAgentSessionMessages(response.payload?.messages || []),
+  };
+}
+
+export async function listAgentSessions(agentId: string): Promise<AgentSessionList> {
+  const response = await api.get<{ payload: AgentSessionList }>(`${API_URL}/agents/${agentId}/sessions`);
+  return response.payload;
+}
+
+export async function createAgentSession(
+  agentId: string,
+  data: { mode: 'persistent' | 'experimental' | 'incognito'; name?: string }
+): Promise<AgentSessionMutationResult> {
+  const response = await api.post<{ payload: AgentSessionMutationResult }>(`${API_URL}/agents/${agentId}/sessions`, data);
+  return response.payload;
+}
+
+export async function selectAgentSession(
+  agentId: string,
+  data: { mode: 'persistent' | 'experimental' | 'incognito'; sessionId?: string }
+): Promise<AgentSessionMutationResult> {
+  const response = await api.put<{ payload: AgentSessionMutationResult }>(`${API_URL}/agents/${agentId}/session`, data);
+  return response.payload;
+}
+
+export async function renameAgentSession(
+  agentId: string,
+  sessionId: string,
+  data: { name: string }
+): Promise<AgentSessionMutationResult> {
+  const response = await api.patch<{ payload: AgentSessionMutationResult }>(`${API_URL}/agents/${agentId}/sessions/${sessionId}`, data);
+  return response.payload;
+}
+
+export async function deleteAgentSession(
+  agentId: string,
+  sessionId: string
+): Promise<AgentSessionMutationResult> {
+  const response = await api.delete<{ payload: AgentSessionMutationResult }>(`${API_URL}/agents/${agentId}/sessions/${sessionId}`);
+  return response.payload;
+}
+
 /**
  * Create a new agent
  */
@@ -582,6 +772,7 @@ export async function chatWithAgentStream(
   agentId: string,
   message: string,
   options: {
+    onStart?: () => void;
     onMessage?: (content: any, isComplete: any, metadata: any) => void;
     onError?: (error: any) => void;
     onComplete?: () => void;
@@ -589,42 +780,59 @@ export async function chatWithAgentStream(
     mcpContext?: boolean;
     maxTokens?: number;
     temperature?: number;
+    images?: AgentImageContent[];
   } = {}
 ): Promise<void> {
-  const { onMessage, onError, onComplete, context, mcpContext, maxTokens, temperature } = options;
+  const { onStart, onMessage, onError, onComplete, context, mcpContext, maxTokens, temperature, images } = options;
+  let buffer = '';
 
   await api.stream(`${API_URL}/agents/${agentId}/prompt/stream`, {
     message,
+    images,
     context,
     mcpContext,
     maxTokens,
     temperature,
   }, {
+    onOpen: () => {
+      onStart?.();
+    },
     onChunk: (chunk: string) => {
-      try {
-        // Handle SSE-style streaming
-        const lines = chunk.split('\n');
+      buffer += chunk;
+      const events = buffer.split('\n\n');
+      buffer = events.pop() || '';
+
+      for (const eventChunk of events) {
+        const lines = eventChunk.split('\n').map((line) => line.trim()).filter(Boolean);
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = JSON.parse(line.slice(6));
-            if (onMessage) {
-              if (data.type === 'chunk') {
-                onMessage(data.delta || '', false, data.metadata || {});
-              } else if (data.type === 'complete') {
-                const finalMessage = Array.isArray(data.messages)
-                  ? [...data.messages].reverse().find((msg: any) => msg?.role === 'assistant')
-                  : null;
-                onMessage(extractAgentMessageText(finalMessage), true, data.metadata || {});
-              } else if (data.type === 'error' && onError) {
-                onError(new Error(data.error || 'Prompt stream failed'));
-              }
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6).trim();
+          if (payload === '[DONE]') continue;
+          try {
+            const data = JSON.parse(payload);
+            if (!onMessage) continue;
+            if (data.type === 'chunk') {
+              onMessage(data.delta || '', false, data.metadata || {});
+            } else if (data.type === 'thinking') {
+              onMessage('', false, { ...(data.metadata || {}), reasoningDelta: data.delta || '' });
+            } else if (data.type === 'complete') {
+              const finalMessage = Array.isArray(data.messages)
+                ? [...data.messages].reverse().find((msg: any) => msg?.role === 'assistant')
+                : null;
+              onMessage(
+                extractAgentMessageText(finalMessage),
+                true,
+                {
+                  ...(data.metadata || {}),
+                  ...(extractAgentMessageMetadata(finalMessage) || {}),
+                }
+              );
+            } else if (data.type === 'error' && onError) {
+              onError(new Error(data.error || 'Prompt stream failed'));
             }
+          } catch {
+            // ignore malformed partial event payloads
           }
-        }
-      } catch (error) {
-        // Handle plain text chunks
-        if (onMessage && chunk.trim()) {
-          onMessage(chunk, false, {});
         }
       }
     },
@@ -647,9 +855,10 @@ export async function chatWithAgentFallback(
     mcpContext?: boolean;
     maxTokens?: number;
     temperature?: number;
+    images?: AgentImageContent[];
   }
 ): Promise<{ content: string; metadata?: any }> {
-  const { message, onMessage, onError, onComplete, context, mcpContext, maxTokens, temperature } = options;
+  const { message, onMessage, onError, onComplete, context, mcpContext, maxTokens, temperature, images } = options;
 
   try {
     const response = await api.post<{
@@ -658,6 +867,7 @@ export async function chatWithAgentFallback(
       }
     }>(`${API_URL}/agents/${agentId}/prompt`, {
       message,
+      images,
       context,
       mcpContext,
       maxTokens,
@@ -669,7 +879,7 @@ export async function chatWithAgentFallback(
       : null;
     const result = {
       content: extractAgentMessageText(finalMessage),
-      metadata: finalMessage?.metadata || {},
+      metadata: extractAgentMessageMetadata(finalMessage),
     };
 
     if (onMessage) {

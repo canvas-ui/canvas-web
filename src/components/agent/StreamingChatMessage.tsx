@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { StreamingChatMessage } from '@/hooks/useAgentSocket';
 import { Wifi, WifiOff, Radio, Cpu } from 'lucide-react';
+import AgentAssistantExtras from './AgentAssistantExtras';
 
 interface StreamingChatMessageProps {
   message: StreamingChatMessage;
@@ -75,6 +76,11 @@ export function StreamingChatMessageComponent({
             : 'bg-muted'
         } ${isStreaming && !message.isComplete ? 'border-2 border-blue-300 animate-pulse' : ''}`}
       >
+        <AgentAssistantExtras
+          reasoning={message.role === 'assistant' ? message.metadata?.reasoning?.trim() : undefined}
+          metadata={message.role === 'assistant' ? message.metadata : undefined}
+          isStreaming={isStreaming && !message.isComplete}
+        />
         <div className="whitespace-pre-wrap text-sm">
           {displayedContent}
           {isStreaming && !message.isComplete && (
@@ -86,9 +92,6 @@ export function StreamingChatMessageComponent({
         <div className="flex items-center justify-between text-xs mt-2 opacity-70">
           <div className="flex items-center gap-2">
             <span>{new Date(message.timestamp).toLocaleTimeString()}</span>
-            {message.metadata?.model && (
-              <span>• {message.metadata.model}</span>
-            )}
             {isStreaming && !message.isComplete && (
               <span className="text-blue-400">• streaming...</span>
             )}

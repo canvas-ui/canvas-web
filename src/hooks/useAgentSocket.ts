@@ -1,17 +1,14 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { API_ROUTES } from '@/config/api';
+import type { AgentImageContent, AgentResponseMetadata } from '@/services/agent';
 
 export interface StreamingChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: string;
   isComplete?: boolean;
-  metadata?: {
-    model?: string;
-    provider?: string;
-    toolCalls?: any[];
-  };
+  metadata?: AgentResponseMetadata;
 }
 
 // Updated to match backend format
@@ -26,6 +23,7 @@ export interface StreamingChatChunk {
 
 export interface StreamingChatRequest {
   message: string;
+  images?: AgentImageContent[];
   context?: StreamingChatMessage[];
   mcpContext?: boolean;
   maxTokens?: number;

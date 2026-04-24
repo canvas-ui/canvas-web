@@ -331,13 +331,14 @@ export const api = {
     endpoint: string,
     data?: unknown,
     options: {
+      onOpen?: () => void;
       onChunk?: (chunk: string) => void;
       onError?: (error: Error) => void;
       onComplete?: () => void;
       signal?: AbortSignal;
     } = {}
   ): Promise<void> {
-    const { onChunk, onError, onComplete, signal } = options;
+    const { onOpen, onChunk, onError, onComplete, signal } = options;
 
     try {
       let bodyContent: RequestInit['body'];
@@ -362,6 +363,8 @@ export const api = {
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
+
+      onOpen?.();
 
       // Check if the response body exists and supports streaming
       if (!response.body) {

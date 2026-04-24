@@ -5,6 +5,7 @@ import { useMenu } from '@/components/shell/menu-context'
 import { useAgentListData } from '@/hooks/useAgentListData'
 import { startAgent, stopAgent } from '@/services/agent'
 import { useToast } from '@/components/ui/toast-container'
+import { useNavigate } from 'react-router-dom'
 
 function StatusDot({ status }: { status: string }) {
   const color =
@@ -21,10 +22,12 @@ export function AgentList() {
   const { agents, isLoading, refresh } = useAgentListData(state.activeSection === 'agents')
   const { showToast } = useToast()
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
+  const navigate = useNavigate()
 
   const handleSelect = (agent: any) => {
     selectEntity(agent.id)
-    openM2('chat', agent.id)
+    openM2('detail', agent.id)
+    navigate(`/agents/${agent.id}`)
   }
 
   const handleStart = async (e: React.MouseEvent, agent: any) => {

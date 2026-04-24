@@ -21,7 +21,6 @@ import AgentsPage from './pages/agents'
 import AgentDetailPage from './pages/agents/[agentId]'
 import WorkspaceSettingsPage from './pages/workspaces/[workspaceName]/settings'
 import ContextSettingsPage from './pages/contexts/[contextId]/settings'
-import AgentSettingsPage from './pages/agents/[agentId]/settings'
 import RolesPage from './pages/roles'
 import RemotesPage from './pages/remotes'
 import { AppShell } from './components/shell/AppShell'
@@ -62,7 +61,7 @@ function AppContent() {
           <Route path="contexts/:contextId/settings" element={<ContextSettingsPage />} />
           <Route path="agents" element={<AgentsPage />} />
           <Route path="agents/:agentId" element={<AgentDetailPage />} />
-          <Route path="agents/:agentId/settings" element={<AgentSettingsPage />} />
+          <Route path="agents/:agentId/settings" element={<AgentDetailPage />} />
           <Route path="roles" element={<RolesPage />} />
           <Route path="remotes" element={<RemotesPage />} />
           <Route path="api-tokens" element={<ApiTokensPage />} />

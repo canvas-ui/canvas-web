@@ -3,6 +3,7 @@ import { ArrowLeft, Send, Square, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getAgent, type Agent } from '@/services/agent'
 import { useAgentPromptStream } from '@/hooks/useAgentPromptStream'
+import AgentAssistantExtras from '@/components/agent/AgentAssistantExtras'
 
 interface AgentChatPanelProps {
   agentId: string
@@ -21,6 +22,7 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
   }, [agentId])
 
   useEffect(() => {
+    if (messages.length === 0) return
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
@@ -81,6 +83,12 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
               !msg.isComplete && msg.role === 'assistant' && 'opacity-80',
             )}
           >
+            <AgentAssistantExtras
+              reasoning={msg.role === 'assistant' ? msg.reasoning : undefined}
+              metadata={msg.role === 'assistant' ? msg.metadata : undefined}
+              isStreaming={!msg.isComplete}
+              compact
+            />
             {msg.content || (!msg.isComplete && msg.role === 'assistant' ? '…' : '')}
           </div>
         ))}

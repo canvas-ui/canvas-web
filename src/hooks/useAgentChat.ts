@@ -10,7 +10,10 @@ import {
   chatWithAgentStream,
   chatWithAgentFallback,
   convertToStreamingMessages,
-  ChatMessage
+  ChatMessage,
+  AgentImageContent,
+  extractAgentMessageMetadata,
+  getAgentSession,
 } from '@/services/agent';
 
 export interface UseAgentChatOptions {
@@ -46,6 +49,20 @@ function extractMessageText(message: any): string {
   return text || '';
 }
 
+function appendReasoning(currentReasoning: string | undefined, delta: string | undefined): string | undefined {
+  const nextReasoning = `${currentReasoning || ''}${delta || ''}`.trim();
+  return nextReasoning || undefined;
+}
+
+function sanitizeStreamingMetadata(metadata: Record<string, any> | undefined, reasoning: string | undefined) {
+  if (!metadata && !reasoning) return undefined;
+  const { reasoningDelta: _reasoningDelta, ...rest } = metadata || {};
+  return {
+    ...rest,
+    ...(reasoning ? { reasoning } : {}),
+  };
+}
+
 export function useAgentChat(options: UseAgentChatOptions) {
   const {
     agentId,
@@ -65,6 +82,30 @@ export function useAgentChat(options: UseAgentChatOptions) {
   const [currentStreamingMessage, setCurrentStreamingMessage] = useState<StreamingChatMessage | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ChatState['connectionStatus']>('disconnected');
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!agentId) {
+      setMessages(convertToStreamingMessages(initialMessages));
+      return;
+    }
+
+    getAgentSession(agentId)
+      .then((session) => {
+        if (cancelled) return;
+        setMessages(convertToStreamingMessages(session.messages));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setMessages(convertToStreamingMessages(initialMessages));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [agentId]);
 
   // Refs for managing state
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -104,7 +145,8 @@ export function useAgentChat(options: UseAgentChatOptions) {
         const updatedMessage = prev ? {
           ...prev,
           content: prev.content + (chunk.delta || chunk.content || ''),
-          isComplete: false
+          isComplete: false,
+          metadata: prev.metadata
         } : {
           role: 'assistant' as const,
           content: chunk.delta || chunk.content || '',
@@ -113,6 +155,23 @@ export function useAgentChat(options: UseAgentChatOptions) {
         };
 
         return updatedMessage;
+      });
+    } else if (chunk.type === 'thinking') {
+      setCurrentStreamingMessage(prev => {
+        const reasoning = appendReasoning(prev?.metadata?.reasoning, chunk.delta);
+        return prev ? {
+          ...prev,
+          metadata: {
+            ...(prev.metadata || {}),
+            ...(reasoning ? { reasoning } : {})
+          }
+        } : {
+          role: 'assistant' as const,
+          content: '',
+          timestamp: new Date().toISOString(),
+          isComplete: false,
+          metadata: reasoning ? { reasoning } : undefined
+        };
       });
     } else if (chunk.type === 'complete' || chunk.type === 'done') {
       // Mark current streaming message as complete
@@ -135,6 +194,7 @@ export function useAgentChat(options: UseAgentChatOptions) {
         ? [...messages].reverse().find((message: any) => message?.role === 'assistant')
         : null;
       const finalContent = extractMessageText(finalMessage);
+      const finalMetadata = extractAgentMessageMetadata(finalMessage);
 
       // Move streaming message to completed messages
       setCurrentStreamingMessage(prev => {
@@ -142,7 +202,11 @@ export function useAgentChat(options: UseAgentChatOptions) {
           const completedMessage = {
             ...prev,
             content: finalContent || prev.content,
-            isComplete: true
+            isComplete: true,
+            metadata: {
+              ...(prev.metadata || {}),
+              ...(finalMetadata || {})
+            }
           };
           setMessages(prevMessages => [...prevMessages, completedMessage]);
         } else if (finalContent) {
@@ -150,7 +214,8 @@ export function useAgentChat(options: UseAgentChatOptions) {
             role: 'assistant',
             content: finalContent,
             timestamp: new Date().toISOString(),
-            isComplete: true
+            isComplete: true,
+            metadata: finalMetadata
           }]);
         }
         return null;
@@ -176,6 +241,7 @@ export function useAgentChat(options: UseAgentChatOptions) {
   const sendMessage = useCallback(async (
     message: string,
     options: {
+      images?: AgentImageContent[];
       mcpContext?: boolean;
       maxTokens?: number;
       temperature?: number;
@@ -191,7 +257,7 @@ export function useAgentChat(options: UseAgentChatOptions) {
     // Add user message to chat
     const userMessage: StreamingChatMessage = {
       role: 'user',
-      content: message,
+      content: message || (options.images?.length ? `[${options.images.length} image${options.images.length === 1 ? '' : 's'} attached]` : ''),
       timestamp: new Date().toISOString(),
       isComplete: true
     };
@@ -201,6 +267,7 @@ export function useAgentChat(options: UseAgentChatOptions) {
 
     const request: StreamingChatRequest = {
       message,
+      images: options.images,
       context: messages.slice(-10), // Last 10 messages for context
       mcpContext: options.mcpContext ?? true,
       maxTokens: options.maxTokens,
@@ -208,7 +275,8 @@ export function useAgentChat(options: UseAgentChatOptions) {
     };
 
     // Smart streaming method selection based on provider
-    const shouldUseWebSocket = enableWebSocket && isConnected && llmProvider !== 'ollama';
+    const hasImages = Array.isArray(options.images) && options.images.length > 0;
+    const shouldUseWebSocket = enableWebSocket && isConnected && llmProvider !== 'ollama' && !hasImages;
     const shouldUseSSE = enableSSE;
 
     // Log streaming strategy
@@ -231,6 +299,7 @@ export function useAgentChat(options: UseAgentChatOptions) {
 
     // Try SSE (primary method for Ollama, fallback for others)
     if (shouldUseSSE) {
+      let sseAccepted = false;
       try {
         console.log(`📡 ${llmProvider === 'ollama' ? 'Using' : 'Attempting'} SSE streaming for ${llmProvider || 'unknown'} provider...`);
         setConnectionStatus('sse');
@@ -242,24 +311,35 @@ export function useAgentChat(options: UseAgentChatOptions) {
           agentId,
           request.message,
           {
+            onStart: () => {
+              sseAccepted = true;
+            },
             onMessage: (content: string, isComplete: boolean, metadata: any) => {
               streamingMessage += content;
+              const reasoningDelta = typeof metadata?.reasoningDelta === 'string' ? metadata.reasoningDelta : '';
 
-              setCurrentStreamingMessage({
-                role: 'assistant',
-                content: streamingMessage,
-                timestamp: new Date().toISOString(),
-                isComplete,
-                metadata
+              setCurrentStreamingMessage(prev => {
+                const reasoning = metadata?.reasoning || appendReasoning(prev?.metadata?.reasoning, reasoningDelta);
+                return {
+                  role: 'assistant',
+                  content: streamingMessage,
+                  timestamp: prev?.timestamp || new Date().toISOString(),
+                  isComplete,
+                  metadata: sanitizeStreamingMetadata({
+                    ...(prev?.metadata || {}),
+                    ...metadata,
+                  }, reasoning)
+                };
               });
 
               if (isComplete) {
+                const reasoning = metadata?.reasoning;
                 setMessages(prev => [...prev, {
                   role: 'assistant',
                   content: streamingMessage,
                   timestamp: new Date().toISOString(),
                   isComplete: true,
-                  metadata
+                  metadata: sanitizeStreamingMetadata(metadata, reasoning)
                 }]);
                 setCurrentStreamingMessage(null);
                 setIsStreaming(false);
@@ -277,6 +357,7 @@ export function useAgentChat(options: UseAgentChatOptions) {
               timestamp: msg.timestamp,
               metadata: msg.metadata
             })),
+            images: options.images,
             mcpContext: options.mcpContext ?? true,
             maxTokens: options.maxTokens,
             temperature: options.temperature
@@ -284,6 +365,10 @@ export function useAgentChat(options: UseAgentChatOptions) {
         );
         return;
       } catch (error) {
+        if (sseAccepted) {
+          console.warn(`SSE stream failed after server accepted prompt for ${llmProvider || 'unknown'}; refusing REST fallback to avoid duplicate prompt.`);
+          return;
+        }
         console.warn(`SSE streaming failed for ${llmProvider || 'unknown'}, falling back to REST:`, error);
       }
     }
@@ -296,6 +381,7 @@ export function useAgentChat(options: UseAgentChatOptions) {
 
         const response = await chatWithAgentFallback(agentId, {
           message,
+          images: options.images,
           context: messages.slice(-10).map(msg => ({
             role: msg.role,
             content: msg.content,

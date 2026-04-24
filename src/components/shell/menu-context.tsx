@@ -23,7 +23,7 @@ type MenuAction =
   | { type: 'OPEN_M2'; view: M2View; entityId?: string | null }
   | { type: 'CLOSE_M2' }
   | { type: 'SELECT_ENTITY'; entityId: string | null }
-  | { type: 'SYNC_FROM_URL'; section: MenuSection; entityId: string | null }
+  | { type: 'SYNC_FROM_URL'; section: MenuSection; entityId: string | null; m2View: M2View }
   | { type: 'SET_USER'; user: MenuState['user'] }
 
 interface MenuContextValue {
@@ -91,7 +91,11 @@ function menuReducer(state: MenuState, action: MenuAction): MenuState {
       return { ...state, selectedEntityId: action.entityId }
 
     case 'SYNC_FROM_URL': {
-      if (action.section === state.activeSection && action.entityId === state.selectedEntityId) {
+      if (
+        action.section === state.activeSection
+        && action.entityId === state.selectedEntityId
+        && action.m2View === state.m2View
+      ) {
         return state
       }
       return {
@@ -99,8 +103,8 @@ function menuReducer(state: MenuState, action: MenuAction): MenuState {
         activeSection: action.section,
         m1Open: action.section !== null,
         selectedEntityId: action.entityId,
-        m2Open: action.entityId !== null,
-        m2View: action.entityId !== null ? 'detail' : null,
+        m2Open: action.m2View !== null,
+        m2View: action.m2View,
       }
     }
 
@@ -124,17 +128,24 @@ export function useMenu(): MenuContextValue {
 
 // ─── URL Sync ────────────────────────────────────────────────────────────────
 
-function sectionFromPath(pathname: string): { section: MenuSection; entityId: string | null } {
+function sectionFromPath(pathname: string): { section: MenuSection; entityId: string | null; m2View: M2View } {
   const segments = pathname.split('/').filter(Boolean)
   const first = segments[0] || ''
   const second = segments[1] || null
+  const third = segments[2] || null
 
-  if (first === 'contexts') return { section: 'contexts', entityId: second }
-  if (first === 'workspaces') return { section: 'workspaces', entityId: second }
-  if (first === 'agents') return { section: 'agents', entityId: second }
-  if (first === 'admin') return { section: 'admin', entityId: null }
-  if (first === 'api-tokens') return { section: 'settings', entityId: null }
-  return { section: null, entityId: null }
+  if (first === 'contexts') {
+    return { section: 'contexts', entityId: second, m2View: third === 'settings' ? 'form' : second ? 'detail' : null }
+  }
+  if (first === 'workspaces') {
+    return { section: 'workspaces', entityId: second, m2View: third === 'settings' ? 'form' : second ? 'detail' : null }
+  }
+  if (first === 'agents') {
+    return { section: 'agents', entityId: second, m2View: third === 'settings' ? 'settings' : second ? 'detail' : null }
+  }
+  if (first === 'admin') return { section: 'admin', entityId: null, m2View: null }
+  if (first === 'api-tokens') return { section: 'settings', entityId: null, m2View: null }
+  return { section: null, entityId: null, m2View: null }
 }
 
 function useMenuUrlSync(_state: MenuState, dispatch: React.Dispatch<MenuAction>) {
@@ -148,8 +159,8 @@ function useMenuUrlSync(_state: MenuState, dispatch: React.Dispatch<MenuAction>)
       isInternalNav.current = false
       return
     }
-    const { section, entityId } = sectionFromPath(location.pathname)
-    dispatch({ type: 'SYNC_FROM_URL', section, entityId })
+    const { section, entityId, m2View } = sectionFromPath(location.pathname)
+    dispatch({ type: 'SYNC_FROM_URL', section, entityId, m2View })
   }, [location.pathname, dispatch])
 
   // State → URL: navigate when entity selection changes from menu interaction

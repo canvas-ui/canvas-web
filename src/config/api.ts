@@ -1,4 +1,31 @@
-export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001/rest/v2'
+function getApiUrl() {
+  const configuredUrl = import.meta.env.VITE_API_URL
+  const browserOrigin = window.location.origin
+
+  if (!configuredUrl) {
+    return `${browserOrigin}/rest/v2`
+  }
+
+  try {
+    const apiUrl = new URL(configuredUrl)
+    const browserUrl = new URL(browserOrigin)
+    const loopbackHosts = new Set(['localhost', '127.0.0.1', '::1'])
+    const isLoopbackMismatch = loopbackHosts.has(apiUrl.hostname)
+      && loopbackHosts.has(browserUrl.hostname)
+      && apiUrl.hostname !== browserUrl.hostname
+      && apiUrl.port === browserUrl.port
+
+    if (isLoopbackMismatch) {
+      return `${browserOrigin}${apiUrl.pathname}`
+    }
+
+    return apiUrl.toString().replace(/\/$/, '')
+  } catch {
+    return configuredUrl
+  }
+}
+
+export const API_URL = getApiUrl()
 // Don't convert to WebSocket protocol here - the socket.io client will handle that
 export const WS_URL = API_URL.split('/rest')[0]
 

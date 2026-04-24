@@ -1,12 +1,16 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { api } from '@/lib/api'
 import { API_URL } from '@/config/api'
-import { startAgent } from '@/services/agent'
+import { getAgentSession, startAgent } from '@/services/agent'
+import { extractAgentMessageReasoning } from '@/services/agent'
+import { extractAgentMessageMetadata, type AgentResponseMetadata } from '@/services/agent'
 
 export interface PromptMessage {
   role: 'user' | 'assistant'
   content: string
   isComplete: boolean
+  reasoning?: string
+  metadata?: AgentResponseMetadata
 }
 
 function extractMessageText(message: any): string {
@@ -29,6 +33,34 @@ export function useAgentPromptStream(agentId: string) {
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    if (!agentId) {
+      setMessages([])
+      return
+    }
+
+    getAgentSession(agentId)
+      .then((session) => {
+        if (cancelled) return
+        setMessages(session.messages.map((message) => ({
+          role: message.role as 'user' | 'assistant',
+          content: message.content,
+          isComplete: true,
+          ...(message.metadata?.reasoning ? { reasoning: message.metadata.reasoning } : {}),
+          ...(message.metadata ? { metadata: message.metadata } : {}),
+        })))
+      })
+      .catch(() => {
+        if (!cancelled) setMessages([])
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [agentId])
 
   const send = useCallback(async (text: string) => {
     if (isStreaming || !text.trim() || !agentId) return
@@ -56,6 +88,8 @@ export function useAgentPromptStream(agentId: string) {
     abortRef.current = new AbortController()
     let buffer = ''
     let assistantContent = ''
+    let assistantReasoning = ''
+    let assistantMetadata: AgentResponseMetadata | undefined
 
     try {
       await api.stream(
@@ -78,7 +112,27 @@ export function useAgentPromptStream(agentId: string) {
                   assistantContent += ev.delta || ''
                   setMessages(prev => {
                     const copy = [...prev]
-                    copy[copy.length - 1] = { role: 'assistant', content: assistantContent, isComplete: false }
+                    copy[copy.length - 1] = {
+                      role: 'assistant',
+                      content: assistantContent,
+                      isComplete: false,
+                      ...(assistantReasoning ? { reasoning: assistantReasoning } : {}),
+                      ...(assistantMetadata ? { metadata: assistantMetadata } : {}),
+                    }
+                    return copy
+                  })
+                } else if (ev.type === 'thinking') {
+                  assistantReasoning = `${assistantReasoning}${ev.delta || ''}`.trim()
+                  setMessages(prev => {
+                    const copy = [...prev]
+                    const currentContent = copy[copy.length - 1]?.content || assistantContent
+                    copy[copy.length - 1] = {
+                      role: 'assistant',
+                      content: currentContent,
+                      isComplete: false,
+                      ...(assistantReasoning ? { reasoning: assistantReasoning } : {}),
+                      ...(assistantMetadata ? { metadata: assistantMetadata } : {}),
+                    }
                     return copy
                   })
                 } else if (ev.type === 'complete') {
@@ -86,6 +140,8 @@ export function useAgentPromptStream(agentId: string) {
                     ? [...ev.messages].reverse().find((message: any) => message?.role === 'assistant')
                     : null
                   const finalContent = extractMessageText(finalMessage)
+                  const finalReasoning = extractAgentMessageReasoning(finalMessage) || assistantReasoning
+                  assistantMetadata = extractAgentMessageMetadata(finalMessage)
 
                   setMessages(prev => {
                     const copy = [...prev]
@@ -94,6 +150,8 @@ export function useAgentPromptStream(agentId: string) {
                       role: 'assistant',
                       content: finalContent || currentContent,
                       isComplete: true,
+                      ...(finalReasoning ? { reasoning: finalReasoning } : {}),
+                      ...(assistantMetadata ? { metadata: assistantMetadata } : {}),
                     }
                     return copy
                   })

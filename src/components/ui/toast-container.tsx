@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useRef } from 'react'
+import React, { createContext, useContext, useMemo, useRef, useState, useCallback } from 'react'
 import { ToastProvider, ToastViewport, Toast, ToastTitle, ToastDescription, ToastClose } from './toast'
 
 type ToastType = {
@@ -20,7 +20,7 @@ export function ToastContainer({ children }: { children?: React.ReactNode }) {
   // Keep a short-lived set of recent toast keys to avoid accidental spam (e.g. socket events firing multiple times)
   const recentToastKeys = useRef<Set<string>>(new Set())
 
-  const showToast = (toast: Omit<ToastType, 'id'>) => {
+  const showToast = useCallback((toast: Omit<ToastType, 'id'>) => {
     const key = `${toast.title}:${toast.description}`
     // If we already displayed the exact same toast very recently, skip it
     if (recentToastKeys.current.has(key)) {
@@ -37,10 +37,12 @@ export function ToastContainer({ children }: { children?: React.ReactNode }) {
       setToasts((prev) => prev.filter((t) => t.id !== id))
       recentToastKeys.current.delete(key)
     }, 5000)
-  }
+  }, [])
+
+  const contextValue = useMemo(() => ({ showToast }), [showToast])
 
   return (
-    <ToastContext.Provider value={{ showToast }}>
+    <ToastContext.Provider value={contextValue}>
       <ToastProvider>
         {children as any}
         {toasts.map((toast) => (

@@ -1,3 +1,4 @@
+import { useCallback, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useMenu } from './menu-context'
 import { ContextList } from '@/components/menu/contexts/ContextList'
@@ -7,10 +8,14 @@ import { WorkspaceList } from '@/components/menu/workspaces/WorkspaceList'
 import { WorkspaceM2 } from '@/components/menu/workspaces/WorkspaceM2'
 import { WorkspaceM2Form } from '@/components/menu/workspaces/WorkspaceM2Form'
 import { AgentList } from '@/components/menu/agents/AgentList'
-import { AgentM2Chat } from '@/components/menu/agents/AgentM2Chat'
+import { AgentM2Sessions } from '@/components/menu/agents/AgentM2Sessions'
 import { AgentM2Settings } from '@/components/menu/agents/AgentM2Settings'
 import { AdminMenu } from '@/components/menu/admin/AdminMenu'
 import { SettingsMenu } from '@/components/menu/settings/SettingsMenu'
+
+const DEFAULT_WIDTH = 280
+const MIN_WIDTH = 220
+const MAX_WIDTH = 560
 
 function M2Content() {
   const { state } = useMenu()
@@ -25,7 +30,7 @@ function M2Content() {
     if (m2View === 'form') return <WorkspaceM2Form />
   }
   if (activeSection === 'agents') {
-    if (m2View === 'chat') return <AgentM2Chat />
+    if (m2View === 'detail') return <AgentM2Sessions />
     if (m2View === 'form' || m2View === 'settings') return <AgentM2Settings />
   }
   return null
@@ -33,16 +38,44 @@ function M2Content() {
 
 export function MenuPanelArea() {
   const { state } = useMenu()
+  const [width, setWidth] = useState(DEFAULT_WIDTH)
+  const [isDragging, setIsDragging] = useState(false)
+  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
+
+  const onDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsDragging(true)
+    dragRef.current = { startX: e.clientX, startWidth: width }
+
+    const onMove = (ev: MouseEvent) => {
+      if (!dragRef.current) return
+      const delta = ev.clientX - dragRef.current.startX
+      const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, dragRef.current.startWidth + delta))
+      setWidth(next)
+    }
+
+    const onUp = () => {
+      dragRef.current = null
+      setIsDragging(false)
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }, [width])
 
   return (
     <div
+      style={state.m1Open ? { width } : undefined}
       className={cn(
-        'relative flex-shrink-0 overflow-hidden border-r border-sidebar-border bg-sidebar transition-[width] duration-200 ease-out',
-        state.m1Open ? 'w-[var(--m1-width)]' : 'w-0 border-r-0',
+        'relative flex-shrink-0 overflow-hidden border-r border-sidebar-border bg-sidebar',
+        !isDragging && 'transition-[width] duration-200 ease-out',
+        state.m1Open ? '' : 'w-0 border-r-0',
       )}
     >
       {/* M1 layer */}
-      <div className="absolute inset-0 flex flex-col min-w-[var(--m1-width)]">
+      <div className="absolute inset-0 flex flex-col" style={{ minWidth: width }}>
         {state.activeSection === 'contexts' && <ContextList />}
         {state.activeSection === 'workspaces' && <WorkspaceList />}
         {state.activeSection === 'agents' && <AgentList />}
@@ -58,7 +91,16 @@ export function MenuPanelArea() {
         )}
       >
         {state.m2Open && <M2Content />}
+
       </div>
+
+      {/* Drag handle — right edge for both M1 and M2 */}
+      {state.m1Open && (
+        <div
+          onMouseDown={onDragStart}
+          className="absolute right-0 top-0 bottom-0 z-20 w-1 cursor-col-resize hover:bg-primary/20 transition-colors"
+        />
+      )}
     </div>
   )
 }

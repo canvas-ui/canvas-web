@@ -1,5 +1,4 @@
 import { useRef, useState, useCallback } from 'react'
-import { cn } from '@/lib/utils'
 import { useToolbox } from './toolbox-context'
 import { HomePanel } from './panels/HomePanel'
 import { ToolsPanel } from './panels/ToolsPanel'
@@ -58,14 +57,11 @@ export function ToolboxPanel() {
       </div>
 
       {/* T2 — agent chat overlay */}
-      <div
-        className={cn(
-          'absolute inset-0 z-10 bg-background flex flex-col transition-transform duration-200 ease-out',
-          t2Open ? 'translate-x-0' : 'translate-x-full',
-        )}
-      >
-        {t2Open && t2AgentId && <AgentChatPanel agentId={t2AgentId} onClose={closeT2} />}
-      </div>
+      {t2Open && t2AgentId && (
+        <div className="absolute inset-0 z-10 bg-background flex flex-col">
+          <AgentChatPanel agentId={t2AgentId} onClose={closeT2} />
+        </div>
+      )}
     </div>
   )
 }
