@@ -18,6 +18,12 @@ import {
 } from "@/services/agent"
 
 export default function AgentsPage() {
+  const defaultBaseUrls = {
+    anthropic: 'https://api.anthropic.com',
+    openai: 'https://api.openai.com/v1',
+    ollama: 'http://localhost:11434/v1',
+  }
+
   const [agents, setAgents] = useState<Agent[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -29,7 +35,7 @@ export default function AgentsPage() {
   const [newAgentModel, setNewAgentModel] = useState("")
   const [newAgentConnectorConfig, setNewAgentConnectorConfig] = useState({
     apiKey: "",
-    host: "",
+    baseUrl: defaultBaseUrls.anthropic,
     maxTokens: 4096,
     temperature: 0.7,
     topP: 1.0,
@@ -71,7 +77,7 @@ export default function AgentsPage() {
     // Reset connector config when provider changes
     setNewAgentConnectorConfig({
       apiKey: "",
-      host: newAgentProvider === 'ollama' ? 'http://localhost:11434' : "",
+      baseUrl: defaultBaseUrls[newAgentProvider],
       maxTokens: 4096,
       temperature: 0.7,
       topP: 1.0,
@@ -146,20 +152,20 @@ export default function AgentsPage() {
           model: newAgentModel,
           prompts: newAgentSystemPrompt ? {
             system: newAgentSystemPrompt
-          } : undefined
-        },
-        connectors: {
-          [newAgentProvider]: {
-            ...newAgentConnectorConfig,
-            // Clean up empty values
-            ...(newAgentConnectorConfig.apiKey ? { apiKey: newAgentConnectorConfig.apiKey } : {}),
-            ...(newAgentConnectorConfig.host ? { host: newAgentConnectorConfig.host } : {}),
-            maxTokens: newAgentConnectorConfig.maxTokens,
-            temperature: newAgentConnectorConfig.temperature,
-            topP: newAgentConnectorConfig.topP,
-            frequencyPenalty: newAgentConnectorConfig.frequencyPenalty,
-            presencePenalty: newAgentConnectorConfig.presencePenalty,
-            ...(newAgentProvider === 'ollama' ? { numCtx: newAgentConnectorConfig.numCtx } : {})
+          } : undefined,
+          connectors: {
+            [newAgentProvider]: {
+              ...newAgentConnectorConfig,
+              // Clean up empty values
+              ...(newAgentConnectorConfig.apiKey ? { apiKey: newAgentConnectorConfig.apiKey } : {}),
+              ...(newAgentConnectorConfig.baseUrl ? { baseUrl: newAgentConnectorConfig.baseUrl } : {}),
+              maxTokens: newAgentConnectorConfig.maxTokens,
+              temperature: newAgentConnectorConfig.temperature,
+              topP: newAgentConnectorConfig.topP,
+              frequencyPenalty: newAgentConnectorConfig.frequencyPenalty,
+              presencePenalty: newAgentConnectorConfig.presencePenalty,
+              ...(newAgentProvider === 'ollama' ? { numCtx: newAgentConnectorConfig.numCtx } : {})
+            }
           }
         },
         mcp: {
@@ -184,7 +190,7 @@ export default function AgentsPage() {
       setNewAgentSystemPrompt("")
       setNewAgentConnectorConfig({
         apiKey: "",
-        host: newAgentProvider === 'ollama' ? 'http://localhost:11434' : "",
+        baseUrl: defaultBaseUrls[newAgentProvider],
         maxTokens: 4096,
         temperature: 0.7,
         topP: 1.0,
@@ -381,12 +387,12 @@ export default function AgentsPage() {
               />
             </div>
             <div>
-              <label htmlFor="host" className="text-sm font-medium">Host (Optional)</label>
+              <label htmlFor="baseUrl" className="text-sm font-medium">Base URL (Optional)</label>
               <Input
-                id="host"
-                value={newAgentConnectorConfig.host}
-                onChange={(e) => setNewAgentConnectorConfig(prev => ({ ...prev, host: e.target.value }))}
-                placeholder="Enter your host (e.g., http://localhost:11434)"
+                id="baseUrl"
+                value={newAgentConnectorConfig.baseUrl}
+                onChange={(e) => setNewAgentConnectorConfig(prev => ({ ...prev, baseUrl: e.target.value }))}
+                placeholder={defaultBaseUrls[newAgentProvider]}
                 disabled={isCreating}
               />
             </div>

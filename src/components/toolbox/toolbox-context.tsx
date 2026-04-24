@@ -24,6 +24,9 @@ export interface ToolboxState {
   t1Open: boolean
   t1View: T1View
   toolsTab: ToolsTab
+  // T2 — agent chat overlay
+  t2Open: boolean
+  t2AgentId: string | null
   // Navigation-derived
   activeContextPath: string | null
   activeContextType: ActiveContextType
@@ -46,6 +49,8 @@ type ToolboxAction =
   | { type: 'SET_VIEW'; view: T1View }
   | { type: 'TOGGLE_VIEW'; view: T1View }
   | { type: 'CLOSE_T1' }
+  | { type: 'OPEN_T2_AGENT'; agentId: string }
+  | { type: 'CLOSE_T2' }
   | { type: 'SET_TOOLS_TAB'; tab: ToolsTab }
   | {
       type: 'SET_NAVIGATION'
@@ -71,6 +76,8 @@ const initialState: ToolboxState = {
   t1Open: false,
   t1View: null,
   toolsTab: 'timeline',
+  t2Open: false,
+  t2AgentId: null,
   activeContextPath: null,
   activeContextType: null,
   activeWorkspaceName: null,
@@ -92,7 +99,11 @@ function toolboxReducer(state: ToolboxState, action: ToolboxAction): ToolboxStat
       if (state.t1View === action.view) return { ...state, t1Open: false, t1View: null }
       return { ...state, t1Open: true, t1View: action.view }
     case 'CLOSE_T1':
-      return { ...state, t1Open: false, t1View: null }
+      return { ...state, t1Open: false, t1View: null, t2Open: false, t2AgentId: null }
+    case 'OPEN_T2_AGENT':
+      return { ...state, t2Open: true, t2AgentId: action.agentId }
+    case 'CLOSE_T2':
+      return { ...state, t2Open: false, t2AgentId: null }
     case 'SET_TOOLS_TAB':
       return { ...state, toolsTab: action.tab }
     case 'SET_NAVIGATION':
@@ -183,6 +194,8 @@ interface ToolboxContextValue {
   setView: (view: T1View) => void
   toggleView: (view: T1View) => void
   closeT1: () => void
+  openAgentT2: (agentId: string) => void
+  closeT2: () => void
   setToolsTab: (tab: ToolsTab) => void
   setFilters: (filters: ToolboxFilters) => void
   setFeatureToggle: (key: string, on: boolean) => void
@@ -288,6 +301,8 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
   const setView = useCallback((view: T1View) => dispatch({ type: 'SET_VIEW', view }), [])
   const toggleView = useCallback((view: T1View) => dispatch({ type: 'TOGGLE_VIEW', view }), [])
   const closeT1 = useCallback(() => dispatch({ type: 'CLOSE_T1' }), [])
+  const openAgentT2 = useCallback((agentId: string) => dispatch({ type: 'OPEN_T2_AGENT', agentId }), [])
+  const closeT2 = useCallback(() => dispatch({ type: 'CLOSE_T2' }), [])
   const setToolsTab = useCallback((tab: ToolsTab) => dispatch({ type: 'SET_TOOLS_TAB', tab }), [])
 
   const setFilters = useCallback((filters: ToolboxFilters) => {
@@ -340,7 +355,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
 
   return (
     <ToolboxCtx.Provider
-      value={{ state, setView, toggleView, closeT1, setToolsTab, setFilters, setFeatureToggle, setTimelineFilter, saveFilters }}
+      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, setToolsTab, setFilters, setFeatureToggle, setTimelineFilter, saveFilters }}
     >
       {children}
     </ToolboxCtx.Provider>

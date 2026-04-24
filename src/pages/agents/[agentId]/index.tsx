@@ -437,18 +437,20 @@ export default function AgentDetailPage() {
         description: editForm.description,
         llmProvider: editForm.llmProvider as 'anthropic' | 'openai' | 'ollama',
         model: editForm.model,
-        prompts: {
-          system: editForm.systemPrompt
-        },
-        connectors: {
-          [editForm.llmProvider]: {
-            temperature: editForm.temperature,
-            maxTokens: editForm.maxTokens,
-            topP: editForm.topP,
-            frequencyPenalty: editForm.frequencyPenalty,
-            presencePenalty: editForm.presencePenalty,
-            numCtx: editForm.numCtx,
-            reasoning: editForm.reasoning
+        config: {
+          prompts: {
+            system: editForm.systemPrompt
+          },
+          connectors: {
+            [editForm.llmProvider]: {
+              temperature: editForm.temperature,
+              maxTokens: editForm.maxTokens,
+              topP: editForm.topP,
+              frequencyPenalty: editForm.frequencyPenalty,
+              presencePenalty: editForm.presencePenalty,
+              numCtx: editForm.numCtx,
+              reasoning: editForm.reasoning
+            }
           }
         }
       }

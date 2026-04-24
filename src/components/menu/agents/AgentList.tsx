@@ -18,7 +18,7 @@ function StatusDot({ status }: { status: string }) {
 
 export function AgentList() {
   const { state, selectEntity, openM2 } = useMenu()
-  const { agents, isLoading } = useAgentListData(state.activeSection === 'agents')
+  const { agents, isLoading, refresh } = useAgentListData(state.activeSection === 'agents')
   const { showToast } = useToast()
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
 
@@ -32,6 +32,7 @@ export function AgentList() {
     setBusyIds(prev => new Set(prev).add(agent.id))
     try {
       await startAgent(agent.id)
+      refresh()
       showToast({ title: 'Success', description: `${agent.label || agent.name} started` })
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Start failed', variant: 'destructive' })
@@ -45,6 +46,7 @@ export function AgentList() {
     setBusyIds(prev => new Set(prev).add(agent.id))
     try {
       await stopAgent(agent.id)
+      refresh()
       showToast({ title: 'Success', description: `${agent.label || agent.name} stopped` })
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Stop failed', variant: 'destructive' })

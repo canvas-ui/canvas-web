@@ -20,7 +20,7 @@ export interface UseAgentChatOptions {
   enableWebSocket?: boolean;
   enableSSE?: boolean;
   enableFallback?: boolean;
-  llmProvider?: 'anthropic' | 'openai' | 'ollama' | 'custom'; // Add provider info
+  llmProvider?: 'anthropic' | 'openai' | 'ollama' | 'lm-studio' | 'vllm' | 'custom'; // Add provider info
 }
 
 export interface ChatState {
@@ -29,6 +29,21 @@ export interface ChatState {
   currentStreamingMessage: StreamingChatMessage | null;
   connectionStatus: 'websocket' | 'sse' | 'rest' | 'disconnected';
   error: string | null;
+}
+
+function extractMessageText(message: any): string {
+  if (!message) return '';
+  if (typeof message.errorMessage === 'string' && message.errorMessage.trim()) {
+    return message.errorMessage.trim();
+  }
+  const content = message.content;
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  const text = content
+    .filter((block: any) => block?.type === 'text' && typeof block.text === 'string')
+    .map((block: any) => block.text)
+    .join('\n');
+  return text || '';
 }
 
 export function useAgentChat(options: UseAgentChatOptions) {
@@ -114,13 +129,29 @@ export function useAgentChat(options: UseAgentChatOptions) {
     }
   }
 
-  function handleWebSocketComplete(_agentId: string, messageId: string) {
+  function handleWebSocketComplete(_agentId: string, messageId: string, messages?: any[]) {
     if (messageId === currentMessageRef.current) {
+      const finalMessage = Array.isArray(messages)
+        ? [...messages].reverse().find((message: any) => message?.role === 'assistant')
+        : null;
+      const finalContent = extractMessageText(finalMessage);
+
       // Move streaming message to completed messages
       setCurrentStreamingMessage(prev => {
         if (prev) {
-          const completedMessage = { ...prev, isComplete: true };
+          const completedMessage = {
+            ...prev,
+            content: finalContent || prev.content,
+            isComplete: true
+          };
           setMessages(prevMessages => [...prevMessages, completedMessage]);
+        } else if (finalContent) {
+          setMessages(prevMessages => [...prevMessages, {
+            role: 'assistant',
+            content: finalContent,
+            timestamp: new Date().toISOString(),
+            isComplete: true
+          }]);
         }
         return null;
       });

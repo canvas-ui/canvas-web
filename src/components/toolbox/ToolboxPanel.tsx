@@ -1,16 +1,18 @@
 import { useRef, useState, useCallback } from 'react'
+import { cn } from '@/lib/utils'
 import { useToolbox } from './toolbox-context'
 import { HomePanel } from './panels/HomePanel'
 import { ToolsPanel } from './panels/ToolsPanel'
 import { AgentsPanel } from './panels/AgentsPanel'
+import { AgentChatPanel } from './panels/AgentChatPanel'
 
 const DEFAULT_WIDTH = 500
 const MIN_WIDTH = 280
 const MAX_WIDTH = 900
 
 export function ToolboxPanel() {
-  const { state, closeT1 } = useToolbox()
-  const { t1Open, t1View } = state
+  const { state, closeT1, closeT2 } = useToolbox()
+  const { t1Open, t1View, t2Open, t2AgentId } = state
   const [width, setWidth] = useState(DEFAULT_WIDTH)
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
 
@@ -40,7 +42,7 @@ export function ToolboxPanel() {
   return (
     <div
       style={{ width }}
-      className="relative flex flex-col h-full bg-background border-l border-border shrink-0"
+      className="relative flex flex-col h-full bg-background border-l border-border shrink-0 overflow-hidden"
     >
       {/* Drag handle — left edge */}
       <div
@@ -48,9 +50,22 @@ export function ToolboxPanel() {
         className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/20 transition-colors z-10"
       />
 
-      {t1View === 'home' && <HomePanel onClose={closeT1} />}
-      {t1View === 'tools' && <ToolsPanel onClose={closeT1} />}
-      {t1View === 'agents' && <AgentsPanel onClose={closeT1} />}
+      {/* T1 — panel layer */}
+      <div className="absolute inset-0 flex flex-col">
+        {t1View === 'home' && <HomePanel onClose={closeT1} />}
+        {t1View === 'tools' && <ToolsPanel onClose={closeT1} />}
+        {t1View === 'agents' && <AgentsPanel onClose={closeT1} />}
+      </div>
+
+      {/* T2 — agent chat overlay */}
+      <div
+        className={cn(
+          'absolute inset-0 z-10 bg-background flex flex-col transition-transform duration-200 ease-out',
+          t2Open ? 'translate-x-0' : 'translate-x-full',
+        )}
+      >
+        {t2Open && t2AgentId && <AgentChatPanel agentId={t2AgentId} onClose={closeT2} />}
+      </div>
     </div>
   )
 }

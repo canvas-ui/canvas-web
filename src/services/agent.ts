@@ -21,6 +21,13 @@ export interface AgentConfig {
   streamingSupported: boolean;
 }
 
+export interface AgentSkill {
+  name: string;
+  description: string;
+  content: string;
+  disableModelInvocation?: boolean;
+}
+
 // Main Agent interface used throughout the application
 export interface Agent {
   id: string;
@@ -30,18 +37,27 @@ export interface Agent {
   color?: string;
   status: 'active' | 'inactive' | 'error' | 'starting' | 'stopping' | 'available';
   isActive: boolean;
-  llmProvider: 'anthropic' | 'openai' | 'ollama' | 'custom';
+  llmProvider: 'anthropic' | 'openai' | 'ollama' | 'lm-studio' | 'vllm' | 'custom';
   model: string;
   lastAccessed?: string;
   config: {
-    type: 'anthropic' | 'openai' | 'ollama' | 'custom';
+    type: 'anthropic' | 'openai' | 'ollama' | 'lm-studio' | 'vllm' | 'custom';
     model?: string;
     apiKey?: string;
     baseUrl?: string;
+    identity?: {
+      role?: string;
+      identity?: string;
+      instructions?: string;
+    };
     prompts?: {
       system?: string;
+      append?: string;
+      context?: string;
       user?: string;
     };
+    memory?: string;
+    skills?: AgentSkill[];
     connectors?: {
       [key: string]: {
         temperature?: number;
@@ -115,14 +131,31 @@ export interface ChatMessage {
   };
 }
 
+function extractAgentMessageText(message: any): string {
+  if (!message) return '';
+  if (typeof message.errorMessage === 'string' && message.errorMessage.trim()) {
+    return message.errorMessage.trim();
+  }
+  const content = message.content;
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  const text = content
+    .filter((block: any) => block?.type === 'text' && typeof block.text === 'string')
+    .map((block: any) => block.text)
+    .join('\n');
+  return text || '';
+}
+
 // Agent creation data interface
 export interface CreateAgentData {
   name: string;
   label?: string;
   description?: string;
   color?: string;
-  llmProvider?: 'anthropic' | 'openai' | 'ollama' | 'custom';
+  llmProvider?: 'anthropic' | 'openai' | 'ollama' | 'lm-studio' | 'vllm' | 'custom';
   model?: string;
+  apiKey?: string;
+  baseUrl?: string;
   config: Partial<Agent['config']>;
   connectors?: {
     [key: string]: {
@@ -560,7 +593,7 @@ export async function chatWithAgentStream(
 ): Promise<void> {
   const { onMessage, onError, onComplete, context, mcpContext, maxTokens, temperature } = options;
 
-  await api.stream(`${API_URL}/agents/${agentId}/chat/stream`, {
+  await api.stream(`${API_URL}/agents/${agentId}/prompt/stream`, {
     message,
     context,
     mcpContext,
@@ -575,7 +608,16 @@ export async function chatWithAgentStream(
           if (line.startsWith('data: ')) {
             const data = JSON.parse(line.slice(6));
             if (onMessage) {
-              onMessage(data.content || data.delta || '', data.done || false, data.metadata || {});
+              if (data.type === 'chunk') {
+                onMessage(data.delta || '', false, data.metadata || {});
+              } else if (data.type === 'complete') {
+                const finalMessage = Array.isArray(data.messages)
+                  ? [...data.messages].reverse().find((msg: any) => msg?.role === 'assistant')
+                  : null;
+                onMessage(extractAgentMessageText(finalMessage), true, data.metadata || {});
+              } else if (data.type === 'error' && onError) {
+                onError(new Error(data.error || 'Prompt stream failed'));
+              }
             }
           }
         }
@@ -612,10 +654,9 @@ export async function chatWithAgentFallback(
   try {
     const response = await api.post<{
       payload: {
-        content: string;
-        metadata?: any;
+        messages: any[];
       }
-    }>(`${API_URL}/agents/${agentId}/chat`, {
+    }>(`${API_URL}/agents/${agentId}/prompt`, {
       message,
       context,
       mcpContext,
@@ -623,14 +664,22 @@ export async function chatWithAgentFallback(
       temperature,
     });
 
+    const finalMessage = Array.isArray(response.payload.messages)
+      ? [...response.payload.messages].reverse().find((msg: any) => msg?.role === 'assistant')
+      : null;
+    const result = {
+      content: extractAgentMessageText(finalMessage),
+      metadata: finalMessage?.metadata || {},
+    };
+
     if (onMessage) {
-      onMessage(response.payload.content, true, response.payload.metadata || {});
+      onMessage(result.content, true, result.metadata);
     }
     if (onComplete) {
       onComplete();
     }
 
-    return response.payload;
+    return result;
   } catch (error) {
     if (onError) {
       onError(error);

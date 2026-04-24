@@ -21,6 +21,7 @@ export interface StreamingChatChunk {
   type: string;       // Backend uses type field
   content: string;
   delta: string;      // Backend includes delta field
+  messages?: any[];
 }
 
 export interface StreamingChatRequest {
@@ -42,7 +43,7 @@ export interface StreamingChatError {
 export interface UseAgentSocketOptions {
   agentId?: string;
   onMessage?: (chunk: StreamingChatChunk) => void;
-  onComplete?: (agentId: string, messageId: string) => void;
+  onComplete?: (agentId: string, messageId: string, messages?: any[]) => void;
   onError?: (error: StreamingChatError) => void;
 }
 
@@ -112,10 +113,10 @@ export function useAgentSocket(options: UseAgentSocketOptions = {}) {
     });
 
     // Backend sends different completion event
-    socketInstance.on('agent:chat:complete', (data: { agentId: string; messageId: string }) => {
+    socketInstance.on('agent:chat:complete', (data: { agentId: string; messageId: string; messages?: any[] }) => {
       console.log('Chat stream complete:', data);
       if (optionsRef.current.onComplete) {
-        optionsRef.current.onComplete(data.agentId, data.messageId);
+        optionsRef.current.onComplete(data.agentId, data.messageId, data.messages);
       }
     });
 

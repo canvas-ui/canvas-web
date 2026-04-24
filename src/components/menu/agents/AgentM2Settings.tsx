@@ -19,11 +19,36 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: 'integrations', label: 'Integrations' },
 ]
 
-const DEFAULT_MODELS = {
+const DEFAULT_MODELS: Record<string, string> = {
   anthropic: 'claude-3-5-sonnet-20241022',
   openai: 'gpt-4o',
   ollama: 'qwen2.5-coder:latest',
+  'lm-studio': '',
+  vllm: '',
   custom: '',
+}
+
+const DEFAULT_PROVIDER_BASE_URLS: Record<string, string> = {
+  anthropic: 'https://api.anthropic.com',
+  openai: 'https://api.openai.com/v1',
+  ollama: 'http://localhost:11434/v1',
+  'lm-studio': 'http://localhost:1234/v1',
+  vllm: 'http://localhost:8000/v1',
+  custom: '',
+}
+
+function getDefaultProviderBaseUrl(provider: string) {
+  return DEFAULT_PROVIDER_BASE_URLS[provider] || ''
+}
+
+function buildSystemPrompt(role: string, identity: string, instructions: string) {
+  const sections = [
+    role.trim() ? `## Role\n${role.trim()}` : '',
+    identity.trim() ? `## Identity\n${identity.trim()}` : '',
+    instructions.trim() ? `## Instructions\n${instructions.trim()}` : '',
+  ].filter(Boolean)
+
+  return sections.join('\n\n')
 }
 
 export function AgentM2Settings() {
@@ -47,7 +72,7 @@ export function AgentM2Settings() {
   const [idSystemPrompt, setIdSystemPrompt] = useState('')
 
   // Provider fields
-  const [provider, setProvider] = useState<'anthropic' | 'openai' | 'ollama' | 'custom'>('anthropic')
+  const [provider, setProvider] = useState<'anthropic' | 'openai' | 'ollama' | 'lm-studio' | 'vllm' | 'custom'>('anthropic')
   const [providerApiKey, setProviderApiKey] = useState('')
   const [providerHost, setProviderHost] = useState('')
 
@@ -61,18 +86,19 @@ export function AgentM2Settings() {
     if (isCreate) return
     if (!entityId) return
     getAgent(entityId).then(a => {
+      const identity = a.config?.identity || {}
       setAgent(a)
       setIdName(a.name || '')
       setIdLabel(a.label || '')
       setIdDescription(a.description || '')
       setIdColor(a.color || generateNiceRandomHexColor())
-      setIdRole((a as any).role || '')
-      setIdIdentity((a as any).identity || '')
-      setIdInstructions((a as any).instructions || '')
+      setIdRole(identity.role || '')
+      setIdIdentity(identity.identity || '')
+      setIdInstructions(identity.instructions || '')
       setIdSystemPrompt(a.config?.prompts?.system || '')
       setProvider(a.llmProvider as any || 'anthropic')
       setProviderApiKey(a.config?.apiKey || '')
-      setProviderHost(a.config?.baseUrl || '')
+      setProviderHost(a.config?.baseUrl || getDefaultProviderBaseUrl(a.llmProvider))
       setMainModel(a.model || DEFAULT_MODELS[a.llmProvider as keyof typeof DEFAULT_MODELS] || '')
       const conn = a.config?.connectors?.[a.llmProvider]
       if (conn) {
@@ -83,45 +109,42 @@ export function AgentM2Settings() {
     }).catch(() => showToast({ title: 'Error', description: 'Failed to load agent', variant: 'destructive' }))
   }, [entityId])
 
-  const buildPayload = (): Partial<CreateAgentData> => ({
-    label: idLabel.trim(),
-    description: idDescription.trim() || undefined,
-    color: idColor,
-    llmProvider: provider,
-    model: mainModel,
-    config: {
-      type: provider,
+  const buildPayload = (): Partial<CreateAgentData> => {
+    const compiledSystemPrompt = buildSystemPrompt(idRole, idIdentity, idInstructions)
+
+    return {
+      label: idLabel.trim(),
+      description: idDescription.trim() || undefined,
+      color: idColor,
+      llmProvider: provider,
       model: mainModel,
       apiKey: providerApiKey || undefined,
       baseUrl: providerHost || undefined,
-      prompts: idSystemPrompt ? { system: idSystemPrompt } : undefined,
-      connectors: {
-        [provider]: {
-          temperature: mainTemp,
-          maxTokens: mainMaxTokens,
-          topP: mainTopP,
+      config: {
+        type: provider,
+        model: mainModel,
+        identity: {
+          role: idRole.trim() || undefined,
+          identity: idIdentity.trim() || undefined,
+          instructions: idInstructions.trim() || undefined,
+        },
+        prompts: (idSystemPrompt.trim() || compiledSystemPrompt) ? {
+          system: idSystemPrompt.trim() || compiledSystemPrompt,
+        } : undefined,
+        connectors: {
+          [provider]: {
+            temperature: mainTemp,
+            maxTokens: mainMaxTokens,
+            topP: mainTopP,
+          },
         },
       },
-    },
-  })
+    }
+  }
 
   const buildCreatePayload = (): CreateAgentData => ({
     name: idName.trim(),
     ...buildPayload() as any,
-    config: {
-      type: provider,
-      model: mainModel,
-      apiKey: providerApiKey || undefined,
-      baseUrl: providerHost || undefined,
-      prompts: idSystemPrompt ? { system: idSystemPrompt } : undefined,
-      connectors: {
-        [provider]: {
-          temperature: mainTemp,
-          maxTokens: mainMaxTokens,
-          topP: mainTopP,
-        },
-      },
-    },
   })
 
   const handleSave = async () => {
@@ -271,22 +294,40 @@ export function AgentM2Settings() {
                   const p = e.target.value as typeof provider
                   setProvider(p)
                   setMainModel(DEFAULT_MODELS[p] || '')
+                  setProviderHost(getDefaultProviderBaseUrl(p))
                 }}
                 className="mt-1 w-full h-8 px-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="anthropic">Anthropic Claude</option>
                 <option value="openai">OpenAI GPT</option>
                 <option value="ollama">Ollama (Local)</option>
+                <option value="lm-studio">LM Studio (Local)</option>
+                <option value="vllm">vLLM (Local)</option>
                 <option value="custom">Custom</option>
               </select>
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground">API Key</label>
-              <Input type="password" value={providerApiKey} onChange={e => setProviderApiKey(e.target.value)} placeholder="sk-…" className="mt-1 h-8 text-sm" />
+              <label className="text-xs font-medium text-muted-foreground">
+                API Key{['ollama', 'lm-studio', 'vllm'].includes(provider) && ' (any value works for local providers)'}
+              </label>
+              <Input
+                type="password"
+                value={providerApiKey}
+                onChange={e => setProviderApiKey(e.target.value)}
+                placeholder={provider === 'ollama' ? 'ollama' : provider === 'lm-studio' ? 'lm-studio' : 'sk-…'}
+                className="mt-1 h-8 text-sm"
+              />
             </div>
             <div>
               <label className="text-xs font-medium text-muted-foreground">Host / Base URL</label>
-              <Input value={providerHost} onChange={e => setProviderHost(e.target.value)} placeholder="https://api.example.com" className="mt-1 h-8 text-sm" />
+              <Input
+                value={providerHost}
+                onChange={e => setProviderHost(e.target.value)}
+                placeholder={
+                  getDefaultProviderBaseUrl(provider) || 'https://api.example.com'
+                }
+                className="mt-1 h-8 text-sm"
+              />
             </div>
           </div>
         )}
