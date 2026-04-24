@@ -10,6 +10,18 @@ import { useToast } from '@/components/ui/toast-container'
 import { useAgentChat } from '@/hooks/useAgentChat'
 import { type Agent, type AgentImageContent, getAgent, getAgentStatus, startAgent, stopAgent } from '@/services/agent'
 
+function useSessionGuard(agentId: string) {
+  const { sessions, create } = useAgentSessions(agentId)
+  const hasSession = (sessions?.sessions.length ?? 0) > 0
+
+  const ensureSession = async () => {
+    if (hasSession) return
+    await create({ mode: 'persistent' })
+  }
+
+  return { hasSession, ensureSession }
+}
+
 interface PendingImage extends AgentImageContent {
   id: string
 }
@@ -45,6 +57,7 @@ function AgentConversation({
   sessionKey: string
 }) {
   const { showToast } = useToast()
+  const { hasSession, ensureSession } = useSessionGuard(agentId)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const chatInputRef = useRef<HTMLInputElement>(null)
   const [currentMessage, setCurrentMessage] = useState('')
@@ -88,6 +101,8 @@ function AgentConversation({
 
     setCurrentMessage('')
     try {
+      // Auto-create a session transparently if this is a fresh agent with no sessions yet
+      await ensureSession()
       await sendMessage(message, {
         images: pendingImages.map(({ id: _id, ...image }) => image),
       })
@@ -148,8 +163,12 @@ function AgentConversation({
           <div className="flex h-full items-center justify-center text-center text-muted-foreground">
             <div>
               <MessageCircle className="mx-auto mb-4 h-10 w-10 opacity-40" />
-              <p className="text-sm">No messages yet.</p>
-              <p className="mt-1 text-xs">Select or create a session in M2, then start chatting.</p>
+              <p className="text-sm">{hasSession ? 'No messages yet.' : 'No session yet.'}</p>
+              <p className="mt-1 text-xs">
+                {hasSession
+                  ? 'Send a message to start the conversation.'
+                  : 'Type a message to auto-create a session, or pick one in the Sessions panel.'}
+              </p>
             </div>
           </div>
         ) : (
@@ -204,7 +223,7 @@ function AgentConversation({
             value={currentMessage}
             onChange={(e) => setCurrentMessage(e.target.value)}
             onPaste={handlePaste}
-            placeholder={isStreaming ? 'Streaming in progress...' : 'Type a message...'}
+            placeholder={isStreaming ? 'Streaming in progress...' : hasSession ? 'Type a message...' : 'Type to start a new session…'}
             disabled={isStreaming}
             className="flex-1"
           />

@@ -819,14 +819,12 @@ export async function chatWithAgentStream(
               const finalMessage = Array.isArray(data.messages)
                 ? [...data.messages].reverse().find((msg: any) => msg?.role === 'assistant')
                 : null;
-              onMessage(
-                extractAgentMessageText(finalMessage),
-                true,
-                {
-                  ...(data.metadata || {}),
-                  ...(extractAgentMessageMetadata(finalMessage) || {}),
-                }
-              );
+              // Pass empty string for content — the streaming buffer already has the full accumulated text.
+              // Re-appending the final text here would double the message.
+              onMessage('', true, {
+                ...(data.metadata || {}),
+                ...(extractAgentMessageMetadata(finalMessage) || {}),
+              });
             } else if (data.type === 'error' && onError) {
               onError(new Error(data.error || 'Prompt stream failed'));
             }

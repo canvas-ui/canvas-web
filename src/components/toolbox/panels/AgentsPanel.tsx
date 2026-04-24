@@ -91,8 +91,8 @@ export function AgentsPanel({ onClose }: AgentsPanelProps) {
               return (
                 <div
                   key={agent.id}
-                  className="group relative rounded-md px-3 py-2.5 cursor-pointer transition-colors bg-card hover:bg-accent/50"
-                  style={{ borderRight: `3px solid ${agent.color || 'transparent'}` }}
+                  className="group relative px-3 py-2.5 cursor-pointer transition-colors bg-card hover:bg-accent/50"
+                  style={{ borderLeft: `6px solid ${agent.color || 'transparent'}` }}
                   onClick={() => openAgentT2(agent.id)}
                 >
                   <div className="flex items-center gap-2">
