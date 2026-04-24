@@ -1,4 +1,5 @@
-import { X, Save, Loader2 } from 'lucide-react'
+import { useState } from 'react'
+import { X, Save, Loader2, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToolbox, type ToolsTab } from '@/components/toolbox/toolbox-context'
 
@@ -172,6 +173,7 @@ function FeaturesTab() {
   const { state, setFeatureToggle } = useToolbox()
   const { availableBitmaps, bitmapsLoading, filters } = state
   const allOf = new Set(filters.features.allOf)
+  const [search, setSearch] = useState('')
 
   if (bitmapsLoading) {
     return (
@@ -189,27 +191,50 @@ function FeaturesTab() {
     )
   }
 
-  const groups = groupBitmaps(availableBitmaps)
+  const q = search.trim().toLowerCase()
+  const filtered = q ? availableBitmaps.filter(k => k.toLowerCase().includes(q)) : availableBitmaps
+  const groups = groupBitmaps(filtered)
 
   return (
-    <div className="overflow-y-auto p-4 space-y-5">
-      {Array.from(groups.entries()).map(([prefix, keys]) => (
-        <div key={prefix}>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-            {PREFIX_LABELS[prefix] ?? prefix}
-          </p>
-          <div className="space-y-2">
-            {keys.map((key) => (
-              <MD2Toggle
-                key={key}
-                label={key}
-                checked={allOf.has(key)}
-                onChange={(v) => setFeatureToggle(key, v)}
-              />
-            ))}
-          </div>
+    <div className="flex h-full min-h-0 flex-col">
+      {/* Search */}
+      <div className="px-4 py-2 border-b border-border shrink-0">
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search features…"
+            className="w-full pl-7 pr-3 py-1.5 text-xs rounded-md bg-muted border border-transparent focus:border-ring focus:outline-none"
+          />
         </div>
-      ))}
+      </div>
+
+      {/* Scrollable list */}
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5">
+        {groups.size === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-6">No matches</p>
+        ) : (
+          Array.from(groups.entries()).map(([prefix, keys]) => (
+            <div key={prefix}>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                {PREFIX_LABELS[prefix] ?? prefix}
+              </p>
+              <div className="space-y-2">
+                {keys.map((key) => (
+                  <MD2Toggle
+                    key={key}
+                    label={key}
+                    checked={allOf.has(key)}
+                    onChange={(v) => setFeatureToggle(key, v)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   )
 }
