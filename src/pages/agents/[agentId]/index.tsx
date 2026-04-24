@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Bot, Cpu, Image as ImageIcon, MessageCircle, Play, Settings, Square, X } from 'lucide-react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import StreamingChatMessageComponent from '@/components/agent/StreamingChatMessage'
 import { useAgentSessions } from '@/components/agent/agent-session-context'
 import { useMenu } from '@/components/shell/menu-context'
@@ -260,6 +260,8 @@ function AgentConversation({
 
 export default function AgentDetailPage() {
   const { agentId, sessionId } = useParams<{ agentId: string; sessionId?: string }>()
+  const location = useLocation()
+  const navigate = useNavigate()
   const { showToast } = useToast()
   const { selectEntity, openM2 } = useMenu()
   const [agent, setAgent] = useState<Agent | null>(null)
@@ -268,6 +270,7 @@ export default function AgentDetailPage() {
   const [isStopping, setIsStopping] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const lastMissingSessionRef = useRef<string | null>(null)
+  const selectingSessionRef = useRef<string | null>(null)
   const { current, sessions, refresh, select } = useAgentSessions(agentId || '')
 
   const selectedSession = useMemo(() => {
@@ -295,6 +298,15 @@ export default function AgentDetailPage() {
         const agentData = await getAgent(agentId)
         selectEntity(agentData.id)
         setAgent(agentData)
+        const canonicalAgentId = agentData.name || agentData.id
+        if (canonicalAgentId && decodeURIComponent(agentId) !== canonicalAgentId) {
+          const nextPath = location.pathname.endsWith('/settings')
+            ? `/agents/${encodeURIComponent(canonicalAgentId)}/settings`
+            : sessionId
+              ? `/agents/${encodeURIComponent(canonicalAgentId)}/${encodeURIComponent(sessionId)}`
+              : `/agents/${encodeURIComponent(canonicalAgentId)}`
+          navigate(nextPath, { replace: true })
+        }
         await refresh()
         setError(null)
       } catch (loadError) {
@@ -307,7 +319,7 @@ export default function AgentDetailPage() {
     }
 
     loadPageData()
-  }, [agentId, refresh, selectEntity, showToast])
+  }, [agentId, sessionId, location.pathname, navigate, refresh, selectEntity, showToast])
 
   useEffect(() => {
     if (!agentId || !sessionId || !sessions) return
@@ -316,7 +328,16 @@ export default function AgentDetailPage() {
     const targetSession = sessions.sessions.find((session) => (
       session.id === targetSessionId || session.slug === targetSessionId
     ))
-    if (current?.mode === 'persistent' && targetSession && current.sessionId === targetSession.id) return
+    const isAlreadySelected = Boolean(targetSession && (
+      sessions.currentSessionId === targetSession.id
+      || sessions.currentSessionPath === targetSession.path
+      || current?.sessionId === targetSession.id
+      || current?.sessionFile === targetSession.path
+    ))
+    if (current?.mode === 'persistent' && isAlreadySelected) {
+      selectingSessionRef.current = null
+      return
+    }
 
     if (!targetSession) {
       if (lastMissingSessionRef.current !== targetSessionId) {
@@ -331,14 +352,22 @@ export default function AgentDetailPage() {
     }
 
     lastMissingSessionRef.current = null
-    select({ mode: 'persistent', sessionId: targetSession.id }).catch((selectError) => {
-      showToast({
-        title: 'Session Error',
-        description: selectError instanceof Error ? selectError.message : 'Failed to select session',
-        variant: 'destructive',
+    if (selectingSessionRef.current === targetSession.id) return
+    selectingSessionRef.current = targetSession.id
+    select({ mode: 'persistent', sessionId: targetSession.id })
+      .catch((selectError) => {
+        showToast({
+          title: 'Session Error',
+          description: selectError instanceof Error ? selectError.message : 'Failed to select session',
+          variant: 'destructive',
+        })
       })
-    })
-  }, [agentId, sessionId, sessions, current?.mode, current?.sessionId, select, showToast])
+      .finally(() => {
+        if (selectingSessionRef.current === targetSession.id) {
+          selectingSessionRef.current = null
+        }
+      })
+  }, [agentId, sessionId, sessions, current?.mode, current?.sessionId, current?.sessionFile, select, showToast])
 
   useEffect(() => {
     if (!agentId) return
