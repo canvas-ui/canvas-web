@@ -622,3 +622,24 @@ export async function stopWorkspaceImapMailbox(workspaceId: string, mailboxId: s
   );
   return response.payload;
 }
+
+// ─── Bitmaps ────────────────────────────────────────────────────────────────
+
+// Prefixes that are structural/internal and not shown to users in the toolbox.
+const EXCLUDED_BITMAP_PREFIXES = ['internal/', 'context/', 'vfs/', 'nested/']
+
+export async function listWorkspaceBitmaps(workspaceId: string): Promise<string[]> {
+  try {
+    const response = await api.get<{ payload: unknown[] }>(
+      `${API_ROUTES.workspaces}/${encodeURIComponent(workspaceId)}/bitmaps`
+    )
+    const items = response.payload || []
+    // Response is string[] or { key: string }[] depending on workspace version
+    const keys = items.map(item =>
+      typeof item === 'string' ? item : (item as Record<string, string>).key ?? String(item)
+    )
+    return keys.filter(k => k && !EXCLUDED_BITMAP_PREFIXES.some(p => k.startsWith(p)))
+  } catch {
+    return []
+  }
+}

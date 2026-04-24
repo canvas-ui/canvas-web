@@ -124,6 +124,20 @@ export async function createContext(contextData: CreateContextPayload): Promise<
   }
 }
 
+export async function patchContext(id: string, updates: { name?: string; description?: string; metadata?: Record<string, unknown> }, ownerId?: string): Promise<Context> {
+  try {
+    const endpoint = withOwnerId(`${API_ROUTES.contexts}/${id}`, ownerId);
+    const response = await api.put<{ payload: { context: Context } }>(endpoint, updates);
+    if (response?.payload?.context) {
+      return response.payload.context;
+    }
+    throw new Error('Updated context data not found in API response');
+  } catch (error) {
+    console.error(`Failed to patch context ${id}:`, error);
+    throw error;
+  }
+}
+
 export async function updateContext(id: string, updates: { name?: string | null; baseUrl?: string | null }, ownerId?: string): Promise<Context> {
   try {
     const endpoint = withOwnerId(`${API_ROUTES.contexts}/${id}`, ownerId);

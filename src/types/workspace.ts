@@ -12,6 +12,38 @@ export interface CanvasQuerySpec {
   filters: string[]
 }
 
+// Toolbox filter state — stored in metadata.toolbox on canvas/context objects,
+// or in localStorage for regular-layer (session) navigation.
+export interface ToolboxFeatureFilters {
+  allOf: string[]
+  anyOf: string[]
+  noneOf: string[]
+}
+
+export interface ToolboxTimelineFilters {
+  quickFilter: string | null
+  indexCreated: boolean
+  indexUpdated: boolean
+  indexDeleted: boolean
+  searchContent: boolean
+}
+
+export interface ToolboxFilters {
+  features: ToolboxFeatureFilters
+  timeline: ToolboxTimelineFilters
+}
+
+export const DEFAULT_TOOLBOX_FILTERS: ToolboxFilters = {
+  features: { allOf: [], anyOf: [], noneOf: [] },
+  timeline: {
+    quickFilter: null,
+    indexCreated: true,
+    indexUpdated: true,
+    indexDeleted: false,
+    searchContent: false,
+  },
+}
+
 // Opaque metadata blob the backend never introspects. Any layer can carry it
 // (UI styling, share info, applet config, etc.); for canvases it usually
 // contains a `ui` block plus future share/applet keys.

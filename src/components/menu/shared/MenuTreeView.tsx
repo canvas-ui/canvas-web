@@ -465,14 +465,13 @@ export function MenuTreeView({
 
   const handlePaste = useCallback(async (target: string) => {
     if (!clipboard || !onMovePath || !onCopyPath) return
-    const baseName = clipboard.path.split('/').filter(Boolean).pop() ?? clipboard.path
-    const destPath = target === '/' ? `/${baseName}` : `${target}/${baseName}`
-    if (clipboard.path === destPath) return
+    // target is the parent to paste under; prevent pasting into self or own descendants
+    if (target === clipboard.path || target.startsWith(clipboard.path + '/')) return
     if (clipboard.mode === 'cut') {
-      await onMovePath(clipboard.path, destPath, false)
+      await onMovePath(clipboard.path, target, false)
       setClipboard(null)
     } else {
-      await onCopyPath(clipboard.path, destPath, false)
+      await onCopyPath(clipboard.path, target, false)
     }
   }, [clipboard, onMovePath, onCopyPath])
 
