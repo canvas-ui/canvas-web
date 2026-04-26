@@ -47,12 +47,12 @@ export function AgentAssistantExtras({
       {reasoning && (
         <details
           open={isStreaming}
-          className={`mb-2 rounded border border-border/60 bg-background/60 ${compact ? 'px-2 py-1.5' : 'px-3 py-2'}`}
+          className={`mb-2 rounded border border-border bg-background ${compact ? 'px-2 py-1.5' : 'px-3 py-2'}`}
         >
-          <summary className={`cursor-pointer font-medium text-muted-foreground ${compact ? 'text-[11px]' : 'text-xs'}`}>
+          <summary className={`cursor-pointer font-medium text-foreground ${compact ? 'text-[11px]' : 'text-xs'}`}>
             Reasoning
           </summary>
-          <div className={`mt-1 whitespace-pre-wrap text-muted-foreground ${compact ? 'text-[11px]' : 'text-xs'}`}>
+          <div className={`mt-1 whitespace-pre-wrap text-foreground ${compact ? 'text-[11px]' : 'text-xs'}`}>
             {reasoning}
           </div>
         </details>

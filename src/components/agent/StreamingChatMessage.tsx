@@ -74,7 +74,7 @@ export function StreamingChatMessageComponent({
           message.role === 'user'
             ? 'bg-primary text-primary-foreground'
             : 'bg-muted'
-        } ${isStreaming && !message.isComplete ? 'border-2 border-blue-300 animate-pulse' : ''}`}
+        } ${isStreaming && !message.isComplete ? 'border-2 border-blue-300' : ''}`}
       >
         <AgentAssistantExtras
           reasoning={message.role === 'assistant' ? message.metadata?.reasoning?.trim() : undefined}

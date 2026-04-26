@@ -7,7 +7,7 @@ import { useMenu } from '@/components/shell/menu-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast-container'
-import { getAgent, type Agent, type AgentSessionSummary } from '@/services/agent'
+import { getAgent, type Agent, type AgentSessionMutationResult, type AgentSessionSummary } from '@/services/agent'
 
 function formatSessionTitle(session: AgentSessionSummary) {
   if (session.name?.trim()) return session.name.trim()
@@ -21,6 +21,16 @@ function formatSessionSubtitle(session: AgentSessionSummary) {
     return `${session.messageCount} msg${session.messageCount === 1 ? '' : 's'} • ${updated}`
   }
   return `Empty • ${updated}`
+}
+
+function findResultSession(result: AgentSessionMutationResult) {
+  return result.sessions.sessions.find((session) => (
+    session.id === result.current.sessionId
+    || session.path === result.current.sessionFile
+    || session.id === result.sessions.currentSessionId
+    || session.path === result.sessions.currentSessionPath
+    || session.isCurrent
+  )) || null
 }
 
 export function AgentM2Sessions() {
@@ -73,8 +83,7 @@ export function AgentM2Sessions() {
       const result = await create({ mode: 'persistent', name: newSessionName.trim() || undefined })
       setCreatingNew(false)
       setNewSessionName('')
-      const createdSession = result.sessions.sessions.find((session) => session.id === result.current.sessionId)
-      openChat(createdSession || result.current.sessionId)
+      openChat(findResultSession(result))
     } catch (createError) {
       showToast({
         title: 'Error',
@@ -87,8 +96,7 @@ export function AgentM2Sessions() {
   const handleExperimental = async () => {
     try {
       const result = await create({ mode: 'experimental' })
-      const experimentalSession = result.sessions.sessions.find((session) => session.id === result.current.sessionId)
-      openChat(experimentalSession || result.current.sessionId)
+      openChat(findResultSession(result))
     } catch (createError) {
       showToast({
         title: 'Error',

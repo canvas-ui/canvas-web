@@ -6,7 +6,18 @@ import { useToast } from '@/components/ui/toast-container'
 import { M2Header } from '@/components/menu/shared/M2Header'
 import { useMenu } from '@/components/shell/menu-context'
 import { generateNiceRandomHexColor } from '@/utils/color'
-import { getAgent, updateAgent, deleteAgent, createAgent, type Agent, type CreateAgentData } from '@/services/agent'
+import {
+  createAgent,
+  deleteAgent,
+  getAgent,
+  installAgentSkill,
+  listAgentSkills,
+  removeAgentSkill,
+  updateAgent,
+  type Agent,
+  type AgentSkill,
+  type CreateAgentData,
+} from '@/services/agent'
 import { useLocation, useNavigate } from 'react-router-dom'
 
 type SettingsTab = 'identity' | 'provider' | 'models' | 'tools' | 'memory' | 'integrations'
@@ -85,10 +96,19 @@ export function AgentM2Settings() {
   const [mainMaxTokens, setMainMaxTokens] = useState(4096)
   const [mainTopP, setMainTopP] = useState(1.0)
 
+  // Skill fields
+  const [skills, setSkills] = useState<AgentSkill[]>([])
+  const [skillName, setSkillName] = useState('')
+  const [skillDescription, setSkillDescription] = useState('')
+  const [skillContent, setSkillContent] = useState('')
+  const [skillSource, setSkillSource] = useState('')
+  const [isSkillSaving, setIsSkillSaving] = useState(false)
+  const [deletingSkill, setDeletingSkill] = useState<string | null>(null)
+
   useEffect(() => {
     if (isCreate) return
     if (!entityId) return
-    getAgent(entityId).then(a => {
+    getAgent(entityId).then(async a => {
       const identity = a.config?.identity || {}
       setAgent(a)
       setIdName(a.name || '')
@@ -109,6 +129,7 @@ export function AgentM2Settings() {
         setMainMaxTokens(conn.maxTokens ?? 4096)
         setMainTopP(conn.topP ?? 1.0)
       }
+      setSkills(await listAgentSkills(entityId))
     }).catch(() => showToast({ title: 'Error', description: 'Failed to load agent', variant: 'destructive' }))
   }, [entityId])
 
@@ -197,6 +218,58 @@ export function AgentM2Settings() {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Delete failed', variant: 'destructive' })
     } finally {
       setIsDeleting(false)
+    }
+  }
+
+  const resetSkillForm = () => {
+    setSkillName('')
+    setSkillDescription('')
+    setSkillContent('')
+    setSkillSource('')
+  }
+
+  const handleEditSkill = (skill: AgentSkill) => {
+    setSkillName(skill.name)
+    setSkillDescription(skill.description || '')
+    setSkillContent(skill.content || '')
+    setSkillSource(skill.source || '')
+  }
+
+  const handleInstallSkill = async () => {
+    if (!entityId || (!skillSource.trim() && !skillContent.trim())) return
+    setIsSkillSaving(true)
+    try {
+      const nextSkills = await installAgentSkill(entityId, skillSource.trim()
+        ? { source: skillSource.trim() }
+        : {
+          name: skillName,
+          description: skillDescription,
+          content: skillContent,
+        })
+      setSkills(nextSkills)
+      resetSkillForm()
+      window.dispatchEvent(new CustomEvent('agents:refresh'))
+      showToast({ title: 'Installed', description: 'Skill saved' })
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Skill install failed', variant: 'destructive' })
+    } finally {
+      setIsSkillSaving(false)
+    }
+  }
+
+  const handleRemoveSkill = async (name: string) => {
+    if (!entityId) return
+    setDeletingSkill(name)
+    try {
+      const nextSkills = await removeAgentSkill(entityId, name)
+      setSkills(nextSkills)
+      if (skillName === name || skillSource === name) resetSkillForm()
+      window.dispatchEvent(new CustomEvent('agents:refresh'))
+      showToast({ title: 'Removed', description: `Skill "${name}" removed` })
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Skill remove failed', variant: 'destructive' })
+    } finally {
+      setDeletingSkill(null)
     }
   }
 
@@ -380,6 +453,90 @@ export function AgentM2Settings() {
 
         {tab === 'tools' && (
           <div className="p-4 space-y-3">
+            <div>
+              <div className="text-xs font-semibold">Skills</div>
+              <div className="mt-2 space-y-2">
+                {skills.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">No skills installed</div>
+                ) : (
+                  skills.map(skill => (
+                    <div key={skill.name} className="border border-sidebar-border rounded-md p-2 text-xs">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="font-medium truncate">{skill.name}</div>
+                          <div className="text-muted-foreground truncate">
+                            {skill.package ? skill.source : (skill.description || 'No description')}
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 gap-1">
+                          <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-[11px]" onClick={() => handleEditSkill(skill)}>
+                            Edit
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            className="h-7 px-2 text-[11px]"
+                            disabled={deletingSkill === (skill.source || skill.name)}
+                            onClick={() => handleRemoveSkill(skill.source || skill.name)}
+                          >
+                            {deletingSkill === (skill.source || skill.name) ? 'Removing…' : 'Remove'}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {!isCreate && (
+                <div className="mt-3 space-y-2 rounded-md border border-sidebar-border p-3">
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Package Source</label>
+                    <Input
+                      value={skillSource}
+                      onChange={e => setSkillSource(e.target.value)}
+                      placeholder="npm:@foo/pi-tools or git:github.com/badlogic/pi-doom"
+                      className="mt-1 h-8 text-sm"
+                    />
+                    <div className="mt-1 text-[10px] text-muted-foreground">Use this for whole pi packages. Leave empty to save inline SKILL.md content.</div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Name</label>
+                    <Input value={skillName} onChange={e => setSkillName(e.target.value)} placeholder="skill-name, or read from frontmatter" className="mt-1 h-8 text-sm" disabled={Boolean(skillSource.trim())} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Description</label>
+                    <Input value={skillDescription} onChange={e => setSkillDescription(e.target.value)} placeholder="What this skill helps with" className="mt-1 h-8 text-sm" disabled={Boolean(skillSource.trim())} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">SKILL.md Content</label>
+                    <textarea
+                      value={skillContent}
+                      onChange={e => setSkillContent(e.target.value)}
+                      placeholder="# Skill instructions…"
+                      disabled={Boolean(skillSource.trim())}
+                      className="mt-1 w-full px-2 py-1.5 border border-input bg-background rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-ring min-h-[120px] resize-y font-mono"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-8 text-xs"
+                      disabled={isSkillSaving || (!skillSource.trim() && !skillContent.trim())}
+                      onClick={handleInstallSkill}
+                    >
+                      {isSkillSaving ? 'Saving…' : 'Install / Update Skill'}
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={resetSkillForm}>
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="text-xs font-semibold">MCP Servers</div>
             {(agent?.config?.mcp?.servers || []).length === 0 ? (
               <div className="text-xs text-muted-foreground">No MCP servers configured</div>
@@ -391,9 +548,6 @@ export function AgentM2Settings() {
                 </div>
               ))
             )}
-            <div className="border border-dashed border-sidebar-border rounded-md p-3">
-              <div className="text-[10px] text-muted-foreground">Tool management UI coming soon. Edit via agent settings page for now.</div>
-            </div>
           </div>
         )}
 

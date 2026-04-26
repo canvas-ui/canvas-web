@@ -80,7 +80,6 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
               msg.role === 'user'
                 ? 'ml-auto bg-foreground text-background'
                 : 'mr-auto bg-muted text-foreground',
-              !msg.isComplete && msg.role === 'assistant' && 'opacity-80',
             )}
           >
             <AgentAssistantExtras

@@ -46,6 +46,14 @@ async function fileToAgentImage(file: File): Promise<PendingImage> {
   }
 }
 
+function normalizeSessionRouteId(value?: string | null) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
 function AgentConversation({
   agentId,
   routeAgentId,
@@ -275,7 +283,6 @@ export default function AgentDetailPage() {
   const [isStarting, setIsStarting] = useState(false)
   const [isStopping, setIsStopping] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const lastMissingSessionRef = useRef<string | null>(null)
   const selectingSessionRef = useRef<string | null>(null)
   const { current, sessions, refresh, select } = useAgentSessions(agentId || '')
 
@@ -331,8 +338,11 @@ export default function AgentDetailPage() {
     if (!agentId || !sessionId || !sessions) return
 
     const targetSessionId = decodeURIComponent(sessionId)
+    const targetSessionSlug = normalizeSessionRouteId(targetSessionId)
     const targetSession = sessions.sessions.find((session) => (
-      session.id === targetSessionId || session.slug === targetSessionId
+      session.id === targetSessionId
+      || session.slug === targetSessionId
+      || normalizeSessionRouteId(session.name) === targetSessionSlug
     ))
     const isAlreadySelected = Boolean(targetSession && (
       sessions.currentSessionId === targetSession.id
@@ -340,24 +350,20 @@ export default function AgentDetailPage() {
       || current?.sessionId === targetSession.id
       || current?.sessionFile === targetSession.path
     ))
+    const isCurrentRoute = current?.sessionId === targetSessionId
+      || sessions.currentSessionId === targetSessionId
     if (current?.mode === 'persistent' && isAlreadySelected) {
       selectingSessionRef.current = null
       return
     }
 
     if (!targetSession) {
-      if (lastMissingSessionRef.current !== targetSessionId) {
-        lastMissingSessionRef.current = targetSessionId
-        showToast({
-          title: 'Session not found',
-          description: targetSessionId,
-          variant: 'destructive',
-        })
+      if (current?.mode === 'persistent' && isCurrentRoute) {
+        selectingSessionRef.current = null
       }
       return
     }
 
-    lastMissingSessionRef.current = null
     if (selectingSessionRef.current === targetSession.id) return
     selectingSessionRef.current = targetSession.id
     select({ mode: 'persistent', sessionId: targetSession.id })

@@ -24,8 +24,12 @@ export interface AgentConfig {
 export interface AgentSkill {
   name: string;
   description: string;
-  content: string;
+  content?: string;
   disableModelInvocation?: boolean;
+  source?: string;
+  package?: boolean;
+  installedPath?: string;
+  path?: string;
 }
 
 export interface AgentResponseUsageCost {
@@ -662,6 +666,21 @@ export async function deleteAgentSession(
 ): Promise<AgentSessionMutationResult> {
   const response = await api.delete<{ payload: AgentSessionMutationResult }>(`${API_URL}/agents/${agentId}/sessions/${sessionId}`);
   return normalizeAgentSessionMutationResult(response.payload);
+}
+
+export async function listAgentSkills(agentId: string): Promise<AgentSkill[]> {
+  const response = await api.get<{ payload: AgentSkill[] }>(`${API_URL}/agents/${agentId}/skills`);
+  return response.payload || [];
+}
+
+export async function installAgentSkill(agentId: string, skill: Partial<AgentSkill>): Promise<AgentSkill[]> {
+  const response = await api.post<{ payload: AgentSkill[] }>(`${API_URL}/agents/${agentId}/skills`, skill);
+  return response.payload || [];
+}
+
+export async function removeAgentSkill(agentId: string, skillName: string): Promise<AgentSkill[]> {
+  const response = await api.delete<{ payload: AgentSkill[] }>(`${API_URL}/agents/${agentId}/skills/${encodeURIComponent(skillName)}`);
+  return response.payload || [];
 }
 
 /**
