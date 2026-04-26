@@ -58,7 +58,10 @@ interface TreeNodeProps {
   pastedDocumentIds?: number[]
   clipboardPaths?: string[]
   onDragStart: (path: string, event: React.DragEvent) => void
+  onDragEnter: (path: string, event: React.DragEvent) => void
   onDragOver: (path: string, event: React.DragEvent) => void
+  onDragLeave: (path: string, event: React.DragEvent) => void
+  onDragEnd: () => void
   onDrop: (path: string, event: React.DragEvent) => void
   dragOverPath: string | null
   tree: TreeNode
@@ -291,7 +294,10 @@ function TreeNodeComponent({
   pastedDocumentIds,
   clipboardPaths,
   onDragStart,
+  onDragEnter,
   onDragOver,
+  onDragLeave,
+  onDragEnd,
   onDrop,
   dragOverPath,
   tree,
@@ -399,7 +405,10 @@ function TreeNodeComponent({
         onContextMenu={handleContextMenu}
         draggable={!readOnly}
         onDragStart={(e) => !readOnly && onDragStart(currentPath, e)}
+        onDragEnter={(e) => !readOnly && onDragEnter(currentPath, e)}
         onDragOver={(e) => !readOnly && onDragOver(currentPath, e)}
+        onDragLeave={(e) => onDragLeave(currentPath, e)}
+        onDragEnd={() => onDragEnd()}
         onDrop={(e) => !readOnly && onDrop(currentPath, e)}
       >
         {/* Expand/Collapse button */}
@@ -516,7 +525,10 @@ function TreeNodeComponent({
               pastedDocumentIds={pastedDocumentIds}
               clipboardPaths={clipboardPaths}
               onDragStart={onDragStart}
+              onDragEnter={onDragEnter}
               onDragOver={onDragOver}
+              onDragLeave={onDragLeave}
+              onDragEnd={onDragEnd}
               onDrop={onDrop}
               dragOverPath={dragOverPath}
               tree={tree}
@@ -558,9 +570,10 @@ export function TreeView({
   onLayerSelectionChange: externalOnLayerSelectionChange
 }: TreeViewProps) {
   const [dragOverPath, setDragOverPath] = useState<string | null>(null)
-  const [draggedPath, setDraggedPath] = useState<string | null>(null)
   const [rootContextMenu, setRootContextMenu] = useState<{ x: number; y: number } | null>(null)
-  const dragCounterRef = useRef(0)
+  // Tracks the currently dragged path synchronously so dragenter/dragover handlers
+  // validate before React state has a chance to flush after dragstart.
+  const draggedPathRef = useRef<string | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
 
   // Internal path clipboard (used when no external clipboard is provided)
@@ -638,137 +651,126 @@ export function TreeView({
   const handleDragStart = useCallback((path: string, event: React.DragEvent) => {
     if (readOnly) return
 
-    setDraggedPath(path)
+    draggedPathRef.current = path
     event.dataTransfer.setData('text/plain', path)
-    // Allow Ctrl-drag to copy (copyMove), not only move.
+    // Allow Ctrl-drag to copy, Shift-drag to move recursively; default is plain move.
     event.dataTransfer.effectAllowed = 'copyMove'
   }, [readOnly])
 
+  // Returns true when a path drag would be a valid operation given current modifier keys.
+  const isValidPathDrop = useCallback((sourcePath: string, targetPath: string, isCopy: boolean): boolean => {
+    const normSource = sourcePath.endsWith('/') ? sourcePath.slice(0, -1) : sourcePath
+    const normTarget = targetPath.endsWith('/') ? targetPath.slice(0, -1) : targetPath
+    const sourceParent = normSource.substring(0, normSource.lastIndexOf('/')) || '/'
+
+    if (normTarget.startsWith(normSource + '/')) return false // target inside source
+    if (normSource === normTarget) return false               // same node
+    if (!isCopy && normTarget === sourceParent) return false  // move to own parent is no-op
+    return true
+  }, [])
+
+  // onDragEnter: fires once when cursor enters a node — set the drop target highlight.
+  const handleDragEnter = useCallback((path: string, event: React.DragEvent) => {
+    if (readOnly) return
+
+    const hasPathData = event.dataTransfer.types.includes('text/plain')
+    const currentDragged = draggedPathRef.current
+
+    if (hasPathData && currentDragged) {
+      const isCopy = event.ctrlKey || event.metaKey
+      if (!isValidPathDrop(currentDragged, path, isCopy)) return
+    }
+
+    event.preventDefault()
+    setDragOverPath(path)
+  }, [readOnly, isValidPathDrop])
+
+  // onDragOver: fires continuously while cursor is over a node — keep drop allowed and
+  // update the cursor glyph based on current modifier keys (user can press Ctrl mid-drag).
   const handleDragOver = useCallback((path: string, event: React.DragEvent) => {
     if (readOnly) return
 
-    // Check if this is a document drag by looking at the data types
     const hasDocumentData = event.dataTransfer.types.includes('application/json')
     const hasPathData = event.dataTransfer.types.includes('text/plain')
+    const currentDragged = draggedPathRef.current
 
-    // For path drag operations, validate the operation before allowing drop.
-    // Note: "drop on parent is a no-op" only applies to MOVE, not COPY.
-    if (hasPathData && draggedPath) {
-      const normalizedSource = draggedPath.endsWith('/') ? draggedPath.slice(0, -1) : draggedPath
-      const normalizedTarget = path.endsWith('/') ? path.slice(0, -1) : path
-
+    if (hasPathData && currentDragged) {
       const isCopy = event.ctrlKey || event.metaKey
-      const sourceParent = normalizedSource.substring(0, normalizedSource.lastIndexOf('/')) || '/'
-
-      const isInvalidOperation =
-        normalizedTarget.startsWith(normalizedSource + '/') || // Target is descendant of source (copy or move)
-        normalizedSource === normalizedTarget || // Target is same as source (copy or move)
-        (!isCopy && normalizedTarget === sourceParent) // Target is direct parent of source (move-only no-op)
-
-      if (isInvalidOperation) {
+      if (!isValidPathDrop(currentDragged, path, isCopy)) {
         event.dataTransfer.dropEffect = 'none'
-        return // Don't set drag over path for invalid operations
+        return
       }
     }
 
-    // Always prevent default to allow drop for valid operations
     event.preventDefault()
 
     if (hasDocumentData) {
-      // For document drops, default to copy
       event.dataTransfer.dropEffect = 'copy'
     } else if (hasPathData) {
-      // For path drops, default to move, allow copy with ctrl
-      event.dataTransfer.dropEffect = event.ctrlKey ? 'copy' : 'move'
+      // Ctrl = copy, Shift = recursive move, plain = move
+      event.dataTransfer.dropEffect = (event.ctrlKey || event.metaKey) ? 'copy' : 'move'
     } else {
       event.dataTransfer.dropEffect = 'copy'
     }
+  }, [readOnly, isValidPathDrop])
 
-    setDragOverPath(path)
-    dragCounterRef.current++
-  }, [readOnly, draggedPath])
+  // onDragLeave: fires when cursor leaves a node — clear highlight only if truly leaving
+  // (not just moving to a child element inside the same row).
+  const handleDragLeave = useCallback((path: string, event: React.DragEvent) => {
+    const relatedTarget = event.relatedTarget as Node | null
+    if (!event.currentTarget.contains(relatedTarget)) {
+      setDragOverPath(prev => prev === path ? null : prev)
+    }
+  }, [])
+
+  // onDragEnd: fires on the drag source after drop or cancel — always clean up.
+  const handleDragEnd = useCallback(() => {
+    draggedPathRef.current = null
+    setDragOverPath(null)
+  }, [])
 
   const handleDrop = useCallback(async (targetPath: string, event: React.DragEvent) => {
     if (readOnly) return
 
     event.preventDefault()
+    draggedPathRef.current = null
     setDragOverPath(null)
-    dragCounterRef.current = 0
 
     try {
-            // Check if it's a document being dragged
       const dragData = event.dataTransfer.getData('application/json')
 
       if (dragData) {
         const parsedData = JSON.parse(dragData)
 
         if (parsedData.type === 'document') {
-          // Handle document drop
           const documentIds = parsedData.documentIds || [parsedData.documentId]
           if (onPasteDocuments) {
-            // For now, always copy documents (could extend to move with shift key)
+            // Shift+drop moves documents; plain drop copies.
             await onPasteDocuments(targetPath, documentIds)
           }
           return
         }
       }
 
-      // Handle path drag & drop
-      if (!draggedPath) return
-      const sourcePath = draggedPath
-      setDraggedPath(null)
-
+      const sourcePath = event.dataTransfer.getData('text/plain')
+      if (!sourcePath) return
       if (sourcePath === targetPath) return
 
-      // Validate move operation to prevent invalid path operations
-      const isCtrlPressed = event.ctrlKey
+      const isCopy = event.ctrlKey || event.metaKey
+      const isRecursive = event.shiftKey
 
-      if (!isCtrlPressed) {
-        // For move operations, check if target is an ancestor or descendant of source
-        const normalizedSource = sourcePath.endsWith('/') ? sourcePath.slice(0, -1) : sourcePath
-        const normalizedTarget = targetPath.endsWith('/') ? targetPath.slice(0, -1) : targetPath
+      if (!isValidPathDrop(sourcePath, targetPath, isCopy)) return
 
-        // Prevent moving a path into its own descendant
-        if (normalizedTarget.startsWith(normalizedSource + '/')) {
-          alert(`Cannot move "${sourcePath}" into its own subdirectory "${targetPath}"`)
-          return
-        }
-
-        // Prevent moving a path onto its direct parent (which would be a no-op)
-        const sourceParent = normalizedSource.substring(0, normalizedSource.lastIndexOf('/')) || '/'
-        if (normalizedTarget === sourceParent) {
-          alert(`Cannot move "${sourcePath}" to its current parent directory "${targetPath}"`)
-          return
-        }
-
-        // Prevent moving a path onto itself
-        if (normalizedSource === normalizedTarget) {
-          return
-        }
-      }
-
-      // Determine operation based on modifier keys
-      const isShiftPressed = event.shiftKey
-
-      if (isCtrlPressed && onCopyPath) {
-        // Copy operation
-        await onCopyPath(sourcePath, targetPath, false)
-      } else if (onMovePath) {
-        // Move operation (default)
-        await onMovePath(sourcePath, targetPath, isShiftPressed)
+      if (isCopy && onCopyPath) {
+        await onCopyPath(sourcePath, targetPath, isRecursive)
+      } else if (!isCopy && onMovePath) {
+        await onMovePath(sourcePath, targetPath, isRecursive)
       }
     } catch (error) {
       console.error('Error during drop operation:', error)
       alert(`Drop operation failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
-  }, [readOnly, draggedPath, onCopyPath, onMovePath, onPasteDocuments])
-
-  const handleDragLeave = useCallback(() => {
-    dragCounterRef.current--
-    if (dragCounterRef.current === 0) {
-      setDragOverPath(null)
-    }
-  }, [])
+  }, [readOnly, isValidPathDrop, onCopyPath, onMovePath, onPasteDocuments])
 
   const handleRootContextMenu = (e: React.MouseEvent) => {
     if (readOnly) return
@@ -803,7 +805,12 @@ export function TreeView({
       tabIndex={0}
       onKeyDown={handleKeyDown}
       onMouseDown={() => rootRef.current?.focus()}
-      onDragLeave={handleDragLeave}
+      onDragLeave={(e) => {
+        // Clear highlight when drag exits the entire tree widget.
+        if (!rootRef.current?.contains(e.relatedTarget as Node)) {
+          setDragOverPath(null)
+        }
+      }}
     >
 
       <div className="space-y-0.5">
@@ -817,7 +824,9 @@ export function TreeView({
           )}
           onClick={() => onPathSelect('/')}
           onContextMenu={handleRootContextMenu}
+          onDragEnter={(e) => !readOnly && handleDragEnter('/', e)}
           onDragOver={(e) => !readOnly && handleDragOver('/', e)}
+          onDragLeave={(e) => handleDragLeave('/', e)}
           onDrop={(e) => !readOnly && handleDrop('/', e)}
         >
           <div className="flex items-center justify-center w-4 h-4 mr-1">
@@ -902,7 +911,10 @@ export function TreeView({
             pastedDocumentIds={pastedDocumentIds}
             clipboardPaths={effectiveClipboardPaths}
             onDragStart={handleDragStart}
+            onDragEnter={handleDragEnter}
             onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDragEnd={handleDragEnd}
             onDrop={handleDrop}
             dragOverPath={dragOverPath}
             tree={tree}

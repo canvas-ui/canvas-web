@@ -297,6 +297,14 @@ interface CardNodeProps {
   onCtxMenu: (e: React.MouseEvent, path: string, node: TreeNode) => void
   onConfirmCreate: (parentPath: string, name: string) => void
   onCancelCreate: () => void
+  // Drag-and-drop
+  dragOverPath: string | null
+  onDragStart: (path: string, e: React.DragEvent) => void
+  onDragEnter: (path: string, e: React.DragEvent) => void
+  onDragOver: (path: string, e: React.DragEvent) => void
+  onDragLeave: (path: string, e: React.DragEvent) => void
+  onDragEnd: () => void
+  onDrop: (path: string, e: React.DragEvent) => void
 }
 
 function CardNode({
@@ -305,6 +313,7 @@ function CardNode({
   inlineCreateParent, inlineCreateIsCanvas,
   onSelect, onShowContent, onCtrl, onCtxMenu,
   onConfirmCreate, onCancelCreate,
+  dragOverPath, onDragStart, onDragEnter, onDragOver, onDragLeave, onDragEnd, onDrop,
 }: CardNodeProps) {
 
   const path = buildPath(parentPath, node.name)
@@ -335,17 +344,25 @@ function CardNode({
     <div>
       <div
         className={cn(
-          'group relative flex items-center gap-1.5 rounded-l-md px-2 py-2 cursor-pointer transition-all',
+          'group relative flex items-center gap-1.5 rounded-l-md px-2 py-2 cursor-pointer transition-all select-none',
           'shadow hover:shadow-md text-xs',
           isSource && 'ring-1 ring-blue-500/40 bg-blue-500/10',
           isTarget && !isSource && 'ring-1 ring-amber-500/40 bg-amber-500/10',
           !isSource && !isTarget && isSelected && 'bg-primary/[0.06]',
           !isSource && !isTarget && !isSelected && isPending && 'bg-primary/[0.03]',
           !isSource && !isTarget && !isSelected && !isPending && 'bg-card hover:bg-primary/[0.04]',
+          dragOverPath === path && !readOnly && 'ring-2 ring-blue-400 bg-blue-50/50',
         )}
         style={{ borderRight: node.color ? `4px solid ${node.color}` : '4px solid transparent' }}
+        draggable={!readOnly}
         onClick={handleClick}
         onContextMenu={e => { if (!readOnly) { e.preventDefault(); onCtxMenu(e, path, node) } }}
+        onDragStart={e => { if (!readOnly) onDragStart(path, e) }}
+        onDragEnter={e => { if (!readOnly) onDragEnter(path, e) }}
+        onDragOver={e => { if (!readOnly) onDragOver(path, e) }}
+        onDragLeave={e => onDragLeave(path, e)}
+        onDragEnd={() => onDragEnd()}
+        onDrop={e => { if (!readOnly) onDrop(path, e) }}
       >
         <button
           type="button"
@@ -411,6 +428,13 @@ function CardNode({
               onCtxMenu={onCtxMenu}
               onConfirmCreate={onConfirmCreate}
               onCancelCreate={onCancelCreate}
+              dragOverPath={dragOverPath}
+              onDragStart={onDragStart}
+              onDragEnter={onDragEnter}
+              onDragOver={onDragOver}
+              onDragLeave={onDragLeave}
+              onDragEnd={onDragEnd}
+              onDrop={onDrop}
             />
           ))}
         </div>
@@ -436,6 +460,80 @@ export function MenuTreeView({
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; path: string; node: TreeNode } | null>(null)
   const [inlineCreateParent, setInlineCreateParent] = useState<string | null>(null)
   const [inlineCreateIsCanvas, setInlineCreateIsCanvas] = useState(false)
+
+  // ── Drag-and-drop state ───────────────────────────────────────────────────
+  const [dragOverPath, setDragOverPath] = useState<string | null>(null)
+  const draggedPathRef = useRef<string | null>(null)
+
+  const isValidPathDrop = useCallback((src: string, tgt: string, isCopy: boolean): boolean => {
+    const ns = src.endsWith('/') ? src.slice(0, -1) : src
+    const nt = tgt.endsWith('/') ? tgt.slice(0, -1) : tgt
+    const srcParent = ns.substring(0, ns.lastIndexOf('/')) || '/'
+    if (nt.startsWith(ns + '/')) return false
+    if (ns === nt) return false
+    if (!isCopy && nt === srcParent) return false
+    return true
+  }, [])
+
+  const handleDragStart = useCallback((path: string, e: React.DragEvent) => {
+    draggedPathRef.current = path
+    e.dataTransfer.setData('text/plain', path)
+    e.dataTransfer.effectAllowed = 'copyMove'
+  }, [])
+
+  const handleDragEnter = useCallback((path: string, e: React.DragEvent) => {
+    const src = draggedPathRef.current
+    if (src) {
+      const isCopy = e.ctrlKey || e.metaKey
+      if (!isValidPathDrop(src, path, isCopy)) return
+    }
+    e.preventDefault()
+    setDragOverPath(path)
+  }, [isValidPathDrop])
+
+  const handleDragOver = useCallback((path: string, e: React.DragEvent) => {
+    const src = draggedPathRef.current
+    if (src) {
+      const isCopy = e.ctrlKey || e.metaKey
+      if (!isValidPathDrop(src, path, isCopy)) {
+        e.dataTransfer.dropEffect = 'none'
+        return
+      }
+    }
+    e.preventDefault()
+    e.dataTransfer.dropEffect = (e.ctrlKey || e.metaKey) ? 'copy' : 'move'
+  }, [isValidPathDrop])
+
+  const handleDragLeave = useCallback((path: string, e: React.DragEvent) => {
+    if (!(e.currentTarget as Node).contains(e.relatedTarget as Node)) {
+      setDragOverPath(prev => prev === path ? null : prev)
+    }
+  }, [])
+
+  const handleDragEnd = useCallback(() => {
+    draggedPathRef.current = null
+    setDragOverPath(null)
+  }, [])
+
+  const handleDrop = useCallback(async (targetPath: string, e: React.DragEvent) => {
+    e.preventDefault()
+    const src = e.dataTransfer.getData('text/plain')
+    draggedPathRef.current = null
+    setDragOverPath(null)
+    if (!src || src === targetPath) return
+    const isCopy = e.ctrlKey || e.metaKey
+    const isRecursive = e.shiftKey
+    if (!isValidPathDrop(src, targetPath, isCopy)) return
+    try {
+      if (isCopy && onCopyPath) {
+        await onCopyPath(src, targetPath, isRecursive)
+      } else if (!isCopy && onMovePath) {
+        await onMovePath(src, targetPath, isRecursive)
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err))
+    }
+  }, [isValidPathDrop, onCopyPath, onMovePath])
 
   const q = searchQuery.toLowerCase().trim()
 
@@ -508,6 +606,13 @@ export function MenuTreeView({
     inlineCreateParent, inlineCreateIsCanvas,
     onSelect, onShowContent, onCtrl: handleCtrl, onCtxMenu: openCtxMenu,
     onConfirmCreate: handleConfirmCreate, onCancelCreate: handleCancelCreate,
+    dragOverPath,
+    onDragStart: handleDragStart,
+    onDragEnter: handleDragEnter,
+    onDragOver: handleDragOver,
+    onDragLeave: handleDragLeave,
+    onDragEnd: handleDragEnd,
+    onDrop: handleDrop,
   }
 
   return (
@@ -532,12 +637,17 @@ export function MenuTreeView({
       {/* Root "/" node — always shown, children indented below */}
       <div
         className={cn(
-          'group relative flex items-center gap-1.5 rounded-l-md px-2 py-2 cursor-pointer transition-all',
+          'group relative flex items-center gap-1.5 rounded-l-md px-2 py-2 cursor-pointer transition-all select-none',
           'shadow hover:shadow-md text-xs',
           selectedPath === '/' && !contentPath ? 'bg-primary/[0.06]' : 'bg-card hover:bg-primary/[0.04]',
+          dragOverPath === '/' && !readOnly && 'ring-2 ring-blue-400 bg-blue-50/50',
         )}
         style={{ borderRight: '4px solid transparent' }}
         onClick={() => onSelect('/')}
+        onDragEnter={e => { if (!readOnly) handleDragEnter('/', e) }}
+        onDragOver={e => { if (!readOnly) handleDragOver('/', e) }}
+        onDragLeave={e => handleDragLeave('/', e)}
+        onDrop={e => { if (!readOnly) handleDrop('/', e) }}
         onContextMenu={e => {
           if (!readOnly && onInsertPath) {
             e.preventDefault()
