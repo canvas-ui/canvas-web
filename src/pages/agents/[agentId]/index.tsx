@@ -5,7 +5,6 @@ import StreamingChatMessageComponent from '@/components/agent/StreamingChatMessa
 import { useAgentSessions } from '@/components/agent/agent-session-context'
 import { useMenu } from '@/components/shell/menu-context'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast-container'
 import { useAgentChat } from '@/hooks/useAgentChat'
 import { type Agent, type AgentImageContent, type ChatMessage, getAgent, getAgentStatus, startAgent, stopAgent } from '@/services/agent'
@@ -64,7 +63,7 @@ function AgentConversation({
   const { hasSession, ensureSession } = useSessionGuard(agentId)
   const navigate = useNavigate()
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const chatInputRef = useRef<HTMLInputElement>(null)
+  const chatInputRef = useRef<HTMLTextAreaElement>(null)
   const [currentMessage, setCurrentMessage] = useState('')
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([])
 
@@ -128,7 +127,7 @@ function AgentConversation({
     }
   }
 
-  const handlePaste = async (e: React.ClipboardEvent<HTMLInputElement>) => {
+  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const files = Array.from(e.clipboardData.items)
       .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
       .map((item) => item.getAsFile())
@@ -230,14 +229,21 @@ function AgentConversation({
         )}
 
         <form onSubmit={handleSendMessage} className="flex gap-2">
-          <Input
+          <textarea
             ref={chatInputRef}
             value={currentMessage}
             onChange={(e) => setCurrentMessage(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                e.currentTarget.form?.requestSubmit()
+              }
+            }}
             onPaste={handlePaste}
             placeholder={isStreaming ? 'Streaming in progress...' : hasSession ? 'Type a message...' : 'Type to start a new session…'}
             disabled={isStreaming}
-            className="flex-1"
+            rows={2}
+            className="flex min-h-10 flex-1 resize-y rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
           />
           {isStreaming ? (
             <Button type="button" variant="outline" onClick={stopStreaming}>

@@ -36,6 +36,13 @@ export function AgentChat({ agentId, className = '' }: AgentChatProps) {
     }
   };
 
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      e.currentTarget.form?.requestSubmit();
+    }
+  };
+
   const handleRetry = async () => {
     try {
       await retryLastMessage();
@@ -146,13 +153,14 @@ export function AgentChat({ agentId, className = '' }: AgentChatProps) {
       {/* Input Form */}
       <form onSubmit={handleSubmit} className="p-4 border-t">
         <div className="flex space-x-2">
-          <input
-            type="text"
+          <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleInputKeyDown}
             placeholder="Type your message..."
             disabled={isLoading}
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+            rows={2}
+            className="flex-1 min-h-10 px-3 py-2 border border-gray-300 rounded-md resize-y focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
           />
           <button
             type="submit"

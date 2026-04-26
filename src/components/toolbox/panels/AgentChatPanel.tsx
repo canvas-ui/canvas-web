@@ -112,9 +112,8 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
               }
             }}
             placeholder="Message…"
-            rows={1}
-            className="flex-1 resize-none text-sm px-3 py-2 border border-input bg-background rounded-md focus:outline-none focus:ring-1 focus:ring-ring min-h-[38px] max-h-[120px]"
-            style={{ height: Math.min(120, Math.max(38, (input.match(/\n/g)?.length ?? 0) * 22 + 38)) + 'px' }}
+            rows={2}
+            className="flex-1 resize-y text-sm px-3 py-2 border border-input bg-background rounded-md focus:outline-none focus:ring-1 focus:ring-ring min-h-[38px] max-h-[120px]"
           />
           {isStreaming ? (
             <button
