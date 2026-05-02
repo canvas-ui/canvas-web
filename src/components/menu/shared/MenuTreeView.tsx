@@ -35,8 +35,8 @@ export interface MenuTreeViewProps {
   onLockLayer?: (layerId: string) => Promise<boolean>
   onUnlockLayer?: (layerId: string) => Promise<boolean>
   onDestroyLayer?: (layerId: string) => Promise<boolean>
-  onMergeLayer?: (layerId: string, targetLayers: string[]) => Promise<any>
-  onSubtractLayer?: (layerId: string, targetLayers: string[]) => Promise<any>
+  onMergeLayer?: (layerId: string, targetLayers: string[]) => Promise<unknown>
+  onSubtractLayer?: (layerId: string, targetLayers: string[]) => Promise<unknown>
   searchQuery?: string
   pastedDocumentIds?: number[]
   onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
@@ -45,6 +45,8 @@ export interface MenuTreeViewProps {
 type ClipboardMode = 'copy' | 'cut'
 type Clip = { mode: ClipboardMode; path: string }
 type LayerRef = { path: string; id: string }
+
+const TREE_BRANCH_GUTTER = 22
 
 // ─── Context menu ─────────────────────────────────────────────────────────────
 
@@ -281,6 +283,7 @@ interface CardNodeProps {
   node: TreeNode
   parentPath: string
   depth: number
+  isLast: boolean
   selectedPath: string
   pendingPath?: string | null
   contentPath?: string | null
@@ -308,7 +311,7 @@ interface CardNodeProps {
 }
 
 function CardNode({
-  node, parentPath, depth, selectedPath, pendingPath, contentPath, readOnly,
+  node, parentPath, depth, isLast, selectedPath, pendingPath, contentPath, readOnly,
   sourceLayer, targetLayers, clipboard, searchQuery,
   inlineCreateParent, inlineCreateIsCanvas,
   onSelect, onShowContent, onCtrl, onCtxMenu,
@@ -318,11 +321,11 @@ function CardNode({
 
   const path = buildPath(parentPath, node.name)
 
-  if (searchQuery && !nodeMatchesSearch(node, parentPath, searchQuery)) return null
-
   const [expanded, setExpanded] = useState(() =>
     selectedPath !== '/' && (selectedPath === path || selectedPath.startsWith(path + '/'))
   )
+
+  if (searchQuery && !nodeMatchesSearch(node, parentPath, searchQuery)) return null
 
   // Auto-expand when inline create targets this node
   const shouldExpand = expanded || inlineCreateParent === path || (searchQuery.length > 0)
@@ -341,11 +344,26 @@ function CardNode({
   }
 
   return (
-    <div>
+    <div className="relative">
+      <div
+        className="pointer-events-none absolute top-0 w-px bg-border"
+        style={{
+          left: `-${TREE_BRANCH_GUTTER / 2}px`,
+          bottom: isLast ? '50%' : 0,
+        }}
+      />
+      <div
+        className="pointer-events-none absolute top-5 h-px bg-border"
+        style={{
+          left: `-${TREE_BRANCH_GUTTER / 2}px`,
+          width: `${TREE_BRANCH_GUTTER / 2}px`,
+        }}
+      />
+
       <div
         className={cn(
-          'group relative flex items-center gap-1.5 rounded-l-md px-2 py-2 cursor-pointer transition-all select-none',
-          'shadow hover:shadow-md text-xs',
+          'group relative flex min-h-10 items-center gap-2 rounded-md px-3 py-2 cursor-pointer transition-all select-none',
+          'shadow-sm hover:shadow text-sm',
           isSource && 'ring-1 ring-blue-500/40 bg-blue-500/10',
           isTarget && !isSource && 'ring-1 ring-amber-500/40 bg-amber-500/10',
           !isSource && !isTarget && isSelected && 'bg-primary/[0.06]',
@@ -369,11 +387,11 @@ function CardNode({
           className={cn('shrink-0 text-muted-foreground hover:text-foreground', !hasChildren && inlineCreateParent !== path && 'invisible')}
           onClick={e => { e.stopPropagation(); setExpanded(v => !v) }}
         >
-          {shouldExpand ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+          {shouldExpand ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         </button>
 
         {isCanvas && (
-          <LayoutDashboard className="w-3 h-3 shrink-0 text-violet-500" aria-label="Canvas" />
+          <LayoutDashboard className="w-4 h-4 shrink-0 text-violet-500" aria-label="Canvas" />
         )}
 
         <span className="flex-1 truncate font-medium">{node.label || node.name}</span>
@@ -389,16 +407,16 @@ function CardNode({
         {!readOnly && (
           <button
             type="button"
-            className="shrink-0 opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-muted-foreground/10 text-muted-foreground"
+            className="shrink-0 opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-muted-foreground/10 text-muted-foreground"
             onClick={e => { e.stopPropagation(); onCtxMenu(e, path, node) }}
           >
-            <MoreHorizontal className="w-3 h-3" />
+            <MoreHorizontal className="w-4 h-4" />
           </button>
         )}
       </div>
 
       {shouldExpand && (hasChildren || inlineCreateParent === path) && (
-        <div className="ml-3.5 mt-0.5 space-y-0.5">
+        <div className="ml-[22px] mt-1 space-y-1">
           {inlineCreateParent === path && (
             <InlineCreateInput
               onConfirm={name => onConfirmCreate(path, name)}
@@ -406,12 +424,13 @@ function CardNode({
               placeholder={inlineCreateIsCanvas ? 'canvas name…' : undefined}
             />
           )}
-          {node.children?.map(child => (
+          {node.children?.map((child, index) => (
             <CardNode
               key={child.id || child.name}
               node={child}
               parentPath={path}
               depth={depth + 1}
+              isLast={index === (node.children?.length ?? 0) - 1}
               selectedPath={selectedPath}
               pendingPath={pendingPath}
               contentPath={contentPath}
@@ -616,7 +635,7 @@ export function MenuTreeView({
   }
 
   return (
-    <div className="px-2 py-1.5 space-y-0.5">
+    <div className="px-3 py-2 space-y-1">
       {hasSelection && (
         <div className="flex items-center justify-between px-1 pb-1 text-[10px] text-muted-foreground">
           <span>
@@ -637,8 +656,8 @@ export function MenuTreeView({
       {/* Root "/" node — always shown, children indented below */}
       <div
         className={cn(
-          'group relative flex items-center gap-1.5 rounded-l-md px-2 py-2 cursor-pointer transition-all select-none',
-          'shadow hover:shadow-md text-xs',
+          'group relative flex min-h-10 items-center gap-2 rounded-md px-3 py-2 cursor-pointer transition-all select-none',
+          'shadow-sm hover:shadow text-sm',
           selectedPath === '/' && !contentPath ? 'bg-primary/[0.06]' : 'bg-card hover:bg-primary/[0.04]',
           dragOverPath === '/' && !readOnly && 'ring-2 ring-blue-400 bg-blue-50/50',
         )}
@@ -659,14 +678,14 @@ export function MenuTreeView({
           }
         }}
       >
-        <ChevronDown className="w-3 h-3 shrink-0 text-muted-foreground" />
+        <ChevronDown className="w-4 h-4 shrink-0 text-muted-foreground" />
         <span className="flex-1 font-medium truncate">
           / {rootLabel && <span className="text-muted-foreground font-normal">[{rootLabel}]</span>}
         </span>
         {!readOnly && onInsertPath && (
           <button
             type="button"
-            className="shrink-0 opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-muted-foreground/10 text-muted-foreground"
+            className="shrink-0 opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-muted-foreground/10 text-muted-foreground"
             onClick={e => {
               e.stopPropagation()
               const x = Math.min(e.clientX, window.innerWidth - 190)
@@ -675,13 +694,13 @@ export function MenuTreeView({
               setCtxMenu({ x, y, path: '/', node: pseudoNode })
             }}
           >
-            <MoreHorizontal className="w-3 h-3" />
+            <MoreHorizontal className="w-4 h-4" />
           </button>
         )}
       </div>
 
       {/* Children indented under root */}
-      <div className="ml-3.5 space-y-0.5">
+      <div className="ml-[22px] mt-1 space-y-1">
         {inlineCreateParent === '/' && (
           <InlineCreateInput
             onConfirm={name => handleConfirmCreate('/', name)}
@@ -689,12 +708,13 @@ export function MenuTreeView({
             placeholder={inlineCreateIsCanvas ? 'canvas name…' : undefined}
           />
         )}
-        {root.children?.map(child => (
+        {root.children?.map((child, index) => (
           <CardNode
             key={child.id || child.name}
             node={child}
             parentPath="/"
             depth={0}
+            isLast={index === (root.children?.length ?? 0) - 1}
             {...cardProps}
           />
         ))}
