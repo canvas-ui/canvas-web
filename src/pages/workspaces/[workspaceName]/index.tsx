@@ -20,10 +20,10 @@ import {
   DEFAULT_WORKSPACE_TREE_NAME,
 } from '@/services/workspace';
 import { Document } from '@/types/workspace';
-import { sanitizeUrlPath } from '@/utils/url-params';
+import { sanitizeUrlPath, buildWorkspaceUrl } from '@/utils/url-params';
 
 export default function WorkspaceDetailPage() {
-  const { workspaceName } = useParams<{ workspaceName: string }>();
+  const { workspaceName, treeName, '*': pathSplat } = useParams<{ workspaceName: string; treeName?: string; '*'?: string }>();
   const location = useLocation();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -49,11 +49,11 @@ export default function WorkspaceDetailPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
 
-  // Read path and tree from URL search params
-  const searchParams = new URLSearchParams(location.search);
-  const selectedPath = sanitizeUrlPath(decodeURIComponent(searchParams.get('path') || '/'));
-  const selectedTreeName = searchParams.get('tree') || DEFAULT_WORKSPACE_TREE_NAME;
+  // Path and tree from URL segments; UI state from query params
+  const selectedPath = sanitizeUrlPath('/' + (pathSplat ?? ''));
+  const selectedTreeName = treeName ?? DEFAULT_WORKSPACE_TREE_NAME;
 
+  const searchParams = new URLSearchParams(location.search);
   const isLayerView = searchParams.get('layer') === '1';
   const selectedLayerId = searchParams.get('layerId') || null;
   const selectedNodeType = searchParams.get('nodeType') || null;
@@ -340,12 +340,10 @@ export default function WorkspaceDetailPage() {
       const canvas = await createCanvas(workspaceName, { path, treeName: selectedTreeName });
       setSaveAsCanvasOpen(false);
       window.dispatchEvent(new CustomEvent('workspace:tree:refresh', { detail: { workspaceName } }));
-      const params = new URLSearchParams();
-      params.set('tree', selectedTreeName);
-      if (path !== '/') params.set('path', path);
-      params.set('nodeType', 'canvas');
-      params.set('canvasId', canvas.id);
-      navigate(`/workspaces/${workspaceName}?${params.toString()}`);
+      const uiParams = new URLSearchParams();
+      uiParams.set('nodeType', 'canvas');
+      uiParams.set('canvasId', canvas.id);
+      navigate(`${buildWorkspaceUrl(workspaceName!, path, selectedTreeName)}?${uiParams.toString()}`);
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to create canvas', variant: 'destructive' });
     } finally {

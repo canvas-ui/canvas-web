@@ -50,32 +50,57 @@ export function filtersToUrlParams(filters: UrlFilters): URLSearchParams {
   return params;
 }
 
+const DEFAULT_TREE = 'context';
+
 /**
- * Extract workspace path from URL pathname
- * e.g., /workspaces/myworkspace/foo/bar/baz -> /foo/bar/baz
+ * Parse tree name and path from workspace URL pathname.
+ * Handles:
+ *   /workspaces/:ws/trees/:tree/path[/rest...]
+ *   /workspaces/:ws/path[/rest...]
+ *   /workspaces/:ws
  */
-export function extractWorkspacePath(pathname: string, workspaceName: string): string {
-  const prefix = `/workspaces/${workspaceName}`;
-  if (pathname.startsWith(prefix)) {
-    const remainingPath = pathname.slice(prefix.length);
-    return sanitizeUrlPath(remainingPath || '/');
+export function parseWorkspacePathFromUrl(pathname: string): { treeName: string; path: string } {
+  const segments = pathname.split('/').filter(Boolean);
+  // ['workspaces', wsName, 'trees', treeName, 'path', ...rest]
+  // ['workspaces', wsName, 'path', ...rest]
+  // ['workspaces', wsName]
+  if (segments[0] !== 'workspaces') return { treeName: DEFAULT_TREE, path: '/' };
+
+  if (segments[2] === 'trees' && segments[4] === 'path') {
+    const treeName = segments[3] || DEFAULT_TREE;
+    const rest = segments.slice(5).join('/');
+    return { treeName, path: rest ? `/${rest}` : '/' };
   }
-  return '/';
+
+  if (segments[2] === 'path') {
+    const rest = segments.slice(3).join('/');
+    return { treeName: DEFAULT_TREE, path: rest ? `/${rest}` : '/' };
+  }
+
+  return { treeName: DEFAULT_TREE, path: '/' };
 }
 
 /**
- * Build workspace URL with path and filters
+ * Build workspace URL.
+ * /workspaces/:ws                              — root, default tree
+ * /workspaces/:ws/path/foo/bar                 — path, default tree
+ * /workspaces/:ws/trees/:tree                  — root, named tree
+ * /workspaces/:ws/trees/:tree/path/foo/bar     — path, named tree
  */
-export function buildWorkspaceUrl(workspaceName: string, path: string, filters?: UrlFilters): string {
-  const sanitizedPath = sanitizeUrlPath(path);
-  const basePath = `/workspaces/${workspaceName}${sanitizedPath === '/' ? '' : sanitizedPath}`;
+export function buildWorkspaceUrl(workspaceName: string, path: string, treeName?: string): string {
+  const tree = treeName && treeName !== DEFAULT_TREE ? `/trees/${treeName}` : '';
+  const p = sanitizeUrlPath(path);
+  const pathSegment = p === '/' ? '' : `/path${p}`;
+  return `/workspaces/${workspaceName}${tree}${pathSegment}`;
+}
 
-  if (!filters || (filters.features.length === 0 && filters.filters.length === 0)) {
-    return basePath;
-  }
-
-  const params = filtersToUrlParams(filters);
-  return `${basePath}?${params.toString()}`;
+/**
+ * Extract workspace path from URL pathname (legacy helper).
+ * e.g., /workspaces/myworkspace/path/foo/bar -> /foo/bar
+ */
+export function extractWorkspacePath(pathname: string): string {
+  const { path } = parseWorkspacePathFromUrl(pathname);
+  return path;
 }
 
 /**

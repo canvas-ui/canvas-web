@@ -37,6 +37,7 @@ export interface MenuTreeViewProps {
   onDestroyLayer?: (layerId: string) => Promise<boolean>
   onMergeLayer?: (layerId: string, targetLayers: string[]) => Promise<unknown>
   onSubtractLayer?: (layerId: string, targetLayers: string[]) => Promise<unknown>
+  onConvertLayer?: (layerId: string, targetType: 'context' | 'canvas') => Promise<unknown>
   searchQuery?: string
   pastedDocumentIds?: number[]
   onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
@@ -68,6 +69,7 @@ interface CtxMenuProps {
   onDestroy?: MenuTreeViewProps['onDestroyLayer']
   onMerge?: MenuTreeViewProps['onMergeLayer']
   onSubtract?: MenuTreeViewProps['onSubtractLayer']
+  onConvert?: MenuTreeViewProps['onConvertLayer']
   onCopy: (path: string) => void
   onCut: (path: string) => void
   onPaste: (target: string) => Promise<void>
@@ -79,7 +81,7 @@ function CtxMenu({
   x, y, node, path, onClose, onShowContent,
   sourceLayer, targetLayers, clipboard,
   onStartInlineCreate, hasCreateCanvas, onRemove, onRename,
-  onLock, onUnlock, onDestroy, onMerge, onSubtract,
+  onLock, onUnlock, onDestroy, onMerge, onSubtract, onConvert,
   onCopy, onCut, onPaste,
   pastedDocumentIds, onPasteDocuments,
 }: CtxMenuProps) {
@@ -222,6 +224,23 @@ function CtxMenu({
             <div className="px-3 py-1.5 text-[10px] text-muted-foreground italic">
               Right-click the source layer to merge/subtract
             </div>
+          </>
+        )}
+
+        {/* Convert layer type */}
+        {onConvert && path !== '/' && !node.locked && (
+          <>
+            <div className="my-1 h-px bg-border" />
+            {node.type === 'canvas'
+              ? item(<Layers className="w-3 h-3" />, 'Convert to Layer', async () => {
+                  if (confirm(`Convert canvas "${node.label || node.name}" back to a normal layer?`))
+                    await onConvert(node.id, 'context')
+                })
+              : item(<LayoutDashboard className="w-3 h-3 text-violet-500" />, 'Convert to Canvas', async () => {
+                  if (confirm(`Convert layer "${node.label || node.name}" to a canvas?`))
+                    await onConvert(node.id, 'canvas')
+                })
+            }
           </>
         )}
       </div>
@@ -469,7 +488,7 @@ export function MenuTreeView({
   rootLabel, contentPath, onShowContent,
   onInsertPath, onCreateCanvas, onRemovePath, onRenamePath, onMovePath, onCopyPath,
   pastedDocumentIds, onPasteDocuments,
-  onLockLayer, onUnlockLayer, onDestroyLayer, onMergeLayer, onSubtractLayer,
+  onLockLayer, onUnlockLayer, onDestroyLayer, onMergeLayer, onSubtractLayer, onConvertLayer,
   searchQuery = '',
 }: MenuTreeViewProps) {
 
@@ -743,6 +762,7 @@ export function MenuTreeView({
           onDestroy={!readOnly ? onDestroyLayer : undefined}
           onMerge={!readOnly ? onMergeLayer : undefined}
           onSubtract={!readOnly ? onSubtractLayer : undefined}
+          onConvert={!readOnly ? onConvertLayer : undefined}
           onCopy={path => setClipboard({ mode: 'copy', path })}
           onCut={path => setClipboard({ mode: 'cut', path })}
           onPaste={handlePaste}

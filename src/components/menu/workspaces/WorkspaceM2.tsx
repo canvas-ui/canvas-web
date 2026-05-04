@@ -2,10 +2,11 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { Settings, ExternalLink, GitBranch, FolderTree, Layers, Search, Lock, Unlock, Edit2, Trash2 } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
+import { buildWorkspaceUrl, parseWorkspacePathFromUrl } from '@/utils/url-params'
 import { M2Header } from '@/components/menu/shared/M2Header'
 import { MenuTreeView } from '@/components/menu/shared/MenuTreeView'
 import { useMenu } from '@/components/shell/menu-context'
-import { getWorkspace, getWorkspaceTreeByName, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer, pasteDocumentsToWorkspacePath } from '@/services/workspace'
+import { getWorkspace, getWorkspaceTreeByName, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer, pasteDocumentsToWorkspacePath, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
 import type { Layer } from '@/services/workspace'
 import { useTreeOperations } from '@/hooks/useTreeOperations'
 import type { TreeNode } from '@/types/workspace'
@@ -42,11 +43,9 @@ export function WorkspaceM2() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  // Derive tab and path from the current URL on every render
-  const urlParams = new URLSearchParams(location.search)
-  const urlTree = urlParams.get('tree')
-  const urlPath = urlParams.get('path') ? decodeURIComponent(urlParams.get('path')!) : '/'
-  const urlIsLayer = urlParams.get('layer') === '1'
+  // Derive tab and path from URL pathname; UI-only state from query params
+  const { treeName: urlTree, path: urlPath } = parseWorkspacePathFromUrl(location.pathname)
+  const urlIsLayer = new URLSearchParams(location.search).get('layer') === '1'
   const initialTab: TreeTab = urlTree === 'directory' ? 'directory' : 'context'
 
   const [wsLabel, setWsLabel] = useState<string | null>(null)
@@ -178,16 +177,14 @@ export function WorkspaceM2() {
     }
   }, [wsName, refreshAll])
 
-  // Sync active tab and selected path when URL search params change externally
+  // Sync active tab and selected path when URL pathname changes externally
   useEffect(() => {
-    const params = new URLSearchParams(location.search)
-    const tree = params.get('tree')
-    const path = params.get('path') ? decodeURIComponent(params.get('path')!) : '/'
+    const { treeName: tree, path } = parseWorkspacePathFromUrl(location.pathname)
     const tab: TreeTab = tree === 'directory' ? 'directory' : 'context'
     setActiveTab(tab)
     setSelectedPath(path)
     setContentPath(path !== '/' ? path : null)
-  }, [location.search])
+  }, [location.pathname])
 
   const ops = useTreeOperations({
     workspaceId: wsName ?? undefined,
@@ -208,25 +205,24 @@ export function WorkspaceM2() {
   const handlePathSelect = (path: string) => {
     setContentPath(null)
     setSelectedPath(path)
-    const params = new URLSearchParams()
-    params.set('tree', activeTab === 'layers' ? 'context' : activeTab)
-    if (path !== '/') params.set('path', path)
+    const treeName = activeTab === 'layers' ? DEFAULT_WORKSPACE_TREE_NAME : activeTab
     const node = findNodeByPath(activeTree, path)
+    const uiParams = new URLSearchParams()
     if (node?.type === 'canvas') {
-      params.set('nodeType', 'canvas')
-      if (node.id) params.set('canvasId', node.id)
+      uiParams.set('nodeType', 'canvas')
+      if (node.id) uiParams.set('canvasId', node.id)
     }
-    navigate(`/workspaces/${wsName}?${params.toString()}`)
+    const url = buildWorkspaceUrl(wsName!, path, treeName)
+    navigate(uiParams.size > 0 ? `${url}?${uiParams.toString()}` : url)
   }
 
   const handleShowContent = useCallback((path: string) => {
     setSelectedPath(path)
     setContentPath(path)
-    const params = new URLSearchParams()
-    params.set('tree', activeTab === 'layers' ? 'context' : activeTab)
-    if (path !== '/') params.set('path', path)
-    params.set('layer', '1')
-    navigate(`/workspaces/${wsName}?${params.toString()}`)
+    const treeName = activeTab === 'layers' ? DEFAULT_WORKSPACE_TREE_NAME : activeTab
+    const uiParams = new URLSearchParams()
+    uiParams.set('layer', '1')
+    navigate(`${buildWorkspaceUrl(wsName!, path, treeName)}?${uiParams.toString()}`)
   }, [wsName, activeTab, navigate])
 
   const q = searchQuery.toLowerCase().trim()
@@ -303,11 +299,10 @@ export function WorkspaceM2() {
             isLoading={isLoadingLayers}
             wsName={wsName ?? ''}
             onSelect={layer => {
-              const params = new URLSearchParams()
-              params.set('tree', 'context')
-              params.set('layerId', layer.id)
-              params.set('layer', '1')
-              navigate(`/workspaces/${wsName}?${params.toString()}`)
+              const uiParams = new URLSearchParams()
+              uiParams.set('layerId', layer.id)
+              uiParams.set('layer', '1')
+              navigate(`${buildWorkspaceUrl(wsName!, '/')}?${uiParams.toString()}`)
             }}
             onLock={async layer => {
               await lockWorkspaceLayer(wsName!, layer.id, wsName!, 'context')
