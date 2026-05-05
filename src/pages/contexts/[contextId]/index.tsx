@@ -12,6 +12,7 @@ import {
 import socketService from '@/lib/socket';
 import { DefaultCanvas } from '@/components/canvas/DefaultCanvas';
 import { Document as WorkspaceDocument } from '@/types/workspace';
+import { useToolbox } from '@/components/toolbox/toolbox-context';
 
 function contextUrlToPath(url: string, workspaceName?: string): string {
   if (!url || !workspaceName) return '/';
@@ -49,6 +50,11 @@ export default function ContextDetailPage() {
   const location = useLocation();
   const ownerId = new URLSearchParams(location.search).get('ownerId') || undefined;
   const { showToast } = useToast();
+  const { state: toolboxState } = useToolbox();
+  const tbAllOf = toolboxState.filters.features.allOf;
+  const tbAnyOf = toolboxState.filters.features.anyOf;
+  const tbNoneOf = toolboxState.filters.features.noneOf;
+  const tbFiltersKey = JSON.stringify({ a: tbAllOf, b: tbAnyOf, c: tbNoneOf });
 
   const [context, setContext] = useState<ContextData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -70,7 +76,13 @@ export default function ContextDetailPage() {
     if (!contextId) return;
     setIsLoadingDocuments(true);
     try {
-      const data = await getContextDocuments(contextId, [], [], { limit: pageSize, page: currentPage, q: serverSearchQuery || undefined }, ownerId);
+      const data = await getContextDocuments(
+        contextId,
+        tbAllOf,
+        [],
+        { limit: pageSize, page: currentPage, q: serverSearchQuery || undefined, anyOf: tbAnyOf, noneOf: tbNoneOf },
+        ownerId,
+      );
       setDocuments(
         (data as any[]).map((doc: any) => ({
           ...doc,
@@ -85,7 +97,8 @@ export default function ContextDetailPage() {
     } finally {
       setIsLoadingDocuments(false);
     }
-  }, [contextId, currentPage, pageSize, ownerId, serverSearchQuery]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contextId, currentPage, pageSize, ownerId, serverSearchQuery, tbFiltersKey]);
 
   const fetchContextDetails = useCallback(async () => {
     if (!contextId) return;

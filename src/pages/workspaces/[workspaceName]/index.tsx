@@ -21,6 +21,7 @@ import {
 } from '@/services/workspace';
 import { Document } from '@/types/workspace';
 import { sanitizeUrlPath, buildWorkspaceUrl } from '@/utils/url-params';
+import { useToolbox } from '@/components/toolbox/toolbox-context';
 
 export default function WorkspaceDetailPage() {
   const { workspaceName, treeName, '*': pathSplat } = useParams<{ workspaceName: string; treeName?: string; '*'?: string }>();
@@ -49,6 +50,12 @@ export default function WorkspaceDetailPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [serverSearchQuery, setServerSearchQuery] = useState('');
+
+  const { state: toolboxState } = useToolbox();
+  const tbAllOf = toolboxState.filters.features.allOf;
+  const tbAnyOf = toolboxState.filters.features.anyOf;
+  const tbNoneOf = toolboxState.filters.features.noneOf;
+  const tbFiltersKey = JSON.stringify({ a: tbAllOf, b: tbAnyOf, c: tbNoneOf });
 
   // Path and tree from URL segments; UI state from query params
   const selectedPath = sanitizeUrlPath('/' + (pathSplat ?? ''));
@@ -112,15 +119,20 @@ export default function WorkspaceDetailPage() {
           limit: pageSize,
           page: currentPage,
           q: serverSearchQuery || undefined,
+          allOf: tbAllOf,
+          anyOf: tbAnyOf,
+          noneOf: tbNoneOf,
         });
       } else {
         const selectedTreeType: 'context' | 'directory' = selectedTreeName === 'directory' ? 'directory' : 'context';
-        response = await getWorkspaceDocuments(workspaceName, selectedPath, [], {
+        response = await getWorkspaceDocuments(workspaceName, selectedPath, tbAllOf, {
           limit: pageSize,
           page: currentPage,
           treeName: selectedTreeName,
           treeType: selectedTreeType,
           q: serverSearchQuery || undefined,
+          anyOf: tbAnyOf,
+          noneOf: tbNoneOf,
         });
       }
       setDocuments((response.payload as Document[]) || []);
@@ -133,7 +145,8 @@ export default function WorkspaceDetailPage() {
     } finally {
       setIsLoadingDocuments(false);
     }
-  }, [workspaceName, selectedPath, selectedTreeName, selectedLayerId, isLayerView, currentPage, pageSize, workspace?.status, serverSearchQuery]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceName, selectedPath, selectedTreeName, selectedLayerId, isLayerView, currentPage, pageSize, workspace?.status, serverSearchQuery, tbFiltersKey]);
 
   useEffect(() => {
     fetchDocuments();

@@ -16,6 +16,14 @@ function appendAllOf(params: URLSearchParams, featureArray: string[] = []) {
   featureArray.filter(Boolean).forEach(feature => params.append('allOf', feature))
 }
 
+function appendAnyOf(params: URLSearchParams, anyOf: string[] = []) {
+  anyOf.filter(Boolean).forEach(k => params.append('anyOf', k))
+}
+
+function appendNoneOf(params: URLSearchParams, noneOf: string[] = []) {
+  noneOf.filter(Boolean).forEach(k => params.append('noneOf', k))
+}
+
 function appendFilters(params: URLSearchParams, filterArray: string[] = []) {
   filterArray.filter(Boolean).forEach(filter => params.append('filters', filter))
 }
@@ -147,7 +155,7 @@ export async function getWorkspaceDocuments(
   id: string,
   contextSpec: string = '/',
   featureArray: string[] = [],
-  options: { limit?: number; offset?: number; page?: number; includeIncoming?: boolean; treeName?: string; treeType?: string; q?: string } = {}
+  options: { limit?: number; offset?: number; page?: number; includeIncoming?: boolean; treeName?: string; treeType?: string; q?: string; anyOf?: string[]; noneOf?: string[] } = {}
 ): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }> {
   try {
     const params = new URLSearchParams();
@@ -155,6 +163,8 @@ export async function getWorkspaceDocuments(
     if (options.treeType) params.append('treeType', options.treeType)
     if (contextSpec) params.append('context', contextSpec)
     appendAllOf(params, featureArray)
+    appendAnyOf(params, options.anyOf)
+    appendNoneOf(params, options.noneOf)
     if (options.includeIncoming) params.append('includeIncoming', 'true')
     if (options.limit !== undefined) params.append('limit', options.limit.toString());
     if (options.offset !== undefined) params.append('offset', options.offset.toString());
@@ -175,7 +185,7 @@ export async function getWorkspaceLayerDocuments(
   id: string,
   treeName: string,
   layerId: string,
-  options: { limit?: number; offset?: number; page?: number; q?: string } = {}
+  options: { limit?: number; offset?: number; page?: number; q?: string; allOf?: string[]; anyOf?: string[]; noneOf?: string[] } = {}
 ): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }> {
   try {
     const params = new URLSearchParams();
@@ -183,6 +193,9 @@ export async function getWorkspaceLayerDocuments(
     if (options.offset !== undefined) params.append('offset', options.offset.toString());
     if (options.page !== undefined) params.append('page', options.page.toString());
     if (options.q && options.q.trim()) params.append('q', options.q.trim());
+    appendAllOf(params, options.allOf);
+    appendAnyOf(params, options.anyOf);
+    appendNoneOf(params, options.noneOf);
     const queryString = params.toString();
     const url = `${API_ROUTES.workspaces}/${id}/trees/${encodeURIComponent(treeName)}/layers/${encodeURIComponent(layerId)}/documents${queryString ? '?' + queryString : ''}`;
     return await api.get<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }>(url);

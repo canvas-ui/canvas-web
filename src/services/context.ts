@@ -19,6 +19,8 @@ type PaginationOptions = {
   offset?: number;
   page?: number;
   q?: string;
+  anyOf?: string[];
+  noneOf?: string[];
 };
 
 interface ApiPayload<T = unknown> {
@@ -190,6 +192,8 @@ export async function getContextDocuments(
     const params = new URLSearchParams();
     featureArray.forEach(feature => params.append('allOf', feature));
     filterArray.forEach(filter => params.append('filters', filter));
+    (options.anyOf || []).filter(Boolean).forEach(k => params.append('anyOf', k));
+    (options.noneOf || []).filter(Boolean).forEach(k => params.append('noneOf', k));
     if (ownerId) params.append('ownerId', ownerId);
     if (options.includeServerContext !== undefined) {
       params.append('includeServerContext', options.includeServerContext.toString());
