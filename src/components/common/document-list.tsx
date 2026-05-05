@@ -335,13 +335,15 @@ function DocumentDetailModal({ document, isOpen, onClose }: DocumentDetailModalP
                 <div><span className="font-medium">Content Type:</span><span className="ml-2">{document.metadata?.contentType ?? '—'}</span></div>
                 <div><span className="font-medium">Content Encoding:</span><span className="ml-2">{document.metadata?.contentEncoding ?? '—'}</span></div>
                 {(() => {
-                  const locs: string[] = (document as any).locations ?? (document.metadata as any)?.dataPaths ?? []
-                  if (!Array.isArray(locs) || locs.length === 0) return null
+                  const raw = (document as any).locations ?? (document.metadata as any)?.dataPaths ?? []
+                  if (!Array.isArray(raw) || raw.length === 0) return null
+                  const items: string[] = raw.map((l: any) => typeof l === 'string' ? l : (l?.url ?? '')).filter(Boolean)
+                  if (items.length === 0) return null
                   return (
                     <div>
                       <span className="font-medium">Locations:</span>
                       <div className="ml-2 mt-1">
-                        {locs.map((path, index) => (<div key={index} className="font-mono text-xs break-all">{path}</div>))}
+                        {items.map((path, index) => (<div key={index} className="font-mono text-xs break-all">{path}</div>))}
                       </div>
                     </div>
                   )
