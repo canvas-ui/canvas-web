@@ -255,7 +255,7 @@ function FeaturesTab() {
                           type="button"
                           disabled={deleting === key}
                           onClick={() => handleDelete(key)}
-                          className="shrink-0 p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity disabled:opacity-50"
+                          className="shrink-0 p-1.5 rounded text-muted-foreground/70 hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
                           title={`Delete bitmap "${key}" from database`}
                           aria-label={`Delete bitmap ${key}`}
                         >
