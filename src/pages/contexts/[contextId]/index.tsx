@@ -59,6 +59,7 @@ export default function ContextDetailPage() {
   const [copiedDocuments, setCopiedDocuments] = useState<number[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+  const [serverSearchQuery, setServerSearchQuery] = useState('');
 
   const layerParam = new URLSearchParams(location.search).get('layer');
   const isSharedContext = Boolean(ownerId);
@@ -69,7 +70,7 @@ export default function ContextDetailPage() {
     if (!contextId) return;
     setIsLoadingDocuments(true);
     try {
-      const data = await getContextDocuments(contextId, [], [], { limit: pageSize, page: currentPage }, ownerId);
+      const data = await getContextDocuments(contextId, [], [], { limit: pageSize, page: currentPage, q: serverSearchQuery || undefined }, ownerId);
       setDocuments(
         (data as any[]).map((doc: any) => ({
           ...doc,
@@ -84,7 +85,7 @@ export default function ContextDetailPage() {
     } finally {
       setIsLoadingDocuments(false);
     }
-  }, [contextId, currentPage, pageSize, ownerId]);
+  }, [contextId, currentPage, pageSize, ownerId, serverSearchQuery]);
 
   const fetchContextDetails = useCallback(async () => {
     if (!contextId) return;
@@ -318,6 +319,8 @@ export default function ContextDetailPage() {
         onPasteDocuments={handlePasteDocuments}
         onImportDocuments={!isSharedContext ? handleImportDocuments : undefined}
         pastedDocumentIds={copiedDocuments}
+        backendSearchQuery={serverSearchQuery}
+        onBackendSearch={(q) => { setServerSearchQuery(q); setCurrentPage(1); }}
       />
     </div>
   );

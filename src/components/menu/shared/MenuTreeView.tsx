@@ -435,7 +435,7 @@ function CardNode({
       </div>
 
       {shouldExpand && (hasChildren || inlineCreateParent === path) && (
-        <div className="ml-[22px] mt-3 mb-2 space-y-3">
+        <div className="ml-[22px] mt-2 mb-1 space-y-1.5">
           {inlineCreateParent === path && (
             <InlineCreateInput
               onConfirm={name => onConfirmCreate(path, name)}
@@ -654,7 +654,7 @@ export function MenuTreeView({
   }
 
   return (
-    <div className="px-3 py-2 space-y-3">
+    <div className="px-3 py-2 space-y-1.5">
       {hasSelection && (
         <div className="flex items-center justify-between px-1 pb-1 text-[10px] text-muted-foreground">
           <span>
@@ -719,7 +719,7 @@ export function MenuTreeView({
       </div>
 
       {/* Children indented under root */}
-      <div className="ml-[22px] mt-1 space-y-1">
+      <div className="ml-[22px] mt-1.5 space-y-1.5">
         {inlineCreateParent === '/' && (
           <InlineCreateInput
             onConfirm={name => handleConfirmCreate('/', name)}

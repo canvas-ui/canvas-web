@@ -36,6 +36,8 @@ interface DefaultCanvasProps {
   disablePurgeDocuments?: boolean
   canvasInfo?: CanvasInfo
   onSaveAsCanvas?: () => void
+  backendSearchQuery?: string
+  onBackendSearch?: (query: string) => void
 }
 
 export function DefaultCanvas({
@@ -64,6 +66,8 @@ export function DefaultCanvas({
   disablePurgeDocuments,
   canvasInfo,
   onSaveAsCanvas,
+  backendSearchQuery,
+  onBackendSearch,
 }: DefaultCanvasProps) {
   const isCanvas = urlType === 'canvas'
 
@@ -133,6 +137,8 @@ export function DefaultCanvas({
           pastedDocumentIds={pastedDocumentIds}
           onPurgeDocuments={onPurgeDocuments}
           disablePurgeDocuments={disablePurgeDocuments}
+          backendSearchQuery={backendSearchQuery}
+          onBackendSearch={onBackendSearch}
         />
       </div>
     </div>

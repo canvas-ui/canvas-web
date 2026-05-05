@@ -40,6 +40,8 @@ interface DocumentListProps {
   onPageSizeChange?: (pageSize: number) => void
   onPurgeDocuments?: () => void
   disablePurgeDocuments?: boolean
+  backendSearchQuery?: string
+  onBackendSearch?: (query: string) => void
 }
 
 interface DocumentRowProps {
@@ -568,18 +570,33 @@ function DocumentRow({ document, isSelected, onSelect, onRemoveDocument, onDelet
   )
 }
 
-export function DocumentList({ documents, isLoading, contextPath, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false }: DocumentListProps) {
+export function DocumentList({ documents, isLoading, contextPath, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQuery, onBackendSearch }: DocumentListProps) {
   const [selectedDocuments, setSelectedDocuments] = useState<Set<number>>(new Set())
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; documentIds: number[] } | null>(null)
   const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [showExportModal, setShowExportModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
+  const [searchQuery, setSearchQuery] = useState(backendSearchQuery || '')
+
+  // Sync local input when backend search query changes externally
+  useEffect(() => {
+    setSearchQuery(backendSearchQuery || '')
+  }, [backendSearchQuery])
 
   // Clear selection when context path changes
   useEffect(() => {
     setSelectedDocuments(new Set())
   }, [contextPath])
+
+  const submitBackendSearch = useCallback(() => {
+    if (!onBackendSearch) return
+    onBackendSearch(searchQuery.trim())
+  }, [onBackendSearch, searchQuery])
+
+  const clearAllSearch = useCallback(() => {
+    setSearchQuery('')
+    if (onBackendSearch && backendSearchQuery) onBackendSearch('')
+  }, [onBackendSearch, backendSearchQuery])
       // Handle drag start for selected documents
   const handleMultiDragStart = useCallback((e: React.DragEvent, documentId: number) => {
     // Always ensure the dragged document is included
@@ -786,25 +803,60 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
         </div>
 
         {/* Search Input */}
-        <div className="mt-3 relative">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Search documents..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-input rounded-md bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground hover:text-foreground"
+        <div className="mt-3 space-y-2">
+          <div className="relative flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                placeholder={onBackendSearch ? 'Search documents (Enter for server search)...' : 'Search documents...'}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && onBackendSearch) {
+                    e.preventDefault()
+                    submitBackendSearch()
+                  }
+                }}
+                className="w-full pl-10 pr-9 py-2 border border-input rounded-md bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+              />
+              {(searchQuery || backendSearchQuery) && (
+                <button
+                  onClick={clearAllSearch}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground hover:text-foreground"
+                  title="Clear search"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            {onBackendSearch && searchQuery.trim() && searchQuery.trim() !== (backendSearchQuery || '') && (
+              <Button
+                size="sm"
+                variant="default"
+                onClick={submitBackendSearch}
+                className="shrink-0"
+                title="Run full-text search on the server"
               >
-                <X className="h-4 w-4" />
-              </button>
+                <Search className="h-3.5 w-3.5 mr-1" />
+                Search server
+              </Button>
             )}
           </div>
+          {backendSearchQuery && (
+            <div className="flex items-center gap-2 text-xs">
+              <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-800">
+                Server search: <span className="font-mono">"{backendSearchQuery}"</span>
+              </span>
+              <button
+                onClick={() => onBackendSearch && onBackendSearch('')}
+                className="text-muted-foreground hover:text-foreground"
+                title="Clear server search"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Pagination Controls */}

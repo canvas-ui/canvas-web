@@ -18,6 +18,7 @@ type PaginationOptions = {
   limit?: number;
   offset?: number;
   page?: number;
+  q?: string;
 };
 
 interface ApiPayload<T = unknown> {
@@ -199,6 +200,7 @@ export async function getContextDocuments(
     if (options.limit !== undefined) params.append('limit', options.limit.toString());
     if (options.offset !== undefined) params.append('offset', options.offset.toString());
     if (options.page !== undefined) params.append('page', options.page.toString());
+    if (options.q && options.q.trim()) params.append('q', options.q.trim());
 
     const url = `${API_ROUTES.contexts}/${id}/documents${params.toString() ? '?' + params.toString() : ''}`;
     const response = await api.get<{ payload: DocumentResponse['data']; count: number; totalCount: number }>(url);
