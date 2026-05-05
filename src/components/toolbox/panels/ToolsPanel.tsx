@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { X, Save, Loader2, Search } from 'lucide-react'
+import { X, Save, Loader2, Search, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToolbox, type ToolsTab } from '@/components/toolbox/toolbox-context'
+import { useToast } from '@/components/ui/toast-container'
 
 // ─── MD2-style toggle switch ─────────────────────────────────────────────────
 
@@ -170,10 +171,26 @@ function groupBitmaps(keys: string[]): Map<string, string[]> {
 }
 
 function FeaturesTab() {
-  const { state, setFeatureToggle } = useToolbox()
+  const { state, setFeatureToggle, deleteBitmap } = useToolbox()
   const { availableBitmaps, bitmapsLoading, filters } = state
   const allOf = new Set(filters.features.allOf)
   const [search, setSearch] = useState('')
+  const [deleting, setDeleting] = useState<string | null>(null)
+  const { showToast } = useToast()
+
+  const handleDelete = async (key: string) => {
+    if (key.startsWith('data/')) return
+    if (!window.confirm(`Delete bitmap "${key}"?\n\nThis removes the bitmap from the database. Documents are unaffected, but any features/filters relying on this bitmap will lose their grouping.`)) return
+    setDeleting(key)
+    try {
+      await deleteBitmap(key)
+      showToast({ title: 'Bitmap deleted', description: key })
+    } catch (e) {
+      showToast({ title: 'Delete failed', description: e instanceof Error ? e.message : String(e), variant: 'destructive' })
+    } finally {
+      setDeleting(null)
+    }
+  }
 
   if (bitmapsLoading) {
     return (
@@ -222,14 +239,34 @@ function FeaturesTab() {
                 {PREFIX_LABELS[prefix] ?? prefix}
               </p>
               <div className="space-y-2">
-                {keys.map((key) => (
-                  <MD2Toggle
-                    key={key}
-                    label={key}
-                    checked={allOf.has(key)}
-                    onChange={(v) => setFeatureToggle(key, v)}
-                  />
-                ))}
+                {keys.map((key) => {
+                  const isProtected = key.startsWith('data/')
+                  return (
+                    <div key={key} className="flex items-center gap-2 group">
+                      <div className="flex-1 min-w-0">
+                        <MD2Toggle
+                          label={key}
+                          checked={allOf.has(key)}
+                          onChange={(v) => setFeatureToggle(key, v)}
+                        />
+                      </div>
+                      {!isProtected && (
+                        <button
+                          type="button"
+                          disabled={deleting === key}
+                          onClick={() => handleDelete(key)}
+                          className="shrink-0 p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity disabled:opacity-50"
+                          title={`Delete bitmap "${key}" from database`}
+                          aria-label={`Delete bitmap ${key}`}
+                        >
+                          {deleting === key
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <Trash2 className="w-3.5 h-3.5" />}
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </div>
           ))

@@ -10,7 +10,7 @@ import {
 import { useLocation } from 'react-router-dom'
 import type { ToolboxFilters, ToolboxTimelineFilters } from '@/types/workspace'
 import { DEFAULT_TOOLBOX_FILTERS } from '@/types/workspace'
-import { listWorkspaceBitmaps } from '@/services/workspace'
+import { listWorkspaceBitmaps, deleteWorkspaceBitmap } from '@/services/workspace'
 import { getCanvas, updateCanvas } from '@/services/canvas'
 import { getContext, patchContext } from '@/services/context'
 
@@ -201,6 +201,7 @@ interface ToolboxContextValue {
   setFeatureToggle: (key: string, on: boolean) => void
   setTimelineFilter: (update: Partial<ToolboxTimelineFilters>) => void
   saveFilters: () => Promise<void>
+  deleteBitmap: (key: string) => Promise<void>
 }
 
 const ToolboxCtx = createContext<ToolboxContextValue | null>(null)
@@ -353,9 +354,30 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const deleteBitmap = useCallback(async (key: string) => {
+    const wn = stateRef.current.activeWorkspaceName
+    if (!wn) throw new Error('No active workspace')
+    await deleteWorkspaceBitmap(wn, key)
+    const remaining = stateRef.current.availableBitmaps.filter(k => k !== key)
+    dispatch({ type: 'SET_BITMAPS', keys: remaining })
+    // Strip from active filters if present
+    const f = stateRef.current.filters
+    const stripped: ToolboxFilters = {
+      ...f,
+      features: {
+        allOf: f.features.allOf.filter(k => k !== key),
+        anyOf: f.features.anyOf.filter(k => k !== key),
+        noneOf: f.features.noneOf.filter(k => k !== key),
+      },
+    }
+    if (JSON.stringify(stripped.features) !== JSON.stringify(f.features)) {
+      dispatch({ type: 'SET_FILTERS', filters: stripped })
+    }
+  }, [])
+
   return (
     <ToolboxCtx.Provider
-      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, setToolsTab, setFilters, setFeatureToggle, setTimelineFilter, saveFilters }}
+      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, setToolsTab, setFilters, setFeatureToggle, setTimelineFilter, saveFilters, deleteBitmap }}
     >
       {children}
     </ToolboxCtx.Provider>

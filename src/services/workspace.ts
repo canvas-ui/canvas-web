@@ -663,3 +663,15 @@ export async function listWorkspaceBitmaps(workspaceId: string): Promise<string[
     return []
   }
 }
+
+export async function deleteWorkspaceBitmap(workspaceId: string, bitmapKey: string): Promise<boolean> {
+  const cleaned = bitmapKey.replace(/^\/+|\/+$/g, '')
+  if (!cleaned) throw new Error('Bitmap key is required')
+  if (cleaned.startsWith('data/') || cleaned === 'data') {
+    throw new Error('data/* bitmaps are protected and cannot be deleted manually')
+  }
+  await api.delete<{ payload: { key: string } }>(
+    `${API_ROUTES.workspaces}/${encodeURIComponent(workspaceId)}/bitmaps/${cleaned.split('/').map(encodeURIComponent).join('/')}`
+  )
+  return true
+}
