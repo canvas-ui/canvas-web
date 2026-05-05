@@ -382,7 +382,7 @@ function CardNode({
       <div
         className={cn(
           'group relative flex min-h-10 items-center gap-2 rounded-md px-3 py-2 cursor-pointer transition-all select-none',
-          'shadow-sm hover:shadow text-sm',
+          'shadow-lg hover:shadow-xl text-sm',
           isSource && 'ring-1 ring-blue-500/40 bg-blue-500/10',
           isTarget && !isSource && 'ring-1 ring-amber-500/40 bg-amber-500/10',
           !isSource && !isTarget && isSelected && 'bg-primary/[0.06]',
@@ -435,7 +435,7 @@ function CardNode({
       </div>
 
       {shouldExpand && (hasChildren || inlineCreateParent === path) && (
-        <div className="ml-[22px] mt-1 space-y-1">
+        <div className="ml-[22px] mt-3 mb-2 space-y-3">
           {inlineCreateParent === path && (
             <InlineCreateInput
               onConfirm={name => onConfirmCreate(path, name)}
@@ -654,7 +654,7 @@ export function MenuTreeView({
   }
 
   return (
-    <div className="px-3 py-2 space-y-1">
+    <div className="px-3 py-2 space-y-3">
       {hasSelection && (
         <div className="flex items-center justify-between px-1 pb-1 text-[10px] text-muted-foreground">
           <span>
@@ -676,7 +676,7 @@ export function MenuTreeView({
       <div
         className={cn(
           'group relative flex min-h-10 items-center gap-2 rounded-md px-3 py-2 cursor-pointer transition-all select-none',
-          'shadow-sm hover:shadow text-sm',
+          'shadow-lg hover:shadow-xl text-sm',
           selectedPath === '/' && !contentPath ? 'bg-primary/[0.06]' : 'bg-card hover:bg-primary/[0.04]',
           dragOverPath === '/' && !readOnly && 'ring-2 ring-blue-400 bg-blue-50/50',
         )}

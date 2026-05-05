@@ -280,7 +280,7 @@ export function WorkspaceM2() {
       </div>
 
       {/* Search box — shared across all tabs */}
-      <div className="px-2 py-1.5 border-b border-sidebar-border shrink-0">
+      <div className="px-2 py-1.5 border-b border-sidebar-border shrink-0 shadow-md z-10">
         <div className="flex items-center gap-1.5 rounded-md border bg-muted/40 px-2 py-1">
           <Search className="w-3 h-3 shrink-0 text-muted-foreground" />
           <input
