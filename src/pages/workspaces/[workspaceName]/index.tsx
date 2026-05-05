@@ -48,6 +48,7 @@ export default function WorkspaceDetailPage() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+  const [serverSearchQuery, setServerSearchQuery] = useState('');
 
   // Path and tree from URL segments; UI state from query params
   const selectedPath = sanitizeUrlPath('/' + (pathSplat ?? ''));
@@ -110,6 +111,7 @@ export default function WorkspaceDetailPage() {
         response = await getWorkspaceLayerDocuments(workspaceName, selectedTreeName, selectedLayerId, {
           limit: pageSize,
           page: currentPage,
+          q: serverSearchQuery || undefined,
         });
       } else {
         const selectedTreeType: 'context' | 'directory' = selectedTreeName === 'directory' ? 'directory' : 'context';
@@ -118,6 +120,7 @@ export default function WorkspaceDetailPage() {
           page: currentPage,
           treeName: selectedTreeName,
           treeType: selectedTreeType,
+          q: serverSearchQuery || undefined,
         });
       }
       setDocuments((response.payload as Document[]) || []);
@@ -130,7 +133,7 @@ export default function WorkspaceDetailPage() {
     } finally {
       setIsLoadingDocuments(false);
     }
-  }, [workspaceName, selectedPath, selectedTreeName, selectedLayerId, isLayerView, currentPage, pageSize, workspace?.status]);
+  }, [workspaceName, selectedPath, selectedTreeName, selectedLayerId, isLayerView, currentPage, pageSize, workspace?.status, serverSearchQuery]);
 
   useEffect(() => {
     fetchDocuments();
@@ -429,6 +432,8 @@ export default function WorkspaceDetailPage() {
           disablePurgeDocuments={false}
           canvasInfo={canvasInfo ?? undefined}
           onSaveAsCanvas={selectedNodeType !== 'canvas' && !isLayerView ? handleSaveAsCanvas : undefined}
+          backendSearchQuery={serverSearchQuery}
+          onBackendSearch={(q) => { setServerSearchQuery(q); setCurrentPage(1); }}
         />
       </div>
 

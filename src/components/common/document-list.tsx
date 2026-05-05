@@ -845,7 +845,7 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
           </div>
           {backendSearchQuery && (
             <div className="flex items-center gap-2 text-xs">
-              <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-800">
+              <span className="px-2 py-0.5 rounded bg-muted text-foreground border">
                 Server search: <span className="font-mono">"{backendSearchQuery}"</span>
               </span>
               <button
