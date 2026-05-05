@@ -9,7 +9,7 @@ import type { TreeNode } from '@/types/workspace';
 // And make sure other non-provided fields are optional or handled.
 type CreateContextPayload = Pick<Context, 'id' | 'url'> &
                             Partial<Pick<Context, 'name' | 'description' | 'baseUrl'>> &
-                            { workspaceId: string };
+                            { workspaceId: string; treeType?: 'context' | 'directory'; treeId?: string };
 
 type UnknownRecord = Record<string, unknown>;
 type PaginationOptions = {

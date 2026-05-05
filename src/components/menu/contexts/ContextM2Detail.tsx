@@ -86,6 +86,8 @@ export function ContextM2Detail() {
       setSelectedPath(pendingPath)
       setPendingPath(null)
       window.dispatchEvent(new CustomEvent('contexts:refresh'))
+      // Refetch tree so newly auto-locked layers along the new URL render with the locked tint
+      await loadTree(id)
       showToast({ title: 'Saved', description: 'Context URL updated' })
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Save failed', variant: 'destructive' })
@@ -101,6 +103,7 @@ export function ContextM2Detail() {
     try {
       await updateContextUrl(id, url)
       window.dispatchEvent(new CustomEvent('contexts:refresh'))
+      await loadTree(id)
       showToast({ title: 'Saved', description: 'Context URL updated' })
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Save failed', variant: 'destructive' })

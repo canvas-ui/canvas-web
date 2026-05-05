@@ -28,6 +28,7 @@ export function ContextM2Form() {
   const [newUrl, setNewUrl] = useState('/')
   const [newBaseUrl, setNewBaseUrl] = useState('')
   const [newWorkspaceId, setNewWorkspaceId] = useState('')
+  const [newTreeType, setNewTreeType] = useState<'context' | 'directory'>('context')
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
 
   // Edit mode state
@@ -79,6 +80,7 @@ export function ContextM2Form() {
         url: newUrl.trim() || '/',
         baseUrl: newBaseUrl.trim() || undefined,
         workspaceId: newWorkspaceId,
+        treeType: newTreeType,
       })
       window.dispatchEvent(new CustomEvent('contexts:refresh'))
       showToast({ title: 'Created', description: `Context "${newId}" created` })
@@ -190,6 +192,40 @@ export function ContextM2Form() {
                   <option key={ws.id} value={ws.id}>{ws.label || ws.name}</option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Tree</label>
+              <div className="mt-1 flex rounded-md border border-input p-0.5 bg-background">
+                <button
+                  type="button"
+                  onClick={() => setNewTreeType('context')}
+                  className={cn(
+                    'flex-1 h-7 px-2 rounded text-xs font-medium transition-colors',
+                    newTreeType === 'context'
+                      ? 'bg-accent text-foreground'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
+                  )}
+                  title="Context tree (default) — workspace tree of type 'context' named 'context'"
+                >
+                  context
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewTreeType('directory')}
+                  className={cn(
+                    'flex-1 h-7 px-2 rounded text-xs font-medium transition-colors',
+                    newTreeType === 'directory'
+                      ? 'bg-accent text-foreground'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
+                  )}
+                  title="Directory tree — workspace tree of type 'directory' named 'directory'"
+                >
+                  directory
+                </button>
+              </div>
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                Pick which workspace tree this context navigates.
+              </p>
             </div>
             <Button type="submit" className="w-full h-8 text-sm" disabled={isSaving || !newId.trim()}>
               {isSaving ? 'Creating…' : 'Create Context'}
