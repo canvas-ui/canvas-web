@@ -332,20 +332,24 @@ function DocumentDetailModal({ document, isOpen, onClose }: DocumentDetailModalP
             <div>
               <h3 className="font-semibold mb-3">Metadata</h3>
               <div className="grid gap-3 text-sm">
-                <div><span className="font-medium">Content Type:</span><span className="ml-2">{document.metadata.contentType}</span></div>
-                <div><span className="font-medium">Content Encoding:</span><span className="ml-2">{document.metadata.contentEncoding}</span></div>
-                {document.metadata.dataPaths.length > 0 && (
-                  <div>
-                    <span className="font-medium">Data Paths:</span>
-                    <div className="ml-2 mt-1">
-                      {document.metadata.dataPaths.map((path, index) => (<div key={index} className="font-mono text-xs">{path}</div>))}
+                <div><span className="font-medium">Content Type:</span><span className="ml-2">{document.metadata?.contentType ?? '—'}</span></div>
+                <div><span className="font-medium">Content Encoding:</span><span className="ml-2">{document.metadata?.contentEncoding ?? '—'}</span></div>
+                {(() => {
+                  const locs: string[] = (document as any).locations ?? (document.metadata as any)?.dataPaths ?? []
+                  if (!Array.isArray(locs) || locs.length === 0) return null
+                  return (
+                    <div>
+                      <span className="font-medium">Locations:</span>
+                      <div className="ml-2 mt-1">
+                        {locs.map((path, index) => (<div key={index} className="font-mono text-xs break-all">{path}</div>))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )
+                })()}
               </div>
             </div>
 
-            {document.checksumArray.length > 0 && (
+            {Array.isArray(document.checksumArray) && document.checksumArray.length > 0 && (
               <div>
                 <h3 className="font-semibold mb-3">Checksums</h3>
                 <div className="space-y-2">
@@ -362,20 +366,22 @@ function DocumentDetailModal({ document, isOpen, onClose }: DocumentDetailModalP
               </div>
             )}
 
-            <div>
-              <h3 className="font-semibold mb-3">Index Options</h3>
-              <div className="space-y-3 text-sm">
-                <div><span className="font-medium">Primary Checksum Algorithm:</span><span className="ml-2">{document.indexOptions.primaryChecksumAlgorithm}</span></div>
-                <div>
-                  <span className="font-medium">FTS Search Fields:</span>
-                  <div className="ml-2 mt-1">{document.indexOptions.ftsSearchFields.map((field, index) => (<span key={index} className="inline-block bg-muted px-2 py-1 rounded text-xs mr-2 mb-1">{field}</span>))}</div>
-                </div>
-                <div>
-                  <span className="font-medium">Vector Embedding Fields:</span>
-                  <div className="ml-2 mt-1">{document.indexOptions.vectorEmbeddingFields.map((field, index) => (<span key={index} className="inline-block bg-muted px-2 py-1 rounded text-xs mr-2 mb-1">{field}</span>))}</div>
+            {document.indexOptions && (
+              <div>
+                <h3 className="font-semibold mb-3">Index Options</h3>
+                <div className="space-y-3 text-sm">
+                  <div><span className="font-medium">Primary Checksum Algorithm:</span><span className="ml-2">{document.indexOptions.primaryChecksumAlgorithm ?? '—'}</span></div>
+                  <div>
+                    <span className="font-medium">FTS Search Fields:</span>
+                    <div className="ml-2 mt-1">{(document.indexOptions.ftsSearchFields ?? []).map((field, index) => (<span key={index} className="inline-block bg-muted px-2 py-1 rounded text-xs mr-2 mb-1">{field}</span>))}</div>
+                  </div>
+                  <div>
+                    <span className="font-medium">Vector Embedding Fields:</span>
+                    <div className="ml-2 mt-1">{(document.indexOptions.vectorEmbeddingFields ?? []).map((field, index) => (<span key={index} className="inline-block bg-muted px-2 py-1 rounded text-xs mr-2 mb-1">{field}</span>))}</div>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
           <div className="mt-8 pt-4 border-t flex justify-end">
