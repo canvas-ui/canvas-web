@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { Settings, ExternalLink, GitBranch, FolderTree, Layers, Search, Lock, Unlock, Edit2, Trash2 } from 'lucide-react'
+import { Settings, ExternalLink, GitBranch, FolderTree, Layers, LayoutDashboard, Search, Lock, Unlock, Edit2, Trash2 } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { buildWorkspaceUrl, parseWorkspacePathFromUrl } from '@/utils/url-params'
@@ -380,6 +380,12 @@ function LayersList({ layers, isLoading, onSelect, onLock, onUnlock, onRename, o
             className={cn('w-2 h-2 rounded-full shrink-0', !layer.color && 'bg-muted-foreground/20')}
             style={layer.color ? { backgroundColor: layer.color } : undefined}
           />
+
+          {layer.type === 'canvas' ? (
+            <LayoutDashboard className="w-3.5 h-3.5 shrink-0 text-violet-500" aria-label="Canvas" />
+          ) : (
+            <Layers className="w-3.5 h-3.5 shrink-0 text-muted-foreground/60" aria-label="Layer" />
+          )}
 
           {renamingId === layer.id ? (
             <input
