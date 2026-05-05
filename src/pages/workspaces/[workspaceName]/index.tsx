@@ -9,6 +9,7 @@ import { getCanvas, createCanvas } from '@/services/canvas';
 import {
   getWorkspaceDocuments,
   getWorkspaceLayerDocuments,
+  getWorkspaceTreeByName,
   pasteDocumentsToWorkspacePath,
   importDocumentsToWorkspacePath,
   removeWorkspaceDocuments,
@@ -19,7 +20,7 @@ import {
   stopWorkspace,
   DEFAULT_WORKSPACE_TREE_NAME,
 } from '@/services/workspace';
-import { Document } from '@/types/workspace';
+import { Document, TreeNode } from '@/types/workspace';
 import { sanitizeUrlPath, buildWorkspaceUrl } from '@/utils/url-params';
 import { useToolbox } from '@/components/toolbox/toolbox-context';
 
@@ -64,8 +65,11 @@ export default function WorkspaceDetailPage() {
   const searchParams = new URLSearchParams(location.search);
   const isLayerView = searchParams.get('layer') === '1';
   const selectedLayerId = searchParams.get('layerId') || null;
-  const selectedNodeType = searchParams.get('nodeType') || null;
-  const selectedCanvasId = searchParams.get('canvasId') || null;
+  // Leaf node type / canvas id are derived from the path against the loaded tree —
+  // we do not encode them in the URL. The path is the source of truth, mirroring
+  // the REST API. See `feedback_url_design` memory for rationale.
+  const [selectedNodeType, setSelectedNodeType] = useState<'canvas' | null>(null);
+  const [tree, setTree] = useState<TreeNode | null>(null);
   const urlDisplay = workspaceName
     ? `${workspaceName}://${selectedPath === '/' ? '' : selectedPath.replace(/^\//, '')}`
     : '';
@@ -156,13 +160,62 @@ export default function WorkspaceDetailPage() {
     setCurrentPage(1);
   }, [selectedPath, selectedTreeName, selectedLayerId]);
 
-  // Fetch canvas metadata when a canvas node is selected
+  // Load the workspace tree once per (workspace, treeName) so we can resolve
+  // leaf node type / id locally without an extra round-trip.
   useEffect(() => {
-    if (!selectedCanvasId || !workspaceName) { setCanvasInfo(null); return; }
-    getCanvas(workspaceName, selectedCanvasId, selectedTreeName)
-      .then(c => setCanvasInfo({ label: c.label, description: c.description, color: c.color }))
-      .catch(() => setCanvasInfo(null));
-  }, [workspaceName, selectedCanvasId, selectedTreeName]);
+    let cancelled = false;
+    if (!workspaceName) { setTree(null); return; }
+    getWorkspaceTreeByName(workspaceName, selectedTreeName)
+      .then(res => { if (!cancelled) setTree(res.payload); })
+      .catch(() => { if (!cancelled) setTree(null); });
+
+    const onTreeRefresh = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { workspaceName?: string } | undefined;
+      if (detail?.workspaceName && detail.workspaceName !== workspaceName) return;
+      getWorkspaceTreeByName(workspaceName, selectedTreeName)
+        .then(res => { if (!cancelled) setTree(res.payload); })
+        .catch(() => {});
+    };
+    window.addEventListener('workspace:tree:refresh', onTreeRefresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('workspace:tree:refresh', onTreeRefresh);
+    };
+  }, [workspaceName, selectedTreeName]);
+
+  // Resolve leaf node from path against the loaded tree.
+  // Path is the URL truth; type/id/canvas-hints derived locally — no extra API call.
+  useEffect(() => {
+    let cancelled = false;
+    if (!tree || selectedPath === '/' || isLayerView) {
+      setCanvasInfo(null);
+      setSelectedNodeType(null);
+      return;
+    }
+    const segments = selectedPath.split('/').filter(Boolean);
+    let node: TreeNode | null = tree;
+    for (const seg of segments) {
+      node = node?.children?.find(c => c.name === seg) ?? null;
+      if (!node) break;
+    }
+    if (!node || node.type !== 'canvas') {
+      setCanvasInfo(null);
+      setSelectedNodeType(null);
+      return;
+    }
+
+    setSelectedNodeType('canvas');
+    // Tree payload may already carry label/color/description on the layer node;
+    // fall back to those before issuing a getCanvas fetch (keeps full querySpec
+    // / metadata for canvas-specific UI affordances).
+    setCanvasInfo({ label: node.label, description: node.description, color: node.color });
+    if (workspaceName && node.id) {
+      getCanvas(workspaceName, node.id, selectedTreeName)
+        .then(c => { if (!cancelled) setCanvasInfo({ label: c.label, description: c.description, color: c.color }); })
+        .catch(() => {});
+    }
+    return () => { cancelled = true; };
+  }, [tree, selectedPath, isLayerView, workspaceName, selectedTreeName]);
 
   const handleStartWorkspace = async () => {
     if (!workspace) return;
@@ -353,13 +406,10 @@ export default function WorkspaceDetailPage() {
     try {
       const name = saveAsCanvasName.trim();
       const path = selectedPath === '/' ? `/${name}` : `${selectedPath}/${name}`;
-      const canvas = await createCanvas(workspaceName, { path, treeName: selectedTreeName });
+      await createCanvas(workspaceName, { path, treeName: selectedTreeName });
       setSaveAsCanvasOpen(false);
       window.dispatchEvent(new CustomEvent('workspace:tree:refresh', { detail: { workspaceName } }));
-      const uiParams = new URLSearchParams();
-      uiParams.set('nodeType', 'canvas');
-      uiParams.set('canvasId', canvas.id);
-      navigate(`${buildWorkspaceUrl(workspaceName!, path, selectedTreeName)}?${uiParams.toString()}`);
+      navigate(buildWorkspaceUrl(workspaceName!, path, selectedTreeName));
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to create canvas', variant: 'destructive' });
     } finally {

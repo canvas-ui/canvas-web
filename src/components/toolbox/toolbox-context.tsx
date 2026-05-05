@@ -10,9 +10,11 @@ import {
 import { useLocation } from 'react-router-dom'
 import type { ToolboxFilters, ToolboxTimelineFilters } from '@/types/workspace'
 import { DEFAULT_TOOLBOX_FILTERS } from '@/types/workspace'
-import { listWorkspaceBitmaps, deleteWorkspaceBitmap } from '@/services/workspace'
+import { listWorkspaceBitmaps, deleteWorkspaceBitmap, getWorkspaceTreeByName } from '@/services/workspace'
+import type { TreeNode } from '@/types/workspace'
 import { getCanvas, updateCanvas } from '@/services/canvas'
 import { getContext, patchContext } from '@/services/context'
+import { parseWorkspacePathFromUrl } from '@/utils/url-params'
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -223,32 +225,52 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
   // ── URL → navigation state ────────────────────────────────────────────────
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search)
+    let cancelled = false
     const pathParts = location.pathname.split('/').filter(Boolean)
 
     const newWorkspaceName = pathParts[0] === 'workspaces' ? (pathParts[1] || null) : null
     const newContextId = pathParts[0] === 'contexts' ? (pathParts[1] || null) : null
-    const newCanvasId = params.get('nodeType') === 'canvas' ? params.get('canvasId') : null
-    const newContextType: ActiveContextType = newCanvasId ? 'canvas' : newContextId ? 'context' : null
-    const newContextPath = params.get('path') || null
+    const { path: wsPath, treeName: wsTreeName } = newWorkspaceName
+      ? parseWorkspacePathFromUrl(location.pathname)
+      : { path: '/', treeName: '' }
 
-    const prev = stateRef.current
-    const leavingCanvasContext = prev.activeContextType !== null && newContextType === null
+    const dispatchNav = (canvasId: string | null) => {
+      if (cancelled) return
+      const contextType: ActiveContextType = canvasId ? 'canvas' : newContextId ? 'context' : null
+      const prev = stateRef.current
+      const leavingCanvasContext = prev.activeContextType !== null && contextType === null
+      if (leavingCanvasContext) saveSessionFilters(prev.filters)
 
-    // When navigating away from a canvas/context back to a regular layer, snapshot filters to session
-    if (leavingCanvasContext) {
-      saveSessionFilters(prev.filters)
+      dispatch({
+        type: 'SET_NAVIGATION',
+        workspaceName: newWorkspaceName,
+        canvasId,
+        contextId: newContextId,
+        contextType,
+        contextPath: newWorkspaceName ? wsPath : null,
+      })
     }
 
-    dispatch({
-      type: 'SET_NAVIGATION',
-      workspaceName: newWorkspaceName,
-      canvasId: newCanvasId,
-      contextId: newContextId,
-      contextType: newContextType,
-      contextPath: newContextPath,
-    })
-  }, [location.pathname, location.search])
+    // Walk the loaded tree to find the leaf node; tree already carries layer
+    // type, no extra GET needed. Path is the URL truth; canvas hint is derived.
+    if (newWorkspaceName && wsPath !== '/') {
+      getWorkspaceTreeByName(newWorkspaceName, wsTreeName)
+        .then(res => {
+          if (cancelled) return
+          const segments = wsPath.split('/').filter(Boolean)
+          let node: TreeNode | null = res.payload
+          for (const seg of segments) {
+            node = node?.children?.find(c => c.name === seg) ?? null
+            if (!node) break
+          }
+          dispatchNav(node?.type === 'canvas' ? node.id : null)
+        })
+        .catch(() => dispatchNav(null))
+      return () => { cancelled = true }
+    }
+    dispatchNav(null)
+    return () => { cancelled = true }
+  }, [location.pathname])
 
   // ── Load bitmaps when workspace changes ───────────────────────────────────
 

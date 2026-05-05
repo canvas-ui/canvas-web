@@ -14,17 +14,6 @@ import socketService from '@/lib/socket'
 
 type TreeTab = 'context' | 'directory' | 'layers'
 
-function findNodeByPath(root: TreeNode | null, path: string): TreeNode | null {
-  if (!root || path === '/') return root
-  const parts = path.split('/').filter(Boolean)
-  let node: TreeNode | null = root
-  for (const part of parts) {
-    node = node?.children?.find(c => c.name === part) ?? null
-    if (!node) return null
-  }
-  return node
-}
-
 const TAB_ICONS: Record<TreeTab, React.ReactNode> = {
   context: <GitBranch className="w-3.5 h-3.5" />,
   directory: <FolderTree className="w-3.5 h-3.5" />,
@@ -206,14 +195,9 @@ export function WorkspaceM2() {
     setContentPath(null)
     setSelectedPath(path)
     const treeName = activeTab === 'layers' ? DEFAULT_WORKSPACE_TREE_NAME : activeTab
-    const node = findNodeByPath(activeTree, path)
-    const uiParams = new URLSearchParams()
-    if (node?.type === 'canvas') {
-      uiParams.set('nodeType', 'canvas')
-      if (node.id) uiParams.set('canvasId', node.id)
-    }
-    const url = buildWorkspaceUrl(wsName!, path, treeName)
-    navigate(uiParams.size > 0 ? `${url}?${uiParams.toString()}` : url)
+    // Path is the URL truth — leaf type / canvas id are derived from the path
+    // by the workspace page itself. No type-specific query params here.
+    navigate(buildWorkspaceUrl(wsName!, path, treeName))
   }
 
   const handleShowContent = useCallback((path: string) => {

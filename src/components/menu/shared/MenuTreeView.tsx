@@ -133,7 +133,7 @@ function CtxMenu({
         </button>
 
         {/* New canvas — inline, workspace trees only */}
-        {hasCreateCanvas && path !== '/' && (
+        {hasCreateCanvas && (
           <button
             type="button"
             className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-accent rounded-sm text-left"
