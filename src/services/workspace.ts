@@ -348,11 +348,6 @@ export async function subtractWorkspaceLayer(workspaceId: string, layerId: strin
   return res.payload
 }
 
-export async function convertWorkspaceLayer(workspaceId: string, layerId: string, targetType: 'context' | 'canvas', treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<Layer> {
-  const res = await api.post<{ payload: Layer }>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers/${encodeURIComponent(layerId)}/convert`, { targetType })
-  return res.payload
-}
-
 // ─────────────────────────────────────────────────────────────────────────
 // Workspace documents
 // ─────────────────────────────────────────────────────────────────────────

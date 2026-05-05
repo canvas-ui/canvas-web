@@ -3,7 +3,6 @@ import { api } from '@/lib/api'
 import type {
   Canvas,
   CanvasQuerySpec,
-  Document,
   LayerMetadata,
 } from '@/types/workspace'
 
@@ -82,61 +81,13 @@ export async function deleteCanvas(
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Canvas documents — applies path AND querySpec, composed with caller filters
+// Canvas documents — list via the standard `GET /workspaces/:id/documents?context=<canvas-path>`.
+// Workspace.list/search composes the canvas's querySpec server-side, so no canvas-specific docs
+// service helper is needed.
 // ─────────────────────────────────────────────────────────────────────────
 
-export interface CanvasDocumentsOptions {
-  treeName?: string
-  allOf?: string[]
-  anyOf?: string[]
-  noneOf?: string[]
-  filters?: string[]
-  limit?: number
-  offset?: number
-  page?: number
-  /** Search query — when set, server uses /search semantics. */
-  q?: string
-}
-
-export interface CanvasDocumentsResponse {
-  payload: Document[]
-  count: number | null
-  totalCount: number | null
-  status: string
-  statusCode: number
-  message: string
-}
-
-function appendListParam(params: URLSearchParams, key: string, values?: string[]) {
-  if (!values?.length) { return }
-  for (const v of values) {
-    if (v) { params.append(key, v) }
-  }
-}
-
-export async function getCanvasDocuments(
-  workspaceId: string,
-  canvasIdOrName: string,
-  options: CanvasDocumentsOptions = {},
-): Promise<CanvasDocumentsResponse> {
-  const params = new URLSearchParams()
-  if (options.treeName) { params.append('tree', options.treeName) }
-  appendListParam(params, 'allOf', options.allOf)
-  appendListParam(params, 'anyOf', options.anyOf)
-  appendListParam(params, 'noneOf', options.noneOf)
-  appendListParam(params, 'filters', options.filters)
-  if (options.limit !== undefined) { params.append('limit', String(options.limit)) }
-  if (options.offset !== undefined) { params.append('offset', String(options.offset)) }
-  if (options.page !== undefined) { params.append('page', String(options.page)) }
-  if (options.q) { params.append('q', options.q) }
-
-  const qs = params.toString()
-  const url = `${API_ROUTES.workspaces}/${encodeURIComponent(workspaceId)}/canvases/${encodeURIComponent(canvasIdOrName)}/documents${qs ? '?' + qs : ''}`
-  return await api.get<CanvasDocumentsResponse>(url)
-}
-
 // ─────────────────────────────────────────────────────────────────────────
-// Top-level /canvases convenience alias (read-only)
+// Top-level /canvases convenience alias (read-only — canvas object lookup)
 // ─────────────────────────────────────────────────────────────────────────
 
 export interface CanvasAliasOptions {
@@ -151,26 +102,6 @@ export async function getCanvasByAlias(canvasIdOrName: string, options: CanvasAl
   const url = `${API_ROUTES.canvases}/${encodeURIComponent(canvasIdOrName)}${qs ? '?' + qs : ''}`
   const res = await api.get<{ payload: Canvas }>(url)
   return res.payload
-}
-
-export async function getCanvasDocumentsByAlias(
-  canvasIdOrName: string,
-  options: CanvasDocumentsOptions & CanvasAliasOptions = {},
-): Promise<CanvasDocumentsResponse> {
-  const params = new URLSearchParams()
-  if (options.workspace) { params.append('workspace', options.workspace) }
-  appendListParam(params, 'allOf', options.allOf)
-  appendListParam(params, 'anyOf', options.anyOf)
-  appendListParam(params, 'noneOf', options.noneOf)
-  appendListParam(params, 'filters', options.filters)
-  if (options.limit !== undefined) { params.append('limit', String(options.limit)) }
-  if (options.offset !== undefined) { params.append('offset', String(options.offset)) }
-  if (options.page !== undefined) { params.append('page', String(options.page)) }
-  if (options.q) { params.append('q', options.q) }
-
-  const qs = params.toString()
-  const url = `${API_ROUTES.canvases}/${encodeURIComponent(canvasIdOrName)}/documents${qs ? '?' + qs : ''}`
-  return await api.get<CanvasDocumentsResponse>(url)
 }
 
 // ─────────────────────────────────────────────────────────────────────────

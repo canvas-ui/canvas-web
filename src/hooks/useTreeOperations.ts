@@ -13,7 +13,7 @@ import {
 } from '@/services/context'
 import {
   insertWorkspacePath, removeWorkspacePath, moveWorkspacePath, copyWorkspacePath,
-  mergeWorkspaceLayer, subtractWorkspaceLayer, convertWorkspaceLayer,
+  mergeWorkspaceLayer, subtractWorkspaceLayer,
   lockWorkspaceLayer, unlockWorkspaceLayer, destroyWorkspaceLayer,
   DEFAULT_WORKSPACE_TREE_NAME,
 } from '@/services/workspace'
@@ -122,13 +122,6 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     return result
   }, [workspaceId, wsTree, refresh])
 
-  const onConvertLayer = useCallback(async (layerId: string, targetType: 'context' | 'canvas'): Promise<any> => {
-    if (!workspaceId) return null
-    const result = await convertWorkspaceLayer(workspaceId, layerId, targetType, wsTree)
-    refresh()
-    return result
-  }, [workspaceId, wsTree, refresh])
-
   const onCreateCanvas = useCallback(async (path: string): Promise<boolean> => {
     if (!workspaceId) return false
     try {
@@ -147,7 +140,6 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     onLockLayer: workspaceId ? onLockLayer : undefined,
     onUnlockLayer: workspaceId ? onUnlockLayer : undefined,
     onDestroyLayer: workspaceId ? onDestroyLayer : undefined,
-    onConvertLayer: workspaceId ? onConvertLayer : undefined,
     onCreateCanvas: workspaceId ? onCreateCanvas : undefined,
   }
 }
