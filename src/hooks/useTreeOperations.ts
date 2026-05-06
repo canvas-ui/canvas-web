@@ -16,6 +16,7 @@ import {
   mergeWorkspaceLayer, subtractWorkspaceLayer,
   lockWorkspaceLayer, unlockWorkspaceLayer, destroyWorkspaceLayer,
   createWorkspaceCanvas,
+  updateWorkspacePath,
   DEFAULT_WORKSPACE_TREE_NAME,
 } from '@/services/workspace'
 
@@ -53,12 +54,12 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
 
   // Rename = move to same parent with a new last segment
   const onRenamePath = useCallback(async (fromPath: string, newName: string): Promise<boolean> => {
-    const parts = fromPath.split('/')
-    parts[parts.length - 1] = newName
-    const toPath = parts.join('/')
     let result: boolean
-    if (contextId) result = await moveContextPath(contextId, fromPath, toPath, false)
-    else if (workspaceId) result = await moveWorkspacePath(workspaceId, fromPath, toPath, false, wsTree)
+    if (contextId) {
+      const parts = fromPath.split('/')
+      parts[parts.length - 1] = newName
+      result = await moveContextPath(contextId, fromPath, parts.join('/'), false)
+    } else if (workspaceId) result = await updateWorkspacePath(workspaceId, fromPath, { name: newName }, wsTree)
     else return false
     refresh()
     return result
