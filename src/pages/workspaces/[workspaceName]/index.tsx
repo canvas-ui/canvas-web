@@ -10,6 +10,9 @@ import {
   getWorkspaceLayerDocuments,
   getWorkspaceTreeByName,
   createWorkspaceCanvas,
+  createPublicCanvasShare,
+  getPublicCanvasShare,
+  deletePublicCanvasShare,
   pasteDocumentsToWorkspacePath,
   importDocumentsToWorkspacePath,
   removeWorkspaceDocuments,
@@ -49,6 +52,8 @@ export default function WorkspaceDetailPage() {
   const [saveAsCanvasOpen, setSaveAsCanvasOpen] = useState(false);
   const [saveAsCanvasName, setSaveAsCanvasName] = useState('');
   const [saveAsCanvasLoading, setSaveAsCanvasLoading] = useState(false);
+  const [shareCanvasLoading, setShareCanvasLoading] = useState(false);
+  const [publicCanvasShare, setPublicCanvasShare] = useState<{ code: string; url: string } | null>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
@@ -225,6 +230,20 @@ export default function WorkspaceDetailPage() {
     setSelectedNodeType('canvas');
     setCanvasInfo({ label: node.label, description: node.description, color: node.color });
   }, [tree, selectedPath, isLayerView]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!workspaceName || selectedNodeType !== 'canvas' || isLayerView) {
+      setPublicCanvasShare(null);
+      return;
+    }
+
+    getPublicCanvasShare(workspaceName, selectedPath, selectedTreeName)
+      .then(share => { if (!cancelled) setPublicCanvasShare(share); })
+      .catch(() => { if (!cancelled) setPublicCanvasShare(null); });
+
+    return () => { cancelled = true; };
+  }, [workspaceName, selectedPath, selectedTreeName, selectedNodeType, isLayerView]);
 
   const handleStartWorkspace = async () => {
     if (!workspace) return;
@@ -426,6 +445,36 @@ export default function WorkspaceDetailPage() {
     }
   };
 
+  const handleShareCanvas = async () => {
+    if (!workspaceName || selectedNodeType !== 'canvas') return;
+    setShareCanvasLoading(true);
+    try {
+      const share = publicCanvasShare || await createPublicCanvasShare(workspaceName, selectedPath, selectedTreeName);
+      setPublicCanvasShare(share);
+      const url = `${window.location.origin}${share.url}`;
+      await navigator.clipboard?.writeText(url);
+      showToast({ title: 'Public canvas link copied', description: url });
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to share canvas', variant: 'destructive' });
+    } finally {
+      setShareCanvasLoading(false);
+    }
+  };
+
+  const handleUnshareCanvas = async () => {
+    if (!publicCanvasShare) return;
+    setShareCanvasLoading(true);
+    try {
+      await deletePublicCanvasShare(publicCanvasShare.code);
+      setPublicCanvasShare(null);
+      showToast({ title: 'Canvas unshared', description: 'The public link no longer works.' });
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to unshare canvas', variant: 'destructive' });
+    } finally {
+      setShareCanvasLoading(false);
+    }
+  };
+
   if (isLoadingWorkspace) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -503,7 +552,11 @@ export default function WorkspaceDetailPage() {
           onPurgeDocuments={handlePurgeDocuments}
           disablePurgeDocuments={false}
           canvasInfo={canvasInfo ?? undefined}
-          onSaveAsCanvas={selectedNodeType !== 'canvas' && !isLayerView ? handleSaveAsCanvas : undefined}
+          onSaveAsCanvas={tree && selectedNodeType !== 'canvas' && !isLayerView ? handleSaveAsCanvas : undefined}
+          onShareCanvas={selectedNodeType === 'canvas' && !isLayerView ? handleShareCanvas : undefined}
+          onUnshareCanvas={publicCanvasShare ? handleUnshareCanvas : undefined}
+          isSharingCanvas={shareCanvasLoading}
+          isCanvasShared={!!publicCanvasShare}
           backendSearchQuery={serverSearchQuery}
           onBackendSearch={handleBackendSearch}
         />

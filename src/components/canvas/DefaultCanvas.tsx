@@ -1,4 +1,4 @@
-import { LayoutDashboard, BookMarked } from 'lucide-react'
+import { LayoutDashboard, BookMarked, Share2, Unlink } from 'lucide-react'
 import { Document } from '@/types/workspace'
 import { DocumentList } from '@/components/common/document-list'
 
@@ -36,6 +36,10 @@ interface DefaultCanvasProps {
   disablePurgeDocuments?: boolean
   canvasInfo?: CanvasInfo
   onSaveAsCanvas?: () => void
+  onShareCanvas?: () => void
+  onUnshareCanvas?: () => void
+  isSharingCanvas?: boolean
+  isCanvasShared?: boolean
   backendSearchQuery?: string
   onBackendSearch?: (query: string) => void
 }
@@ -66,6 +70,10 @@ export function DefaultCanvas({
   disablePurgeDocuments,
   canvasInfo,
   onSaveAsCanvas,
+  onShareCanvas,
+  onUnshareCanvas,
+  isSharingCanvas,
+  isCanvasShared,
   backendSearchQuery,
   onBackendSearch,
 }: DefaultCanvasProps) {
@@ -93,6 +101,28 @@ export function DefaultCanvas({
               </span>
             )}
           </div>
+          {onShareCanvas && (
+            <button
+              type="button"
+              onClick={onShareCanvas}
+              disabled={isSharingCanvas}
+              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 text-xs border rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              <Share2 className="w-3 h-3" />
+              {isSharingCanvas ? 'Sharing...' : isCanvasShared ? 'Copy link' : 'Share'}
+            </button>
+          )}
+          {isCanvasShared && onUnshareCanvas && (
+            <button
+              type="button"
+              onClick={onUnshareCanvas}
+              disabled={isSharingCanvas}
+              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 text-xs border rounded-md hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive disabled:opacity-50"
+            >
+              <Unlink className="w-3 h-3" />
+              Unshare
+            </button>
+          )}
         </div>
       ) : (
         <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/20 shrink-0">

@@ -1,4 +1,4 @@
-import { API_ROUTES } from '@/config/api';
+import { API_ROUTES, API_URL } from '@/config/api';
 import { api } from '@/lib/api';
 import type { TreeNode } from '@/types/workspace';
 // GLOBAL Workspace type from src/types/api.d.ts will be used.
@@ -253,6 +253,27 @@ export async function createWorkspaceCanvas(workspaceId: string, path: string, t
     console.error(`Failed to create workspace canvas ${path}:`, error)
     throw error
   }
+}
+
+export async function createPublicCanvasShare(workspaceId: string, path: string, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<{ code: string; url: string }> {
+  const response = await api.post<{ payload: { code: string; url: string } }>(
+    `${API_URL}/pub/c`,
+    { workspaceId, path, treeName }
+  )
+  return response.payload
+}
+
+export async function getPublicCanvasShare(workspaceId: string, path: string, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<{ code: string; url: string } | null> {
+  const params = new URLSearchParams({ workspaceId, path, treeName })
+  const response = await api.get<{ payload: { code: string; url: string } | null }>(
+    `${API_URL}/pub/c?${params.toString()}`
+  )
+  return response.payload
+}
+
+export async function deletePublicCanvasShare(code: string): Promise<boolean> {
+  await api.delete<{ payload: boolean }>(`${API_URL}/pub/c/${encodeURIComponent(code)}`)
+  return true
 }
 
 export async function updateWorkspacePath(workspaceId: string, path: string, updates: Record<string, unknown>, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<boolean> {

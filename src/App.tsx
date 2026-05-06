@@ -11,6 +11,7 @@ import ContextsPage from './pages/contexts'
 import ContextDetailPage from './pages/contexts/[contextId]'
 import ApiTokensPage from './pages/api-tokens'
 import SharedViewerPage from './pages/shared'
+import PublicCanvasPage from './pages/pub/canvas'
 import AdminWorkspacesPage from './pages/admin/workspaces'
 import AdminContextsPage from './pages/admin/contexts'
 import AdminAgentsPage from './pages/admin/agents'
@@ -47,6 +48,7 @@ function AppContent() {
         {/* Authentication routes */}
         <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
         <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
+        <Route path="/pub/c/:code" element={<PublicCanvasPage />} />
 
         {/* Dashboard layout for authenticated routes */}
         <Route path="/" element={<ProtectedRoute><AppShell /></ProtectedRoute>}>

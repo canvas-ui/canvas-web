@@ -303,6 +303,7 @@ interface CardNodeProps {
   onCancelCreate: () => void
   // Drag-and-drop
   dragOverPath: string | null
+  isCopyDrag: boolean
   onDragStart: (path: string, e: React.DragEvent) => void
   onDragEnter: (path: string, e: React.DragEvent) => void
   onDragOver: (path: string, e: React.DragEvent) => void
@@ -317,7 +318,7 @@ function CardNode({
   inlineCreateParent, inlineCreateIsCanvas,
   onSelect, onShowContent, onCtrl, onCtxMenu,
   onConfirmCreate, onCancelCreate,
-  dragOverPath, onDragStart, onDragEnter, onDragOver, onDragLeave, onDragEnd, onDrop,
+  dragOverPath, isCopyDrag, onDragStart, onDragEnter, onDragOver, onDragLeave, onDragEnd, onDrop,
 }: CardNodeProps) {
 
   const path = buildPath(parentPath, node.name)
@@ -363,15 +364,18 @@ function CardNode({
 
       <div
         className={cn(
-          'group relative flex min-h-10 items-center gap-2 rounded-md px-3 py-2 cursor-pointer transition-all select-none',
+          'group relative flex min-h-10 items-center gap-2 rounded-md px-3 py-2 cursor-pointer transition-all select-none overflow-hidden',
           'shadow-lg hover:shadow-xl text-sm',
-          isSource && 'ring-1 ring-blue-500/40 bg-blue-500/10',
-          isTarget && !isSource && 'ring-1 ring-amber-500/40 bg-amber-500/10',
-          !isSource && !isTarget && isSelected && 'bg-primary/[0.06]',
-          !isSource && !isTarget && !isSelected && isPending && 'bg-primary/[0.03]',
-          !isSource && !isTarget && !isSelected && !isPending && !node.locked && 'bg-card hover:bg-primary/[0.04]',
-          !isSource && !isTarget && node.locked && 'bg-amber-500/15 hover:bg-amber-500/20',
-          dragOverPath === path && !readOnly && 'ring-2 ring-blue-400 bg-blue-50/50',
+          'before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1.5 before:transition-colors',
+          isSource && 'ring-1 ring-blue-500/40 bg-blue-500/10 before:bg-blue-500',
+          isTarget && !isSource && 'ring-1 ring-amber-500/40 bg-amber-500/10 before:bg-amber-500',
+          !isSource && !isTarget && isSelected && !node.locked && 'bg-primary/[0.08] hover:bg-primary/[0.12] before:bg-primary',
+          !isSource && !isTarget && isSelected && node.locked && 'bg-amber-500/15 hover:bg-amber-500/20 before:bg-primary',
+          !isSource && !isTarget && !isSelected && isPending && 'bg-primary/[0.03] before:bg-transparent',
+          !isSource && !isTarget && !isSelected && !isPending && !node.locked && 'bg-card hover:bg-primary/[0.04] before:bg-transparent',
+          !isSource && !isTarget && !isSelected && node.locked && 'bg-amber-500/15 hover:bg-amber-500/20 before:bg-amber-500',
+          dragOverPath === path && !readOnly && !isCopyDrag && 'ring-2 ring-blue-400 bg-blue-50/50',
+          dragOverPath === path && !readOnly && isCopyDrag && 'ring-2 ring-emerald-500 bg-emerald-50/50',
         )}
         style={{ borderRight: node.color ? `4px solid ${node.color}` : '4px solid transparent' }}
         draggable={!readOnly}
@@ -447,6 +451,7 @@ function CardNode({
               onConfirmCreate={onConfirmCreate}
               onCancelCreate={onCancelCreate}
               dragOverPath={dragOverPath}
+              isCopyDrag={isCopyDrag}
               onDragStart={onDragStart}
               onDragEnter={onDragEnter}
               onDragOver={onDragOver}
@@ -481,7 +486,27 @@ export function MenuTreeView({
 
   // ── Drag-and-drop state ───────────────────────────────────────────────────
   const [dragOverPath, setDragOverPath] = useState<string | null>(null)
+  const [isCopyDrag, setIsCopyDrag] = useState(false)
+  const [copyModeSticky, setCopyModeSticky] = useState(false)
   const draggedPathRef = useRef<string | null>(null)
+  const isCopyRef = useRef(false)
+  const copyModeStickyRef = useRef(false)
+
+  // Track ctrl/meta/alt globally — Firefox fires keydown/keyup during drag
+  // (Chrome does not). Respect sticky toggle as the floor.
+  useEffect(() => {
+    const sync = (e: KeyboardEvent) => {
+      const next = e.ctrlKey || e.altKey || copyModeStickyRef.current
+      isCopyRef.current = next
+      setIsCopyDrag(next)
+    }
+    window.addEventListener('keydown', sync)
+    window.addEventListener('keyup', sync)
+    return () => {
+      window.removeEventListener('keydown', sync)
+      window.removeEventListener('keyup', sync)
+    }
+  }, [])
 
   const isValidPathDrop = useCallback((src: string, tgt: string, isCopy: boolean): boolean => {
     const ns = src.endsWith('/') ? src.slice(0, -1) : src
@@ -499,10 +524,14 @@ export function MenuTreeView({
     e.dataTransfer.effectAllowed = 'copyMove'
   }, [])
 
+  const eventIsCopy = (e: React.DragEvent) =>
+    e.ctrlKey || e.altKey || copyModeStickyRef.current
+
   const handleDragEnter = useCallback((path: string, e: React.DragEvent) => {
     const src = draggedPathRef.current
+    const isCopy = eventIsCopy(e)
+    if (isCopy !== isCopyRef.current) { isCopyRef.current = isCopy; setIsCopyDrag(isCopy) }
     if (src) {
-      const isCopy = e.ctrlKey || e.metaKey
       if (!isValidPathDrop(src, path, isCopy)) return
     }
     e.preventDefault()
@@ -510,16 +539,20 @@ export function MenuTreeView({
   }, [isValidPathDrop])
 
   const handleDragOver = useCallback((path: string, e: React.DragEvent) => {
+    const isCopy = eventIsCopy(e)
+    if (isCopy !== isCopyRef.current) {
+      isCopyRef.current = isCopy
+      setIsCopyDrag(isCopy)
+    }
     const src = draggedPathRef.current
     if (src) {
-      const isCopy = e.ctrlKey || e.metaKey
       if (!isValidPathDrop(src, path, isCopy)) {
         e.dataTransfer.dropEffect = 'none'
         return
       }
     }
     e.preventDefault()
-    e.dataTransfer.dropEffect = (e.ctrlKey || e.metaKey) ? 'copy' : 'move'
+    e.dataTransfer.dropEffect = isCopy ? 'copy' : 'move'
   }, [isValidPathDrop])
 
   const handleDragLeave = useCallback((path: string, e: React.DragEvent) => {
@@ -530,16 +563,20 @@ export function MenuTreeView({
 
   const handleDragEnd = useCallback(() => {
     draggedPathRef.current = null
+    isCopyRef.current = false
+    setIsCopyDrag(false)
     setDragOverPath(null)
   }, [])
 
   const handleDrop = useCallback(async (targetPath: string, e: React.DragEvent) => {
     e.preventDefault()
     const src = e.dataTransfer.getData('text/plain')
+    const isCopy = eventIsCopy(e) || isCopyRef.current
     draggedPathRef.current = null
+    isCopyRef.current = false
+    setIsCopyDrag(false)
     setDragOverPath(null)
     if (!src || src === targetPath) return
-    const isCopy = e.ctrlKey || e.metaKey
     const isRecursive = e.shiftKey
     if (!isValidPathDrop(src, targetPath, isCopy)) return
     try {
@@ -612,6 +649,16 @@ export function MenuTreeView({
     setInlineCreateIsCanvas(false)
   }, [])
 
+  const toggleCopyMode = useCallback(() => {
+    setCopyModeSticky(v => {
+      const next = !v
+      copyModeStickyRef.current = next
+      isCopyRef.current = next
+      setIsCopyDrag(next)
+      return next
+    })
+  }, [])
+
   if (isLoading) return <div className="px-3 py-3 text-xs text-muted-foreground">Loading tree…</div>
   if (!root) return <div className="px-3 py-3 text-xs text-muted-foreground">No tree available</div>
 
@@ -625,6 +672,7 @@ export function MenuTreeView({
     onSelect, onShowContent, onCtrl: handleCtrl, onCtxMenu: openCtxMenu,
     onConfirmCreate: handleConfirmCreate, onCancelCreate: handleCancelCreate,
     dragOverPath,
+    isCopyDrag,
     onDragStart: handleDragStart,
     onDragEnter: handleDragEnter,
     onDragOver: handleDragOver,
@@ -635,6 +683,23 @@ export function MenuTreeView({
 
   return (
     <div className="px-3 py-2 space-y-1.5">
+      {!readOnly && (
+        <div className="flex items-center justify-end px-1 pb-0.5 text-[10px]">
+          <button
+            type="button"
+            onClick={toggleCopyMode}
+            title="Toggle drag-drop mode (or hold Ctrl / Alt while dragging)"
+            className={cn(
+              'px-2 py-0.5 rounded-full border transition-colors select-none',
+              copyModeSticky
+                ? 'border-emerald-500 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                : 'border-border text-muted-foreground hover:bg-muted',
+            )}
+          >
+            {copyModeSticky ? 'Drag → Copy' : 'Drag → Move'}
+          </button>
+        </div>
+      )}
       {hasSelection && (
         <div className="flex items-center justify-between px-1 pb-1 text-[10px] text-muted-foreground">
           <span>
@@ -658,7 +723,8 @@ export function MenuTreeView({
           'group relative flex min-h-10 items-center gap-2 rounded-md px-3 py-2 cursor-pointer transition-all select-none',
           'shadow-lg hover:shadow-xl text-sm',
           selectedPath === '/' && !contentPath ? 'bg-primary/[0.06]' : 'bg-card hover:bg-primary/[0.04]',
-          dragOverPath === '/' && !readOnly && 'ring-2 ring-blue-400 bg-blue-50/50',
+          dragOverPath === '/' && !readOnly && !isCopyDrag && 'ring-2 ring-blue-400 bg-blue-50/50',
+          dragOverPath === '/' && !readOnly && isCopyDrag && 'ring-2 ring-emerald-500 bg-emerald-50/50',
         )}
         style={{ borderRight: '4px solid transparent' }}
         onClick={() => onSelect('/')}
