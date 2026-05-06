@@ -276,6 +276,47 @@ export async function deletePublicCanvasShare(code: string): Promise<boolean> {
   return true
 }
 
+export interface WorkspacePublicCanvasShare {
+  type: 'public-canvas'
+  code: string
+  url: string
+  workspaceId: string
+  owner: string
+  treeName: string
+  treeType: string
+  path: string
+  layerId: string
+  createdAt: string
+  locked: boolean
+  lockedBy: string[]
+  canvas: {
+    id: string
+    name: string
+    label?: string
+    description?: string
+    color?: string | null
+    locked: boolean
+    lockedBy: string[]
+  } | null
+}
+
+export async function listWorkspaceShares(workspaceId: string): Promise<{ publicCanvasShares: WorkspacePublicCanvasShare[]; emailShares: any[] }> {
+  const response = await api.get<{ payload: { publicCanvasShares?: WorkspacePublicCanvasShare[]; emailShares?: any[] } }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/shares`
+  )
+  return {
+    publicCanvasShares: response.payload?.publicCanvasShares || [],
+    emailShares: response.payload?.emailShares || [],
+  }
+}
+
+export async function revokeWorkspacePublicCanvasShare(workspaceId: string, code: string): Promise<boolean> {
+  await api.delete<{ payload: boolean }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/shares/public-canvas/${encodeURIComponent(code)}`
+  )
+  return true
+}
+
 export async function updateWorkspacePath(workspaceId: string, path: string, updates: Record<string, unknown>, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<boolean> {
   try {
     await api.patch<{ payload: unknown; message: string; status: string; statusCode: number }>(

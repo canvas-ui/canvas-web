@@ -387,8 +387,8 @@ function WorkspaceEmailShares({ workspaceId }: { workspaceId: string }) {
 
   const loadShares = async () => {
     try {
-      const res = await api.get<{ payload: typeof shares }>(`/workspaces/${workspaceId}/shares`)
-      setShares(res.payload || [])
+      const res = await api.get<{ payload: typeof shares | { emailShares?: typeof shares } }>(`/workspaces/${workspaceId}/shares`)
+      setShares(Array.isArray(res.payload) ? res.payload : res.payload?.emailShares || [])
     } catch (e) {
       // silent
     }

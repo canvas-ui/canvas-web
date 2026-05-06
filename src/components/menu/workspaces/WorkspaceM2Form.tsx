@@ -5,8 +5,19 @@ import { useToast } from '@/components/ui/toast-container'
 import { M2Header } from '@/components/menu/shared/M2Header'
 import { useMenu } from '@/components/shell/menu-context'
 import { generateNiceRandomHexColor } from '@/utils/color'
-import { listWorkspaces, createWorkspace, updateWorkspace, removeWorkspace, getWorkspaceServicesStatus, enableWorkspaceService, disableWorkspaceService } from '@/services/workspace'
-import type { WorkspaceServicesStatus } from '@/services/workspace'
+import { Copy, ExternalLink, RefreshCw, Unlink } from 'lucide-react'
+import {
+  listWorkspaces,
+  createWorkspace,
+  updateWorkspace,
+  removeWorkspace,
+  getWorkspaceServicesStatus,
+  enableWorkspaceService,
+  disableWorkspaceService,
+  listWorkspaceShares,
+  revokeWorkspacePublicCanvasShare,
+} from '@/services/workspace'
+import type { WorkspacePublicCanvasShare, WorkspaceServicesStatus } from '@/services/workspace'
 
 export function WorkspaceM2Form() {
   const { state, closeM2 } = useMenu()
@@ -23,6 +34,22 @@ export function WorkspaceM2Form() {
   const [isDestroying, setIsDestroying] = useState(false)
   const [services, setServices] = useState<WorkspaceServicesStatus | null>(null)
   const [togglingService, setTogglingService] = useState<string | null>(null)
+  const [shares, setShares] = useState<WorkspacePublicCanvasShare[]>([])
+  const [isLoadingShares, setIsLoadingShares] = useState(false)
+  const [revokingCode, setRevokingCode] = useState<string | null>(null)
+
+  const loadShares = async (workspaceId = entityId) => {
+    if (!workspaceId) return
+    setIsLoadingShares(true)
+    try {
+      const result = await listWorkspaceShares(workspaceId)
+      setShares(result.publicCanvasShares)
+    } catch {
+      setShares([])
+    } finally {
+      setIsLoadingShares(false)
+    }
+  }
 
   useEffect(() => {
     if (isCreate) return
@@ -40,6 +67,7 @@ export function WorkspaceM2Form() {
           setColor(ws.color || '#FFFFFF')
         }
         setServices(svcStatus)
+        await loadShares(entityId!)
       } catch {
         showToast({ title: 'Error', description: 'Failed to load workspace', variant: 'destructive' })
       }
@@ -113,6 +141,28 @@ export function WorkspaceM2Form() {
     }
   }
 
+  const copyShareUrl = async (share: WorkspacePublicCanvasShare) => {
+    const url = `${window.location.origin}${share.url}`
+    await navigator.clipboard?.writeText(url)
+    showToast({ title: 'Copied', description: url })
+  }
+
+  const revokeShare = async (share: WorkspacePublicCanvasShare) => {
+    if (!entityId) return
+    if (!window.confirm(`Revoke public share for "${share.path}"?`)) return
+    setRevokingCode(share.code)
+    try {
+      await revokeWorkspacePublicCanvasShare(entityId, share.code)
+      await loadShares(entityId)
+      window.dispatchEvent(new CustomEvent('workspace:tree:refresh', { detail: { workspaceName: entityId } }))
+      showToast({ title: 'Revoked', description: 'Public canvas link no longer works' })
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to revoke share', variant: 'destructive' })
+    } finally {
+      setRevokingCode(null)
+    }
+  }
+
   return (
     <div className="flex flex-col h-full">
       <M2Header
@@ -182,6 +232,74 @@ export function WorkspaceM2Form() {
                 />
               </button>
             </div>
+          </div>
+        )}
+
+        {!isCreate && (
+          <div className="border-t pt-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs font-medium text-muted-foreground">Shares</div>
+                <div className="text-[10px] text-muted-foreground">Public canvas links in this workspace</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => loadShares()}
+                disabled={isLoadingShares}
+                className="flex h-7 w-7 items-center justify-center rounded hover:bg-accent/50 text-muted-foreground hover:text-foreground disabled:opacity-50"
+                title="Refresh shares"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isLoadingShares ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+
+            {shares.length === 0 ? (
+              <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+                No public canvas shares.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {shares.map(share => {
+                  const url = `${window.location.origin}${share.url}`
+                  return (
+                    <div key={share.code} className="rounded-md border p-2 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="truncate font-mono text-xs">{share.path}</div>
+                          <div className="mt-0.5 text-[10px] text-muted-foreground">
+                            {new Date(share.createdAt).toLocaleString()}
+                          </div>
+                        </div>
+                        <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] ${share.locked ? 'text-green-700 bg-green-50 border-green-200' : 'text-amber-700 bg-amber-50 border-amber-200'}`}>
+                          {share.locked ? 'Locked' : 'Unlocked'}
+                        </span>
+                      </div>
+                      <div className="truncate rounded bg-muted/40 px-2 py-1 font-mono text-[10px] text-muted-foreground">
+                        {url}
+                      </div>
+                      <div className="flex justify-end gap-1">
+                        <Button type="button" variant="outline" size="sm" className="h-7 px-2" onClick={() => copyShareUrl(share)}>
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" className="h-7 px-2" onClick={() => window.open(url, '_blank', 'noreferrer')}>
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-destructive hover:text-destructive"
+                          disabled={revokingCode === share.code}
+                          onClick={() => revokeShare(share)}
+                        >
+                          <Unlink className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         )}
 

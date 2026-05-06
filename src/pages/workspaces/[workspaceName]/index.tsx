@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { API_ROUTES } from '@/config/api';
@@ -48,7 +48,6 @@ export default function WorkspaceDetailPage() {
     operation: 'copy' | 'cut';
   } | null>(null);
 
-  const [canvasInfo, setCanvasInfo] = useState<CanvasInfo | null>(null);
   const [saveAsCanvasOpen, setSaveAsCanvasOpen] = useState(false);
   const [saveAsCanvasName, setSaveAsCanvasName] = useState('');
   const [saveAsCanvasLoading, setSaveAsCanvasLoading] = useState(false);
@@ -74,8 +73,21 @@ export default function WorkspaceDetailPage() {
   // Leaf node type / canvas id are derived from the path against the loaded tree —
   // we do not encode them in the URL. The path is the source of truth, mirroring
   // the REST API. See `feedback_url_design` memory for rationale.
-  const [selectedNodeType, setSelectedNodeType] = useState<'canvas' | null>(null);
   const [tree, setTree] = useState<TreeNode | null>(null);
+  const selectedNode = useMemo(() => {
+    if (!tree || selectedPath === '/' || isLayerView) return null;
+    const segments = selectedPath.split('/').filter(Boolean);
+    let node: TreeNode | null = tree;
+    for (const seg of segments) {
+      node = node?.children?.find(c => c.name === seg) ?? null;
+      if (!node) return null;
+    }
+    return node;
+  }, [tree, selectedPath, isLayerView]);
+  const selectedNodeType = selectedNode?.type === 'canvas' ? 'canvas' : null;
+  const canvasInfo: CanvasInfo | null = selectedNodeType === 'canvas'
+    ? { label: selectedNode?.label, description: selectedNode?.description, color: selectedNode?.color }
+    : null;
   const urlDisplay = workspaceName
     ? `${workspaceName}://${selectedPath === '/' ? '' : selectedPath.replace(/^\//, '')}`
     : '';
@@ -206,30 +218,6 @@ export default function WorkspaceDetailPage() {
       window.removeEventListener('workspace:tree:refresh', onTreeRefresh);
     };
   }, [workspaceName, selectedTreeName]);
-
-  // Resolve leaf node from path against the loaded tree.
-  // Path is the URL truth; type/id/canvas-hints derived locally — no extra API call.
-  useEffect(() => {
-    if (!tree || selectedPath === '/' || isLayerView) {
-      setCanvasInfo(null);
-      setSelectedNodeType(null);
-      return;
-    }
-    const segments = selectedPath.split('/').filter(Boolean);
-    let node: TreeNode | null = tree;
-    for (const seg of segments) {
-      node = node?.children?.find(c => c.name === seg) ?? null;
-      if (!node) break;
-    }
-    if (!node || node.type !== 'canvas') {
-      setCanvasInfo(null);
-      setSelectedNodeType(null);
-      return;
-    }
-
-    setSelectedNodeType('canvas');
-    setCanvasInfo({ label: node.label, description: node.description, color: node.color });
-  }, [tree, selectedPath, isLayerView]);
 
   useEffect(() => {
     let cancelled = false;
