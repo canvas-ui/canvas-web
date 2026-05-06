@@ -319,8 +319,15 @@ export function WorkspaceM2() {
             pastedDocumentIds={docClipboard?.documentIds}
             onPasteDocuments={docClipboard && wsName ? async (path, ids) => {
               const treeType: 'context' | 'directory' = activeTab === 'directory' ? 'directory' : 'context'
-              const success = await pasteDocumentsToWorkspacePath(wsName, path, ids, treeType, treeType)
-              if (success) setDocClipboard(null)
+              const treeName = activeTab === 'directory' ? 'directory' : DEFAULT_WORKSPACE_TREE_NAME
+              const success = await pasteDocumentsToWorkspacePath(wsName, path, ids, treeName, treeType)
+              if (success) {
+                setDocClipboard(null)
+                window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: null }))
+                window.dispatchEvent(new CustomEvent('workspace:documents:refresh', {
+                  detail: { workspaceName: wsName, path, treeName },
+                }))
+              }
               return success
             } : undefined}
             {...ops}

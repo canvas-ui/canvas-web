@@ -175,6 +175,19 @@ export default function WorkspaceDetailPage() {
   }, [fetchDocuments]);
 
   useEffect(() => {
+    const onDocumentsRefresh = (event: Event) => {
+      const detail = (event as CustomEvent).detail as { workspaceName?: string; path?: string; treeName?: string } | undefined;
+      if (detail?.workspaceName && detail.workspaceName !== workspaceName) return;
+      if (detail?.treeName && detail.treeName !== selectedTreeName) return;
+      if (detail?.path && detail.path !== selectedPath) return;
+      fetchDocuments();
+    };
+
+    window.addEventListener('workspace:documents:refresh', onDocumentsRefresh);
+    return () => window.removeEventListener('workspace:documents:refresh', onDocumentsRefresh);
+  }, [fetchDocuments, workspaceName, selectedPath, selectedTreeName]);
+
+  useEffect(() => {
     setCurrentPage(1);
   }, [selectedPath, selectedTreeName, selectedLayerId]);
 
@@ -366,9 +379,9 @@ export default function WorkspaceDetailPage() {
   const selectedTreeType: 'context' | 'directory' = selectedTreeName === 'directory' ? 'directory' : 'context';
 
   const handlePasteDocuments = async (path: string, documentIds: number[]): Promise<boolean> => {
-    if (!workspace) return false;
+    if (!workspaceName) return false;
     try {
-      const success = await pasteDocumentsToWorkspacePath(workspace.name, path, documentIds, selectedTreeName, selectedTreeType);
+      const success = await pasteDocumentsToWorkspacePath(workspaceName, path, documentIds, selectedTreeName, selectedTreeType);
       if (success) {
         await fetchDocuments();
         setClipboard(null);
@@ -383,9 +396,9 @@ export default function WorkspaceDetailPage() {
   };
 
   const handleImportDocuments = async (docs: any[], contextPath: string): Promise<boolean> => {
-    if (!workspace) return false;
+    if (!workspaceName) return false;
     try {
-      const success = await importDocumentsToWorkspacePath(workspace.name, contextPath, docs, selectedTreeName, selectedTreeType);
+      const success = await importDocumentsToWorkspacePath(workspaceName, contextPath, docs, selectedTreeName, selectedTreeType);
       if (success) {
         if (contextPath === selectedPath) await fetchDocuments();
         showToast({ title: 'Success', description: `Imported ${docs.length} document(s) to "${contextPath}"` });
