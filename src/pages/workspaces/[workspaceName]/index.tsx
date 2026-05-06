@@ -209,8 +209,8 @@ export default function WorkspaceDetailPage() {
     navigate(`${location.pathname}${nextSearch ? `?${nextSearch}` : ''}`);
   }, [location.pathname, location.search, navigate]);
 
-  // Load the workspace tree once per (workspace, treeName) so we can resolve
-  // leaf node type / id locally without an extra round-trip.
+  // Keep the tree fresh enough to resolve leaf type locally. Path changes can
+  // follow a just-created canvas, so refetch on path navigation too.
   useEffect(() => {
     let cancelled = false;
     if (!workspaceName) { setTree(null); return; }
@@ -230,7 +230,7 @@ export default function WorkspaceDetailPage() {
       cancelled = true;
       window.removeEventListener('workspace:tree:refresh', onTreeRefresh);
     };
-  }, [workspaceName, selectedTreeName]);
+  }, [workspaceName, selectedTreeName, selectedPath]);
 
   useEffect(() => {
     let cancelled = false;

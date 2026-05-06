@@ -635,14 +635,14 @@ export function MenuTreeView({
     const full = parentPath === '/' ? `/${name}` : `${parentPath}/${name}`
     try {
       if (isCanvas) {
-        if (onCreateCanvas) await onCreateCanvas(full)
+        if (onCreateCanvas && await onCreateCanvas(full)) onSelect(full)
       } else {
-        if (onInsertPath) await onInsertPath(full, true)
+        if (onInsertPath && await onInsertPath(full, true)) onSelect(full)
       }
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err))
     }
-  }, [onInsertPath, onCreateCanvas, inlineCreateIsCanvas])
+  }, [onInsertPath, onCreateCanvas, onSelect, inlineCreateIsCanvas])
 
   const handleCancelCreate = useCallback(() => {
     setInlineCreateParent(null)
