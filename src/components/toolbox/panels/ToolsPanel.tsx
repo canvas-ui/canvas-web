@@ -174,6 +174,7 @@ function FeaturesTab() {
   const { state, setFeatureToggle, deleteBitmap } = useToolbox()
   const { availableBitmaps, bitmapsLoading, filters } = state
   const allOf = new Set(filters.features.allOf)
+  const anyOf = new Set(filters.features.anyOf)
   const [search, setSearch] = useState('')
   const [deleting, setDeleting] = useState<string | null>(null)
   const { showToast } = useToast()
@@ -238,24 +239,56 @@ function FeaturesTab() {
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
                 {PREFIX_LABELS[prefix] ?? prefix}
               </p>
-              <div className="space-y-2">
+              <div className="flex flex-col gap-1.5">
                 {keys.map((key) => {
                   const isProtected = key.startsWith('data/')
+                  const isAbstraction = key.startsWith('data/abstraction/')
+                  const isChecked = isAbstraction ? anyOf.has(key) : allOf.has(key)
+                  const segments = key.split('/')
+                  const shortLabel = segments[segments.length - 1]
+                  const subLabel = segments.length > 1 ? segments.slice(0, -1).join('/') : null
                   return (
-                    <div key={key} className="flex items-center gap-2 group">
+                    <div
+                      key={key}
+                      className={cn(
+                        'flex items-center gap-2 group rounded-md px-2.5 py-2 border transition-colors',
+                        isChecked
+                          ? 'bg-muted/60 border-border'
+                          : 'bg-transparent border-transparent hover:bg-muted/30 hover:border-border/50',
+                      )}
+                    >
                       <div className="flex-1 min-w-0">
-                        <MD2Toggle
-                          label={key}
-                          checked={allOf.has(key)}
-                          onChange={(v) => setFeatureToggle(key, v)}
-                        />
+                        <div
+                          role="switch"
+                          aria-checked={isChecked}
+                          tabIndex={0}
+                          onClick={() => setFeatureToggle(key, !isChecked)}
+                          onKeyDown={(e) => (e.key === ' ' || e.key === 'Enter') && setFeatureToggle(key, !isChecked)}
+                          className="flex items-center justify-between gap-3 cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+                        >
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-sm text-foreground truncate leading-tight">{shortLabel}</span>
+                            {subLabel && (
+                              <span className="text-[10px] text-muted-foreground truncate leading-tight mt-0.5">{subLabel}/</span>
+                            )}
+                          </div>
+                          <div className={cn(
+                            'relative w-10 h-5 rounded-full transition-colors shrink-0',
+                            isChecked ? 'bg-zinc-700' : 'bg-zinc-300 dark:bg-zinc-600',
+                          )}>
+                            <div className={cn(
+                              'absolute top-[2px] w-4 h-4 rounded-full bg-white shadow transition-transform',
+                              isChecked ? 'translate-x-[22px]' : 'translate-x-[2px]',
+                            )} />
+                          </div>
+                        </div>
                       </div>
                       {!isProtected && (
                         <button
                           type="button"
                           disabled={deleting === key}
                           onClick={() => handleDelete(key)}
-                          className="shrink-0 p-1.5 rounded text-muted-foreground/70 hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
+                          className="shrink-0 p-1.5 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50 opacity-0 group-hover:opacity-100"
                           title={`Delete bitmap "${key}" from database`}
                           aria-label={`Delete bitmap ${key}`}
                         >
