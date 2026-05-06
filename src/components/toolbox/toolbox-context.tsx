@@ -349,10 +349,17 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
 
   const setFeatureToggle = useCallback((key: string, on: boolean) => {
     const { filters } = stateRef.current
-    const allOf = on
-      ? [...new Set([...filters.features.allOf, key])]
-      : filters.features.allOf.filter(k => k !== key)
-    const anyOf = filters.features.anyOf.filter(k => k !== key)
+    const isAbstraction = key.startsWith('data/abstraction/')
+    const allOf = isAbstraction
+      ? filters.features.allOf.filter(k => k !== key)
+      : on
+        ? [...new Set([...filters.features.allOf, key])]
+        : filters.features.allOf.filter(k => k !== key)
+    const anyOf = isAbstraction
+      ? on
+        ? [...new Set([...filters.features.anyOf, key])]
+        : filters.features.anyOf.filter(k => k !== key)
+      : filters.features.anyOf.filter(k => k !== key)
     const noneOf = filters.features.noneOf.filter(k => k !== key)
     dispatch({
       type: 'SET_FILTERS',
