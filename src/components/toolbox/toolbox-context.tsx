@@ -378,6 +378,10 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
         const node = findTreeNode(tree.payload, activeContextPath)
         await updateWorkspacePath(activeWorkspaceName, activeContextPath, {
           metadata: { ...(node?.metadata || {}), toolbox: filters },
+          querySpec: {
+            features: filters.features,
+            filters: [],
+          },
         }, activeTreeName || DEFAULT_WORKSPACE_TREE_NAME)
       } else if (activeContextType === 'context' && activeContextId) {
         const ctx = await getContext(activeContextId)
