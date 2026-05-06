@@ -5,11 +5,11 @@ import { API_ROUTES } from '@/config/api';
 import { useToast } from '@/components/ui/toast-container';
 import { DefaultCanvas } from '@/components/canvas/DefaultCanvas';
 import type { CanvasInfo } from '@/components/canvas/DefaultCanvas';
-import { getCanvas, createCanvas } from '@/services/canvas';
 import {
   getWorkspaceDocuments,
   getWorkspaceLayerDocuments,
   getWorkspaceTreeByName,
+  createWorkspaceCanvas,
   pasteDocumentsToWorkspacePath,
   importDocumentsToWorkspacePath,
   removeWorkspaceDocuments,
@@ -186,7 +186,6 @@ export default function WorkspaceDetailPage() {
   // Resolve leaf node from path against the loaded tree.
   // Path is the URL truth; type/id/canvas-hints derived locally — no extra API call.
   useEffect(() => {
-    let cancelled = false;
     if (!tree || selectedPath === '/' || isLayerView) {
       setCanvasInfo(null);
       setSelectedNodeType(null);
@@ -205,17 +204,8 @@ export default function WorkspaceDetailPage() {
     }
 
     setSelectedNodeType('canvas');
-    // Tree payload may already carry label/color/description on the layer node;
-    // fall back to those before issuing a getCanvas fetch (keeps full querySpec
-    // / metadata for canvas-specific UI affordances).
     setCanvasInfo({ label: node.label, description: node.description, color: node.color });
-    if (workspaceName && node.id) {
-      getCanvas(workspaceName, node.id, selectedTreeName)
-        .then(c => { if (!cancelled) setCanvasInfo({ label: c.label, description: c.description, color: c.color }); })
-        .catch(() => {});
-    }
-    return () => { cancelled = true; };
-  }, [tree, selectedPath, isLayerView, workspaceName, selectedTreeName]);
+  }, [tree, selectedPath, isLayerView]);
 
   const handleStartWorkspace = async () => {
     if (!workspace) return;
@@ -406,7 +396,7 @@ export default function WorkspaceDetailPage() {
     try {
       const name = saveAsCanvasName.trim();
       const path = selectedPath === '/' ? `/${name}` : `${selectedPath}/${name}`;
-      await createCanvas(workspaceName, { path, treeName: selectedTreeName });
+      await createWorkspaceCanvas(workspaceName, path, selectedTreeName);
       setSaveAsCanvasOpen(false);
       window.dispatchEvent(new CustomEvent('workspace:tree:refresh', { detail: { workspaceName } }));
       navigate(buildWorkspaceUrl(workspaceName!, path, selectedTreeName));

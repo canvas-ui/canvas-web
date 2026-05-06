@@ -65,29 +65,6 @@ export interface TreeNode {
   children: TreeNode[]
 }
 
-// Canonical canvas payload returned by /workspaces/:wid/canvases endpoints.
-export interface Canvas {
-  schemaVersion: string
-  id: string
-  type: 'canvas'
-  name: string
-  label: string
-  description: string
-  color: string | null
-  locked: boolean
-  lockedBy: string[]
-  metadata: LayerMetadata
-  acl: Record<string, unknown>
-  querySpec: CanvasQuerySpec
-  // Joined fields the route adds for convenience
-  treeId: string
-  treeName: string
-  path: string | null
-  // Only present on the top-level /canvases alias responses
-  workspaceId?: string
-  workspaceName?: string
-}
-
 // Document structure from API
 export interface Document {
   id: number

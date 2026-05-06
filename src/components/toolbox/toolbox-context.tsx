@@ -10,9 +10,14 @@ import {
 import { useLocation } from 'react-router-dom'
 import type { ToolboxFilters, ToolboxTimelineFilters } from '@/types/workspace'
 import { DEFAULT_TOOLBOX_FILTERS } from '@/types/workspace'
-import { listWorkspaceBitmaps, deleteWorkspaceBitmap, getWorkspaceTreeByName } from '@/services/workspace'
+import {
+  DEFAULT_WORKSPACE_TREE_NAME,
+  listWorkspaceBitmaps,
+  deleteWorkspaceBitmap,
+  getWorkspaceTreeByName,
+  updateWorkspacePath,
+} from '@/services/workspace'
 import type { TreeNode } from '@/types/workspace'
-import { getCanvas, updateCanvas } from '@/services/canvas'
 import { getContext, patchContext } from '@/services/context'
 import { parseWorkspacePathFromUrl } from '@/utils/url-params'
 
@@ -33,6 +38,7 @@ export interface ToolboxState {
   activeContextPath: string | null
   activeContextType: ActiveContextType
   activeWorkspaceName: string | null
+  activeTreeName: string | null
   activeCanvasId: string | null
   activeContextId: string | null
   // Filters
@@ -57,6 +63,7 @@ type ToolboxAction =
   | {
       type: 'SET_NAVIGATION'
       workspaceName: string | null
+      treeName: string | null
       canvasId: string | null
       contextId: string | null
       contextType: ActiveContextType
@@ -83,6 +90,7 @@ const initialState: ToolboxState = {
   activeContextPath: null,
   activeContextType: null,
   activeWorkspaceName: null,
+  activeTreeName: null,
   activeCanvasId: null,
   activeContextId: null,
   filters: DEFAULT_TOOLBOX_FILTERS,
@@ -112,6 +120,7 @@ function toolboxReducer(state: ToolboxState, action: ToolboxAction): ToolboxStat
       return {
         ...state,
         activeWorkspaceName: action.workspaceName,
+        activeTreeName: action.treeName,
         activeCanvasId: action.canvasId,
         activeContextId: action.contextId,
         activeContextType: action.contextType,
@@ -189,6 +198,15 @@ function extractToolboxFilters(metadata: Record<string, unknown> | undefined): T
   }
 }
 
+function findTreeNode(root: TreeNode, path: string): TreeNode | null {
+  let node: TreeNode | null = root
+  for (const segment of path.split('/').filter(Boolean)) {
+    node = node?.children?.find(child => child.name === segment) ?? null
+    if (!node) break
+  }
+  return node
+}
+
 // ─── Context value ────────────────────────────────────────────────────────────
 
 interface ToolboxContextValue {
@@ -244,6 +262,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
       dispatch({
         type: 'SET_NAVIGATION',
         workspaceName: newWorkspaceName,
+        treeName: newWorkspaceName ? wsTreeName : null,
         canvasId,
         contextId: newContextId,
         contextType,
@@ -257,12 +276,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
       getWorkspaceTreeByName(newWorkspaceName, wsTreeName)
         .then(res => {
           if (cancelled) return
-          const segments = wsPath.split('/').filter(Boolean)
-          let node: TreeNode | null = res.payload
-          for (const seg of segments) {
-            node = node?.children?.find(c => c.name === seg) ?? null
-            if (!node) break
-          }
+          const node = findTreeNode(res.payload, wsPath)
           dispatchNav(node?.type === 'canvas' ? node.id : null)
         })
         .catch(() => dispatchNav(null))
@@ -286,11 +300,12 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
   // ── Load filters when canvas/context/session changes ──────────────────────
 
   useEffect(() => {
-    const { activeContextType, activeCanvasId, activeContextId, activeWorkspaceName } = state
+    const { activeContextType, activeCanvasId, activeContextId, activeWorkspaceName, activeTreeName, activeContextPath } = state
 
-    if (activeContextType === 'canvas' && activeCanvasId && activeWorkspaceName) {
-      getCanvas(activeWorkspaceName, activeCanvasId).then(canvas => {
-        const saved = extractToolboxFilters(canvas.metadata)
+    if (activeContextType === 'canvas' && activeCanvasId && activeWorkspaceName && activeContextPath) {
+      getWorkspaceTreeByName(activeWorkspaceName, activeTreeName || DEFAULT_WORKSPACE_TREE_NAME).then(res => {
+        const node = findTreeNode(res.payload, activeContextPath)
+        const saved = extractToolboxFilters(node?.metadata)
         dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: saved })
       }).catch(() => {
         dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: null })
@@ -309,7 +324,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: session })
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.activeCanvasId, state.activeContextId, state.activeContextType])
+  }, [state.activeCanvasId, state.activeContextId, state.activeContextPath, state.activeContextType, state.activeTreeName, state.activeWorkspaceName])
 
   // ── Auto-save session filters when not in canvas/context mode ────────────
 
@@ -354,15 +369,16 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const saveFilters = useCallback(async () => {
-    const { activeContextType, activeCanvasId, activeContextId, activeWorkspaceName, filters, isSaving } = stateRef.current
+    const { activeContextType, activeContextId, activeWorkspaceName, activeTreeName, activeContextPath, filters, isSaving } = stateRef.current
     if (isSaving) return
     dispatch({ type: 'SET_SAVING', isSaving: true })
     try {
-      if (activeContextType === 'canvas' && activeCanvasId && activeWorkspaceName) {
-        const canvas = await getCanvas(activeWorkspaceName, activeCanvasId)
-        await updateCanvas(activeWorkspaceName, activeCanvasId, {
-          metadata: { ...canvas.metadata, toolbox: filters },
-        })
+      if (activeContextType === 'canvas' && activeWorkspaceName && activeContextPath) {
+        const tree = await getWorkspaceTreeByName(activeWorkspaceName, activeTreeName || DEFAULT_WORKSPACE_TREE_NAME)
+        const node = findTreeNode(tree.payload, activeContextPath)
+        await updateWorkspacePath(activeWorkspaceName, activeContextPath, {
+          metadata: { ...(node?.metadata || {}), toolbox: filters },
+        }, activeTreeName || DEFAULT_WORKSPACE_TREE_NAME)
       } else if (activeContextType === 'context' && activeContextId) {
         const ctx = await getContext(activeContextId)
         const existingMeta = (ctx as Context & { metadata?: Record<string, unknown> }).metadata || {}

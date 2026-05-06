@@ -32,6 +32,19 @@ function getWorkspaceTreeBaseRoute(workspaceId: string, treeName = DEFAULT_WORKS
   return `${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}`
 }
 
+function encodeTreePath(path: string) {
+  return String(path || '/')
+    .split('/')
+    .filter(Boolean)
+    .map(encodeURIComponent)
+    .join('/')
+}
+
+function getWorkspaceTreePathRoute(workspaceId: string, treeName: string, path: string) {
+  const encodedPath = encodeTreePath(path)
+  return `${getWorkspaceTreeBaseRoute(workspaceId, treeName)}/path/${encodedPath}`
+}
+
 export async function getWorkspace(id: string): Promise<Workspace> {
   const response = await api.get<{ payload: { workspace: Workspace } | Workspace }>(`${API_ROUTES.workspaces}/${id}`)
   const p = response.payload
@@ -216,26 +229,52 @@ export async function updateWorkspace(id: string, payload: Partial<CreateWorkspa
 }
 
 // Workspace tree operations
-export async function insertWorkspacePath(workspaceId: string, path: string, autoCreateLayers = true, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<boolean> {
+export async function insertWorkspacePath(workspaceId: string, path: string, autoCreateLayers = true, treeName = DEFAULT_WORKSPACE_TREE_NAME, type: 'context' | 'canvas' = 'context'): Promise<boolean> {
   try {
-    const response = await api.post<{ payload: boolean; message: string; status: string; statusCode: number }>(
-      `${getWorkspaceTreeBaseRoute(workspaceId, treeName)}/paths`,
-      { path, autoCreateLayers }
+    await api.put<{ payload: unknown; message: string; status: string; statusCode: number }>(
+      getWorkspaceTreePathRoute(workspaceId, treeName, path),
+      { type, autoCreateLayers }
     );
-    return response.payload;
+    return true;
   } catch (error) {
     console.error(`Failed to insert workspace path ${path}:`, error);
     throw error;
   }
 }
 
+export async function createWorkspaceCanvas(workspaceId: string, path: string, treeName = DEFAULT_WORKSPACE_TREE_NAME, options: { querySpec?: object; metadata?: object } = {}): Promise<boolean> {
+  try {
+    await api.put<{ payload: unknown; message: string; status: string; statusCode: number }>(
+      getWorkspaceTreePathRoute(workspaceId, treeName, path),
+      { type: 'canvas', ...options }
+    )
+    return true
+  } catch (error) {
+    console.error(`Failed to create workspace canvas ${path}:`, error)
+    throw error
+  }
+}
+
+export async function updateWorkspacePath(workspaceId: string, path: string, updates: Record<string, unknown>, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<boolean> {
+  try {
+    await api.patch<{ payload: unknown; message: string; status: string; statusCode: number }>(
+      getWorkspaceTreePathRoute(workspaceId, treeName, path),
+      updates
+    )
+    return true
+  } catch (error) {
+    console.error(`Failed to update workspace path ${path}:`, error)
+    throw error
+  }
+}
+
 export async function removeWorkspacePath(workspaceId: string, path: string, recursive = false, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<boolean> {
   try {
-    const params = new URLSearchParams({ path, recursive: recursive.toString() });
-    const response = await api.delete<{ payload: boolean; message: string; status: string; statusCode: number }>(
-      `${getWorkspaceTreeBaseRoute(workspaceId, treeName)}/paths?${params.toString()}`
+    const params = new URLSearchParams({ recursive: recursive.toString() });
+    await api.delete<{ payload: unknown; message: string; status: string; statusCode: number }>(
+      `${getWorkspaceTreePathRoute(workspaceId, treeName, path)}?${params.toString()}`
     );
-    return response.payload;
+    return true;
   } catch (error) {
     console.error(`Failed to remove workspace path ${path}:`, error);
     throw error;
@@ -244,11 +283,11 @@ export async function removeWorkspacePath(workspaceId: string, path: string, rec
 
 export async function moveWorkspacePath(workspaceId: string, fromPath: string, toPath: string, recursive = false, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<boolean> {
   try {
-    const response = await api.post<{ payload: boolean; message: string; status: string; statusCode: number }>(
-      `${getWorkspaceTreeBaseRoute(workspaceId, treeName)}/paths/move`,
-      { from: fromPath, to: toPath, recursive }
+    await api.patch<{ payload: unknown; message: string; status: string; statusCode: number }>(
+      getWorkspaceTreePathRoute(workspaceId, treeName, fromPath),
+      { to: toPath, recursive }
     );
-    return response.payload;
+    return true;
   } catch (error) {
     console.error(`Failed to move workspace path from ${fromPath} to ${toPath}:`, error);
     throw error;
@@ -257,11 +296,11 @@ export async function moveWorkspacePath(workspaceId: string, fromPath: string, t
 
 export async function copyWorkspacePath(workspaceId: string, fromPath: string, toPath: string, recursive = false, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<boolean> {
   try {
-    const response = await api.post<{ payload: boolean; message: string; status: string; statusCode: number }>(
-      `${getWorkspaceTreeBaseRoute(workspaceId, treeName)}/paths/copy`,
-      { from: fromPath, to: toPath, recursive }
+    await api.post<{ payload: unknown; message: string; status: string; statusCode: number }>(
+      getWorkspaceTreePathRoute(workspaceId, treeName, fromPath),
+      { to: toPath, recursive }
     );
-    return response.payload;
+    return true;
   } catch (error) {
     console.error(`Failed to copy workspace path from ${fromPath} to ${toPath}:`, error);
     throw error;

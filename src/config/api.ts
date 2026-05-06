@@ -51,9 +51,6 @@ export const API_ROUTES = {
   // Contexts
   contexts: `${API_URL}/contexts`,
 
-  // Canvases (top-level convenience alias; CRUD lives under /workspaces/:wid/canvases)
-  canvases: `${API_URL}/canvases`,
-
   // Admin routes
   admin: {
     users: `${API_URL}/admin/users`,
