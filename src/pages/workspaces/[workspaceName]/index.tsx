@@ -29,6 +29,8 @@ export default function WorkspaceDetailPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const searchParams = new URLSearchParams(location.search);
+  const urlSearchQuery = searchParams.get('q') || searchParams.get('search') || '';
 
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(true);
@@ -50,7 +52,7 @@ export default function WorkspaceDetailPage() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
-  const [serverSearchQuery, setServerSearchQuery] = useState('');
+  const [serverSearchQuery, setServerSearchQuery] = useState(urlSearchQuery);
 
   const { state: toolboxState } = useToolbox();
   const tbAllOf = toolboxState.filters.features.allOf;
@@ -62,7 +64,6 @@ export default function WorkspaceDetailPage() {
   const selectedPath = sanitizeUrlPath('/' + (pathSplat ?? ''));
   const selectedTreeName = treeName ?? DEFAULT_WORKSPACE_TREE_NAME;
 
-  const searchParams = new URLSearchParams(location.search);
   const isLayerView = searchParams.get('layer') === '1';
   const selectedLayerId = searchParams.get('layerId') || null;
   // Leaf node type / canvas id are derived from the path against the loaded tree —
@@ -159,6 +160,24 @@ export default function WorkspaceDetailPage() {
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedPath, selectedTreeName, selectedLayerId]);
+
+  useEffect(() => {
+    setServerSearchQuery(urlSearchQuery);
+    setCurrentPage(1);
+  }, [urlSearchQuery]);
+
+  const handleBackendSearch = useCallback((query: string) => {
+    const trimmed = query.trim();
+    const params = new URLSearchParams(location.search);
+    if (trimmed) {
+      params.set('q', trimmed);
+    } else {
+      params.delete('q');
+      params.delete('search');
+    }
+    const nextSearch = params.toString();
+    navigate(`${location.pathname}${nextSearch ? `?${nextSearch}` : ''}`);
+  }, [location.pathname, location.search, navigate]);
 
   // Load the workspace tree once per (workspace, treeName) so we can resolve
   // leaf node type / id locally without an extra round-trip.
@@ -486,7 +505,7 @@ export default function WorkspaceDetailPage() {
           canvasInfo={canvasInfo ?? undefined}
           onSaveAsCanvas={selectedNodeType !== 'canvas' && !isLayerView ? handleSaveAsCanvas : undefined}
           backendSearchQuery={serverSearchQuery}
-          onBackendSearch={(q) => { setServerSearchQuery(q); setCurrentPage(1); }}
+          onBackendSearch={handleBackendSearch}
         />
       </div>
 
