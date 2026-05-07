@@ -163,6 +163,7 @@ export default function ContextDetailPage() {
 
   const handleBackendSearch = useCallback((query: string) => {
     const trimmed = query.trim();
+    setServerSearchQuery(trimmed);
     const params = new URLSearchParams(location.search);
     if (trimmed) {
       setIgnoreSavedSearch(false);

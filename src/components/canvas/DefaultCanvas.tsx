@@ -1,4 +1,4 @@
-import { LayoutDashboard, BookMarked, Share2, Unlink } from 'lucide-react'
+import { LayoutDashboard, BookMarked, Share2, Unlink, Save } from 'lucide-react'
 import { Document } from '@/types/workspace'
 import { DocumentList } from '@/components/common/document-list'
 
@@ -107,6 +107,17 @@ export function DefaultCanvas({
               </span>
             )}
           </div>
+          {canSaveChanges && onSaveChanges && (
+            <button
+              type="button"
+              onClick={onSaveChanges}
+              disabled={isSavingChanges}
+              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 text-xs border rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              <Save className="w-3 h-3" />
+              {isSavingChanges ? 'Saving...' : 'Save canvas'}
+            </button>
+          )}
           {onShareCanvas && (
             <button
               type="button"
@@ -175,7 +186,7 @@ export function DefaultCanvas({
           disablePurgeDocuments={disablePurgeDocuments}
           backendSearchQuery={backendSearchQuery}
           onBackendSearch={onBackendSearch}
-          canSaveChanges={canSaveChanges}
+          canSaveChanges={!isCanvas && canSaveChanges}
           isSavingChanges={isSavingChanges}
           onSaveChanges={onSaveChanges}
         />
