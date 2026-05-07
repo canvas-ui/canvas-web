@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Copy, Database, ExternalLink, RefreshCw, Server, Trash2, Unlink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { HooksPanel } from '@/components/workspace/hooks-panel'
 import { ImapMailboxesPanel } from '@/components/workspace/imap-mailboxes-panel'
 import { TokenManager } from '@/components/workspace/token-manager'
 import { useToast } from '@/components/ui/toast-container'
@@ -24,7 +25,7 @@ import {
   type WorkspaceServicesStatus,
 } from '@/services/workspace'
 
-type SettingsTab = 'general' | 'data' | 'services' | 'shares'
+type SettingsTab = 'general' | 'data' | 'services' | 'shares' | 'hooks'
 type ServiceId = 'dotfiles' | 'git' | 'home' | 'webdav' | 'imap' | 'imapSync'
 
 const DATA_BACKEND_LABELS: Record<string, { title: string; description: string }> = {
@@ -258,6 +259,7 @@ export default function WorkspaceSettingsPage() {
           ['data', 'Data Backends'],
           ['services', 'Services'],
           ['shares', 'Shares / ACL'],
+          ['hooks', 'Hooks'],
         ].map(([id, title]) => (
           <button
             key={id}
@@ -418,6 +420,12 @@ export default function WorkspaceSettingsPage() {
             <ImapMailboxesPanel workspaceId={workspaceId} enabled={!!(services?.imap?.enabled || services?.imapSync?.enabled)} />
           </section>
         </div>
+      )}
+
+      {activeTab === 'hooks' && (
+        <section className="rounded-lg border p-4">
+          <HooksPanel workspaceId={workspaceId} />
+        </section>
       )}
     </div>
   )
