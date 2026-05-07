@@ -6,7 +6,7 @@ import { buildWorkspaceUrl, parseWorkspacePathFromUrl } from '@/utils/url-params
 import { M2Header } from '@/components/menu/shared/M2Header'
 import { MenuTreeView } from '@/components/menu/shared/MenuTreeView'
 import { useMenu } from '@/components/shell/menu-context'
-import { getWorkspace, getWorkspaceTreeByName, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer, pasteDocumentsToWorkspacePath, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
+import { getWorkspace, getWorkspaceTreeByName, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer, pasteDocumentsToWorkspacePath, createPublicCanvasShare, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
 import type { Layer } from '@/services/workspace'
 import { useTreeOperations } from '@/hooks/useTreeOperations'
 import type { TreeNode } from '@/types/workspace'
@@ -209,6 +209,15 @@ export function WorkspaceM2() {
     navigate(`${buildWorkspaceUrl(wsName!, path, treeName)}?${uiParams.toString()}`)
   }, [wsName, activeTab, navigate])
 
+  const handleShareCanvas = useCallback(async (path: string) => {
+    if (!wsName) return
+    const treeName = activeTab === 'layers' ? DEFAULT_WORKSPACE_TREE_NAME : activeTab
+    const share = await createPublicCanvasShare(wsName, path, treeName)
+    const url = `${window.location.origin}${share.url}`
+    await navigator.clipboard?.writeText(url)
+    alert(`Canvas share link copied:\n${url}`)
+  }, [wsName, activeTab])
+
   const q = searchQuery.toLowerCase().trim()
   const filteredLayers = q ? layers.filter(l =>
     l.name.toLowerCase().includes(q) ||
@@ -316,6 +325,7 @@ export function WorkspaceM2() {
             contentPath={contentPath}
             onSelect={handlePathSelect}
             onShowContent={handleShowContent}
+            onShareCanvas={handleShareCanvas}
             isLoading={isLoadingTree}
             rootLabel={wsName ?? undefined}
             searchQuery={searchQuery}

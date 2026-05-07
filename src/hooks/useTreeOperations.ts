@@ -29,6 +29,7 @@ interface UseTreeOperationsOptions {
 
 export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh }: UseTreeOperationsOptions) {
   const wsTree = treeName || DEFAULT_WORKSPACE_TREE_NAME
+  const isDirectoryTree = wsTree === 'directory'
 
   const refresh = useCallback((delay = 150) => {
     if (onRefresh) setTimeout(onRefresh, delay)
@@ -140,7 +141,7 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     onMergeLayer, onSubtractLayer,
     onLockLayer: workspaceId ? onLockLayer : undefined,
     onUnlockLayer: workspaceId ? onUnlockLayer : undefined,
-    onDestroyLayer: workspaceId ? onDestroyLayer : undefined,
+    onDestroyLayer: workspaceId && !isDirectoryTree ? onDestroyLayer : undefined,
     onCreateCanvas: workspaceId ? onCreateCanvas : undefined,
   }
 }

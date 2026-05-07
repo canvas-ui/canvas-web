@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useLocation } from 'react-router-dom';
+import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useToast } from '@/components/ui/toast-container';
 import {
   getContext,
@@ -48,7 +48,9 @@ interface ContextData {
 export default function ContextDetailPage() {
   const { contextId } = useParams<{ contextId: string }>();
   const location = useLocation();
+  const navigate = useNavigate();
   const ownerId = new URLSearchParams(location.search).get('ownerId') || undefined;
+  const urlSearchQuery = new URLSearchParams(location.search).get('q') || new URLSearchParams(location.search).get('search') || '';
   const { showToast } = useToast();
   const { state: toolboxState } = useToolbox();
   const tbAllOf = toolboxState.filters.features.allOf;
@@ -65,7 +67,7 @@ export default function ContextDetailPage() {
   const [copiedDocuments, setCopiedDocuments] = useState<number[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
-  const [serverSearchQuery, setServerSearchQuery] = useState('');
+  const [serverSearchQuery, setServerSearchQuery] = useState(urlSearchQuery);
 
   const layerParam = new URLSearchParams(location.search).get('layer');
   const isSharedContext = Boolean(ownerId);
@@ -148,6 +150,20 @@ export default function ContextDetailPage() {
   useEffect(() => { fetchContextDetails(); }, [fetchContextDetails]);
   useEffect(() => { if (context) fetchDocuments(); }, [context?.id, fetchDocuments]);
   useEffect(() => { setCurrentPage(1); }, [contextId]);
+  useEffect(() => { setServerSearchQuery(urlSearchQuery); setCurrentPage(1); }, [urlSearchQuery]);
+
+  const handleBackendSearch = useCallback((query: string) => {
+    const trimmed = query.trim();
+    const params = new URLSearchParams(location.search);
+    if (trimmed) {
+      params.set('q', trimmed);
+    } else {
+      params.delete('q');
+      params.delete('search');
+    }
+    const next = params.toString();
+    navigate(`${location.pathname}${next ? `?${next}` : ''}`);
+  }, [location.pathname, location.search, navigate]);
 
   // WebSocket subscription for real-time context and document updates
   useEffect(() => {
@@ -333,7 +349,7 @@ export default function ContextDetailPage() {
         onImportDocuments={!isSharedContext ? handleImportDocuments : undefined}
         pastedDocumentIds={copiedDocuments}
         backendSearchQuery={serverSearchQuery}
-        onBackendSearch={(q) => { setServerSearchQuery(q); setCurrentPage(1); }}
+        onBackendSearch={handleBackendSearch}
       />
     </div>
   );

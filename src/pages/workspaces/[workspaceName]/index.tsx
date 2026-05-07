@@ -435,7 +435,14 @@ export default function WorkspaceDetailPage() {
     try {
       const name = saveAsCanvasName.trim();
       const path = selectedPath === '/' ? `/${name}` : `${selectedPath}/${name}`;
-      await createWorkspaceCanvas(workspaceName, path, selectedTreeName);
+      await createWorkspaceCanvas(workspaceName, path, selectedTreeName, {
+        metadata: { toolbox: toolboxState.filters },
+        querySpec: {
+          features: toolboxState.filters.features,
+          filters: [],
+          query: serverSearchQuery.trim() || undefined,
+        },
+      });
       setSaveAsCanvasOpen(false);
       window.dispatchEvent(new CustomEvent('workspace:tree:refresh', { detail: { workspaceName } }));
       navigate(buildWorkspaceUrl(workspaceName!, path, selectedTreeName));
@@ -529,7 +536,7 @@ export default function WorkspaceDetailPage() {
       {/* Canvas */}
       <div className="flex-1 min-h-0">
         <DefaultCanvas
-          urlType={isLayerView ? (selectedTreeName === 'directory' ? 'directory-layer' : 'context-layer') : (selectedTreeName === 'directory' ? 'directory' : selectedNodeType === 'canvas' ? 'canvas' : 'context')}
+          urlType={isLayerView ? (selectedTreeName === 'directory' ? 'directory-layer' : 'context-layer') : (selectedNodeType === 'canvas' ? 'canvas' : selectedTreeName === 'directory' ? 'directory' : 'context')}
           urlDisplay={urlDisplay}
           contextPath={selectedPath}
           documents={documents}

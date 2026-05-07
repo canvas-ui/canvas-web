@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { X, Save, Loader2, Search, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToolbox, type ToolsTab } from '@/components/toolbox/toolbox-context'
@@ -317,7 +318,11 @@ interface ToolsPanelProps {
 
 export function ToolsPanel({ onClose }: ToolsPanelProps) {
   const { state, setToolsTab, saveFilters } = useToolbox()
-  const { toolsTab, isDirty, isSaving, activeContextType } = state
+  const { toolsTab, isDirty, isSaving, activeContextType, savedSearchQuery } = state
+  const location = useLocation()
+  const currentSearchQuery = new URLSearchParams(location.search).get('q') || new URLSearchParams(location.search).get('search') || ''
+  const searchDirty = activeContextType !== null && currentSearchQuery.trim() !== (savedSearchQuery || '')
+  const canSave = activeContextType !== null && (isDirty || searchDirty)
 
   const tabs: { id: ToolsTab; label: string }[] = [
     { id: 'timeline', label: 'Timeline' },
@@ -330,7 +335,7 @@ export function ToolsPanel({ onClose }: ToolsPanelProps) {
       <div className="flex items-center justify-between px-4 h-12 bg-zinc-900 shrink-0">
         <span className="text-sm font-medium text-zinc-100">Tools</span>
         <div className="flex items-center gap-2">
-          {isDirty && activeContextType !== null && (
+          {canSave && (
             <button
               type="button"
               onClick={saveFilters}

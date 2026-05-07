@@ -44,6 +44,7 @@ export interface ToolboxState {
   // Filters
   filters: ToolboxFilters
   savedFilters: ToolboxFilters | null
+  savedSearchQuery: string | null
   isDirty: boolean
   isSaving: boolean
   // Bitmaps
@@ -70,7 +71,7 @@ type ToolboxAction =
       contextPath: string | null
     }
   | { type: 'SET_FILTERS'; filters: ToolboxFilters }
-  | { type: 'SET_SAVED_FILTERS'; savedFilters: ToolboxFilters | null }
+  | { type: 'SET_SAVED_FILTERS'; savedFilters: ToolboxFilters | null; savedSearchQuery?: string | null }
   | { type: 'SET_SAVING'; isSaving: boolean }
   | { type: 'SET_BITMAPS'; keys: string[] }
   | { type: 'SET_BITMAPS_LOADING'; loading: boolean }
@@ -95,6 +96,7 @@ const initialState: ToolboxState = {
   activeContextId: null,
   filters: DEFAULT_TOOLBOX_FILTERS,
   savedFilters: null,
+  savedSearchQuery: null,
   isDirty: false,
   isSaving: false,
   availableBitmaps: [],
@@ -138,6 +140,7 @@ function toolboxReducer(state: ToolboxState, action: ToolboxAction): ToolboxStat
       return {
         ...state,
         savedFilters: action.savedFilters,
+        savedSearchQuery: action.savedSearchQuery ?? null,
         filters: action.savedFilters ?? DEFAULT_TOOLBOX_FILTERS,
         isDirty: false,
       }
@@ -306,22 +309,26 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
       getWorkspaceTreeByName(activeWorkspaceName, activeTreeName || DEFAULT_WORKSPACE_TREE_NAME).then(res => {
         const node = findTreeNode(res.payload, activeContextPath)
         const saved = extractToolboxFilters(node?.metadata)
-        dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: saved })
+        dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: saved, savedSearchQuery: node?.querySpec?.query ?? null })
       }).catch(() => {
-        dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: null })
+        dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: null, savedSearchQuery: null })
       })
     } else if (activeContextType === 'context' && activeContextId) {
       getContext(activeContextId).then(ctx => {
         const metadata = (ctx as Context & { metadata?: Record<string, unknown> }).metadata
         const saved = extractToolboxFilters(metadata)
-        dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: saved })
+        dispatch({
+          type: 'SET_SAVED_FILTERS',
+          savedFilters: saved,
+          savedSearchQuery: typeof metadata?.toolboxSearchQuery === 'string' ? metadata.toolboxSearchQuery : null,
+        })
       }).catch(() => {
-        dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: null })
+        dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: null, savedSearchQuery: null })
       })
     } else {
       // Regular layer — restore session filters
       const session = loadSessionFilters()
-      dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: session })
+      dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: session, savedSearchQuery: null })
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.activeCanvasId, state.activeContextId, state.activeContextPath, state.activeContextType, state.activeTreeName, state.activeWorkspaceName])
@@ -395,11 +402,13 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
       } else if (activeContextType === 'context' && activeContextId) {
         const ctx = await getContext(activeContextId)
         const existingMeta = (ctx as Context & { metadata?: Record<string, unknown> }).metadata || {}
+        const searchQuery = new URLSearchParams(location.search).get('q') || new URLSearchParams(location.search).get('search') || ''
         await patchContext(activeContextId, {
-          metadata: { ...existingMeta, toolbox: filters },
+          metadata: { ...existingMeta, toolbox: filters, toolboxSearchQuery: searchQuery.trim() || undefined },
         })
       }
-      dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: filters })
+      const searchQuery = new URLSearchParams(location.search).get('q') || new URLSearchParams(location.search).get('search') || ''
+      dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: filters, savedSearchQuery: searchQuery.trim() || null })
     } finally {
       dispatch({ type: 'SET_SAVING', isSaving: false })
     }

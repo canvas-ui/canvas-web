@@ -9,7 +9,7 @@ import { createPortal } from 'react-dom'
 import {
   ChevronRight, ChevronDown,
   Plus, Trash2, Edit2, Copy, Scissors, Clipboard,
-  Layers, LayoutDashboard, MoreHorizontal, Lock, Unlock, Eye,
+  Layers, LayoutDashboard, MoreHorizontal, Lock, Unlock, Eye, Share2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { TreeNode } from '@/types/workspace'
@@ -32,6 +32,7 @@ export interface MenuTreeViewProps {
   onRenamePath?: (fromPath: string, newName: string) => Promise<boolean>
   onMovePath?: (from: string, to: string, recursive?: boolean) => Promise<boolean>
   onCopyPath?: (from: string, to: string, recursive?: boolean) => Promise<boolean>
+  onShareCanvas?: (path: string) => Promise<void>
   onLockLayer?: (layerId: string) => Promise<boolean>
   onUnlockLayer?: (layerId: string) => Promise<boolean>
   onDestroyLayer?: (layerId: string) => Promise<boolean>
@@ -61,6 +62,7 @@ interface CtxMenuProps {
   clipboard: Clip | null
   onStartInlineCreate: (parentPath: string, isCanvas?: boolean) => void
   hasCreateCanvas?: boolean
+  onShareCanvas?: MenuTreeViewProps['onShareCanvas']
   onRemove?: MenuTreeViewProps['onRemovePath']
   onRename?: MenuTreeViewProps['onRenamePath']
   onLock?: MenuTreeViewProps['onLockLayer']
@@ -78,7 +80,7 @@ interface CtxMenuProps {
 function CtxMenu({
   x, y, node, path, onClose, onShowContent,
   sourceLayer, targetLayers, clipboard,
-  onStartInlineCreate, hasCreateCanvas, onRemove, onRename,
+  onStartInlineCreate, hasCreateCanvas, onShareCanvas, onRemove, onRename,
   onLock, onUnlock, onDestroy, onMerge, onSubtract,
   onCopy, onCut, onPaste,
   pastedDocumentIds, onPasteDocuments,
@@ -121,6 +123,14 @@ function CtxMenu({
         })}
 
         {onShowContent && <div className="my-1 h-px bg-border" />}
+
+        {node.type === 'canvas' && onShareCanvas && item(
+          <Share2 className="w-3 h-3" />,
+          'Share canvas',
+          async () => { await onShareCanvas(path) },
+        )}
+
+        {node.type === 'canvas' && onShareCanvas && <div className="my-1 h-px bg-border" />}
 
         {/* New folder — inline */}
         <button
@@ -471,7 +481,7 @@ function CardNode({
 export function MenuTreeView({
   root, selectedPath, pendingPath, onSelect, isLoading = false, readOnly = false,
   rootLabel, contentPath, onShowContent,
-  onInsertPath, onCreateCanvas, onRemovePath, onRenamePath, onMovePath, onCopyPath,
+  onInsertPath, onCreateCanvas, onShareCanvas, onRemovePath, onRenamePath, onMovePath, onCopyPath,
   pastedDocumentIds, onPasteDocuments,
   onLockLayer, onUnlockLayer, onDestroyLayer, onMergeLayer, onSubtractLayer,
   searchQuery = '',
@@ -801,6 +811,7 @@ export function MenuTreeView({
           clipboard={clipboard}
           onStartInlineCreate={(path, isCanvas = false) => { setInlineCreateParent(path); setInlineCreateIsCanvas(isCanvas) }}
           hasCreateCanvas={!!onCreateCanvas}
+          onShareCanvas={onShareCanvas}
           onRemove={!readOnly ? onRemovePath : undefined}
           onRename={!readOnly ? onRenamePath : undefined}
           onLock={!readOnly ? onLockLayer : undefined}
