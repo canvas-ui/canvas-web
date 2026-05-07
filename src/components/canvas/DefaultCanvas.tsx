@@ -42,6 +42,9 @@ interface DefaultCanvasProps {
   isCanvasShared?: boolean
   backendSearchQuery?: string
   onBackendSearch?: (query: string) => void
+  canSaveChanges?: boolean
+  isSavingChanges?: boolean
+  onSaveChanges?: () => Promise<void> | void
 }
 
 export function DefaultCanvas({
@@ -76,6 +79,9 @@ export function DefaultCanvas({
   isCanvasShared,
   backendSearchQuery,
   onBackendSearch,
+  canSaveChanges,
+  isSavingChanges,
+  onSaveChanges,
 }: DefaultCanvasProps) {
   const isCanvas = urlType === 'canvas'
 
@@ -169,6 +175,9 @@ export function DefaultCanvas({
           disablePurgeDocuments={disablePurgeDocuments}
           backendSearchQuery={backendSearchQuery}
           onBackendSearch={onBackendSearch}
+          canSaveChanges={canSaveChanges}
+          isSavingChanges={isSavingChanges}
+          onSaveChanges={onSaveChanges}
         />
       </div>
     </div>

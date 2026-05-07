@@ -1,5 +1,5 @@
 import { Document } from '@/types/workspace'
-import { File, Calendar, Hash, Eye, ExternalLink, Globe, Mail, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link } from 'lucide-react'
+import { File, Calendar, Hash, Eye, ExternalLink, Globe, Mail, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link } from 'lucide-react'
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import Fuse from 'fuse.js'
 import {
@@ -42,6 +42,9 @@ interface DocumentListProps {
   disablePurgeDocuments?: boolean
   backendSearchQuery?: string
   onBackendSearch?: (query: string) => void
+  canSaveChanges?: boolean
+  isSavingChanges?: boolean
+  onSaveChanges?: () => Promise<void> | void
 }
 
 interface DocumentRowProps {
@@ -578,7 +581,7 @@ function DocumentRow({ document, isSelected, onSelect, onRemoveDocument, onDelet
   )
 }
 
-export function DocumentList({ documents, isLoading, contextPath, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQuery, onBackendSearch }: DocumentListProps) {
+export function DocumentList({ documents, isLoading, contextPath, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQuery, onBackendSearch, canSaveChanges = false, isSavingChanges = false, onSaveChanges }: DocumentListProps) {
   const [selectedDocuments, setSelectedDocuments] = useState<Set<number>>(new Set())
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; documentIds: number[] } | null>(null)
   const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null)
@@ -848,6 +851,19 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
               >
                 <Search className="h-3.5 w-3.5 mr-1" />
                 Search server
+              </Button>
+            )}
+            {canSaveChanges && onSaveChanges && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onSaveChanges}
+                disabled={isSavingChanges}
+                className="shrink-0"
+                title="Save current query and filters"
+              >
+                <Save className="h-3.5 w-3.5 mr-1" />
+                {isSavingChanges ? 'Saving...' : 'Save changes'}
               </Button>
             )}
           </div>

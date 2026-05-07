@@ -57,8 +57,9 @@ export default function WorkspaceDetailPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [serverSearchQuery, setServerSearchQuery] = useState(urlSearchQuery);
+  const [ignoredSavedSearchPath, setIgnoredSavedSearchPath] = useState<string | null>(null);
 
-  const { state: toolboxState } = useToolbox();
+  const { state: toolboxState, saveFilters } = useToolbox();
   const tbAllOf = toolboxState.filters.features.allOf;
   const tbAnyOf = toolboxState.filters.features.anyOf;
   const tbNoneOf = toolboxState.filters.features.noneOf;
@@ -85,6 +86,9 @@ export default function WorkspaceDetailPage() {
     return node;
   }, [tree, selectedPath, isLayerView]);
   const selectedNodeType = selectedNode?.type === 'canvas' ? 'canvas' : null;
+  const savedCanvasSearchQuery = selectedNodeType === 'canvas' && typeof selectedNode?.querySpec?.query === 'string'
+    ? selectedNode.querySpec.query
+    : '';
   const canvasInfo: CanvasInfo | null = selectedNodeType === 'canvas'
     ? { label: selectedNode?.label, description: selectedNode?.description, color: selectedNode?.color }
     : null;
@@ -189,6 +193,7 @@ export default function WorkspaceDetailPage() {
 
   useEffect(() => {
     setCurrentPage(1);
+    setIgnoredSavedSearchPath(null);
   }, [selectedPath, selectedTreeName, selectedLayerId]);
 
   useEffect(() => {
@@ -196,18 +201,30 @@ export default function WorkspaceDetailPage() {
     setCurrentPage(1);
   }, [urlSearchQuery]);
 
+  useEffect(() => {
+    if (urlSearchQuery || selectedNodeType !== 'canvas' || ignoredSavedSearchPath === selectedPath) return;
+    setServerSearchQuery(savedCanvasSearchQuery);
+    setCurrentPage(1);
+  }, [urlSearchQuery, selectedNodeType, savedCanvasSearchQuery, selectedPath, ignoredSavedSearchPath]);
+
   const handleBackendSearch = useCallback((query: string) => {
     const trimmed = query.trim();
     const params = new URLSearchParams(location.search);
     if (trimmed) {
+      setIgnoredSavedSearchPath(null);
       params.set('q', trimmed);
     } else {
+      setIgnoredSavedSearchPath(selectedPath);
       params.delete('q');
       params.delete('search');
     }
     const nextSearch = params.toString();
     navigate(`${location.pathname}${nextSearch ? `?${nextSearch}` : ''}`);
-  }, [location.pathname, location.search, navigate]);
+  }, [location.pathname, location.search, navigate, selectedPath]);
+
+  const currentSearchQuery = serverSearchQuery.trim();
+  const canSaveChanges = Boolean(toolboxState.activeContextType)
+    && (toolboxState.isDirty || currentSearchQuery !== (selectedNodeType === 'canvas' ? savedCanvasSearchQuery : (toolboxState.savedSearchQuery || '')));
 
   // Keep the tree fresh enough to resolve leaf type locally. Path changes can
   // follow a just-created canvas, so refetch on path navigation too.
@@ -567,6 +584,9 @@ export default function WorkspaceDetailPage() {
           isCanvasShared={!!publicCanvasShare}
           backendSearchQuery={serverSearchQuery}
           onBackendSearch={handleBackendSearch}
+          canSaveChanges={canSaveChanges}
+          isSavingChanges={toolboxState.isSaving}
+          onSaveChanges={saveFilters}
         />
       </div>
 

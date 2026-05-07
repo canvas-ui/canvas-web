@@ -43,6 +43,7 @@ interface ContextData {
   filterArray: string[];
   pendingUrl: string | null;
   description?: string | null;
+  metadata?: Record<string, unknown>;
 }
 
 export default function ContextDetailPage() {
@@ -52,7 +53,7 @@ export default function ContextDetailPage() {
   const ownerId = new URLSearchParams(location.search).get('ownerId') || undefined;
   const urlSearchQuery = new URLSearchParams(location.search).get('q') || new URLSearchParams(location.search).get('search') || '';
   const { showToast } = useToast();
-  const { state: toolboxState } = useToolbox();
+  const { state: toolboxState, saveFilters } = useToolbox();
   const tbAllOf = toolboxState.filters.features.allOf;
   const tbAnyOf = toolboxState.filters.features.anyOf;
   const tbNoneOf = toolboxState.filters.features.noneOf;
@@ -68,11 +69,13 @@ export default function ContextDetailPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [serverSearchQuery, setServerSearchQuery] = useState(urlSearchQuery);
+  const [ignoreSavedSearch, setIgnoreSavedSearch] = useState(false);
 
   const layerParam = new URLSearchParams(location.search).get('layer');
   const isSharedContext = Boolean(ownerId);
   const selectedPath = context ? contextUrlToPath(context.url, context.workspaceName) : '/';
   const urlType = layerParam ? 'context-layer' : 'context';
+  const savedContextSearchQuery = typeof context?.metadata?.toolboxSearchQuery === 'string' ? context.metadata.toolboxSearchQuery : '';
 
   const fetchDocuments = useCallback(async () => {
     if (!contextId) return;
@@ -136,6 +139,7 @@ export default function ContextDetailPage() {
         filterArray: fetched.filterArray || [],
         pendingUrl: fetched.pendingUrl || null,
         description: fetched.description || null,
+        metadata: (fetched as any).metadata || {},
       });
       setError(null);
     } catch (err) {
@@ -149,21 +153,32 @@ export default function ContextDetailPage() {
 
   useEffect(() => { fetchContextDetails(); }, [fetchContextDetails]);
   useEffect(() => { if (context) fetchDocuments(); }, [context?.id, fetchDocuments]);
-  useEffect(() => { setCurrentPage(1); }, [contextId]);
+  useEffect(() => { setCurrentPage(1); setIgnoreSavedSearch(false); }, [contextId]);
   useEffect(() => { setServerSearchQuery(urlSearchQuery); setCurrentPage(1); }, [urlSearchQuery]);
+  useEffect(() => {
+    if (urlSearchQuery || ignoreSavedSearch) return;
+    setServerSearchQuery(savedContextSearchQuery);
+    setCurrentPage(1);
+  }, [urlSearchQuery, ignoreSavedSearch, savedContextSearchQuery]);
 
   const handleBackendSearch = useCallback((query: string) => {
     const trimmed = query.trim();
     const params = new URLSearchParams(location.search);
     if (trimmed) {
+      setIgnoreSavedSearch(false);
       params.set('q', trimmed);
     } else {
+      setIgnoreSavedSearch(true);
       params.delete('q');
       params.delete('search');
     }
     const next = params.toString();
     navigate(`${location.pathname}${next ? `?${next}` : ''}`);
   }, [location.pathname, location.search, navigate]);
+
+  const currentSearchQuery = serverSearchQuery.trim();
+  const canSaveChanges = Boolean(toolboxState.activeContextType)
+    && (toolboxState.isDirty || currentSearchQuery !== (toolboxState.savedSearchQuery || savedContextSearchQuery || ''));
 
   // WebSocket subscription for real-time context and document updates
   useEffect(() => {
@@ -350,6 +365,9 @@ export default function ContextDetailPage() {
         pastedDocumentIds={copiedDocuments}
         backendSearchQuery={serverSearchQuery}
         onBackendSearch={handleBackendSearch}
+        canSaveChanges={canSaveChanges}
+        isSavingChanges={toolboxState.isSaving}
+        onSaveChanges={saveFilters}
       />
     </div>
   );
