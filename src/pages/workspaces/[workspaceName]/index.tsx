@@ -27,6 +27,11 @@ import { Document, TreeNode } from '@/types/workspace';
 import { sanitizeUrlPath, buildWorkspaceUrl } from '@/utils/url-params';
 import { useToolbox } from '@/components/toolbox/toolbox-context';
 
+type WorkspaceSidePane = {
+  treeName: string;
+  path: string;
+};
+
 export default function WorkspaceDetailPage() {
   const { workspaceName, treeName, '*': pathSplat } = useParams<{ workspaceName: string; treeName?: string; '*'?: string }>();
   const location = useLocation();
@@ -75,6 +80,7 @@ export default function WorkspaceDetailPage() {
   // we do not encode them in the URL. The path is the source of truth, mirroring
   // the REST API. See `feedback_url_design` memory for rationale.
   const [tree, setTree] = useState<TreeNode | null>(null);
+  const [sidePane, setSidePane] = useState<WorkspaceSidePane | null>(null);
   const selectedNode = useMemo(() => {
     if (!tree || selectedPath === '/' || isLayerView) return null;
     const segments = selectedPath.split('/').filter(Boolean);
@@ -177,6 +183,16 @@ export default function WorkspaceDetailPage() {
   useEffect(() => {
     fetchDocuments();
   }, [fetchDocuments]);
+
+  useEffect(() => {
+    const onOpenToSide = (event: Event) => {
+      const detail = (event as CustomEvent<WorkspaceSidePane & { workspaceName?: string }>).detail;
+      if (!detail || detail.workspaceName !== workspaceName) return;
+      setSidePane({ treeName: detail.treeName || DEFAULT_WORKSPACE_TREE_NAME, path: sanitizeUrlPath(detail.path || '/') });
+    };
+    window.addEventListener('workspace:open-to-side', onOpenToSide);
+    return () => window.removeEventListener('workspace:open-to-side', onOpenToSide);
+  }, [workspaceName]);
 
   useEffect(() => {
     const onDocumentsRefresh = (event: Event) => {
@@ -501,6 +517,12 @@ export default function WorkspaceDetailPage() {
     }
   };
 
+  const handleFocusSidePane = useCallback((pane: WorkspaceSidePane) => {
+    if (!workspaceName) return;
+    setSidePane({ treeName: selectedTreeName, path: selectedPath });
+    navigate(buildWorkspaceUrl(workspaceName, pane.path, pane.treeName));
+  }, [workspaceName, selectedTreeName, selectedPath, navigate]);
+
   if (isLoadingWorkspace) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -552,43 +574,53 @@ export default function WorkspaceDetailPage() {
       </div>
 
       {/* Canvas */}
-      <div className="flex-1 min-h-0">
-        <DefaultCanvas
-          urlType={isLayerView ? (selectedTreeName === 'directory' ? 'directory-layer' : 'context-layer') : (selectedNodeType === 'canvas' ? 'canvas' : selectedTreeName === 'directory' ? 'directory' : 'context')}
-          urlDisplay={urlDisplay}
-          contextPath={selectedPath}
-          documents={documents}
-          isLoading={isLoadingDocuments}
-          totalCount={documentsTotalCount}
-          currentPage={currentPage}
-          pageSize={pageSize}
-          onPageChange={setCurrentPage}
-          onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }}
-          onRemoveDocument={selectedPath !== '/' ? handleRemoveDocument : undefined}
-          onDeleteDocument={handleDeleteDocument}
-          onDestroyDocument={handleDestroyDocument}
-          onRemoveDocuments={selectedPath !== '/' ? handleRemoveDocuments : undefined}
-          onDeleteDocuments={handleDeleteDocuments}
-          onDestroyDocuments={handleDestroyDocuments}
-          onCopyDocuments={handleCopyDocuments}
-          onCutDocuments={handleCutDocuments}
-          onPasteDocuments={handlePasteDocuments}
-          onImportDocuments={handleImportDocuments}
-          pastedDocumentIds={clipboard?.documentIds}
-          onPurgeDocuments={handlePurgeDocuments}
-          disablePurgeDocuments={false}
-          canvasInfo={canvasInfo ?? undefined}
-          onSaveAsCanvas={tree && selectedNodeType !== 'canvas' && !isLayerView ? handleSaveAsCanvas : undefined}
-          onShareCanvas={selectedNodeType === 'canvas' && !isLayerView ? handleShareCanvas : undefined}
-          onUnshareCanvas={publicCanvasShare ? handleUnshareCanvas : undefined}
-          isSharingCanvas={shareCanvasLoading}
-          isCanvasShared={!!publicCanvasShare}
-          backendSearchQuery={serverSearchQuery}
-          onBackendSearch={handleBackendSearch}
-          canSaveChanges={canSaveChanges}
-          isSavingChanges={toolboxState.isSaving}
-          onSaveChanges={saveFilters}
-        />
+      <div className="flex-1 min-h-0 flex gap-2 p-2 bg-muted/20">
+        <div className="flex-1 min-w-0 rounded-lg border bg-background overflow-hidden">
+          <DefaultCanvas
+            urlType={isLayerView ? (selectedTreeName === 'directory' ? 'directory-layer' : 'context-layer') : (selectedNodeType === 'canvas' ? 'canvas' : selectedTreeName === 'directory' ? 'directory' : 'context')}
+            urlDisplay={urlDisplay}
+            contextPath={selectedPath}
+            documents={documents}
+            isLoading={isLoadingDocuments}
+            totalCount={documentsTotalCount}
+            currentPage={currentPage}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }}
+            onRemoveDocument={selectedPath !== '/' ? handleRemoveDocument : undefined}
+            onDeleteDocument={handleDeleteDocument}
+            onDestroyDocument={handleDestroyDocument}
+            onRemoveDocuments={selectedPath !== '/' ? handleRemoveDocuments : undefined}
+            onDeleteDocuments={handleDeleteDocuments}
+            onDestroyDocuments={handleDestroyDocuments}
+            onCopyDocuments={handleCopyDocuments}
+            onCutDocuments={handleCutDocuments}
+            onPasteDocuments={handlePasteDocuments}
+            onImportDocuments={handleImportDocuments}
+            pastedDocumentIds={clipboard?.documentIds}
+            onPurgeDocuments={handlePurgeDocuments}
+            disablePurgeDocuments={false}
+            canvasInfo={canvasInfo ?? undefined}
+            onSaveAsCanvas={tree && selectedNodeType !== 'canvas' && !isLayerView ? handleSaveAsCanvas : undefined}
+            onShareCanvas={selectedNodeType === 'canvas' && !isLayerView ? handleShareCanvas : undefined}
+            onUnshareCanvas={publicCanvasShare ? handleUnshareCanvas : undefined}
+            isSharingCanvas={shareCanvasLoading}
+            isCanvasShared={!!publicCanvasShare}
+            backendSearchQuery={serverSearchQuery}
+            onBackendSearch={handleBackendSearch}
+            canSaveChanges={canSaveChanges}
+            isSavingChanges={toolboxState.isSaving}
+            onSaveChanges={saveFilters}
+          />
+        </div>
+        {sidePane && workspaceName && (
+          <SideWorkspaceCanvas
+            workspaceName={workspaceName}
+            pane={sidePane}
+            onFocus={() => handleFocusSidePane(sidePane)}
+            onClose={() => setSidePane(null)}
+          />
+        )}
       </div>
 
       {/* Save as canvas dialog */}
@@ -632,6 +664,131 @@ export default function WorkspaceDetailPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function findTreeNode(root: TreeNode | null, path: string): TreeNode | null {
+  if (!root || path === '/') return root;
+  let node: TreeNode | null = root;
+  for (const segment of path.split('/').filter(Boolean)) {
+    node = node?.children?.find(child => child.name === segment) ?? null;
+    if (!node) return null;
+  }
+  return node;
+}
+
+function SideWorkspaceCanvas({
+  workspaceName,
+  pane,
+  onFocus,
+  onClose,
+}: {
+  workspaceName: string;
+  pane: WorkspaceSidePane;
+  onFocus: () => void;
+  onClose: () => void;
+}) {
+  const { showToast } = useToast();
+  const [tree, setTree] = useState<TreeNode | null>(null);
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [clipboard, setClipboard] = useState<{ documentIds: number[]; operation: 'copy' | 'cut' } | null>(null);
+  const treeType: 'context' | 'directory' = pane.treeName === 'directory' ? 'directory' : 'context';
+  const selectedNode = findTreeNode(tree, pane.path);
+  const isCanvas = selectedNode?.type === 'canvas';
+  const urlDisplay = `${workspaceName}://${pane.path === '/' ? '' : pane.path.replace(/^\//, '')}`;
+
+  const fetchPaneDocuments = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await getWorkspaceDocuments(workspaceName, pane.path, [], {
+        limit: pageSize,
+        page: currentPage,
+        treeName: pane.treeName,
+        treeType,
+      });
+      setDocuments((response.payload as Document[]) || []);
+      setTotalCount(response.totalCount || response.count || 0);
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to fetch side pane documents', variant: 'destructive' });
+      setDocuments([]);
+      setTotalCount(0);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [workspaceName, pane.path, pane.treeName, treeType, pageSize, currentPage, showToast]);
+
+  useEffect(() => {
+    getWorkspaceTreeByName(workspaceName, pane.treeName)
+      .then(res => setTree(res.payload))
+      .catch(() => setTree(null));
+  }, [workspaceName, pane.treeName, pane.path]);
+
+  useEffect(() => {
+    fetchPaneDocuments();
+  }, [fetchPaneDocuments]);
+
+  const pasteDocuments = useCallback(async (path: string, documentIds: number[]) => {
+    try {
+      const success = await pasteDocumentsToWorkspacePath(workspaceName, path, documentIds, pane.treeName, treeType);
+      if (success) {
+        setClipboard(null);
+        await fetchPaneDocuments();
+      }
+      return success;
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to paste documents', variant: 'destructive' });
+      return false;
+    }
+  }, [workspaceName, pane.treeName, treeType, fetchPaneDocuments, showToast]);
+
+  return (
+    <div className="relative flex-1 min-w-0 rounded-lg border bg-background overflow-hidden ring-1 ring-primary/20">
+      <button
+        type="button"
+        onClick={onFocus}
+        className="absolute right-16 top-2 z-10 px-2 py-1 text-xs rounded-md border bg-background/90 hover:bg-accent"
+      >
+        Focus
+      </button>
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute right-2 top-2 z-10 px-2 py-1 text-xs rounded-md border bg-background/90 hover:bg-accent"
+      >
+        Close
+      </button>
+      <DefaultCanvas
+        urlType={isCanvas ? 'canvas' : treeType}
+        urlDisplay={urlDisplay}
+        contextPath={pane.path}
+        documents={documents}
+        isLoading={isLoading}
+        totalCount={totalCount}
+        currentPage={currentPage}
+        pageSize={pageSize}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }}
+        onCopyDocuments={(documentIds) => {
+          setClipboard({ documentIds, operation: 'copy' });
+          window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: { documentIds, operation: 'copy' } }));
+        }}
+        onCutDocuments={(documentIds) => {
+          setClipboard({ documentIds, operation: 'cut' });
+          window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: { documentIds, operation: 'cut' } }));
+        }}
+        onPasteDocuments={pasteDocuments}
+        pastedDocumentIds={clipboard?.documentIds}
+        canvasInfo={isCanvas ? {
+          label: selectedNode?.label,
+          description: selectedNode?.description,
+          color: selectedNode?.color,
+        } : undefined}
+      />
     </div>
   );
 }

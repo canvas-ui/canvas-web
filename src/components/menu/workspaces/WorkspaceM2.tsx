@@ -209,6 +209,13 @@ export function WorkspaceM2() {
     navigate(`${buildWorkspaceUrl(wsName!, path, treeName)}?${uiParams.toString()}`)
   }, [wsName, activeTab, navigate])
 
+  const handleOpenToSide = useCallback((path: string, treeName: string) => {
+    if (!wsName) return
+    window.dispatchEvent(new CustomEvent('workspace:open-to-side', {
+      detail: { workspaceName: wsName, treeName, path },
+    }))
+  }, [wsName])
+
   const handleShareCanvas = useCallback(async (path: string) => {
     if (!wsName) return
     const treeName = activeTab === 'layers' ? DEFAULT_WORKSPACE_TREE_NAME : activeTab
@@ -321,10 +328,12 @@ export function WorkspaceM2() {
         ) : (
           <MenuTreeView
             root={activeTree}
+            treeName={activeTab === 'directory' ? 'directory' : DEFAULT_WORKSPACE_TREE_NAME}
             selectedPath={selectedPath}
             contentPath={contentPath}
             onSelect={handlePathSelect}
             onShowContent={handleShowContent}
+            onOpenToSide={handleOpenToSide}
             onShareCanvas={handleShareCanvas}
             isLoading={isLoadingTree}
             rootLabel={wsName ?? undefined}

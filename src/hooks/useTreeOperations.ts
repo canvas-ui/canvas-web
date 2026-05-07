@@ -66,19 +66,19 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     return result
   }, [contextId, workspaceId, wsTree, refresh])
 
-  const onMovePath = useCallback(async (from: string, to: string, recursive = false): Promise<boolean> => {
+  const onMovePath = useCallback(async (from: string, to: string, recursive = false, sourceTreeName = wsTree, targetTreeName = wsTree): Promise<boolean> => {
     let result: boolean
     if (contextId) result = await moveContextPath(contextId, from, to, recursive)
-    else if (workspaceId) result = await moveWorkspacePath(workspaceId, from, to, recursive, wsTree)
+    else if (workspaceId) result = await moveWorkspacePath(workspaceId, from, to, recursive, sourceTreeName, targetTreeName)
     else return false
     refresh()
     return result
   }, [contextId, workspaceId, wsTree, refresh])
 
-  const onCopyPath = useCallback(async (from: string, to: string, recursive = false): Promise<boolean> => {
+  const onCopyPath = useCallback(async (from: string, to: string, recursive = false, sourceTreeName = wsTree, targetTreeName = wsTree): Promise<boolean> => {
     let result: boolean
     if (contextId) result = await copyContextPath(contextId, from, to, recursive)
-    else if (workspaceId) result = await copyWorkspacePath(workspaceId, from, to, recursive, wsTree)
+    else if (workspaceId) result = await copyWorkspacePath(workspaceId, from, to, recursive, sourceTreeName, targetTreeName)
     else return false
     refresh()
     return result

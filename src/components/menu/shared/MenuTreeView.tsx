@@ -18,6 +18,7 @@ import type { TreeNode } from '@/types/workspace'
 
 export interface MenuTreeViewProps {
   root: TreeNode | null
+  treeName?: string
   selectedPath: string
   pendingPath?: string | null
   onSelect: (path: string) => void
@@ -26,12 +27,13 @@ export interface MenuTreeViewProps {
   rootLabel?: string
   contentPath?: string | null
   onShowContent?: (path: string) => void
+  onOpenToSide?: (path: string, treeName: string) => void
   onInsertPath?: (path: string, autoCreateLayers?: boolean) => Promise<boolean>
   onCreateCanvas?: (path: string) => Promise<boolean>
   onRemovePath?: (path: string, recursive?: boolean) => Promise<boolean>
   onRenamePath?: (fromPath: string, newName: string) => Promise<boolean>
-  onMovePath?: (from: string, to: string, recursive?: boolean) => Promise<boolean>
-  onCopyPath?: (from: string, to: string, recursive?: boolean) => Promise<boolean>
+  onMovePath?: (from: string, to: string, recursive?: boolean, sourceTreeName?: string, targetTreeName?: string) => Promise<boolean>
+  onCopyPath?: (from: string, to: string, recursive?: boolean, sourceTreeName?: string, targetTreeName?: string) => Promise<boolean>
   onShareCanvas?: (path: string) => Promise<void>
   onLockLayer?: (layerId: string) => Promise<boolean>
   onUnlockLayer?: (layerId: string) => Promise<boolean>
@@ -44,7 +46,7 @@ export interface MenuTreeViewProps {
 }
 
 type ClipboardMode = 'copy' | 'cut'
-type Clip = { mode: ClipboardMode; path: string }
+type Clip = { mode: ClipboardMode; path: string; treeName: string }
 type LayerRef = { path: string; id: string }
 
 const TREE_BRANCH_GUTTER = 22
@@ -57,6 +59,7 @@ interface CtxMenuProps {
   path: string
   onClose: () => void
   onShowContent?: (path: string) => void
+  onOpenToSide?: (path: string) => void
   sourceLayer: LayerRef | null
   targetLayers: Map<string, string>
   clipboard: Clip | null
@@ -78,7 +81,7 @@ interface CtxMenuProps {
 }
 
 function CtxMenu({
-  x, y, node, path, onClose, onShowContent,
+  x, y, node, path, onClose, onShowContent, onOpenToSide,
   sourceLayer, targetLayers, clipboard,
   onStartInlineCreate, hasCreateCanvas, onShareCanvas, onRemove, onRename,
   onLock, onUnlock, onDestroy, onMerge, onSubtract,
@@ -121,8 +124,11 @@ function CtxMenu({
         {onShowContent && item(<Eye className="w-3 h-3" />, 'Show layer content', async () => {
           onShowContent(path)
         })}
+        {onOpenToSide && item(<Eye className="w-3 h-3" />, 'Open to the side', async () => {
+          onOpenToSide(path)
+        })}
 
-        {onShowContent && <div className="my-1 h-px bg-border" />}
+        {(onShowContent || onOpenToSide) && <div className="my-1 h-px bg-border" />}
 
         {node.type === 'canvas' && onShareCanvas && item(
           <Share2 className="w-3 h-3" />,
@@ -479,8 +485,8 @@ function CardNode({
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export function MenuTreeView({
-  root, selectedPath, pendingPath, onSelect, isLoading = false, readOnly = false,
-  rootLabel, contentPath, onShowContent,
+  root, treeName = 'context', selectedPath, pendingPath, onSelect, isLoading = false, readOnly = false,
+  rootLabel, contentPath, onShowContent, onOpenToSide,
   onInsertPath, onCreateCanvas, onShareCanvas, onRemovePath, onRenamePath, onMovePath, onCopyPath,
   pastedDocumentIds, onPasteDocuments,
   onLockLayer, onUnlockLayer, onDestroyLayer, onMergeLayer, onSubtractLayer,
@@ -499,8 +505,17 @@ export function MenuTreeView({
   const [isCopyDrag, setIsCopyDrag] = useState(false)
   const [copyModeSticky, setCopyModeSticky] = useState(false)
   const draggedPathRef = useRef<string | null>(null)
+  const draggedTreeRef = useRef<string>(treeName)
   const isCopyRef = useRef(false)
   const copyModeStickyRef = useRef(false)
+
+  useEffect(() => {
+    const onClipboard = (event: Event) => {
+      setClipboard((event as CustomEvent<Clip | null>).detail ?? null)
+    }
+    window.addEventListener('tree:path-clipboard', onClipboard)
+    return () => window.removeEventListener('tree:path-clipboard', onClipboard)
+  }, [])
 
   // Track ctrl/meta/alt globally — Firefox fires keydown/keyup during drag
   // (Chrome does not). Respect sticky toggle as the floor.
@@ -519,6 +534,7 @@ export function MenuTreeView({
   }, [])
 
   const isValidPathDrop = useCallback((src: string, tgt: string, isCopy: boolean): boolean => {
+    if (draggedTreeRef.current !== treeName) return true
     const ns = src.endsWith('/') ? src.slice(0, -1) : src
     const nt = tgt.endsWith('/') ? tgt.slice(0, -1) : tgt
     const srcParent = ns.substring(0, ns.lastIndexOf('/')) || '/'
@@ -526,13 +542,15 @@ export function MenuTreeView({
     if (ns === nt) return false
     if (!isCopy && nt === srcParent) return false
     return true
-  }, [])
+  }, [treeName])
 
   const handleDragStart = useCallback((path: string, e: React.DragEvent) => {
     draggedPathRef.current = path
+    draggedTreeRef.current = treeName
     e.dataTransfer.setData('text/plain', path)
+    e.dataTransfer.setData('application/x-canvas-tree-path', JSON.stringify({ path, treeName }))
     e.dataTransfer.effectAllowed = 'copyMove'
-  }, [])
+  }, [treeName])
 
   const eventIsCopy = (e: React.DragEvent) =>
     e.ctrlKey || e.altKey || copyModeStickyRef.current
@@ -573,6 +591,7 @@ export function MenuTreeView({
 
   const handleDragEnd = useCallback(() => {
     draggedPathRef.current = null
+    draggedTreeRef.current = treeName
     isCopyRef.current = false
     setIsCopyDrag(false)
     setDragOverPath(null)
@@ -580,25 +599,33 @@ export function MenuTreeView({
 
   const handleDrop = useCallback(async (targetPath: string, e: React.DragEvent) => {
     e.preventDefault()
-    const src = e.dataTransfer.getData('text/plain')
+    const payload = (() => {
+      try { return JSON.parse(e.dataTransfer.getData('application/x-canvas-tree-path')) as { path?: string; treeName?: string } }
+      catch { return null }
+    })()
+    const src = payload?.path || e.dataTransfer.getData('text/plain')
+    const sourceTreeName = payload?.treeName || draggedTreeRef.current || treeName
     const isCopy = eventIsCopy(e) || isCopyRef.current
     draggedPathRef.current = null
+    draggedTreeRef.current = treeName
     isCopyRef.current = false
     setIsCopyDrag(false)
     setDragOverPath(null)
-    if (!src || src === targetPath) return
+    if (!src) return
     const isRecursive = e.shiftKey
-    if (!isValidPathDrop(src, targetPath, isCopy)) return
+    const isCrossTree = sourceTreeName !== treeName
+    if (!isCrossTree && src === targetPath) return
+    if (!isCrossTree && !isValidPathDrop(src, targetPath, isCopy)) return
     try {
       if (isCopy && onCopyPath) {
-        await onCopyPath(src, targetPath, isRecursive)
+        await onCopyPath(src, targetPath, isRecursive, sourceTreeName, treeName)
       } else if (!isCopy && onMovePath) {
-        await onMovePath(src, targetPath, isRecursive)
+        await onMovePath(src, targetPath, isRecursive, sourceTreeName, treeName)
       }
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err))
     }
-  }, [isValidPathDrop, onCopyPath, onMovePath])
+  }, [isValidPathDrop, onCopyPath, onMovePath, treeName])
 
   const q = searchQuery.toLowerCase().trim()
 
@@ -629,14 +656,34 @@ export function MenuTreeView({
   const handlePaste = useCallback(async (target: string) => {
     if (!clipboard || !onMovePath || !onCopyPath) return
     // target is the parent to paste under; prevent pasting into self or own descendants
-    if (target === clipboard.path || target.startsWith(clipboard.path + '/')) return
+    if (clipboard.treeName === treeName && (target === clipboard.path || target.startsWith(clipboard.path + '/'))) return
     if (clipboard.mode === 'cut') {
-      await onMovePath(clipboard.path, target, false)
+      await onMovePath(clipboard.path, target, false, clipboard.treeName, treeName)
       setClipboard(null)
+      window.dispatchEvent(new CustomEvent('tree:path-clipboard', { detail: null }))
     } else {
-      await onCopyPath(clipboard.path, target, false)
+      await onCopyPath(clipboard.path, target, false, clipboard.treeName, treeName)
     }
-  }, [clipboard, onMovePath, onCopyPath])
+  }, [clipboard, onMovePath, onCopyPath, treeName])
+
+  useEffect(() => {
+    if (readOnly) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') return
+      if (event.key !== 'F6') return
+      event.preventDefault()
+      if (clipboard?.mode === 'cut') {
+        handlePaste(selectedPath)
+        return
+      }
+      const next = { mode: 'cut' as const, path: selectedPath, treeName }
+      setClipboard(next)
+      window.dispatchEvent(new CustomEvent('tree:path-clipboard', { detail: next }))
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [clipboard, handlePaste, readOnly, selectedPath, treeName])
 
   const handleConfirmCreate = useCallback(async (parentPath: string, name: string) => {
     const isCanvas = inlineCreateIsCanvas
@@ -806,6 +853,7 @@ export function MenuTreeView({
           path={ctxMenu.path}
           onClose={() => setCtxMenu(null)}
           onShowContent={onShowContent}
+          onOpenToSide={onOpenToSide ? (path) => onOpenToSide(path, treeName) : undefined}
           sourceLayer={sourceLayer}
           targetLayers={targetLayers}
           clipboard={clipboard}
@@ -819,8 +867,16 @@ export function MenuTreeView({
           onDestroy={!readOnly ? onDestroyLayer : undefined}
           onMerge={!readOnly ? onMergeLayer : undefined}
           onSubtract={!readOnly ? onSubtractLayer : undefined}
-          onCopy={path => setClipboard({ mode: 'copy', path })}
-          onCut={path => setClipboard({ mode: 'cut', path })}
+          onCopy={path => {
+            const next = { mode: 'copy' as const, path, treeName }
+            setClipboard(next)
+            window.dispatchEvent(new CustomEvent('tree:path-clipboard', { detail: next }))
+          }}
+          onCut={path => {
+            const next = { mode: 'cut' as const, path, treeName }
+            setClipboard(next)
+            window.dispatchEvent(new CustomEvent('tree:path-clipboard', { detail: next }))
+          }}
           onPaste={handlePaste}
           pastedDocumentIds={pastedDocumentIds}
           onPasteDocuments={onPasteDocuments}

@@ -343,11 +343,11 @@ export async function removeWorkspacePath(workspaceId: string, path: string, rec
   }
 }
 
-export async function moveWorkspacePath(workspaceId: string, fromPath: string, toPath: string, recursive = false, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<boolean> {
+export async function moveWorkspacePath(workspaceId: string, fromPath: string, toPath: string, recursive = false, treeName = DEFAULT_WORKSPACE_TREE_NAME, targetTreeName?: string): Promise<boolean> {
   try {
     await api.patch<{ payload: unknown; message: string; status: string; statusCode: number }>(
       getWorkspaceTreePathRoute(workspaceId, treeName, fromPath),
-      { to: toPath, recursive }
+      { to: toPath, recursive, ...(targetTreeName && targetTreeName !== treeName ? { targetTreeNameOrTreeId: targetTreeName } : {}) }
     );
     return true;
   } catch (error) {
@@ -356,11 +356,11 @@ export async function moveWorkspacePath(workspaceId: string, fromPath: string, t
   }
 }
 
-export async function copyWorkspacePath(workspaceId: string, fromPath: string, toPath: string, recursive = false, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<boolean> {
+export async function copyWorkspacePath(workspaceId: string, fromPath: string, toPath: string, recursive = false, treeName = DEFAULT_WORKSPACE_TREE_NAME, targetTreeName?: string): Promise<boolean> {
   try {
     await api.post<{ payload: unknown; message: string; status: string; statusCode: number }>(
       getWorkspaceTreePathRoute(workspaceId, treeName, fromPath),
-      { to: toPath, recursive }
+      { to: toPath, recursive, ...(targetTreeName && targetTreeName !== treeName ? { targetTreeNameOrTreeId: targetTreeName } : {}) }
     );
     return true;
   } catch (error) {
