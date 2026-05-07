@@ -383,11 +383,13 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
       if (activeContextType === 'canvas' && activeWorkspaceName && activeContextPath) {
         const tree = await getWorkspaceTreeByName(activeWorkspaceName, activeTreeName || DEFAULT_WORKSPACE_TREE_NAME)
         const node = findTreeNode(tree.payload, activeContextPath)
+        const searchQuery = new URLSearchParams(location.search).get('q') || new URLSearchParams(location.search).get('search') || ''
         await updateWorkspacePath(activeWorkspaceName, activeContextPath, {
           metadata: { ...(node?.metadata || {}), toolbox: filters },
           querySpec: {
             features: filters.features,
             filters: [],
+            query: searchQuery.trim() || undefined,
           },
         }, activeTreeName || DEFAULT_WORKSPACE_TREE_NAME)
       } else if (activeContextType === 'context' && activeContextId) {
@@ -401,7 +403,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
     } finally {
       dispatch({ type: 'SET_SAVING', isSaving: false })
     }
-  }, [])
+  }, [location.search])
 
   const deleteBitmap = useCallback(async (key: string) => {
     const wn = stateRef.current.activeWorkspaceName

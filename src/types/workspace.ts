@@ -10,6 +10,7 @@ export interface CanvasFeatureBuckets {
 export interface CanvasQuerySpec {
   features: string[] | CanvasFeatureBuckets | null
   filters: string[]
+  query?: string | null
 }
 
 // Toolbox filter state — stored in metadata.toolbox on canvas/context objects,
