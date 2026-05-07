@@ -27,7 +27,7 @@ const TAB_LABELS: Record<TreeTab, string> = {
 }
 
 export function WorkspaceM2() {
-  const { state, closeM2, openM2 } = useMenu()
+  const { state, closeM2 } = useMenu()
   const wsName = state.selectedEntityId
   const navigate = useNavigate()
   const location = useLocation()
@@ -233,7 +233,10 @@ export function WorkspaceM2() {
             </button>
             <button
               type="button"
-              onClick={() => openM2('form', wsName)}
+              onClick={() => {
+                closeM2()
+                navigate(`/workspaces/${wsName}/settings`)
+              }}
               className="flex items-center justify-center w-8 h-8 rounded hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors"
               title="Settings"
             >

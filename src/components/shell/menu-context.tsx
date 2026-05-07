@@ -138,7 +138,7 @@ function sectionFromPath(pathname: string): { section: MenuSection; entityId: st
     return { section: 'contexts', entityId: second, m2View: third === 'settings' ? 'form' : second ? 'detail' : null }
   }
   if (first === 'workspaces') {
-    return { section: 'workspaces', entityId: second, m2View: third === 'settings' ? 'form' : second ? 'detail' : null }
+    return { section: 'workspaces', entityId: second, m2View: third === 'settings' ? null : second ? 'detail' : null }
   }
   if (first === 'agents') {
     return { section: 'agents', entityId: second, m2View: third === 'settings' ? 'settings' : second ? 'detail' : null }

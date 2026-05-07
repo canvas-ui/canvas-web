@@ -6,7 +6,7 @@ import { Plus, Copy, Trash2, Eye, EyeOff, Check } from 'lucide-react';
 import { api } from '@/lib/api';
 
 interface Token {
-  tokenHash: string;
+  hash: string;
   permissions: ('read' | 'write' | 'admin')[];
   description: string;
   createdAt: string;
@@ -39,8 +39,11 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
   const loadTokens = async () => {
     try {
       setIsLoading(true);
-      const response = await api.get<{ payload: Token[] }>(`/workspaces/${workspaceId}/tokens`);
-      setTokens(response.payload || []);
+      const response = await api.get<{ payload: Array<Token & { tokenHash?: string }> }>(`/workspaces/${workspaceId}/tokens`);
+      setTokens((response.payload || []).map(token => ({
+        ...token,
+        hash: token.hash || token.tokenHash || '',
+      })).filter(token => token.hash));
     } catch (error) {
       showToast({
         title: 'Error',
@@ -80,7 +83,7 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
         expiresAt
       };
 
-      const response = await api.post<{ payload: { token: string; tokenHash: string } }>(`/workspaces/${workspaceId}/tokens`, payload);
+      const response = await api.post<{ payload: { token: string; hash: string } }>(`/workspaces/${workspaceId}/tokens`, payload);
 
       // Store the new token value to display in UI
       if (response.payload && response.payload.token) {
@@ -322,7 +325,7 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
       ) : (
         <div className="space-y-3">
           {tokens.map((token) => (
-            <div key={token.tokenHash} className="border rounded-lg p-3 flex items-center justify-between">
+            <div key={token.hash} className="border rounded-lg p-3 flex items-center justify-between">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="font-medium text-sm">{token.description}</span>
@@ -332,14 +335,14 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <span className="font-mono">
-                    {formatTokenHash(token.tokenHash)}
+                    {formatTokenHash(token.hash)}
                   </span>
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => toggleTokenVisibility(token.tokenHash)}
+                    onClick={() => toggleTokenVisibility(token.hash)}
                   >
-                    {visibleTokens.has(token.tokenHash) ? (
+                    {visibleTokens.has(token.hash) ? (
                       <EyeOff className="h-3 w-3" />
                     ) : (
                       <Eye className="h-3 w-3" />
@@ -348,7 +351,7 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => copyToClipboard(token.tokenHash)}
+                    onClick={() => copyToClipboard(token.hash)}
                   >
                     <Copy className="h-3 w-3" />
                   </Button>
@@ -365,7 +368,7 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => revokeToken(token.tokenHash)}
+                onClick={() => revokeToken(token.hash)}
                 className="text-destructive hover:text-destructive"
               >
                 <Trash2 className="h-4 w-4" />

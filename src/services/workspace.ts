@@ -544,8 +544,26 @@ export interface WorkspaceServiceStatus {
   initialized?: boolean;
   path?: string;
   transports?: string[];
+  backend?: string;
   mailboxCount?: number;
   activeMailboxCount?: number;
+}
+
+export interface WorkspaceDataBackendStatus {
+  enabled: boolean;
+  supported?: boolean;
+  driver?: string;
+  root?: string;
+  watch?: boolean;
+  watching?: boolean;
+  resync?: boolean;
+  managed?: boolean;
+  indexIncoming?: boolean;
+  incomingPathMode?: 'sourceDirectories' | string;
+  running?: boolean;
+  lastScanAt?: string | null;
+  lastError?: string | null;
+  cacheStats?: { entries: number; size: number } | null;
 }
 
 export interface WorkspaceImapMailbox {
@@ -573,8 +591,11 @@ export interface WorkspaceImapMailbox {
 
 export interface WorkspaceServicesStatus {
   dotfiles: WorkspaceServiceStatus;
+  git?: WorkspaceServiceStatus;
   home?: WorkspaceServiceStatus;
+  webdav?: WorkspaceServiceStatus;
   imap?: WorkspaceServiceStatus;
+  imapSync?: WorkspaceServiceStatus;
 }
 
 /**
@@ -595,7 +616,7 @@ export async function getWorkspaceServicesStatus(workspaceId: string): Promise<W
  */
 export async function enableWorkspaceService(
   workspaceId: string,
-  serviceName: 'dotfiles' | 'home' | 'imap'
+  serviceName: 'dotfiles' | 'git' | 'home' | 'webdav' | 'imap' | 'imapSync'
 ): Promise<{ success: boolean; path?: string }> {
   try {
     const response = await api.post<{ payload: { success: boolean; path?: string } }>(
@@ -613,7 +634,7 @@ export async function enableWorkspaceService(
  */
 export async function disableWorkspaceService(
   workspaceId: string,
-  serviceName: 'dotfiles' | 'home' | 'imap'
+  serviceName: 'dotfiles' | 'git' | 'home' | 'webdav' | 'imap' | 'imapSync'
 ): Promise<{ success: boolean }> {
   try {
     const response = await api.post<{ payload: { success: boolean } }>(
@@ -624,6 +645,31 @@ export async function disableWorkspaceService(
     console.error(`Failed to disable ${serviceName} service:`, error);
     throw error;
   }
+}
+
+export async function getWorkspaceDataBackends(workspaceId: string): Promise<Record<string, WorkspaceDataBackendStatus>> {
+  const response = await api.get<{ payload: Record<string, WorkspaceDataBackendStatus> }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/data-backends`
+  );
+  return response.payload || {};
+}
+
+export async function updateWorkspaceDataBackends(
+  workspaceId: string,
+  dataBackends: Record<string, Partial<WorkspaceDataBackendStatus>>
+): Promise<Record<string, WorkspaceDataBackendStatus>> {
+  const response = await api.patch<{ payload: Record<string, WorkspaceDataBackendStatus> }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/data-backends`,
+    { dataBackends }
+  );
+  return response.payload || {};
+}
+
+export async function resyncWorkspaceDataBackend(workspaceId: string, backendId: string): Promise<{ backend: string; count: number }> {
+  const response = await api.post<{ payload: { backend: string; count: number } }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/data-backends/${encodeURIComponent(backendId)}/resync`
+  );
+  return response.payload;
 }
 
 export interface WorkspaceHookFile {

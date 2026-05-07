@@ -5,6 +5,7 @@ import { useMenu } from '@/components/shell/menu-context'
 import { useWorkspaceListData } from '@/hooks/useWorkspaceListData'
 import { startWorkspace, stopWorkspace } from '@/services/workspace'
 import { useToast } from '@/components/ui/toast-container'
+import { useNavigate } from 'react-router-dom'
 
 function StatusDot({ status }: { status: string }) {
   const color =
@@ -16,9 +17,10 @@ function StatusDot({ status }: { status: string }) {
 }
 
 export function WorkspaceList() {
-  const { state, selectEntity, openM2 } = useMenu()
+  const { state, selectEntity, openM2, closeM2 } = useMenu()
   const { workspaces, isLoading } = useWorkspaceListData(state.activeSection === 'workspaces')
   const { showToast } = useToast()
+  const navigate = useNavigate()
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
 
   const handleSelect = (ws: Workspace) => {
@@ -135,7 +137,8 @@ export function WorkspaceList() {
                         onClick={(e) => {
                           e.stopPropagation()
                           selectEntity(ws.name)
-                          openM2('form', ws.name)
+                          closeM2()
+                          navigate(`/workspaces/${ws.name}/settings`)
                         }}
                         className="flex items-center justify-center w-6 h-6 rounded hover:bg-muted-foreground/10 text-muted-foreground transition-colors"
                         title="Settings"
