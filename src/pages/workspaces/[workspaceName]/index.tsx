@@ -5,6 +5,7 @@ import { API_ROUTES } from '@/config/api';
 import { useToast } from '@/components/ui/toast-container';
 import { DefaultCanvas } from '@/components/canvas/DefaultCanvas';
 import type { CanvasInfo } from '@/components/canvas/DefaultCanvas';
+import type { DocumentPasteOptions } from '@/components/common/document-list';
 import {
   getWorkspaceDocuments,
   getWorkspaceLayerDocuments,
@@ -26,11 +27,38 @@ import {
 import { Document, TreeNode } from '@/types/workspace';
 import { sanitizeUrlPath, buildWorkspaceUrl } from '@/utils/url-params';
 import { useToolbox } from '@/components/toolbox/toolbox-context';
+import { cn } from '@/lib/utils';
 
 type WorkspaceSidePane = {
   treeName: string;
   path: string;
 };
+
+type FocusedPane = 'left' | 'right';
+type WorkspaceClipboard = {
+  documentIds: number[];
+  operation: 'copy' | 'cut';
+  sourcePath?: string;
+  sourceTreeName?: string;
+};
+
+const treeCache = new Map<string, TreeNode | null>();
+const documentCache = new Map<string, { documents: Document[]; totalCount: number }>();
+
+function paneKey(workspaceName: string, treeName: string, path: string) {
+  return `${workspaceName}\0${treeName}\0${path}`;
+}
+
+function documentKey(workspaceName: string, treeName: string, path: string, page: number, pageSize: number, search: string, filtersKey = '') {
+  return `${paneKey(workspaceName, treeName, path)}\0${page}\0${pageSize}\0${search}\0${filtersKey}`;
+}
+
+function invalidateDocumentCache(workspaceName: string, treeName: string, path: string) {
+  const prefix = paneKey(workspaceName, treeName, path);
+  for (const key of documentCache.keys()) {
+    if (key.startsWith(prefix)) documentCache.delete(key);
+  }
+}
 
 export default function WorkspaceDetailPage() {
   const { workspaceName, treeName, '*': pathSplat } = useParams<{ workspaceName: string; treeName?: string; '*'?: string }>();
@@ -48,10 +76,7 @@ export default function WorkspaceDetailPage() {
   const [isStartingWorkspace, setIsStartingWorkspace] = useState(false);
   const [isStoppingWorkspace, setIsStoppingWorkspace] = useState(false);
 
-  const [clipboard, setClipboard] = useState<{
-    documentIds: number[];
-    operation: 'copy' | 'cut';
-  } | null>(null);
+  const [clipboard, setClipboard] = useState<WorkspaceClipboard | null>(null);
 
   const [saveAsCanvasOpen, setSaveAsCanvasOpen] = useState(false);
   const [saveAsCanvasName, setSaveAsCanvasName] = useState('');
@@ -81,6 +106,8 @@ export default function WorkspaceDetailPage() {
   // the REST API. See `feedback_url_design` memory for rationale.
   const [tree, setTree] = useState<TreeNode | null>(null);
   const [sidePane, setSidePane] = useState<WorkspaceSidePane | null>(null);
+  const [leftPaneSnapshot, setLeftPaneSnapshot] = useState<WorkspaceSidePane | null>(null);
+  const [focusedPane, setFocusedPane] = useState<FocusedPane>('left');
   const selectedNode = useMemo(() => {
     if (!tree || selectedPath === '/' || isLayerView) return null;
     const segments = selectedPath.split('/').filter(Boolean);
@@ -143,6 +170,13 @@ export default function WorkspaceDetailPage() {
   // Fetch documents when path, tree, pagination, or workspace status changes
   const fetchDocuments = useCallback(async () => {
     if (!workspaceName) return;
+    const cacheKey = documentKey(workspaceName, selectedTreeName, selectedPath, currentPage, pageSize, serverSearchQuery || '', tbFiltersKey);
+    const cached = documentCache.get(cacheKey);
+    if (cached) {
+      setDocuments(cached.documents);
+      setDocumentsTotalCount(cached.totalCount);
+      return;
+    }
     setIsLoadingDocuments(true);
     try {
       let response;
@@ -167,8 +201,11 @@ export default function WorkspaceDetailPage() {
           noneOf: tbNoneOf,
         });
       }
-      setDocuments((response.payload as Document[]) || []);
-      setDocumentsTotalCount(response.totalCount || response.count || 0);
+      const nextDocuments = (response.payload as Document[]) || [];
+      const nextTotalCount = response.totalCount || response.count || 0;
+      setDocuments(nextDocuments);
+      setDocumentsTotalCount(nextTotalCount);
+      documentCache.set(cacheKey, { documents: nextDocuments, totalCount: nextTotalCount });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch documents';
       showToast({ title: 'Error', description: message, variant: 'destructive' });
@@ -188,11 +225,13 @@ export default function WorkspaceDetailPage() {
     const onOpenToSide = (event: Event) => {
       const detail = (event as CustomEvent<WorkspaceSidePane & { workspaceName?: string }>).detail;
       if (!detail || detail.workspaceName !== workspaceName) return;
+      setLeftPaneSnapshot({ treeName: selectedTreeName, path: selectedPath });
       setSidePane({ treeName: detail.treeName || DEFAULT_WORKSPACE_TREE_NAME, path: sanitizeUrlPath(detail.path || '/') });
+      setFocusedPane('left');
     };
     window.addEventListener('workspace:open-to-side', onOpenToSide);
     return () => window.removeEventListener('workspace:open-to-side', onOpenToSide);
-  }, [workspaceName]);
+  }, [workspaceName, selectedTreeName, selectedPath]);
 
   useEffect(() => {
     const onDocumentsRefresh = (event: Event) => {
@@ -248,15 +287,25 @@ export default function WorkspaceDetailPage() {
   useEffect(() => {
     let cancelled = false;
     if (!workspaceName) { setTree(null); return; }
+    const cacheKey = paneKey(workspaceName, selectedTreeName, '/');
+    if (treeCache.has(cacheKey)) {
+      setTree(treeCache.get(cacheKey) ?? null);
+    }
     getWorkspaceTreeByName(workspaceName, selectedTreeName)
-      .then(res => { if (!cancelled) setTree(res.payload); })
+      .then(res => {
+        treeCache.set(cacheKey, res.payload);
+        if (!cancelled) setTree(res.payload);
+      })
       .catch(() => { if (!cancelled) setTree(null); });
 
     const onTreeRefresh = (e: Event) => {
       const detail = (e as CustomEvent).detail as { workspaceName?: string } | undefined;
       if (detail?.workspaceName && detail.workspaceName !== workspaceName) return;
       getWorkspaceTreeByName(workspaceName, selectedTreeName)
-        .then(res => { if (!cancelled) setTree(res.payload); })
+        .then(res => {
+          treeCache.set(cacheKey, res.payload);
+          if (!cancelled) setTree(res.payload);
+        })
         .catch(() => {});
     };
     window.addEventListener('workspace:tree:refresh', onTreeRefresh);
@@ -315,7 +364,8 @@ export default function WorkspaceDetailPage() {
   const handleRemoveDocument = async (documentId: number) => {
     if (!workspace) return;
     try {
-      await removeWorkspaceDocuments(workspace.name, [documentId], selectedPath);
+      await removeWorkspaceDocuments(workspace.name, [documentId], selectedPath, [], selectedTreeName, selectedTreeType);
+      invalidateDocumentCache(workspace.name, selectedTreeName, selectedPath);
       setDocuments(prev => prev.filter(doc => doc.id !== documentId));
       setDocumentsTotalCount(prev => Math.max(0, prev - 1));
       showToast({ title: 'Success', description: 'Document removed from workspace path.' });
@@ -327,7 +377,8 @@ export default function WorkspaceDetailPage() {
   const handleDeleteDocument = async (documentId: number) => {
     if (!workspace) return;
     try {
-      await deleteWorkspaceDocuments(workspace.name, [documentId], selectedPath);
+      await deleteWorkspaceDocuments(workspace.name, [documentId], selectedPath, [], selectedTreeName, selectedTreeType);
+      invalidateDocumentCache(workspace.name, selectedTreeName, selectedPath);
       setDocuments(prev => prev.filter(doc => doc.id !== documentId));
       setDocumentsTotalCount(prev => Math.max(0, prev - 1));
       showToast({ title: 'Success', description: 'Document deleted.' });
@@ -339,7 +390,8 @@ export default function WorkspaceDetailPage() {
   const handleRemoveDocuments = async (documentIds: number[]) => {
     if (!workspace) return;
     try {
-      await removeWorkspaceDocuments(workspace.name, documentIds, selectedPath);
+      await removeWorkspaceDocuments(workspace.name, documentIds, selectedPath, [], selectedTreeName, selectedTreeType);
+      invalidateDocumentCache(workspace.name, selectedTreeName, selectedPath);
       setDocuments(prev => prev.filter(doc => !documentIds.includes(doc.id)));
       setDocumentsTotalCount(prev => Math.max(0, prev - documentIds.length));
       showToast({ title: 'Success', description: `${documentIds.length} document(s) removed.` });
@@ -351,7 +403,8 @@ export default function WorkspaceDetailPage() {
   const handleDeleteDocuments = async (documentIds: number[]) => {
     if (!workspace) return;
     try {
-      await deleteWorkspaceDocuments(workspace.name, documentIds, selectedPath);
+      await deleteWorkspaceDocuments(workspace.name, documentIds, selectedPath, [], selectedTreeName, selectedTreeType);
+      invalidateDocumentCache(workspace.name, selectedTreeName, selectedPath);
       setDocuments(prev => prev.filter(doc => !documentIds.includes(doc.id)));
       setDocumentsTotalCount(prev => Math.max(0, prev - documentIds.length));
       showToast({ title: 'Success', description: `${documentIds.length} document(s) deleted.` });
@@ -399,28 +452,43 @@ export default function WorkspaceDetailPage() {
   };
 
   const handleCopyDocuments = (documentIds: number[]) => {
-    setClipboard({ documentIds, operation: 'copy' });
+    setClipboard({ documentIds, operation: 'copy', sourcePath: selectedPath, sourceTreeName: selectedTreeName });
     window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: { documentIds, operation: 'copy' } }));
     showToast({ title: 'Copied', description: `${documentIds.length} document(s) copied to clipboard` });
   };
 
   const handleCutDocuments = (documentIds: number[]) => {
-    setClipboard({ documentIds, operation: 'cut' });
+    setClipboard({ documentIds, operation: 'cut', sourcePath: selectedPath, sourceTreeName: selectedTreeName });
     window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: { documentIds, operation: 'cut' } }));
     showToast({ title: 'Cut', description: `${documentIds.length} document(s) cut to clipboard` });
   };
 
   const selectedTreeType: 'context' | 'directory' = selectedTreeName === 'directory' ? 'directory' : 'context';
 
-  const handlePasteDocuments = async (path: string, documentIds: number[]): Promise<boolean> => {
+  const handlePasteDocuments = async (path: string, documentIds: number[], options: DocumentPasteOptions = {}): Promise<boolean> => {
     if (!workspaceName) return false;
     try {
       const success = await pasteDocumentsToWorkspacePath(workspaceName, path, documentIds, selectedTreeName, selectedTreeType);
       if (success) {
+        invalidateDocumentCache(workspaceName, selectedTreeName, path);
+        const sourceTreeName = options.sourceTreeName || clipboard?.sourceTreeName;
+        const sourcePath = options.sourcePath || clipboard?.sourcePath;
+        const shouldMove = options.move || clipboard?.operation === 'cut';
+        if (shouldMove && sourcePath && sourceTreeName) {
+          const sourceTreeType: 'context' | 'directory' = sourceTreeName === 'directory' ? 'directory' : 'context';
+          await removeWorkspaceDocuments(workspaceName, documentIds, sourcePath, [], sourceTreeName, sourceTreeType);
+          invalidateDocumentCache(workspaceName, sourceTreeName, sourcePath);
+          window.dispatchEvent(new CustomEvent('workspace:documents:refresh', {
+            detail: { workspaceName, path: sourcePath, treeName: sourceTreeName },
+          }));
+        }
         await fetchDocuments();
         setClipboard(null);
         window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: null }));
-        showToast({ title: 'Success', description: `${documentIds.length} document(s) ${clipboard?.operation === 'cut' ? 'moved' : 'pasted'} to "${path}"` });
+        window.dispatchEvent(new CustomEvent('workspace:documents:refresh', {
+          detail: { workspaceName, path, treeName: selectedTreeName },
+        }));
+        showToast({ title: 'Success', description: `${documentIds.length} document(s) ${options.move || clipboard?.operation === 'cut' ? 'moved' : 'pasted'} to "${path}"` });
       }
       return success;
     } catch (err) {
@@ -434,6 +502,7 @@ export default function WorkspaceDetailPage() {
     try {
       const success = await importDocumentsToWorkspacePath(workspaceName, contextPath, docs, selectedTreeName, selectedTreeType);
       if (success) {
+        invalidateDocumentCache(workspaceName, selectedTreeName, contextPath);
         if (contextPath === selectedPath) await fetchDocuments();
         showToast({ title: 'Success', description: `Imported ${docs.length} document(s) to "${contextPath}"` });
       }
@@ -517,10 +586,15 @@ export default function WorkspaceDetailPage() {
     }
   };
 
-  const handleFocusSidePane = useCallback((pane: WorkspaceSidePane) => {
+  const handleFocusPane = useCallback((side: FocusedPane, pane: WorkspaceSidePane) => {
     if (!workspaceName) return;
-    setSidePane({ treeName: selectedTreeName, path: selectedPath });
-    navigate(buildWorkspaceUrl(workspaceName, pane.path, pane.treeName));
+    setFocusedPane(side);
+    if (side === 'right') {
+      setLeftPaneSnapshot({ treeName: selectedTreeName, path: selectedPath });
+    }
+    if (pane.treeName !== selectedTreeName || pane.path !== selectedPath) {
+      navigate(buildWorkspaceUrl(workspaceName, pane.path, pane.treeName));
+    }
   }, [workspaceName, selectedTreeName, selectedPath, navigate]);
 
   if (isLoadingWorkspace) {
@@ -537,6 +611,48 @@ export default function WorkspaceDetailPage() {
   if (!workspace) {
     return <div className="flex items-center justify-center h-full text-muted-foreground">Workspace not found.</div>;
   }
+
+  const currentPane: WorkspaceSidePane = { treeName: selectedTreeName, path: selectedPath };
+  const leftPane = focusedPane === 'right' && leftPaneSnapshot ? leftPaneSnapshot : currentPane;
+  const currentCanvas = (
+    <DefaultCanvas
+      urlType={isLayerView ? (selectedTreeName === 'directory' ? 'directory-layer' : 'context-layer') : (selectedNodeType === 'canvas' ? 'canvas' : selectedTreeName === 'directory' ? 'directory' : 'context')}
+      urlDisplay={urlDisplay}
+      contextPath={selectedPath}
+      treeName={selectedTreeName}
+      documents={documents}
+      isLoading={isLoadingDocuments}
+      totalCount={documentsTotalCount}
+      currentPage={currentPage}
+      pageSize={pageSize}
+      onPageChange={setCurrentPage}
+      onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }}
+      onRemoveDocument={selectedPath !== '/' ? handleRemoveDocument : undefined}
+      onDeleteDocument={handleDeleteDocument}
+      onDestroyDocument={handleDestroyDocument}
+      onRemoveDocuments={selectedPath !== '/' ? handleRemoveDocuments : undefined}
+      onDeleteDocuments={handleDeleteDocuments}
+      onDestroyDocuments={handleDestroyDocuments}
+      onCopyDocuments={handleCopyDocuments}
+      onCutDocuments={handleCutDocuments}
+      onPasteDocuments={handlePasteDocuments}
+      onImportDocuments={handleImportDocuments}
+      pastedDocumentIds={clipboard?.documentIds}
+      onPurgeDocuments={handlePurgeDocuments}
+      disablePurgeDocuments={false}
+      canvasInfo={canvasInfo ?? undefined}
+      onSaveAsCanvas={tree && selectedNodeType !== 'canvas' && !isLayerView ? handleSaveAsCanvas : undefined}
+      onShareCanvas={selectedNodeType === 'canvas' && !isLayerView ? handleShareCanvas : undefined}
+      onUnshareCanvas={publicCanvasShare ? handleUnshareCanvas : undefined}
+      isSharingCanvas={shareCanvasLoading}
+      isCanvasShared={!!publicCanvasShare}
+      backendSearchQuery={serverSearchQuery}
+      onBackendSearch={handleBackendSearch}
+      canSaveChanges={canSaveChanges}
+      isSavingChanges={toolboxState.isSaving}
+      onSaveChanges={saveFilters}
+    />
+  );
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -575,51 +691,43 @@ export default function WorkspaceDetailPage() {
 
       {/* Canvas */}
       <div className="flex-1 min-h-0 flex gap-2 p-2 bg-muted/20">
-        <div className="flex-1 min-w-0 rounded-lg border bg-background overflow-hidden">
-          <DefaultCanvas
-            urlType={isLayerView ? (selectedTreeName === 'directory' ? 'directory-layer' : 'context-layer') : (selectedNodeType === 'canvas' ? 'canvas' : selectedTreeName === 'directory' ? 'directory' : 'context')}
-            urlDisplay={urlDisplay}
-            contextPath={selectedPath}
-            documents={documents}
-            isLoading={isLoadingDocuments}
-            totalCount={documentsTotalCount}
-            currentPage={currentPage}
-            pageSize={pageSize}
-            onPageChange={setCurrentPage}
-            onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }}
-            onRemoveDocument={selectedPath !== '/' ? handleRemoveDocument : undefined}
-            onDeleteDocument={handleDeleteDocument}
-            onDestroyDocument={handleDestroyDocument}
-            onRemoveDocuments={selectedPath !== '/' ? handleRemoveDocuments : undefined}
-            onDeleteDocuments={handleDeleteDocuments}
-            onDestroyDocuments={handleDestroyDocuments}
-            onCopyDocuments={handleCopyDocuments}
-            onCutDocuments={handleCutDocuments}
-            onPasteDocuments={handlePasteDocuments}
-            onImportDocuments={handleImportDocuments}
-            pastedDocumentIds={clipboard?.documentIds}
-            onPurgeDocuments={handlePurgeDocuments}
-            disablePurgeDocuments={false}
-            canvasInfo={canvasInfo ?? undefined}
-            onSaveAsCanvas={tree && selectedNodeType !== 'canvas' && !isLayerView ? handleSaveAsCanvas : undefined}
-            onShareCanvas={selectedNodeType === 'canvas' && !isLayerView ? handleShareCanvas : undefined}
-            onUnshareCanvas={publicCanvasShare ? handleUnshareCanvas : undefined}
-            isSharingCanvas={shareCanvasLoading}
-            isCanvasShared={!!publicCanvasShare}
-            backendSearchQuery={serverSearchQuery}
-            onBackendSearch={handleBackendSearch}
-            canSaveChanges={canSaveChanges}
-            isSavingChanges={toolboxState.isSaving}
-            onSaveChanges={saveFilters}
-          />
-        </div>
-        {sidePane && workspaceName && (
+        {focusedPane === 'left' ? (
+          <div className={cn(
+            'flex-1 min-w-0 rounded-lg border bg-background overflow-hidden',
+            sidePane && 'ring-2 ring-primary',
+          )}>
+            {currentCanvas}
+          </div>
+        ) : (
           <SideWorkspaceCanvas
-            workspaceName={workspaceName}
-            pane={sidePane}
-            onFocus={() => handleFocusSidePane(sidePane)}
-            onClose={() => setSidePane(null)}
+            workspaceName={workspaceName!}
+            pane={leftPane}
+            isFocused={false}
+            clipboard={clipboard}
+            setClipboard={setClipboard}
+            onFocus={() => handleFocusPane('left', leftPane)}
           />
+        )}
+        {sidePane && workspaceName && (
+          focusedPane === 'right' ? (
+            <div className="flex-1 min-w-0 rounded-lg border bg-background overflow-hidden ring-2 ring-primary">
+              {currentCanvas}
+            </div>
+          ) : (
+            <SideWorkspaceCanvas
+              workspaceName={workspaceName}
+              pane={sidePane}
+              isFocused={false}
+              clipboard={clipboard}
+              setClipboard={setClipboard}
+              onFocus={() => handleFocusPane('right', sidePane)}
+              onClose={() => {
+                setSidePane(null);
+                setFocusedPane('left');
+                if (leftPaneSnapshot) navigate(buildWorkspaceUrl(workspaceName, leftPaneSnapshot.path, leftPaneSnapshot.treeName));
+              }}
+            />
+          )
         )}
       </div>
 
@@ -681,13 +789,19 @@ function findTreeNode(root: TreeNode | null, path: string): TreeNode | null {
 function SideWorkspaceCanvas({
   workspaceName,
   pane,
+  isFocused = false,
+  clipboard,
+  setClipboard,
   onFocus,
   onClose,
 }: {
   workspaceName: string;
   pane: WorkspaceSidePane;
+  isFocused?: boolean;
+  clipboard: WorkspaceClipboard | null;
+  setClipboard: (clipboard: WorkspaceClipboard | null) => void;
   onFocus: () => void;
-  onClose: () => void;
+  onClose?: () => void;
 }) {
   const { showToast } = useToast();
   const [tree, setTree] = useState<TreeNode | null>(null);
@@ -696,13 +810,19 @@ function SideWorkspaceCanvas({
   const [totalCount, setTotalCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
-  const [clipboard, setClipboard] = useState<{ documentIds: number[]; operation: 'copy' | 'cut' } | null>(null);
   const treeType: 'context' | 'directory' = pane.treeName === 'directory' ? 'directory' : 'context';
   const selectedNode = findTreeNode(tree, pane.path);
   const isCanvas = selectedNode?.type === 'canvas';
   const urlDisplay = `${workspaceName}://${pane.path === '/' ? '' : pane.path.replace(/^\//, '')}`;
 
   const fetchPaneDocuments = useCallback(async () => {
+    const cacheKey = documentKey(workspaceName, pane.treeName, pane.path, currentPage, pageSize, '', '');
+    const cached = documentCache.get(cacheKey);
+    if (cached) {
+      setDocuments(cached.documents);
+      setTotalCount(cached.totalCount);
+      return;
+    }
     setIsLoading(true);
     try {
       const response = await getWorkspaceDocuments(workspaceName, pane.path, [], {
@@ -711,8 +831,11 @@ function SideWorkspaceCanvas({
         treeName: pane.treeName,
         treeType,
       });
-      setDocuments((response.payload as Document[]) || []);
-      setTotalCount(response.totalCount || response.count || 0);
+      const nextDocuments = (response.payload as Document[]) || [];
+      const nextTotalCount = response.totalCount || response.count || 0;
+      setDocuments(nextDocuments);
+      setTotalCount(nextTotalCount);
+      documentCache.set(cacheKey, { documents: nextDocuments, totalCount: nextTotalCount });
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to fetch side pane documents', variant: 'destructive' });
       setDocuments([]);
@@ -723,8 +846,15 @@ function SideWorkspaceCanvas({
   }, [workspaceName, pane.path, pane.treeName, treeType, pageSize, currentPage, showToast]);
 
   useEffect(() => {
+    const cacheKey = paneKey(workspaceName, pane.treeName, '/');
+    if (treeCache.has(cacheKey)) {
+      setTree(treeCache.get(cacheKey) ?? null);
+    }
     getWorkspaceTreeByName(workspaceName, pane.treeName)
-      .then(res => setTree(res.payload))
+      .then(res => {
+        treeCache.set(cacheKey, res.payload);
+        setTree(res.payload);
+      })
       .catch(() => setTree(null));
   }, [workspaceName, pane.treeName, pane.path]);
 
@@ -732,22 +862,58 @@ function SideWorkspaceCanvas({
     fetchPaneDocuments();
   }, [fetchPaneDocuments]);
 
-  const pasteDocuments = useCallback(async (path: string, documentIds: number[]) => {
+  useEffect(() => {
+    const onRefresh = (event: Event) => {
+      const detail = (event as CustomEvent).detail as { workspaceName?: string; path?: string; treeName?: string } | undefined;
+      if (detail?.workspaceName && detail.workspaceName !== workspaceName) return;
+      if (detail?.treeName && detail.treeName !== pane.treeName) return;
+      if (detail?.path && detail.path !== pane.path) return;
+      fetchPaneDocuments();
+    };
+    window.addEventListener('workspace:documents:refresh', onRefresh);
+    return () => window.removeEventListener('workspace:documents:refresh', onRefresh);
+  }, [fetchPaneDocuments, workspaceName, pane.treeName, pane.path]);
+
+  const pasteDocuments = useCallback(async (path: string, documentIds: number[], options: DocumentPasteOptions = {}) => {
     try {
       const success = await pasteDocumentsToWorkspacePath(workspaceName, path, documentIds, pane.treeName, treeType);
       if (success) {
+        invalidateDocumentCache(workspaceName, pane.treeName, path);
+        const sourcePath = options.sourcePath || clipboard?.sourcePath;
+        const sourceTreeName = options.sourceTreeName || clipboard?.sourceTreeName;
+        const shouldMove = options.move || clipboard?.operation === 'cut';
+        if (shouldMove && sourcePath && sourceTreeName) {
+          const sourceTreeType: 'context' | 'directory' = sourceTreeName === 'directory' ? 'directory' : 'context';
+          await removeWorkspaceDocuments(workspaceName, documentIds, sourcePath, [], sourceTreeName, sourceTreeType);
+          invalidateDocumentCache(workspaceName, sourceTreeName, sourcePath);
+          window.dispatchEvent(new CustomEvent('workspace:documents:refresh', {
+            detail: { workspaceName, path: sourcePath, treeName: sourceTreeName },
+          }));
+        }
         setClipboard(null);
         await fetchPaneDocuments();
+        window.dispatchEvent(new CustomEvent('workspace:documents:refresh', {
+          detail: { workspaceName, path, treeName: pane.treeName },
+        }));
       }
       return success;
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to paste documents', variant: 'destructive' });
       return false;
     }
-  }, [workspaceName, pane.treeName, treeType, fetchPaneDocuments, showToast]);
+  }, [workspaceName, pane.treeName, treeType, fetchPaneDocuments, showToast, clipboard]);
 
   return (
-    <div className="relative flex-1 min-w-0 rounded-lg border bg-background overflow-hidden ring-1 ring-primary/20">
+    <div
+      className={cn(
+        'relative flex-1 min-w-0 rounded-lg border bg-background overflow-hidden',
+        isFocused ? 'ring-2 ring-primary' : 'ring-1 ring-primary/20',
+      )}
+      onMouseDown={(event) => {
+        if ((event.target as HTMLElement).closest('button,input,textarea,select,a')) return;
+        onFocus();
+      }}
+    >
       <button
         type="button"
         onClick={onFocus}
@@ -755,17 +921,20 @@ function SideWorkspaceCanvas({
       >
         Focus
       </button>
-      <button
-        type="button"
-        onClick={onClose}
-        className="absolute right-2 top-2 z-10 px-2 py-1 text-xs rounded-md border bg-background/90 hover:bg-accent"
-      >
-        Close
-      </button>
+      {onClose && (
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-2 top-2 z-10 px-2 py-1 text-xs rounded-md border bg-background/90 hover:bg-accent"
+        >
+          Close
+        </button>
+      )}
       <DefaultCanvas
         urlType={isCanvas ? 'canvas' : treeType}
         urlDisplay={urlDisplay}
         contextPath={pane.path}
+        treeName={pane.treeName}
         documents={documents}
         isLoading={isLoading}
         totalCount={totalCount}
@@ -774,11 +943,11 @@ function SideWorkspaceCanvas({
         onPageChange={setCurrentPage}
         onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }}
         onCopyDocuments={(documentIds) => {
-          setClipboard({ documentIds, operation: 'copy' });
+          setClipboard({ documentIds, operation: 'copy', sourcePath: pane.path, sourceTreeName: pane.treeName });
           window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: { documentIds, operation: 'copy' } }));
         }}
         onCutDocuments={(documentIds) => {
-          setClipboard({ documentIds, operation: 'cut' });
+          setClipboard({ documentIds, operation: 'cut', sourcePath: pane.path, sourceTreeName: pane.treeName });
           window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: { documentIds, operation: 'cut' } }));
         }}
         onPasteDocuments={pasteDocuments}

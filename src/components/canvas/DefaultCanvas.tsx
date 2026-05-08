@@ -1,6 +1,7 @@
 import { LayoutDashboard, BookMarked, Share2, Unlink, Save } from 'lucide-react'
 import { Document } from '@/types/workspace'
 import { DocumentList } from '@/components/common/document-list'
+import type { DocumentPasteOptions } from '@/components/common/document-list'
 
 type CanvasUrlType = 'context' | 'canvas' | 'directory' | 'context-layer' | 'directory-layer'
 
@@ -14,6 +15,7 @@ interface DefaultCanvasProps {
   urlType: CanvasUrlType
   urlDisplay: string
   contextPath: string
+  treeName?: string
   documents: Document[]
   isLoading: boolean
   totalCount: number
@@ -29,7 +31,7 @@ interface DefaultCanvasProps {
   onDestroyDocuments?: (documentIds: number[]) => void
   onCopyDocuments?: (documentIds: number[]) => void
   onCutDocuments?: (documentIds: number[]) => void
-  onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
+  onPasteDocuments?: (path: string, documentIds: number[], options?: DocumentPasteOptions) => Promise<boolean>
   onImportDocuments?: (documents: any[], contextPath: string) => Promise<boolean>
   pastedDocumentIds?: number[]
   onPurgeDocuments?: () => void
@@ -51,6 +53,7 @@ export function DefaultCanvas({
   urlType,
   urlDisplay,
   contextPath,
+  treeName,
   documents,
   isLoading,
   totalCount,
@@ -165,6 +168,7 @@ export function DefaultCanvas({
           documents={documents}
           isLoading={isLoading}
           contextPath={contextPath}
+          treeName={treeName}
           totalCount={totalCount}
           viewMode="table"
           currentPage={currentPage}

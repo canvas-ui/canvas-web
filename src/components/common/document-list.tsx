@@ -18,6 +18,7 @@ interface DocumentListProps {
   documents: Document[]
   isLoading: boolean
   contextPath: string
+  treeName?: string
   totalCount: number
   onRemoveDocument?: (documentId: number) => void
   onDeleteDocument?: (documentId: number) => void
@@ -27,7 +28,7 @@ interface DocumentListProps {
   onDestroyDocuments?: (documentIds: number[]) => void
   onCopyDocuments?: (documentIds: number[]) => void
   onCutDocuments?: (documentIds: number[]) => void
-  onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
+  onPasteDocuments?: (path: string, documentIds: number[], options?: DocumentPasteOptions) => Promise<boolean>
   onImportDocuments?: (documents: any[], contextPath: string) => Promise<boolean>
   pastedDocumentIds?: number[]
   viewMode?: 'card' | 'table'
@@ -45,6 +46,12 @@ interface DocumentListProps {
   canSaveChanges?: boolean
   isSavingChanges?: boolean
   onSaveChanges?: () => Promise<void> | void
+}
+
+export interface DocumentPasteOptions {
+  move?: boolean
+  sourcePath?: string
+  sourceTreeName?: string
 }
 
 interface DocumentRowProps {
@@ -581,7 +588,7 @@ function DocumentRow({ document, isSelected, onSelect, onRemoveDocument, onDelet
   )
 }
 
-export function DocumentList({ documents, isLoading, contextPath, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQuery, onBackendSearch, canSaveChanges = false, isSavingChanges = false, onSaveChanges }: DocumentListProps) {
+export function DocumentList({ documents, isLoading, contextPath, treeName, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQuery, onBackendSearch, canSaveChanges = false, isSavingChanges = false, onSaveChanges }: DocumentListProps) {
   const [selectedDocuments, setSelectedDocuments] = useState<Set<number>>(new Set())
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; documentIds: number[] } | null>(null)
   const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null)
@@ -625,7 +632,9 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
 
     const dragData = {
       type: 'document',
-      documentIds: draggedIds
+      documentIds: draggedIds,
+      sourcePath: contextPath,
+      sourceTreeName: treeName,
     };
 
     e.dataTransfer.setData('application/json', JSON.stringify(dragData));
@@ -633,7 +642,31 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
 
     // Add visual feedback for dragging
     e.dataTransfer.setDragImage(e.currentTarget as Element, 0, 0);
-  }, [selectedDocuments])
+  }, [selectedDocuments, contextPath, treeName])
+
+  const handleDrop = useCallback(async (event: React.DragEvent) => {
+    if (!onPasteDocuments) return
+    const raw = event.dataTransfer.getData('application/json')
+    if (!raw) return
+    let dragData: { type?: string; documentIds?: number[]; sourcePath?: string; sourceTreeName?: string } | null = null
+    try { dragData = JSON.parse(raw) } catch { return }
+    if (dragData?.type !== 'document' || !Array.isArray(dragData.documentIds) || dragData.documentIds.length === 0) return
+    event.preventDefault()
+    event.stopPropagation()
+    await onPasteDocuments(contextPath, dragData.documentIds, {
+      move: event.shiftKey,
+      sourcePath: dragData.sourcePath,
+      sourceTreeName: dragData.sourceTreeName,
+    })
+    setSelectedDocuments(new Set())
+  }, [contextPath, onPasteDocuments])
+
+  const handleDragOver = useCallback((event: React.DragEvent) => {
+    if (!onPasteDocuments) return
+    if (!Array.from(event.dataTransfer.types).includes('application/json')) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = event.shiftKey ? 'move' : 'copy'
+  }, [onPasteDocuments])
 
   // Fuse.js configuration for fuzzy search
   const fuseOptions = useMemo(() => ({
@@ -799,7 +832,11 @@ export function DocumentList({ documents, isLoading, contextPath, totalCount, on
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 p-4">
+    <div
+      className="flex-1 flex flex-col min-h-0 p-4"
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
       <div className="border-b pb-3 mb-4 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div>

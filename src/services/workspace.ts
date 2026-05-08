@@ -7,8 +7,9 @@ import type { TreeNode } from '@/types/workspace';
 export const INCOMING_ROOT_CONTEXT = '/.incoming'
 export const DEFAULT_WORKSPACE_TREE_NAME = 'context'
 
-function appendWorkspaceContext(params: URLSearchParams, contextSpec: string = '/') {
-  params.append('tree', DEFAULT_WORKSPACE_TREE_NAME)
+function appendWorkspaceContext(params: URLSearchParams, contextSpec: string = '/', treeName = DEFAULT_WORKSPACE_TREE_NAME, treeType: 'context' | 'directory' = 'context') {
+  params.append('treeNameOrTreeId', treeName)
+  params.append('treeType', treeType)
   if (contextSpec) params.append('context', contextSpec)
 }
 
@@ -465,10 +466,12 @@ export async function removeWorkspaceDocuments(
   workspaceId: string,
   documentIds: readonly (string | number)[],
   contextSpec: string = '/',
-  featureArray: string[] = []
+  featureArray: string[] = [],
+  treeName = DEFAULT_WORKSPACE_TREE_NAME,
+  treeType: 'context' | 'directory' = 'context'
 ): Promise<boolean> {
   const params = new URLSearchParams()
-  appendWorkspaceContext(params, contextSpec)
+  appendWorkspaceContext(params, contextSpec, treeName, treeType)
   appendAllOf(params, featureArray)
   const ids = normalizeDocumentIds(documentIds)
   await api.delete(`${API_ROUTES.workspaces}/${workspaceId}/documents/remove?${params.toString()}`, {
@@ -482,10 +485,12 @@ export async function deleteWorkspaceDocuments(
   workspaceId: string,
   documentIds: readonly (string | number)[],
   contextSpec: string = '/',
-  featureArray: string[] = []
+  featureArray: string[] = [],
+  treeName = DEFAULT_WORKSPACE_TREE_NAME,
+  treeType: 'context' | 'directory' = 'context'
 ): Promise<boolean> {
   const params = new URLSearchParams()
-  appendWorkspaceContext(params, contextSpec)
+  appendWorkspaceContext(params, contextSpec, treeName, treeType)
   appendAllOf(params, featureArray)
   const ids = normalizeDocumentIds(documentIds)
   await api.delete(`${API_ROUTES.workspaces}/${workspaceId}/documents?${params.toString()}`, {
