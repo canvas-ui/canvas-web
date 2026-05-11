@@ -27,6 +27,8 @@ export interface ToolboxTimelineFilters {
   indexUpdated: boolean
   indexDeleted: boolean
   searchContent: boolean
+  // Custom domain timelines to include in query (empty = all)
+  selectedTimelines: string[]
 }
 
 export interface ToolboxFilters {
@@ -42,7 +44,39 @@ export const DEFAULT_TOOLBOX_FILTERS: ToolboxFilters = {
     indexUpdated: true,
     indexDeleted: false,
     searchContent: false,
+    selectedTimelines: [],
   },
+}
+
+/**
+ * Convert toolbox timeline filter state → SynapsD `datetime:ACTION:TIMEFRAME` strings.
+ * Returns an empty array when no quick filter is active.
+ */
+export function buildDatetimeFilters(timeline: ToolboxTimelineFilters): string[] {
+  const { quickFilter, indexCreated, indexUpdated, indexDeleted } = timeline
+  if (!quickFilter) return []
+  const filters: string[] = []
+  if (indexCreated) filters.push(`datetime:created:${quickFilter}`)
+  if (indexUpdated) filters.push(`datetime:updated:${quickFilter}`)
+  if (indexDeleted) filters.push(`datetime:deleted:${quickFilter}`)
+  return filters
+}
+
+// Timeline types
+export interface TimelineInfo {
+  name: string
+  scales?: string[]
+}
+
+export interface TimelineQueryInterval {
+  start: string | number
+  end?: string | number
+  scale?: string
+}
+
+export interface TimelineQueryOptions {
+  mode?: 'union' | 'layers'
+  scales?: string[]
 }
 
 // Opaque metadata blob the backend never introspects. Any layer can carry it

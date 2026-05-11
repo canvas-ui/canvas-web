@@ -14,6 +14,9 @@ import {
   DEFAULT_WORKSPACE_TREE_NAME,
   listWorkspaceBitmaps,
   deleteWorkspaceBitmap,
+  listWorkspaceTimelines,
+  createWorkspaceTimeline,
+  deleteWorkspaceTimeline,
   getWorkspaceTreeByName,
   updateWorkspacePath,
 } from '@/services/workspace'
@@ -50,6 +53,9 @@ export interface ToolboxState {
   // Bitmaps
   availableBitmaps: string[]
   bitmapsLoading: boolean
+  // Timelines
+  availableTimelines: string[]
+  timelinesLoading: boolean
 }
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
@@ -75,6 +81,8 @@ type ToolboxAction =
   | { type: 'SET_SAVING'; isSaving: boolean }
   | { type: 'SET_BITMAPS'; keys: string[] }
   | { type: 'SET_BITMAPS_LOADING'; loading: boolean }
+  | { type: 'SET_TIMELINES'; names: string[] }
+  | { type: 'SET_TIMELINES_LOADING'; loading: boolean }
 
 // ─── Reducer ──────────────────────────────────────────────────────────────────
 
@@ -101,6 +109,8 @@ const initialState: ToolboxState = {
   isSaving: false,
   availableBitmaps: [],
   bitmapsLoading: false,
+  availableTimelines: [],
+  timelinesLoading: false,
 }
 
 function toolboxReducer(state: ToolboxState, action: ToolboxAction): ToolboxState {
@@ -150,6 +160,10 @@ function toolboxReducer(state: ToolboxState, action: ToolboxAction): ToolboxStat
       return { ...state, availableBitmaps: action.keys, bitmapsLoading: false }
     case 'SET_BITMAPS_LOADING':
       return { ...state, bitmapsLoading: action.loading }
+    case 'SET_TIMELINES':
+      return { ...state, availableTimelines: action.names, timelinesLoading: false }
+    case 'SET_TIMELINES_LOADING':
+      return { ...state, timelinesLoading: action.loading }
     default:
       return state
   }
@@ -194,6 +208,7 @@ function extractToolboxFilters(metadata: Record<string, unknown> | undefined): T
         indexUpdated: (t.timeline as ToolboxTimelineFilters)?.indexUpdated ?? true,
         indexDeleted: (t.timeline as ToolboxTimelineFilters)?.indexDeleted ?? false,
         searchContent: (t.timeline as ToolboxTimelineFilters)?.searchContent ?? false,
+        selectedTimelines: (t.timeline as ToolboxTimelineFilters)?.selectedTimelines ?? [],
       },
     }
   } catch {
@@ -225,6 +240,9 @@ interface ToolboxContextValue {
   setTimelineFilter: (update: Partial<ToolboxTimelineFilters>) => void
   saveFilters: () => Promise<void>
   deleteBitmap: (key: string) => Promise<void>
+  createTimeline: (name: string) => Promise<void>
+  deleteTimeline: (name: string) => Promise<void>
+  refreshTimelines: () => void
 }
 
 const ToolboxCtx = createContext<ToolboxContextValue | null>(null)
@@ -297,6 +315,17 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SET_BITMAPS_LOADING', loading: true })
     listWorkspaceBitmaps(wn).then(keys => {
       dispatch({ type: 'SET_BITMAPS', keys })
+    })
+  }, [state.activeWorkspaceName])
+
+  // ── Load timelines when workspace changes ─────────────────────────────────
+
+  useEffect(() => {
+    const wn = state.activeWorkspaceName
+    if (!wn) return
+    dispatch({ type: 'SET_TIMELINES_LOADING', loading: true })
+    listWorkspaceTimelines(wn).then(names => {
+      dispatch({ type: 'SET_TIMELINES', names })
     })
   }, [state.activeWorkspaceName])
 
@@ -435,9 +464,39 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const refreshTimelines = useCallback(() => {
+    const wn = stateRef.current.activeWorkspaceName
+    if (!wn) return
+    dispatch({ type: 'SET_TIMELINES_LOADING', loading: true })
+    listWorkspaceTimelines(wn).then(names => {
+      dispatch({ type: 'SET_TIMELINES', names })
+    })
+  }, [])
+
+  const createTimeline = useCallback(async (name: string) => {
+    const wn = stateRef.current.activeWorkspaceName
+    if (!wn) throw new Error('No active workspace')
+    await createWorkspaceTimeline(wn, name)
+    refreshTimelines()
+  }, [refreshTimelines])
+
+  const deleteTimeline = useCallback(async (name: string) => {
+    const wn = stateRef.current.activeWorkspaceName
+    if (!wn) throw new Error('No active workspace')
+    await deleteWorkspaceTimeline(wn, name)
+    const remaining = stateRef.current.availableTimelines.filter(n => n !== name)
+    dispatch({ type: 'SET_TIMELINES', names: remaining })
+    // Strip from selected if present
+    const f = stateRef.current.filters
+    const selectedTimelines = f.timeline.selectedTimelines.filter(n => n !== name)
+    if (selectedTimelines.length !== f.timeline.selectedTimelines.length) {
+      dispatch({ type: 'SET_FILTERS', filters: { ...f, timeline: { ...f.timeline, selectedTimelines } } })
+    }
+  }, [])
+
   return (
     <ToolboxCtx.Provider
-      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, setToolsTab, setFilters, setFeatureToggle, setTimelineFilter, saveFilters, deleteBitmap }}
+      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, setToolsTab, setFilters, setFeatureToggle, setTimelineFilter, saveFilters, deleteBitmap, createTimeline, deleteTimeline, refreshTimelines }}
     >
       {children}
     </ToolboxCtx.Provider>

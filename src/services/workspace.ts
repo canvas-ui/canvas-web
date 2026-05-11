@@ -1,6 +1,6 @@
 import { API_ROUTES, API_URL } from '@/config/api';
 import { api } from '@/lib/api';
-import type { TreeNode } from '@/types/workspace';
+import type { TreeNode, TimelineInfo, TimelineQueryInterval, TimelineQueryOptions } from '@/types/workspace';
 // GLOBAL Workspace type from src/types/api.d.ts will be used.
 // No local Workspace interface should be defined here.
 
@@ -169,7 +169,7 @@ export async function getWorkspaceDocuments(
   id: string,
   contextSpec: string = '/',
   featureArray: string[] = [],
-  options: { limit?: number; offset?: number; page?: number; includeIncoming?: boolean; treeName?: string; treeType?: string; q?: string; anyOf?: string[]; noneOf?: string[] } = {}
+  options: { limit?: number; offset?: number; page?: number; includeIncoming?: boolean; treeName?: string; treeType?: string; q?: string; anyOf?: string[]; noneOf?: string[]; filters?: string[] } = {}
 ): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }> {
   try {
     const params = new URLSearchParams();
@@ -179,6 +179,7 @@ export async function getWorkspaceDocuments(
     appendAllOf(params, featureArray)
     appendAnyOf(params, options.anyOf)
     appendNoneOf(params, options.noneOf)
+    appendFilters(params, options.filters)
     if (options.includeIncoming) params.append('includeIncoming', 'true')
     if (options.limit !== undefined) params.append('limit', options.limit.toString());
     if (options.offset !== undefined) params.append('offset', options.offset.toString());
@@ -199,7 +200,7 @@ export async function getWorkspaceLayerDocuments(
   id: string,
   treeName: string,
   layerId: string,
-  options: { limit?: number; offset?: number; page?: number; q?: string; allOf?: string[]; anyOf?: string[]; noneOf?: string[] } = {}
+  options: { limit?: number; offset?: number; page?: number; q?: string; allOf?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[] } = {}
 ): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }> {
   try {
     const params = new URLSearchParams();
@@ -210,6 +211,7 @@ export async function getWorkspaceLayerDocuments(
     appendAllOf(params, options.allOf);
     appendAnyOf(params, options.anyOf);
     appendNoneOf(params, options.noneOf);
+    appendFilters(params, options.filters);
     const queryString = params.toString();
     const url = `${API_ROUTES.workspaces}/${id}/trees/${encodeURIComponent(treeName)}/layers/${encodeURIComponent(layerId)}/documents${queryString ? '?' + queryString : ''}`;
     return await api.get<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }>(url);
@@ -821,4 +823,42 @@ export async function deleteWorkspaceBitmap(workspaceId: string, bitmapKey: stri
     `${API_ROUTES.workspaces}/${encodeURIComponent(workspaceId)}/bitmaps/${cleaned.split('/').map(encodeURIComponent).join('/')}`
   )
   return true
+}
+
+// ─── Timeline API ─────────────────────────────────────────────────────────────
+
+function timelineBase(workspaceId: string) {
+  return `${API_ROUTES.workspaces}/${encodeURIComponent(workspaceId)}/timelines`
+}
+
+export async function listWorkspaceTimelines(workspaceId: string): Promise<string[]> {
+  try {
+    const res = await api.get<{ payload: string[] }>(timelineBase(workspaceId))
+    return res.payload || []
+  } catch {
+    return []
+  }
+}
+
+export async function createWorkspaceTimeline(workspaceId: string, name: string): Promise<TimelineInfo> {
+  const res = await api.post<{ payload: TimelineInfo }>(timelineBase(workspaceId), { name })
+  return res.payload
+}
+
+export async function deleteWorkspaceTimeline(workspaceId: string, name: string): Promise<boolean> {
+  await api.delete<{ payload: unknown }>(`${timelineBase(workspaceId)}/${encodeURIComponent(name)}`)
+  return true
+}
+
+export async function queryWorkspaceTimeline(
+  workspaceId: string,
+  timelineName: string,
+  interval: TimelineQueryInterval,
+  options: TimelineQueryOptions = {},
+): Promise<number[]> {
+  const res = await api.post<{ payload: number[] }>(
+    `${timelineBase(workspaceId)}/${encodeURIComponent(timelineName)}/query`,
+    { ...interval, ...options },
+  )
+  return res.payload || []
 }

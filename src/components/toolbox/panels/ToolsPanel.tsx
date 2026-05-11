@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
-import { X, Save, Loader2, Search, Trash2 } from 'lucide-react'
+import { X, Save, Loader2, Search, Trash2, Plus, RefreshCw, ZoomIn, ZoomOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToolbox, type ToolsTab } from '@/components/toolbox/toolbox-context'
 import { useToast } from '@/components/ui/toast-container'
@@ -47,42 +47,377 @@ function MD2Toggle({ label, checked, onChange, accent = 'default' }: ToggleProps
   )
 }
 
-// ─── Timeline tab ─────────────────────────────────────────────────────────────
+// ─── Timeline quick filter keys ───────────────────────────────────────────────
+// Keys must match getTimeframeBounds() case labels in Timeline.js (camelCase).
 
-const QUICK_FILTERS = ['Today', 'Yesterday', 'This week', 'This month', 'This year'] as const
+const QUICK_FILTERS = [
+  'Today',
+  'Yesterday',
+  'This week',
+  'This month',
+  'This year',
+  'This century',
+  'This millennium',
+] as const
 type QuickFilter = (typeof QUICK_FILTERS)[number]
 
 const QF_KEY_MAP: Record<QuickFilter, string> = {
-  Today: 'today',
-  Yesterday: 'yesterday',
-  'This week': 'this_week',
-  'This month': 'this_month',
-  'This year': 'this_year',
+  'Today': 'today',
+  'Yesterday': 'yesterday',
+  'This week': 'thisWeek',
+  'This month': 'thisMonth',
+  'This year': 'thisYear',
+  'This century': 'thisCentury',
+  'This millennium': 'thisMillennium',
 }
 
+// ─── Zoomable timeline rail ───────────────────────────────────────────────────
+
+type ZoomLevel = 0 | 1 | 2 | 3 | 4 | 5
+
+interface ZoomConfig {
+  label: string
+  unit: 'millennium' | 'century' | 'decade' | 'year' | 'month' | 'week'
+  tickCount: number
+  // How many ms per pixel (approx, for drag scroll)
+  msPerPx: number
+}
+
+const ZOOM_LEVELS: ZoomConfig[] = [
+  { label: 'Millennium', unit: 'millennium', tickCount: 5,  msPerPx: 3e10 },
+  { label: 'Century',    unit: 'century',    tickCount: 10, msPerPx: 3e9  },
+  { label: 'Decade',     unit: 'decade',     tickCount: 10, msPerPx: 3e8  },
+  { label: 'Year',       unit: 'year',       tickCount: 12, msPerPx: 2.6e6},
+  { label: 'Month',      unit: 'month',      tickCount: 4,  msPerPx: 6e5  },
+  { label: 'Week',       unit: 'week',       tickCount: 7,  msPerPx: 8.6e4},
+]
+
+function getTickLabels(centerDate: Date, zl: ZoomConfig): { label: string; isNow: boolean }[] {
+  const now = new Date()
+  const y = centerDate.getFullYear()
+  const m = centerDate.getMonth()
+
+  switch (zl.unit) {
+    case 'millennium': {
+      const base = Math.floor(y / 1000) * 1000 - 2000
+      return Array.from({ length: zl.tickCount }, (_, i) => {
+        const yr = base + i * 1000
+        return { label: yr <= 0 ? `${1 - yr} BCE` : `${yr}`, isNow: yr === Math.floor(now.getFullYear() / 1000) * 1000 }
+      })
+    }
+    case 'century': {
+      const base = Math.floor(y / 100) * 100 - 500
+      return Array.from({ length: zl.tickCount }, (_, i) => {
+        const yr = base + i * 100
+        return { label: yr <= 0 ? `${1 - yr} BCE` : `${yr}`, isNow: yr === Math.floor(now.getFullYear() / 100) * 100 }
+      })
+    }
+    case 'decade': {
+      const base = Math.floor(y / 10) * 10 - 50
+      return Array.from({ length: zl.tickCount }, (_, i) => {
+        const yr = base + i * 10
+        return { label: `${yr}`, isNow: yr === Math.floor(now.getFullYear() / 10) * 10 }
+      })
+    }
+    case 'year': {
+      return Array.from({ length: zl.tickCount }, (_, i) => {
+        const yr = y - 6 + i
+        return { label: `${yr}`, isNow: yr === now.getFullYear() }
+      })
+    }
+    case 'month': {
+      const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+      return Array.from({ length: zl.tickCount }, (_, i) => {
+        const mo = (m - 2 + i + 12) % 12
+        const yr = y + Math.floor((m - 2 + i) / 12)
+        return { label: `${MONTHS[mo]} ${yr}`, isNow: mo === now.getMonth() && yr === now.getFullYear() }
+      })
+    }
+    case 'week': {
+      const base = new Date(centerDate)
+      base.setDate(base.getDate() - 3)
+      return Array.from({ length: zl.tickCount }, (_, i) => {
+        const d = new Date(base)
+        d.setDate(base.getDate() + i)
+        const isNow = d.toDateString() === now.toDateString()
+        return { label: `${d.getDate()}/${d.getMonth() + 1}`, isNow }
+      })
+    }
+  }
+}
+
+// Map quick filter key → zoom level index
+const QF_ZOOM: Partial<Record<string, ZoomLevel>> = {
+  today: 5,
+  yesterday: 5,
+  thisWeek: 4,
+  thisMonth: 3,
+  thisYear: 2,
+  thisCentury: 1,
+  thisMillennium: 0,
+}
+
+interface TimelineRailProps {
+  quickFilterKey: string | null
+  onSelectRange: (start: Date, end: Date) => void
+}
+
+function TimelineRail({ quickFilterKey, onSelectRange }: TimelineRailProps) {
+  const [zoomLevel, setZoomLevel] = useState<ZoomLevel>(2)
+  const [centerDate, setCenterDate] = useState(() => new Date())
+  const railRef = useRef<HTMLDivElement>(null)
+  const dragRef = useRef<{ startY: number; startDate: Date } | null>(null)
+  const [selectedRange, setSelectedRange] = useState<{ top: number; height: number } | null>(null)
+  const [brushStart, setBrushStart] = useState<number | null>(null)
+
+  // Sync zoom level when quick filter changes
+  useEffect(() => {
+    if (quickFilterKey && QF_ZOOM[quickFilterKey] !== undefined) {
+      setZoomLevel(QF_ZOOM[quickFilterKey] as ZoomLevel)
+    }
+  }, [quickFilterKey])
+
+  const zl = ZOOM_LEVELS[zoomLevel]
+  const ticks = getTickLabels(centerDate, zl)
+
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault()
+    if (e.ctrlKey || e.metaKey) {
+      // Ctrl+scroll → zoom
+      setZoomLevel(prev => Math.max(0, Math.min(5, prev + (e.deltaY > 0 ? -1 : 1))) as ZoomLevel)
+    } else {
+      // Scroll → pan in time
+      const shift = e.deltaY * zl.msPerPx * 2
+      setCenterDate(prev => new Date(prev.getTime() + shift))
+    }
+  }, [zl.msPerPx])
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    const rect = railRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const y = e.clientY - rect.top
+    setBrushStart(y)
+    setSelectedRange(null)
+    dragRef.current = { startY: e.clientY, startDate: new Date(centerDate) }
+
+    const onMove = (ev: MouseEvent) => {
+      if (!dragRef.current || !railRef.current) return
+      const r = railRef.current.getBoundingClientRect()
+      const curY = ev.clientY - r.top
+      if (Math.abs(curY - (brushStart ?? curY)) < 4) return
+      const top = Math.min(brushStart ?? curY, curY)
+      const height = Math.abs(curY - (brushStart ?? curY))
+      setSelectedRange({ top, height })
+    }
+
+    const onUp = (ev: MouseEvent) => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      if (!railRef.current) return
+      const r = railRef.current.getBoundingClientRect()
+      const startY = Math.min(brushStart ?? 0, ev.clientY - r.top)
+      const endY = Math.max(brushStart ?? 0, ev.clientY - r.top)
+      const h = r.height
+      const totalMs = zl.tickCount * zl.msPerPx * (h / zl.tickCount) * h
+      const centerMs = centerDate.getTime()
+      const halfMs = (totalMs / 2)
+      const startMs = centerMs - halfMs + (startY / h) * totalMs
+      const endMs = centerMs - halfMs + (endY / h) * totalMs
+      if (Math.abs(endMs - startMs) > 1000) {
+        onSelectRange(new Date(startMs), new Date(endMs))
+      } else {
+        setSelectedRange(null)
+      }
+      dragRef.current = null
+    }
+
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }, [centerDate, brushStart, zl, onSelectRange])
+
+  const jumpToNow = () => setCenterDate(new Date())
+
+  return (
+    <div className="w-16 shrink-0 flex flex-col border-r border-border">
+      {/* Zoom controls */}
+      <div className="flex flex-col items-center gap-0.5 py-1.5 border-b border-border shrink-0">
+        <button
+          type="button"
+          onClick={() => setZoomLevel(prev => Math.min(5, prev + 1) as ZoomLevel)}
+          className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          title="Zoom in"
+        >
+          <ZoomIn className="w-3 h-3" />
+        </button>
+        <span className="text-[9px] text-muted-foreground/60 select-none leading-none px-0.5 text-center">
+          {zl.label}
+        </span>
+        <button
+          type="button"
+          onClick={() => setZoomLevel(prev => Math.max(0, prev - 1) as ZoomLevel)}
+          className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          title="Zoom out"
+        >
+          <ZoomOut className="w-3 h-3" />
+        </button>
+      </div>
+
+      {/* Rail */}
+      <div
+        ref={railRef}
+        className="relative flex-1 overflow-hidden cursor-ns-resize select-none"
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+      >
+        {/* Center line */}
+        <div className="absolute left-1/2 top-0 bottom-0 w-px bg-border -translate-x-1/2 pointer-events-none" />
+
+        {/* Ticks */}
+        {ticks.map((tick, i) => {
+          const yPct = ((i + 0.5) / ticks.length) * 100
+          return (
+            <div
+              key={i}
+              className="absolute left-0 right-0 flex items-center pointer-events-none"
+              style={{ top: `${yPct}%`, transform: 'translateY(-50%)' }}
+            >
+              <div className={cn(
+                'w-full flex items-center justify-center',
+              )}>
+                <div className={cn(
+                  'w-1.5 h-1.5 rounded-full border shrink-0',
+                  tick.isNow
+                    ? 'bg-primary border-primary'
+                    : 'bg-muted border-border',
+                )} />
+              </div>
+            </div>
+          )
+        })}
+
+        {/* Labels on hover — static for now, shown as tiny text */}
+        {ticks.map((tick, i) => {
+          const yPct = ((i + 0.5) / ticks.length) * 100
+          return (
+            <div
+              key={`lbl-${i}`}
+              className="absolute left-0 right-0 pointer-events-none flex justify-center"
+              style={{ top: `${yPct}%`, transform: 'translateY(-50%)' }}
+            >
+              <span className={cn(
+                'text-[8px] leading-none px-0.5 rounded',
+                tick.isNow
+                  ? 'text-primary font-semibold'
+                  : 'text-muted-foreground/50',
+              )}>
+                {tick.label}
+              </span>
+            </div>
+          )
+        })}
+
+        {/* Brush selection overlay */}
+        {selectedRange && (
+          <div
+            className="absolute left-1 right-1 bg-primary/20 border border-primary/40 rounded pointer-events-none"
+            style={{ top: selectedRange.top, height: selectedRange.height }}
+          />
+        )}
+
+        {/* Quick-filter highlight */}
+        {quickFilterKey && (
+          <div className="absolute left-0 right-0 pointer-events-none"
+            style={{ top: '45%', height: '10%' }}
+          >
+            <div className="mx-1 h-full bg-primary/10 border-l-2 border-primary/60 rounded-r" />
+          </div>
+        )}
+      </div>
+
+      {/* Jump to now */}
+      <button
+        type="button"
+        onClick={jumpToNow}
+        className="text-[9px] text-muted-foreground/50 hover:text-muted-foreground py-1 border-t border-border transition-colors text-center shrink-0"
+        title="Jump to now"
+      >
+        now
+      </button>
+    </div>
+  )
+}
+
+// ─── Timeline tab ─────────────────────────────────────────────────────────────
+
+
 function TimelineTab() {
-  const { state, setTimelineFilter } = useToolbox()
+  const { state, setTimelineFilter, createTimeline, deleteTimeline, refreshTimelines } = useToolbox()
   const { timeline } = state.filters
+  const { availableTimelines, timelinesLoading } = state
+  const [newTimelineName, setNewTimelineName] = useState('')
+  const [creatingTimeline, setCreatingTimeline] = useState(false)
+  const [deletingTimeline, setDeletingTimeline] = useState<string | null>(null)
+  const { showToast } = useToast()
 
   const quickFilter = QUICK_FILTERS.find(f => QF_KEY_MAP[f] === timeline.quickFilter) ?? null
+  const selectedTimelines = new Set(timeline.selectedTimelines ?? [])
+
+  const handleToggleTimeline = (name: string) => {
+    const next = new Set(selectedTimelines)
+    if (next.has(name)) next.delete(name)
+    else next.add(name)
+    setTimelineFilter({ selectedTimelines: [...next] })
+  }
+
+  const handleCreateTimeline = async () => {
+    const name = newTimelineName.trim()
+    if (!name) return
+    setCreatingTimeline(true)
+    try {
+      await createTimeline(name)
+      setNewTimelineName('')
+      showToast({ title: 'Timeline created', description: name })
+    } catch (e) {
+      showToast({ title: 'Failed to create timeline', description: e instanceof Error ? e.message : String(e), variant: 'destructive' })
+    } finally {
+      setCreatingTimeline(false)
+    }
+  }
+
+  const handleDeleteTimeline = async (name: string) => {
+    if (!window.confirm(`Delete timeline "${name}"?\n\nThis removes all interval data for this timeline.`)) return
+    setDeletingTimeline(name)
+    try {
+      await deleteTimeline(name)
+      showToast({ title: 'Timeline deleted', description: name })
+    } catch (e) {
+      showToast({ title: 'Failed to delete timeline', description: e instanceof Error ? e.message : String(e), variant: 'destructive' })
+    } finally {
+      setDeletingTimeline(null)
+    }
+  }
+
+  const domainTimelines = availableTimelines.filter(n => !n.startsWith('crud:'))
+
+  const handleRangeSelect = useCallback((start: Date, end: Date) => {
+    const iso = (d: Date) => d.toISOString().split('T')[0]
+    // Could wire to a custom datetime:ACTION:range:START:END filter in future;
+    // for now just show a toast to confirm the drag works
+    showToast({ title: 'Range selected', description: `${iso(start)} → ${iso(end)}` })
+  }, [showToast])
 
   return (
     <div className="flex h-full min-h-0">
-      {/* Timeline rail */}
-      <div className="w-16 shrink-0 flex flex-col items-center py-4 border-r border-border">
-        <div className="relative flex flex-col items-center flex-1 w-full">
-          <div className="absolute top-0 bottom-0 w-px bg-border left-1/2 -translate-x-1/2" />
-          {[0, 1, 2, 3, 4].map((i) => (
-            <div
-              key={i}
-              className="relative z-10 w-2.5 h-2.5 rounded-full bg-muted border border-border mt-8 first:mt-0 cursor-pointer hover:bg-primary/20 hover:border-primary transition-colors"
-            />
-          ))}
-        </div>
-      </div>
+      {/* Graphical timeline rail */}
+      <TimelineRail
+        quickFilterKey={timeline.quickFilter}
+        onSelectRange={handleRangeSelect}
+      />
 
       {/* Controls */}
       <div className="flex-1 overflow-y-auto p-4 space-y-5">
+        {/* Quick filter */}
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
             Quick filter
@@ -106,25 +441,26 @@ function TimelineTab() {
           </div>
         </div>
 
+        {/* CRUD index toggles — always visible */}
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-            Index actions
+            CRUD index
           </p>
           <div className="space-y-2">
             <MD2Toggle
-              label="Created"
+              label="crud:created"
               checked={timeline.indexCreated}
               onChange={(v) => setTimelineFilter({ indexCreated: v })}
               accent="green"
             />
             <MD2Toggle
-              label="Updated"
+              label="crud:updated"
               checked={timeline.indexUpdated}
               onChange={(v) => setTimelineFilter({ indexUpdated: v })}
               accent="blue"
             />
             <MD2Toggle
-              label="Deleted"
+              label="crud:deleted"
               checked={timeline.indexDeleted}
               onChange={(v) => setTimelineFilter({ indexDeleted: v })}
               accent="amber"
@@ -132,6 +468,7 @@ function TimelineTab() {
           </div>
         </div>
 
+        {/* Content */}
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
             Content
@@ -142,6 +479,97 @@ function TimelineTab() {
             onChange={(v) => setTimelineFilter({ searchContent: v })}
           />
         </div>
+
+        {/* Domain timelines */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Domain timelines
+            </p>
+            <button
+              type="button"
+              onClick={() => refreshTimelines()}
+              className="text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+              title="Refresh timelines"
+            >
+              <RefreshCw className="w-3 h-3" />
+            </button>
+          </div>
+
+          {timelinesLoading ? (
+            <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Loading…
+            </div>
+          ) : domainTimelines.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-1">No domain timelines yet</p>
+          ) : (
+            <div className="flex flex-col gap-0.5">
+              {domainTimelines.map(name => {
+                const checked = selectedTimelines.has(name)
+                return (
+                  <div
+                    key={name}
+                    className={cn(
+                      'flex items-center gap-2.5 group rounded-md px-2 py-1.5 cursor-pointer transition-colors',
+                      checked ? 'bg-muted/60' : 'hover:bg-muted/30',
+                    )}
+                    onClick={() => handleToggleTimeline(name)}
+                  >
+                    {/* Checkbox */}
+                    <div className={cn(
+                      'shrink-0 w-4 h-4 rounded border-2 flex items-center justify-center transition-colors',
+                      checked
+                        ? 'bg-primary border-primary'
+                        : 'border-muted-foreground/40 bg-transparent group-hover:border-muted-foreground/70',
+                    )}>
+                      {checked && (
+                        <svg className="w-2.5 h-2.5 text-primary-foreground" viewBox="0 0 10 10" fill="none">
+                          <path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </div>
+                    <span className="flex-1 text-sm text-foreground truncate select-none">
+                      {name}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={deletingTimeline === name}
+                      onClick={(e) => { e.stopPropagation(); handleDeleteTimeline(name) }}
+                      className="shrink-0 p-1 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50 opacity-0 group-hover:opacity-100"
+                      title={`Delete timeline "${name}"`}
+                    >
+                      {deletingTimeline === name
+                        ? <Loader2 className="w-3 h-3 animate-spin" />
+                        : <Trash2 className="w-3 h-3" />}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Create new timeline */}
+          <div className="mt-3 flex gap-1.5">
+            <input
+              type="text"
+              value={newTimelineName}
+              onChange={e => setNewTimelineName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleCreateTimeline()}
+              placeholder="New timeline name…"
+              className="flex-1 px-2 py-1 text-xs rounded-md bg-muted border border-transparent focus:border-ring focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={handleCreateTimeline}
+              disabled={creatingTimeline || !newTimelineName.trim()}
+              className="shrink-0 p-1.5 rounded-md bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+              title="Create timeline"
+            >
+              {creatingTimeline ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -149,7 +577,6 @@ function TimelineTab() {
 
 // ─── Features tab ─────────────────────────────────────────────────────────────
 
-// Friendly labels for known prefix groups
 const PREFIX_LABELS: Record<string, string> = {
   data: 'Data',
   client: 'Client',

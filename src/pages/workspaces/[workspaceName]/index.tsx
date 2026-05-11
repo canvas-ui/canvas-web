@@ -24,7 +24,7 @@ import {
   stopWorkspace,
   DEFAULT_WORKSPACE_TREE_NAME,
 } from '@/services/workspace';
-import { Document, TreeNode } from '@/types/workspace';
+import { Document, TreeNode, buildDatetimeFilters } from '@/types/workspace';
 import { sanitizeUrlPath, buildWorkspaceUrl } from '@/utils/url-params';
 import { useToolbox } from '@/components/toolbox/toolbox-context';
 import { cn } from '@/lib/utils';
@@ -93,7 +93,8 @@ export default function WorkspaceDetailPage() {
   const tbAllOf = toolboxState.filters.features.allOf;
   const tbAnyOf = toolboxState.filters.features.anyOf;
   const tbNoneOf = toolboxState.filters.features.noneOf;
-  const tbFiltersKey = JSON.stringify({ a: tbAllOf, b: tbAnyOf, c: tbNoneOf });
+  const tbDatetimeFilters = buildDatetimeFilters(toolboxState.filters.timeline);
+  const tbFiltersKey = JSON.stringify({ a: tbAllOf, b: tbAnyOf, c: tbNoneOf, d: tbDatetimeFilters });
 
   // Path and tree from URL segments; UI state from query params
   const selectedPath = sanitizeUrlPath('/' + (pathSplat ?? ''));
@@ -188,6 +189,7 @@ export default function WorkspaceDetailPage() {
           allOf: tbAllOf,
           anyOf: tbAnyOf,
           noneOf: tbNoneOf,
+          filters: tbDatetimeFilters,
         });
       } else {
         const selectedTreeType: 'context' | 'directory' = selectedTreeName === 'directory' ? 'directory' : 'context';
@@ -199,6 +201,7 @@ export default function WorkspaceDetailPage() {
           q: serverSearchQuery || undefined,
           anyOf: tbAnyOf,
           noneOf: tbNoneOf,
+          filters: tbDatetimeFilters,
         });
       }
       const nextDocuments = (response.payload as Document[]) || [];
