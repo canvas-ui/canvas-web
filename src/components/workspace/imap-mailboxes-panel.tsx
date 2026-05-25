@@ -12,8 +12,8 @@ import {
   syncWorkspaceImapMailbox,
   testWorkspaceImapMailbox,
   updateWorkspaceImapMailbox,
-  WorkspaceImapMailbox,
-  WorkspaceImapMailboxInput,
+  type WorkspaceImapMailbox,
+  type WorkspaceImapMailboxInput,
 } from '@/services/workspace';
 import { Loader2, Mail, Play, RefreshCw, Save, Square, Trash2 } from 'lucide-react';
 
@@ -34,7 +34,7 @@ const EMPTY_MAILBOX: WorkspaceImapMailboxInput = {
   folder: 'INBOX',
   mode: 'poll',
   pollInterval: 60000,
-  initialSyncDays: 30,
+  initialSyncDays: 180,
   lastUid: 0,
 };
 
@@ -58,7 +58,7 @@ function toFormState(mailbox: WorkspaceImapMailbox): WorkspaceImapMailboxInput {
 
 export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelProps) {
   const [mailboxes, setMailboxes] = useState<WorkspaceImapMailbox[]>([]);
-  const [selectedId, setSelectedId] = useState<string>('');
+  const [selectedId, setSelectedId] = useState('');
   const [form, setForm] = useState<WorkspaceImapMailboxInput>(EMPTY_MAILBOX);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -75,14 +75,14 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
     try {
       const nextMailboxes = await listWorkspaceImapMailboxes(workspaceId);
       setMailboxes(nextMailboxes);
-      if (selectedId) {
-        const selected = nextMailboxes.find((mailbox) => mailbox.id === selectedId);
-        if (selected) {
-          setForm((current) => ({
-            ...toFormState(selected),
-            password: current.password,
-          }));
-        }
+      if (!selectedId) return;
+
+      const selected = nextMailboxes.find((mailbox) => mailbox.id === selectedId);
+      if (selected) {
+        setForm((current) => ({
+          ...toFormState(selected),
+          password: current.password,
+        }));
       }
     } catch (error) {
       showToast({
@@ -96,7 +96,7 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
   }, [workspaceId, selectedId, showToast]);
 
   useEffect(() => {
-    loadMailboxes();
+    void loadMailboxes();
   }, [loadMailboxes]);
 
   const selectMailbox = (mailbox: WorkspaceImapMailbox) => {
@@ -122,6 +122,9 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
         host: form.host.trim(),
         user: form.user.trim(),
         folder: form.folder?.trim() || 'INBOX',
+        port: Number(form.port) || 993,
+        pollInterval: Number(form.pollInterval) || 60000,
+        initialSyncDays: Math.max(0, Number(form.initialSyncDays) || 0),
       };
 
       const saved = selectedId
@@ -130,10 +133,7 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
 
       await loadMailboxes();
       selectMailbox(saved);
-      showToast({
-        title: 'Saved',
-        description: `IMAP mailbox ${saved.id} saved`,
-      });
+      showToast({ title: 'Saved', description: `IMAP mailbox ${saved.id} saved` });
     } catch (error) {
       showToast({
         title: 'Error',
@@ -146,22 +146,14 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
   };
 
   const handleDelete = async () => {
-    if (!selectedId) {
-      return;
-    }
-    if (!window.confirm(`Delete IMAP mailbox ${selectedId}?`)) {
-      return;
-    }
+    if (!selectedId || !window.confirm(`Delete IMAP mailbox ${selectedId}?`)) return;
 
     setRunningAction(`delete:${selectedId}`);
     try {
       await deleteWorkspaceImapMailbox(workspaceId, selectedId);
       await loadMailboxes();
       resetForm();
-      showToast({
-        title: 'Deleted',
-        description: `IMAP mailbox ${selectedId} deleted`,
-      });
+      showToast({ title: 'Deleted', description: `IMAP mailbox ${selectedId} deleted` });
     } catch (error) {
       showToast({
         title: 'Error',
@@ -176,21 +168,13 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
   const runMailboxAction = async (action: 'test' | 'sync' | 'start' | 'stop', mailboxId: string) => {
     setRunningAction(`${action}:${mailboxId}`);
     try {
-      if (action === 'test') {
-        await testWorkspaceImapMailbox(workspaceId, mailboxId);
-      } else if (action === 'sync') {
-        await syncWorkspaceImapMailbox(workspaceId, mailboxId);
-      } else if (action === 'start') {
-        await startWorkspaceImapMailbox(workspaceId, mailboxId);
-      } else {
-        await stopWorkspaceImapMailbox(workspaceId, mailboxId);
-      }
+      if (action === 'test') await testWorkspaceImapMailbox(workspaceId, mailboxId);
+      else if (action === 'sync') await syncWorkspaceImapMailbox(workspaceId, mailboxId);
+      else if (action === 'start') await startWorkspaceImapMailbox(workspaceId, mailboxId);
+      else await stopWorkspaceImapMailbox(workspaceId, mailboxId);
 
       await loadMailboxes();
-      showToast({
-        title: 'Success',
-        description: `Mailbox ${mailboxId} ${action} completed`,
-      });
+      showToast({ title: 'Success', description: `Mailbox ${mailboxId} ${action} completed` });
     } catch (error) {
       showToast({
         title: 'Error',
@@ -207,13 +191,13 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
       <div className="space-y-1">
         <h4 className="text-sm font-medium">IMAP Mailboxes</h4>
         <p className="text-xs text-muted-foreground">
-          Configure mailbox polling, test connectivity, and manually trigger syncs.
+          Configure mailbox polling, sync window, and manual syncs.
         </p>
       </div>
 
       {!enabled && (
         <p className="rounded-md border bg-muted/40 p-2 text-xs text-muted-foreground">
-          Enable the IMAP service first. Mailboxes can still be configured while the service is off.
+          Enable the IMAP service before polling starts. Mailboxes can still be configured while it is off.
         </p>
       )}
 
@@ -244,7 +228,7 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
                 <div className="font-medium">{mailbox.id}</div>
                 <div className="text-muted-foreground">{mailbox.user} on {mailbox.host} · {mailbox.folder}</div>
                 <div className="text-muted-foreground">
-                  {mailbox.runtime.status}
+                  {mailbox.runtime.status} · {mailbox.initialSyncDays} days
                   {mailbox.lastError ? ` · error: ${mailbox.lastError}` : ''}
                 </div>
               </button>
@@ -282,8 +266,8 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
         </div>
         <div className="grid gap-2">
           <Label htmlFor="imap-lookback">Initial Sync Lookback (days)</Label>
-          <Input id="imap-lookback" type="number" min="0" value={String(form.initialSyncDays ?? 30)} onChange={(event) => handleChange('initialSyncDays', Number(event.target.value || 0))} />
-          <p className="text-xs text-muted-foreground">Only used for the first sync when `lastUid` is `0`. Set `0` to import the whole mailbox.</p>
+          <Input id="imap-lookback" type="number" min="0" value={String(form.initialSyncDays ?? 180)} onChange={(event) => handleChange('initialSyncDays', Number(event.target.value || 0))} />
+          <p className="text-xs text-muted-foreground">Only used for the first sync when lastUid is 0. Set 0 to import the whole mailbox.</p>
         </div>
         <div className="grid gap-2">
           <Label htmlFor="imap-poll">Poll Interval (ms)</Label>

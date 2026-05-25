@@ -26,6 +26,7 @@ interface DocumentDetailModalProps {
 
 function DocumentDetailModal({ document, isOpen, onClose }: DocumentDetailModalProps) {
   if (!isOpen || !document) return null
+  const locations = document.locations || document.metadata.dataPaths?.map((url) => ({ url })) || []
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -106,12 +107,12 @@ function DocumentDetailModal({ document, isOpen, onClose }: DocumentDetailModalP
                   <span className="font-medium">Content Encoding:</span>
                   <span className="ml-2">{document.metadata.contentEncoding}</span>
                 </div>
-                {document.metadata.dataPaths.length > 0 && (
+                {locations.length > 0 && (
                   <div>
-                    <span className="font-medium">Data Paths:</span>
+                    <span className="font-medium">Locations:</span>
                     <div className="ml-2 mt-1">
-                      {document.metadata.dataPaths.map((path, index) => (
-                        <div key={index} className="font-mono text-xs">{path}</div>
+                      {locations.map((location, index) => (
+                        <div key={index} className="font-mono text-xs">{location.url}</div>
                       ))}
                     </div>
                   </div>
