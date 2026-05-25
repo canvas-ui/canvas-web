@@ -596,6 +596,14 @@ export interface WorkspaceImapMailbox {
   };
 }
 
+export interface WorkspaceImapFolder {
+  name: string;
+  path: string;
+  delimiter: string;
+  selectable: boolean;
+  attributes: string[];
+}
+
 export interface WorkspaceServicesStatus {
   dotfiles: WorkspaceServiceStatus;
   git?: WorkspaceServiceStatus;
@@ -744,6 +752,27 @@ export async function createWorkspaceImapMailbox(
     payload
   );
   return response.payload;
+}
+
+export async function discoverWorkspaceImapFolders(
+  workspaceId: string,
+  payload: WorkspaceImapMailboxInput
+): Promise<WorkspaceImapFolder[]> {
+  const response = await api.post<{ payload: WorkspaceImapFolder[] }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/services/imap/mailboxes/folders`,
+    payload
+  );
+  return response.payload || [];
+}
+
+export async function listWorkspaceImapFolders(
+  workspaceId: string,
+  mailboxId: string
+): Promise<WorkspaceImapFolder[]> {
+  const response = await api.get<{ payload: WorkspaceImapFolder[] }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/services/imap/mailboxes/${encodeURIComponent(mailboxId)}/folders`
+  );
+  return response.payload || [];
 }
 
 export async function updateWorkspaceImapMailbox(

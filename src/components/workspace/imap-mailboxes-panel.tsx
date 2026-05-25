@@ -6,12 +6,15 @@ import { useToast } from '@/components/ui/toast-container';
 import {
   createWorkspaceImapMailbox,
   deleteWorkspaceImapMailbox,
+  discoverWorkspaceImapFolders,
+  listWorkspaceImapFolders,
   listWorkspaceImapMailboxes,
   startWorkspaceImapMailbox,
   stopWorkspaceImapMailbox,
   syncWorkspaceImapMailbox,
   testWorkspaceImapMailbox,
   updateWorkspaceImapMailbox,
+  type WorkspaceImapFolder,
   type WorkspaceImapMailbox,
   type WorkspaceImapMailboxInput,
 } from '@/services/workspace';
@@ -60,7 +63,9 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
   const [mailboxes, setMailboxes] = useState<WorkspaceImapMailbox[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [form, setForm] = useState<WorkspaceImapMailboxInput>(EMPTY_MAILBOX);
+  const [folders, setFolders] = useState<WorkspaceImapFolder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingFolders, setIsLoadingFolders] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [runningAction, setRunningAction] = useState<string | null>(null);
   const { showToast } = useToast();
@@ -102,15 +107,49 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
   const selectMailbox = (mailbox: WorkspaceImapMailbox) => {
     setSelectedId(mailbox.id);
     setForm(toFormState(mailbox));
+    setFolders([]);
   };
 
   const resetForm = () => {
     setSelectedId('');
     setForm(EMPTY_MAILBOX);
+    setFolders([]);
   };
 
   const handleChange = <K extends keyof WorkspaceImapMailboxInput>(key: K, value: WorkspaceImapMailboxInput[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const loadFolders = async () => {
+    if (!selectedId && (!form.host.trim() || !form.user.trim() || !form.password)) {
+      showToast({
+        title: 'Missing IMAP Fields',
+        description: 'Host, user, and password are required to discover folders.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsLoadingFolders(true);
+    try {
+      const nextFolders = selectedId && !form.password
+        ? await listWorkspaceImapFolders(workspaceId, selectedId)
+        : await discoverWorkspaceImapFolders(workspaceId, {
+            ...form,
+            host: form.host.trim(),
+            user: form.user.trim(),
+            folder: form.folder?.trim() || 'INBOX',
+          });
+      setFolders(nextFolders.filter((folder) => folder.selectable));
+    } catch (error) {
+      showToast({
+        title: 'IMAP Error',
+        description: error instanceof Error ? error.message : 'Failed to discover IMAP folders',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoadingFolders(false);
+    }
   };
 
   const handleSave = async () => {
@@ -257,7 +296,25 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
         <div className="grid grid-cols-2 gap-3">
           <div className="grid gap-2">
             <Label htmlFor="imap-folder">Folder</Label>
-            <Input id="imap-folder" value={form.folder || 'INBOX'} onChange={(event) => handleChange('folder', event.target.value)} placeholder="INBOX" />
+            <div className="flex gap-2">
+              <select
+                id="imap-folder"
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                value={form.folder || 'INBOX'}
+                onChange={(event) => handleChange('folder', event.target.value)}
+              >
+                <option value={form.folder || 'INBOX'}>{form.folder || 'INBOX'}</option>
+                {folders
+                  .filter((folder) => folder.path !== form.folder)
+                  .map((folder) => (
+                    <option key={folder.path} value={folder.path}>{folder.path}</option>
+                  ))}
+              </select>
+              <Button type="button" size="sm" variant="outline" onClick={loadFolders} disabled={isLoadingFolders}>
+                {isLoadingFolders ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">Use the refresh button to discover folders from the IMAP server.</p>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="imap-port">Port</Label>
