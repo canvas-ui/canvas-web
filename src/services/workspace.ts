@@ -770,7 +770,7 @@ export async function listWorkspaceImapFolders(
   mailboxId: string
 ): Promise<WorkspaceImapFolder[]> {
   const response = await api.get<{ payload: WorkspaceImapFolder[] }>(
-    `${API_ROUTES.workspaces}/${workspaceId}/services/imap/mailboxes/${encodeURIComponent(mailboxId)}/folders`
+    `${API_ROUTES.workspaces}/${workspaceId}/services/imap/mailboxes/folders/${encodeURIComponent(mailboxId)}`
   );
   return response.payload || [];
 }
