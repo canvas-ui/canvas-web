@@ -11,6 +11,7 @@ import {
   listWorkspaceImapMailboxes,
   startWorkspaceImapMailbox,
   stopWorkspaceImapMailbox,
+  subscribeWorkspaceImapFolders,
   syncWorkspaceImapMailbox,
   testWorkspaceImapMailbox,
   updateWorkspaceImapMailbox,
@@ -64,6 +65,7 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
   const [selectedId, setSelectedId] = useState('');
   const [form, setForm] = useState<WorkspaceImapMailboxInput>(EMPTY_MAILBOX);
   const [folders, setFolders] = useState<WorkspaceImapFolder[]>([]);
+  const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingFolders, setIsLoadingFolders] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -108,16 +110,26 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
     setSelectedId(mailbox.id);
     setForm(toFormState(mailbox));
     setFolders([]);
+    setSelectedFolders([mailbox.folder]);
   };
 
   const resetForm = () => {
     setSelectedId('');
     setForm(EMPTY_MAILBOX);
     setFolders([]);
+    setSelectedFolders([]);
   };
 
   const handleChange = <K extends keyof WorkspaceImapMailboxInput>(key: K, value: WorkspaceImapMailboxInput[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const toggleFolder = (folderPath: string) => {
+    setSelectedFolders((current) => {
+      if (current.includes(folderPath)) return current.filter((path) => path !== folderPath);
+      return [...current, folderPath];
+    });
+    setForm((current) => ({ ...current, folder: folderPath }));
   };
 
   const loadFolders = async () => {
@@ -140,7 +152,13 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
             user: form.user.trim(),
             folder: form.folder?.trim() || 'INBOX',
           });
-      setFolders(nextFolders.filter((folder) => folder.selectable));
+      const selectableFolders = nextFolders.filter((folder) => folder.selectable);
+      const accountFolders = mailboxes
+        .filter((mailbox) => mailbox.host === form.host && mailbox.user === form.user)
+        .map((mailbox) => mailbox.folder);
+      const checked = new Set([...accountFolders, form.folder || 'INBOX']);
+      setFolders(selectableFolders);
+      setSelectedFolders(selectableFolders.filter((folder) => checked.has(folder.path)).map((folder) => folder.path));
     } catch (error) {
       showToast({
         title: 'IMAP Error',
@@ -155,12 +173,14 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      const fallbackFolder = form.folder?.trim() || 'INBOX';
+      const foldersToSave = selectedFolders.length > 0 ? selectedFolders : [fallbackFolder];
       const payload: WorkspaceImapMailboxInput = {
         ...form,
         id: form.id?.trim() || undefined,
         host: form.host.trim(),
         user: form.user.trim(),
-        folder: form.folder?.trim() || 'INBOX',
+        folder: selectedId ? fallbackFolder : foldersToSave[0],
         port: Number(form.port) || 993,
         pollInterval: Number(form.pollInterval) || 60000,
         initialSyncDays: Math.max(0, Number(form.initialSyncDays) || 0),
@@ -168,11 +188,34 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
 
       const saved = selectedId
         ? await updateWorkspaceImapMailbox(workspaceId, selectedId, payload)
-        : await createWorkspaceImapMailbox(workspaceId, payload);
+        : await createWorkspaceImapMailbox(workspaceId, {
+            ...payload,
+            id: foldersToSave.length === 1 ? payload.id : undefined,
+          });
+
+      const existingFolders = new Set(mailboxes
+        .filter((mailbox) => mailbox.host === payload.host && mailbox.user === payload.user)
+        .map((mailbox) => mailbox.folder));
+
+      const extraFolders = foldersToSave.filter((folder) => folder !== payload.folder && !existingFolders.has(folder));
+      if (selectedId) {
+        if (extraFolders.length > 0) {
+          await subscribeWorkspaceImapFolders(workspaceId, selectedId, extraFolders);
+        }
+      } else {
+        for (const folder of extraFolders) {
+          await createWorkspaceImapMailbox(workspaceId, {
+            ...payload,
+            id: undefined,
+            password: form.password,
+            folder,
+          });
+        }
+      }
 
       await loadMailboxes();
       selectMailbox(saved);
-      showToast({ title: 'Saved', description: `IMAP mailbox ${saved.id} saved` });
+      showToast({ title: 'Saved', description: `${foldersToSave.length} IMAP folder subscription${foldersToSave.length === 1 ? '' : 's'} saved` });
     } catch (error) {
       showToast({
         title: 'Error',
@@ -295,31 +338,45 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="grid gap-2">
-            <Label htmlFor="imap-folder">Folder</Label>
+            <Label htmlFor="imap-folder">Fallback Folder</Label>
             <div className="flex gap-2">
-              <select
-                id="imap-folder"
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                value={form.folder || 'INBOX'}
-                onChange={(event) => handleChange('folder', event.target.value)}
-              >
-                <option value={form.folder || 'INBOX'}>{form.folder || 'INBOX'}</option>
-                {folders
-                  .filter((folder) => folder.path !== form.folder)
-                  .map((folder) => (
-                    <option key={folder.path} value={folder.path}>{folder.path}</option>
-                  ))}
-              </select>
+              <Input id="imap-folder" value={form.folder || 'INBOX'} onChange={(event) => handleChange('folder', event.target.value)} placeholder="INBOX" />
               <Button type="button" size="sm" variant="outline" onClick={loadFolders} disabled={isLoadingFolders}>
                 {isLoadingFolders ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">Use the refresh button to discover folders from the IMAP server.</p>
+            <p className="text-xs text-muted-foreground">Used when no discovered folders are checked.</p>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="imap-port">Port</Label>
             <Input id="imap-port" type="number" value={String(form.port || 993)} onChange={(event) => handleChange('port', Number(event.target.value || 993))} />
           </div>
+        </div>
+        <div className="grid gap-2">
+          <Label>Folders To Sync</Label>
+          <div className="max-h-44 overflow-y-auto rounded-md border p-2">
+            {folders.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Click refresh beside the folder field to discover IMAP folders.</p>
+            ) : (
+              <div className="space-y-1">
+                {folders.map((folder) => (
+                  <label key={folder.path} className="flex items-center gap-2 rounded px-2 py-1 text-xs hover:bg-accent/50">
+                    <input
+                      type="checkbox"
+                      checked={selectedFolders.includes(folder.path)}
+                      onChange={() => toggleFolder(folder.path)}
+                    />
+                    <span className="font-mono">{folder.path}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+          {selectedFolders.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {selectedFolders.length} folder{selectedFolders.length === 1 ? '' : 's'} selected. Each folder is saved as its own subscription.
+            </p>
+          )}
         </div>
         <div className="grid gap-2">
           <Label htmlFor="imap-lookback">Initial Sync Lookback (days)</Label>

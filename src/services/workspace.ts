@@ -775,6 +775,18 @@ export async function listWorkspaceImapFolders(
   return response.payload || [];
 }
 
+export async function subscribeWorkspaceImapFolders(
+  workspaceId: string,
+  mailboxId: string,
+  folders: string[]
+): Promise<WorkspaceImapMailbox[]> {
+  const response = await api.post<{ payload: WorkspaceImapMailbox[] }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/services/imap/mailboxes/folders/${encodeURIComponent(mailboxId)}`,
+    { folders }
+  );
+  return response.payload || [];
+}
+
 export async function updateWorkspaceImapMailbox(
   workspaceId: string,
   mailboxId: string,
