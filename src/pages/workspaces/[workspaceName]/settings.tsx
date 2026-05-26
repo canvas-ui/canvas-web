@@ -242,7 +242,8 @@ export default function WorkspaceSettingsPage() {
   if (!workspace) return <div className="p-6 text-sm text-muted-foreground">Workspace not found</div>
 
   return (
-    <div className="mx-auto max-w-5xl p-6">
+    <div className="h-full min-h-0 overflow-y-auto">
+      <div className="mx-auto max-w-5xl p-6 pb-12">
       <div className="mb-5 flex items-center gap-3">
         <button type="button" onClick={() => navigate(`/workspaces/${workspaceName}`)} className="text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-5 w-5" />
@@ -427,6 +428,7 @@ export default function WorkspaceSettingsPage() {
           <HooksPanel workspaceId={workspaceId} />
         </section>
       )}
+      </div>
     </div>
   )
 }
