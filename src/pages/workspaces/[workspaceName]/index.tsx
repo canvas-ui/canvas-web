@@ -9,7 +9,8 @@ import type { DocumentPasteOptions } from '@/components/common/document-list';
 import {
   getWorkspaceDocuments,
   getWorkspaceLayerDocuments,
-  getWorkspaceTreeByName,
+  getCachedWorkspaceTreeByName,
+  invalidateWorkspaceTreeCache,
   createWorkspaceCanvas,
   createPublicCanvasShare,
   getPublicCanvasShare,
@@ -42,7 +43,6 @@ type WorkspaceClipboard = {
   sourceTreeName?: string;
 };
 
-const treeCache = new Map<string, TreeNode | null>();
 const documentCache = new Map<string, { documents: Document[]; totalCount: number }>();
 
 function paneKey(workspaceName: string, treeName: string, path: string) {
@@ -285,38 +285,33 @@ export default function WorkspaceDetailPage() {
   const canSaveChanges = Boolean(toolboxState.activeContextType)
     && (toolboxState.isDirty || currentSearchQuery !== (selectedNodeType === 'canvas' ? savedCanvasSearchQuery : (toolboxState.savedSearchQuery || '')));
 
-  // Keep the tree fresh enough to resolve leaf type locally. Path changes can
-  // follow a just-created canvas, so refetch on path navigation too.
+  // Full tree JSON is expensive for directory trees. Load it once per tree and
+  // refresh only when the backend tells us tree metadata changed.
   useEffect(() => {
     let cancelled = false;
     if (!workspaceName) { setTree(null); return; }
-    const cacheKey = paneKey(workspaceName, selectedTreeName, '/');
-    if (treeCache.has(cacheKey)) {
-      setTree(treeCache.get(cacheKey) ?? null);
-    }
-    getWorkspaceTreeByName(workspaceName, selectedTreeName)
-      .then(res => {
-        treeCache.set(cacheKey, res.payload);
-        if (!cancelled) setTree(res.payload);
-      })
-      .catch(() => { if (!cancelled) setTree(null); });
+
+    const loadTree = (force = false) => {
+      if (force) invalidateWorkspaceTreeCache(workspaceName, selectedTreeName);
+      getCachedWorkspaceTreeByName(workspaceName, selectedTreeName, { force })
+        .then(res => { if (!cancelled) setTree(res.payload); })
+        .catch(() => { if (!cancelled) setTree(null); });
+    };
+
+    loadTree(false);
 
     const onTreeRefresh = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { workspaceName?: string } | undefined;
+      const detail = (e as CustomEvent).detail as { workspaceName?: string; treeName?: string } | undefined;
       if (detail?.workspaceName && detail.workspaceName !== workspaceName) return;
-      getWorkspaceTreeByName(workspaceName, selectedTreeName)
-        .then(res => {
-          treeCache.set(cacheKey, res.payload);
-          if (!cancelled) setTree(res.payload);
-        })
-        .catch(() => {});
+      if (detail?.treeName && detail.treeName !== selectedTreeName) return;
+      loadTree(true);
     };
     window.addEventListener('workspace:tree:refresh', onTreeRefresh);
     return () => {
       cancelled = true;
       window.removeEventListener('workspace:tree:refresh', onTreeRefresh);
     };
-  }, [workspaceName, selectedTreeName, selectedPath]);
+  }, [workspaceName, selectedTreeName]);
 
   useEffect(() => {
     let cancelled = false;
@@ -849,17 +844,29 @@ function SideWorkspaceCanvas({
   }, [workspaceName, pane.path, pane.treeName, treeType, pageSize, currentPage, showToast]);
 
   useEffect(() => {
-    const cacheKey = paneKey(workspaceName, pane.treeName, '/');
-    if (treeCache.has(cacheKey)) {
-      setTree(treeCache.get(cacheKey) ?? null);
-    }
-    getWorkspaceTreeByName(workspaceName, pane.treeName)
-      .then(res => {
-        treeCache.set(cacheKey, res.payload);
-        setTree(res.payload);
-      })
-      .catch(() => setTree(null));
-  }, [workspaceName, pane.treeName, pane.path]);
+    let cancelled = false;
+    const loadTree = (force = false) => {
+      if (force) invalidateWorkspaceTreeCache(workspaceName, pane.treeName);
+      getCachedWorkspaceTreeByName(workspaceName, pane.treeName, { force })
+        .then(res => { if (!cancelled) setTree(res.payload); })
+        .catch(() => { if (!cancelled) setTree(null); });
+    };
+
+    loadTree(false);
+
+    const onTreeRefresh = (event: Event) => {
+      const detail = (event as CustomEvent).detail as { workspaceName?: string; treeName?: string } | undefined;
+      if (detail?.workspaceName && detail.workspaceName !== workspaceName) return;
+      if (detail?.treeName && detail.treeName !== pane.treeName) return;
+      loadTree(true);
+    };
+
+    window.addEventListener('workspace:tree:refresh', onTreeRefresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('workspace:tree:refresh', onTreeRefresh);
+    };
+  }, [workspaceName, pane.treeName]);
 
   useEffect(() => {
     fetchPaneDocuments();

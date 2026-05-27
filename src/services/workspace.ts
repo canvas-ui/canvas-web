@@ -7,6 +7,11 @@ import type { TreeNode, TimelineInfo, TimelineQueryInterval, TimelineQueryOption
 export const INCOMING_ROOT_CONTEXT = '/.incoming'
 export const DEFAULT_WORKSPACE_TREE_NAME = 'context'
 
+type WorkspaceTreeResponse = { payload: TreeNode; status: string; statusCode: number; message: string }
+
+const workspaceTreeCache = new Map<string, WorkspaceTreeResponse>()
+const workspaceTreeInflight = new Map<string, Promise<WorkspaceTreeResponse>>()
+
 function appendWorkspaceContext(params: URLSearchParams, contextSpec: string = '/', treeName = DEFAULT_WORKSPACE_TREE_NAME, treeType: 'context' | 'directory' = 'context') {
   params.append('treeNameOrTreeId', treeName)
   params.append('treeType', treeType)
@@ -31,6 +36,10 @@ function appendFilters(params: URLSearchParams, filterArray: string[] = []) {
 
 function getWorkspaceTreeBaseRoute(workspaceId: string, treeName = DEFAULT_WORKSPACE_TREE_NAME) {
   return `${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}`
+}
+
+function workspaceTreeCacheKey(workspaceId: string, treeName = DEFAULT_WORKSPACE_TREE_NAME) {
+  return `${workspaceId}\0${treeName}`
 }
 
 function encodeTreePath(path: string) {
@@ -153,15 +162,62 @@ export async function getWorkspaceTree(
 export async function getWorkspaceTreeByName(
   workspaceId: string,
   treeName: string
-): Promise<{ payload: TreeNode; status: string; statusCode: number; message: string }> {
+): Promise<WorkspaceTreeResponse> {
   try {
-    return await api.get<{ payload: TreeNode; status: string; statusCode: number; message: string }>(
+    return await api.get<WorkspaceTreeResponse>(
       `${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}`
     );
   } catch (error) {
     console.error(`Failed to get workspace tree ${workspaceId}/${treeName}:`, error);
     throw error;
   }
+}
+
+export function invalidateWorkspaceTreeCache(workspaceId?: string, treeName?: string) {
+  if (!workspaceId) {
+    workspaceTreeCache.clear()
+    workspaceTreeInflight.clear()
+    return
+  }
+  if (!treeName) {
+    const prefix = `${workspaceId}\0`
+    for (const key of workspaceTreeCache.keys()) {
+      if (key.startsWith(prefix)) workspaceTreeCache.delete(key)
+    }
+    for (const key of workspaceTreeInflight.keys()) {
+      if (key.startsWith(prefix)) workspaceTreeInflight.delete(key)
+    }
+    return
+  }
+  const key = workspaceTreeCacheKey(workspaceId, treeName)
+  workspaceTreeCache.delete(key)
+  workspaceTreeInflight.delete(key)
+}
+
+export async function getCachedWorkspaceTreeByName(
+  workspaceId: string,
+  treeName: string,
+  options: { force?: boolean } = {}
+): Promise<WorkspaceTreeResponse> {
+  const key = workspaceTreeCacheKey(workspaceId, treeName)
+  if (!options.force && workspaceTreeCache.has(key)) {
+    return workspaceTreeCache.get(key)!
+  }
+  if (!options.force && workspaceTreeInflight.has(key)) {
+    return workspaceTreeInflight.get(key)!
+  }
+
+  const request = getWorkspaceTreeByName(workspaceId, treeName)
+    .then((response) => {
+      workspaceTreeCache.set(key, response)
+      return response
+    })
+    .finally(() => {
+      workspaceTreeInflight.delete(key)
+    })
+
+  workspaceTreeInflight.set(key, request)
+  return request
 }
 
 // Get workspace documents

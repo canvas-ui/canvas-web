@@ -6,7 +6,7 @@ import { buildWorkspaceUrl, parseWorkspacePathFromUrl } from '@/utils/url-params
 import { M2Header } from '@/components/menu/shared/M2Header'
 import { MenuTreeView } from '@/components/menu/shared/MenuTreeView'
 import { useMenu } from '@/components/shell/menu-context'
-import { getWorkspace, getWorkspaceTreeByName, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer, pasteDocumentsToWorkspacePath, createPublicCanvasShare, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
+import { getWorkspace, getCachedWorkspaceTreeByName, invalidateWorkspaceTreeCache, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer, pasteDocumentsToWorkspacePath, createPublicCanvasShare, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
 import type { Layer } from '@/services/workspace'
 import { useTreeOperations } from '@/hooks/useTreeOperations'
 import type { TreeNode } from '@/types/workspace'
@@ -62,12 +62,13 @@ export function WorkspaceM2() {
     setSelectedPath(urlPath)
   }, [urlPath])
 
-  const loadTree = useCallback(async (name: string, tab: 'context' | 'directory') => {
+  const loadTree = useCallback(async (name: string, tab: 'context' | 'directory', force = false) => {
     const setLoading = tab === 'context' ? setIsLoadingContext : setIsLoadingDirectory
     const setData = tab === 'context' ? setContextTree : setDirectoryTree
     setLoading(true)
     try {
-      const res = await getWorkspaceTreeByName(name, tab)
+      if (force) invalidateWorkspaceTreeCache(name, tab)
+      const res = await getCachedWorkspaceTreeByName(name, tab, { force })
       setData(res.payload)
     } catch {
       // tree unavailable
@@ -99,8 +100,8 @@ export function WorkspaceM2() {
       setIsLoadingLayers(true)
       try {
         const [ctxRes, dirRes] = await Promise.allSettled([
-          getWorkspaceTreeByName(name, 'context'),
-          getWorkspaceTreeByName(name, 'directory'),
+          getCachedWorkspaceTreeByName(name, 'context'),
+          getCachedWorkspaceTreeByName(name, 'directory'),
         ])
         // Fetch workspace details for label (non-blocking)
         getWorkspace(name).then(ws => { if (!cancelled) setWsLabel(ws.label || null) }).catch(() => {})
@@ -128,8 +129,8 @@ export function WorkspaceM2() {
   }, [wsName])
 
   const refreshAll = useCallback((name: string) => {
-    loadTree(name, 'context')
-    loadTree(name, 'directory')
+    loadTree(name, 'context', true)
+    loadTree(name, 'directory', true)
     loadLayers(name)
   }, [loadTree, loadLayers])
 

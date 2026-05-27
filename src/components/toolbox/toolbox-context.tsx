@@ -17,7 +17,8 @@ import {
   listWorkspaceTimelines,
   createWorkspaceTimeline,
   deleteWorkspaceTimeline,
-  getWorkspaceTreeByName,
+  getCachedWorkspaceTreeByName,
+  invalidateWorkspaceTreeCache,
   updateWorkspacePath,
 } from '@/services/workspace'
 import type { TreeNode } from '@/types/workspace'
@@ -294,7 +295,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
     // Walk the loaded tree to find the leaf node; tree already carries layer
     // type, no extra GET needed. Path is the URL truth; canvas hint is derived.
     if (newWorkspaceName && wsPath !== '/') {
-      getWorkspaceTreeByName(newWorkspaceName, wsTreeName)
+      getCachedWorkspaceTreeByName(newWorkspaceName, wsTreeName)
         .then(res => {
           if (cancelled) return
           const node = findTreeNode(res.payload, wsPath)
@@ -335,7 +336,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
     const { activeContextType, activeCanvasId, activeContextId, activeWorkspaceName, activeTreeName, activeContextPath } = state
 
     if (activeContextType === 'canvas' && activeCanvasId && activeWorkspaceName && activeContextPath) {
-      getWorkspaceTreeByName(activeWorkspaceName, activeTreeName || DEFAULT_WORKSPACE_TREE_NAME).then(res => {
+      getCachedWorkspaceTreeByName(activeWorkspaceName, activeTreeName || DEFAULT_WORKSPACE_TREE_NAME).then(res => {
         const node = findTreeNode(res.payload, activeContextPath)
         const saved = extractToolboxFilters(node?.metadata)
         dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: saved, savedSearchQuery: node?.querySpec?.query ?? null })
@@ -417,7 +418,8 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SET_SAVING', isSaving: true })
     try {
       if (activeContextType === 'canvas' && activeWorkspaceName && activeContextPath) {
-        const tree = await getWorkspaceTreeByName(activeWorkspaceName, activeTreeName || DEFAULT_WORKSPACE_TREE_NAME)
+        const treeName = activeTreeName || DEFAULT_WORKSPACE_TREE_NAME
+        const tree = await getCachedWorkspaceTreeByName(activeWorkspaceName, treeName)
         const node = findTreeNode(tree.payload, activeContextPath)
         const searchQuery = new URLSearchParams(location.search).get('q') || new URLSearchParams(location.search).get('search') || ''
         await updateWorkspacePath(activeWorkspaceName, activeContextPath, {
@@ -427,7 +429,8 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
             filters: [],
             query: searchQuery.trim() || undefined,
           },
-        }, activeTreeName || DEFAULT_WORKSPACE_TREE_NAME)
+        }, treeName)
+        invalidateWorkspaceTreeCache(activeWorkspaceName, treeName)
       } else if (activeContextType === 'context' && activeContextId) {
         const ctx = await getContext(activeContextId)
         const existingMeta = (ctx as Context & { metadata?: Record<string, unknown> }).metadata || {}
