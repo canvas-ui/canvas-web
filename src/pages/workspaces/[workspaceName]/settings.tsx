@@ -186,6 +186,18 @@ export default function WorkspaceSettingsPage() {
     }
   }
 
+  const patchDataBackend = async (backendId: string, patch: Partial<WorkspaceDataBackendStatus>, action: string) => {
+    setBusyAction(`${action}:${backendId}`)
+    try {
+      const next = await updateWorkspaceDataBackends(workspaceId, { [backendId]: patch })
+      setDataBackends(next)
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to update backend', variant: 'destructive' })
+    } finally {
+      setBusyAction(null)
+    }
+  }
+
   const resyncBackend = async (backendId: string) => {
     setBusyAction(`resync:${backendId}`)
     try {
@@ -370,14 +382,34 @@ export default function WorkspaceSettingsPage() {
                     <p className="mt-1 text-xs text-muted-foreground">{copy.description}</p>
                     {backend.root && <p className="mt-2 truncate font-mono text-xs text-muted-foreground">{backend.root}</p>}
                     <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                      <span>watch: {backend.watch ? 'true' : 'false'}</span>
                       <span>running: {backend.running ? 'true' : 'false'}</span>
+                      <span>watching: {backend.watching ? 'true' : 'false'}</span>
                       <span>incoming: {backend.indexIncoming ? 'true' : 'false'}</span>
                       {backend.lastScanAt && <span>last scan: {new Date(backend.lastScanAt).toLocaleString()}</span>}
                     </div>
                     {backend.lastError && <p className="mt-2 text-xs text-destructive">{backend.lastError}</p>}
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex shrink-0 items-center gap-3">
+                    {backend.driver === 'file' && canToggle && (
+                      <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        watch
+                        <Toggle
+                          checked={!!backend.watch}
+                          disabled={!backend.enabled || busyAction === `watch:${backendId}`}
+                          onClick={() => patchDataBackend(backendId, { watch: !backend.watch }, 'watch')}
+                        />
+                      </label>
+                    )}
+                    {backend.indexIncoming !== undefined && canToggle && (
+                      <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        incoming
+                        <Toggle
+                          checked={!!backend.indexIncoming}
+                          disabled={!backend.enabled || busyAction === `incoming:${backendId}`}
+                          onClick={() => patchDataBackend(backendId, { indexIncoming: !backend.indexIncoming }, 'incoming')}
+                        />
+                      </label>
+                    )}
                     {backend.resync && (
                       <Button type="button" variant="outline" size="sm" disabled={busyAction === `resync:${backendId}`} onClick={() => resyncBackend(backendId)}>
                         <RefreshCw className={`mr-2 h-3.5 w-3.5 ${busyAction === `resync:${backendId}` ? 'animate-spin' : ''}`} />
