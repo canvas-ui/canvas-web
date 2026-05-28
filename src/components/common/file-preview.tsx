@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Document } from '@/types/workspace'
-import { downloadDocument, fetchDocumentBlobUrl } from '@/services/workspace'
+import { downloadDocument, fetchDocumentBlob } from '@/services/workspace'
 import { Download } from 'lucide-react'
 
 interface FilePreviewProps {
@@ -20,10 +20,10 @@ function classify(mime: string): 'image' | 'audio' | 'video' | 'pdf' | 'text' | 
   return 'binary'
 }
 
+// Any file doc gets the preview component — binary types just show a
+// "no inline preview" notice plus the Download button.
 export function isPreviewable(document: Document): boolean {
-  if (document.schema !== FILE_SCHEMA) return false
-  const mime = String(document.data?.mime || document.metadata?.contentType || '')
-  return classify(mime) !== 'binary'
+  return document.schema === FILE_SCHEMA
 }
 
 export function FilePreview({ workspaceId, document }: FilePreviewProps) {
@@ -44,21 +44,18 @@ export function FilePreview({ workspaceId, document }: FilePreviewProps) {
 
     if (kind === 'binary') return
 
-    fetchDocumentBlobUrl(workspaceId, document.id)
-      .then(async ({ url, mime }) => {
-        if (cancelled) { URL.revokeObjectURL(url); return }
-        createdUrl = url
+    fetchDocumentBlob(workspaceId, document.id)
+      .then(async ({ blob }) => {
+        if (cancelled) return
         if (kind === 'text') {
-          const res = await fetch(url)
-          const txt = await res.text()
+          // Read directly from the Blob — fetch(blob:…) trips CSP connect-src.
+          const txt = await blob.text()
           if (!cancelled) setText(txt.slice(0, 200_000))
-          URL.revokeObjectURL(url)
-          createdUrl = null
         } else {
-          setBlobUrl(url)
+          createdUrl = URL.createObjectURL(blob)
+          if (cancelled) { URL.revokeObjectURL(createdUrl); createdUrl = null; return }
+          setBlobUrl(createdUrl)
         }
-        // declaredMime usually matches; ignore returned `mime` unless we ever need a sniff fallback
-        void mime
       })
       .catch((e) => { if (!cancelled) setError(String(e.message || e)) })
 
@@ -82,7 +79,7 @@ export function FilePreview({ workspaceId, document }: FilePreviewProps) {
         </button>
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
-      {!error && kind !== 'text' && !blobUrl && <p className="text-sm text-muted-foreground">Loading preview...</p>}
+      {!error && kind !== 'binary' && kind !== 'text' && !blobUrl && <p className="text-sm text-muted-foreground">Loading preview...</p>}
       {!error && kind === 'image' && blobUrl && <img src={blobUrl} alt={filename} className="max-h-[60vh] max-w-full border rounded" />}
       {!error && kind === 'audio' && blobUrl && <audio src={blobUrl} controls className="w-full" />}
       {!error && kind === 'video' && blobUrl && <video src={blobUrl} controls className="max-h-[60vh] w-full" />}
@@ -91,7 +88,7 @@ export function FilePreview({ workspaceId, document }: FilePreviewProps) {
         text == null ? <p className="text-sm text-muted-foreground">Loading...</p>
                      : <pre className="bg-muted p-3 rounded text-xs overflow-auto max-h-[60vh] whitespace-pre-wrap">{text}</pre>
       )}
-      {!error && kind === 'binary' && <p className="text-sm text-muted-foreground">No inline preview available for this type.</p>}
+      {!error && kind === 'binary' && <p className="text-sm text-muted-foreground">No inline preview available for this type — use Download.</p>}
     </div>
   )
 }

@@ -589,14 +589,18 @@ function buildContentApiPath(workspaceId: string, documentId: number | string, o
  * to drop into <img>, <audio>, <video>, <iframe>. Caller is responsible for
  * calling URL.revokeObjectURL when the URL is no longer needed.
  */
-export async function fetchDocumentBlobUrl(workspaceId: string, documentId: number | string): Promise<{ url: string; mime: string; size: number }> {
+export async function fetchDocumentBlob(workspaceId: string, documentId: number | string): Promise<{ blob: Blob; mime: string }> {
   const token = localStorage.getItem('authToken')
   const res = await fetch(buildContentApiPath(workspaceId, documentId), {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const mime = res.headers.get('content-type') || 'application/octet-stream'
-  const blob = await res.blob()
+  return { blob: await res.blob(), mime }
+}
+
+export async function fetchDocumentBlobUrl(workspaceId: string, documentId: number | string): Promise<{ url: string; mime: string; size: number }> {
+  const { blob, mime } = await fetchDocumentBlob(workspaceId, documentId)
   return { url: URL.createObjectURL(blob), mime, size: blob.size }
 }
 
