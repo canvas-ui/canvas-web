@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Document } from '@/types/workspace'
-import { getDocumentContentUrl } from '@/services/workspace'
+import { downloadDocument, fetchDocumentBlobUrl } from '@/services/workspace'
 import { Download } from 'lucide-react'
 
 interface FilePreviewProps {
@@ -27,40 +27,71 @@ export function isPreviewable(document: Document): boolean {
 }
 
 export function FilePreview({ workspaceId, document }: FilePreviewProps) {
-  const mime = String(document.data?.mime || document.metadata?.contentType || 'application/octet-stream')
-  const kind = classify(mime)
-  const url = getDocumentContentUrl(workspaceId, document.id)
-  const downloadUrl = getDocumentContentUrl(workspaceId, document.id, { download: true })
+  const declaredMime = String(document.data?.mime || document.metadata?.contentType || 'application/octet-stream')
+  const kind = classify(declaredMime)
+  const filename = String(document.data?.filename || `document-${document.id}`)
+
+  const [blobUrl, setBlobUrl] = useState<string | null>(null)
   const [text, setText] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (kind !== 'text') { setText(null); return }
     let cancelled = false
-    fetch(url, { credentials: 'include' })
-      .then(r => r.ok ? r.text() : Promise.reject(new Error(`HTTP ${r.status}`)))
-      .then(t => { if (!cancelled) setText(t.slice(0, 200_000)) })
-      .catch(e => { if (!cancelled) setError(String(e.message || e)) })
-    return () => { cancelled = true }
-  }, [kind, url])
+    let createdUrl: string | null = null
+    setError(null)
+    setBlobUrl(null)
+    setText(null)
+
+    if (kind === 'binary') return
+
+    fetchDocumentBlobUrl(workspaceId, document.id)
+      .then(async ({ url, mime }) => {
+        if (cancelled) { URL.revokeObjectURL(url); return }
+        createdUrl = url
+        if (kind === 'text') {
+          const res = await fetch(url)
+          const txt = await res.text()
+          if (!cancelled) setText(txt.slice(0, 200_000))
+          URL.revokeObjectURL(url)
+          createdUrl = null
+        } else {
+          setBlobUrl(url)
+        }
+        // declaredMime usually matches; ignore returned `mime` unless we ever need a sniff fallback
+        void mime
+      })
+      .catch((e) => { if (!cancelled) setError(String(e.message || e)) })
+
+    return () => {
+      cancelled = true
+      if (createdUrl) URL.revokeObjectURL(createdUrl)
+    }
+  }, [workspaceId, document.id, kind])
+
+  const onDownload = async () => {
+    try { await downloadDocument(workspaceId, document.id, filename) }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+  }
 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">{mime}</span>
-        <a href={downloadUrl} className="text-xs text-primary hover:underline inline-flex items-center gap-1">
+        <span className="text-xs text-muted-foreground">{declaredMime}</span>
+        <button onClick={onDownload} className="text-xs text-primary hover:underline inline-flex items-center gap-1">
           <Download className="h-3 w-3" /> Download
-        </a>
+        </button>
       </div>
-      {kind === 'image' && <img src={url} alt={document.data?.filename || 'preview'} className="max-h-[60vh] max-w-full border rounded" />}
-      {kind === 'audio' && <audio src={url} controls className="w-full" />}
-      {kind === 'video' && <video src={url} controls className="max-h-[60vh] w-full" />}
-      {kind === 'pdf' && <iframe src={url} className="w-full h-[60vh] border rounded" title="pdf-preview" />}
-      {kind === 'text' && (
-        error ? <p className="text-sm text-destructive">{error}</p>
-              : <pre className="bg-muted p-3 rounded text-xs overflow-auto max-h-[60vh] whitespace-pre-wrap">{text ?? 'Loading...'}</pre>
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      {!error && kind !== 'text' && !blobUrl && <p className="text-sm text-muted-foreground">Loading preview...</p>}
+      {!error && kind === 'image' && blobUrl && <img src={blobUrl} alt={filename} className="max-h-[60vh] max-w-full border rounded" />}
+      {!error && kind === 'audio' && blobUrl && <audio src={blobUrl} controls className="w-full" />}
+      {!error && kind === 'video' && blobUrl && <video src={blobUrl} controls className="max-h-[60vh] w-full" />}
+      {!error && kind === 'pdf'   && blobUrl && <iframe src={blobUrl} className="w-full h-[60vh] border rounded" title={filename} />}
+      {!error && kind === 'text' && (
+        text == null ? <p className="text-sm text-muted-foreground">Loading...</p>
+                     : <pre className="bg-muted p-3 rounded text-xs overflow-auto max-h-[60vh] whitespace-pre-wrap">{text}</pre>
       )}
-      {kind === 'binary' && <p className="text-sm text-muted-foreground">No inline preview available for this type.</p>}
+      {!error && kind === 'binary' && <p className="text-sm text-muted-foreground">No inline preview available for this type.</p>}
     </div>
   )
 }

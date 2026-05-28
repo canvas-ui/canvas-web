@@ -579,9 +579,46 @@ export async function destroyWorkspaceDocuments(
   return response.payload
 }
 
-export function getDocumentContentUrl(workspaceId: string, documentId: number | string, opts: { download?: boolean } = {}): string {
+function buildContentApiPath(workspaceId: string, documentId: number | string, opts: { download?: boolean } = {}): string {
   const qs = opts.download ? '?download=1' : ''
   return `${API_ROUTES.workspaces}/${workspaceId}/documents/${documentId}/content${qs}`
+}
+
+/**
+ * Fetch document bytes with bearer auth and wrap them in a blob: URL safe
+ * to drop into <img>, <audio>, <video>, <iframe>. Caller is responsible for
+ * calling URL.revokeObjectURL when the URL is no longer needed.
+ */
+export async function fetchDocumentBlobUrl(workspaceId: string, documentId: number | string): Promise<{ url: string; mime: string; size: number }> {
+  const token = localStorage.getItem('authToken')
+  const res = await fetch(buildContentApiPath(workspaceId, documentId), {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const mime = res.headers.get('content-type') || 'application/octet-stream'
+  const blob = await res.blob()
+  return { url: URL.createObjectURL(blob), mime, size: blob.size }
+}
+
+/**
+ * Stream the document bytes to disk via the browser's download UI. Uses the
+ * authed fetch + blob roundtrip so no token ever appears in the URL.
+ */
+export async function downloadDocument(workspaceId: string, documentId: number | string, filename: string): Promise<void> {
+  const token = localStorage.getItem('authToken')
+  const res = await fetch(buildContentApiPath(workspaceId, documentId, { download: true }), {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 30_000)
 }
 
 export async function purgeWorkspaceDocuments(
