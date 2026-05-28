@@ -941,7 +941,7 @@ function SideWorkspaceCanvas({
         urlDisplay={urlDisplay}
         contextPath={pane.path}
         treeName={pane.treeName}
-        workspaceId={workspace?.name}
+        workspaceId={workspaceName}
         documents={documents}
         isLoading={isLoading}
         totalCount={totalCount}
