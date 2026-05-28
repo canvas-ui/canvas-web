@@ -16,6 +16,7 @@ interface DefaultCanvasProps {
   urlDisplay: string
   contextPath: string
   treeName?: string
+  workspaceId?: string
   documents: Document[]
   isLoading: boolean
   totalCount: number
@@ -54,6 +55,7 @@ export function DefaultCanvas({
   urlDisplay,
   contextPath,
   treeName,
+  workspaceId,
   documents,
   isLoading,
   totalCount,
@@ -169,6 +171,7 @@ export function DefaultCanvas({
           isLoading={isLoading}
           contextPath={contextPath}
           treeName={treeName}
+          workspaceId={workspaceId}
           totalCount={totalCount}
           viewMode="table"
           currentPage={currentPage}

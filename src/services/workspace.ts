@@ -558,26 +558,30 @@ export async function deleteWorkspaceDocuments(
   return true
 }
 
-export interface EvictResult {
-  successful: { id: number; action: string; backendsCleared?: string[]; remainingBackends?: string[] }[]
-  failed: { id: number; reason: string; backends?: string[] }[]
-  skipped: { id: number; reason: string }[]
+export interface DestroyResult {
+  successful: { id: number; deleted: string[]; droppedRefs: string[]; kept: string[]; docDeleted: boolean }[]
+  failed: { id: number; reason: string }[]
 }
 
-export async function evictWorkspaceDocuments(
+export async function destroyWorkspaceDocuments(
   workspaceId: string,
   documentIds: readonly (string | number)[],
-  backends?: string[]
-): Promise<EvictResult> {
+  urls?: string[]
+): Promise<DestroyResult> {
   const ids = normalizeDocumentIds(documentIds)
-  const response = await api.delete<{ payload: EvictResult }>(
-    `${API_ROUTES.workspaces}/${workspaceId}/documents/evict`,
+  const response = await api.delete<{ payload: DestroyResult }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/documents/destroy`,
     {
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(backends ? { documentIds: ids, backends } : { documentIds: ids }),
+      body: JSON.stringify(urls ? { documentIds: ids, urls } : { documentIds: ids }),
     }
   )
   return response.payload
+}
+
+export function getDocumentContentUrl(workspaceId: string, documentId: number | string, opts: { download?: boolean } = {}): string {
+  const qs = opts.download ? '?download=1' : ''
+  return `${API_ROUTES.workspaces}/${workspaceId}/documents/${documentId}/content${qs}`
 }
 
 export async function purgeWorkspaceDocuments(

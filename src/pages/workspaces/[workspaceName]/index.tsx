@@ -19,7 +19,7 @@ import {
   importDocumentsToWorkspacePath,
   removeWorkspaceDocuments,
   deleteWorkspaceDocuments,
-  evictWorkspaceDocuments,
+  destroyWorkspaceDocuments,
   purgeWorkspaceDocuments,
   startWorkspace,
   stopWorkspace,
@@ -414,13 +414,9 @@ export default function WorkspaceDetailPage() {
   const handleDestroyDocument = async (documentId: number) => {
     if (!workspace) return;
     try {
-      const result = await evictWorkspaceDocuments(workspace.name, [documentId]);
+      const result = await destroyWorkspaceDocuments(workspace.name, [documentId]);
       if (result.failed?.length) {
-        const f = result.failed[0];
-        const msg = f.backends
-          ? `${f.reason} (${f.backends.join(', ')})`
-          : f.reason;
-        showToast({ title: 'Error', description: msg, variant: 'destructive' });
+        showToast({ title: 'Error', description: result.failed[0].reason, variant: 'destructive' });
         return;
       }
       setDocuments(prev => prev.filter(doc => doc.id !== documentId));
@@ -434,14 +430,13 @@ export default function WorkspaceDetailPage() {
   const handleDestroyDocuments = async (documentIds: number[]) => {
     if (!workspace) return;
     try {
-      const result = await evictWorkspaceDocuments(workspace.name, documentIds);
-      const succeededIds = new Set(result.successful?.map(r => r.id) ?? []);
+      const result = await destroyWorkspaceDocuments(workspace.name, documentIds);
+      const succeededIds = new Set(result.successful?.filter(r => r.docDeleted).map(r => r.id) ?? []);
       setDocuments(prev => prev.filter(doc => !succeededIds.has(doc.id)));
       setDocumentsTotalCount(prev => Math.max(0, prev - succeededIds.size));
       const msg = [
         result.successful?.length ? `${result.successful.length} destroyed` : null,
         result.failed?.length ? `${result.failed.length} failed` : null,
-        result.skipped?.length ? `${result.skipped.length} skipped` : null,
       ].filter(Boolean).join(', ');
       showToast({ title: 'Done', description: msg || 'No documents destroyed' });
     } catch (err) {
@@ -618,6 +613,7 @@ export default function WorkspaceDetailPage() {
       urlDisplay={urlDisplay}
       contextPath={selectedPath}
       treeName={selectedTreeName}
+      workspaceId={workspace.name}
       documents={documents}
       isLoading={isLoadingDocuments}
       totalCount={documentsTotalCount}
@@ -945,6 +941,7 @@ function SideWorkspaceCanvas({
         urlDisplay={urlDisplay}
         contextPath={pane.path}
         treeName={pane.treeName}
+        workspaceId={workspace?.name}
         documents={documents}
         isLoading={isLoading}
         totalCount={totalCount}

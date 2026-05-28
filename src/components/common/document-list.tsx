@@ -13,12 +13,14 @@ import {
 import { Button } from '@/components/ui/button'
 import { createPortal } from 'react-dom'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
+import { FilePreview, isPreviewable } from '@/components/common/file-preview'
 
 interface DocumentListProps {
   documents: Document[]
   isLoading: boolean
   contextPath: string
   treeName?: string
+  workspaceId?: string
   totalCount: number
   onRemoveDocument?: (documentId: number) => void
   onDeleteDocument?: (documentId: number) => void
@@ -57,6 +59,7 @@ export interface DocumentPasteOptions {
 interface DocumentRowProps {
   document: Document
   isSelected?: boolean
+  workspaceId?: string
   onSelect?: (documentId: number, isSelected: boolean, isCtrlClick: boolean) => void
   onRemoveDocument?: (documentId: number) => void
   onDeleteDocument?: (documentId: number) => void
@@ -67,6 +70,7 @@ interface DocumentRowProps {
 interface DocumentTableRowProps {
   document: Document
   isSelected?: boolean
+  workspaceId?: string
   onSelect?: (documentId: number, isSelected: boolean, isCtrlClick: boolean) => void
   onRemoveDocument?: (documentId: number) => void
   onDeleteDocument?: (documentId: number) => void
@@ -78,6 +82,7 @@ interface DocumentDetailModalProps {
   document: Document | null
   isOpen: boolean
   onClose: () => void
+  workspaceId?: string
 }
 
 interface ExportModalProps {
@@ -290,9 +295,11 @@ function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
   )
 }
 
-function DocumentDetailModal({ document, isOpen, onClose }: DocumentDetailModalProps) {
+function DocumentDetailModal({ document, isOpen, onClose, workspaceId }: DocumentDetailModalProps) {
   const [showRawJson, setShowRawJson] = useState(false)
   if (!isOpen || !document) return null
+
+  const showPreview = workspaceId && isPreviewable(document)
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -323,6 +330,12 @@ function DocumentDetailModal({ document, isOpen, onClose }: DocumentDetailModalP
           </div>
 
           <div className="space-y-6">
+            {showPreview && workspaceId && (
+              <div>
+                <h3 className="font-semibold mb-3">Preview</h3>
+                <FilePreview workspaceId={workspaceId} document={document} />
+              </div>
+            )}
             <div>
               <h3 className="font-semibold mb-3">Basic Information</h3>
               <div className="grid gap-3 text-sm">
@@ -405,7 +418,7 @@ function DocumentDetailModal({ document, isOpen, onClose }: DocumentDetailModalP
   )
 }
 
-function DocumentTableRow({ document, isSelected, onSelect, onRemoveDocument, onDeleteDocument, onRightClick, onDragStart }: DocumentTableRowProps) {
+function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemoveDocument, onDeleteDocument, onRightClick, onDragStart }: DocumentTableRowProps) {
   const [showDetailModal, setShowDetailModal] = useState(false)
 
   const isTabDocument = document.schema === 'data/abstraction/tab'
@@ -501,12 +514,12 @@ function DocumentTableRow({ document, isSelected, onSelect, onRemoveDocument, on
           </div>
         </TableCell>
       </TableRow>
-      <DocumentDetailModal document={document} isOpen={showDetailModal} onClose={() => setShowDetailModal(false)} />
+      <DocumentDetailModal document={document} isOpen={showDetailModal} onClose={() => setShowDetailModal(false)} workspaceId={workspaceId} />
     </>
   )
 }
 
-function DocumentRow({ document, isSelected, onSelect, onRemoveDocument, onDeleteDocument, onRightClick, onDragStart }: DocumentRowProps) {
+function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocument, onDeleteDocument, onRightClick, onDragStart }: DocumentRowProps) {
   const [showDetailModal, setShowDetailModal] = useState(false)
   const isTabDocument = document.schema === 'data/abstraction/tab'
   const tabUrl = isTabDocument ? document.data.url : null
@@ -583,12 +596,12 @@ function DocumentRow({ document, isSelected, onSelect, onRemoveDocument, onDelet
           </div>
         </div>
       </div>
-      <DocumentDetailModal document={document} isOpen={showDetailModal} onClose={() => setShowDetailModal(false)} />
+      <DocumentDetailModal document={document} isOpen={showDetailModal} onClose={() => setShowDetailModal(false)} workspaceId={workspaceId} />
     </>
   )
 }
 
-export function DocumentList({ documents, isLoading, contextPath, treeName, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQuery, onBackendSearch, canSaveChanges = false, isSavingChanges = false, onSaveChanges }: DocumentListProps) {
+export function DocumentList({ documents, isLoading, contextPath, treeName, workspaceId, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQuery, onBackendSearch, canSaveChanges = false, isSavingChanges = false, onSaveChanges }: DocumentListProps) {
   const [selectedDocuments, setSelectedDocuments] = useState<Set<number>>(new Set())
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; documentIds: number[] } | null>(null)
   const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null)
@@ -1219,7 +1232,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, tota
             </TableHeader>
             <TableBody>
               {filteredDocuments.map((document) => (
-                <DocumentTableRow key={document.id} document={document} isSelected={selectedDocuments.has(document.id)} onSelect={handleDocumentSelect} onRemoveDocument={onRemoveDocument} onDeleteDocument={onDeleteDocument} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
+                <DocumentTableRow key={document.id} document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onRemoveDocument={onRemoveDocument} onDeleteDocument={onDeleteDocument} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
               ))}
             </TableBody>
           </Table>
@@ -1229,7 +1242,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, tota
           <div className="space-y-3 pr-2">
             {filteredDocuments.map((document) => (
               <div key={document.id} onContextMenu={(e) => { e.stopPropagation(); handleDocumentRightClick(e, document.id); }}>
-                <DocumentRow document={document} isSelected={selectedDocuments.has(document.id)} onSelect={handleDocumentSelect} onRemoveDocument={onRemoveDocument} onDeleteDocument={onDeleteDocument} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
+                <DocumentRow document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onRemoveDocument={onRemoveDocument} onDeleteDocument={onDeleteDocument} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
               </div>
             ))}
           </div>
