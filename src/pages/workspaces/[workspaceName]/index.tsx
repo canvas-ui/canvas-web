@@ -15,6 +15,7 @@ import {
   createPublicCanvasShare,
   getPublicCanvasShare,
   deletePublicCanvasShare,
+  removeWorkspacePath,
   pasteDocumentsToWorkspacePath,
   importDocumentsToWorkspacePath,
   removeWorkspaceDocuments,
@@ -82,6 +83,7 @@ export default function WorkspaceDetailPage() {
   const [saveAsCanvasName, setSaveAsCanvasName] = useState('');
   const [saveAsCanvasLoading, setSaveAsCanvasLoading] = useState(false);
   const [shareCanvasLoading, setShareCanvasLoading] = useState(false);
+  const [deleteCanvasLoading, setDeleteCanvasLoading] = useState(false);
   const [publicCanvasShare, setPublicCanvasShare] = useState<{ code: string; url: string } | null>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -571,11 +573,45 @@ export default function WorkspaceDetailPage() {
     try {
       await deletePublicCanvasShare(publicCanvasShare.code);
       setPublicCanvasShare(null);
+      window.dispatchEvent(new CustomEvent('workspace:tree:refresh', { detail: { workspaceName, treeName: selectedTreeName } }));
       showToast({ title: 'Canvas unshared', description: 'The public link no longer works.' });
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to unshare canvas', variant: 'destructive' });
     } finally {
       setShareCanvasLoading(false);
+    }
+  };
+
+  const handleDeleteCanvas = async () => {
+    if (!workspaceName || selectedNodeType !== 'canvas' || selectedPath === '/') return;
+
+    const name = canvasInfo?.label || selectedPath.split('/').pop() || 'canvas';
+    const sharedHint = publicCanvasShare ? ' Its public link will stop working.' : '';
+    if (!window.confirm(`Delete canvas "${name}"? This cannot be undone.${sharedHint}`)) return;
+
+    setDeleteCanvasLoading(true);
+    try {
+      if (publicCanvasShare) {
+        await deletePublicCanvasShare(publicCanvasShare.code);
+        setPublicCanvasShare(null);
+      } else if (selectedNode?.locked) {
+        showToast({ title: 'Canvas is locked', description: 'Unlock it before deleting.', variant: 'destructive' });
+        return;
+      }
+
+      await removeWorkspacePath(workspaceName, selectedPath, false, selectedTreeName);
+
+      const segments = selectedPath.split('/').filter(Boolean);
+      segments.pop();
+      const parentPath = segments.length ? `/${segments.join('/')}` : '/';
+
+      window.dispatchEvent(new CustomEvent('workspace:tree:refresh', { detail: { workspaceName, treeName: selectedTreeName } }));
+      navigate(buildWorkspaceUrl(workspaceName, parentPath, selectedTreeName));
+      showToast({ title: 'Canvas deleted', description: `"${name}" was removed.` });
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to delete canvas', variant: 'destructive' });
+    } finally {
+      setDeleteCanvasLoading(false);
     }
   };
 
@@ -638,8 +674,11 @@ export default function WorkspaceDetailPage() {
       onSaveAsCanvas={tree && selectedNodeType !== 'canvas' && !isLayerView ? handleSaveAsCanvas : undefined}
       onShareCanvas={selectedNodeType === 'canvas' && !isLayerView ? handleShareCanvas : undefined}
       onUnshareCanvas={publicCanvasShare ? handleUnshareCanvas : undefined}
+      onDeleteCanvas={selectedNodeType === 'canvas' && !isLayerView ? handleDeleteCanvas : undefined}
       isSharingCanvas={shareCanvasLoading}
+      isDeletingCanvas={deleteCanvasLoading}
       isCanvasShared={!!publicCanvasShare}
+      isCanvasLocked={!!selectedNode?.locked}
       backendSearchQuery={serverSearchQuery}
       onBackendSearch={handleBackendSearch}
       canSaveChanges={canSaveChanges}

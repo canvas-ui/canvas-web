@@ -109,6 +109,7 @@ export interface Document {
   metadata: {
     contentType: string
     contentEncoding: string
+    size?: number
   }
   locations?: Array<{ url: string; metadata?: Record<string, any> }>
   indexOptions: {

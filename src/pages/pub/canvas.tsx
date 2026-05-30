@@ -5,7 +5,7 @@ import { io, Socket } from 'socket.io-client'
 import { LayoutDashboard, RefreshCw, Search, Wifi, WifiOff, X } from 'lucide-react'
 import { API_URL, WS_URL } from '@/config/api'
 import { api } from '@/lib/api'
-import { getDocumentDisplayInfo, getLocationFilename, isImageFile } from '@/lib/document-display'
+import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { Document, TreeNode } from '@/types/workspace'
 
@@ -39,6 +39,47 @@ interface PublicCanvasPayload {
     count?: number
     totalCount?: number
   } | Document[]
+}
+
+const FILE_SCHEMA = 'data/abstraction/file'
+
+function getFileUrl(document: Document) {
+  return String(document.locations?.[0]?.url || '').trim()
+}
+
+function getFileName(document: Document) {
+  const url = getFileUrl(document)
+  if (!url) return ''
+  const withoutQuery = url.split(/[?#]/)[0]
+  const base = withoutQuery.split('/').filter(Boolean).pop() || ''
+  try { return decodeURIComponent(base) } catch { return base }
+}
+
+function isImageFile(document: Document) {
+  return document.schema === FILE_SCHEMA && String(document.metadata?.contentType || '').startsWith('image/')
+}
+
+function formatBytes(value: unknown) {
+  const bytes = Number(value)
+  if (!Number.isFinite(bytes) || bytes < 0) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+function getPublicDocumentDisplay(document: Document) {
+  if (document.schema !== FILE_SCHEMA) return getDocumentDisplayInfo(document)
+
+  const name = getFileName(document)
+  const mime = String(document.metadata?.contentType || '').trim()
+  const size = formatBytes(document.metadata?.size)
+  return {
+    ...getDocumentDisplayInfo(document),
+    title: name || `File ${document.id}`,
+    preview: [mime, size].filter(Boolean).join(' · '),
+    subtitle: getFileUrl(document),
+    schemaLabel: 'file',
+  }
 }
 
 function isHttpUrl(value: string) {
@@ -93,13 +134,13 @@ export default function PublicCanvasPage() {
     const q = searchQuery.trim().toLowerCase()
     if (!q) return documents
     return documents.filter((document) => {
-      const display = getDocumentDisplayInfo(document)
+      const display = getPublicDocumentDisplay(document)
       const haystack = [
         document.schema,
         display.title,
         display.preview,
         display.subtitle,
-        getLocationFilename(document),
+        getFileName(document),
         document.metadata?.contentType,
       ].join(' ').toLowerCase()
       return haystack.includes(q)
@@ -273,7 +314,7 @@ export default function PublicCanvasPage() {
                     {searchQuery.trim() ? 'No loaded documents match your search.' : 'No documents yet.'}
                   </div>
                 ) : filteredDocuments.map((document) => {
-                  const display = getDocumentDisplayInfo(document)
+                  const display = getPublicDocumentDisplay(document)
                   const link = getDocumentLink(document, display)
                   return (
                     <article key={document.id} className="p-4">
