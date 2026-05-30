@@ -759,7 +759,7 @@ function DashboardSidebar() {
               <div className="container mx-auto px-4 flex justify-between items-center text-sm text-muted-foreground">
                 <div>© {new Date().getFullYear()} Canvas. All rights reserved.</div>
                 <a
-                  href="https://github.com/canvas-ai"
+                  href="https://github.com/canvas-ui"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center hover:text-foreground"
