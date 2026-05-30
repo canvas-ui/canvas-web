@@ -109,7 +109,6 @@ export interface Document {
   metadata: {
     contentType: string
     contentEncoding: string
-    dataPaths?: string[]
   }
   locations?: Array<{ url: string; metadata?: Record<string, any> }>
   indexOptions: {

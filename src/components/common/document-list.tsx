@@ -358,7 +358,7 @@ function DocumentDetailModal({ document, isOpen, onClose, workspaceId }: Documen
                 <div><span className="font-medium">Content Type:</span><span className="ml-2">{document.metadata?.contentType ?? '—'}</span></div>
                 <div><span className="font-medium">Content Encoding:</span><span className="ml-2">{document.metadata?.contentEncoding ?? '—'}</span></div>
                 {(() => {
-                  const raw = (document as any).locations ?? (document.metadata as any)?.dataPaths ?? []
+                  const raw = (document as any).locations ?? []
                   if (!Array.isArray(raw) || raw.length === 0) return null
                   const items: string[] = raw.map((l: any) => typeof l === 'string' ? l : (l?.url ?? '')).filter(Boolean)
                   if (items.length === 0) return null

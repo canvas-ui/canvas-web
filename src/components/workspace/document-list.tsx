@@ -26,7 +26,7 @@ interface DocumentDetailModalProps {
 
 function DocumentDetailModal({ document, isOpen, onClose }: DocumentDetailModalProps) {
   if (!isOpen || !document) return null
-  const locations = document.locations || document.metadata.dataPaths?.map((url) => ({ url })) || []
+  const locations = document.locations || []
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {

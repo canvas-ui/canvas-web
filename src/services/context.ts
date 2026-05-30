@@ -39,7 +39,6 @@ interface DocumentResponse {
     metadata: {
       contentType: string;
       contentEncoding: string;
-      dataPaths: string[];
     };
     indexOptions: {
       checksumAlgorithms: string[];
