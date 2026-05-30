@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useParams } from 'react-router-dom'
 import { io, Socket } from 'socket.io-client'
-import { LayoutDashboard, RefreshCw, Search, Wifi, WifiOff, X } from 'lucide-react'
+import { Download, LayoutDashboard, RefreshCw, Search, Wifi, WifiOff, X } from 'lucide-react'
 import { API_URL, WS_URL } from '@/config/api'
 import { api } from '@/lib/api'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
@@ -96,8 +96,9 @@ function getDocumentLink(document: Document, display: ReturnType<typeof getDocum
   return null
 }
 
-function publicDocumentContentUrl(code: string, documentId: number) {
-  return `${API_URL}/pub/c/${encodeURIComponent(code)}/documents/${documentId}/content`
+function publicDocumentContentUrl(code: string, documentId: number, download = false) {
+  const url = `${API_URL}/pub/c/${encodeURIComponent(code)}/documents/${documentId}/content`
+  return download ? `${url}?download=1` : url
 }
 
 function linkify(value: string) {
@@ -316,6 +317,7 @@ export default function PublicCanvasPage() {
                 ) : filteredDocuments.map((document) => {
                   const display = getPublicDocumentDisplay(document)
                   const link = getDocumentLink(document, display)
+                  const isFile = document.schema === FILE_SCHEMA
                   return (
                     <article key={document.id} className="p-4">
                       <div className="flex flex-col gap-1 md:flex-row md:items-start md:justify-between">
@@ -329,9 +331,21 @@ export default function PublicCanvasPage() {
                           </h3>
                           <div className="mt-1 font-mono text-xs text-neutral-500">{display.schemaLabel}</div>
                         </div>
-                        <time className="shrink-0 text-xs text-neutral-500">
-                          {formatDate(document.updatedAt || document.createdAt)}
-                        </time>
+                        <div className="flex shrink-0 items-center gap-3">
+                          {isFile && (
+                            <a
+                              href={publicDocumentContentUrl(code, document.id, true)}
+                              download={display.title}
+                              className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-50 hover:text-neutral-950"
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                              Download
+                            </a>
+                          )}
+                          <time className="text-xs text-neutral-500">
+                            {formatDate(document.updatedAt || document.createdAt)}
+                          </time>
+                        </div>
                       </div>
                       {display.preview && (
                         <p className="mt-3 line-clamp-3 text-sm leading-6 text-neutral-700">
