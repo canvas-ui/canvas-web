@@ -318,13 +318,15 @@ export default function PublicCanvasPage() {
                   const display = getPublicDocumentDisplay(document)
                   const link = getDocumentLink(document, display)
                   const isFile = document.schema === FILE_SCHEMA
+                  const fileUrl = isFile ? publicDocumentContentUrl(code, document.id) : null
+                  const openUrl = fileUrl || link
                   return (
                     <article key={document.id} className="p-4">
                       <div className="flex flex-col gap-1 md:flex-row md:items-start md:justify-between">
                         <div className="min-w-0">
                           <h3 className="truncate font-medium">
-                            {link ? (
-                              <a href={link} target="_blank" rel="noreferrer" className="hover:text-violet-700 hover:underline">
+                            {openUrl ? (
+                              <a href={openUrl} target="_blank" rel="noreferrer" className="hover:text-violet-700 hover:underline">
                                 {display.title}
                               </a>
                             ) : display.title}
@@ -353,12 +355,14 @@ export default function PublicCanvasPage() {
                         </p>
                       )}
                       {isImageFile(document) && (
-                        <img
-                          src={publicDocumentContentUrl(code, document.id)}
-                          alt={display.title}
-                          loading="lazy"
-                          className="mt-3 max-h-64 max-w-full rounded border bg-neutral-50 object-contain"
-                        />
+                        <a href={fileUrl || undefined} target="_blank" rel="noreferrer" className="mt-3 block w-fit">
+                          <img
+                            src={fileUrl || undefined}
+                            alt={display.title}
+                            loading="lazy"
+                            className="max-h-64 max-w-full rounded border bg-neutral-50 object-contain transition-opacity hover:opacity-90"
+                          />
+                        </a>
                       )}
                     </article>
                   )
