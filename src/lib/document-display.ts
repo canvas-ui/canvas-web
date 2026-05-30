@@ -2,6 +2,7 @@ import type { Document } from '@/types/workspace'
 
 const EMAIL_SCHEMA = 'data/abstraction/email'
 const TAB_SCHEMA = 'data/abstraction/tab'
+export const FILE_SCHEMA = 'data/abstraction/file'
 
 type DisplayIcon = 'file' | 'globe' | 'mail'
 
@@ -37,6 +38,11 @@ function getTabTitle(url: string): string {
 // Filename for a blob doc: basename of the first location's key (everything
 // after scheme://backend/). Blobs carry no data.filename — the name is a
 // per-location alias, so it's derived from the location URL.
+export function isImageFile(document: Document): boolean {
+  if (document.schema !== FILE_SCHEMA) return false
+  return String(document.metadata?.contentType || '').startsWith('image/')
+}
+
 export function getLocationFilename(document: Document): string {
   const url = document.locations?.[0]?.url
   if (!url) return ''
@@ -80,6 +86,24 @@ export function getDocumentDisplayInfo(document: Document): {
       subtitle: url,
       icon: 'globe',
       isExternal: Boolean(url),
+      schemaLabel,
+    }
+  }
+
+  if (document.schema === FILE_SCHEMA) {
+    const filename = getLocationFilename(document)
+    const mime = String(document.metadata?.contentType || '').trim()
+    const size = document.metadata?.size
+    const previewParts = [
+      mime,
+      Number.isFinite(size) ? `${size} bytes` : '',
+    ].filter(Boolean)
+    return {
+      title: truncate(filename, 160) || `File ${document.id}`,
+      preview: previewParts.join(' · '),
+      subtitle: filename,
+      icon: 'file',
+      isExternal: false,
       schemaLabel,
     }
   }

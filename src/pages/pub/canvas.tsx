@@ -5,6 +5,7 @@ import { io, Socket } from 'socket.io-client'
 import { LayoutDashboard, RefreshCw, Search, Wifi, WifiOff, X } from 'lucide-react'
 import { API_URL, WS_URL } from '@/config/api'
 import { api } from '@/lib/api'
+import { getDocumentDisplayInfo, getLocationFilename, isImageFile } from '@/lib/document-display'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { Document, TreeNode } from '@/types/workspace'
 
@@ -40,25 +41,22 @@ interface PublicCanvasPayload {
   } | Document[]
 }
 
-function getDocumentTitle(document: Document) {
-  const data = document.data || {}
-  return String(data.title || data.subject || data.name || data.url || data.content || `Document ${document.id}`)
-}
-
-function getDocumentPreview(document: Document) {
-  const data = document.data || {}
-  const value = data.text || data.body || data.content || data.description || data.url || ''
-  return String(value).replace(/\s+/g, ' ').trim()
-}
-
-function getDocumentUrl(document: Document) {
-  const data = document.data || {}
-  const value = String(data.url || data.href || data.link || '')
-  return isHttpUrl(value) ? value : null
-}
-
 function isHttpUrl(value: string) {
   return /^https?:\/\/[^\s]+$/i.test(value)
+}
+
+function getDocumentLink(document: Document, display: ReturnType<typeof getDocumentDisplayInfo>) {
+  if (document.schema === 'data/abstraction/tab') {
+    const url = String(document.data?.url || '').trim()
+    return isHttpUrl(url) ? url : null
+  }
+  if (display.isExternal && isHttpUrl(display.subtitle)) return display.subtitle
+  if (isHttpUrl(display.title)) return display.title
+  return null
+}
+
+function publicDocumentContentUrl(code: string, documentId: number) {
+  return `${API_URL}/pub/c/${encodeURIComponent(code)}/documents/${documentId}/content`
 }
 
 function linkify(value: string) {
@@ -95,11 +93,14 @@ export default function PublicCanvasPage() {
     const q = searchQuery.trim().toLowerCase()
     if (!q) return documents
     return documents.filter((document) => {
+      const display = getDocumentDisplayInfo(document)
       const haystack = [
         document.schema,
-        getDocumentTitle(document),
-        getDocumentPreview(document),
-        JSON.stringify(document.data || {}),
+        display.title,
+        display.preview,
+        display.subtitle,
+        getLocationFilename(document),
+        document.metadata?.contentType,
       ].join(' ').toLowerCase()
       return haystack.includes(q)
     })
@@ -272,34 +273,37 @@ export default function PublicCanvasPage() {
                     {searchQuery.trim() ? 'No loaded documents match your search.' : 'No documents yet.'}
                   </div>
                 ) : filteredDocuments.map((document) => {
-                  const preview = getDocumentPreview(document)
-                  const url = getDocumentUrl(document)
-                  const title = getDocumentTitle(document)
+                  const display = getDocumentDisplayInfo(document)
+                  const link = getDocumentLink(document, display)
                   return (
                     <article key={document.id} className="p-4">
                       <div className="flex flex-col gap-1 md:flex-row md:items-start md:justify-between">
                         <div className="min-w-0">
                           <h3 className="truncate font-medium">
-                            {url ? (
-                              <a href={url} target="_blank" rel="noreferrer" className="hover:text-violet-700 hover:underline">
-                                {title}
+                            {link ? (
+                              <a href={link} target="_blank" rel="noreferrer" className="hover:text-violet-700 hover:underline">
+                                {display.title}
                               </a>
-                            ) : isHttpUrl(title) ? (
-                              <a href={title} target="_blank" rel="noreferrer" className="hover:text-violet-700 hover:underline">
-                                {title}
-                              </a>
-                            ) : title}
+                            ) : display.title}
                           </h3>
-                          <div className="mt-1 font-mono text-xs text-neutral-500">{document.schema}</div>
+                          <div className="mt-1 font-mono text-xs text-neutral-500">{display.schemaLabel}</div>
                         </div>
                         <time className="shrink-0 text-xs text-neutral-500">
                           {formatDate(document.updatedAt || document.createdAt)}
                         </time>
                       </div>
-                      {preview && (
+                      {display.preview && (
                         <p className="mt-3 line-clamp-3 text-sm leading-6 text-neutral-700">
-                          {linkify(preview)}
+                          {linkify(display.preview)}
                         </p>
+                      )}
+                      {isImageFile(document) && (
+                        <img
+                          src={publicDocumentContentUrl(code, document.id)}
+                          alt={display.title}
+                          loading="lazy"
+                          className="mt-3 max-h-64 max-w-full rounded border bg-neutral-50 object-contain"
+                        />
                       )}
                     </article>
                   )
