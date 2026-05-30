@@ -58,10 +58,10 @@ export default function HomePage() {
   }, []);
 
   const integrationLinks = [
-    { name: 'Browser extensions', url: 'https://github.com/canvas-ai/canvas-browser-extensions', description: 'Integrate Canvas directly into your web browser.' },
-    { name: 'CLI Client', url: 'https://github.com/canvas-ai/canvas-cli', description: 'Manage Canvas from your command line.' },
-    { name: 'Shell client', url: 'https://github.com/canvas-ai/canvas-shell', description: 'Interact with Canvas using a shell interface.' },
-    { name: 'Electron UI', url: 'https://github.com/canvas-ai/canvas-electron', description: 'Use the Canvas desktop application.' },
+    { name: 'Browser extensions', url: 'https://github.com/canvas-ui/canvas-browser-extensions', description: 'Integrate Canvas directly into your web browser.' },
+    { name: 'CLI Client', url: 'https://github.com/canvas-ui/canvas-cli', description: 'Manage Canvas from your command line.' },
+    { name: 'Shell client', url: 'https://github.com/canvas-ui/canvas-shell', description: 'Interact with Canvas using a shell interface.' },
+    { name: 'Electron UI', url: 'https://github.com/canvas-ui/canvas-electron', description: 'Use the Canvas desktop application.' },
   ];
 
   return (
