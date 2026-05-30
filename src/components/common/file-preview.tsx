@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Document } from '@/types/workspace'
 import { downloadDocument, fetchDocumentBlob } from '@/services/workspace'
+import { getLocationFilename } from '@/lib/document-display'
 import { Download } from 'lucide-react'
 
 interface FilePreviewProps {
@@ -27,9 +28,9 @@ export function isPreviewable(document: Document): boolean {
 }
 
 export function FilePreview({ workspaceId, document }: FilePreviewProps) {
-  const declaredMime = String(document.data?.mime || document.metadata?.contentType || 'application/octet-stream')
+  const declaredMime = String(document.metadata?.contentType || 'application/octet-stream')
   const kind = classify(declaredMime)
-  const filename = String(document.data?.filename || `document-${document.id}`)
+  const filename = getLocationFilename(document) || `document-${document.id}`
 
   const [blobUrl, setBlobUrl] = useState<string | null>(null)
   const [text, setText] = useState<string | null>(null)

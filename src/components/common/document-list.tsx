@@ -686,7 +686,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     keys: [
       { name: 'data.title', weight: 0.4 },
       { name: 'data.name', weight: 0.4 },
-      { name: 'data.filename', weight: 0.4 },
+      { name: 'locations.url', weight: 0.4 },
       { name: 'data.url', weight: 0.3 },
       { name: 'data.content', weight: 0.2 },
       { name: 'data.description', weight: 0.2 },

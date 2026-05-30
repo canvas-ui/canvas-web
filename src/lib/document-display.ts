@@ -34,6 +34,20 @@ function getTabTitle(url: string): string {
   }
 }
 
+// Filename for a blob doc: basename of the first location's key (everything
+// after scheme://backend/). Blobs carry no data.filename — the name is a
+// per-location alias, so it's derived from the location URL.
+export function getLocationFilename(document: Document): string {
+  const url = document.locations?.[0]?.url
+  if (!url) return ''
+  const afterScheme = url.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')
+  const slash = afterScheme.indexOf('/')
+  const key = slash >= 0 ? afterScheme.slice(slash + 1) : afterScheme
+  const base = key.split('/').filter(Boolean).pop()
+  if (!base) return ''
+  try { return decodeURIComponent(base) } catch { return base }
+}
+
 export function getDocumentDisplayInfo(document: Document): {
   title: string
   preview: string
@@ -71,7 +85,7 @@ export function getDocumentDisplayInfo(document: Document): {
   }
 
   return {
-    title: truncate(document.data.title || document.data.name || document.data.filename || document.data.subject, 160) || `Document ${document.id}`,
+    title: truncate(document.data.title || document.data.name || document.data.subject || getLocationFilename(document), 160) || `Document ${document.id}`,
     preview: truncate(document.data.content || document.data.description || document.data.summary || document.data.bodyPreview || document.data.body, 140),
     subtitle: '',
     icon: 'file',
