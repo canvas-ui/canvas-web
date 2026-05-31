@@ -63,6 +63,29 @@
     --m1-width: 280px;
     --t0-width: 48px;
     --t1-width: 500px;
+
+    /* The "desk" — neutral surface the sheets rest on */
+    --desk: 240 6% 90%;
+  }
+
+  /* Dark scope — applied to the toolbox dock so it reads as a dark sheet.
+     Every semantic-token utility (bg-card, text-foreground, …) flips here. */
+  .dark {
+    --background: 240 6% 10%;
+    --foreground: 0 0% 98%;
+    --card: 240 5% 11%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 6% 10%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 6% 10%;
+    --muted: 240 4% 16%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 240 4% 20%;
+    --accent-foreground: 0 0% 98%;
+    --border: 240 4% 18%;
+    --input: 240 4% 18%;
+    --ring: 0 0% 83%;
   }
 }
 
@@ -174,6 +197,15 @@
   .ripple:active::after {
     width: 300px;
     height: 300px;
+  }
+
+  /* A floating sheet of paper on the desk */
+  .canvas-desk {
+    background-color: hsl(var(--desk));
+  }
+
+  .canvas-sheet {
+    @apply bg-card rounded-xl shadow-elevation-2 overflow-hidden;
   }
 
   /* Canvas-specific utilities */

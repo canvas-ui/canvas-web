@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,6 +11,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  SortableTableHead,
+  useSortableData,
 } from "@/components/ui/table"
 import {
   AlertDialog,
@@ -375,6 +377,23 @@ export default function ContextsPage() {
     }
   }
 
+  const sortAccessors = useMemo(() => ({
+    type: (c: ContextEntry) => (c.isShared || c.type === 'shared') ? 'shared' : 'owned',
+    id: (c: ContextEntry) => c.id ?? '',
+    owner: (c: ContextEntry) => (c.isShared || c.type === 'shared') ? (c.ownerEmail || c.userId || '') : 'you',
+    url: (c: ContextEntry) => c.url ?? '',
+    workspaceId: (c: ContextEntry) => c.workspaceId ?? '',
+    baseUrl: (c: ContextEntry) => c.baseUrl ?? '',
+    path: (c: ContextEntry) => c.path ?? '',
+    locked: (c: ContextEntry) => (c.locked ? 1 : 0),
+    created: (c: ContextEntry) => Date.parse(c.createdAt) || 0,
+    updated: (c: ContextEntry) => Date.parse(c.updatedAt) || 0,
+  }), [])
+  const { sorted: sortedContexts, sort, toggleSort } = useSortableData(
+    contexts.filter((c): c is ContextEntry => c != null),
+    sortAccessors,
+  )
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -491,21 +510,21 @@ export default function ContextsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Type</TableHead>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Owner</TableHead>
-                  <TableHead>Context URL</TableHead>
-                  <TableHead>Workspace ID</TableHead>
-                  <TableHead>Base URL</TableHead>
-                  <TableHead>Path</TableHead>
-                  <TableHead>Locked</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Updated</TableHead>
+                  <SortableTableHead label="Type" sortKey="type" sort={sort} onSort={toggleSort} />
+                  <SortableTableHead label="ID" sortKey="id" sort={sort} onSort={toggleSort} />
+                  <SortableTableHead label="Owner" sortKey="owner" sort={sort} onSort={toggleSort} />
+                  <SortableTableHead label="Context URL" sortKey="url" sort={sort} onSort={toggleSort} />
+                  <SortableTableHead label="Workspace ID" sortKey="workspaceId" sort={sort} onSort={toggleSort} />
+                  <SortableTableHead label="Base URL" sortKey="baseUrl" sort={sort} onSort={toggleSort} />
+                  <SortableTableHead label="Path" sortKey="path" sort={sort} onSort={toggleSort} />
+                  <SortableTableHead label="Locked" sortKey="locked" sort={sort} onSort={toggleSort} />
+                  <SortableTableHead label="Created" sortKey="created" sort={sort} onSort={toggleSort} />
+                  <SortableTableHead label="Updated" sortKey="updated" sort={sort} onSort={toggleSort} />
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {contexts.filter(context => context != null).map((context) => {
+                {sortedContexts.map((context) => {
                   // Safety checks to prevent errors with undefined properties
                   if (!context) {
                     console.warn('Found null/undefined context in contexts array, skipping');

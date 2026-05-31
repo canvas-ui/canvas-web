@@ -45,7 +45,7 @@ export function ToolBar() {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="flex flex-col items-center w-[var(--t0-width)] h-full bg-zinc-900 border-l border-zinc-800 shrink-0">
+      <div className="flex flex-col items-center w-[var(--t0-width)] h-full bg-zinc-900 shrink-0">
         <div className="flex flex-col items-center gap-1 py-3 flex-1">
           <T0Button
             icon={<Home className="w-4 h-4" />}

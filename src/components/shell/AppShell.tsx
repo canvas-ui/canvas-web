@@ -12,12 +12,15 @@ export function AppShell() {
     <MenuProvider>
       <AgentSessionProvider>
         <ToolboxProvider>
-          <div className="flex h-screen w-screen overflow-hidden bg-background">
+          <div className="flex h-screen w-screen overflow-hidden canvas-desk gap-2 p-2">
             <MenuBar />
             <MenuPanelArea />
             <ContentArea />
-            <ToolboxPanel />
-            <ToolBar />
+            {/* Toolbox dock — T1 grows the same dark sheet rather than spawning a new one */}
+            <div className="dark flex shrink-0 rounded-xl shadow-elevation-3 overflow-hidden bg-zinc-900">
+              <ToolboxPanel />
+              <ToolBar />
+            </div>
           </div>
         </ToolboxProvider>
       </AgentSessionProvider>

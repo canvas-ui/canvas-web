@@ -69,9 +69,9 @@ export function MenuPanelArea() {
     <div
       style={state.m1Open ? { width } : undefined}
       className={cn(
-        'relative flex-shrink-0 overflow-hidden border-r border-sidebar-border bg-sidebar',
+        'relative flex-shrink-0 overflow-hidden bg-sidebar',
         !isDragging && 'transition-[width] duration-200 ease-out',
-        state.m1Open ? '' : 'w-0 border-r-0',
+        state.m1Open ? 'rounded-xl shadow-elevation-2' : 'w-0',
       )}
     >
       {/* M1 layer */}

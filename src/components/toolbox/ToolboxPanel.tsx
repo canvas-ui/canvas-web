@@ -41,7 +41,7 @@ export function ToolboxPanel() {
   return (
     <div
       style={{ width }}
-      className="relative flex flex-col h-full bg-background border-l border-border shrink-0 overflow-hidden"
+      className="relative flex flex-col h-full bg-background text-foreground shrink-0 overflow-hidden border-r border-border"
     >
       {/* Drag handle — left edge */}
       <div

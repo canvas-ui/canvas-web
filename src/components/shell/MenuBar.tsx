@@ -109,7 +109,7 @@ export function MenuBar() {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="flex flex-col items-center w-[var(--m0-width)] h-full bg-sidebar border-r border-sidebar-border shrink-0 shadow-lg z-10">
+      <div className="flex flex-col items-center w-[var(--m0-width)] h-full bg-transparent shrink-0">
         {/* Logo */}
         <div className="flex items-center justify-center h-12 w-full shrink-0">
           <button

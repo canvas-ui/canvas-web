@@ -9,6 +9,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  SortableTableHead,
+  useSortableData,
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { createPortal } from 'react-dom'
@@ -716,6 +718,16 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     return searchResults.map(result => result.item)
   }, [documents, searchQuery, fuse])
 
+  // Column sort for the table view
+  const sortAccessors = useMemo(() => ({
+    title: (d: Document) => getDocumentDisplayInfo(d).title?.toLowerCase() ?? '',
+    schema: (d: Document) => getDocumentDisplayInfo(d).schemaLabel ?? '',
+    id: (d: Document) => d.id,
+    created: (d: Document) => Date.parse(d.createdAt) || 0,
+    version: (d: Document) => d.versionNumber ?? 0,
+  }), [])
+  const { sorted: sortedDocuments, sort, toggleSort } = useSortableData(filteredDocuments, sortAccessors)
+
   const handleDocumentSelect = useCallback((documentId: number, isSelected: boolean, isCtrlClick: boolean) => {
     setSelectedDocuments(prev => {
       const newSelection = new Set(prev)
@@ -1221,17 +1233,17 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
             <TableHeader>
               <TableRow>
                 <TableHead className="w-12">Type</TableHead>
-                <TableHead>Title</TableHead>
-                <TableHead>Schema</TableHead>
-                <TableHead>ID</TableHead>
+                <SortableTableHead label="Title" sortKey="title" sort={sort} onSort={toggleSort} />
+                <SortableTableHead label="Schema" sortKey="schema" sort={sort} onSort={toggleSort} />
+                <SortableTableHead label="ID" sortKey="id" sort={sort} onSort={toggleSort} />
                 <TableHead>Checksum</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead>Version</TableHead>
+                <SortableTableHead label="Created" sortKey="created" sort={sort} onSort={toggleSort} />
+                <SortableTableHead label="Version" sortKey="version" sort={sort} onSort={toggleSort} />
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredDocuments.map((document) => (
+              {sortedDocuments.map((document) => (
                 <DocumentTableRow key={document.id} document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onRemoveDocument={onRemoveDocument} onDeleteDocument={onDeleteDocument} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
               ))}
             </TableBody>
