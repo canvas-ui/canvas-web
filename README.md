@@ -1,6 +1,6 @@
 # Canvas web frontend
 
-- Bundled with [Canvas Server](https://github.com/canvas-ai/canvas-server)  
+- Bundled with [Canvas Server](https://github.com/canvas-ui/canvas-server)  
 - For standalone deployment, see the installation section below
 
 ## Screenshots
@@ -10,7 +10,7 @@
 
 ### Workspace Detail
 
-Workspace connected to a browser running [canvas-browser-extension](https://github.com/canvas-ai/canvas-browser-extensions)
+Workspace connected to a browser running [canvas-browser-extension](https://github.com/canvas-ui/canvas-browser-extensions)
 ![Workspace Management](./public/screenshots/s2.png)
 
 ### Context detail
@@ -27,7 +27,7 @@ Context-bound browser with real-time data sync
 ### Setup
 1. **Clone this repository**
    ```bash
-   git clone https://github.com/canvas-ai/canvas-web
+   git clone https://github.com/canvas-ui/canvas-web
    cd canvas-web
    ```
 
