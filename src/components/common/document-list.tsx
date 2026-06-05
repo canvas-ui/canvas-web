@@ -610,6 +610,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   const [showExportModal, setShowExportModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState(backendSearchQuery || '')
+  const [isDragOver, setIsDragOver] = useState(false)
 
   // Sync local input when backend search query changes externally
   useEffect(() => {
@@ -668,6 +669,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     if (dragData?.type !== 'document' || !Array.isArray(dragData.documentIds) || dragData.documentIds.length === 0) return
     event.preventDefault()
     event.stopPropagation()
+    setIsDragOver(false)
     await onPasteDocuments(contextPath, dragData.documentIds, {
       move: event.shiftKey,
       sourcePath: dragData.sourcePath,
@@ -681,7 +683,12 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     if (!Array.from(event.dataTransfer.types).includes('application/json')) return
     event.preventDefault()
     event.dataTransfer.dropEffect = event.shiftKey ? 'move' : 'copy'
+    setIsDragOver(true)
   }, [onPasteDocuments])
+
+  const handleDragLeave = useCallback((event: React.DragEvent) => {
+    if (!(event.currentTarget as Node).contains(event.relatedTarget as Node)) setIsDragOver(false)
+  }, [])
 
   // Fuse.js configuration for fuzzy search
   const fuseOptions = useMemo(() => ({
@@ -858,8 +865,9 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
 
   return (
     <div
-      className="flex-1 flex flex-col min-h-0 p-4"
+      className={`flex-1 flex flex-col min-h-0 p-4 rounded-lg transition-colors ${isDragOver ? 'ring-2 ring-inset ring-primary bg-primary/5' : ''}`}
       onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
       <div className="border-b pb-3 mb-4 flex-shrink-0">

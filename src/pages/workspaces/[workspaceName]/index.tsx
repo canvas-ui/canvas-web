@@ -30,6 +30,7 @@ import { Document, TreeNode, buildDatetimeFilters } from '@/types/workspace';
 import { sanitizeUrlPath, buildWorkspaceUrl } from '@/utils/url-params';
 import { useToolbox } from '@/components/toolbox/toolbox-context';
 import { cn } from '@/lib/utils';
+import socketService from '@/lib/socket';
 
 type WorkspaceSidePane = {
   treeName: string;
@@ -250,6 +251,42 @@ export default function WorkspaceDetailPage() {
     window.addEventListener('workspace:documents:refresh', onDocumentsRefresh);
     return () => window.removeEventListener('workspace:documents:refresh', onDocumentsRefresh);
   }, [fetchDocuments, workspaceName, selectedPath, selectedTreeName]);
+
+  // Live-refresh the content area when documents change in the DB (CLI, agents,
+  // hooks, other clients). The backend forwards synapsd document events over the
+  // workspace socket channel keyed by workspace id. We subscribe but never
+  // unsubscribe on cleanup so we don't tear down a sibling component's
+  // subscription to the same channel.
+  useEffect(() => {
+    if (!workspaceName || !workspace) return;
+    const channels = [workspace.name, workspace.id].filter(Boolean).map(id => `workspace:${id}`);
+    const subscribe = () => channels.forEach(ch => socketService.emit('subscribe', { channel: ch }));
+    subscribe();
+    const offConnect = socketService.on('connect', subscribe);
+
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const refresh = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        invalidateDocumentCache(workspaceName, selectedTreeName, selectedPath);
+        fetchDocuments();
+      }, 200);
+    };
+
+    const events = [
+      'document.inserted', 'document.updated', 'document.removed', 'document.deleted',
+      'tree.document.inserted', 'tree.document.inserted.batch',
+      'tree.document.removed', 'tree.document.removed.batch',
+      'tree.document.deleted', 'tree.document.deleted.batch',
+    ];
+    events.forEach(ev => socketService.on(ev, refresh));
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      offConnect?.();
+      events.forEach(ev => socketService.off(ev, refresh));
+    };
+  }, [workspaceName, workspace?.id, workspace?.name, selectedTreeName, selectedPath, fetchDocuments]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -542,6 +579,14 @@ export default function WorkspaceDetailPage() {
         },
       });
       setSaveAsCanvasOpen(false);
+      // Refresh the local tree before navigating so the new node resolves as a
+      // canvas — otherwise the page renders generic context/directory controls
+      // until the async tree:refresh lands.
+      invalidateWorkspaceTreeCache(workspaceName!, selectedTreeName);
+      try {
+        const res = await getCachedWorkspaceTreeByName(workspaceName!, selectedTreeName, { force: true });
+        setTree(res.payload);
+      } catch { /* falls back to the tree:refresh event below */ }
       window.dispatchEvent(new CustomEvent('workspace:tree:refresh', { detail: { workspaceName } }));
       navigate(buildWorkspaceUrl(workspaceName!, path, selectedTreeName));
     } catch (err) {

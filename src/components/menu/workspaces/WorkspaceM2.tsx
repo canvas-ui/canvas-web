@@ -35,7 +35,8 @@ export function WorkspaceM2() {
   // Derive tab and path from URL pathname; UI-only state from query params
   const { treeName: urlTree, path: urlPath } = parseWorkspacePathFromUrl(location.pathname)
   const urlIsLayer = new URLSearchParams(location.search).get('layer') === '1'
-  const initialTab: TreeTab = urlTree === 'directory' ? 'directory' : 'context'
+  const urlLayerId = new URLSearchParams(location.search).get('layerId')
+  const initialTab: TreeTab = urlLayerId ? 'layers' : urlTree === 'directory' ? 'directory' : 'context'
 
   const [wsLabel, setWsLabel] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TreeTab>(initialTab)
@@ -170,11 +171,14 @@ export function WorkspaceM2() {
   // Sync active tab and selected path when URL pathname changes externally
   useEffect(() => {
     const { treeName: tree, path } = parseWorkspacePathFromUrl(location.pathname)
-    const tab: TreeTab = tree === 'directory' ? 'directory' : 'context'
+    // A selected layer (layerId param) keeps us on the Layers tab — otherwise the
+    // pathname-only derivation would kick us back to the context tree.
+    const layerId = new URLSearchParams(location.search).get('layerId')
+    const tab: TreeTab = layerId ? 'layers' : tree === 'directory' ? 'directory' : 'context'
     setActiveTab(tab)
     setSelectedPath(path)
     setContentPath(path !== '/' ? path : null)
-  }, [location.pathname])
+  }, [location.pathname, location.search])
 
   const ops = useTreeOperations({
     workspaceId: wsName ?? undefined,
