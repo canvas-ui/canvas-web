@@ -51,8 +51,8 @@ function paneKey(workspaceName: string, treeName: string, path: string) {
   return `${workspaceName}\0${treeName}\0${path}`;
 }
 
-function documentKey(workspaceName: string, treeName: string, path: string, page: number, pageSize: number, search: string, filtersKey = '') {
-  return `${paneKey(workspaceName, treeName, path)}\0${page}\0${pageSize}\0${search}\0${filtersKey}`;
+function documentKey(workspaceName: string, treeName: string, path: string, page: number, pageSize: number, search: string, filtersKey = '', layerId = '') {
+  return `${paneKey(workspaceName, treeName, path)}\0${page}\0${pageSize}\0${search}\0${filtersKey}\0${layerId}`;
 }
 
 function invalidateDocumentCache(workspaceName: string, treeName: string, path: string) {
@@ -174,7 +174,7 @@ export default function WorkspaceDetailPage() {
   // Fetch documents when path, tree, pagination, or workspace status changes
   const fetchDocuments = useCallback(async () => {
     if (!workspaceName) return;
-    const cacheKey = documentKey(workspaceName, selectedTreeName, selectedPath, currentPage, pageSize, serverSearchQuery || '', tbFiltersKey);
+    const cacheKey = documentKey(workspaceName, selectedTreeName, selectedPath, currentPage, pageSize, serverSearchQuery || '', tbFiltersKey, (isLayerView && selectedLayerId) ? selectedLayerId : '');
     const cached = documentCache.get(cacheKey);
     if (cached) {
       setDocuments(cached.documents);
