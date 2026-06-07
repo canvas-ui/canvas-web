@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -14,6 +14,7 @@ interface FormData {
 }
 
 export default function RegisterPage() {
+  const navigate = useNavigate()
   const { showToast } = useToast()
   const [isLoading, setIsLoading] = React.useState<boolean>(false)
   const [errors, setErrors] = React.useState<Partial<FormData>>({})
@@ -23,15 +24,21 @@ export default function RegisterPage() {
     password: ""
   })
   const [registrationComplete, setRegistrationComplete] = React.useState<boolean>(false)
+  const [requireEmailVerification, setRequireEmailVerification] = React.useState<boolean>(false)
   const [policy, setPolicy] = React.useState<{ minLength: number; requireUppercase: boolean; requireLowercase: boolean; requireNumbers: boolean; requireSpecialChars: boolean; maxLength: number } | null>(null)
 
   React.useEffect(() => {
     (async () => {
       const conf = await getAuthConfig()
-      const pol = conf?.strategies?.local?.passwordPolicy
-      if (pol) setPolicy(pol)
+      const local = conf?.strategies?.local
+      if (local?.enabled === false) {
+        navigate('/login', { replace: true })
+        return
+      }
+      if (local?.passwordPolicy) setPolicy(local.passwordPolicy)
+      setRequireEmailVerification(!!local?.requireEmailVerification)
     })()
-  }, [])
+  }, [navigate])
 
   const passwordChecks = React.useMemo(() => {
     if (!policy) return null
@@ -98,9 +105,9 @@ export default function RegisterPage() {
       if (unmet.length) {
         newErrors.password = `Password must contain ${unmet.join(', ').replace(/, ([^,]*)$/, ' and $1')}.`
       }
-    } else if (formData.password.length < 12) {
-      // Fallback to default if policy not yet loaded
-      newErrors.password = "Password must be at least 12 characters long"
+    } else if (formData.password.length < 8) {
+      // Fallback minimum while policy loads
+      newErrors.password = "Password must be at least 8 characters long"
     }
 
     setErrors(newErrors)
@@ -129,7 +136,9 @@ export default function RegisterPage() {
 
       showToast({
         title: "Registration Successful",
-        description: "You can now log in with your credentials.",
+        description: requireEmailVerification
+          ? "Check your email for a verification link before logging in."
+          : "You can now log in with your credentials.",
         variant: "default"
       })
       setRegistrationComplete(true)
@@ -160,16 +169,17 @@ export default function RegisterPage() {
         <div className="flex flex-col space-y-2 text-center">
           <h1 className="text-2xl font-semibold tracking-tight">Registration Successful!</h1>
           <p className="text-sm text-muted-foreground">
-            You have successfully created your account.
+            {requireEmailVerification
+              ? "Check your email for a verification link to activate your account."
+              : "Your account has been created."}
           </p>
         </div>
         <div className="space-y-6 text-center pt-6">
-          <p className="text-muted-foreground">
-            Please proceed to the login page to access your account.
-          </p>
-          <Button asChild className="w-full">
-            <Link to="/login">Go to Login</Link>
-          </Button>
+          {!requireEmailVerification && (
+            <Button asChild className="w-full">
+              <Link to="/login">Go to Login</Link>
+            </Button>
+          )}
         </div>
       </AuthLayout>
     )

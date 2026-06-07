@@ -26,6 +26,8 @@ interface AuthConfig {
   }
 }
 
+const localEnabled = (config: AuthConfig | null) => config?.strategies?.local?.enabled !== false
+
 export default function LoginPage() {
   const navigate = useNavigate()
   const [isLoading, setIsLoading] = React.useState<boolean>(false)
@@ -187,14 +189,16 @@ export default function LoginPage() {
               <Button type="submit" disabled={isLoading}>
                 {isLoading ? "Signing in..." : "Sign In"}
               </Button>
-              <Button
-                variant="outline"
-                type="button"
-                disabled={isLoading}
-                onClick={() => navigate("/register")}
-              >
-                Don't have an account? Sign up
-              </Button>
+              {localEnabled(authConfig) && (
+                <Button
+                  variant="outline"
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => navigate("/register")}
+                >
+                  Don't have an account? Sign up
+                </Button>
+              )}
             </div>
           </div>
         </form>
