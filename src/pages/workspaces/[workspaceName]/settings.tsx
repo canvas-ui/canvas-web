@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Copy, Database, ExternalLink, RefreshCw, Server, Trash2, Unlink } from 'lucide-react'
+import { Icon } from '@iconify/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { LayerIconPicker } from '@/components/menu/shared/LayerIconPicker'
+import { DEFAULT_WORKSPACE_ICON, type LayerStyle } from '@/lib/layer-style'
 import { HooksPanel } from '@/components/workspace/hooks-panel'
 import { ImapMailboxesPanel } from '@/components/workspace/imap-mailboxes-panel'
 import { TokenManager } from '@/components/workspace/token-manager'
@@ -92,6 +95,8 @@ export default function WorkspaceSettingsPage() {
   const [label, setLabel] = useState('')
   const [description, setDescription] = useState('')
   const [color, setColor] = useState('#FFFFFF')
+  const [icon, setIcon] = useState<string | null>(null)
+  const [pickerPos, setPickerPos] = useState<{ x: number; y: number } | null>(null)
   const [shares, setShares] = useState<WorkspacePublicCanvasShare[]>([])
   const [services, setServices] = useState<WorkspaceServicesStatus | null>(null)
   const [dataBackends, setDataBackends] = useState<Record<string, WorkspaceDataBackendStatus>>({})
@@ -129,6 +134,7 @@ export default function WorkspaceSettingsPage() {
           setLabel(ws.label || '')
           setDescription(ws.description || '')
           setColor(ws.color || '#FFFFFF')
+          setIcon(ws.icon ?? null)
           await Promise.all([loadShares(ws.name), loadRuntimeSettings(ws.name)])
         }
       } catch {
@@ -145,7 +151,7 @@ export default function WorkspaceSettingsPage() {
     if (!workspace) return
     setIsSaving(true)
     try {
-      await updateWorkspace(workspace.name, { label: label.trim(), description: description.trim(), color })
+      await updateWorkspace(workspace.name, { label: label.trim(), description: description.trim(), color, icon })
       window.dispatchEvent(new CustomEvent('workspaces:refresh'))
       showToast({ title: 'Saved', description: 'Workspace settings updated' })
     } catch (err) {
@@ -297,14 +303,35 @@ export default function WorkspaceSettingsPage() {
               <Input id="ws-description" value={description} onChange={e => setDescription(e.target.value)} placeholder="Description (optional)" />
             </div>
             <div>
-              <label htmlFor="ws-color" className="text-sm font-medium">Color</label>
+              <label className="text-sm font-medium">Icon &amp; color</label>
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  title="Pick icon &amp; color"
+                  onClick={(e) => setPickerPos({ x: Math.min(e.clientX, window.innerWidth - 290), y: Math.min(e.clientY, window.innerHeight - 360) })}
+                  className="flex h-10 w-10 items-center justify-center rounded-md border hover:bg-accent"
+                >
+                  <Icon icon={icon || DEFAULT_WORKSPACE_ICON} width={22} height={22} color={color || undefined} />
+                </button>
                 <Input id="ws-color" type="color" value={color} onChange={e => setColor(e.target.value)} className="h-10 w-16 p-1" />
                 <Button type="button" variant="outline" size="sm" onClick={() => setColor(generateNiceRandomHexColor())}>Randomize</Button>
               </div>
             </div>
             <Button type="submit" disabled={isSaving || !label.trim()}>{isSaving ? 'Saving...' : 'Save Changes'}</Button>
           </form>
+
+          {pickerPos && (
+            <LayerIconPicker
+              x={pickerPos.x}
+              y={pickerPos.y}
+              current={{ icon: icon ?? undefined, color }}
+              onChange={(change: LayerStyle) => {
+                if ('icon' in change) setIcon(change.icon ?? null)
+                if ('color' in change && change.color) setColor(change.color)
+              }}
+              onClose={() => setPickerPos(null)}
+            />
+          )}
 
           <section className="rounded-lg border border-destructive/30 p-4">
             <h2 className="mb-3 text-sm font-semibold text-destructive">Danger Zone</h2>

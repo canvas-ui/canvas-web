@@ -9,8 +9,9 @@
 import { useCallback } from 'react'
 import {
   insertContextPath, removeContextPath, moveContextPath, copyContextPath,
-  mergeContextLayer, subtractContextLayer,
+  mergeContextLayer, subtractContextLayer, updateContextPath,
 } from '@/services/context'
+import type { LayerMetadata } from '@/types/workspace'
 import {
   insertWorkspacePath, removeWorkspacePath, moveWorkspacePath, copyWorkspacePath,
   mergeWorkspaceLayer, subtractWorkspaceLayer,
@@ -84,6 +85,14 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     return result
   }, [contextId, workspaceId, wsTree, refresh])
 
+  // Style-only updates (icon/color) are rendered optimistically by the tree,
+  // so we deliberately skip the refetch to avoid a disruptive full re-render.
+  const onUpdateNode = useCallback(async (path: string, updates: { metadata?: LayerMetadata }): Promise<boolean> => {
+    if (contextId) return await updateContextPath(contextId, path, updates)
+    if (workspaceId) return await updateWorkspacePath(workspaceId, path, updates, wsTree)
+    return false
+  }, [contextId, workspaceId, wsTree])
+
   const onMergeLayer = useCallback(async (layerId: string, targetLayers: string[]): Promise<any> => {
     let result: any
     if (contextId) result = await mergeContextLayer(contextId, layerId, targetLayers)
@@ -138,6 +147,7 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
 
   return {
     onInsertPath, onRemovePath, onRenamePath, onMovePath, onCopyPath,
+    onUpdateNode,
     onMergeLayer, onSubtractLayer,
     onLockLayer: workspaceId ? onLockLayer : undefined,
     onUnlockLayer: workspaceId ? onUnlockLayer : undefined,

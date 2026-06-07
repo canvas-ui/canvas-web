@@ -360,6 +360,11 @@ export async function removeContextPath(contextId: string, path: string, recursi
   return response.payload ?? true
 }
 
+export async function updateContextPath(contextId: string, path: string, updates: Record<string, unknown>): Promise<boolean> {
+  const response = await api.patch<ApiPayload<boolean>>(`${API_ROUTES.contexts}/${contextId}/tree/paths`, { path, ...updates })
+  return response.payload ?? true
+}
+
 export async function moveContextPath(contextId: string, from: string, to: string, recursive = false): Promise<boolean> {
   const response = await api.post<ApiPayload<boolean>>(`${API_ROUTES.contexts}/${contextId}/tree/paths/move`, { from, to, recursive })
   return response.payload ?? true

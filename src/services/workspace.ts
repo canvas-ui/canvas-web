@@ -86,6 +86,7 @@ interface CreateWorkspacePayload {
     name: string;
     description?: string;
     color?: string;
+    icon?: string | null;
     label?: string;
     type?: string; // This aligns with optional 'type' in global Workspace
 }

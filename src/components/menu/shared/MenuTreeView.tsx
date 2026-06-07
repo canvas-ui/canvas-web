@@ -9,10 +9,16 @@ import { createPortal } from 'react-dom'
 import {
   ChevronRight, ChevronDown,
   Plus, Trash2, Edit2, Copy, Scissors, Clipboard,
-  Layers, LayoutDashboard, MoreHorizontal, Lock, Unlock, Eye, Share2,
+  Layers, LayoutDashboard, MoreHorizontal, Lock, Unlock, Eye, Share2, Palette,
 } from 'lucide-react'
+import { Icon } from '@iconify/react'
 import { cn } from '@/lib/utils'
-import type { TreeNode } from '@/types/workspace'
+import type { TreeNode, LayerMetadata } from '@/types/workspace'
+import {
+  getLayerStyle, mergeLayerStyle, DEFAULT_FOLDER_ICON, DEFAULT_CANVAS_ICON,
+  type LayerStyle,
+} from '@/lib/layer-style'
+import { LayerIconPicker } from './LayerIconPicker'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -40,6 +46,7 @@ export interface MenuTreeViewProps {
   onDestroyLayer?: (layerId: string) => Promise<boolean>
   onMergeLayer?: (layerId: string, targetLayers: string[]) => Promise<unknown>
   onSubtractLayer?: (layerId: string, targetLayers: string[]) => Promise<unknown>
+  onUpdateNode?: (path: string, updates: { metadata?: LayerMetadata }) => Promise<boolean>
   searchQuery?: string
   pastedDocumentIds?: number[]
   onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
@@ -64,6 +71,7 @@ interface CtxMenuProps {
   targetLayers: Map<string, string>
   clipboard: Clip | null
   onStartInlineCreate: (parentPath: string, isCanvas?: boolean) => void
+  onChangeIcon?: () => void
   hasCreateCanvas?: boolean
   onShareCanvas?: MenuTreeViewProps['onShareCanvas']
   onRemove?: MenuTreeViewProps['onRemovePath']
@@ -83,7 +91,7 @@ interface CtxMenuProps {
 function CtxMenu({
   x, y, node, path, onClose, onShowContent, onOpenToSide,
   sourceLayer, targetLayers, clipboard,
-  onStartInlineCreate, hasCreateCanvas, onShareCanvas, onRemove, onRename,
+  onStartInlineCreate, onChangeIcon, hasCreateCanvas, onShareCanvas, onRemove, onRename,
   onLock, onUnlock, onDestroy, onMerge, onSubtract,
   onCopy, onCut, onPaste,
   pastedDocumentIds, onPasteDocuments,
@@ -157,6 +165,17 @@ function CtxMenu({
           >
             <LayoutDashboard className="w-3 h-3 text-violet-500" />
             New canvas here
+          </button>
+        )}
+
+        {path !== '/' && onChangeIcon && (
+          <button
+            type="button"
+            className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-accent rounded-sm text-left"
+            onClick={() => { onChangeIcon(); onClose() }}
+          >
+            <Palette className="w-3 h-3" />
+            Change icon
           </button>
         )}
 
@@ -317,6 +336,8 @@ interface CardNodeProps {
   onCtxMenu: (e: React.MouseEvent, path: string, node: TreeNode) => void
   onConfirmCreate: (parentPath: string, name: string) => void
   onCancelCreate: () => void
+  onOpenPicker?: (e: React.MouseEvent, path: string, node: TreeNode) => void
+  styleOverrides: Map<string, LayerStyle>
   // Drag-and-drop
   dragOverPath: string | null
   isCopyDrag: boolean
@@ -333,11 +354,12 @@ function CardNode({
   sourceLayer, targetLayers, clipboard, searchQuery,
   inlineCreateParent, inlineCreateIsCanvas,
   onSelect, onShowContent, onCtrl, onCtxMenu,
-  onConfirmCreate, onCancelCreate,
+  onConfirmCreate, onCancelCreate, onOpenPicker, styleOverrides,
   dragOverPath, isCopyDrag, onDragStart, onDragEnter, onDragOver, onDragLeave, onDragEnd, onDrop,
 }: CardNodeProps) {
 
   const path = buildPath(parentPath, node.name)
+  const style = styleOverrides.get(path) ?? getLayerStyle(node)
 
   const [expanded, setExpanded] = useState(() =>
     selectedPath !== '/' && (selectedPath === path || selectedPath.startsWith(path + '/'))
@@ -393,7 +415,7 @@ function CardNode({
           dragOverPath === path && !readOnly && !isCopyDrag && 'ring-2 ring-blue-400 bg-blue-50/50',
           dragOverPath === path && !readOnly && isCopyDrag && 'ring-2 ring-emerald-500 bg-emerald-50/50',
         )}
-        style={{ borderRight: node.color ? `4px solid ${node.color}` : '4px solid transparent' }}
+        style={{ borderRight: style.color ? `4px solid ${style.color}` : '4px solid transparent' }}
         draggable={!readOnly}
         onClick={handleClick}
         onContextMenu={e => { if (!readOnly) { e.preventDefault(); onCtxMenu(e, path, node) } }}
@@ -412,9 +434,27 @@ function CardNode({
           {shouldExpand ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         </button>
 
-        {isCanvas && (
-          <LayoutDashboard className="w-4 h-4 shrink-0 text-violet-500" aria-label="Canvas" />
-        )}
+        {(() => {
+          const iconEl = (
+            <Icon
+              icon={style.icon || (isCanvas ? DEFAULT_CANVAS_ICON : DEFAULT_FOLDER_ICON)}
+              width={16}
+              height={16}
+              color={style.color || undefined}
+              className={cn('shrink-0', !style.color && (isCanvas ? 'text-violet-500' : 'text-muted-foreground'))}
+            />
+          )
+          return onOpenPicker ? (
+            <button
+              type="button"
+              className="shrink-0 rounded p-0.5 -m-0.5 hover:bg-muted-foreground/10"
+              title="Change icon"
+              onClick={e => { e.stopPropagation(); onOpenPicker(e, path, node) }}
+            >
+              {iconEl}
+            </button>
+          ) : iconEl
+        })()}
 
         <span
           className="flex-1 truncate font-medium"
@@ -466,6 +506,8 @@ function CardNode({
               onCtxMenu={onCtxMenu}
               onConfirmCreate={onConfirmCreate}
               onCancelCreate={onCancelCreate}
+              onOpenPicker={onOpenPicker}
+              styleOverrides={styleOverrides}
               dragOverPath={dragOverPath}
               isCopyDrag={isCopyDrag}
               onDragStart={onDragStart}
@@ -490,6 +532,7 @@ export function MenuTreeView({
   onInsertPath, onCreateCanvas, onShareCanvas, onRemovePath, onRenamePath, onMovePath, onCopyPath,
   pastedDocumentIds, onPasteDocuments,
   onLockLayer, onUnlockLayer, onDestroyLayer, onMergeLayer, onSubtractLayer,
+  onUpdateNode,
   searchQuery = '',
 }: MenuTreeViewProps) {
 
@@ -497,6 +540,19 @@ export function MenuTreeView({
   const [sourceLayer, setSourceLayer] = useState<LayerRef | null>(null)
   const [targetLayers, setTargetLayers] = useState<Map<string, string>>(new Map())
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; path: string; node: TreeNode } | null>(null)
+  const [picker, setPicker] = useState<{ x: number; y: number; path: string; node: TreeNode } | null>(null)
+  // Live style preview keyed by path; persistence is debounced. Cleared on
+  // every tree refetch (root identity change) so server data takes over.
+  const [styleOverrides, setStyleOverrides] = useState<Map<string, LayerStyle>>(new Map())
+  const [prevRoot, setPrevRoot] = useState(root)
+  const persistTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+
+  // Drop optimistic style overrides once fresh server data arrives (root
+  // identity changes on refetch). Reset-on-prop-change happens during render.
+  if (root !== prevRoot) {
+    setPrevRoot(root)
+    setStyleOverrides(new Map())
+  }
   const [inlineCreateParent, setInlineCreateParent] = useState<string | null>(null)
   const [inlineCreateIsCanvas, setInlineCreateIsCanvas] = useState(false)
 
@@ -636,6 +692,30 @@ export function MenuTreeView({
     setCtxMenu({ x, y, path, node })
   }, [])
 
+  const openPicker = useCallback((e: React.MouseEvent, path: string, node: TreeNode) => {
+    e.stopPropagation()
+    const x = Math.min(e.clientX, window.innerWidth - 290)
+    const y = Math.min(e.clientY, window.innerHeight - 360)
+    setPicker({ x, y, path, node })
+  }, [])
+
+  const handleStyleChange = useCallback((change: LayerStyle) => {
+    if (!picker || !onUpdateNode) return
+    const path = picker.path
+    const next: LayerStyle = { ...(styleOverrides.get(path) ?? getLayerStyle(picker.node)), ...change }
+    // Instant local preview for both the tree row and the picker.
+    setStyleOverrides(prev => new Map(prev).set(path, next))
+    // Debounced persist — the native color input fires rapidly while dragging.
+    const metadata = mergeLayerStyle(picker.node.metadata, next)
+    const timers = persistTimers.current
+    const pending = timers.get(path)
+    if (pending) clearTimeout(pending)
+    timers.set(path, setTimeout(() => {
+      timers.delete(path)
+      onUpdateNode(path, { metadata }).catch(err => alert(err instanceof Error ? err.message : String(err)))
+    }, 350))
+  }, [picker, onUpdateNode, styleOverrides])
+
   const handleCtrl = useCallback((path: string, id: string) => {
     if (!sourceLayer) {
       setSourceLayer({ path, id })
@@ -728,6 +808,8 @@ export function MenuTreeView({
     inlineCreateParent, inlineCreateIsCanvas,
     onSelect, onShowContent, onCtrl: handleCtrl, onCtxMenu: openCtxMenu,
     onConfirmCreate: handleConfirmCreate, onCancelCreate: handleCancelCreate,
+    onOpenPicker: onUpdateNode ? openPicker : undefined,
+    styleOverrides,
     dragOverPath,
     isCopyDrag,
     onDragStart: handleDragStart,
@@ -858,6 +940,7 @@ export function MenuTreeView({
           targetLayers={targetLayers}
           clipboard={clipboard}
           onStartInlineCreate={(path, isCanvas = false) => { setInlineCreateParent(path); setInlineCreateIsCanvas(isCanvas) }}
+          onChangeIcon={onUpdateNode ? () => openPicker({ clientX: ctxMenu.x, clientY: ctxMenu.y, stopPropagation: () => {} } as React.MouseEvent, ctxMenu.path, ctxMenu.node) : undefined}
           hasCreateCanvas={!!onCreateCanvas}
           onShareCanvas={onShareCanvas}
           onRemove={!readOnly ? onRemovePath : undefined}
@@ -880,6 +963,16 @@ export function MenuTreeView({
           onPaste={handlePaste}
           pastedDocumentIds={pastedDocumentIds}
           onPasteDocuments={onPasteDocuments}
+        />
+      )}
+
+      {picker && onUpdateNode && (
+        <LayerIconPicker
+          x={picker.x}
+          y={picker.y}
+          current={styleOverrides.get(picker.path) ?? getLayerStyle(picker.node)}
+          onChange={handleStyleChange}
+          onClose={() => setPicker(null)}
         />
       )}
     </div>

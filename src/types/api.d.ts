@@ -29,6 +29,7 @@ interface Workspace {
   isShared?: boolean
   sharedVia?: any
   color?: string
+  icon?: string | null
   label?: string
   acl: {
     tokens: {
