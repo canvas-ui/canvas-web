@@ -34,7 +34,15 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
 
   const refresh = useCallback((delay = 150) => {
     if (onRefresh) setTimeout(onRefresh, delay)
-  }, [onRefresh])
+    // Notify the content area (WorkspaceDetailPage) so it force-reloads its own
+    // tree and re-detects node types (e.g. a freshly created canvas). Without
+    // this, menu-driven mutations only refresh the menu's tree.
+    if (workspaceId) {
+      setTimeout(() => window.dispatchEvent(
+        new CustomEvent('workspace:tree:refresh', { detail: { workspaceName: workspaceId } })
+      ), delay)
+    }
+  }, [onRefresh, workspaceId])
 
   const onInsertPath = useCallback(async (path: string, autoCreateLayers = true): Promise<boolean> => {
     let result: boolean

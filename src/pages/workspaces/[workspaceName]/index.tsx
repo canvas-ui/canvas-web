@@ -5,6 +5,7 @@ import { API_ROUTES } from '@/config/api';
 import { useToast } from '@/components/ui/toast-container';
 import { DefaultCanvas } from '@/components/canvas/DefaultCanvas';
 import type { CanvasInfo } from '@/components/canvas/DefaultCanvas';
+import { CanvasGrid } from '@/components/canvas/CanvasGrid';
 import type { DocumentPasteOptions } from '@/components/common/document-list';
 import {
   getWorkspaceDocuments,
@@ -719,6 +720,8 @@ export default function WorkspaceDetailPage() {
     return <div className="flex items-center justify-center h-full text-muted-foreground">Workspace not found.</div>;
   }
 
+  const showCanvasGrid = selectedNodeType === 'canvas' && !isLayerView && !!selectedNode;
+
   const currentCanvas = (
     <DefaultCanvas
       urlType={isLayerView ? (selectedTreeName === 'directory' ? 'directory-layer' : 'context-layer') : (selectedNodeType === 'canvas' ? 'canvas' : selectedTreeName === 'directory' ? 'directory' : 'context')}
@@ -761,7 +764,19 @@ export default function WorkspaceDetailPage() {
       canSaveChanges={canSaveChanges}
       isSavingChanges={toolboxState.isSaving}
       onSaveChanges={saveFilters}
-    />
+    >
+      {showCanvasGrid && selectedNode && (
+        <CanvasGrid
+          workspaceId={workspace.name}
+          treeName={selectedTreeName}
+          path={selectedPath}
+          layerId={selectedNode.id}
+          querySpec={selectedNode.querySpec}
+          metadata={selectedNode.metadata}
+          isLocked={!!selectedNode.locked}
+        />
+      )}
+    </DefaultCanvas>
   );
 
   return (

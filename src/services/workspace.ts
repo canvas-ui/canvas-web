@@ -253,6 +253,29 @@ export async function getWorkspaceDocuments(
   }
 }
 
+// List documents visible on a canvas path. Uses the workspace documents endpoint
+// so parent-layer AND semantics apply and the canvas leaf's querySpec is composed
+// server-side — do NOT use getWorkspaceLayerDocuments with the canvas layer id.
+export async function getCanvasPathDocuments(
+  id: string,
+  path: string,
+  treeName = DEFAULT_WORKSPACE_TREE_NAME,
+  options: { limit?: number; offset?: number; page?: number; q?: string; allOf?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[] } = {}
+): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }> {
+  const treeType = treeName === 'directory' ? 'directory' : 'context'
+  return getWorkspaceDocuments(id, path, options.allOf || [], {
+    treeName,
+    treeType,
+    limit: options.limit,
+    page: options.page,
+    offset: options.offset,
+    q: options.q,
+    anyOf: options.anyOf,
+    noneOf: options.noneOf,
+    filters: options.filters,
+  })
+}
+
 export async function getWorkspaceLayerDocuments(
   id: string,
   treeName: string,
@@ -313,6 +336,14 @@ export async function createWorkspaceCanvas(workspaceId: string, path: string, t
     console.error(`Failed to create workspace canvas ${path}:`, error)
     throw error
   }
+}
+
+// Persist a canvas' UI state (widget layout + config) into its layer metadata.
+// The caller passes the full, already-merged metadata object so sibling keys
+// (e.g. metadata.toolbox) are preserved regardless of server merge semantics.
+export async function saveCanvasUi(workspaceId: string, path: string, treeName: string, metadata: Record<string, unknown>): Promise<boolean> {
+  await api.patch(getWorkspaceTreePathRoute(workspaceId, treeName, path), { metadata })
+  return true
 }
 
 export async function createPublicCanvasShare(workspaceId: string, path: string, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<{ code: string; url: string }> {

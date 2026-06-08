@@ -7,6 +7,7 @@ import { API_URL, WS_URL } from '@/config/api'
 import { api } from '@/lib/api'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { CanvasGrid } from '@/components/canvas/CanvasGrid'
 import type { Document, TreeNode } from '@/types/workspace'
 
 interface PublicCanvasPayload {
@@ -200,6 +201,11 @@ export default function PublicCanvasPage() {
     setSearchQuery('')
   }, [])
 
+  const publicFetchDocuments = useCallback(async () => ({
+    payload: documents,
+    totalCount: payload?.stats.documentCount ?? documents.length,
+  }), [documents, payload])
+
   if (isLoading && !payload) {
     return (
       <main className="min-h-screen bg-neutral-100 flex items-center justify-center p-6">
@@ -222,6 +228,9 @@ export default function PublicCanvasPage() {
       </main>
     )
   }
+
+  const canvasUi = (payload.canvas.metadata?.ui ?? {}) as { widgets?: Record<string, unknown> }
+  const hasWidgets = !!canvasUi.widgets && Object.keys(canvasUi.widgets).length > 0
 
   return (
     <main className="min-h-screen bg-neutral-100 p-4 text-neutral-950 md:p-10">
@@ -265,6 +274,23 @@ export default function PublicCanvasPage() {
               <Stat label="Refreshed" value={formatDate(payload.stats.refreshedAt)} />
             </section>
 
+            {hasWidgets && (
+              <section className="rounded-2xl border overflow-hidden flex flex-col h-[70vh]">
+                <CanvasGrid
+                  key={JSON.stringify(canvasUi)}
+                  workspaceId={payload.workspace.name}
+                  treeName={payload.share.treeName}
+                  path={payload.share.path}
+                  layerId={payload.canvas.id}
+                  querySpec={payload.canvas.querySpec}
+                  metadata={payload.canvas.metadata}
+                  readOnly
+                  fetchDocuments={publicFetchDocuments}
+                />
+              </section>
+            )}
+
+            {!hasWidgets && (
             <section className="rounded-2xl border">
               <div className="flex flex-col gap-3 border-b px-4 py-3 md:flex-row md:items-center md:justify-between">
                 <h2 className="font-semibold">Content</h2>
@@ -369,6 +395,7 @@ export default function PublicCanvasPage() {
                 })}
               </div>
             </section>
+            )}
           </CardContent>
         </Card>
       </div>

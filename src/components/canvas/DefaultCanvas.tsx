@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { LayoutDashboard, BookMarked, Share2, Unlink, Save, Trash2 } from 'lucide-react'
 import { Document } from '@/types/workspace'
 import { DocumentList } from '@/components/common/document-list'
@@ -52,6 +53,9 @@ interface DefaultCanvasProps {
   canSaveChanges?: boolean
   isSavingChanges?: boolean
   onSaveChanges?: () => Promise<void> | void
+  // When provided, replaces the document list body (e.g. the canvas widget grid)
+  // while keeping the canvas header and its share/delete controls.
+  children?: ReactNode
 }
 
 export function DefaultCanvas({
@@ -95,6 +99,7 @@ export function DefaultCanvas({
   canSaveChanges,
   isSavingChanges,
   onSaveChanges,
+  children,
 }: DefaultCanvasProps) {
   const isCanvas = urlType === 'canvas'
 
@@ -186,6 +191,7 @@ export function DefaultCanvas({
       )}
 
       <div className="flex-1 min-h-0 overflow-y-auto">
+        {children || (
         <DocumentList
           documents={documents}
           isLoading={isLoading}
@@ -218,6 +224,7 @@ export function DefaultCanvas({
           isSavingChanges={isSavingChanges}
           onSaveChanges={onSaveChanges}
         />
+        )}
       </div>
     </div>
   )
