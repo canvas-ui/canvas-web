@@ -70,15 +70,24 @@ export function LayerIconPicker({ x, y, current, onChange, onClose }: LayerIconP
 
   const panelRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState({ x, y })
+  // Keep the panel inside the viewport. Re-clamp on every size change since the
+  // icon grid grows after the catalog loads asynchronously, and on window resize.
   useLayoutEffect(() => {
     const el = panelRef.current
     if (!el) return
-    const { width, height } = el.getBoundingClientRect()
     const margin = 8
-    setPos({
-      x: Math.max(margin, Math.min(x, window.innerWidth - width - margin)),
-      y: Math.max(margin, Math.min(y, window.innerHeight - height - margin)),
-    })
+    const clamp = () => {
+      const { width, height } = el.getBoundingClientRect()
+      setPos({
+        x: Math.max(margin, Math.min(x, window.innerWidth - width - margin)),
+        y: Math.max(margin, Math.min(y, window.innerHeight - height - margin)),
+      })
+    }
+    clamp()
+    const ro = new ResizeObserver(clamp)
+    ro.observe(el)
+    window.addEventListener('resize', clamp)
+    return () => { ro.disconnect(); window.removeEventListener('resize', clamp) }
   }, [x, y])
 
   return createPortal(

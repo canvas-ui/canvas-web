@@ -1018,6 +1018,46 @@ function SideWorkspaceCanvas({
     }
   }, [workspaceName, pane.treeName, treeType, fetchPaneDocuments, showToast, clipboard]);
 
+  // Remove / delete / destroy, scoped to this pane's own path + tree.
+  const refreshPane = useCallback(() => {
+    invalidateDocumentCache(workspaceName, pane.treeName, pane.path);
+    fetchPaneDocuments();
+  }, [workspaceName, pane.treeName, pane.path, fetchPaneDocuments]);
+
+  const removeDocs = useCallback(async (ids: number[]) => {
+    try {
+      await removeWorkspaceDocuments(workspaceName, ids, pane.path, [], pane.treeName, treeType);
+      refreshPane();
+      showToast({ title: 'Removed', description: `${ids.length} document(s) removed from "${pane.path}"` });
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to remove documents', variant: 'destructive' });
+    }
+  }, [workspaceName, pane.path, pane.treeName, treeType, refreshPane, showToast]);
+
+  const deleteDocs = useCallback(async (ids: number[]) => {
+    try {
+      await deleteWorkspaceDocuments(workspaceName, ids, pane.path, [], pane.treeName, treeType);
+      refreshPane();
+      showToast({ title: 'Deleted', description: `${ids.length} document(s) deleted.` });
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to delete documents', variant: 'destructive' });
+    }
+  }, [workspaceName, pane.path, pane.treeName, treeType, refreshPane, showToast]);
+
+  const destroyDocs = useCallback(async (ids: number[]) => {
+    try {
+      const result = await destroyWorkspaceDocuments(workspaceName, ids);
+      if (result.failed?.length && !result.successful?.length) {
+        showToast({ title: 'Error', description: result.failed[0].reason, variant: 'destructive' });
+        return;
+      }
+      refreshPane();
+      showToast({ title: 'Destroyed', description: `${result.successful?.length ?? ids.length} document(s) removed from all backends.` });
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to destroy documents', variant: 'destructive' });
+    }
+  }, [workspaceName, refreshPane, showToast]);
+
   return (
     <div
       className={cn(
@@ -1051,6 +1091,12 @@ function SideWorkspaceCanvas({
         pageSize={pageSize}
         onPageChange={setCurrentPage}
         onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }}
+        onRemoveDocument={pane.path !== '/' ? (id) => removeDocs([id]) : undefined}
+        onRemoveDocuments={pane.path !== '/' ? removeDocs : undefined}
+        onDeleteDocument={(id) => deleteDocs([id])}
+        onDeleteDocuments={deleteDocs}
+        onDestroyDocument={(id) => destroyDocs([id])}
+        onDestroyDocuments={destroyDocs}
         onCopyDocuments={(documentIds) => {
           setClipboard({ documentIds, operation: 'copy', sourcePath: pane.path, sourceTreeName: pane.treeName });
           window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: { documentIds, operation: 'copy' } }));
