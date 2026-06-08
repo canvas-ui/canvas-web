@@ -110,8 +110,9 @@ export default function WorkspaceDetailPage() {
   // the REST API. See `feedback_url_design` memory for rationale.
   const [tree, setTree] = useState<TreeNode | null>(null);
   const [sidePane, setSidePane] = useState<WorkspaceSidePane | null>(null);
-  const [leftPaneSnapshot, setLeftPaneSnapshot] = useState<WorkspaceSidePane | null>(null);
   const [focusedPane, setFocusedPane] = useState<FocusedPane>('left');
+  const [leftSelection, setLeftSelection] = useState<number[]>([]);
+  const [rightSelection, setRightSelection] = useState<number[]>([]);
   const selectedNode = useMemo(() => {
     if (!tree || selectedPath === '/' || isLayerView) return null;
     const segments = selectedPath.split('/').filter(Boolean);
@@ -231,7 +232,6 @@ export default function WorkspaceDetailPage() {
     const onOpenToSide = (event: Event) => {
       const detail = (event as CustomEvent<WorkspaceSidePane & { workspaceName?: string }>).detail;
       if (!detail || detail.workspaceName !== workspaceName) return;
-      setLeftPaneSnapshot({ treeName: selectedTreeName, path: selectedPath });
       setSidePane({ treeName: detail.treeName || DEFAULT_WORKSPACE_TREE_NAME, path: sanitizeUrlPath(detail.path || '/') });
       setFocusedPane('left');
     };
@@ -660,16 +660,49 @@ export default function WorkspaceDetailPage() {
     }
   };
 
-  const handleFocusPane = useCallback((side: FocusedPane, pane: WorkspaceSidePane) => {
-    if (!workspaceName) return;
-    setFocusedPane(side);
-    if (side === 'right') {
-      setLeftPaneSnapshot({ treeName: selectedTreeName, path: selectedPath });
+  // Midnight-Commander transfer: move the focused pane's selection into the
+  // other pane's path/tree in one keystroke (F5 = copy/link, F6 = move).
+  const transferBetweenPanes = useCallback(async (move: boolean) => {
+    if (!workspaceName || !sidePane) return;
+    const left: WorkspaceSidePane = { treeName: selectedTreeName, path: selectedPath };
+    const source = focusedPane === 'left' ? left : sidePane;
+    const target = focusedPane === 'left' ? sidePane : left;
+    const ids = focusedPane === 'left' ? leftSelection : rightSelection;
+    if (ids.length === 0) {
+      showToast({ title: 'Nothing selected', description: 'Tick documents in the focused pane first.' });
+      return;
     }
-    if (pane.treeName !== selectedTreeName || pane.path !== selectedPath) {
-      navigate(buildWorkspaceUrl(workspaceName, pane.path, pane.treeName));
+    const targetType: 'context' | 'directory' = target.treeName === 'directory' ? 'directory' : 'context';
+    try {
+      const ok = await pasteDocumentsToWorkspacePath(workspaceName, target.path, ids, target.treeName, targetType);
+      if (!ok) return;
+      invalidateDocumentCache(workspaceName, target.treeName, target.path);
+      if (move) {
+        const sourceType: 'context' | 'directory' = source.treeName === 'directory' ? 'directory' : 'context';
+        await removeWorkspaceDocuments(workspaceName, ids, source.path, [], source.treeName, sourceType);
+        invalidateDocumentCache(workspaceName, source.treeName, source.path);
+      }
+      [source, target].forEach(p => window.dispatchEvent(new CustomEvent('workspace:documents:refresh', {
+        detail: { workspaceName, path: p.path, treeName: p.treeName },
+      })));
+      showToast({ title: move ? 'Moved' : 'Copied', description: `${ids.length} document(s) → "${target.path}"` });
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Transfer failed', variant: 'destructive' });
     }
-  }, [workspaceName, selectedTreeName, selectedPath, navigate]);
+  }, [workspaceName, sidePane, focusedPane, selectedTreeName, selectedPath, leftSelection, rightSelection, showToast]);
+
+  useEffect(() => {
+    if (!sidePane) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'F5' && e.key !== 'F6') return;
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+      e.preventDefault();
+      transferBetweenPanes(e.key === 'F6');
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [sidePane, transferBetweenPanes]);
 
   if (isLoadingWorkspace) {
     return (
@@ -686,8 +719,6 @@ export default function WorkspaceDetailPage() {
     return <div className="flex items-center justify-center h-full text-muted-foreground">Workspace not found.</div>;
   }
 
-  const currentPane: WorkspaceSidePane = { treeName: selectedTreeName, path: selectedPath };
-  const leftPane = focusedPane === 'right' && leftPaneSnapshot ? leftPaneSnapshot : currentPane;
   const currentCanvas = (
     <DefaultCanvas
       urlType={isLayerView ? (selectedTreeName === 'directory' ? 'directory-layer' : 'context-layer') : (selectedNodeType === 'canvas' ? 'canvas' : selectedTreeName === 'directory' ? 'directory' : 'context')}
@@ -712,6 +743,7 @@ export default function WorkspaceDetailPage() {
       onCutDocuments={handleCutDocuments}
       onPasteDocuments={handlePasteDocuments}
       onImportDocuments={handleImportDocuments}
+      onSelectionChange={setLeftSelection}
       pastedDocumentIds={clipboard?.documentIds}
       onPurgeDocuments={handlePurgeDocuments}
       disablePurgeDocuments={false}
@@ -767,45 +799,36 @@ export default function WorkspaceDetailPage() {
         )}
       </div>
 
-      {/* Canvas */}
+      {/* Canvas — dual-pane is pure local focus; the left pane stays URL-bound,
+          the right is self-contained, so switching focus never refetches. */}
       <div className="flex-1 min-h-0 flex gap-2 p-2 bg-muted/20">
-        {focusedPane === 'left' ? (
-          <div className={cn(
+        <div
+          className={cn(
             'flex-1 min-w-0 rounded-lg border bg-background overflow-hidden',
-            sidePane && 'ring-2 ring-primary',
-          )}>
-            {currentCanvas}
-          </div>
-        ) : (
+            sidePane && (focusedPane === 'left' ? 'ring-2 ring-primary' : 'ring-1 ring-primary/20'),
+          )}
+          onMouseDown={(e) => {
+            if ((e.target as HTMLElement).closest('button,input,textarea,select,a')) return;
+            setFocusedPane('left');
+          }}
+        >
+          {currentCanvas}
+        </div>
+        {sidePane && workspaceName && (
           <SideWorkspaceCanvas
-            workspaceName={workspaceName!}
-            pane={leftPane}
-            isFocused={false}
+            workspaceName={workspaceName}
+            pane={sidePane}
+            isFocused={focusedPane === 'right'}
             clipboard={clipboard}
             setClipboard={setClipboard}
-            onFocus={() => handleFocusPane('left', leftPane)}
+            onFocus={() => setFocusedPane('right')}
+            onSelectionChange={setRightSelection}
+            onClose={() => {
+              setSidePane(null);
+              setFocusedPane('left');
+              setRightSelection([]);
+            }}
           />
-        )}
-        {sidePane && workspaceName && (
-          focusedPane === 'right' ? (
-            <div className="flex-1 min-w-0 rounded-lg border bg-background overflow-hidden ring-2 ring-primary">
-              {currentCanvas}
-            </div>
-          ) : (
-            <SideWorkspaceCanvas
-              workspaceName={workspaceName}
-              pane={sidePane}
-              isFocused={false}
-              clipboard={clipboard}
-              setClipboard={setClipboard}
-              onFocus={() => handleFocusPane('right', sidePane)}
-              onClose={() => {
-                setSidePane(null);
-                setFocusedPane('left');
-                if (leftPaneSnapshot) navigate(buildWorkspaceUrl(workspaceName, leftPaneSnapshot.path, leftPaneSnapshot.treeName));
-              }}
-            />
-          )
         )}
       </div>
 
@@ -871,6 +894,7 @@ function SideWorkspaceCanvas({
   clipboard,
   setClipboard,
   onFocus,
+  onSelectionChange,
   onClose,
 }: {
   workspaceName: string;
@@ -879,6 +903,7 @@ function SideWorkspaceCanvas({
   clipboard: WorkspaceClipboard | null;
   setClipboard: (clipboard: WorkspaceClipboard | null) => void;
   onFocus: () => void;
+  onSelectionChange?: (documentIds: number[]) => void;
   onClose?: () => void;
 }) {
   const { showToast } = useToast();
@@ -1004,13 +1029,6 @@ function SideWorkspaceCanvas({
         onFocus();
       }}
     >
-      <button
-        type="button"
-        onClick={onFocus}
-        className="absolute right-16 top-2 z-10 px-2 py-1 text-xs rounded-md border bg-background/90 hover:bg-accent"
-      >
-        Focus
-      </button>
       {onClose && (
         <button
           type="button"
@@ -1042,6 +1060,7 @@ function SideWorkspaceCanvas({
           window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: { documentIds, operation: 'cut' } }));
         }}
         onPasteDocuments={pasteDocuments}
+        onSelectionChange={onSelectionChange}
         pastedDocumentIds={clipboard?.documentIds}
         canvasInfo={isCanvas ? {
           label: selectedNode?.label,

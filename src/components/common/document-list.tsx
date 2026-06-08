@@ -34,6 +34,7 @@ interface DocumentListProps {
   onCutDocuments?: (documentIds: number[]) => void
   onPasteDocuments?: (path: string, documentIds: number[], options?: DocumentPasteOptions) => Promise<boolean>
   onImportDocuments?: (documents: any[], contextPath: string) => Promise<boolean>
+  onSelectionChange?: (documentIds: number[]) => void
   pastedDocumentIds?: number[]
   viewMode?: 'card' | 'table'
   activeContextUrl?: string
@@ -603,7 +604,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
   )
 }
 
-export function DocumentList({ documents, isLoading, contextPath, treeName, workspaceId, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQuery, onBackendSearch, canSaveChanges = false, isSavingChanges = false, onSaveChanges }: DocumentListProps) {
+export function DocumentList({ documents, isLoading, contextPath, treeName, workspaceId, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, onSelectionChange, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQuery, onBackendSearch, canSaveChanges = false, isSavingChanges = false, onSaveChanges }: DocumentListProps) {
   const [selectedDocuments, setSelectedDocuments] = useState<Set<number>>(new Set())
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; documentIds: number[] } | null>(null)
   const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null)
@@ -621,6 +622,11 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   useEffect(() => {
     setSelectedDocuments(new Set())
   }, [contextPath])
+
+  // Expose selection to parent (for cross-pane F5/F6 transfers)
+  useEffect(() => {
+    onSelectionChange?.(Array.from(selectedDocuments))
+  }, [selectedDocuments, onSelectionChange])
 
   const submitBackendSearch = useCallback(() => {
     if (!onBackendSearch) return
