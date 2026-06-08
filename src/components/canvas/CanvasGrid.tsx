@@ -102,6 +102,7 @@ export function CanvasGrid({
   const [menuOpen, setMenuOpen] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [rowHeight, setRowHeight] = useState(MIN_ROW_HEIGHT)
   const gridHostRef = useRef<HTMLDivElement>(null)
 
@@ -173,6 +174,7 @@ export function CanvasGrid({
   const saveNow = useCallback(async () => {
     if (!editable || isSaving) return
     setIsSaving(true)
+    setSaveError(null)
     try {
       await saveCanvasUi(workspaceId, path, treeName, { ...(metadata || {}), ui: latest.current })
       setIsDirty(false)
@@ -181,6 +183,8 @@ export function CanvasGrid({
       }))
       onSaved?.()
     } catch (err) {
+      const message = err instanceof Error ? err.message : 'Save failed'
+      setSaveError(message)
       console.error('Failed to save canvas layout:', err)
     } finally {
       setIsSaving(false)
@@ -269,6 +273,7 @@ export function CanvasGrid({
         <span className="text-xs text-muted-foreground">
           {ids.length} widget{ids.length === 1 ? '' : 's'}
           {isDirty ? ' · unsaved' : ''}
+          {saveError ? ` · ${saveError}` : ''}
         </span>
       </div>
       )}
