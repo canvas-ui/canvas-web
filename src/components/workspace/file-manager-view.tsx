@@ -46,7 +46,7 @@ interface FileManagerViewProps {
   onMovePath?: (fromPath: string, toPath: string, recursive?: boolean) => Promise<boolean>;
   onCopyPath?: (fromPath: string, toPath: string, recursive?: boolean) => Promise<boolean>;
   onLockLayer?: (layerId: string) => Promise<boolean>;
-  onUnlockLayer?: (layerId: string) => Promise<boolean>;
+  onUnlockLayer?: (layerId: string, lockBy?: string) => Promise<boolean>;
   onMergeLayer?: (layerId: string, targetLayers: string[]) => Promise<any>;
   onSubtractLayer?: (layerId: string, targetLayers: string[]) => Promise<any>;
 

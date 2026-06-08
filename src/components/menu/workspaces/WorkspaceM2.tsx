@@ -205,12 +205,15 @@ export function WorkspaceM2() {
     navigate(buildWorkspaceUrl(wsName!, path, treeName))
   }
 
-  const handleShowContent = useCallback((path: string) => {
+  const handleShowContent = useCallback((path: string, layerId?: string) => {
     setSelectedPath(path)
     setContentPath(path)
     const treeName = activeTab === 'layers' ? DEFAULT_WORKSPACE_TREE_NAME : activeTab
     const uiParams = new URLSearchParams()
     uiParams.set('layer', '1')
+    // Resolve the single layer's own bitmap (same as picking it in the layers
+    // tab) instead of the path-AND read.
+    if (layerId) uiParams.set('layerId', layerId)
     navigate(`${buildWorkspaceUrl(wsName!, path, treeName)}?${uiParams.toString()}`)
   }, [wsName, activeTab, navigate])
 

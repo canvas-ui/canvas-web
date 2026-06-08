@@ -4,7 +4,7 @@
  * rename, remove, copy/cut/paste, lock/unlock layer, show layer content,
  * merge/subtract layers. Ctrl/⌘-click to multi-select source + targets.
  */
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ChevronRight, ChevronDown,
@@ -32,7 +32,7 @@ export interface MenuTreeViewProps {
   readOnly?: boolean
   rootLabel?: string
   contentPath?: string | null
-  onShowContent?: (path: string) => void
+  onShowContent?: (path: string, layerId?: string) => void
   onOpenToSide?: (path: string, treeName: string) => void
   onInsertPath?: (path: string, autoCreateLayers?: boolean) => Promise<boolean>
   onCreateCanvas?: (path: string) => Promise<boolean>
@@ -42,7 +42,7 @@ export interface MenuTreeViewProps {
   onCopyPath?: (from: string, to: string, recursive?: boolean, sourceTreeName?: string, targetTreeName?: string) => Promise<boolean>
   onShareCanvas?: (path: string) => Promise<void>
   onLockLayer?: (layerId: string) => Promise<boolean>
-  onUnlockLayer?: (layerId: string) => Promise<boolean>
+  onUnlockLayer?: (layerId: string, lockBy?: string) => Promise<boolean>
   onDestroyLayer?: (layerId: string) => Promise<boolean>
   onMergeLayer?: (layerId: string, targetLayers: string[]) => Promise<unknown>
   onSubtractLayer?: (layerId: string, targetLayers: string[]) => Promise<unknown>
@@ -65,7 +65,7 @@ interface CtxMenuProps {
   node: TreeNode
   path: string
   onClose: () => void
-  onShowContent?: (path: string) => void
+  onShowContent?: (path: string, layerId?: string) => void
   onOpenToSide?: (path: string) => void
   sourceLayer: LayerRef | null
   targetLayers: Map<string, string>
@@ -102,6 +102,21 @@ function CtxMenu({
     sourceLayer.path === path || targetLayers.has(path)
   )
 
+  // Clamp into the viewport after render — menu height varies with item count,
+  // so a fixed estimate can't keep tall menus on-screen. Measure, then nudge.
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState({ x, y })
+  useLayoutEffect(() => {
+    const el = menuRef.current
+    if (!el) return
+    const { width, height } = el.getBoundingClientRect()
+    const margin = 8
+    setPos({
+      x: Math.max(margin, Math.min(x, window.innerWidth - width - margin)),
+      y: Math.max(margin, Math.min(y, window.innerHeight - height - margin)),
+    })
+  }, [x, y])
+
   const run = async (fn: () => Promise<void>) => {
     try { await fn() } catch (err) { alert(err instanceof Error ? err.message : String(err)) }
     onClose()
@@ -125,12 +140,13 @@ function CtxMenu({
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
       <div
-        className="fixed z-50 min-w-[11rem] overflow-hidden rounded-md border bg-popover p-1 shadow-lg"
-        style={{ left: x, top: y }}
+        ref={menuRef}
+        className="fixed z-50 max-h-[90vh] min-w-[11rem] overflow-y-auto rounded-md border bg-popover p-1 shadow-lg"
+        style={{ left: pos.x, top: pos.y }}
       >
         {/* Show layer content — workspace tree only */}
         {onShowContent && item(<Eye className="w-3 h-3" />, 'Show layer content', async () => {
-          onShowContent(path)
+          onShowContent(path, node.id || undefined)
         })}
         {onOpenToSide && item(<Eye className="w-3 h-3" />, 'Open to the side', async () => {
           onOpenToSide(path)
@@ -227,6 +243,28 @@ function CtxMenu({
                   await onLock(node.id)
                 }))
             }
+            {node.locked && node.lockedBy && node.lockedBy.length > 0 && (
+              <>
+                <div className="px-3 pt-1 pb-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Locked by
+                </div>
+                {node.lockedBy.map(holder => (
+                  <div key={holder} className="flex items-center justify-between gap-2 px-3 py-1 text-xs">
+                    <span className="truncate" title={holder}>{holder}</span>
+                    {onUnlock && (
+                      <button
+                        type="button"
+                        title={`Remove lock held by ${holder}`}
+                        className="shrink-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => run(async () => { await onUnlock(node.id, holder) })}
+                      >
+                        <Unlock className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </>
+            )}
             {path !== '/' && !node.locked && onDestroy && item(
               <Trash2 className="w-3 h-3" />, 'Destroy layer', async () => {
                 if (confirm(`Permanently destroy layer "${node.label || node.name}" and its bitmap?`))
@@ -307,6 +345,17 @@ function InlineCreateInput({ onConfirm, onCancel, placeholder = 'folder name…'
 
 function buildPath(parent: string, name: string) {
   return parent === '/' ? `/${name}` : `${parent}/${name}`
+}
+
+function findNodeByPath(root: TreeNode | null, path: string): TreeNode | null {
+  if (!root || path === '/') return null
+  const segments = path.split('/').filter(Boolean)
+  let node: TreeNode | undefined = root
+  for (const seg of segments) {
+    node = node?.children?.find(c => c.name === seg)
+    if (!node) return null
+  }
+  return node ?? null
 }
 
 function nodeMatchesSearch(node: TreeNode, parentPath: string, query: string): boolean {
@@ -687,16 +736,12 @@ export function MenuTreeView({
 
   const openCtxMenu = useCallback((e: React.MouseEvent, path: string, node: TreeNode) => {
     e.stopPropagation()
-    const x = Math.min(e.clientX, window.innerWidth - 190)
-    const y = Math.min(e.clientY, window.innerHeight - 260)
-    setCtxMenu({ x, y, path, node })
+    setCtxMenu({ x: e.clientX, y: e.clientY, path, node })
   }, [])
 
   const openPicker = useCallback((e: React.MouseEvent, path: string, node: TreeNode) => {
     e.stopPropagation()
-    const x = Math.min(e.clientX, window.innerWidth - 290)
-    const y = Math.min(e.clientY, window.innerHeight - 360)
-    setPicker({ x, y, path, node })
+    setPicker({ x: e.clientX, y: e.clientY, path, node })
   }, [])
 
   const handleStyleChange = useCallback((change: LayerStyle) => {
@@ -786,6 +831,22 @@ export function MenuTreeView({
     setInlineCreateIsCanvas(false)
   }, [])
 
+  // Delete/Backspace removes the selected layer. Scoped to the tree container
+  // (not window) so it never fires while the user is in the document list.
+  const handleTreeKeyDown = useCallback((event: React.KeyboardEvent) => {
+    if (readOnly || !onRemovePath) return
+    if (event.key !== 'Delete' && event.key !== 'Backspace') return
+    const el = event.target as HTMLElement | null
+    if (el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA') return
+    if (!selectedPath || selectedPath === '/') return
+    event.preventDefault()
+    const node = findNodeByPath(root, selectedPath)
+    if (node?.locked) { alert(`"${selectedPath}" is locked`); return }
+    if (confirm(`Remove "${selectedPath}"?`)) {
+      onRemovePath(selectedPath, false).catch(err => alert(err instanceof Error ? err.message : String(err)))
+    }
+  }, [readOnly, onRemovePath, selectedPath, root])
+
   const toggleCopyMode = useCallback(() => {
     setCopyModeSticky(v => {
       const next = !v
@@ -821,7 +882,7 @@ export function MenuTreeView({
   }
 
   return (
-    <div className="px-3 py-2 space-y-1.5">
+    <div className="px-3 py-2 space-y-1.5 outline-none" tabIndex={0} onKeyDown={handleTreeKeyDown}>
       {!readOnly && (
         <div className="flex items-center justify-end px-1 pb-0.5 text-[10px]">
           <button
@@ -874,11 +935,9 @@ export function MenuTreeView({
         onContextMenu={e => {
           if (!readOnly && onInsertPath) {
             e.preventDefault()
-            const x = Math.min(e.clientX, window.innerWidth - 190)
-            const y = Math.min(e.clientY, window.innerHeight - 260)
             // use root as a pseudo-node for ctx menu
             const pseudoNode = { id: '', name: '/', label: '/', type: 'root', description: '', color: null, locked: false, children: [] } as unknown as TreeNode
-            setCtxMenu({ x, y, path: '/', node: pseudoNode })
+            setCtxMenu({ x: e.clientX, y: e.clientY, path: '/', node: pseudoNode })
           }
         }}
       >
@@ -892,10 +951,8 @@ export function MenuTreeView({
             className="shrink-0 opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-muted-foreground/10 text-muted-foreground"
             onClick={e => {
               e.stopPropagation()
-              const x = Math.min(e.clientX, window.innerWidth - 190)
-              const y = Math.min(e.clientY, window.innerHeight - 260)
               const pseudoNode = { id: '', name: '/', label: '/', type: 'root', description: '', color: null, locked: false, children: [] } as unknown as TreeNode
-              setCtxMenu({ x, y, path: '/', node: pseudoNode })
+              setCtxMenu({ x: e.clientX, y: e.clientY, path: '/', node: pseudoNode })
             }}
           >
             <MoreHorizontal className="w-4 h-4" />

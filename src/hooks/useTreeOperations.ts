@@ -119,11 +119,18 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     return result
   }, [workspaceId, wsTree, refresh])
 
-  const onUnlockLayer = useCallback(async (layerId: string): Promise<boolean> => {
+  // lockBy lets the caller target a specific holder (selective lock removal).
+  // Removing one holder while others remain returns 409 ("still locked by …"),
+  // which is the expected outcome here, so we swallow it and refresh.
+  const onUnlockLayer = useCallback(async (layerId: string, lockBy?: string): Promise<boolean> => {
     if (!workspaceId) return false
-    const result = await unlockWorkspaceLayer(workspaceId, layerId, workspaceId, wsTree)
+    try {
+      await unlockWorkspaceLayer(workspaceId, layerId, lockBy ?? workspaceId, wsTree)
+    } catch (err) {
+      if (!(err instanceof Error) || !/still locked by/i.test(err.message)) throw err
+    }
     refresh(300)
-    return result
+    return true
   }, [workspaceId, wsTree, refresh])
 
   const onDestroyLayer = useCallback(async (layerId: string): Promise<boolean> => {

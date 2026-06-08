@@ -3,7 +3,7 @@
  * Selections apply live via onChange; the panel stays open so icon and
  * color can be tweaked together (raindrop-style).
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '@iconify/react'
 import { X, Loader2 } from 'lucide-react'
@@ -68,15 +68,26 @@ export function LayerIconPicker({ x, y, current, onChange, onClose }: LayerIconP
     [query, results, allIcons],
   )
 
-  const left = Math.min(x, window.innerWidth - 290)
-  const top = Math.min(y, window.innerHeight - 360)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState({ x, y })
+  useLayoutEffect(() => {
+    const el = panelRef.current
+    if (!el) return
+    const { width, height } = el.getBoundingClientRect()
+    const margin = 8
+    setPos({
+      x: Math.max(margin, Math.min(x, window.innerWidth - width - margin)),
+      y: Math.max(margin, Math.min(y, window.innerHeight - height - margin)),
+    })
+  }, [x, y])
 
   return createPortal(
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
       <div
+        ref={panelRef}
         className="fixed z-50 w-[270px] rounded-md border bg-popover p-2 shadow-xl"
-        style={{ left, top }}
+        style={{ left: pos.x, top: pos.y }}
       >
         <div className="flex items-center justify-between px-1 pb-1.5">
           <span className="text-xs font-medium">Icon &amp; color</span>
