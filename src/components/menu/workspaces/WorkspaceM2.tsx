@@ -212,7 +212,8 @@ export function WorkspaceM2() {
     const uiParams = new URLSearchParams()
     uiParams.set('layer', '1')
     // Resolve the single layer's own bitmap (same as picking it in the layers
-    // tab) instead of the path-AND read.
+    // tab) instead of the path-AND read. Context-tree only — the directory tree
+    // already shows per-folder layers and doesn't offer this action.
     if (layerId) uiParams.set('layerId', layerId)
     navigate(`${buildWorkspaceUrl(wsName!, path, treeName)}?${uiParams.toString()}`)
   }, [wsName, activeTab, navigate])
@@ -340,7 +341,7 @@ export function WorkspaceM2() {
             selectedPath={selectedPath}
             contentPath={contentPath}
             onSelect={handlePathSelect}
-            onShowContent={handleShowContent}
+            onShowContent={activeTab === 'directory' ? undefined : handleShowContent}
             onOpenToSide={handleOpenToSide}
             onShareCanvas={handleShareCanvas}
             isLoading={isLoadingTree}
