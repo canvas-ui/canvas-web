@@ -399,3 +399,20 @@ export async function importDocumentsToContext(workspaceId: string, contextPath:
     throw error;
   }
 }
+
+// Insert documents directly into a context by its id. The context inserts them at
+// its current url path; `features` are merged onto every document server-side.
+// Server route: POST /contexts/:id/documents -> context.putMany
+export async function insertDocumentsToContextById(contextId: string, documents: UnknownRecord[], features: string[] = []): Promise<boolean> {
+  try {
+    const docs = Array.isArray(documents) ? documents : [documents];
+    await api.post<ApiPayload>(
+      `${API_ROUTES.contexts}/${contextId}/documents`,
+      { documents: docs, features }
+    );
+    return true;
+  } catch (error) {
+    console.error(`Failed to insert documents into context ${contextId}:`, error);
+    throw error;
+  }
+}
