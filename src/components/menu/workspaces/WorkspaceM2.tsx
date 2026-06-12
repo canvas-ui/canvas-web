@@ -39,6 +39,7 @@ export function WorkspaceM2() {
   const initialTab: TreeTab = urlLayerId ? 'layers' : urlTree === 'directory' ? 'directory' : 'context'
 
   const [wsLabel, setWsLabel] = useState<string | null>(null)
+  const [wsId, setWsId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TreeTab>(initialTab)
   const [contextTree, setContextTree] = useState<TreeNode | null>(null)
   const [directoryTree, setDirectoryTree] = useState<TreeNode | null>(null)
@@ -105,7 +106,7 @@ export function WorkspaceM2() {
           getCachedWorkspaceTreeByName(name, 'directory'),
         ])
         // Fetch workspace details for label (non-blocking)
-        getWorkspace(name).then(ws => { if (!cancelled) setWsLabel(ws.label || null) }).catch(() => {})
+        getWorkspace(name).then(ws => { if (!cancelled) { setWsLabel(ws.label || null); setWsId(ws.id || null) } }).catch(() => {})
         if (cancelled) return
         if (ctxRes.status === 'fulfilled') setContextTree(ctxRes.value.payload)
         if (dirRes.status === 'fulfilled') setDirectoryTree(dirRes.value.payload)
@@ -149,24 +150,38 @@ export function WorkspaceM2() {
     return () => window.removeEventListener('workspace:tree:refresh', handler as EventListener)
   }, [wsName, refreshAll])
 
-  // Subscribe to workspace channel and refresh trees when a context changes its path
-  // (which locks/unlocks layers, so trees must reflect updated lock state)
+  // Subscribe to the workspace channel and refresh trees on relevant DB events:
+  //  • context.path.changed — lock/unlock state shifts
+  //  • tree.path.* / tree.layer.updated — folders created/moved/removed by any
+  //    client (CLI, agents, browser extension)
+  // Subscribe by BOTH name and id: synapsd tree events carry only workspaceId,
+  // so a name-only subscription would never receive them.
   useEffect(() => {
     if (!wsName) return
-    const channel = `workspace:${wsName}`
-    const subscribe = () => socketService.emit('subscribe', { channel })
+    const channels = [`workspace:${wsName}`, wsId ? `workspace:${wsId}` : null].filter(Boolean) as string[]
+    const subscribe = () => channels.forEach(ch => socketService.emit('subscribe', { channel: ch }))
     const offConnect = socketService.on('connect', subscribe)
     subscribe()
 
-    const handleContextPathChanged = () => { refreshAll(wsName) }
-    socketService.on('context.path.changed', handleContextPathChanged)
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const refreshSoon = () => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => refreshAll(wsName), 200)
+    }
+    const events = [
+      'context.path.changed',
+      'tree.path.inserted', 'tree.path.moved', 'tree.path.removed', 'tree.path.copied',
+      'tree.layer.updated', 'tree.recalculated', 'tree.created', 'tree.deleted', 'tree.renamed',
+    ]
+    events.forEach(ev => socketService.on(ev, refreshSoon))
 
     return () => {
-      socketService.emit('unsubscribe', { channel })
+      if (timer) clearTimeout(timer)
+      channels.forEach(ch => socketService.emit('unsubscribe', { channel: ch }))
       offConnect?.()
-      socketService.off('context.path.changed', handleContextPathChanged)
+      events.forEach(ev => socketService.off(ev, refreshSoon))
     }
-  }, [wsName, refreshAll])
+  }, [wsName, wsId, refreshAll])
 
   // Sync active tab and selected path when URL pathname changes externally
   useEffect(() => {
