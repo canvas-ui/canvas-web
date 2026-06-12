@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { X, StickyNote, Link as LinkIcon, Upload } from 'lucide-react'
+import { X, StickyNote, Link as LinkIcon, Upload, Plus } from 'lucide-react'
 import { useToolbox, type AddKind } from './toolbox-context'
 import { NoteForm } from './add/NoteForm'
 import { LinkForm } from './add/LinkForm'
@@ -15,8 +15,16 @@ const TITLES: Record<AddKind, { label: string; icon: typeof StickyNote }> = {
   file: { label: 'Add Files', icon: Upload },
 }
 
+// Abstraction list shown in the panel's picker mode. Single source of truth —
+// adding one of the ~10 eventual abstractions is one entry here (+ its form).
+const ABSTRACTIONS: { kind: AddKind; label: string; icon: typeof StickyNote }[] = [
+  { kind: 'note', label: 'Note', icon: StickyNote },
+  { kind: 'link', label: 'Link', icon: LinkIcon },
+  { kind: 'file', label: 'File', icon: Upload },
+]
+
 export function AddPanel() {
-  const { state, closeAdd } = useToolbox()
+  const { state, openAdd, closeAdd } = useToolbox()
   const { addOpen, addKind } = state
   const [width, setWidth] = useState(DEFAULT_WIDTH)
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
@@ -40,9 +48,12 @@ export function AddPanel() {
     window.addEventListener('mouseup', onUp)
   }, [width])
 
-  if (!addOpen || !addKind) return null
+  if (!addOpen) return null
 
-  const { label, icon: Icon } = TITLES[addKind]
+  // Picker mode: no abstraction chosen yet — list the options in the same slot
+  // the form will occupy.
+  const isPicker = !addKind
+  const { label, icon: Icon } = addKind ? TITLES[addKind] : { label: 'Add', icon: Plus }
 
   return (
     <div
@@ -70,6 +81,21 @@ export function AddPanel() {
       </div>
 
       <div className="flex-1 overflow-y-auto">
+        {isPicker && (
+          <div className="p-2">
+            {ABSTRACTIONS.map(({ kind, label: l, icon: I }) => (
+              <button
+                key={kind}
+                type="button"
+                onClick={() => openAdd(kind)}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+              >
+                <I className="h-4 w-4 text-muted-foreground" />
+                {l}
+              </button>
+            ))}
+          </div>
+        )}
         {addKind === 'note' && <NoteForm />}
         {addKind === 'link' && <LinkForm />}
         {addKind === 'file' && <FileForm />}

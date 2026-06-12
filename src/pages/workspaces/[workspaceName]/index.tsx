@@ -748,6 +748,7 @@ export default function WorkspaceDetailPage() {
       onImportDocuments={handleImportDocuments}
       onSelectionChange={setLeftSelection}
       pastedDocumentIds={clipboard?.documentIds}
+      linkTree={tree}
       onPurgeDocuments={handlePurgeDocuments}
       disablePurgeDocuments={false}
       canvasInfo={canvasInfo ?? undefined}
@@ -1123,6 +1124,7 @@ function SideWorkspaceCanvas({
         onPasteDocuments={pasteDocuments}
         onSelectionChange={onSelectionChange}
         pastedDocumentIds={clipboard?.documentIds}
+        linkTree={tree}
         canvasInfo={isCanvas ? {
           label: selectedNode?.label,
           description: selectedNode?.description,

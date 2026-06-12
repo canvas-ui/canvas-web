@@ -1,6 +1,5 @@
 import { Outlet, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
-import { CreateFab } from './CreateFab'
 
 // Detail views (canvas, file-manager, agent chat, settings) manage their own
 // full-height scroll + padding, so the sheet stays flush for them.
@@ -18,7 +17,6 @@ export function ContentArea() {
       <main className={cn('flex-1 min-h-0 overflow-auto', !fullBleed && 'p-6')}>
         <Outlet />
       </main>
-      <CreateFab />
     </div>
   )
 }

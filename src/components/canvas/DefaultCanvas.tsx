@@ -1,8 +1,26 @@
 import type { ReactNode } from 'react'
-import { LayoutDashboard, BookMarked, Share2, Unlink, Save, Trash2 } from 'lucide-react'
-import { Document } from '@/types/workspace'
+import { LayoutDashboard, BookMarked, Share2, Unlink, Save, Trash2, Plus } from 'lucide-react'
+import { Document, TreeNode } from '@/types/workspace'
 import { DocumentList } from '@/components/common/document-list'
 import type { DocumentPasteOptions } from '@/components/common/document-list'
+import { useToolbox } from '@/components/toolbox/toolbox-context'
+
+// Right-most "+ Add" in the content header — opens the side AddPanel picker so a
+// note/link/file is created at the path shown in the URL bar.
+function AddButton() {
+  const { openAddPicker } = useToolbox()
+  return (
+    <button
+      type="button"
+      onClick={openAddPicker}
+      title="Add a note, link or file here"
+      className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 text-xs border rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+    >
+      <Plus className="w-3 h-3" />
+      Add
+    </button>
+  )
+}
 
 type CanvasUrlType = 'context' | 'canvas' | 'directory' | 'context-layer' | 'directory-layer'
 
@@ -53,6 +71,8 @@ interface DefaultCanvasProps {
   canSaveChanges?: boolean
   isSavingChanges?: boolean
   onSaveChanges?: () => Promise<void> | void
+  // When provided, enables the document list's "Link to…" path picker.
+  linkTree?: TreeNode | null
   // When provided, replaces the document list body (e.g. the canvas widget grid)
   // while keeping the canvas header and its share/delete controls.
   children?: ReactNode
@@ -99,6 +119,7 @@ export function DefaultCanvas({
   canSaveChanges,
   isSavingChanges,
   onSaveChanges,
+  linkTree,
   children,
 }: DefaultCanvasProps) {
   const isCanvas = urlType === 'canvas'
@@ -170,6 +191,7 @@ export function DefaultCanvas({
               {isDeletingCanvas ? 'Deleting…' : 'Delete'}
             </button>
           )}
+          <AddButton />
         </div>
       ) : (
         <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/20 shrink-0">
@@ -187,6 +209,7 @@ export function DefaultCanvas({
               Save as canvas
             </button>
           )}
+          <AddButton />
         </div>
       )}
 
@@ -223,6 +246,7 @@ export function DefaultCanvas({
           canSaveChanges={!isCanvas && canSaveChanges}
           isSavingChanges={isSavingChanges}
           onSaveChanges={onSaveChanges}
+          linkTree={linkTree}
         />
         )}
       </div>

@@ -71,7 +71,7 @@ type ToolboxAction =
   | { type: 'CLOSE_T1' }
   | { type: 'OPEN_T2_AGENT'; agentId: string }
   | { type: 'CLOSE_T2' }
-  | { type: 'OPEN_ADD'; kind: AddKind }
+  | { type: 'OPEN_ADD'; kind: AddKind | null }
   | { type: 'CLOSE_ADD' }
   | { type: 'SET_TOOLS_TAB'; tab: ToolsTab }
   | {
@@ -248,6 +248,7 @@ interface ToolboxContextValue {
   openAgentT2: (agentId: string) => void
   closeT2: () => void
   openAdd: (kind: AddKind) => void
+  openAddPicker: () => void
   closeAdd: () => void
   setToolsTab: (tab: ToolsTab) => void
   setFilters: (filters: ToolboxFilters) => void
@@ -393,6 +394,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
   const openAgentT2 = useCallback((agentId: string) => dispatch({ type: 'OPEN_T2_AGENT', agentId }), [])
   const closeT2 = useCallback(() => dispatch({ type: 'CLOSE_T2' }), [])
   const openAdd = useCallback((kind: AddKind) => dispatch({ type: 'OPEN_ADD', kind }), [])
+  const openAddPicker = useCallback(() => dispatch({ type: 'OPEN_ADD', kind: null }), [])
   const closeAdd = useCallback(() => dispatch({ type: 'CLOSE_ADD' }), [])
   const setToolsTab = useCallback((tab: ToolsTab) => dispatch({ type: 'SET_TOOLS_TAB', tab }), [])
 
@@ -515,7 +517,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
 
   return (
     <ToolboxCtx.Provider
-      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, closeAdd, setToolsTab, setFilters, setFeatureToggle, setTimelineFilter, saveFilters, deleteBitmap, createTimeline, deleteTimeline, refreshTimelines }}
+      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, closeAdd, setToolsTab, setFilters, setFeatureToggle, setTimelineFilter, saveFilters, deleteBitmap, createTimeline, deleteTimeline, refreshTimelines }}
     >
       {children}
     </ToolboxCtx.Provider>

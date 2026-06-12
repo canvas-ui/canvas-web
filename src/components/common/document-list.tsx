@@ -1,5 +1,6 @@
-import { Document } from '@/types/workspace'
-import { File, Calendar, Hash, Eye, ExternalLink, Globe, Mail, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link } from 'lucide-react'
+import { Document, TreeNode } from '@/types/workspace'
+import { File, Calendar, Hash, Eye, ExternalLink, Globe, Mail, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2 } from 'lucide-react'
+import { LinkToPanel } from '@/components/common/LinkToPanel'
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import Fuse from 'fuse.js'
 import {
@@ -51,6 +52,9 @@ interface DocumentListProps {
   canSaveChanges?: boolean
   isSavingChanges?: boolean
   onSaveChanges?: () => Promise<void> | void
+  // When provided, enables "Link to…" — links selected documents to chosen tree
+  // paths (via onPasteDocuments with move:false). Hidden when absent.
+  linkTree?: TreeNode | null
 }
 
 export interface DocumentPasteOptions {
@@ -604,9 +608,11 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
   )
 }
 
-export function DocumentList({ documents, isLoading, contextPath, treeName, workspaceId, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, onSelectionChange, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQuery, onBackendSearch, canSaveChanges = false, isSavingChanges = false, onSaveChanges }: DocumentListProps) {
+export function DocumentList({ documents, isLoading, contextPath, treeName, workspaceId, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, onSelectionChange, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQuery, onBackendSearch, canSaveChanges = false, isSavingChanges = false, onSaveChanges, linkTree }: DocumentListProps) {
   const [selectedDocuments, setSelectedDocuments] = useState<Set<number>>(new Set())
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; documentIds: number[] } | null>(null)
+  const [linkPanelIds, setLinkPanelIds] = useState<number[] | null>(null)
+  const canLink = Boolean(linkTree && onPasteDocuments)
   const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [showExportModal, setShowExportModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
@@ -761,10 +767,19 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     setContextMenu({ x: event.clientX, y: event.clientY, documentIds: targetIds })
   }, [selectedDocuments])
 
+  const handleLinkConfirm = useCallback(async (paths: string[], documentIds: number[]) => {
+    if (!onPasteDocuments) return
+    for (const path of paths) {
+      await onPasteDocuments(path, documentIds, { move: false })
+    }
+    setSelectedDocuments(new Set())
+  }, [onPasteDocuments])
+
   const handleContextMenuAction = useCallback(async (action: string, documentIds: number[]) => {
     switch (action) {
       case 'copy': onCopyDocuments?.(documentIds); break
       case 'cut': onCutDocuments?.(documentIds); break
+      case 'link-to': setLinkPanelIds(documentIds); setContextMenu(null); return
       case 'remove': documentIds.length === 1 ? onRemoveDocument?.(documentIds[0]) : onRemoveDocuments?.(documentIds); break
       case 'delete': documentIds.length === 1 ? onDeleteDocument?.(documentIds[0]) : onDeleteDocuments?.(documentIds); break
       case 'destroy': documentIds.length === 1 ? onDestroyDocument?.(documentIds[0]) : onDestroyDocuments?.(documentIds); break
@@ -1081,6 +1096,19 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                   Copy ({selectedDocuments.size})
                 </Button>
 
+                {canLink && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setLinkPanelIds(Array.from(selectedDocuments))}
+                    className="flex items-center gap-2"
+                    title="Link selected documents to other paths"
+                  >
+                    <Link2 className="h-4 w-4" />
+                    Link to ({selectedDocuments.size})
+                  </Button>
+                )}
+
                 {onCutDocuments && (
                   <Button
                     variant="outline"
@@ -1289,6 +1317,12 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                 Cut {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
               </button>
             )}
+            {canLink && (
+              <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('link-to', contextMenu.documentIds)}>
+                <Link2 className="h-3 w-3" />
+                Link to… {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
+              </button>
+            )}
             {contextMenu.documentIds.length === 1 && (
               <>
                 <div className="my-1 h-px bg-border" />
@@ -1370,6 +1404,15 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
         onClose={() => setShowImportModal(false)}
         onImport={handleImport}
       />
+
+      {linkPanelIds && linkTree && (
+        <LinkToPanel
+          tree={linkTree}
+          documentCount={linkPanelIds.length}
+          onConfirm={(paths) => handleLinkConfirm(paths, linkPanelIds)}
+          onClose={() => setLinkPanelIds(null)}
+        />
+      )}
     </div>
   )
 }
