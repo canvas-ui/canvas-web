@@ -350,12 +350,16 @@ export default function WorkspaceDetailPage() {
 
     // Live-reload the tree when paths change in the DB from any client (CLI,
     // agents, the browser extension). The backend forwards synapsd tree events
-    // over the workspace socket channel (already subscribed by the document
-    // effect). Debounced so a batch of changes triggers a single refetch.
+    // over the workspace socket channel (subscribed by-id in the document
+    // effect — tree events carry only workspaceId). Re-broadcast as the local
+    // 'workspace:tree:refresh' so BOTH this page tree and the sidebar
+    // (WorkspaceM2) reload. Debounced so a batch triggers a single refetch.
     let socketTimer: ReturnType<typeof setTimeout> | null = null;
     const reloadTreeSoon = () => {
       if (socketTimer) clearTimeout(socketTimer);
-      socketTimer = setTimeout(() => loadTree(true), 200);
+      socketTimer = setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('workspace:tree:refresh', { detail: { workspaceName } }));
+      }, 200);
     };
     const treeEvents = [
       'tree.path.inserted', 'tree.path.moved', 'tree.path.removed', 'tree.path.copied',
