@@ -3,9 +3,10 @@ import { Plus, StickyNote, Link as LinkIcon, Upload } from 'lucide-react'
 import { useToolbox, type AddKind } from '@/components/toolbox/toolbox-context'
 import { cn } from '@/lib/utils'
 
-// Material-design-v2-ish speed-dial FAB. A single round `+` anchored bottom-right
-// of the content sheet; clicking fans out the create actions, picking one slides
-// the AddPanel in beside the content (via toolbox `openAdd`).
+// Top-right "+" anchored to the content sheet. Clicking opens a box listing the
+// data abstractions you can add; picking one slides the AddPanel in beside the
+// content (via toolbox `openAdd`). ACTIONS is the single source of truth — adding
+// one of the ~10 eventual abstractions is just another entry here (+ its form).
 const ACTIONS: { kind: AddKind; label: string; icon: typeof StickyNote }[] = [
   { kind: 'note', label: 'Note', icon: StickyNote },
   { kind: 'link', label: 'Link', icon: LinkIcon },
@@ -17,7 +18,7 @@ export function CreateFab() {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
-  // Dismiss the fan on outside click / Escape.
+  // Dismiss the box on outside click / Escape.
   useEffect(() => {
     if (!open) return
     const onDown = (e: MouseEvent) => {
@@ -40,12 +41,23 @@ export function CreateFab() {
   }
 
   return (
-    <div ref={rootRef} className="absolute bottom-6 right-6 z-30 flex flex-col items-end gap-3">
-      {/* Fanned actions — stack above the main button, labelled mini-FABs */}
+    <div ref={rootRef} className="absolute top-4 right-4 z-30 flex flex-col items-end gap-2">
+      {/* Primary "+" */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label={open ? 'Close create menu' : 'Create'}
+        aria-expanded={open}
+        className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-elevation-3 transition-transform hover:brightness-110"
+      >
+        <Plus className={cn('h-5 w-5 transition-transform duration-200', open && 'rotate-45')} />
+      </button>
+
+      {/* Abstraction picker — a bordered box of labelled rows, opens under the "+" */}
       <div
         className={cn(
-          'flex flex-col items-end gap-3 transition-all duration-150',
-          open ? 'pointer-events-auto opacity-100' : 'pointer-events-none translate-y-2 opacity-0',
+          'w-44 overflow-hidden rounded-xl border bg-card p-1 shadow-elevation-3 transition-all duration-150',
+          open ? 'pointer-events-auto opacity-100' : 'pointer-events-none -translate-y-1 opacity-0',
         )}
       >
         {ACTIONS.map(({ kind, label, icon: Icon }) => (
@@ -53,29 +65,14 @@ export function CreateFab() {
             key={kind}
             type="button"
             onClick={() => pick(kind)}
-            className="group flex items-center gap-3"
             tabIndex={open ? 0 : -1}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
           >
-            <span className="rounded-md bg-zinc-900/90 px-2 py-1 text-xs font-medium text-zinc-100 shadow-elevation-2">
-              {label}
-            </span>
-            <span className="flex h-11 w-11 items-center justify-center rounded-full border bg-card text-foreground shadow-elevation-3 transition-colors group-hover:bg-muted">
-              <Icon className="h-5 w-5" />
-            </span>
+            <Icon className="h-4 w-4 text-muted-foreground" />
+            {label}
           </button>
         ))}
       </div>
-
-      {/* Primary FAB */}
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-label={open ? 'Close create menu' : 'Create'}
-        aria-expanded={open}
-        className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-elevation-3 transition-transform hover:brightness-110"
-      >
-        <Plus className={cn('h-6 w-6 transition-transform duration-200', open && 'rotate-45')} />
-      </button>
     </div>
   )
 }
