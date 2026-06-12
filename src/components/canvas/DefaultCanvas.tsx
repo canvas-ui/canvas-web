@@ -5,8 +5,8 @@ import { DocumentList } from '@/components/common/document-list'
 import type { DocumentPasteOptions } from '@/components/common/document-list'
 import { useToolbox } from '@/components/toolbox/toolbox-context'
 
-// Right-most "+ Add" in the content header — opens the side AddPanel picker so a
-// note/link/file is created at the path shown in the URL bar.
+// Right-most round "+" in the content header — opens the side AddPanel picker so
+// a note/link/file is created at the path shown in the URL bar.
 function AddButton() {
   const { openAddPicker } = useToolbox()
   return (
@@ -14,10 +14,10 @@ function AddButton() {
       type="button"
       onClick={openAddPicker}
       title="Add a note, link or file here"
-      className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 text-xs border rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+      aria-label="Add"
+      className="shrink-0 flex items-center justify-center w-7 h-7 rounded-full bg-foreground text-background hover:opacity-90 transition-opacity"
     >
-      <Plus className="w-3 h-3" />
-      Add
+      <Plus className="w-4 h-4" />
     </button>
   )
 }
