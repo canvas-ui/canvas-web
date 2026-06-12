@@ -347,9 +347,27 @@ export default function WorkspaceDetailPage() {
       loadTree(true);
     };
     window.addEventListener('workspace:tree:refresh', onTreeRefresh);
+
+    // Live-reload the tree when paths change in the DB from any client (CLI,
+    // agents, the browser extension). The backend forwards synapsd tree events
+    // over the workspace socket channel (already subscribed by the document
+    // effect). Debounced so a batch of changes triggers a single refetch.
+    let socketTimer: ReturnType<typeof setTimeout> | null = null;
+    const reloadTreeSoon = () => {
+      if (socketTimer) clearTimeout(socketTimer);
+      socketTimer = setTimeout(() => loadTree(true), 200);
+    };
+    const treeEvents = [
+      'tree.path.inserted', 'tree.path.moved', 'tree.path.removed', 'tree.path.copied',
+      'tree.layer.updated', 'tree.recalculated', 'tree.created', 'tree.deleted', 'tree.renamed',
+    ];
+    treeEvents.forEach(ev => socketService.on(ev, reloadTreeSoon));
+
     return () => {
       cancelled = true;
+      if (socketTimer) clearTimeout(socketTimer);
       window.removeEventListener('workspace:tree:refresh', onTreeRefresh);
+      treeEvents.forEach(ev => socketService.off(ev, reloadTreeSoon));
     };
   }, [workspaceName, selectedTreeName]);
 
