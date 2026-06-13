@@ -1,9 +1,10 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Key, Share2 } from 'lucide-react'
+import { Key, Share2, Monitor } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const settingsLinks = [
   { path: '/api-tokens', icon: Key, label: 'API Tokens' },
+  { path: '/devices', icon: Monitor, label: 'Devices' },
   { path: '/shared', icon: Share2, label: 'Shared With Me' },
 ]
 
