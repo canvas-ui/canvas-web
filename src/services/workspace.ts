@@ -595,6 +595,17 @@ export interface DestroyResult {
   failed: { id: number; reason: string }[]
 }
 
+export async function updateWorkspaceDocument(
+  workspaceId: string,
+  document: { id: number; schema: string; schemaVersion: string; data: Record<string, any>; metadata?: Record<string, any> }
+): Promise<boolean> {
+  await api.put<{ payload: unknown }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/documents`,
+    { documents: [document] }
+  )
+  return true
+}
+
 export async function destroyWorkspaceDocuments(
   workspaceId: string,
   documentIds: readonly (string | number)[],

@@ -784,6 +784,7 @@ export default function WorkspaceDetailPage() {
       isCanvasLocked={!!selectedNode?.locked}
       backendSearchQuery={serverSearchQuery}
       onBackendSearch={handleBackendSearch}
+      onDocumentUpdated={fetchDocuments}
       canSaveChanges={canSaveChanges}
       isSavingChanges={toolboxState.isSaving}
       onSaveChanges={saveFilters}
@@ -1147,6 +1148,7 @@ function SideWorkspaceCanvas({
         onSelectionChange={onSelectionChange}
         pastedDocumentIds={clipboard?.documentIds}
         linkTree={tree}
+        onDocumentUpdated={refreshPane}
         canvasInfo={isCanvas ? {
           label: selectedNode?.label,
           description: selectedNode?.description,

@@ -366,6 +366,7 @@ export default function ContextDetailPage() {
         pastedDocumentIds={copiedDocuments}
         backendSearchQuery={serverSearchQuery}
         onBackendSearch={handleBackendSearch}
+        onDocumentUpdated={fetchDocuments}
         canSaveChanges={canSaveChanges}
         isSavingChanges={toolboxState.isSaving}
         onSaveChanges={saveFilters}

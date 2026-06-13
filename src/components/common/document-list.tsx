@@ -1,5 +1,5 @@
 import { Document, TreeNode } from '@/types/workspace'
-import { File, Calendar, Hash, Eye, ExternalLink, Globe, Mail, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2 } from 'lucide-react'
+import { File, Calendar, Hash, Eye, ExternalLink, Globe, Mail, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil } from 'lucide-react'
 import { LinkToPanel } from '@/components/common/LinkToPanel'
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import Fuse from 'fuse.js'
@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button'
 import { createPortal } from 'react-dom'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { FilePreview, isPreviewable } from '@/components/common/file-preview'
+import { EditDocumentModal } from '@/components/common/EditDocumentModal'
 
 interface DocumentListProps {
   documents: Document[]
@@ -25,6 +26,8 @@ interface DocumentListProps {
   treeName?: string
   workspaceId?: string
   totalCount: number
+  onEditDocument?: (document: Document) => void
+  onDocumentUpdated?: () => void
   onRemoveDocument?: (documentId: number) => void
   onDeleteDocument?: (documentId: number) => void
   onDestroyDocument?: (documentId: number) => void
@@ -68,6 +71,8 @@ interface DocumentRowProps {
   isSelected?: boolean
   workspaceId?: string
   onSelect?: (documentId: number, isSelected: boolean, isCtrlClick: boolean) => void
+  onEditDocument?: (document: Document) => void
+  onDocumentUpdated?: () => void
   onRemoveDocument?: (documentId: number) => void
   onDeleteDocument?: (documentId: number) => void
   onLinkDocument?: (documentId: number) => void
@@ -80,6 +85,8 @@ interface DocumentTableRowProps {
   isSelected?: boolean
   workspaceId?: string
   onSelect?: (documentId: number, isSelected: boolean, isCtrlClick: boolean) => void
+  onEditDocument?: (document: Document) => void
+  onDocumentUpdated?: () => void
   onRemoveDocument?: (documentId: number) => void
   onDeleteDocument?: (documentId: number) => void
   onLinkDocument?: (documentId: number) => void
@@ -427,8 +434,10 @@ function DocumentDetailModal({ document, isOpen, onClose, workspaceId }: Documen
   )
 }
 
-function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemoveDocument, onDeleteDocument, onLinkDocument, onRightClick, onDragStart }: DocumentTableRowProps) {
+function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onEditDocument, onDocumentUpdated, onRemoveDocument, onDeleteDocument, onLinkDocument, onRightClick, onDragStart }: DocumentTableRowProps) {
   const [showDetailModal, setShowDetailModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const isEditable = document.schema === 'data/abstraction/note' || document.schema === 'data/abstraction/link'
 
   const isTabDocument = document.schema === 'data/abstraction/tab'
   const tabUrl = isTabDocument ? document.data.url : null
@@ -483,6 +492,7 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
   }
 
   const handleViewDetails = (e: React.MouseEvent) => { e.stopPropagation(); setShowDetailModal(true) }
+  const handleEditDocument = (e: React.MouseEvent) => { e.stopPropagation(); if (onEditDocument) { onEditDocument(document) } else { setShowEditModal(true) } }
   const handleRemoveDocument = (e: React.MouseEvent) => { e.stopPropagation(); onRemoveDocument?.(document.id) }
   const handleDeleteDocument = (e: React.MouseEvent) => { e.stopPropagation(); onDeleteDocument?.(document.id) }
 
@@ -518,6 +528,7 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
         <TableCell>
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="sm" onClick={handleViewDetails} title="View document details"><Eye className="h-4 w-4" /></Button>
+            {isEditable && (<Button variant="ghost" size="sm" onClick={handleEditDocument} title="Edit document"><Pencil className="h-4 w-4" /></Button>)}
             {onLinkDocument && (<Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onLinkDocument(document.id) }} title="Link document to other paths"><Link2 className="h-4 w-4" /></Button>)}
             {onRemoveDocument && (<Button variant="ghost" size="sm" onClick={handleRemoveDocument} title="Remove document from context"><X className="h-4 w-4" /></Button>)}
             {onDeleteDocument && (<Button variant="ghost" size="sm" onClick={handleDeleteDocument} title="Delete document permanently" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>)}
@@ -525,13 +536,18 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
         </TableCell>
       </TableRow>
       <DocumentDetailModal document={document} isOpen={showDetailModal} onClose={() => setShowDetailModal(false)} workspaceId={workspaceId} />
+      {showEditModal && workspaceId && (
+        <EditDocumentModal document={document} workspaceId={workspaceId} onClose={() => setShowEditModal(false)} onSaved={() => { setShowEditModal(false); onDocumentUpdated?.() }} />
+      )}
     </>
   )
 }
 
-function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocument, onDeleteDocument, onLinkDocument, onRightClick, onDragStart }: DocumentRowProps) {
+function DocumentRow({ document, isSelected, workspaceId, onSelect, onEditDocument, onDocumentUpdated, onRemoveDocument, onDeleteDocument, onLinkDocument, onRightClick, onDragStart }: DocumentRowProps) {
   const [showDetailModal, setShowDetailModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
   const isTabDocument = document.schema === 'data/abstraction/tab'
+  const isEditable = document.schema === 'data/abstraction/note' || document.schema === 'data/abstraction/link'
   const tabUrl = isTabDocument ? document.data.url : null
   const display = getDocumentDisplayInfo(document)
 
@@ -566,6 +582,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
 
   const handleRightClick = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); if (onSelect && !isSelected) { onSelect(document.id, true, false) } onRightClick?.(e, document.id) }
   const handleViewDetails = (e: React.MouseEvent) => { e.stopPropagation(); setShowDetailModal(true) }
+  const handleEditDocument = (e: React.MouseEvent) => { e.stopPropagation(); if (onEditDocument) { onEditDocument(document) } else { setShowEditModal(true) } }
   const handleRemoveDocument = (e: React.MouseEvent) => { e.stopPropagation(); onRemoveDocument?.(document.id) }
   const handleDeleteDocument = (e: React.MouseEvent) => { e.stopPropagation(); onDeleteDocument?.(document.id) }
 
@@ -601,6 +618,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
           </div>
           <div className="flex items-center gap-2">
             <button onClick={handleViewDetails} className="p-1 hover:bg-muted rounded-sm" title="View document details"><Eye className="h-4 w-4" /></button>
+            {isEditable && (<button onClick={handleEditDocument} className="p-1 hover:bg-muted rounded-sm" title="Edit document"><Pencil className="h-4 w-4" /></button>)}
             {onLinkDocument && (<button onClick={(e) => { e.stopPropagation(); onLinkDocument(document.id) }} className="p-1 hover:bg-muted rounded-sm" title="Link document to other paths"><Link2 className="h-4 w-4" /></button>)}
             {onRemoveDocument && (<button onClick={handleRemoveDocument} className="p-1 hover:bg-muted rounded-sm" title="Remove document from context (keep in database)"><X className="h-4 w-4" /></button>)}
             {onDeleteDocument && (<button onClick={handleDeleteDocument} className="p-1 hover:bg-destructive hover:text-destructive-foreground rounded-sm text-destructive" title="Delete document permanently from database"><Trash2 className="h-4 w-4" /></button>)}
@@ -608,11 +626,14 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
         </div>
       </div>
       <DocumentDetailModal document={document} isOpen={showDetailModal} onClose={() => setShowDetailModal(false)} workspaceId={workspaceId} />
+      {showEditModal && workspaceId && (
+        <EditDocumentModal document={document} workspaceId={workspaceId} onClose={() => setShowEditModal(false)} onSaved={() => { setShowEditModal(false); onDocumentUpdated?.() }} />
+      )}
     </>
   )
 }
 
-export function DocumentList({ documents, isLoading, contextPath, treeName, workspaceId, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, onSelectionChange, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQuery, onBackendSearch, canSaveChanges = false, isSavingChanges = false, onSaveChanges, linkTree }: DocumentListProps) {
+export function DocumentList({ documents, isLoading, contextPath, treeName, workspaceId, totalCount, onEditDocument, onDocumentUpdated, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, onSelectionChange, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQuery, onBackendSearch, canSaveChanges = false, isSavingChanges = false, onSaveChanges, linkTree }: DocumentListProps) {
   const [selectedDocuments, setSelectedDocuments] = useState<Set<number>>(new Set())
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; documentIds: number[] } | null>(null)
   const [linkPanelIds, setLinkPanelIds] = useState<number[] | null>(null)
@@ -1290,7 +1311,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
             </TableHeader>
             <TableBody>
               {sortedDocuments.map((document) => (
-                <DocumentTableRow key={document.id} document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onRemoveDocument={onRemoveDocument} onDeleteDocument={onDeleteDocument} onLinkDocument={canLink ? (id) => setLinkPanelIds([id]) : undefined} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
+                <DocumentTableRow key={document.id} document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onEditDocument={onEditDocument} onDocumentUpdated={onDocumentUpdated} onRemoveDocument={onRemoveDocument} onDeleteDocument={onDeleteDocument} onLinkDocument={canLink ? (id) => setLinkPanelIds([id]) : undefined} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
               ))}
             </TableBody>
           </Table>
@@ -1300,7 +1321,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
           <div className="space-y-3 pr-2">
             {filteredDocuments.map((document) => (
               <div key={document.id} onContextMenu={(e) => { e.stopPropagation(); handleDocumentRightClick(e, document.id); }}>
-                <DocumentRow document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onRemoveDocument={onRemoveDocument} onDeleteDocument={onDeleteDocument} onLinkDocument={canLink ? (id) => setLinkPanelIds([id]) : undefined} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
+                <DocumentRow document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onEditDocument={onEditDocument} onDocumentUpdated={onDocumentUpdated} onRemoveDocument={onRemoveDocument} onDeleteDocument={onDeleteDocument} onLinkDocument={canLink ? (id) => setLinkPanelIds([id]) : undefined} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
               </div>
             ))}
           </div>
