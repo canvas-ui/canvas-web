@@ -1,9 +1,11 @@
 import { useCallback, useRef, useState } from 'react'
-import { X, StickyNote, Link as LinkIcon, Upload, Plus } from 'lucide-react'
+import { X, StickyNote, Link as LinkIcon, Upload, Plus, Pencil } from 'lucide-react'
 import { useToolbox, type AddKind } from './toolbox-context'
 import { NoteForm } from './add/NoteForm'
 import { LinkForm } from './add/LinkForm'
 import { FileForm } from './add/FileForm'
+import { EditNoteForm } from './add/EditNoteForm'
+import { EditLinkForm } from './add/EditLinkForm'
 
 const DEFAULT_WIDTH = 380
 const MIN_WIDTH = 300
@@ -25,7 +27,7 @@ const ABSTRACTIONS: { kind: AddKind; label: string; icon: typeof StickyNote }[] 
 
 export function AddPanel() {
   const { state, openAdd, closeAdd } = useToolbox()
-  const { addOpen, addKind } = state
+  const { addOpen, addKind, editDocument } = state
   const [width, setWidth] = useState(DEFAULT_WIDTH)
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
 
@@ -50,10 +52,22 @@ export function AddPanel() {
 
   if (!addOpen) return null
 
-  // Picker mode: no abstraction chosen yet — list the options in the same slot
-  // the form will occupy.
-  const isPicker = !addKind
-  const { label, icon: Icon } = addKind ? TITLES[addKind] : { label: 'Add', icon: Plus }
+  const isEditMode = Boolean(editDocument)
+  const isPicker = !isEditMode && !addKind
+
+  let headerLabel: string
+  let HeaderIcon: typeof StickyNote
+
+  if (isEditMode) {
+    headerLabel = editDocument!.schema === 'data/abstraction/note' ? 'Edit Note' : 'Edit Link'
+    HeaderIcon = editDocument!.schema === 'data/abstraction/note' ? StickyNote : LinkIcon
+  } else if (addKind) {
+    headerLabel = TITLES[addKind].label
+    HeaderIcon = TITLES[addKind].icon
+  } else {
+    headerLabel = 'Add'
+    HeaderIcon = Plus
+  }
 
   return (
     <div
@@ -67,8 +81,8 @@ export function AddPanel() {
 
       <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
         <span className="flex items-center gap-2 text-sm font-medium">
-          <Icon className="h-4 w-4" />
-          {label}
+          {isEditMode ? <Pencil className="h-4 w-4" /> : <HeaderIcon className="h-4 w-4" />}
+          {headerLabel}
         </span>
         <button
           type="button"
@@ -81,7 +95,9 @@ export function AddPanel() {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {isPicker && (
+        {isEditMode && editDocument!.schema === 'data/abstraction/note' && <EditNoteForm />}
+        {isEditMode && editDocument!.schema === 'data/abstraction/link' && <EditLinkForm />}
+        {!isEditMode && isPicker && (
           <div className="p-2">
             {ABSTRACTIONS.map(({ kind, label: l, icon: I }) => (
               <button
@@ -96,9 +112,9 @@ export function AddPanel() {
             ))}
           </div>
         )}
-        {addKind === 'note' && <NoteForm />}
-        {addKind === 'link' && <LinkForm />}
-        {addKind === 'file' && <FileForm />}
+        {!isEditMode && addKind === 'note' && <NoteForm />}
+        {!isEditMode && addKind === 'link' && <LinkForm />}
+        {!isEditMode && addKind === 'file' && <FileForm />}
       </div>
     </div>
   )

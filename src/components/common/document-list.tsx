@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button'
 import { createPortal } from 'react-dom'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { FilePreview, isPreviewable } from '@/components/common/file-preview'
-import { EditDocumentModal } from '@/components/common/EditDocumentModal'
+import { useToolbox } from '@/components/toolbox/toolbox-context'
 
 interface DocumentListProps {
   documents: Document[]
@@ -26,8 +26,6 @@ interface DocumentListProps {
   treeName?: string
   workspaceId?: string
   totalCount: number
-  onEditDocument?: (document: Document) => void
-  onDocumentUpdated?: () => void
   onRemoveDocument?: (documentId: number) => void
   onDeleteDocument?: (documentId: number) => void
   onDestroyDocument?: (documentId: number) => void
@@ -71,8 +69,6 @@ interface DocumentRowProps {
   isSelected?: boolean
   workspaceId?: string
   onSelect?: (documentId: number, isSelected: boolean, isCtrlClick: boolean) => void
-  onEditDocument?: (document: Document) => void
-  onDocumentUpdated?: () => void
   onRemoveDocument?: (documentId: number) => void
   onDeleteDocument?: (documentId: number) => void
   onLinkDocument?: (documentId: number) => void
@@ -85,8 +81,6 @@ interface DocumentTableRowProps {
   isSelected?: boolean
   workspaceId?: string
   onSelect?: (documentId: number, isSelected: boolean, isCtrlClick: boolean) => void
-  onEditDocument?: (document: Document) => void
-  onDocumentUpdated?: () => void
   onRemoveDocument?: (documentId: number) => void
   onDeleteDocument?: (documentId: number) => void
   onLinkDocument?: (documentId: number) => void
@@ -434,9 +428,9 @@ function DocumentDetailModal({ document, isOpen, onClose, workspaceId }: Documen
   )
 }
 
-function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onEditDocument, onDocumentUpdated, onRemoveDocument, onDeleteDocument, onLinkDocument, onRightClick, onDragStart }: DocumentTableRowProps) {
+function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemoveDocument, onDeleteDocument, onLinkDocument, onRightClick, onDragStart }: DocumentTableRowProps) {
   const [showDetailModal, setShowDetailModal] = useState(false)
-  const [showEditModal, setShowEditModal] = useState(false)
+  const { openEdit } = useToolbox()
   const isEditable = document.schema === 'data/abstraction/note' || document.schema === 'data/abstraction/link'
 
   const isTabDocument = document.schema === 'data/abstraction/tab'
@@ -492,7 +486,7 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onEditD
   }
 
   const handleViewDetails = (e: React.MouseEvent) => { e.stopPropagation(); setShowDetailModal(true) }
-  const handleEditDocument = (e: React.MouseEvent) => { e.stopPropagation(); if (onEditDocument) { onEditDocument(document) } else { setShowEditModal(true) } }
+  const handleEditDocument = (e: React.MouseEvent) => { e.stopPropagation(); openEdit(document, workspaceId ?? '') }
   const handleRemoveDocument = (e: React.MouseEvent) => { e.stopPropagation(); onRemoveDocument?.(document.id) }
   const handleDeleteDocument = (e: React.MouseEvent) => { e.stopPropagation(); onDeleteDocument?.(document.id) }
 
@@ -536,16 +530,13 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onEditD
         </TableCell>
       </TableRow>
       <DocumentDetailModal document={document} isOpen={showDetailModal} onClose={() => setShowDetailModal(false)} workspaceId={workspaceId} />
-      {showEditModal && workspaceId && (
-        <EditDocumentModal document={document} workspaceId={workspaceId} onClose={() => setShowEditModal(false)} onSaved={() => { setShowEditModal(false); onDocumentUpdated?.() }} />
-      )}
     </>
   )
 }
 
-function DocumentRow({ document, isSelected, workspaceId, onSelect, onEditDocument, onDocumentUpdated, onRemoveDocument, onDeleteDocument, onLinkDocument, onRightClick, onDragStart }: DocumentRowProps) {
+function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocument, onDeleteDocument, onLinkDocument, onRightClick, onDragStart }: DocumentRowProps) {
   const [showDetailModal, setShowDetailModal] = useState(false)
-  const [showEditModal, setShowEditModal] = useState(false)
+  const { openEdit } = useToolbox()
   const isTabDocument = document.schema === 'data/abstraction/tab'
   const isEditable = document.schema === 'data/abstraction/note' || document.schema === 'data/abstraction/link'
   const tabUrl = isTabDocument ? document.data.url : null
@@ -582,7 +573,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onEditDocume
 
   const handleRightClick = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); if (onSelect && !isSelected) { onSelect(document.id, true, false) } onRightClick?.(e, document.id) }
   const handleViewDetails = (e: React.MouseEvent) => { e.stopPropagation(); setShowDetailModal(true) }
-  const handleEditDocument = (e: React.MouseEvent) => { e.stopPropagation(); if (onEditDocument) { onEditDocument(document) } else { setShowEditModal(true) } }
+  const handleEditDocument = (e: React.MouseEvent) => { e.stopPropagation(); openEdit(document, workspaceId ?? '') }
   const handleRemoveDocument = (e: React.MouseEvent) => { e.stopPropagation(); onRemoveDocument?.(document.id) }
   const handleDeleteDocument = (e: React.MouseEvent) => { e.stopPropagation(); onDeleteDocument?.(document.id) }
 
@@ -626,14 +617,12 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onEditDocume
         </div>
       </div>
       <DocumentDetailModal document={document} isOpen={showDetailModal} onClose={() => setShowDetailModal(false)} workspaceId={workspaceId} />
-      {showEditModal && workspaceId && (
-        <EditDocumentModal document={document} workspaceId={workspaceId} onClose={() => setShowEditModal(false)} onSaved={() => { setShowEditModal(false); onDocumentUpdated?.() }} />
-      )}
     </>
   )
 }
 
-export function DocumentList({ documents, isLoading, contextPath, treeName, workspaceId, totalCount, onEditDocument, onDocumentUpdated, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, onSelectionChange, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQuery, onBackendSearch, canSaveChanges = false, isSavingChanges = false, onSaveChanges, linkTree }: DocumentListProps) {
+export function DocumentList({ documents, isLoading, contextPath, treeName, workspaceId, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, onSelectionChange, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQuery, onBackendSearch, canSaveChanges = false, isSavingChanges = false, onSaveChanges, linkTree }: DocumentListProps) {
+  const { openEdit } = useToolbox()
   const [selectedDocuments, setSelectedDocuments] = useState<Set<number>>(new Set())
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; documentIds: number[] } | null>(null)
   const [linkPanelIds, setLinkPanelIds] = useState<number[] | null>(null)
@@ -802,6 +791,12 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
 
   const handleContextMenuAction = useCallback(async (action: string, documentIds: number[]) => {
     switch (action) {
+      case 'edit':
+        if (documentIds.length === 1) {
+          const doc = documents.find(d => d.id === documentIds[0])
+          if (doc) { openEdit(doc, workspaceId ?? ''); setContextMenu(null); return }
+        }
+        break
       case 'copy': onCopyDocuments?.(documentIds); break
       case 'cut': onCutDocuments?.(documentIds); break
       case 'link-to': setLinkPanelIds(documentIds); setContextMenu(null); return
@@ -855,7 +850,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     }
     setContextMenu(null)
     setSelectedDocuments(new Set())
-  }, [onCopyDocuments, onCutDocuments, onRemoveDocument, onRemoveDocuments, onDeleteDocument, onDeleteDocuments, onDestroyDocument, onDestroyDocuments, documents])
+  }, [onCopyDocuments, onCutDocuments, onRemoveDocument, onRemoveDocuments, onDeleteDocument, onDeleteDocuments, onDestroyDocument, onDestroyDocuments, documents, openEdit, workspaceId])
 
   const handleEmptyAreaRightClick = useCallback((event: React.MouseEvent) => {
     // Show context menu if there are documents to paste or import functionality is available
@@ -1311,7 +1306,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
             </TableHeader>
             <TableBody>
               {sortedDocuments.map((document) => (
-                <DocumentTableRow key={document.id} document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onEditDocument={onEditDocument} onDocumentUpdated={onDocumentUpdated} onRemoveDocument={onRemoveDocument} onDeleteDocument={onDeleteDocument} onLinkDocument={canLink ? (id) => setLinkPanelIds([id]) : undefined} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
+                <DocumentTableRow key={document.id} document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onRemoveDocument={onRemoveDocument} onDeleteDocument={onDeleteDocument} onLinkDocument={canLink ? (id) => setLinkPanelIds([id]) : undefined} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
               ))}
             </TableBody>
           </Table>
@@ -1321,7 +1316,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
           <div className="space-y-3 pr-2">
             {filteredDocuments.map((document) => (
               <div key={document.id} onContextMenu={(e) => { e.stopPropagation(); handleDocumentRightClick(e, document.id); }}>
-                <DocumentRow document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onEditDocument={onEditDocument} onDocumentUpdated={onDocumentUpdated} onRemoveDocument={onRemoveDocument} onDeleteDocument={onDeleteDocument} onLinkDocument={canLink ? (id) => setLinkPanelIds([id]) : undefined} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
+                <DocumentRow document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onRemoveDocument={onRemoveDocument} onDeleteDocument={onDeleteDocument} onLinkDocument={canLink ? (id) => setLinkPanelIds([id]) : undefined} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
               </div>
             ))}
           </div>
@@ -1355,6 +1350,16 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                   <Eye className="h-3 w-3" />
                   View Details
                 </button>
+                {(() => {
+                  const document = documents.find(doc => doc.id === contextMenu.documentIds[0]);
+                  const isEditable = document?.schema === 'data/abstraction/note' || document?.schema === 'data/abstraction/link';
+                  return isEditable ? (
+                    <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('edit', contextMenu.documentIds)}>
+                      <Pencil className="h-3 w-3" />
+                      Edit
+                    </button>
+                  ) : null;
+                })()}
                 {(() => {
                   const document = documents.find(doc => doc.id === contextMenu.documentIds[0]);
                   const isTabDocument = document?.schema === 'data/abstraction/tab';

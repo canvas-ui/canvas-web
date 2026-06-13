@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useLocation } from 'react-router-dom'
-import type { ToolboxFilters, ToolboxTimelineFilters } from '@/types/workspace'
+import type { ToolboxFilters, ToolboxTimelineFilters, Document as WorkspaceDocument } from '@/types/workspace'
 import { DEFAULT_TOOLBOX_FILTERS } from '@/types/workspace'
 import {
   DEFAULT_WORKSPACE_TREE_NAME,
@@ -31,6 +31,7 @@ export type T1View = 'home' | 'tools' | 'agents' | null
 export type ToolsTab = 'timeline' | 'features'
 export type ActiveContextType = 'canvas' | 'context' | null
 export type AddKind = 'note' | 'link' | 'file'
+export type { WorkspaceDocument }
 
 export interface ToolboxState {
   t1Open: boolean
@@ -42,6 +43,9 @@ export interface ToolboxState {
   // Add panel — slim creation section next to main content
   addOpen: boolean
   addKind: AddKind | null
+  // Edit mode — document being edited in the add panel
+  editDocument: WorkspaceDocument | null
+  editWorkspaceId: string | null
   // Navigation-derived
   activeContextPath: string | null
   activeContextType: ActiveContextType
@@ -73,6 +77,7 @@ type ToolboxAction =
   | { type: 'CLOSE_T2' }
   | { type: 'OPEN_ADD'; kind: AddKind | null }
   | { type: 'CLOSE_ADD' }
+  | { type: 'OPEN_EDIT'; document: WorkspaceDocument; workspaceId: string }
   | { type: 'SET_TOOLS_TAB'; tab: ToolsTab }
   | {
       type: 'SET_NAVIGATION'
@@ -105,6 +110,8 @@ const initialState: ToolboxState = {
   t2AgentId: null,
   addOpen: false,
   addKind: null,
+  editDocument: null,
+  editWorkspaceId: null,
   activeContextPath: null,
   activeContextType: null,
   activeWorkspaceName: null,
@@ -136,9 +143,11 @@ function toolboxReducer(state: ToolboxState, action: ToolboxAction): ToolboxStat
     case 'CLOSE_T2':
       return { ...state, t2Open: false, t2AgentId: null }
     case 'OPEN_ADD':
-      return { ...state, addOpen: true, addKind: action.kind }
+      return { ...state, addOpen: true, addKind: action.kind, editDocument: null, editWorkspaceId: null }
     case 'CLOSE_ADD':
-      return { ...state, addOpen: false, addKind: null }
+      return { ...state, addOpen: false, addKind: null, editDocument: null, editWorkspaceId: null }
+    case 'OPEN_EDIT':
+      return { ...state, addOpen: true, addKind: null, editDocument: action.document, editWorkspaceId: action.workspaceId }
     case 'SET_TOOLS_TAB':
       return { ...state, toolsTab: action.tab }
     case 'SET_NAVIGATION':
@@ -250,6 +259,7 @@ interface ToolboxContextValue {
   openAdd: (kind: AddKind) => void
   openAddPicker: () => void
   closeAdd: () => void
+  openEdit: (document: WorkspaceDocument, workspaceId: string) => void
   setToolsTab: (tab: ToolsTab) => void
   setFilters: (filters: ToolboxFilters) => void
   setFeatureToggle: (key: string, on: boolean) => void
@@ -396,6 +406,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
   const openAdd = useCallback((kind: AddKind) => dispatch({ type: 'OPEN_ADD', kind }), [])
   const openAddPicker = useCallback(() => dispatch({ type: 'OPEN_ADD', kind: null }), [])
   const closeAdd = useCallback(() => dispatch({ type: 'CLOSE_ADD' }), [])
+  const openEdit = useCallback((document: WorkspaceDocument, workspaceId: string) => dispatch({ type: 'OPEN_EDIT', document, workspaceId }), [])
   const setToolsTab = useCallback((tab: ToolsTab) => dispatch({ type: 'SET_TOOLS_TAB', tab }), [])
 
   const setFilters = useCallback((filters: ToolboxFilters) => {
@@ -517,7 +528,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
 
   return (
     <ToolboxCtx.Provider
-      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, closeAdd, setToolsTab, setFilters, setFeatureToggle, setTimelineFilter, saveFilters, deleteBitmap, createTimeline, deleteTimeline, refreshTimelines }}
+      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, closeAdd, openEdit, setToolsTab, setFilters, setFeatureToggle, setTimelineFilter, saveFilters, deleteBitmap, createTimeline, deleteTimeline, refreshTimelines }}
     >
       {children}
     </ToolboxCtx.Provider>

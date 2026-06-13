@@ -55,8 +55,6 @@ interface DefaultCanvasProps {
   onImportDocuments?: (documents: any[], contextPath: string) => Promise<boolean>
   onSelectionChange?: (documentIds: number[]) => void
   pastedDocumentIds?: number[]
-  onEditDocument?: (document: Document) => void
-  onDocumentUpdated?: () => void
   onPurgeDocuments?: () => void
   disablePurgeDocuments?: boolean
   canvasInfo?: CanvasInfo
@@ -105,8 +103,6 @@ export function DefaultCanvas({
   onImportDocuments,
   onSelectionChange,
   pastedDocumentIds,
-  onEditDocument,
-  onDocumentUpdated,
   onPurgeDocuments,
   disablePurgeDocuments,
   canvasInfo,
@@ -231,8 +227,6 @@ export function DefaultCanvas({
           pageSize={pageSize}
           onPageChange={onPageChange}
           onPageSizeChange={onPageSizeChange}
-          onEditDocument={onEditDocument}
-          onDocumentUpdated={onDocumentUpdated}
           onRemoveDocument={onRemoveDocument}
           onDeleteDocument={onDeleteDocument}
           onDestroyDocument={onDestroyDocument}

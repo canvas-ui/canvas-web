@@ -153,6 +153,11 @@ export default function ContextDetailPage() {
 
   useEffect(() => { fetchContextDetails(); }, [fetchContextDetails]);
   useEffect(() => { if (context) fetchDocuments(); }, [context?.id, fetchDocuments]);
+  useEffect(() => {
+    const onRefresh = () => fetchDocuments();
+    window.addEventListener('workspace:documents:refresh', onRefresh);
+    return () => window.removeEventListener('workspace:documents:refresh', onRefresh);
+  }, [fetchDocuments]);
   useEffect(() => { setCurrentPage(1); setIgnoreSavedSearch(false); }, [contextId]);
   useEffect(() => { setServerSearchQuery(urlSearchQuery); setCurrentPage(1); }, [urlSearchQuery]);
   useEffect(() => {
@@ -349,6 +354,7 @@ export default function ContextDetailPage() {
         urlType={urlType}
         urlDisplay={context.url}
         contextPath={selectedPath}
+        workspaceId={context.workspaceName || context.workspaceId}
         documents={documents}
         isLoading={isLoadingDocuments}
         totalCount={documentsTotalCount}
@@ -366,7 +372,6 @@ export default function ContextDetailPage() {
         pastedDocumentIds={copiedDocuments}
         backendSearchQuery={serverSearchQuery}
         onBackendSearch={handleBackendSearch}
-        onDocumentUpdated={fetchDocuments}
         canSaveChanges={canSaveChanges}
         isSavingChanges={toolboxState.isSaving}
         onSaveChanges={saveFilters}

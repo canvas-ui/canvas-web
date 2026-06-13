@@ -246,6 +246,7 @@ export default function WorkspaceDetailPage() {
       if (detail?.workspaceName && detail.workspaceName !== workspaceName) return;
       if (detail?.treeName && detail.treeName !== selectedTreeName) return;
       if (detail?.path && detail.path !== selectedPath) return;
+      if (workspaceName) invalidateDocumentCache(workspaceName, selectedTreeName, selectedPath);
       fetchDocuments();
     };
 
@@ -269,7 +270,7 @@ export default function WorkspaceDetailPage() {
     const refresh = () => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
-        invalidateDocumentCache(workspaceName, selectedTreeName, selectedPath);
+        if (workspaceName) invalidateDocumentCache(workspaceName, selectedTreeName, selectedPath);
         fetchDocuments();
       }, 200);
     };
@@ -784,7 +785,6 @@ export default function WorkspaceDetailPage() {
       isCanvasLocked={!!selectedNode?.locked}
       backendSearchQuery={serverSearchQuery}
       onBackendSearch={handleBackendSearch}
-      onDocumentUpdated={fetchDocuments}
       canSaveChanges={canSaveChanges}
       isSavingChanges={toolboxState.isSaving}
       onSaveChanges={saveFilters}
@@ -1022,6 +1022,7 @@ function SideWorkspaceCanvas({
       if (detail?.workspaceName && detail.workspaceName !== workspaceName) return;
       if (detail?.treeName && detail.treeName !== pane.treeName) return;
       if (detail?.path && detail.path !== pane.path) return;
+      invalidateDocumentCache(workspaceName, pane.treeName, pane.path);
       fetchPaneDocuments();
     };
     window.addEventListener('workspace:documents:refresh', onRefresh);
@@ -1148,7 +1149,6 @@ function SideWorkspaceCanvas({
         onSelectionChange={onSelectionChange}
         pastedDocumentIds={clipboard?.documentIds}
         linkTree={tree}
-        onDocumentUpdated={refreshPane}
         canvasInfo={isCanvas ? {
           label: selectedNode?.label,
           description: selectedNode?.description,

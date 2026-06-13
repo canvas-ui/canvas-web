@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Copy, Database, ExternalLink, RefreshCw, Server, Trash2, Unlink } from 'lucide-react'
+import { ArrowLeft, Copy, Database, ExternalLink, RefreshCw, Server, Trash2, Unlink, Activity } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,6 +15,7 @@ import {
   disableWorkspaceService,
   enableWorkspaceService,
   getWorkspaceDataBackends,
+  getWorkspaceDbStats,
   getWorkspaceServicesStatus,
   listWorkspaceShares,
   listWorkspaces,
@@ -24,11 +25,12 @@ import {
   updateWorkspace,
   updateWorkspaceDataBackends,
   type WorkspaceDataBackendStatus,
+  type WorkspaceDbStats,
   type WorkspacePublicCanvasShare,
   type WorkspaceServicesStatus,
 } from '@/services/workspace'
 
-type SettingsTab = 'general' | 'data' | 'services' | 'shares' | 'hooks'
+type SettingsTab = 'general' | 'data' | 'db' | 'services' | 'shares' | 'hooks'
 type ServiceId = 'dotfiles' | 'git' | 'home' | 'webdav' | 'imap' | 'imapSync'
 
 const DATA_BACKEND_LABELS: Record<string, { title: string; description: string }> = {
@@ -83,6 +85,123 @@ function Toggle({
   )
 }
 
+function StatRow({ label, value, mono = false }: { label: string; value: React.ReactNode; mono?: boolean }) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-2 border-b last:border-0">
+      <span className="text-xs text-muted-foreground shrink-0">{label}</span>
+      <span className={`text-xs text-right ${mono ? 'font-mono' : ''}`}>{value ?? '—'}</span>
+    </div>
+  )
+}
+
+function DbStatsTab({
+  stats,
+  isLoading,
+  onRefresh,
+}: {
+  stats: WorkspaceDbStats | null
+  isLoading: boolean
+  onRefresh: () => void
+}) {
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <RefreshCw className="h-4 w-4 animate-spin" />
+        Loading stats…
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">Live snapshot from synapsd. Click refresh for updated counts.</p>
+        <Button type="button" variant="outline" size="sm" onClick={onRefresh} disabled={isLoading}>
+          <RefreshCw className="mr-2 h-3.5 w-3.5" />
+          Refresh
+        </Button>
+      </div>
+
+      {!stats ? (
+        <div className="rounded-md border p-4 text-sm text-muted-foreground">No stats available.</div>
+      ) : (
+        <>
+          <section className="rounded-lg border p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <Database className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-semibold">Core Index</h2>
+            </div>
+            <StatRow label="Backend" value={stats.dbBackend} mono />
+            <StatRow label="Status" value={stats.status} />
+            <StatRow label="Path" value={stats.dbPath} mono />
+            <StatRow label="Documents" value={stats.documentCount?.toLocaleString()} />
+            <StatRow label="Metadata entries" value={stats.metadataCount?.toLocaleString()} />
+            <StatRow label="Checksum index" value={stats.checksumIndexSize?.toLocaleString()} />
+            <StatRow label="Bitmap store" value={stats.bitmapStoreSize?.toLocaleString()} />
+            <StatRow label="Bitmap cache" value={stats.bitmapCacheSize?.toLocaleString()} />
+            <StatRow label="Deleted (pending GC)" value={stats.deletedDocumentsCount?.toLocaleString()} />
+          </section>
+
+          {stats.fts && (
+            <section className="rounded-lg border p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <Activity className="h-4 w-4 text-muted-foreground" />
+                <h2 className="text-sm font-semibold">Full-Text Search (LanceDB)</h2>
+              </div>
+              {'ready' in stats.fts && (
+                <StatRow label="Ready" value={String((stats.fts as any).ready)} />
+              )}
+              {(stats.fts as any).rowCount !== undefined && (
+                <StatRow label="Row count" value={(stats.fts as any).rowCount?.toLocaleString()} />
+              )}
+              {(stats.fts as any).error && (
+                <StatRow label="Error" value={<span className="text-destructive">{(stats.fts as any).error}</span>} />
+              )}
+            </section>
+          )}
+
+          {stats.semantic && (
+            <section className="rounded-lg border p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <Activity className="h-4 w-4 text-muted-foreground" />
+                <h2 className="text-sm font-semibold">Semantic / Vector Search</h2>
+              </div>
+              <StatRow label="Enabled" value={String(stats.semantic.enabled)} />
+              {stats.semantic.enabled && (
+                <>
+                  <StatRow label="Model" value={stats.semantic.model} mono />
+                  <StatRow label="Dimensions" value={stats.semantic.dim} />
+                  <StatRow label="Embeddable schemas" value={stats.semantic.embeddableSchemas?.join(', ')} />
+                  {stats.semantic.vector && (
+                    <>
+                      <StatRow label="Vector index ready" value={String((stats.semantic.vector as any).ready)} />
+                      {(stats.semantic.vector as any).rowCount !== undefined && (
+                        <StatRow label="Vector row count" value={(stats.semantic.vector as any).rowCount?.toLocaleString()} />
+                      )}
+                      {(stats.semantic.vector as any).error && (
+                        <StatRow label="Vector error" value={<span className="text-destructive">{(stats.semantic.vector as any).error}</span>} />
+                      )}
+                    </>
+                  )}
+                  {stats.semantic.embedder && (
+                    <StatRow label="Worker spawned" value={String((stats.semantic.embedder as any).workerSpawned)} />
+                  )}
+                  {stats.semantic.queue !== null && stats.semantic.queue !== undefined && (
+                    <>
+                      <StatRow label="Queue pending" value={stats.semantic.queue.pending?.toLocaleString()} />
+                      <StatRow label="Queue draining" value={String(stats.semantic.queue.draining)} />
+                    </>
+                  )}
+                </>
+              )}
+            </section>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function WorkspaceSettingsPage() {
   const { workspaceName } = useParams<{ workspaceName: string }>()
   const navigate = useNavigate()
@@ -101,6 +220,8 @@ export default function WorkspaceSettingsPage() {
   const [services, setServices] = useState<WorkspaceServicesStatus | null>(null)
   const [dataBackends, setDataBackends] = useState<Record<string, WorkspaceDataBackendStatus>>({})
   const [busyAction, setBusyAction] = useState<string | null>(null)
+  const [dbStats, setDbStats] = useState<WorkspaceDbStats | null>(null)
+  const [isLoadingDbStats, setIsLoadingDbStats] = useState(false)
 
   const workspaceId = workspace?.name || workspaceName || ''
 
@@ -111,6 +232,19 @@ export default function WorkspaceSettingsPage() {
       setShares(result.publicCanvasShares)
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to load shares', variant: 'destructive' })
+    }
+  }
+
+  const loadDbStats = async (id = workspaceId) => {
+    if (!id) return
+    setIsLoadingDbStats(true)
+    try {
+      const stats = await getWorkspaceDbStats(id)
+      setDbStats(stats)
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to load DB stats', variant: 'destructive' })
+    } finally {
+      setIsLoadingDbStats(false)
     }
   }
 
@@ -145,6 +279,12 @@ export default function WorkspaceSettingsPage() {
     }
     load()
   }, [workspaceName])
+
+  useEffect(() => {
+    if (activeTab === 'db' && workspaceId && !dbStats && !isLoadingDbStats) {
+      loadDbStats()
+    }
+  }, [activeTab, workspaceId])
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -276,6 +416,7 @@ export default function WorkspaceSettingsPage() {
         {[
           ['general', 'General'],
           ['data', 'Data Backends'],
+          ['db', 'Database'],
           ['services', 'Services'],
           ['shares', 'Shares / ACL'],
           ['hooks', 'Hooks'],
@@ -450,6 +591,14 @@ export default function WorkspaceSettingsPage() {
             )
           })}
         </div>
+      )}
+
+      {activeTab === 'db' && (
+        <DbStatsTab
+          stats={dbStats}
+          isLoading={isLoadingDbStats}
+          onRefresh={() => loadDbStats()}
+        />
       )}
 
       {activeTab === 'services' && (

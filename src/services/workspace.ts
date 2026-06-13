@@ -1047,3 +1047,31 @@ export async function queryWorkspaceTimeline(
   )
   return res.payload || []
 }
+
+export interface WorkspaceDbStats {
+  dbBackend: string
+  dbPath: string
+  status: string
+  documentCount: number
+  metadataCount: number
+  bitmapCacheSize: number
+  bitmapStoreSize: number
+  checksumIndexSize: number
+  deletedDocumentsCount: number
+  fts?: { ready: boolean; rowCount?: number; error?: string } | Record<string, unknown>
+  semantic?: {
+    enabled: boolean
+    model?: string
+    dim?: number
+    cacheDir?: string
+    embeddableSchemas?: string[]
+    vector?: { ready: boolean; rowCount?: number; error?: string } | Record<string, unknown>
+    embedder?: Record<string, unknown>
+    queue?: { pending: number; draining: boolean } | null
+  }
+}
+
+export async function getWorkspaceDbStats(workspaceId: string): Promise<WorkspaceDbStats> {
+  const res = await api.get<{ payload: WorkspaceDbStats }>(`${API_ROUTES.workspaces}/${workspaceId}/db/stats`)
+  return res.payload
+}
