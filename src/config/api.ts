@@ -63,6 +63,9 @@ export const API_ROUTES = {
   roles: `${API_URL}/roles`,
   roleTemplates: `${API_URL}/role-templates`,
 
+  // Devices (global registry)
+  devices: `${API_URL}/auth/devices`,
+
   // WebSocket
   ws: WS_URL
 }

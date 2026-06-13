@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Copy, Database, ExternalLink, RefreshCw, Server, Trash2, Unlink, Activity } from 'lucide-react'
+import { ArrowLeft, Copy, Database, ExternalLink, RefreshCw, Server, Trash2, Unlink, Activity, Monitor, Link2, Check, X as XIcon, Pencil } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,8 +29,17 @@ import {
   type WorkspacePublicCanvasShare,
   type WorkspaceServicesStatus,
 } from '@/services/workspace'
+import {
+  listDevices,
+  listWorkspaceDevices,
+  linkWorkspaceDevice,
+  unlinkWorkspaceDevice,
+  updateDevice,
+  type Device,
+  type WorkspaceDevice,
+} from '@/services/devices'
 
-type SettingsTab = 'general' | 'data' | 'db' | 'services' | 'shares' | 'hooks'
+type SettingsTab = 'general' | 'data' | 'db' | 'devices' | 'services' | 'shares' | 'hooks'
 type ServiceId = 'dotfiles' | 'git' | 'home' | 'webdav' | 'imap' | 'imapSync'
 
 const DATA_BACKEND_LABELS: Record<string, { title: string; description: string }> = {
@@ -82,6 +91,189 @@ function Toggle({
     >
       <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow transition-transform ${checked ? 'translate-x-4' : 'translate-x-0'}`} />
     </button>
+  )
+}
+
+function DeviceRow({
+  device,
+  linked,
+  busy,
+  onLink,
+  onUnlink,
+  onUpdate,
+}: {
+  device: Device
+  linked: boolean
+  busy: boolean
+  onLink: () => void
+  onUnlink: () => void
+  onUpdate: (patch: { name?: string; description?: string }) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [editName, setEditName] = useState(device.name)
+  const [editDesc, setEditDesc] = useState(device.description ?? '')
+
+  const commitEdit = () => {
+    if (editName.trim() && (editName !== device.name || editDesc !== (device.description ?? ''))) {
+      onUpdate({ name: editName.trim(), description: editDesc.trim() || undefined })
+    }
+    setEditing(false)
+  }
+
+  const cancelEdit = () => {
+    setEditName(device.name)
+    setEditDesc(device.description ?? '')
+    setEditing(false)
+  }
+
+  return (
+    <section className="rounded-lg border p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-3 min-w-0">
+          <Monitor className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+          <div className="min-w-0">
+            {editing ? (
+              <div className="space-y-2">
+                <Input
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  className="h-7 text-sm"
+                  placeholder="Device name"
+                  autoFocus
+                  onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') cancelEdit() }}
+                />
+                <Input
+                  value={editDesc}
+                  onChange={e => setEditDesc(e.target.value)}
+                  className="h-7 text-xs"
+                  placeholder="Description (optional)"
+                  onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') cancelEdit() }}
+                />
+              </div>
+            ) : (
+              <>
+                <div className="text-sm font-medium">{device.name}</div>
+                {device.description && <div className="text-xs text-muted-foreground mt-0.5">{device.description}</div>}
+              </>
+            )}
+            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground font-mono">
+              <span>{device.deviceId}</span>
+              {device.platform && <span>{device.platform}</span>}
+              {device.arch && <span>{device.arch}</span>}
+              {device.type && <span>{device.type}</span>}
+            </div>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {editing ? (
+            <>
+              <Button type="button" variant="outline" size="sm" onClick={commitEdit} disabled={!editName.trim()}>
+                <Check className="h-3.5 w-3.5" />
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={cancelEdit}>
+                <XIcon className="h-3.5 w-3.5" />
+              </Button>
+            </>
+          ) : (
+            <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(true)} title="Edit name/description">
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          {linked ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={onUnlink}
+              className="text-destructive hover:text-destructive"
+              title="Remove from workspace"
+            >
+              <Unlink className="h-3.5 w-3.5" />
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={onLink}
+              title="Link to workspace"
+            >
+              <Link2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          {linked && (
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">linked</span>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function DevicesTab({
+  allDevices,
+  linkedDevices,
+  isLoading,
+  deviceBusy,
+  onRefresh,
+  onLink,
+  onUnlink,
+  onUpdate,
+}: {
+  allDevices: Device[]
+  linkedDevices: WorkspaceDevice[]
+  isLoading: boolean
+  deviceBusy: string | null
+  onRefresh: () => void
+  onLink: (deviceId: string) => void
+  onUnlink: (deviceId: string) => void
+  onUpdate: (deviceId: string, patch: { name?: string; description?: string }) => void
+}) {
+  const linkedIds = new Set(linkedDevices.map(d => d.deviceId))
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <RefreshCw className="h-4 w-4 animate-spin" />
+        Loading devices…
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">
+          {linkedIds.size} of {allDevices.length} registered device{allDevices.length !== 1 ? 's' : ''} linked to this workspace.
+        </p>
+        <Button type="button" variant="outline" size="sm" onClick={onRefresh} disabled={isLoading}>
+          <RefreshCw className="mr-2 h-3.5 w-3.5" />
+          Refresh
+        </Button>
+      </div>
+
+      {allDevices.length === 0 ? (
+        <div className="rounded-md border p-4 text-sm text-muted-foreground">
+          No devices registered. Devices register themselves on first connection via <span className="font-mono">POST /auth/devices/register</span>.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {allDevices.map(device => (
+            <DeviceRow
+              key={device.deviceId}
+              device={device}
+              linked={linkedIds.has(device.deviceId)}
+              busy={deviceBusy === device.deviceId}
+              onLink={() => onLink(device.deviceId)}
+              onUnlink={() => onUnlink(device.deviceId)}
+              onUpdate={(patch) => onUpdate(device.deviceId, patch)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -222,6 +414,10 @@ export default function WorkspaceSettingsPage() {
   const [busyAction, setBusyAction] = useState<string | null>(null)
   const [dbStats, setDbStats] = useState<WorkspaceDbStats | null>(null)
   const [isLoadingDbStats, setIsLoadingDbStats] = useState(false)
+  const [allDevices, setAllDevices] = useState<Device[]>([])
+  const [linkedDevices, setLinkedDevices] = useState<WorkspaceDevice[]>([])
+  const [isLoadingDevices, setIsLoadingDevices] = useState(false)
+  const [deviceBusy, setDeviceBusy] = useState<string | null>(null)
 
   const workspaceId = workspace?.name || workspaceName || ''
 
@@ -245,6 +441,59 @@ export default function WorkspaceSettingsPage() {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to load DB stats', variant: 'destructive' })
     } finally {
       setIsLoadingDbStats(false)
+    }
+  }
+
+  const loadDevices = async (id = workspaceId) => {
+    if (!id) return
+    setIsLoadingDevices(true)
+    try {
+      const [all, linked] = await Promise.all([listDevices(), listWorkspaceDevices(id)])
+      setAllDevices(all)
+      setLinkedDevices(linked)
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to load devices', variant: 'destructive' })
+    } finally {
+      setIsLoadingDevices(false)
+    }
+  }
+
+  const handleLinkDevice = async (deviceId: string) => {
+    setDeviceBusy(deviceId)
+    try {
+      await linkWorkspaceDevice(workspaceId, deviceId)
+      await loadDevices()
+      showToast({ title: 'Linked', description: `Device linked to workspace` })
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to link device', variant: 'destructive' })
+    } finally {
+      setDeviceBusy(null)
+    }
+  }
+
+  const handleUnlinkDevice = async (deviceId: string) => {
+    setDeviceBusy(deviceId)
+    try {
+      await unlinkWorkspaceDevice(workspaceId, deviceId)
+      setLinkedDevices(prev => prev.filter(d => d.deviceId !== deviceId))
+      showToast({ title: 'Unlinked', description: `Device removed from workspace` })
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to unlink device', variant: 'destructive' })
+    } finally {
+      setDeviceBusy(null)
+    }
+  }
+
+  const handleUpdateDevice = async (deviceId: string, patch: { name?: string; description?: string }) => {
+    setDeviceBusy(`edit:${deviceId}`)
+    try {
+      const updated = await updateDevice(deviceId, patch)
+      setAllDevices(prev => prev.map(d => d.deviceId === deviceId ? { ...d, ...updated } : d))
+      showToast({ title: 'Saved', description: 'Device updated' })
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to update device', variant: 'destructive' })
+    } finally {
+      setDeviceBusy(null)
     }
   }
 
@@ -283,6 +532,9 @@ export default function WorkspaceSettingsPage() {
   useEffect(() => {
     if (activeTab === 'db' && workspaceId && !dbStats && !isLoadingDbStats) {
       loadDbStats()
+    }
+    if (activeTab === 'devices' && workspaceId && !isLoadingDevices && allDevices.length === 0) {
+      loadDevices()
     }
   }, [activeTab, workspaceId])
 
@@ -417,6 +669,7 @@ export default function WorkspaceSettingsPage() {
           ['general', 'General'],
           ['data', 'Data Backends'],
           ['db', 'Database'],
+          ['devices', 'Devices'],
           ['services', 'Services'],
           ['shares', 'Shares / ACL'],
           ['hooks', 'Hooks'],
@@ -598,6 +851,19 @@ export default function WorkspaceSettingsPage() {
           stats={dbStats}
           isLoading={isLoadingDbStats}
           onRefresh={() => loadDbStats()}
+        />
+      )}
+
+      {activeTab === 'devices' && (
+        <DevicesTab
+          allDevices={allDevices}
+          linkedDevices={linkedDevices}
+          isLoading={isLoadingDevices}
+          deviceBusy={deviceBusy}
+          onRefresh={() => loadDevices()}
+          onLink={handleLinkDevice}
+          onUnlink={handleUnlinkDevice}
+          onUpdate={handleUpdateDevice}
         />
       )}
 
