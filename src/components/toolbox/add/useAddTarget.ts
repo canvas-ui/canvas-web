@@ -58,7 +58,7 @@ export async function submitDocuments(target: AddTarget, documents: Record<strin
     if (ok) {
       window.dispatchEvent(
         new CustomEvent('workspace:documents:refresh', {
-          detail: { workspaceName: target.workspaceName, path: target.path, treeName: target.treeName },
+          detail: { workspaceName: target.workspaceName, treeName: target.treeName },
         }),
       )
     }

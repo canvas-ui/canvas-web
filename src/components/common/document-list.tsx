@@ -2,6 +2,10 @@ import { Document, TreeNode } from '@/types/workspace'
 import { File, Calendar, Hash, Eye, ExternalLink, Globe, Mail, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil } from 'lucide-react'
 import { LinkToPanel } from '@/components/common/LinkToPanel'
 import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useEditor, EditorContent } from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
+import TiptapLink from '@tiptap/extension-link'
+import { Markdown as TiptapMarkdown } from 'tiptap-markdown'
 import Fuse from 'fuse.js'
 import {
   Table,
@@ -305,123 +309,187 @@ function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
   )
 }
 
+function NoteViewer({ content }: { content: string }) {
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      TiptapLink.configure({ openOnClick: true, autolink: true }),
+      TiptapMarkdown.configure({ html: false, transformPastedText: true }),
+    ],
+    content,
+    editable: false,
+    editorProps: {
+      attributes: { class: 'md-editor-content px-3 py-2 text-sm outline-none' },
+    },
+  })
+
+  useEffect(() => {
+    if (!editor) return
+    const current = editor.storage.markdown?.getMarkdown?.() ?? ''
+    if (content !== current) editor.commands.setContent(content || '', false)
+  }, [content, editor])
+
+  if (!editor) return null
+  return <EditorContent editor={editor} />
+}
+
+type DetailTab = 'content' | 'details' | 'json'
+
 function DocumentDetailModal({ document, isOpen, onClose, workspaceId }: DocumentDetailModalProps) {
-  const [showRawJson, setShowRawJson] = useState(false)
+  const isNote = document?.schema === 'data/abstraction/note'
+  const [activeTab, setActiveTab] = useState<DetailTab>(isNote ? 'content' : 'details')
+
+  useEffect(() => {
+    if (isOpen) setActiveTab(isNote ? 'content' : 'details')
+  }, [isOpen, isNote])
+
   if (!isOpen || !document) return null
 
   const showPreview = workspaceId && isPreviewable(document)
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
+      year: 'numeric', month: 'long', day: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
     })
   }
 
+  const tabs: { id: DetailTab; label: string }[] = [
+    ...(isNote ? [{ id: 'content' as DetailTab, label: 'Note' }] : []),
+    { id: 'details', label: 'Details' },
+    { id: 'json', label: 'JSON' },
+  ]
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-background border rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-6">
+      <div className="bg-background border rounded-lg max-w-4xl w-full max-h-[90vh] flex flex-col">
+        <div className="p-6 pb-0 shrink-0">
+          <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-2xl font-bold">Document Details</h2>
               <p className="text-muted-foreground">ID: {document.id}</p>
             </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => setShowRawJson(v => !v)}>
-                {showRawJson ? 'View Data' : 'View Raw JSON'}
-              </Button>
-              <button onClick={onClose} className="p-2 hover:bg-muted rounded-sm" title="Close">✕</button>
-            </div>
+            <button onClick={onClose} className="p-2 hover:bg-muted rounded-sm" title="Close">✕</button>
           </div>
 
-          <div className="space-y-6">
-            {showPreview && workspaceId && (
+          <div className="flex gap-1 border-b">
+            {tabs.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setActiveTab(t.id)}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === t.id
+                    ? 'border-primary text-foreground'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="overflow-y-auto flex-1 p-6 pt-4">
+          {activeTab === 'content' && isNote && (
+            <div className="space-y-4">
+              {document.data?.title && (
+                <h3 className="text-lg font-semibold">{document.data.title}</h3>
+              )}
+              <div className="rounded-md border border-input bg-transparent">
+                <NoteViewer content={document.data?.content ?? ''} />
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'details' && (
+            <div className="space-y-6">
+              {showPreview && workspaceId && (
+                <div>
+                  <h3 className="font-semibold mb-3">Preview</h3>
+                  <FilePreview workspaceId={workspaceId} document={document} />
+                </div>
+              )}
               <div>
-                <h3 className="font-semibold mb-3">Preview</h3>
-                <FilePreview workspaceId={workspaceId} document={document} />
+                <h3 className="font-semibold mb-3">Basic Information</h3>
+                <div className="grid gap-3 text-sm">
+                  <div><span className="font-medium">Schema:</span><span className="ml-2 font-mono">{document.schema}</span></div>
+                  <div><span className="font-medium">Schema Version:</span><span className="ml-2">{document.schemaVersion}</span></div>
+                  <div><span className="font-medium">Version:</span><span className="ml-2">{document.versionNumber} / {document.latestVersion}</span></div>
+                  <div><span className="font-medium">Created:</span><span className="ml-2">{formatDate(document.createdAt)}</span></div>
+                  <div><span className="font-medium">Updated:</span><span className="ml-2">{formatDate(document.updatedAt)}</span></div>
+                </div>
               </div>
-            )}
-            <div>
-              <h3 className="font-semibold mb-3">Basic Information</h3>
-              <div className="grid gap-3 text-sm">
-                <div><span className="font-medium">Schema:</span><span className="ml-2 font-mono">{document.schema}</span></div>
-                <div><span className="font-medium">Schema Version:</span><span className="ml-2">{document.schemaVersion}</span></div>
-                <div><span className="font-medium">Version:</span><span className="ml-2">{document.versionNumber} / {document.latestVersion}</span></div>
-                <div><span className="font-medium">Created:</span><span className="ml-2">{formatDate(document.createdAt)}</span></div>
-                <div><span className="font-medium">Updated:</span><span className="ml-2">{formatDate(document.updatedAt)}</span></div>
-              </div>
-            </div>
 
-            <div>
-              <h3 className="font-semibold mb-3">{showRawJson ? 'Raw Document JSON' : 'Document Data'}</h3>
-              <pre className="bg-muted p-4 rounded-lg text-sm overflow-x-auto">{JSON.stringify(showRawJson ? document : document.data, null, 2)}</pre>
-            </div>
-
-            <div>
-              <h3 className="font-semibold mb-3">Metadata</h3>
-              <div className="grid gap-3 text-sm">
-                <div><span className="font-medium">Content Type:</span><span className="ml-2">{document.metadata?.contentType ?? '—'}</span></div>
-                <div><span className="font-medium">Content Encoding:</span><span className="ml-2">{document.metadata?.contentEncoding ?? '—'}</span></div>
-                {(() => {
-                  const raw = (document as any).locations ?? []
-                  if (!Array.isArray(raw) || raw.length === 0) return null
-                  const items: string[] = raw.map((l: any) => typeof l === 'string' ? l : (l?.url ?? '')).filter(Boolean)
-                  if (items.length === 0) return null
-                  return (
-                    <div>
-                      <span className="font-medium">Locations:</span>
-                      <div className="ml-2 mt-1">
-                        {items.map((path, index) => (<div key={index} className="font-mono text-xs break-all">{path}</div>))}
-                      </div>
-                    </div>
-                  )
-                })()}
-              </div>
-            </div>
-
-            {Array.isArray(document.checksumArray) && document.checksumArray.length > 0 && (
               <div>
-                <h3 className="font-semibold mb-3">Checksums</h3>
-                <div className="space-y-2">
-                  {document.checksumArray.map((checksum, index) => {
-                    const [algo, hash] = checksum.split('/')
+                <h3 className="font-semibold mb-3">Document Data</h3>
+                <pre className="bg-muted p-4 rounded-lg text-sm overflow-x-auto">{JSON.stringify(document.data, null, 2)}</pre>
+              </div>
+
+              <div>
+                <h3 className="font-semibold mb-3">Metadata</h3>
+                <div className="grid gap-3 text-sm">
+                  <div><span className="font-medium">Content Type:</span><span className="ml-2">{document.metadata?.contentType ?? '—'}</span></div>
+                  <div><span className="font-medium">Content Encoding:</span><span className="ml-2">{document.metadata?.contentEncoding ?? '—'}</span></div>
+                  {(() => {
+                    const raw = (document as any).locations ?? []
+                    if (!Array.isArray(raw) || raw.length === 0) return null
+                    const items: string[] = raw.map((l: any) => typeof l === 'string' ? l : (l?.url ?? '')).filter(Boolean)
+                    if (items.length === 0) return null
                     return (
-                      <div key={index} className="flex items-center gap-2 text-sm font-mono">
-                        <span className="font-medium">{algo}:</span>
-                        <span className="text-muted-foreground">{hash}</span>
+                      <div>
+                        <span className="font-medium">Locations:</span>
+                        <div className="ml-2 mt-1">
+                          {items.map((path, index) => (<div key={index} className="font-mono text-xs break-all">{path}</div>))}
+                        </div>
                       </div>
                     )
-                  })}
+                  })()}
                 </div>
               </div>
-            )}
 
-            {document.indexOptions && (
-              <div>
-                <h3 className="font-semibold mb-3">Index Options</h3>
-                <div className="space-y-3 text-sm">
-                  <div><span className="font-medium">Primary Checksum Algorithm:</span><span className="ml-2">{document.indexOptions.primaryChecksumAlgorithm ?? '—'}</span></div>
-                  <div>
-                    <span className="font-medium">FTS Search Fields:</span>
-                    <div className="ml-2 mt-1">{(document.indexOptions.ftsSearchFields ?? []).map((field, index) => (<span key={index} className="inline-block bg-muted px-2 py-1 rounded text-xs mr-2 mb-1">{field}</span>))}</div>
-                  </div>
-                  <div>
-                    <span className="font-medium">Vector Embedding Fields:</span>
-                    <div className="ml-2 mt-1">{(document.indexOptions.vectorEmbeddingFields ?? []).map((field, index) => (<span key={index} className="inline-block bg-muted px-2 py-1 rounded text-xs mr-2 mb-1">{field}</span>))}</div>
+              {Array.isArray(document.checksumArray) && document.checksumArray.length > 0 && (
+                <div>
+                  <h3 className="font-semibold mb-3">Checksums</h3>
+                  <div className="space-y-2">
+                    {document.checksumArray.map((checksum, index) => {
+                      const [algo, hash] = checksum.split('/')
+                      return (
+                        <div key={index} className="flex items-center gap-2 text-sm font-mono">
+                          <span className="font-medium">{algo}:</span>
+                          <span className="text-muted-foreground">{hash}</span>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
 
-          <div className="mt-8 pt-4 border-t flex justify-end">
-            <Button onClick={onClose}>Close</Button>
-          </div>
+              {document.indexOptions && (
+                <div>
+                  <h3 className="font-semibold mb-3">Index Options</h3>
+                  <div className="space-y-3 text-sm">
+                    <div><span className="font-medium">Primary Checksum Algorithm:</span><span className="ml-2">{document.indexOptions.primaryChecksumAlgorithm ?? '—'}</span></div>
+                    <div>
+                      <span className="font-medium">FTS Search Fields:</span>
+                      <div className="ml-2 mt-1">{(document.indexOptions.ftsSearchFields ?? []).map((field, index) => (<span key={index} className="inline-block bg-muted px-2 py-1 rounded text-xs mr-2 mb-1">{field}</span>))}</div>
+                    </div>
+                    <div>
+                      <span className="font-medium">Vector Embedding Fields:</span>
+                      <div className="ml-2 mt-1">{(document.indexOptions.vectorEmbeddingFields ?? []).map((field, index) => (<span key={index} className="inline-block bg-muted px-2 py-1 rounded text-xs mr-2 mb-1">{field}</span>))}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'json' && (
+            <pre className="bg-muted p-4 rounded-lg text-sm overflow-x-auto">{JSON.stringify(document, null, 2)}</pre>
+          )}
+        </div>
+
+        <div className="shrink-0 px-6 py-4 border-t flex justify-end">
+          <Button onClick={onClose}>Close</Button>
         </div>
       </div>
     </div>
