@@ -421,9 +421,13 @@ export async function updateWorkspacePath(workspaceId: string, path: string, upd
   }
 }
 
-export async function removeWorkspacePath(workspaceId: string, path: string, recursive = false, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<boolean> {
+// `purge` only has an effect on the /.incoming subtree of a directory tree:
+// it deletes the documents under the folder from the index ("Remove and purge").
+// Elsewhere (and by default) the documents are kept — only the folder is dropped.
+export async function removeWorkspacePath(workspaceId: string, path: string, recursive = false, treeName = DEFAULT_WORKSPACE_TREE_NAME, purge = false): Promise<boolean> {
   try {
     const params = new URLSearchParams({ recursive: recursive.toString() });
+    if (purge) params.set('purge', 'true');
     await api.delete<{ payload: unknown; message: string; status: string; statusCode: number }>(
       `${getWorkspaceTreePathRoute(workspaceId, treeName, path)}?${params.toString()}`
     );

@@ -53,10 +53,10 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     return result
   }, [contextId, workspaceId, wsTree, refresh])
 
-  const onRemovePath = useCallback(async (path: string, recursive = false): Promise<boolean> => {
+  const onRemovePath = useCallback(async (path: string, recursive = false, purge = false): Promise<boolean> => {
     let result: boolean
     if (contextId) result = await removeContextPath(contextId, path, recursive)
-    else if (workspaceId) result = await removeWorkspacePath(workspaceId, path, recursive, wsTree)
+    else if (workspaceId) result = await removeWorkspacePath(workspaceId, path, recursive, wsTree, purge)
     else return false
     refresh()
     return result
