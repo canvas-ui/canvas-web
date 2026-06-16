@@ -2,10 +2,6 @@ import { Document, TreeNode } from '@/types/workspace'
 import { File, Calendar, Hash, Eye, ExternalLink, Globe, Mail, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil } from 'lucide-react'
 import { LinkToPanel } from '@/components/common/LinkToPanel'
 import { useState, useCallback, useMemo, useEffect } from 'react'
-import { useEditor, EditorContent } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
-import TiptapLink from '@tiptap/extension-link'
-import { Markdown as TiptapMarkdown } from 'tiptap-markdown'
 import Fuse from 'fuse.js'
 import {
   Table,
@@ -21,7 +17,13 @@ import { Button } from '@/components/ui/button'
 import { createPortal } from 'react-dom'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { FilePreview, isPreviewable } from '@/components/common/file-preview'
-import { useToolbox } from '@/components/toolbox/toolbox-context'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { LazyMarkdownEditor, LazyNoteViewer } from '@/components/common/lazy-editor'
+import { TagInput } from '@/components/toolbox/add/TagInput'
+import { tagsToFeatures } from '@/components/toolbox/add/tags'
+import { updateWorkspaceDocument } from '@/services/workspace'
+import { useToastHelpers } from '@/hooks/useToastHelpers'
 
 interface DocumentListProps {
   documents: Document[]
@@ -97,6 +99,7 @@ interface DocumentDetailModalProps {
   isOpen: boolean
   onClose: () => void
   workspaceId?: string
+  initialTab?: DetailTab
 }
 
 interface ExportModalProps {
@@ -309,39 +312,123 @@ function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
   )
 }
 
-function NoteViewer({ content }: { content: string }) {
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      TiptapLink.configure({ openOnClick: true, autolink: true }),
-      TiptapMarkdown.configure({ html: false, transformPastedText: true }),
-    ],
-    content,
-    editable: false,
-    editorProps: {
-      attributes: { class: 'md-editor-content px-3 py-2 text-sm outline-none' },
-    },
-  })
+const NOTE_SCHEMA = 'data/abstraction/note'
+const LINK_SCHEMA = 'data/abstraction/link'
+const TAB_SCHEMA = 'data/abstraction/tab'
 
-  useEffect(() => {
-    if (!editor) return
-    const current = editor.storage.markdown?.getMarkdown?.() ?? ''
-    if (content !== current) editor.commands.setContent(content || '', false)
-  }, [content, editor])
-
-  if (!editor) return null
-  return <EditorContent editor={editor} />
+function isEditableSchema(schema: string): boolean {
+  return schema === NOTE_SCHEMA || schema === LINK_SCHEMA || schema === TAB_SCHEMA
 }
 
-type DetailTab = 'content' | 'details' | 'json'
+function featuresToTags(features: string[] | undefined): string[] {
+  return (features || []).filter(f => f.startsWith('tag/')).map(f => f.slice(4))
+}
 
-function DocumentDetailModal({ document, isOpen, onClose, workspaceId }: DocumentDetailModalProps) {
+// Per-schema field mapping for the url/title pair. Legacy links store these as
+// uri/label; tabs use url/title. Notes have no url.
+function urlTitleKeys(schema: string): { urlKey: string | null; titleKey: string } {
+  if (schema === LINK_SCHEMA) return { urlKey: 'uri', titleKey: 'label' }
+  if (schema === TAB_SCHEMA) return { urlKey: 'url', titleKey: 'title' }
+  return { urlKey: null, titleKey: 'title' }
+}
+
+// Inline edit form rendered as the "Edit" tab inside the document detail modal.
+// Editing a link/tab url upserts the document (checksum recalculated) — accepted.
+function DocumentEditForm({ document: doc, workspaceId, onClose }: { document: Document; workspaceId?: string; onClose: () => void }) {
+  const { showSuccessToast, showErrorToast } = useToastHelpers()
+  const isNote = doc.schema === NOTE_SCHEMA
+  const { urlKey, titleKey } = urlTitleKeys(doc.schema)
+
+  const [url, setUrl] = useState<string>(urlKey ? String(doc.data?.[urlKey] ?? '') : '')
+  const [title, setTitle] = useState<string>(String(doc.data?.[titleKey] ?? ''))
+  const [content, setContent] = useState<string>(String(doc.data?.content ?? ''))
+  const [tags, setTags] = useState<string[]>(
+    featuresToTags((doc.metadata as any)?.features).length
+      ? featuresToTags((doc.metadata as any)?.features)
+      : ((doc.data?.tags as string[] | undefined) ?? [])
+  )
+  const [saving, setSaving] = useState(false)
+
+  const urlValid = !urlKey || (() => { try { new URL(url.trim()); return true } catch { return false } })()
+  const canSave = !saving && (isNote ? content.trim().length > 0 : urlValid)
+
+  const handleSave = async () => {
+    if (!workspaceId) { showErrorToast('Missing workspace'); return }
+    setSaving(true)
+    try {
+      const cleanTags = tags.map(t => t.trim()).filter(Boolean)
+      let data: Record<string, any>
+      if (isNote) {
+        data = { ...(title.trim() ? { title: title.trim() } : {}), content }
+      } else {
+        data = { ...doc.data }
+        if (urlKey) data[urlKey] = url.trim()
+        if (title.trim()) data[titleKey] = title.trim(); else delete data[titleKey]
+        data.tags = cleanTags
+      }
+      await updateWorkspaceDocument(workspaceId, {
+        id: doc.id,
+        schema: doc.schema,
+        schemaVersion: doc.schemaVersion,
+        data,
+        metadata: { features: tagsToFeatures(tags) },
+      })
+      showSuccessToast('Document updated')
+      window.dispatchEvent(new CustomEvent('workspace:documents:refresh'))
+      onClose()
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update document')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {urlKey && (
+        <div className="space-y-1.5">
+          <Label htmlFor="edit-url">URL</Label>
+          <Input id="edit-url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com" className="font-mono text-xs" />
+          {url.trim() && !urlValid && (<p className="text-xs text-destructive">Enter a valid URL, e.g. https://example.com</p>)}
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        <Label htmlFor="edit-title">Title</Label>
+        <Input id="edit-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={isNote ? "Optional — defaults to today's date" : 'Optional display title'} />
+      </div>
+
+      {isNote && (
+        <div className="space-y-1.5">
+          <Label>Body</Label>
+          <LazyMarkdownEditor value={content} onChange={setContent} placeholder="Write your note…" />
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        <Label>Tags</Label>
+        <TagInput tags={tags} onChange={setTags} />
+      </div>
+
+      <div className="flex justify-end gap-2 pt-2">
+        <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>Cancel</Button>
+        <Button size="sm" onClick={handleSave} disabled={!canSave}>{saving ? 'Saving…' : 'Save changes'}</Button>
+      </div>
+    </div>
+  )
+}
+
+type DetailTab = 'content' | 'details' | 'json' | 'edit'
+
+function DocumentDetailModal({ document, isOpen, onClose, workspaceId, initialTab }: DocumentDetailModalProps) {
   const isNote = document?.schema === 'data/abstraction/note'
-  const [activeTab, setActiveTab] = useState<DetailTab>(isNote ? 'content' : 'details')
+  const editable = !!document && isEditableSchema(document.schema)
+  const defaultTab: DetailTab = initialTab ?? (isNote ? 'content' : 'details')
+  const [activeTab, setActiveTab] = useState<DetailTab>(defaultTab)
 
   useEffect(() => {
-    if (isOpen) setActiveTab(isNote ? 'content' : 'details')
-  }, [isOpen, isNote])
+    if (isOpen) setActiveTab(initialTab ?? (isNote ? 'content' : 'details'))
+  }, [isOpen, isNote, initialTab])
 
   if (!isOpen || !document) return null
 
@@ -356,6 +443,7 @@ function DocumentDetailModal({ document, isOpen, onClose, workspaceId }: Documen
 
   const tabs: { id: DetailTab; label: string }[] = [
     ...(isNote ? [{ id: 'content' as DetailTab, label: 'Note' }] : []),
+    ...(editable ? [{ id: 'edit' as DetailTab, label: 'Edit' }] : []),
     { id: 'details', label: 'Details' },
     { id: 'json', label: 'JSON' },
   ]
@@ -396,9 +484,13 @@ function DocumentDetailModal({ document, isOpen, onClose, workspaceId }: Documen
                 <h3 className="text-lg font-semibold">{document.data.title}</h3>
               )}
               <div className="rounded-md border border-input bg-transparent">
-                <NoteViewer content={document.data?.content ?? ''} />
+                <LazyNoteViewer content={document.data?.content ?? ''} />
               </div>
             </div>
+          )}
+
+          {activeTab === 'edit' && editable && (
+            <DocumentEditForm document={document} workspaceId={workspaceId} onClose={onClose} />
           )}
 
           {activeTab === 'details' && (
@@ -498,8 +590,8 @@ function DocumentDetailModal({ document, isOpen, onClose, workspaceId }: Documen
 
 function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemoveDocument, onDeleteDocument, onLinkDocument, onRightClick, onDragStart }: DocumentTableRowProps) {
   const [showDetailModal, setShowDetailModal] = useState(false)
-  const { openEdit } = useToolbox()
-  const isEditable = document.schema === 'data/abstraction/note' || document.schema === 'data/abstraction/link'
+  const [detailTab, setDetailTab] = useState<DetailTab | undefined>(undefined)
+  const isEditable = isEditableSchema(document.schema)
 
   const isTabDocument = document.schema === 'data/abstraction/tab'
   const tabUrl = isTabDocument ? document.data.url : null
@@ -553,8 +645,8 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
     onRightClick?.(e, document.id)
   }
 
-  const handleViewDetails = (e: React.MouseEvent) => { e.stopPropagation(); setShowDetailModal(true) }
-  const handleEditDocument = (e: React.MouseEvent) => { e.stopPropagation(); openEdit(document, workspaceId ?? '') }
+  const handleViewDetails = (e: React.MouseEvent) => { e.stopPropagation(); setDetailTab(undefined); setShowDetailModal(true) }
+  const handleEditDocument = (e: React.MouseEvent) => { e.stopPropagation(); setDetailTab('edit'); setShowDetailModal(true) }
   const handleRemoveDocument = (e: React.MouseEvent) => { e.stopPropagation(); onRemoveDocument?.(document.id) }
   const handleDeleteDocument = (e: React.MouseEvent) => { e.stopPropagation(); onDeleteDocument?.(document.id) }
 
@@ -597,16 +689,16 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
           </div>
         </TableCell>
       </TableRow>
-      <DocumentDetailModal document={document} isOpen={showDetailModal} onClose={() => setShowDetailModal(false)} workspaceId={workspaceId} />
+      <DocumentDetailModal document={document} isOpen={showDetailModal} onClose={() => setShowDetailModal(false)} workspaceId={workspaceId} initialTab={detailTab} />
     </>
   )
 }
 
 function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocument, onDeleteDocument, onLinkDocument, onRightClick, onDragStart }: DocumentRowProps) {
   const [showDetailModal, setShowDetailModal] = useState(false)
-  const { openEdit } = useToolbox()
+  const [detailTab, setDetailTab] = useState<DetailTab | undefined>(undefined)
   const isTabDocument = document.schema === 'data/abstraction/tab'
-  const isEditable = document.schema === 'data/abstraction/note' || document.schema === 'data/abstraction/link'
+  const isEditable = isEditableSchema(document.schema)
   const tabUrl = isTabDocument ? document.data.url : null
   const display = getDocumentDisplayInfo(document)
 
@@ -640,8 +732,8 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
   }
 
   const handleRightClick = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); if (onSelect && !isSelected) { onSelect(document.id, true, false) } onRightClick?.(e, document.id) }
-  const handleViewDetails = (e: React.MouseEvent) => { e.stopPropagation(); setShowDetailModal(true) }
-  const handleEditDocument = (e: React.MouseEvent) => { e.stopPropagation(); openEdit(document, workspaceId ?? '') }
+  const handleViewDetails = (e: React.MouseEvent) => { e.stopPropagation(); setDetailTab(undefined); setShowDetailModal(true) }
+  const handleEditDocument = (e: React.MouseEvent) => { e.stopPropagation(); setDetailTab('edit'); setShowDetailModal(true) }
   const handleRemoveDocument = (e: React.MouseEvent) => { e.stopPropagation(); onRemoveDocument?.(document.id) }
   const handleDeleteDocument = (e: React.MouseEvent) => { e.stopPropagation(); onDeleteDocument?.(document.id) }
 
@@ -684,16 +776,16 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
           </div>
         </div>
       </div>
-      <DocumentDetailModal document={document} isOpen={showDetailModal} onClose={() => setShowDetailModal(false)} workspaceId={workspaceId} />
+      <DocumentDetailModal document={document} isOpen={showDetailModal} onClose={() => setShowDetailModal(false)} workspaceId={workspaceId} initialTab={detailTab} />
     </>
   )
 }
 
 export function DocumentList({ documents, isLoading, contextPath, treeName, workspaceId, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, onSelectionChange, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQuery, onBackendSearch, canSaveChanges = false, isSavingChanges = false, onSaveChanges, linkTree }: DocumentListProps) {
-  const { openEdit } = useToolbox()
   const [selectedDocuments, setSelectedDocuments] = useState<Set<number>>(new Set())
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; documentIds: number[] } | null>(null)
   const [linkPanelIds, setLinkPanelIds] = useState<number[] | null>(null)
+  const [detailModal, setDetailModal] = useState<{ document: Document; tab?: DetailTab } | null>(null)
   const canLink = Boolean(linkTree && onPasteDocuments)
   const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [showExportModal, setShowExportModal] = useState(false)
@@ -862,7 +954,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
       case 'edit':
         if (documentIds.length === 1) {
           const doc = documents.find(d => d.id === documentIds[0])
-          if (doc) { openEdit(doc, workspaceId ?? ''); setContextMenu(null); return }
+          if (doc) { setDetailModal({ document: doc, tab: 'edit' }); setContextMenu(null); return }
         }
         break
       case 'copy': onCopyDocuments?.(documentIds); break
@@ -873,12 +965,8 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
       case 'destroy': documentIds.length === 1 ? onDestroyDocument?.(documentIds[0]) : onDestroyDocuments?.(documentIds); break
       case 'view-details':
         if (documentIds.length === 1) {
-          const document = documents.find(doc => doc.id === documentIds[0]);
-          if (document) {
-            // Find the document row and trigger the detail modal
-            const detailEvent = new CustomEvent('show-document-detail', { detail: { document } });
-            window.dispatchEvent(detailEvent);
-          }
+          const doc = documents.find(d => d.id === documentIds[0]);
+          if (doc) { setDetailModal({ document: doc }); setContextMenu(null); return }
         }
         break;
       case 'open-url':
@@ -918,7 +1006,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     }
     setContextMenu(null)
     setSelectedDocuments(new Set())
-  }, [onCopyDocuments, onCutDocuments, onRemoveDocument, onRemoveDocuments, onDeleteDocument, onDeleteDocuments, onDestroyDocument, onDestroyDocuments, documents, openEdit, workspaceId])
+  }, [onCopyDocuments, onCutDocuments, onRemoveDocument, onRemoveDocuments, onDeleteDocument, onDeleteDocuments, onDestroyDocument, onDestroyDocuments, documents, workspaceId])
 
   const handleEmptyAreaRightClick = useCallback((event: React.MouseEvent) => {
     // Show context menu if there are documents to paste or import functionality is available
@@ -1511,6 +1599,14 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
           onClose={() => setLinkPanelIds(null)}
         />
       )}
+
+      <DocumentDetailModal
+        document={detailModal?.document ?? null}
+        isOpen={!!detailModal}
+        onClose={() => setDetailModal(null)}
+        workspaceId={workspaceId}
+        initialTab={detailModal?.tab}
+      />
     </div>
   )
 }

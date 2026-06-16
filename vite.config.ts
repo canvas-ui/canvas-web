@@ -23,6 +23,8 @@ export default defineConfig({
           if (!id.includes('node_modules')) return
           if (/[/\\]react(-dom|-router-dom)?[/\\]/.test(id)) return 'react'
           if (id.includes('lucide-react') || id.includes('@radix-ui')) return 'ui'
+          if (id.includes('@iconify')) return 'icons'
+          if (id.includes('fuse.js')) return 'search'
           if (id.includes('socket.io-client')) return 'socket'
           if (['class-variance-authority', 'clsx', 'tailwind-merge', 'jwt-decode'].some((pkg) => id.includes(pkg))) return 'utils'
         },

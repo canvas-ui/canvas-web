@@ -8,37 +8,41 @@ import { TagInput } from './TagInput'
 import { tagsToFeatures } from './tags'
 import { useAddTarget, submitDocuments, describeTarget } from './useAddTarget'
 
-const LINK_SCHEMA = 'data/abstraction/link'
-const LINK_SCHEMA_VERSION = '1.0'
-// Mirror of the server-side scheme check in schemas/abstractions/Link.js
-const URI_SCHEME_REGEX = /^[a-zA-Z][a-zA-Z0-9+.-]*:/
+// Links are stored as tabs for now (schema unification pending a larger
+// refactor — Link/Tab share the same shape). Editable fields: url + title.
+const TAB_SCHEMA = 'data/abstraction/tab'
+const TAB_SCHEMA_VERSION = '2.0'
+
+function isValidUrl(value: string): boolean {
+  try { new URL(value); return true } catch { return false }
+}
 
 export function LinkForm() {
   const { closeAdd } = useToolbox()
   const target = useAddTarget()
   const { showSuccessToast, showErrorToast } = useToastHelpers()
 
-  const [uri, setUri] = useState('')
-  const [label, setLabel] = useState('')
+  const [url, setUrl] = useState('')
+  const [title, setTitle] = useState('')
   const [tags, setTags] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
 
-  const trimmedUri = uri.trim()
-  const uriValid = URI_SCHEME_REGEX.test(trimmedUri)
-  const showUriError = trimmedUri.length > 0 && !uriValid
-  const canSave = !!target && !saving && uriValid
+  const trimmedUrl = url.trim()
+  const urlValid = isValidUrl(trimmedUrl)
+  const showUrlError = trimmedUrl.length > 0 && !urlValid
+  const canSave = !!target && !saving && urlValid
 
   const handleSave = async () => {
-    if (!target || !uriValid) return
+    if (!target || !urlValid) return
     setSaving(true)
     try {
       const cleanTags = tags.map((t) => t.trim()).filter(Boolean)
       const doc = {
-        schema: LINK_SCHEMA,
-        schemaVersion: LINK_SCHEMA_VERSION,
+        schema: TAB_SCHEMA,
+        schemaVersion: TAB_SCHEMA_VERSION,
         data: {
-          uri: trimmedUri,
-          ...(label.trim() ? { label: label.trim() } : {}),
+          url: trimmedUrl,
+          ...(title.trim() ? { title: title.trim() } : {}),
           ...(cleanTags.length ? { tags: cleanTags } : {}),
         },
         metadata: { features: tagsToFeatures(tags) },
@@ -56,26 +60,26 @@ export function LinkForm() {
   return (
     <div className="flex flex-col gap-4 p-4">
       <div className="space-y-1.5">
-        <Label htmlFor="link-uri">URL</Label>
+        <Label htmlFor="link-url">URL</Label>
         <Input
-          id="link-uri"
-          value={uri}
-          onChange={(e) => setUri(e.target.value)}
+          id="link-url"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
           placeholder="https://example.com"
           autoFocus
         />
-        {showUriError && (
-          <p className="text-xs text-destructive">URL must include a scheme, e.g. https://</p>
+        {showUrlError && (
+          <p className="text-xs text-destructive">Enter a valid URL, e.g. https://example.com</p>
         )}
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="link-label">Label</Label>
+        <Label htmlFor="link-title">Title</Label>
         <Input
-          id="link-label"
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          placeholder="Optional display name"
+          id="link-title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Optional display title"
         />
       </div>
 
