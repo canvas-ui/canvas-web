@@ -324,6 +324,13 @@ function featuresToTags(features: string[] | undefined): string[] {
   return (features || []).filter(f => f.startsWith('tag/')).map(f => f.slice(4))
 }
 
+// Browser-openable URL for a tab/link document, else null.
+function getOpenableUrl(doc: Document): string | null {
+  if (doc.schema === TAB_SCHEMA) return String(doc.data?.url || '').trim() || null
+  if (doc.schema === LINK_SCHEMA) return String(doc.data?.uri || '').trim() || null
+  return null
+}
+
 // Per-schema field mapping for the url/title pair. Legacy links store these as
 // uri/label; tabs use url/title. Notes have no url.
 function urlTitleKeys(schema: string): { urlKey: string | null; titleKey: string } {
@@ -787,6 +794,23 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   const [linkPanelIds, setLinkPanelIds] = useState<number[] | null>(null)
   const [detailModal, setDetailModal] = useState<{ document: Document; tab?: DetailTab } | null>(null)
   const canLink = Boolean(linkTree && onPasteDocuments)
+
+  // URLs to open when every selected doc is a browser-openable tab/link.
+  const selectedOpenableUrls = useMemo(() => {
+    if (selectedDocuments.size === 0) return []
+    const urls: string[] = []
+    for (const doc of documents) {
+      if (!selectedDocuments.has(doc.id)) continue
+      const url = getOpenableUrl(doc)
+      if (!url) return []
+      urls.push(url)
+    }
+    return urls
+  }, [documents, selectedDocuments])
+
+  const openAllSelected = useCallback(() => {
+    for (const url of selectedOpenableUrls) window.open(url, '_blank', 'noopener,noreferrer')
+  }, [selectedOpenableUrls])
   const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [showExportModal, setShowExportModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
@@ -1068,13 +1092,13 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
       onDrop={handleDrop}
     >
       <div className="border-b pb-3 mb-4 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
             <h3 className="font-semibold text-sm text-muted-foreground">Documents</h3>
-            <p className="text-xs text-muted-foreground mt-1">Context: <span className="font-mono">{contextPath}</span>{activeContextUrl && currentContextUrl && activeContextUrl !== currentContextUrl && (<span className="text-orange-600 ml-2">(not yet active)</span>)}</p>
+            <p className="text-xs text-muted-foreground mt-1 break-all">Context: <span className="font-mono">{contextPath}</span>{activeContextUrl && currentContextUrl && activeContextUrl !== currentContextUrl && (<span className="text-orange-600 ml-2">(not yet active)</span>)}</p>
             {selectedDocuments.size > 0 && (<p className="text-xs text-blue-600 mt-1">{selectedDocuments.size} document{selectedDocuments.size !== 1 ? 's' : ''} selected</p>)}
           </div>
-          <div className="text-right">
+          <div className="shrink-0 sm:text-right">
             <p className="text-sm font-medium">{searchQuery ? `${filteredDocuments.length} of ${documents.length}` : `${documents.length}`} documents</p>
             {totalCount > documents.length && (<p className="text-xs text-muted-foreground">{totalCount} total (showing first {documents.length})</p>)}
           </div>
@@ -1258,6 +1282,19 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
 
             {selectedDocuments.size > 0 && (
               <>
+                {selectedOpenableUrls.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={openAllSelected}
+                    className="flex items-center gap-2"
+                    title="Open all selected links in new browser tabs"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Open all in browser ({selectedOpenableUrls.length})
+                  </Button>
+                )}
+
                 <Button
                   variant="outline"
                   size="sm"
