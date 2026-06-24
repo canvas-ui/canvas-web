@@ -180,7 +180,7 @@ export default function WorkspaceDetailPage() {
   }, [workspaceName]);
 
   // Fetch documents when path, tree, pagination, or workspace status changes
-  const fetchDocuments = useCallback(async () => {
+  const fetchDocuments = useCallback(async (opts?: { silent?: boolean }) => {
     if (!workspaceName) return;
     const cacheKey = documentKey(workspaceName, selectedTreeName, selectedPath, currentPage, pageSize, serverSearchQuery || '', tbFiltersKey, (isLayerView && selectedLayerId) ? selectedLayerId : '');
     const cached = documentCache.get(cacheKey);
@@ -189,7 +189,9 @@ export default function WorkspaceDetailPage() {
       setDocumentsTotalCount(cached.totalCount);
       return;
     }
-    setIsLoadingDocuments(true);
+    // Background refreshes (socket events, post-mutation reconcile) update the
+    // list in place. Skipping the loading spinner keeps the list from blinking.
+    if (!opts?.silent) setIsLoadingDocuments(true);
     try {
       let response;
       if (isLayerView && selectedLayerId) {
@@ -226,7 +228,7 @@ export default function WorkspaceDetailPage() {
       setDocuments([]);
       setDocumentsTotalCount(0);
     } finally {
-      setIsLoadingDocuments(false);
+      if (!opts?.silent) setIsLoadingDocuments(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceName, selectedPath, selectedTreeName, selectedLayerId, isLayerView, currentPage, pageSize, workspace?.status, serverSearchQuery, tbFiltersKey]);
@@ -253,7 +255,7 @@ export default function WorkspaceDetailPage() {
       if (detail?.treeName && detail.treeName !== selectedTreeName) return;
       if (detail?.path && detail.path !== selectedPath) return;
       if (workspaceName) invalidateDocumentCache(workspaceName, selectedTreeName, selectedPath);
-      fetchDocuments();
+      fetchDocuments({ silent: true });
     };
 
     window.addEventListener('workspace:documents:refresh', onDocumentsRefresh);
@@ -277,7 +279,7 @@ export default function WorkspaceDetailPage() {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
         if (workspaceName) invalidateDocumentCache(workspaceName, selectedTreeName, selectedPath);
-        fetchDocuments();
+        fetchDocuments({ silent: true });
       }, 200);
     };
 

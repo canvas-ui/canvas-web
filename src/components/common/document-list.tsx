@@ -324,13 +324,6 @@ function featuresToTags(features: string[] | undefined): string[] {
   return (features || []).filter(f => f.startsWith('tag/')).map(f => f.slice(4))
 }
 
-// Browser-openable URL for a tab/link document, else null.
-function getOpenableUrl(doc: Document): string | null {
-  if (doc.schema === TAB_SCHEMA) return String(doc.data?.url || '').trim() || null
-  if (doc.schema === LINK_SCHEMA) return String(doc.data?.uri || '').trim() || null
-  return null
-}
-
 // Per-schema field mapping for the url/title pair. Legacy links store these as
 // uri/label; tabs use url/title. Notes have no url.
 function urlTitleKeys(schema: string): { urlKey: string | null; titleKey: string } {
@@ -667,6 +660,14 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
         draggable
         onDragStart={handleDragStart}
       >
+        <TableCell className="w-10" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            className="h-4 w-4 cursor-pointer accent-blue-600 align-middle"
+            checked={!!isSelected}
+            onChange={(e) => onSelect?.(document.id, e.target.checked, true)}
+          />
+        </TableCell>
         <TableCell className="w-12">
           {display.icon === 'globe' ? <Globe className="h-4 w-4 text-blue-500" /> : display.icon === 'mail' ? <Mail className="h-4 w-4 text-blue-500" /> : <File className="h-4 w-4 text-blue-500" />}
         </TableCell>
@@ -795,22 +796,6 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   const [detailModal, setDetailModal] = useState<{ document: Document; tab?: DetailTab } | null>(null)
   const canLink = Boolean(linkTree && onPasteDocuments)
 
-  // URLs to open when every selected doc is a browser-openable tab/link.
-  const selectedOpenableUrls = useMemo(() => {
-    if (selectedDocuments.size === 0) return []
-    const urls: string[] = []
-    for (const doc of documents) {
-      if (!selectedDocuments.has(doc.id)) continue
-      const url = getOpenableUrl(doc)
-      if (!url) return []
-      urls.push(url)
-    }
-    return urls
-  }, [documents, selectedDocuments])
-
-  const openAllSelected = useCallback(() => {
-    for (const url of selectedOpenableUrls) window.open(url, '_blank', 'noopener,noreferrer')
-  }, [selectedOpenableUrls])
   const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [showExportModal, setShowExportModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
@@ -1099,8 +1084,18 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
             {selectedDocuments.size > 0 && (<p className="text-xs text-blue-600 mt-1">{selectedDocuments.size} document{selectedDocuments.size !== 1 ? 's' : ''} selected</p>)}
           </div>
           <div className="shrink-0 sm:text-right">
-            <p className="text-sm font-medium">{searchQuery ? `${filteredDocuments.length} of ${documents.length}` : `${documents.length}`} documents</p>
-            {totalCount > documents.length && (<p className="text-xs text-muted-foreground">{totalCount} total (showing first {documents.length})</p>)}
+            {searchQuery ? (
+              <p className="text-sm font-medium">{filteredDocuments.length} of {documents.length} on this page</p>
+            ) : (
+              <>
+                <p className="text-sm font-medium">{totalCount.toLocaleString()} document{totalCount !== 1 ? 's' : ''}</p>
+                {totalCount > pageSize && (
+                  <p className="text-xs text-muted-foreground">
+                    Showing {Math.min((currentPage - 1) * pageSize + 1, totalCount)}–{Math.min(currentPage * pageSize, totalCount)}
+                  </p>
+                )}
+              </>
+            )}
           </div>
         </div>
 
@@ -1266,7 +1261,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
               )}
             </Button>
 
-            {onPurgeDocuments && totalCount > 0 && (
+            {onPurgeDocuments && totalCount > 0 && selectedDocuments.size === 0 && (
               <Button
                 variant="outline"
                 size="sm"
@@ -1282,19 +1277,6 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
 
             {selectedDocuments.size > 0 && (
               <>
-                {selectedOpenableUrls.length > 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={openAllSelected}
-                    className="flex items-center gap-2"
-                    title="Open all selected links in new browser tabs"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    Open all in browser ({selectedOpenableUrls.length})
-                  </Button>
-                )}
-
                 <Button
                   variant="outline"
                   size="sm"
@@ -1308,19 +1290,6 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                   <Copy className="h-4 w-4" />
                   Copy ({selectedDocuments.size})
                 </Button>
-
-                {canLink && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setLinkPanelIds(Array.from(selectedDocuments))}
-                    className="flex items-center gap-2"
-                    title="Link selected documents to other paths"
-                  >
-                    <Link2 className="h-4 w-4" />
-                    Link to ({selectedDocuments.size})
-                  </Button>
-                )}
 
                 {onCutDocuments && (
                   <Button
@@ -1352,10 +1321,10 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                       setSelectedDocuments(new Set())
                     }}
                     className="flex items-center gap-2"
-                    title="Remove selected documents from context"
+                    title="Remove selected documents from this folder (kept in index)"
                   >
                     <X className="h-4 w-4" />
-                    Remove ({selectedDocuments.size})
+                    Remove from folder ({selectedDocuments.size})
                   </Button>
                 )}
 
@@ -1379,27 +1348,6 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                     Delete from index ({selectedDocuments.size})
                   </Button>
                 )}
-                {(onDestroyDocument || onDestroyDocuments) && (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => {
-                      const selectedIds = Array.from(selectedDocuments)
-                      if (selectedIds.length === 1) {
-                        onDestroyDocument?.(selectedIds[0])
-                      } else {
-                        onDestroyDocuments?.(selectedIds)
-                      }
-                      setSelectedDocuments(new Set())
-                    }}
-                    className="flex items-center gap-2"
-                    title="Destroy: delete from all storage backends and index"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Destroy ({selectedDocuments.size})
-                  </Button>
-                )}
-
                 <Button
                   variant="outline"
                   size="sm"
@@ -1487,6 +1435,16 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 cursor-pointer accent-blue-600 align-middle"
+                    checked={filteredDocuments.length > 0 && selectedDocuments.size === filteredDocuments.length}
+                    ref={(el) => { if (el) el.indeterminate = selectedDocuments.size > 0 && selectedDocuments.size < filteredDocuments.length }}
+                    onChange={handleSelectAll}
+                    title="Select all on this page"
+                  />
+                </TableHead>
                 <TableHead className="w-12">Type</TableHead>
                 <SortableTableHead label="Title" sortKey="title" sort={sort} onSort={toggleSort} />
                 <SortableTableHead label="Schema" sortKey="schema" sort={sort} onSort={toggleSort} />
