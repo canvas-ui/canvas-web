@@ -60,6 +60,10 @@ const DEFAULT_TREE = 'context';
  *   /workspaces/:ws
  */
 export function parseWorkspacePathFromUrl(pathname: string): { treeName: string; path: string } {
+  // Shared/pasted links arrive percent-encoded (e.g. N%C3%A1kup); decode each
+  // segment so the path matches the decoded tree node names. In-app navigation
+  // keeps the path decoded in router memory, which is why it only broke on load.
+  const decode = (s: string): string => { try { return decodeURIComponent(s); } catch { return s; } };
   const segments = pathname.split('/').filter(Boolean);
   // ['workspaces', wsName, 'trees', treeName, 'path', ...rest]
   // ['workspaces', wsName, 'path', ...rest]
@@ -67,13 +71,13 @@ export function parseWorkspacePathFromUrl(pathname: string): { treeName: string;
   if (segments[0] !== 'workspaces') return { treeName: DEFAULT_TREE, path: '/' };
 
   if (segments[2] === 'trees' && segments[4] === 'path') {
-    const treeName = segments[3] || DEFAULT_TREE;
-    const rest = segments.slice(5).join('/');
+    const treeName = decode(segments[3] || DEFAULT_TREE);
+    const rest = segments.slice(5).map(decode).join('/');
     return { treeName, path: rest ? `/${rest}` : '/' };
   }
 
   if (segments[2] === 'path') {
-    const rest = segments.slice(3).join('/');
+    const rest = segments.slice(3).map(decode).join('/');
     return { treeName: DEFAULT_TREE, path: rest ? `/${rest}` : '/' };
   }
 
