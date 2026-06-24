@@ -226,13 +226,15 @@ export async function getWorkspaceDocuments(
   id: string,
   contextSpec: string = '/',
   featureArray: string[] = [],
-  options: { limit?: number; offset?: number; page?: number; includeIncoming?: boolean; treeName?: string; treeType?: string; q?: string; anyOf?: string[]; noneOf?: string[]; filters?: string[] } = {}
+  options: { limit?: number; offset?: number; page?: number; includeIncoming?: boolean; treeName?: string; treeType?: string; q?: string; anyOf?: string[]; noneOf?: string[]; filters?: string[]; scope?: 'path' | 'workspace' } = {}
 ): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }> {
   try {
     const params = new URLSearchParams();
+    const wholeWorkspace = options.scope === 'workspace'
+    if (wholeWorkspace) params.append('scope', 'workspace')
     params.append('treeNameOrTreeId', options.treeName || DEFAULT_WORKSPACE_TREE_NAME)
     if (options.treeType) params.append('treeType', options.treeType)
-    if (contextSpec) params.append('context', contextSpec)
+    if (contextSpec && !wholeWorkspace) params.append('context', contextSpec)
     appendAllOf(params, featureArray)
     appendAnyOf(params, options.anyOf)
     appendNoneOf(params, options.noneOf)

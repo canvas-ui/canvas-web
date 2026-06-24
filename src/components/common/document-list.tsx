@@ -56,6 +56,9 @@ interface DocumentListProps {
   disablePurgeDocuments?: boolean
   backendSearchQuery?: string
   onBackendSearch?: (query: string) => void
+  // Document scope: 'path' lists the selected tree path; 'workspace' lists every doc.
+  scope?: 'path' | 'workspace'
+  onScopeChange?: (scope: 'path' | 'workspace') => void
   canSaveChanges?: boolean
   isSavingChanges?: boolean
   onSaveChanges?: () => Promise<void> | void
@@ -789,12 +792,17 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
   )
 }
 
-export function DocumentList({ documents, isLoading, contextPath, treeName, workspaceId, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, onSelectionChange, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQuery, onBackendSearch, canSaveChanges = false, isSavingChanges = false, onSaveChanges, linkTree }: DocumentListProps) {
+export function DocumentList({ documents, isLoading, contextPath, treeName, workspaceId, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, onSelectionChange, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQuery, onBackendSearch, scope = 'path', onScopeChange, canSaveChanges = false, isSavingChanges = false, onSaveChanges, linkTree }: DocumentListProps) {
   const [selectedDocuments, setSelectedDocuments] = useState<Set<number>>(new Set())
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; documentIds: number[] } | null>(null)
   const [linkPanelIds, setLinkPanelIds] = useState<number[] | null>(null)
   const [detailModal, setDetailModal] = useState<{ document: Document; tab?: DetailTab } | null>(null)
   const canLink = Boolean(linkTree && onPasteDocuments)
+  // "Remove from folder" is path-scoped: in whole-workspace scope the listed docs
+  // may not live in selectedPath, so removing there is a silent no-op. Suppress it.
+  const isWorkspaceScope = scope === 'workspace'
+  const removeDocument = isWorkspaceScope ? undefined : onRemoveDocument
+  const removeDocuments = isWorkspaceScope ? undefined : onRemoveDocuments
 
   const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [showExportModal, setShowExportModal] = useState(false)
@@ -1102,6 +1110,27 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
         {/* Search Input */}
         <div className="mt-3 space-y-2">
           <div className="relative flex items-center gap-2">
+            {onScopeChange && (
+              <div className="flex shrink-0 rounded-md border border-input overflow-hidden text-xs font-medium">
+                <button
+                  type="button"
+                  onClick={() => onScopeChange('path')}
+                  className={`px-2.5 py-2 transition-colors ${scope === 'path' ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                  title="List documents in the selected path"
+                >
+                  This path
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onScopeChange('workspace')}
+                  className={`px-2.5 py-2 border-l border-input transition-colors flex items-center gap-1 ${scope === 'workspace' ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                  title="List every document in the workspace (staging excluded)"
+                >
+                  <Globe className="h-3.5 w-3.5" />
+                  Whole workspace
+                </button>
+              </div>
+            )}
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
               <input
@@ -1314,17 +1343,18 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                   <Button
                     variant="outline"
                     size="sm"
+                    disabled={isWorkspaceScope}
                     onClick={() => {
                       const selectedIds = Array.from(selectedDocuments)
                       if (selectedIds.length === 1) {
-                        onRemoveDocument?.(selectedIds[0])
+                        removeDocument?.(selectedIds[0])
                       } else {
-                        onRemoveDocuments?.(selectedIds)
+                        removeDocuments?.(selectedIds)
                       }
                       setSelectedDocuments(new Set())
                     }}
                     className="flex items-center gap-2"
-                    title="Remove selected documents from this folder (kept in index)"
+                    title={isWorkspaceScope ? 'Switch to “This path” to remove documents from a folder' : 'Remove selected documents from this folder (kept in index)'}
                   >
                     <X className="h-4 w-4" />
                     Remove from folder ({selectedDocuments.size})
@@ -1460,7 +1490,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
             </TableHeader>
             <TableBody>
               {sortedDocuments.map((document) => (
-                <DocumentTableRow key={document.id} document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onRemoveDocument={onRemoveDocument} onDeleteDocument={onDeleteDocument} onLinkDocument={canLink ? (id) => setLinkPanelIds([id]) : undefined} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
+                <DocumentTableRow key={document.id} document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onRemoveDocument={removeDocument} onDeleteDocument={onDeleteDocument} onLinkDocument={canLink ? (id) => setLinkPanelIds([id]) : undefined} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
               ))}
             </TableBody>
           </Table>
@@ -1470,7 +1500,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
           <div className="space-y-3 pr-2">
             {filteredDocuments.map((document) => (
               <div key={document.id} onContextMenu={(e) => { e.stopPropagation(); handleDocumentRightClick(e, document.id); }}>
-                <DocumentRow document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onRemoveDocument={onRemoveDocument} onDeleteDocument={onDeleteDocument} onLinkDocument={canLink ? (id) => setLinkPanelIds([id]) : undefined} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
+                <DocumentRow document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onRemoveDocument={removeDocument} onDeleteDocument={onDeleteDocument} onLinkDocument={canLink ? (id) => setLinkPanelIds([id]) : undefined} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
               </div>
             ))}
           </div>
@@ -1530,12 +1560,12 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                 </button>
               </>
             )}
-            {(onRemoveDocument || onRemoveDocuments) && (
+            {(removeDocument || removeDocuments) && (
               <>
                 <div className="my-1 h-px bg-border" />
                 <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('remove', contextMenu.documentIds)}>
                   <Move className="h-3 w-3" />
-                  Remove {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
+                  Remove from folder {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
                 </button>
               </>
             )}

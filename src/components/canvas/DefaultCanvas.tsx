@@ -68,6 +68,8 @@ interface DefaultCanvasProps {
   isCanvasLocked?: boolean
   backendSearchQuery?: string
   onBackendSearch?: (query: string) => void
+  scope?: 'path' | 'workspace'
+  onScopeChange?: (scope: 'path' | 'workspace') => void
   canSaveChanges?: boolean
   isSavingChanges?: boolean
   onSaveChanges?: () => Promise<void> | void
@@ -116,6 +118,8 @@ export function DefaultCanvas({
   isCanvasLocked,
   backendSearchQuery,
   onBackendSearch,
+  scope,
+  onScopeChange,
   canSaveChanges,
   isSavingChanges,
   onSaveChanges,
@@ -243,6 +247,8 @@ export function DefaultCanvas({
           disablePurgeDocuments={disablePurgeDocuments}
           backendSearchQuery={backendSearchQuery}
           onBackendSearch={onBackendSearch}
+          scope={scope}
+          onScopeChange={onScopeChange}
           canSaveChanges={!isCanvas && canSaveChanges}
           isSavingChanges={isSavingChanges}
           onSaveChanges={onSaveChanges}

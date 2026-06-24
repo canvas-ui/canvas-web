@@ -52,8 +52,8 @@ function paneKey(workspaceName: string, treeName: string, path: string) {
   return `${workspaceName}\0${treeName}\0${path}`;
 }
 
-function documentKey(workspaceName: string, treeName: string, path: string, page: number, pageSize: number, search: string, filtersKey = '', layerId = '') {
-  return `${paneKey(workspaceName, treeName, path)}\0${page}\0${pageSize}\0${search}\0${filtersKey}\0${layerId}`;
+function documentKey(workspaceName: string, treeName: string, path: string, page: number, pageSize: number, search: string, filtersKey = '', layerId = '', scope = 'path') {
+  return `${paneKey(workspaceName, treeName, path)}\0${page}\0${pageSize}\0${search}\0${filtersKey}\0${layerId}\0${scope}`;
 }
 
 function invalidateDocumentCache(workspaceName: string, treeName: string, path: string) {
@@ -76,6 +76,8 @@ export default function WorkspaceDetailPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
   const [documentsTotalCount, setDocumentsTotalCount] = useState(0);
+  // 'path' scopes to the selected tree path; 'workspace' lists every document.
+  const [docScope, setDocScope] = useState<'path' | 'workspace'>('path');
   const [isStartingWorkspace, setIsStartingWorkspace] = useState(false);
   const [isStoppingWorkspace, setIsStoppingWorkspace] = useState(false);
 
@@ -182,7 +184,7 @@ export default function WorkspaceDetailPage() {
   // Fetch documents when path, tree, pagination, or workspace status changes
   const fetchDocuments = useCallback(async (opts?: { silent?: boolean }) => {
     if (!workspaceName) return;
-    const cacheKey = documentKey(workspaceName, selectedTreeName, selectedPath, currentPage, pageSize, serverSearchQuery || '', tbFiltersKey, (isLayerView && selectedLayerId) ? selectedLayerId : '');
+    const cacheKey = documentKey(workspaceName, selectedTreeName, selectedPath, currentPage, pageSize, serverSearchQuery || '', tbFiltersKey, (isLayerView && selectedLayerId) ? selectedLayerId : '', docScope);
     const cached = documentCache.get(cacheKey);
     if (cached) {
       setDocuments(cached.documents);
@@ -194,7 +196,7 @@ export default function WorkspaceDetailPage() {
     if (!opts?.silent) setIsLoadingDocuments(true);
     try {
       let response;
-      if (isLayerView && selectedLayerId) {
+      if (isLayerView && selectedLayerId && docScope !== 'workspace') {
         response = await getWorkspaceLayerDocuments(workspaceName, selectedTreeName, selectedLayerId, {
           limit: pageSize,
           page: currentPage,
@@ -215,6 +217,7 @@ export default function WorkspaceDetailPage() {
           anyOf: tbAnyOf,
           noneOf: tbNoneOf,
           filters: tbDatetimeFilters,
+          scope: docScope,
         });
       }
       const nextDocuments = (response.payload as Document[]) || [];
@@ -231,7 +234,7 @@ export default function WorkspaceDetailPage() {
       if (!opts?.silent) setIsLoadingDocuments(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceName, selectedPath, selectedTreeName, selectedLayerId, isLayerView, currentPage, pageSize, workspace?.status, serverSearchQuery, tbFiltersKey]);
+  }, [workspaceName, selectedPath, selectedTreeName, selectedLayerId, isLayerView, currentPage, pageSize, workspace?.status, serverSearchQuery, tbFiltersKey, docScope]);
 
   useEffect(() => {
     fetchDocuments();
@@ -301,6 +304,11 @@ export default function WorkspaceDetailPage() {
   useEffect(() => {
     setCurrentPage(1);
     setIgnoredSavedSearchPath(null);
+  }, [selectedPath, selectedTreeName, selectedLayerId, docScope]);
+
+  // Leaving whole-workspace scope is implicit when the user navigates to a path.
+  useEffect(() => {
+    setDocScope('path');
   }, [selectedPath, selectedTreeName, selectedLayerId]);
 
   useEffect(() => {
@@ -778,6 +786,8 @@ export default function WorkspaceDetailPage() {
       onPasteDocuments={handlePasteDocuments}
       onImportDocuments={handleImportDocuments}
       onSelectionChange={setLeftSelection}
+      scope={docScope}
+      onScopeChange={setDocScope}
       pastedDocumentIds={clipboard?.documentIds}
       linkTree={tree}
       onPurgeDocuments={isIncomingPath ? undefined : handlePurgeDocuments}
