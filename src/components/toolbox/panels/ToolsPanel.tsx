@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { X, Save, Loader2, Search, Trash2, Plus, RefreshCw, ZoomIn, ZoomOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useToolbox, type ToolsTab } from '@/components/toolbox/toolbox-context'
+import { useToolbox, type ToolsTab, type FeatureMode } from '@/components/toolbox/toolbox-context'
 import { useToast } from '@/components/ui/toast-container'
 
 // ─── MD2-style toggle switch ─────────────────────────────────────────────────
@@ -598,11 +598,43 @@ function groupBitmaps(keys: string[]): Map<string, string[]> {
   return groups
 }
 
+// Tri-state sigil control: any (OR) · all (+ gate) · not (! exclude).
+// Mirrors synapsd feature algebra. Click the active mode to clear it.
+const MODE_OPTS: { m: FeatureMode; label: string; on: string }[] = [
+  { m: 'anyOf', label: 'any', on: 'bg-blue-500 text-white' },
+  { m: 'allOf', label: 'all', on: 'bg-emerald-500 text-white' },
+  { m: 'noneOf', label: 'not', on: 'bg-rose-500 text-white' },
+]
+
+function ModeControl({ mode, onSet }: { mode: FeatureMode; onSet: (m: FeatureMode) => void }) {
+  return (
+    <div className="flex shrink-0 rounded-md overflow-hidden border border-border divide-x divide-border">
+      {MODE_OPTS.map(o => (
+        <button
+          key={o.m}
+          type="button"
+          onClick={() => onSet(mode === o.m ? 'off' : o.m)}
+          className={cn(
+            'px-2 py-0.5 text-[11px] font-medium transition-colors',
+            mode === o.m ? o.on : 'bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
+          )}
+          title={`${o.label} — ${o.m}`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function FeaturesTab() {
-  const { state, setFeatureToggle, deleteBitmap } = useToolbox()
+  const { state, setFeatureMode, clearFilters, hasActiveFilters, deleteBitmap } = useToolbox()
   const { availableBitmaps, bitmapsLoading, filters } = state
   const allOf = new Set(filters.features.allOf)
   const anyOf = new Set(filters.features.anyOf)
+  const noneOf = new Set(filters.features.noneOf)
+  const modeOf = (key: string): FeatureMode =>
+    allOf.has(key) ? 'allOf' : anyOf.has(key) ? 'anyOf' : noneOf.has(key) ? 'noneOf' : 'off'
   const [search, setSearch] = useState('')
   const [deleting, setDeleting] = useState<string | null>(null)
   const { showToast } = useToast()
@@ -643,8 +675,8 @@ function FeaturesTab() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* Search */}
-      <div className="px-4 py-2 border-b border-border shrink-0">
+      {/* Search + clear */}
+      <div className="px-4 py-2 border-b border-border shrink-0 space-y-2">
         <div className="relative">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
           <input
@@ -655,6 +687,15 @@ function FeaturesTab() {
             className="w-full pl-7 pr-3 py-1.5 text-xs rounded-md bg-muted border border-transparent focus:border-ring focus:outline-none"
           />
         </div>
+        <button
+          type="button"
+          onClick={clearFilters}
+          disabled={!hasActiveFilters}
+          className="flex items-center gap-1.5 w-full justify-center px-2.5 py-1.5 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+        >
+          <X className="w-3 h-3" />
+          Clear all filters
+        </button>
       </div>
 
       {/* Scrollable list */}
@@ -667,56 +708,31 @@ function FeaturesTab() {
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
                 {PREFIX_LABELS[prefix] ?? prefix}
               </p>
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1">
                 {keys.map((key) => {
                   const isProtected = key.startsWith('data/')
-                  const isAbstraction = key.startsWith('data/abstraction/')
-                  const isChecked = isAbstraction ? anyOf.has(key) : allOf.has(key)
-                  const segments = key.split('/')
-                  const shortLabel = segments[segments.length - 1]
-                  const subLabel = segments.length > 1 ? segments.slice(0, -1).join('/') : null
+                  const mode = modeOf(key)
                   return (
                     <div
                       key={key}
                       className={cn(
-                        'flex items-center gap-2 group rounded-md px-2.5 py-2 border transition-colors',
-                        isChecked
-                          ? 'bg-muted/60 border-border'
-                          : 'bg-transparent border-transparent hover:bg-muted/30 hover:border-border/50',
+                        'flex items-center gap-2 group rounded-md pl-2 pr-1.5 py-1 border-l-2 transition-colors',
+                        mode === 'off' ? 'border-l-transparent hover:bg-muted/40'
+                          : mode === 'anyOf' ? 'border-l-blue-500 bg-blue-500/5'
+                          : mode === 'allOf' ? 'border-l-emerald-500 bg-emerald-500/5'
+                          : 'border-l-rose-500 bg-rose-500/5',
                       )}
                     >
-                      <div className="flex-1 min-w-0">
-                        <div
-                          role="switch"
-                          aria-checked={isChecked}
-                          tabIndex={0}
-                          onClick={() => setFeatureToggle(key, !isChecked)}
-                          onKeyDown={(e) => (e.key === ' ' || e.key === 'Enter') && setFeatureToggle(key, !isChecked)}
-                          className="flex items-center justify-between gap-3 cursor-pointer select-none outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
-                        >
-                          <div className="flex flex-col min-w-0">
-                            <span className="text-sm text-foreground truncate leading-tight">{shortLabel}</span>
-                            {subLabel && (
-                              <span className="text-[10px] text-muted-foreground truncate leading-tight mt-0.5">{subLabel}/</span>
-                            )}
-                          </div>
-                          <div className={cn(
-                            'relative w-10 h-5 rounded-full transition-colors shrink-0',
-                            isChecked ? 'bg-zinc-700' : 'bg-zinc-300 dark:bg-zinc-600',
-                          )}>
-                            <div className={cn(
-                              'absolute top-[2px] w-4 h-4 rounded-full bg-white shadow transition-transform',
-                              isChecked ? 'translate-x-[22px]' : 'translate-x-[2px]',
-                            )} />
-                          </div>
-                        </div>
-                      </div>
+                      <span className="flex-1 min-w-0 text-xs font-mono text-foreground truncate" title={key}>
+                        {key}
+                      </span>
+                      <ModeControl mode={mode} onSet={(m) => setFeatureMode(key, m)} />
                       {!isProtected && (
                         <button
                           type="button"
                           disabled={deleting === key}
                           onClick={() => handleDelete(key)}
-                          className="shrink-0 p-1.5 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50 opacity-0 group-hover:opacity-100"
+                          className="shrink-0 p-1 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50 opacity-0 group-hover:opacity-100"
                           title={`Delete bitmap "${key}" from database`}
                           aria-label={`Delete bitmap ${key}`}
                         >
@@ -744,7 +760,7 @@ interface ToolsPanelProps {
 }
 
 export function ToolsPanel({ onClose }: ToolsPanelProps) {
-  const { state, setToolsTab, saveFilters } = useToolbox()
+  const { state, setToolsTab, saveFilters, clearFilters, hasActiveFilters } = useToolbox()
   const { toolsTab, isDirty, isSaving, activeContextType, savedSearchQuery } = state
   const location = useLocation()
   const currentSearchQuery = new URLSearchParams(location.search).get('q') || new URLSearchParams(location.search).get('search') || ''
@@ -762,6 +778,17 @@ export function ToolsPanel({ onClose }: ToolsPanelProps) {
       <div className="flex items-center justify-between px-4 h-12 bg-zinc-900 shrink-0">
         <span className="text-sm font-medium text-zinc-100">Tools</span>
         <div className="flex items-center gap-2">
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors"
+              title="Clear all active filters"
+            >
+              <X className="w-3 h-3" />
+              Clear
+            </button>
+          )}
           {canSave && (
             <button
               type="button"

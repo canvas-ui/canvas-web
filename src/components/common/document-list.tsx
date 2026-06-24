@@ -1241,6 +1241,8 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
 
         {documents.length > 0 && (
           <div className="flex items-center gap-2 mt-3 pt-3 border-t flex-wrap">
+            {/* Table view has a header select-all checkbox; card view needs this button. */}
+            {viewMode !== 'table' && (
             <Button
               variant="outline"
               size="sm"
@@ -1260,6 +1262,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                 </>
               )}
             </Button>
+            )}
 
             {onPurgeDocuments && totalCount > 0 && selectedDocuments.size === 0 && (
               <Button

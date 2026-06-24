@@ -29,6 +29,8 @@ import { parseWorkspacePathFromUrl } from '@/utils/url-params'
 
 export type T1View = 'home' | 'tools' | 'agents' | null
 export type ToolsTab = 'timeline' | 'features'
+// Maps directly to synapsd feature sigil algebra: anyOf (OR), allOf (+ gate), noneOf (! exclude).
+export type FeatureMode = 'off' | 'anyOf' | 'allOf' | 'noneOf'
 export type ActiveContextType = 'canvas' | 'context' | null
 export type AddKind = 'note' | 'link' | 'file'
 export type { WorkspaceDocument }
@@ -263,6 +265,9 @@ interface ToolboxContextValue {
   setToolsTab: (tab: ToolsTab) => void
   setFilters: (filters: ToolboxFilters) => void
   setFeatureToggle: (key: string, on: boolean) => void
+  setFeatureMode: (key: string, mode: FeatureMode) => void
+  clearFilters: () => void
+  hasActiveFilters: boolean
   setTimelineFilter: (update: Partial<ToolboxTimelineFilters>) => void
   saveFilters: () => Promise<void>
   deleteBitmap: (key: string) => Promise<void>
@@ -433,6 +438,23 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
+  // Explicit tri-state per feature bitmap, mirroring synapsd sigil algebra.
+  const setFeatureMode = useCallback((key: string, mode: FeatureMode) => {
+    const { filters } = stateRef.current
+    const allOf = filters.features.allOf.filter(k => k !== key)
+    const anyOf = filters.features.anyOf.filter(k => k !== key)
+    const noneOf = filters.features.noneOf.filter(k => k !== key)
+    if (mode === 'allOf') allOf.push(key)
+    else if (mode === 'anyOf') anyOf.push(key)
+    else if (mode === 'noneOf') noneOf.push(key)
+    dispatch({ type: 'SET_FILTERS', filters: { ...filters, features: { allOf, anyOf, noneOf } } })
+  }, [])
+
+  const clearFilters = useCallback(() => {
+    const { filters } = stateRef.current
+    dispatch({ type: 'SET_FILTERS', filters: { ...DEFAULT_TOOLBOX_FILTERS, timeline: { ...filters.timeline, quickFilter: null, selectedTimelines: [] } } })
+  }, [])
+
   const setTimelineFilter = useCallback((update: Partial<ToolboxTimelineFilters>) => {
     const { filters } = stateRef.current
     dispatch({
@@ -526,9 +548,14 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const { features: f, timeline: tl } = state.filters
+  const hasActiveFilters =
+    f.allOf.length > 0 || f.anyOf.length > 0 || f.noneOf.length > 0 ||
+    tl.quickFilter !== null || (tl.selectedTimelines?.length ?? 0) > 0
+
   return (
     <ToolboxCtx.Provider
-      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, closeAdd, openEdit, setToolsTab, setFilters, setFeatureToggle, setTimelineFilter, saveFilters, deleteBitmap, createTimeline, deleteTimeline, refreshTimelines }}
+      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, closeAdd, openEdit, setToolsTab, setFilters, setFeatureToggle, setFeatureMode, clearFilters, hasActiveFilters, setTimelineFilter, saveFilters, deleteBitmap, createTimeline, deleteTimeline, refreshTimelines }}
     >
       {children}
     </ToolboxCtx.Provider>
