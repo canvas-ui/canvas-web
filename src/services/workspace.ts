@@ -679,10 +679,15 @@ export async function purgeWorkspaceDocuments(
   contextSpec: string = '/',
   featureArray: string[] = [],
   filterArray: string[] = [],
-  options: { includeIncoming?: boolean } = {}
+  options: { includeIncoming?: boolean } = {},
+  treeName: string = DEFAULT_WORKSPACE_TREE_NAME
 ): Promise<{ requested: number; deleted: number }> {
   const params = new URLSearchParams()
-  appendWorkspaceContext(params, contextSpec)
+  // Send the tree NAME only (no treeType): the server resolves the type from the
+  // name, which also works for virtual directory trees. Omitting treeName here was
+  // why "Purge All" silently no-op'd on directory trees (defaulted to context).
+  params.append('treeNameOrTreeId', treeName)
+  if (contextSpec) params.append('context', contextSpec)
   appendAllOf(params, featureArray)
   appendFilters(params, filterArray)
   if (options.includeIncoming) params.append('includeIncoming', 'true')

@@ -590,7 +590,7 @@ export default function WorkspaceDetailPage() {
     const confirmation = window.prompt(`Type PURGE to permanently delete all ${documentsTotalCount} matching documents.`);
     if (confirmation !== 'PURGE') return;
     try {
-      const result = await purgeWorkspaceDocuments(workspace.name, selectedPath, [], []);
+      const result = await purgeWorkspaceDocuments(workspace.name, selectedPath, [], [], {}, selectedTreeName);
       await fetchDocuments();
       showToast({ title: 'Success', description: `${result.deleted} document(s) purged.` });
     } catch (err) {
