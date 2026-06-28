@@ -3,6 +3,7 @@ import { useToolbox } from '../toolbox-context'
 import {
   DEFAULT_WORKSPACE_TREE_NAME,
   importDocumentsToWorkspacePath,
+  listWorkspaceTrees,
 } from '@/services/workspace'
 import { insertDocumentsToContextById } from '@/services/context'
 
@@ -34,7 +35,9 @@ export function useAddTarget(): AddTarget {
         workspaceName: activeWorkspaceName,
         path: activeContextPath,
         treeName: activeTreeName || DEFAULT_WORKSPACE_TREE_NAME,
-        treeType: 'context',
+        // Best-effort default; submitDocuments resolves the real type so inserts
+        // into directory (incl. virtual directory) trees aren't mislabelled.
+        treeType: (activeTreeName === 'directory' ? 'directory' : 'context'),
       }
     }
     return null
@@ -48,12 +51,24 @@ export async function submitDocuments(target: AddTarget, documents: Record<strin
   if (!target) throw new Error('No active workspace or context to add to')
 
   if (target.mode === 'workspace') {
+    // Resolve the actual tree type by name so directory / virtual-directory trees
+    // get treeType:'directory' (the server otherwise builds a context selector and
+    // throws "Tree is not a context tree").
+    let treeType = target.treeType
+    try {
+      const trees = await listWorkspaceTrees(target.workspaceName)
+      const match = trees.find((t) => t?.name === target.treeName || t?.id === target.treeName)
+      if (match?.type === 'directory' || match?.type === 'context') treeType = match.type
+    } catch {
+      /* fall back to the best-effort type from useAddTarget */
+    }
+
     const ok = await importDocumentsToWorkspacePath(
       target.workspaceName,
       target.path,
       documents,
       target.treeName,
-      target.treeType,
+      treeType,
     )
     if (ok) {
       window.dispatchEvent(
