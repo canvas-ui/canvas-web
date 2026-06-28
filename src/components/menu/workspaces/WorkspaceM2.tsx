@@ -171,7 +171,8 @@ export function WorkspaceM2() {
     const events = [
       'context.path.changed',
       'tree.path.inserted', 'tree.path.moved', 'tree.path.removed', 'tree.path.copied',
-      'tree.layer.updated', 'tree.recalculated', 'tree.created', 'tree.deleted', 'tree.renamed',
+      'tree.layer.updated', 'tree.layer.merged', 'tree.layer.subtracted',
+      'tree.recalculated', 'tree.created', 'tree.deleted', 'tree.renamed',
     ]
     events.forEach(ev => socketService.on(ev, refreshSoon))
 

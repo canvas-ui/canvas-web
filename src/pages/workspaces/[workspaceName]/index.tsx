@@ -288,9 +288,13 @@ export default function WorkspaceDetailPage() {
 
     const events = [
       'document.inserted', 'document.updated', 'document.removed', 'document.deleted',
+      'document.removed.batch', 'document.deleted.batch',
       'tree.document.inserted', 'tree.document.inserted.batch',
       'tree.document.removed', 'tree.document.removed.batch',
       'tree.document.deleted', 'tree.document.deleted.batch',
+      // Layer merge/subtract moves docs between layers (membership-only, no
+      // per-doc events) — refresh the content area on these too.
+      'tree.layer.merged', 'tree.layer.subtracted',
     ];
     events.forEach(ev => socketService.on(ev, refresh));
 
@@ -380,7 +384,8 @@ export default function WorkspaceDetailPage() {
     };
     const treeEvents = [
       'tree.path.inserted', 'tree.path.moved', 'tree.path.removed', 'tree.path.copied',
-      'tree.layer.updated', 'tree.recalculated', 'tree.created', 'tree.deleted', 'tree.renamed',
+      'tree.layer.updated', 'tree.layer.merged', 'tree.layer.subtracted',
+      'tree.recalculated', 'tree.created', 'tree.deleted', 'tree.renamed',
     ];
     treeEvents.forEach(ev => socketService.on(ev, reloadTreeSoon));
 
