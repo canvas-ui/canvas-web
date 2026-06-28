@@ -23,6 +23,9 @@ export interface ToolboxFeatureFilters {
 
 export interface ToolboxTimelineFilters {
   quickFilter: string | null
+  // Explicit date range (ISO YYYY-MM-DD), e.g. from dragging the timeline rail.
+  // Takes precedence over quickFilter when set.
+  customRange: { start: string; end: string } | null
   indexCreated: boolean
   indexUpdated: boolean
   indexDeleted: boolean
@@ -40,6 +43,7 @@ export const DEFAULT_TOOLBOX_FILTERS: ToolboxFilters = {
   features: { allOf: [], anyOf: [], noneOf: [] },
   timeline: {
     quickFilter: null,
+    customRange: null,
     indexCreated: true,
     indexUpdated: true,
     indexDeleted: false,
@@ -49,16 +53,24 @@ export const DEFAULT_TOOLBOX_FILTERS: ToolboxFilters = {
 }
 
 /**
- * Convert toolbox timeline filter state → SynapsD `datetime:ACTION:TIMEFRAME` strings.
+ * Convert toolbox timeline filter state → SynapsD timeline filter strings.
+ *
+ * The backend filter grammar is `t:crud:ACTION:TIMEFRAME` (see synapsd
+ * filters.js); the old `datetime:` prefix was never parsed, so timeline filters
+ * silently matched nothing. Multiple actions are OR'd (default sigil = anyOf):
+ * "created OR updated in this timeframe".
+ *
  * Returns an empty array when no quick filter is active.
  */
 export function buildDatetimeFilters(timeline: ToolboxTimelineFilters): string[] {
-  const { quickFilter, indexCreated, indexUpdated, indexDeleted } = timeline
-  if (!quickFilter) return []
+  const { quickFilter, customRange, indexCreated, indexUpdated, indexDeleted } = timeline
+  // Explicit drag range wins over a quick token; otherwise use the quick token.
+  const spec = customRange ? `${customRange.start}..${customRange.end}` : quickFilter
+  if (!spec) return []
   const filters: string[] = []
-  if (indexCreated) filters.push(`datetime:created:${quickFilter}`)
-  if (indexUpdated) filters.push(`datetime:updated:${quickFilter}`)
-  if (indexDeleted) filters.push(`datetime:deleted:${quickFilter}`)
+  if (indexCreated) filters.push(`t:crud:created:${spec}`)
+  if (indexUpdated) filters.push(`t:crud:updated:${spec}`)
+  if (indexDeleted) filters.push(`t:crud:deleted:${spec}`)
   return filters
 }
 

@@ -228,6 +228,7 @@ function extractToolboxFilters(metadata: Record<string, unknown> | undefined): T
       },
       timeline: {
         quickFilter: (t.timeline as ToolboxTimelineFilters)?.quickFilter ?? null,
+        customRange: (t.timeline as ToolboxTimelineFilters)?.customRange ?? null,
         indexCreated: (t.timeline as ToolboxTimelineFilters)?.indexCreated ?? true,
         indexUpdated: (t.timeline as ToolboxTimelineFilters)?.indexUpdated ?? true,
         indexDeleted: (t.timeline as ToolboxTimelineFilters)?.indexDeleted ?? false,
@@ -452,7 +453,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
 
   const clearFilters = useCallback(() => {
     const { filters } = stateRef.current
-    dispatch({ type: 'SET_FILTERS', filters: { ...DEFAULT_TOOLBOX_FILTERS, timeline: { ...filters.timeline, quickFilter: null, selectedTimelines: [] } } })
+    dispatch({ type: 'SET_FILTERS', filters: { ...DEFAULT_TOOLBOX_FILTERS, timeline: { ...filters.timeline, quickFilter: null, customRange: null, selectedTimelines: [] } } })
   }, [])
 
   const setTimelineFilter = useCallback((update: Partial<ToolboxTimelineFilters>) => {

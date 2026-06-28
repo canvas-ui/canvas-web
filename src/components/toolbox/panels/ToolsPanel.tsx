@@ -402,10 +402,10 @@ function TimelineTab() {
 
   const handleRangeSelect = useCallback((start: Date, end: Date) => {
     const iso = (d: Date) => d.toISOString().split('T')[0]
-    // Could wire to a custom datetime:ACTION:range:START:END filter in future;
-    // for now just show a toast to confirm the drag works
-    showToast({ title: 'Range selected', description: `${iso(start)} → ${iso(end)}` })
-  }, [showToast])
+    // Dragging the rail sets an explicit range filter (t:crud:ACTION:start..end),
+    // which supersedes any active quick token.
+    setTimelineFilter({ customRange: { start: iso(start), end: iso(end) }, quickFilter: null })
+  }, [setTimelineFilter])
 
   return (
     <div className="flex h-full min-h-0">
@@ -427,10 +427,10 @@ function TimelineTab() {
               <button
                 key={f}
                 type="button"
-                onClick={() => setTimelineFilter({ quickFilter: quickFilter === f ? null : QF_KEY_MAP[f] })}
+                onClick={() => setTimelineFilter({ quickFilter: quickFilter === f ? null : QF_KEY_MAP[f], customRange: null })}
                 className={cn(
                   'text-left text-sm px-2.5 py-1 rounded-md transition-colors',
-                  quickFilter === f
+                  quickFilter === f && !timeline.customRange
                     ? 'bg-primary text-primary-foreground'
                     : 'text-foreground hover:bg-muted',
                 )}
@@ -439,6 +439,22 @@ function TimelineTab() {
               </button>
             ))}
           </div>
+
+          {timeline.customRange && (
+            <div className="mt-2 flex items-center justify-between gap-2 rounded-md bg-primary/10 border border-primary/30 px-2.5 py-1.5">
+              <span className="text-xs text-foreground truncate">
+                {timeline.customRange.start} → {timeline.customRange.end}
+              </span>
+              <button
+                type="button"
+                onClick={() => setTimelineFilter({ customRange: null })}
+                className="text-muted-foreground hover:text-foreground shrink-0"
+                title="Clear range"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* CRUD index toggles — always visible */}
