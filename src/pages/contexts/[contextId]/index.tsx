@@ -370,8 +370,9 @@ export default function ContextDetailPage() {
         onPasteDocuments={handlePasteDocuments}
         onImportDocuments={!isSharedContext ? handleImportDocuments : undefined}
         pastedDocumentIds={copiedDocuments}
-        backendSearchQuery={serverSearchQuery}
+        backendSearchQueries={serverSearchQuery ? [serverSearchQuery] : []}
         onBackendSearch={handleBackendSearch}
+        onRemoveBackendQuery={() => handleBackendSearch('')}
         canSaveChanges={canSaveChanges}
         isSavingChanges={toolboxState.isSaving}
         onSaveChanges={saveFilters}

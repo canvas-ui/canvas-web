@@ -66,8 +66,9 @@ interface DefaultCanvasProps {
   isDeletingCanvas?: boolean
   isCanvasShared?: boolean
   isCanvasLocked?: boolean
-  backendSearchQuery?: string
+  backendSearchQueries?: string[]
   onBackendSearch?: (query: string) => void
+  onRemoveBackendQuery?: (index: number) => void
   scope?: 'path' | 'workspace'
   onScopeChange?: (scope: 'path' | 'workspace') => void
   canSaveChanges?: boolean
@@ -116,8 +117,9 @@ export function DefaultCanvas({
   isDeletingCanvas,
   isCanvasShared,
   isCanvasLocked,
-  backendSearchQuery,
+  backendSearchQueries,
   onBackendSearch,
+  onRemoveBackendQuery,
   scope,
   onScopeChange,
   canSaveChanges,
@@ -245,8 +247,9 @@ export function DefaultCanvas({
           pastedDocumentIds={pastedDocumentIds}
           onPurgeDocuments={onPurgeDocuments}
           disablePurgeDocuments={disablePurgeDocuments}
-          backendSearchQuery={backendSearchQuery}
+          backendSearchQueries={backendSearchQueries}
           onBackendSearch={onBackendSearch}
+          onRemoveBackendQuery={onRemoveBackendQuery}
           scope={scope}
           onScopeChange={onScopeChange}
           canSaveChanges={!isCanvas && canSaveChanges}

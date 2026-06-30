@@ -54,8 +54,9 @@ interface DocumentListProps {
   onPageSizeChange?: (pageSize: number) => void
   onPurgeDocuments?: () => void
   disablePurgeDocuments?: boolean
-  backendSearchQuery?: string
+  backendSearchQueries?: string[]
   onBackendSearch?: (query: string) => void
+  onRemoveBackendQuery?: (index: number) => void
   // Document scope: 'path' lists the selected tree path; 'workspace' lists every doc.
   scope?: 'path' | 'workspace'
   onScopeChange?: (scope: 'path' | 'workspace') => void
@@ -792,7 +793,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
   )
 }
 
-export function DocumentList({ documents, isLoading, contextPath, treeName, workspaceId, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, onSelectionChange, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQuery, onBackendSearch, scope = 'path', onScopeChange, canSaveChanges = false, isSavingChanges = false, onSaveChanges, linkTree }: DocumentListProps) {
+export function DocumentList({ documents, isLoading, contextPath, treeName, workspaceId, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, onSelectionChange, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQueries = [], onBackendSearch, onRemoveBackendQuery, scope = 'path', onScopeChange, canSaveChanges = false, isSavingChanges = false, onSaveChanges, linkTree }: DocumentListProps) {
   const [selectedDocuments, setSelectedDocuments] = useState<Set<number>>(new Set())
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; documentIds: number[] } | null>(null)
   const [linkPanelIds, setLinkPanelIds] = useState<number[] | null>(null)
@@ -807,13 +808,12 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [showExportModal, setShowExportModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
-  const [searchQuery, setSearchQuery] = useState(backendSearchQuery || '')
+  // The input is a buffer for the NEXT query to add to the stack (not a mirror of
+  // a single active query) — submitting appends a chip and clears it. It also
+  // drives the local fuse filter over the loaded page while you type.
+  const [searchQuery, setSearchQuery] = useState('')
   const [isDragOver, setIsDragOver] = useState(false)
-
-  // Sync local input when backend search query changes externally
-  useEffect(() => {
-    setSearchQuery(backendSearchQuery || '')
-  }, [backendSearchQuery])
+  const hasServerSearch = backendSearchQueries.length > 0
 
   // Clear selection when context path changes
   useEffect(() => {
@@ -827,13 +827,16 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
 
   const submitBackendSearch = useCallback(() => {
     if (!onBackendSearch) return
-    onBackendSearch(searchQuery.trim())
+    const q = searchQuery.trim()
+    if (!q) return
+    onBackendSearch(q)   // parent appends to the stack
+    setSearchQuery('')   // clear buffer for the next refinement
   }, [onBackendSearch, searchQuery])
 
   const clearAllSearch = useCallback(() => {
     setSearchQuery('')
-    if (onBackendSearch && backendSearchQuery) onBackendSearch('')
-  }, [onBackendSearch, backendSearchQuery])
+    if (onRemoveBackendQuery && backendSearchQueries.length > 0) onRemoveBackendQuery(-1) // clear all
+  }, [onRemoveBackendQuery, backendSearchQueries.length])
       // Handle drag start for selected documents
   const handleMultiDragStart = useCallback((e: React.DragEvent, documentId: number) => {
     // Always ensure the dragged document is included
@@ -1135,7 +1138,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
               <input
                 type="text"
-                placeholder={onBackendSearch ? 'Search documents (Enter for server search)...' : 'Search documents...'}
+                placeholder={onBackendSearch ? (hasServerSearch ? 'Refine: add another query (Enter)…' : 'Search documents (Enter for server search)…') : 'Search documents...'}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => {
@@ -1146,7 +1149,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                 }}
                 className="w-full pl-10 pr-9 py-2 border border-input rounded-md bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
               />
-              {(searchQuery || backendSearchQuery) && (
+              {(searchQuery || hasServerSearch) && (
                 <button
                   onClick={clearAllSearch}
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground hover:text-foreground"
@@ -1156,16 +1159,16 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                 </button>
               )}
             </div>
-            {onBackendSearch && searchQuery.trim() && searchQuery.trim() !== (backendSearchQuery || '') && (
+            {onBackendSearch && searchQuery.trim() && !backendSearchQueries.includes(searchQuery.trim()) && (
               <Button
                 size="sm"
                 variant="default"
                 onClick={submitBackendSearch}
                 className="shrink-0"
-                title="Run full-text search on the server"
+                title={hasServerSearch ? 'Refine: add this query (AND)' : 'Run full-text search on the server'}
               >
                 <Search className="h-3.5 w-3.5 mr-1" />
-                Search server
+                {hasServerSearch ? 'Refine' : 'Search server'}
               </Button>
             )}
             {canSaveChanges && onSaveChanges && (
@@ -1182,18 +1185,35 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
               </Button>
             )}
           </div>
-          {backendSearchQuery && (
-            <div className="flex items-center gap-2 text-xs">
-              <span className="px-2 py-0.5 rounded bg-muted text-foreground border">
-                Server search: <span className="font-mono">"{backendSearchQuery}"</span>
-              </span>
-              <button
-                onClick={() => onBackendSearch && onBackendSearch('')}
-                className="text-muted-foreground hover:text-foreground"
-                title="Clear server search"
-              >
-                <X className="h-3 w-3" />
-              </button>
+          {hasServerSearch && (
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              <span className="text-muted-foreground">Server search:</span>
+              {backendSearchQueries.map((q, i) => (
+                <span key={`${q}-${i}`} className="flex items-center gap-1">
+                  {i > 0 && <span className="text-muted-foreground/70 font-medium">AND</span>}
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-muted text-foreground border">
+                    <span className="font-mono">"{q}"</span>
+                    {onRemoveBackendQuery && (
+                      <button
+                        onClick={() => onRemoveBackendQuery(i)}
+                        className="text-muted-foreground hover:text-foreground"
+                        title="Remove this query"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </span>
+                </span>
+              ))}
+              {onRemoveBackendQuery && backendSearchQueries.length > 1 && (
+                <button
+                  onClick={() => onRemoveBackendQuery(-1)}
+                  className="ml-1 text-muted-foreground hover:text-foreground underline"
+                  title="Clear all queries"
+                >
+                  clear all
+                </button>
+              )}
             </div>
           )}
         </div>

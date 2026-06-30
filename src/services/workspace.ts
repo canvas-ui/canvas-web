@@ -34,6 +34,14 @@ function appendFilters(params: URLSearchParams, filterArray: string[] = []) {
   filterArray.filter(Boolean).forEach(filter => params.append('filters', filter))
 }
 
+// Append the text-query stack as repeated ?q params (server AND-narrows them);
+// falls back to a single `q` for the legacy one-shot search shape.
+function appendQueries(params: URLSearchParams, queries?: string[], q?: string) {
+  const list = (queries && queries.length ? queries : (q ? [q] : []))
+    .map(s => s.trim()).filter(Boolean)
+  for (const s of list) { params.append('q', s) }
+}
+
 function getWorkspaceTreeBaseRoute(workspaceId: string, treeName = DEFAULT_WORKSPACE_TREE_NAME) {
   return `${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}`
 }
@@ -226,7 +234,7 @@ export async function getWorkspaceDocuments(
   id: string,
   contextSpec: string = '/',
   featureArray: string[] = [],
-  options: { limit?: number; offset?: number; page?: number; includeIncoming?: boolean; treeName?: string; treeType?: string; q?: string; anyOf?: string[]; noneOf?: string[]; filters?: string[]; scope?: 'path' | 'workspace' } = {}
+  options: { limit?: number; offset?: number; page?: number; includeIncoming?: boolean; treeName?: string; treeType?: string; q?: string; queries?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[]; scope?: 'path' | 'workspace' } = {}
 ): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }> {
   try {
     const params = new URLSearchParams();
@@ -243,7 +251,7 @@ export async function getWorkspaceDocuments(
     if (options.limit !== undefined) params.append('limit', options.limit.toString());
     if (options.offset !== undefined) params.append('offset', options.offset.toString());
     if (options.page !== undefined) params.append('page', options.page.toString());
-    if (options.q && options.q.trim()) params.append('q', options.q.trim());
+    appendQueries(params, options.queries, options.q);
 
     const queryString = params.toString();
     const url = `${API_ROUTES.workspaces}/${id}/documents${queryString ? '?' + queryString : ''}`;
@@ -262,7 +270,7 @@ export async function getCanvasPathDocuments(
   id: string,
   path: string,
   treeName = DEFAULT_WORKSPACE_TREE_NAME,
-  options: { limit?: number; offset?: number; page?: number; q?: string; allOf?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[] } = {}
+  options: { limit?: number; offset?: number; page?: number; q?: string; queries?: string[]; allOf?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[] } = {}
 ): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }> {
   const treeType = treeName === 'directory' ? 'directory' : 'context'
   return getWorkspaceDocuments(id, path, options.allOf || [], {
@@ -272,6 +280,7 @@ export async function getCanvasPathDocuments(
     page: options.page,
     offset: options.offset,
     q: options.q,
+    queries: options.queries,
     anyOf: options.anyOf,
     noneOf: options.noneOf,
     filters: options.filters,
@@ -282,14 +291,14 @@ export async function getWorkspaceLayerDocuments(
   id: string,
   treeName: string,
   layerId: string,
-  options: { limit?: number; offset?: number; page?: number; q?: string; allOf?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[] } = {}
+  options: { limit?: number; offset?: number; page?: number; q?: string; queries?: string[]; allOf?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[] } = {}
 ): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }> {
   try {
     const params = new URLSearchParams();
     if (options.limit !== undefined) params.append('limit', options.limit.toString());
     if (options.offset !== undefined) params.append('offset', options.offset.toString());
     if (options.page !== undefined) params.append('page', options.page.toString());
-    if (options.q && options.q.trim()) params.append('q', options.q.trim());
+    appendQueries(params, options.queries, options.q);
     appendAllOf(params, options.allOf);
     appendAnyOf(params, options.anyOf);
     appendNoneOf(params, options.noneOf);

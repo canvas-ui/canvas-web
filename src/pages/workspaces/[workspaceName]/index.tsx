@@ -69,7 +69,14 @@ export default function WorkspaceDetailPage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const searchParams = new URLSearchParams(location.search);
-  const urlSearchQuery = searchParams.get('q') || searchParams.get('search') || '';
+  // Stacked text queries (?q=car&q=red) refine each other (AND-narrow); a single
+  // ?q / ?search is the ordinary one-shot search.
+  const urlSearchQueries = (() => {
+    const qs = searchParams.getAll('q').map((s) => s.trim()).filter(Boolean);
+    if (qs.length > 0) return qs;
+    const s = (searchParams.get('search') || '').trim();
+    return s ? [s] : [];
+  })();
 
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(true);
@@ -92,7 +99,7 @@ export default function WorkspaceDetailPage() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
-  const [serverSearchQuery, setServerSearchQuery] = useState(urlSearchQuery);
+  const [serverSearchQueries, setServerSearchQueries] = useState<string[]>(urlSearchQueries);
   const [ignoredSavedSearchPath, setIgnoredSavedSearchPath] = useState<string | null>(null);
 
   const { state: toolboxState, saveFilters } = useToolbox();
@@ -184,7 +191,7 @@ export default function WorkspaceDetailPage() {
   // Fetch documents when path, tree, pagination, or workspace status changes
   const fetchDocuments = useCallback(async (opts?: { silent?: boolean }) => {
     if (!workspaceName) return;
-    const cacheKey = documentKey(workspaceName, selectedTreeName, selectedPath, currentPage, pageSize, serverSearchQuery || '', tbFiltersKey, (isLayerView && selectedLayerId) ? selectedLayerId : '', docScope);
+    const cacheKey = documentKey(workspaceName, selectedTreeName, selectedPath, currentPage, pageSize, serverSearchQueries.join('␟'), tbFiltersKey, (isLayerView && selectedLayerId) ? selectedLayerId : '', docScope);
     const cached = documentCache.get(cacheKey);
     if (cached) {
       setDocuments(cached.documents);
@@ -200,7 +207,7 @@ export default function WorkspaceDetailPage() {
         response = await getWorkspaceLayerDocuments(workspaceName, selectedTreeName, selectedLayerId, {
           limit: pageSize,
           page: currentPage,
-          q: serverSearchQuery || undefined,
+          queries: serverSearchQueries,
           allOf: tbAllOf,
           anyOf: tbAnyOf,
           noneOf: tbNoneOf,
@@ -213,7 +220,7 @@ export default function WorkspaceDetailPage() {
           page: currentPage,
           treeName: selectedTreeName,
           treeType: selectedTreeType,
-          q: serverSearchQuery || undefined,
+          queries: serverSearchQueries,
           anyOf: tbAnyOf,
           noneOf: tbNoneOf,
           filters: tbDatetimeFilters,
@@ -234,7 +241,7 @@ export default function WorkspaceDetailPage() {
       if (!opts?.silent) setIsLoadingDocuments(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceName, selectedPath, selectedTreeName, selectedLayerId, isLayerView, currentPage, pageSize, workspace?.status, serverSearchQuery, tbFiltersKey, docScope]);
+  }, [workspaceName, selectedPath, selectedTreeName, selectedLayerId, isLayerView, currentPage, pageSize, workspace?.status, serverSearchQueries, tbFiltersKey, docScope]);
 
   useEffect(() => {
     fetchDocuments();
@@ -315,34 +322,56 @@ export default function WorkspaceDetailPage() {
     setDocScope('path');
   }, [selectedPath, selectedTreeName, selectedLayerId]);
 
-  useEffect(() => {
-    setServerSearchQuery(urlSearchQuery);
-    setCurrentPage(1);
-  }, [urlSearchQuery]);
-
-  useEffect(() => {
-    if (urlSearchQuery || selectedNodeType !== 'canvas' || ignoredSavedSearchPath === selectedPath) return;
-    setServerSearchQuery(savedCanvasSearchQuery);
-    setCurrentPage(1);
-  }, [urlSearchQuery, selectedNodeType, savedCanvasSearchQuery, selectedPath, ignoredSavedSearchPath]);
-
-  const handleBackendSearch = useCallback((query: string) => {
-    const trimmed = query.trim();
-    setServerSearchQuery(trimmed);
+  // Reflect a query stack into the URL (?q=a&q=b) so it is shareable/back-navigable.
+  const syncQueriesToUrl = useCallback((queries: string[]) => {
     const params = new URLSearchParams(location.search);
-    if (trimmed) {
-      setIgnoredSavedSearchPath(null);
-      params.set('q', trimmed);
-    } else {
-      setIgnoredSavedSearchPath(selectedPath);
-      params.delete('q');
-      params.delete('search');
-    }
+    params.delete('q');
+    params.delete('search');
+    for (const q of queries) { params.append('q', q); }
     const nextSearch = params.toString();
     navigate(`${location.pathname}${nextSearch ? `?${nextSearch}` : ''}`);
-  }, [location.pathname, location.search, navigate, selectedPath]);
+  }, [location.pathname, location.search, navigate]);
 
-  const currentSearchQuery = serverSearchQuery.trim();
+  const urlQueriesKey = urlSearchQueries.join('␟');
+  useEffect(() => {
+    setServerSearchQueries(urlSearchQueries);
+    setCurrentPage(1);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlQueriesKey]);
+
+  useEffect(() => {
+    if (urlSearchQueries.length > 0 || selectedNodeType !== 'canvas' || ignoredSavedSearchPath === selectedPath) return;
+    setServerSearchQueries(savedCanvasSearchQuery ? [savedCanvasSearchQuery] : []);
+    setCurrentPage(1);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlQueriesKey, selectedNodeType, savedCanvasSearchQuery, selectedPath, ignoredSavedSearchPath]);
+
+  // Append a query to the stack (refine). Empty input is ignored; duplicates skipped.
+  const handleBackendSearch = useCallback((query: string) => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    setIgnoredSavedSearchPath(null);
+    setServerSearchQueries((prev) => {
+      if (prev.includes(trimmed)) return prev;
+      const next = [...prev, trimmed];
+      syncQueriesToUrl(next);
+      setCurrentPage(1);
+      return next;
+    });
+  }, [syncQueriesToUrl]);
+
+  // Remove one query chip (or clear all when index < 0).
+  const handleRemoveBackendQuery = useCallback((index: number) => {
+    setServerSearchQueries((prev) => {
+      const next = index < 0 ? [] : prev.filter((_, i) => i !== index);
+      if (next.length === 0) { setIgnoredSavedSearchPath(selectedPath); }
+      syncQueriesToUrl(next);
+      setCurrentPage(1);
+      return next;
+    });
+  }, [syncQueriesToUrl, selectedPath]);
+
+  const currentSearchQuery = serverSearchQueries.join(' ').trim();
   const canSaveChanges = Boolean(toolboxState.activeContextType)
     && (toolboxState.isDirty || currentSearchQuery !== (selectedNodeType === 'canvas' ? savedCanvasSearchQuery : (toolboxState.savedSearchQuery || '')));
 
@@ -620,7 +649,9 @@ export default function WorkspaceDetailPage() {
         querySpec: {
           features: toolboxState.filters.features,
           filters: [],
-          query: serverSearchQuery.trim() || undefined,
+          // Canvas querySpec holds a single query; a refine stack collapses to a
+          // combined search string on save (reload runs it as one query).
+          query: currentSearchQuery || undefined,
         },
       });
       setSaveAsCanvasOpen(false);
@@ -806,8 +837,9 @@ export default function WorkspaceDetailPage() {
       isDeletingCanvas={deleteCanvasLoading}
       isCanvasShared={!!publicCanvasShare}
       isCanvasLocked={!!selectedNode?.locked}
-      backendSearchQuery={serverSearchQuery}
+      backendSearchQueries={serverSearchQueries}
       onBackendSearch={handleBackendSearch}
+      onRemoveBackendQuery={handleRemoveBackendQuery}
       canSaveChanges={canSaveChanges}
       isSavingChanges={toolboxState.isSaving}
       onSaveChanges={saveFilters}
