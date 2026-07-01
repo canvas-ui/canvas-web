@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Search, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { Loader } from '@/components/ui/loader'
 import { MenuTreeView } from './MenuTreeView'
 import { listWorkspaces, getCachedWorkspaceTreeByName, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
 import type { TreeNode } from '@/types/workspace'
@@ -20,6 +21,9 @@ interface TreePickerProps {
   // When set, the workspace choice is fixed (e.g. a shared-file blob already
   // landed in a specific workspace) and only the path is pickable.
   lockedWorkspaceName?: string
+  // True while the caller's onSave (upload + document create) is in flight —
+  // shows a spinner on "Save here" and blocks closing mid-save.
+  saving?: boolean
 }
 
 // Thin picker built on MenuTreeView's existing readOnly + onSelect(path) +
@@ -27,7 +31,7 @@ interface TreePickerProps {
 // selector + search bar wrapped around it. Renders as a plain card (not a
 // modal) so callers can place it beside another card, e.g. B5Card opens it
 // as a sibling panel rather than an overlapping dialog.
-export function TreePicker({ onClose, onSelect, lockedWorkspaceName }: TreePickerProps) {
+export function TreePicker({ onClose, onSelect, lockedWorkspaceName, saving = false }: TreePickerProps) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [workspaceName, setWorkspaceName] = useState<string | null>(lockedWorkspaceName ?? null)
   const [tree, setTree] = useState<TreeNode | null>(null)
@@ -70,7 +74,7 @@ export function TreePicker({ onClose, onSelect, lockedWorkspaceName }: TreePicke
     <div className="flex h-[85vh] max-h-[85vh] w-[360px] flex-col overflow-hidden rounded-2xl border bg-card shadow-elevation-4">
       <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
         <span className="text-sm font-medium">Save to…</span>
-        <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground" aria-label="Close">
+        <button type="button" onClick={onClose} disabled={saving} className="text-muted-foreground hover:text-foreground disabled:opacity-40" aria-label="Close">
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -81,6 +85,7 @@ export function TreePicker({ onClose, onSelect, lockedWorkspaceName }: TreePicke
             className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
             value={workspaceName ?? ''}
             onChange={(e) => setWorkspaceName(e.target.value || null)}
+            disabled={saving}
           >
             <option value="" disabled>Select a workspace…</option>
             {workspaces.map((w) => (
@@ -118,8 +123,8 @@ export function TreePicker({ onClose, onSelect, lockedWorkspaceName }: TreePicke
 
       <div className="flex shrink-0 items-center justify-between gap-2 border-t p-3">
         <p className="truncate text-xs text-muted-foreground">{workspaceName ? path : 'Choose a workspace'}</p>
-        <Button size="sm" onClick={confirm} disabled={!workspaceName}>
-          Save here
+        <Button size="sm" onClick={confirm} disabled={!workspaceName || saving}>
+          {saving ? (<><Loader className="mr-1.5 h-3.5 w-3.5" />Saving…</>) : 'Save here'}
         </Button>
       </div>
     </div>

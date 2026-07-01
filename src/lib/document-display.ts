@@ -35,16 +35,24 @@ function getTabTitle(url: string): string {
   }
 }
 
-// Filename for a blob doc: basename of the first location's key (everything
-// after scheme://backend/). Blobs carry no data.filename — the name is a
-// per-location alias, so it's derived from the location URL.
+// Filename for a blob doc. `stored://` locations are content-addressed (the
+// URL's path is a hash, not a name), so the human filename lives on
+// locations[0].metadata.filename instead — set at upload time (see
+// services/blobs.ts callers). Fall back to the URL basename for location
+// schemes where the path IS the name (e.g. file:// from `ws add`).
 export function isImageFile(document: Document): boolean {
   if (document.schema !== FILE_SCHEMA) return false
   return String(document.metadata?.contentType || '').startsWith('image/')
 }
 
 export function getLocationFilename(document: Document): string {
-  const url = document.locations?.[0]?.url
+  const location = document.locations?.[0]
+  if (!location) return ''
+
+  const metaFilename = String(location.metadata?.filename || '').trim()
+  if (metaFilename) return metaFilename
+
+  const url = location.url
   if (!url) return ''
   const afterScheme = url.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')
   const slash = afterScheme.indexOf('/')

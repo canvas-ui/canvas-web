@@ -29,8 +29,25 @@ async function readShareInbox(token: string): Promise<{ kind: QuickAddKind; data
   await cache.delete(`/share-target-inbox/${token}/meta`)
 
   if (files.length) return { kind: 'file', data: { files } }
-  if (meta.url) return { kind: 'link', data: { url: meta.url, title: meta.title } }
+
+  // The `url` param is the well-behaved case, but a lot of apps (esp. the
+  // Android share sheet for browsers/social apps) put the shared link in
+  // `text` instead — treat a text body that's just a bare URL as a link too.
+  const trimmedText = meta.text.trim()
+  const sharedUrl = meta.url || (isBareUrl(trimmedText) ? trimmedText : '')
+  if (sharedUrl) return { kind: 'link', data: { url: sharedUrl, title: meta.title } }
+
   return { kind: 'note', data: { title: meta.title, content: meta.text } }
+}
+
+function isBareUrl(value: string): boolean {
+  if (!value || /\s/.test(value)) return false
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
 }
 
 // Landing point for the OS share sheet (see src/sw.ts for the intercept +

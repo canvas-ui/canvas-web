@@ -81,7 +81,8 @@ export function B5Card({
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            disabled={saving}
+            className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
             aria-label="Close"
           >
             <X className="h-4 w-4" />
@@ -98,6 +99,7 @@ export function B5Card({
       onClose={() => setPickerOpen(false)}
       onSelect={handleSelect}
       lockedWorkspaceName={lockedWorkspaceName}
+      saving={saving}
     />
   )
 
