@@ -57,7 +57,7 @@ export function FileForm() {
           schema: 'data/abstraction/file',
           schemaVersion: '3.0',
           data: {},
-          checksumArray: [`sha256:${blob.checksum}`],
+          checksumArray: [`sha256/${blob.checksum}`],
           locations: [{ url: blob.url, metadata: { filename: file.name } }],
           metadata: { contentType: file.type, size: blob.size },
         })

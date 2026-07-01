@@ -210,7 +210,7 @@ function DocumentRow({ document, onRemoveDocument, onDeleteDocument }: DocumentR
       )
       if (primary) {
         const [algo, hash] = primary.split('/')
-        return { algo, hash: hash.substring(0, 8) + '...' }
+        if (hash) return { algo, hash: hash.substring(0, 8) + '...' }
       }
     }
     return null
