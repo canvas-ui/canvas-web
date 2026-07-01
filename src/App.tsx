@@ -5,6 +5,7 @@ import RegisterPage from './pages/auth/register'
 import WorkspacesPage from './pages/workspaces'
 import WorkspaceDetailPage from './pages/workspaces/[workspaceName]'
 import HomePage from './pages/home'
+import ShareTargetPage from './pages/share-target'
 import { ProtectedRoute } from './components/auth/protected-route'
 import { PublicRoute } from './components/auth/public-route'
 import ContextsPage from './pages/contexts'
@@ -55,6 +56,7 @@ function AppContent() {
         <Route path="/" element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
           <Route index element={<Navigate to="/workspaces" replace />} />
           <Route path="home" element={<HomePage />} />
+          <Route path="share-target" element={<ShareTargetPage />} />
           <Route path="workspaces" element={<WorkspacesPage />} />
           <Route path="workspaces/:workspaceName" element={<WorkspaceDetailPage />} />
           <Route path="workspaces/:workspaceName/settings" element={<WorkspaceSettingsPage />} />

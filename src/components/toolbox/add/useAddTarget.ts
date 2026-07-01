@@ -5,7 +5,7 @@ import {
   importDocumentsToWorkspacePath,
   listWorkspaceTrees,
 } from '@/services/workspace'
-import { insertDocumentsToContextById } from '@/services/context'
+import { insertDocumentsToContextById, getContext } from '@/services/context'
 
 export type AddTarget =
   | { mode: 'workspace'; workspaceName: string; path: string; treeName: string; treeType: 'context' | 'directory' }
@@ -81,6 +81,21 @@ export async function submitDocuments(target: AddTarget, documents: Record<strin
   }
 
   return insertDocumentsToContextById(target.contextId, documents)
+}
+
+// Blob upload (POST /workspaces/:id/blobs) is workspace-scoped. A context is
+// always bound to exactly one workspace+tree+path (Context.js getters
+// workspaceName/treeId/path server-side), so context-mode targets resolve to
+// that binding here rather than needing their own upload path.
+export async function resolveUploadWorkspace(target: AddTarget): Promise<{ workspaceName: string; path: string; treeName: string; treeType: 'context' | 'directory' }> {
+  if (!target) throw new Error('No active workspace or context to add to')
+  if (target.mode === 'workspace') {
+    return { workspaceName: target.workspaceName, path: target.path, treeName: target.treeName, treeType: target.treeType }
+  }
+  const ctx = await getContext(target.contextId)
+  const workspaceName = ctx.workspaceName || ctx.workspaceId
+  if (!workspaceName) throw new Error('Context has no bound workspace')
+  return { workspaceName, path: ctx.path || '/', treeName: ctx.treeId || DEFAULT_WORKSPACE_TREE_NAME, treeType: 'context' }
 }
 
 export function describeTarget(target: AddTarget): string {

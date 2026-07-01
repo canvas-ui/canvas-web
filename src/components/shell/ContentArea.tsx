@@ -8,13 +8,22 @@ function isFullBleed(pathname: string): boolean {
   return ['contexts', 'workspaces', 'agents'].includes(section) && Boolean(entity)
 }
 
+// The FAB quick-capture surface (home, and the share-target landing that
+// reuses it) has no page chrome of its own — no "sheet of paper" card, no
+// padding — it sits directly on the canvas-desk background.
+function isBare(pathname: string): boolean {
+  const [section] = pathname.split('/').filter(Boolean)
+  return section === 'home' || section === 'share-target'
+}
+
 export function ContentArea() {
   const { pathname } = useLocation()
   const fullBleed = isFullBleed(pathname)
+  const bare = isBare(pathname)
 
   return (
-    <div className="relative flex flex-col flex-1 min-w-0 canvas-sheet">
-      <main className={cn('flex-1 min-h-0 overflow-auto', !fullBleed && 'p-6')}>
+    <div className={cn('relative flex flex-col flex-1 min-w-0', !bare && 'canvas-sheet')}>
+      <main className={cn('flex-1 min-h-0 overflow-auto', !fullBleed && !bare && 'p-6')}>
         <Outlet />
       </main>
     </div>

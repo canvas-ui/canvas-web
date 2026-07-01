@@ -4,17 +4,13 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { useToolbox } from '../toolbox-context'
-import { useAddTarget, describeTarget } from './useAddTarget'
+import { useAddTarget, describeTarget, submitDocuments, resolveUploadWorkspace } from './useAddTarget'
+import { uploadWorkspaceBlob } from '@/services/blobs'
 import { cn } from '@/lib/utils'
 
-// Default storage backends seeded per workspace. The backend-pick step only renders
-// when more than one is available. NOTE: wiring is intentionally stubbed — actual
-// upload + backend selection lands with file storage support.
-// TODO(file-backend): replace with real backend listing + upload once storage lands.
-const DEFAULT_BACKENDS = [
-  { id: 'workspace:home', label: 'Home', hint: 'workspace_root/home' },
-  { id: 'workspace:data', label: 'Data', hint: 'workspace_root/data' },
-]
+// TODO: copy-to-multiple-backends (workspace:home vs workspace:data) once more
+// than one blob backend is exposed server-side — for now every upload goes to
+// the workspace's default `workspace:data` blob store.
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -30,10 +26,7 @@ export function FileForm() {
   const inputRef = useRef<HTMLInputElement>(null)
   const [files, setFiles] = useState<File[]>([])
   const [dragOver, setDragOver] = useState(false)
-  const [backends, setBackends] = useState<string[]>(DEFAULT_BACKENDS.map((b) => b.id))
   const [submitting, setSubmitting] = useState(false)
-
-  const multiBackend = DEFAULT_BACKENDS.length > 1
 
   const addFiles = (list: FileList | null) => {
     if (!list) return
@@ -50,26 +43,30 @@ export function FileForm() {
     addFiles(e.dataTransfer.files)
   }
 
-  const toggleBackend = (id: string) => {
-    setBackends((prev) => (prev.includes(id) ? prev.filter((b) => b !== id) : [...prev, id]))
-  }
-
-  const canSubmit = !!target && !submitting && files.length > 0 && (!multiBackend || backends.length > 0)
+  const canSubmit = !!target && !submitting && files.length > 0
 
   const handleSubmit = async () => {
-    if (!canSubmit) return
+    if (!canSubmit || !target) return
     setSubmitting(true)
     try {
-      // TODO(file-backend): POST file blobs to the selected backends and create
-      // data/abstraction/file documents referencing the stored locations.
-      await new Promise((r) => setTimeout(r, 300))
-      showSuccessToast(
-        `File upload backend coming soon — ${files.length} file(s) queued for ${backends.join(', ') || 'default'}`,
-        'Not yet wired',
-      )
+      const { workspaceName } = await resolveUploadWorkspace(target)
+      const docs = []
+      for (const file of files) {
+        const blob = await uploadWorkspaceBlob(workspaceName, file)
+        docs.push({
+          schema: 'data/abstraction/file',
+          schemaVersion: '3.0',
+          data: {},
+          checksumArray: [`sha256:${blob.checksum}`],
+          locations: [{ url: blob.url, metadata: { filename: file.name } }],
+          metadata: { contentType: file.type, size: blob.size },
+        })
+      }
+      await submitDocuments(target, docs)
+      showSuccessToast(`${files.length} file(s) uploaded`)
       closeAdd()
     } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to queue files')
+      showErrorToast(err instanceof Error ? err.message : 'Failed to upload files')
     } finally {
       setSubmitting(false)
     }
@@ -131,25 +128,6 @@ export function FileForm() {
         </div>
       )}
 
-      {multiBackend && files.length > 0 && (
-        <div className="space-y-1.5">
-          <Label>Copy to backends</Label>
-          <div className="space-y-1">
-            {DEFAULT_BACKENDS.map((b) => (
-              <label key={b.id} className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={backends.includes(b.id)}
-                  onChange={() => toggleBackend(b.id)}
-                />
-                <span>{b.label}</span>
-                <span className="text-xs text-muted-foreground">{b.hint}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-      )}
-
       <p className="text-xs text-muted-foreground">{describeTarget(target)}</p>
 
       <div className="flex justify-end gap-2">
@@ -157,7 +135,7 @@ export function FileForm() {
           Cancel
         </Button>
         <Button size="sm" onClick={handleSubmit} disabled={!canSubmit}>
-          {submitting ? 'Working…' : 'Add files'}
+          {submitting ? 'Uploading…' : 'Add files'}
         </Button>
       </div>
     </div>

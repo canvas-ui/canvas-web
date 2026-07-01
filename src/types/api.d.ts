@@ -57,6 +57,7 @@ interface Context {
   workspaceId?: string
   workspaceName?: string
   workspaceActive?: boolean
+  treeId?: string
   userId: string
   baseUrl?: string
   path?: string
