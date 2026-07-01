@@ -610,7 +610,7 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
   const getPrimaryChecksum = () => {
     if (document.checksumArray && document.checksumArray.length > 0) {
       const primary = document.checksumArray.find(c => c.startsWith(document.indexOptions?.primaryChecksumAlgorithm || 'sha1'))
-      if (primary) { const [algo, hash] = primary.split('/'); return { algo, hash: hash.substring(0, 8) + '...' } }
+      if (primary) { const [algo, hash] = primary.split('/'); if (hash) return { algo, hash: hash.substring(0, 8) + '...' } }
     }
     return null
   }
