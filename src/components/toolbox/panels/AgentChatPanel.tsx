@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Send, Square, Trash2 } from 'lucide-react'
+import { ArrowLeft, Mic, Send, Square, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getAgent, type Agent } from '@/services/agent'
+import { getAgent, getVoiceStatus, type Agent } from '@/services/agent'
 import { useAgentPromptStream } from '@/hooks/useAgentPromptStream'
+import { useVoiceRecorder } from '@/hooks/useVoiceRecorder'
 import AgentAssistantExtras from '@/components/agent/AgentAssistantExtras'
 
 interface AgentChatPanelProps {
@@ -13,13 +14,22 @@ interface AgentChatPanelProps {
 export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
   const [agent, setAgent] = useState<Agent | null>(null)
   const [input, setInput] = useState('')
+  const [voiceAvailable, setVoiceAvailable] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const { messages, isStreaming, error, send, stop, clear } = useAgentPromptStream(agentId)
+  const { messages, isStreaming, error, send, sendVoice, stop, clear } = useAgentPromptStream(agentId)
+  const { isRecording, recorderError, start: startRecording, stop: stopRecording } = useVoiceRecorder()
 
   useEffect(() => {
     getAgent(agentId).then(setAgent).catch(() => {})
   }, [agentId])
+
+  useEffect(() => {
+    // Mic button only when server-side STT is configured.
+    getVoiceStatus()
+      .then(status => setVoiceAvailable(Boolean(status.enabled && status.stt)))
+      .catch(() => setVoiceAvailable(false))
+  }, [])
 
   useEffect(() => {
     if (messages.length === 0) return
@@ -32,6 +42,15 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
     setInput('')
     textareaRef.current?.focus()
     await send(msg)
+  }
+
+  const handleMicClick = async () => {
+    if (isRecording) {
+      const clip = await stopRecording()
+      if (clip) await sendVoice(clip)
+    } else if (!isStreaming) {
+      await startRecording()
+    }
   }
 
   return (
@@ -91,8 +110,8 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
             {msg.content || (!msg.isComplete && msg.role === 'assistant' ? '…' : '')}
           </div>
         ))}
-        {error && (
-          <div className="text-xs text-destructive text-center py-1">{error}</div>
+        {(error || recorderError) && (
+          <div className="text-xs text-destructive text-center py-1">{error || recorderError}</div>
         )}
         <div ref={bottomRef} />
       </div>
@@ -114,6 +133,22 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
             rows={2}
             className="flex-1 resize-y text-sm px-3 py-2 border border-input bg-background rounded-md focus:outline-none focus:ring-1 focus:ring-ring min-h-[38px] max-h-[120px]"
           />
+          {voiceAvailable && (
+            <button
+              type="button"
+              onClick={handleMicClick}
+              disabled={isStreaming && !isRecording}
+              className={cn(
+                'flex items-center justify-center w-9 h-9 rounded-md transition-opacity shrink-0 disabled:opacity-40',
+                isRecording
+                  ? 'bg-destructive text-destructive-foreground hover:opacity-90 animate-pulse'
+                  : 'bg-muted text-foreground hover:bg-accent',
+              )}
+              title={isRecording ? 'Stop recording and send' : 'Record a voice message'}
+            >
+              {isRecording ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            </button>
+          )}
           {isStreaming ? (
             <button
               type="button"

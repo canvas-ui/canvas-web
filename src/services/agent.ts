@@ -928,3 +928,51 @@ export function convertToStreamingMessages(messages: ChatMessage[]): ChatMessage
     timestamp: typeof msg.timestamp === 'string' ? msg.timestamp : new Date().toISOString()
   }));
 }
+
+/**
+ * Voice — agent voice round-trip + voice service status
+ */
+
+export interface AgentVoiceResult {
+  transcript: string;
+  reply: string;
+  audio: string | null;          // base64-encoded synthesized reply
+  audioMimeType: string | null;
+  voice: string | null;
+}
+
+export interface VoiceStatus {
+  enabled: boolean;
+  stt: { baseUrl: string; model: string } | null;
+  tts: { baseUrl: string; model: string; voice: string } | null;
+}
+
+export async function getVoiceStatus(): Promise<VoiceStatus> {
+  const response = await api.get<{ payload: VoiceStatus }>(`${API_URL}/voice/status`);
+  return response.payload;
+}
+
+/**
+ * Send a recorded audio clip to an agent: transcribed server-side, prompted,
+ * and (when TTS is configured) the reply comes back as base64 audio.
+ */
+export async function voicePrompt(
+  agentId: string,
+  audio: Blob,
+  options: { tts?: boolean; voice?: string } = {},
+): Promise<AgentVoiceResult> {
+  const form = new FormData();
+  const extension = (audio.type.split('/')[1] || 'webm').split(';')[0];
+  form.append('file', audio, `voice.${extension}`);
+
+  const params = new URLSearchParams();
+  if (options.tts === false) params.set('tts', 'false');
+  if (options.voice) params.set('voice', options.voice);
+  const query = params.toString() ? `?${params.toString()}` : '';
+
+  const response = await api.post<{ payload: AgentVoiceResult }>(
+    `${API_URL}/agents/${agentId}/voice${query}`,
+    form,
+  );
+  return response.payload;
+}

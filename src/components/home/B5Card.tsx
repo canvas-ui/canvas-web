@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { RotateCw, Maximize2, Minimize2, X, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -41,7 +41,15 @@ export function B5Card({
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait')
   const [maximized, setMaximized] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const pickerRef = useRef<HTMLDivElement>(null)
   const { showSuccessToast, showErrorToast } = useToastHelpers()
+
+  // Scroll the newly-inserted picker into view — it's a real flex sibling
+  // (pushes the next card right, doesn't overlap it), which in a long
+  // scrollable row can land past the current viewport otherwise.
+  useEffect(() => {
+    if (pickerOpen) pickerRef.current?.scrollIntoView({ behavior: 'smooth', inline: 'end', block: 'nearest' })
+  }, [pickerOpen])
 
   const handleSelect = async (paths: string[], ctx: LinkToTarget) => {
     if (!onSave) return
@@ -138,9 +146,13 @@ export function B5Card({
   }
 
   return (
+    // In-flow flex siblings — the picker is a real layout item right after
+    // its own card, so it pushes the next card over rather than overlapping
+    // it (an absolutely-positioned overlay was tried and looked wrong —
+    // covered the next card instead of sitting between the two).
     <>
       {card}
-      {picker}
+      {picker && <div ref={pickerRef} className="shrink-0">{picker}</div>}
     </>
   )
 }

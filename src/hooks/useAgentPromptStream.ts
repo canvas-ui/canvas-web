@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { api } from '@/lib/api'
 import { API_URL } from '@/config/api'
-import { getAgentSession, startAgent } from '@/services/agent'
+import { getAgentSession, startAgent, voicePrompt } from '@/services/agent'
 import { extractAgentMessageReasoning } from '@/services/agent'
 import { extractAgentMessageMetadata, type AgentResponseMetadata } from '@/services/agent'
 
@@ -187,6 +187,45 @@ export function useAgentPromptStream(agentId: string) {
     }
   }, [agentId, isStreaming])
 
+  // Voice round-trip: transcribed + answered server-side (non-streaming);
+  // appends the transcript as the user message and plays the spoken reply.
+  const sendVoice = useCallback(async (audio: Blob) => {
+    if (isStreaming || !agentId) return
+    setError(null)
+    setIsStreaming(true)
+    setMessages(prev => [
+      ...prev,
+      { role: 'user', content: '🎤 Transcribing…', isComplete: false },
+    ])
+
+    try {
+      const result = await voicePrompt(agentId, audio)
+      setMessages(prev => {
+        const copy = [...prev]
+        copy[copy.length - 1] = { role: 'user', content: `🎤 ${result.transcript}`, isComplete: true }
+        return [
+          ...copy,
+          { role: 'assistant', content: result.reply, isComplete: true },
+        ]
+      })
+      if (result.audio && result.audioMimeType) {
+        const player = new Audio(`data:${result.audioMimeType};base64,${result.audio}`)
+        player.play().catch(() => { /* autoplay blocked — text reply is still shown */ })
+      }
+    } catch (err: any) {
+      setError(err?.message ?? 'Voice prompt failed')
+      // Drop the transcribing placeholder so the log stays clean.
+      setMessages(prev => {
+        const copy = [...prev]
+        const last = copy[copy.length - 1]
+        if (last?.role === 'user' && !last.isComplete) copy.pop()
+        return copy
+      })
+    } finally {
+      setIsStreaming(false)
+    }
+  }, [agentId, isStreaming])
+
   const stop = useCallback(() => {
     abortRef.current?.abort()
     setIsStreaming(false)
@@ -197,5 +236,5 @@ export function useAgentPromptStream(agentId: string) {
     setError(null)
   }, [])
 
-  return { messages, isStreaming, error, send, stop, clear }
+  return { messages, isStreaming, error, send, sendVoice, stop, clear }
 }
