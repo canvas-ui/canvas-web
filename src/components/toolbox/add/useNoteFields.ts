@@ -16,7 +16,7 @@ export function useNoteFields() {
 
   const canSave = content.trim().length > 0 && !saving
 
-  async function save(target: AddTarget): Promise<boolean> {
+  async function save(target: AddTarget): Promise<number[]> {
     setSaving(true)
     try {
       const doc = {

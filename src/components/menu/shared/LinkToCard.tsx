@@ -1,0 +1,340 @@
+import { useEffect, useState } from 'react'
+import { X, Search, Link2, ChevronRight, ChevronDown, GitBranch, FolderTree } from 'lucide-react'
+import { Icon } from '@iconify/react'
+import type { TreeNode } from '@/types/workspace'
+import { getLayerStyle, DEFAULT_FOLDER_ICON, DEFAULT_CANVAS_ICON, DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style'
+import { Button } from '@/components/ui/button'
+import { Loader } from '@/components/ui/loader'
+import { cn } from '@/lib/utils'
+import { listWorkspaces, getCachedWorkspaceTreeByName, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
+// Workspace is a global type declared in src/types/api.d.ts
+
+export interface LinkToTarget {
+  workspaceName: string
+  treeName: string
+  treeType: 'context' | 'directory'
+}
+
+interface LinkToCardProps {
+  onClose: () => void
+  onConfirm: (paths: string[], ctx: LinkToTarget) => void | Promise<void>
+  documentCount?: number
+  // Skips the workspace-picker step entirely — used by document-list.tsx's
+  // existing "Link to…" action, which already knows its workspace.
+  fixedWorkspaceName?: string
+  // false = clicking a row replaces the selection (single path), no pinned
+  // chips. true (default) = multi-select with pinned chips, LinkToPanel's
+  // original behavior.
+  multiple?: boolean
+  saving?: boolean
+  // Overrides the default B5-sibling sizing (85vh, 380px wide) — e.g. full
+  // height for document-list's right-edge overlay usage.
+  sizeClassName?: string
+}
+
+type TreeTab = 'context' | 'directory'
+
+const TAB_ICONS: Record<TreeTab, React.ReactNode> = {
+  context: <GitBranch className="h-3.5 w-3.5" />,
+  directory: <FolderTree className="h-3.5 w-3.5" />,
+}
+const TAB_LABELS: Record<TreeTab, string> = {
+  context: 'Context tree',
+  directory: 'Directory tree',
+}
+
+function buildPath(parent: string, name: string) {
+  return parent === '/' ? `/${name}` : `${parent}/${name}`
+}
+
+function matchesSearch(node: TreeNode, parentPath: string, query: string): boolean {
+  const path = buildPath(parentPath, node.name)
+  if (path.toLowerCase().includes(query) || (node.label || '').toLowerCase().includes(query)) return true
+  return node.children?.some(c => matchesSearch(c, path, query)) ?? false
+}
+
+// Single tree row — mirrors the MenuTreeView card style, multi-select via the
+// same selected highlight (no checkbox), so it matches the normal tree visually.
+function LinkNode({
+  node, parentPath, query, selected, onToggle,
+}: {
+  node: TreeNode
+  parentPath: string
+  query: string
+  selected: Set<string>
+  onToggle: (path: string) => void
+}) {
+  const path = buildPath(parentPath, node.name)
+  const hasChildren = !!node.children?.length
+  const [expanded, setExpanded] = useState(false)
+
+  if (query && !matchesSearch(node, parentPath, query)) return null
+
+  const shouldExpand = expanded || query.length > 0
+  const isSelected = selected.has(path)
+  const isCanvas = node.type === 'canvas'
+  const style = getLayerStyle(node)
+
+  return (
+    <div>
+      <div
+        className={cn(
+          'group relative flex min-h-10 items-center gap-2 rounded-md px-3 py-2 cursor-pointer transition-all select-none text-sm shadow-sm hover:shadow',
+          'before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1.5 before:transition-colors',
+          isSelected
+            ? 'bg-primary/[0.08] hover:bg-primary/[0.12] before:bg-primary'
+            : 'bg-card hover:bg-primary/[0.04] before:bg-transparent',
+        )}
+        onClick={() => onToggle(path)}
+        title={path}
+      >
+        <button
+          type="button"
+          className={cn('shrink-0 text-muted-foreground hover:text-foreground', !hasChildren && 'invisible')}
+          onClick={e => { e.stopPropagation(); setExpanded(v => !v) }}
+        >
+          {shouldExpand ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+        </button>
+
+        <Icon
+          icon={style.icon || (isCanvas ? DEFAULT_CANVAS_ICON : DEFAULT_FOLDER_ICON)}
+          width={16}
+          height={16}
+          color={style.color || undefined}
+          className={cn('shrink-0', !style.color && (isCanvas ? 'text-violet-500' : 'text-muted-foreground'))}
+        />
+
+        <span className="flex-1 truncate font-medium" title={node.description || undefined}>
+          {node.label || node.name}
+        </span>
+      </div>
+
+      {shouldExpand && hasChildren && (
+        <div className="ml-[22px] mt-1.5 space-y-1.5">
+          {node.children!.map(child => (
+            <LinkNode
+              key={child.id || child.name}
+              node={child}
+              parentPath={path}
+              query={query}
+              selected={selected}
+              onToggle={onToggle}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Merges the old TreePicker (workspace choice) and LinkToPanel (nice
+// multi-select tree UI) into one reusable card: pick a workspace from a
+// WorkspaceList-styled row list, slide into the tree-with-tabs view. Renders
+// as a plain card — callers own positioning (inline sibling for B5Card,
+// fixed overlay for document-list's existing usage).
+export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceName, multiple = true, saving = false, sizeClassName }: LinkToCardProps) {
+  const [step, setStep] = useState<'workspace' | 'tree'>(fixedWorkspaceName ? 'tree' : 'workspace')
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  const [loadingWorkspaces, setLoadingWorkspaces] = useState(false)
+  const [workspaceName, setWorkspaceName] = useState<string | null>(fixedWorkspaceName ?? null)
+  const [activeTab, setActiveTab] = useState<TreeTab>('context')
+  const [tree, setTree] = useState<TreeNode | null>(null)
+  const [loadingTree, setLoadingTree] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [query, setQuery] = useState('')
+  const q = query.trim().toLowerCase()
+
+  useEffect(() => {
+    if (fixedWorkspaceName) return
+    setLoadingWorkspaces(true)
+    listWorkspaces().then(setWorkspaces).catch(() => setWorkspaces([])).finally(() => setLoadingWorkspaces(false))
+  }, [fixedWorkspaceName])
+
+  useEffect(() => {
+    if (!workspaceName) return
+    let cancelled = false
+
+    async function loadTree() {
+      setLoadingTree(true)
+      try {
+        const res = await getCachedWorkspaceTreeByName(workspaceName as string, activeTab)
+        if (!cancelled) setTree(res.payload)
+      } catch {
+        if (!cancelled) setTree(null)
+      } finally {
+        if (!cancelled) setLoadingTree(false)
+      }
+    }
+
+    loadTree()
+    return () => { cancelled = true }
+  }, [workspaceName, activeTab])
+
+  const pickWorkspace = (name: string) => {
+    setWorkspaceName(name)
+    setSelected(new Set())
+    setStep('tree')
+  }
+
+  const toggle = (path: string) => {
+    if (!multiple) {
+      setSelected(new Set([path]))
+      return
+    }
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(path)) next.delete(path)
+      else next.add(path)
+      return next
+    })
+  }
+
+  const confirm = async () => {
+    if (!workspaceName || selected.size === 0 || saving) return
+    await onConfirm(Array.from(selected), { workspaceName, treeName: activeTab === 'directory' ? 'directory' : DEFAULT_WORKSPACE_TREE_NAME, treeType: activeTab })
+  }
+
+  const count = documentCount ?? 1
+
+  return (
+    <div className={cn('flex flex-col overflow-hidden rounded-2xl border bg-card shadow-elevation-4', sizeClassName || 'h-[85vh] max-h-[85vh] w-[380px]')}>
+      <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
+        <span className="flex items-center gap-2 text-sm font-medium">
+          <Link2 className="h-4 w-4" />
+          {step === 'workspace' ? 'Link to…' : `Link ${count} document${count !== 1 ? 's' : ''} to…`}
+        </span>
+        <button type="button" onClick={onClose} disabled={saving} className="text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40" aria-label="Close">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-hidden">
+        {/* Grid (not flex) for the two steps — grid tracks split the 200%-wide
+            carousel exactly in half regardless of content, avoiding the
+            flex-basis/content-fighting that let both steps render at once. */}
+        <div
+          className="grid h-full w-[200%] grid-cols-2 transition-transform duration-200"
+          style={{ transform: step === 'workspace' ? 'translateX(0)' : 'translateX(-50%)' }}
+        >
+          {/* Step 1: workspace list — WorkspaceList.tsx row styling, minus manage controls */}
+          <div className="flex min-w-0 flex-col overflow-y-auto p-2">
+            {loadingWorkspaces && workspaces.length === 0 ? (
+              <div className="px-2 py-3 text-xs text-muted-foreground">Loading…</div>
+            ) : workspaces.length === 0 ? (
+              <div className="px-2 py-3 text-xs text-muted-foreground">No workspaces found</div>
+            ) : (
+              <div className="space-y-1.5">
+                {workspaces.map(ws => (
+                  <div
+                    key={ws.id || ws.name}
+                    onClick={() => pickWorkspace(ws.name)}
+                    className="group relative flex cursor-pointer items-center gap-2 rounded-md bg-card px-3 py-2.5 shadow-sm transition-all hover:bg-accent/50 hover:shadow"
+                    style={{ borderRight: `6px solid ${ws.color || 'transparent'}`, borderRadius: ws.color ? '6px 0 0 6px' : undefined }}
+                  >
+                    <Icon icon={ws.icon || DEFAULT_WORKSPACE_ICON} width={18} height={18} color={ws.color || undefined} className={cn('shrink-0', !ws.color && 'text-muted-foreground')} />
+                    <span className="flex-1 truncate text-sm font-medium">{ws.label || ws.name}</span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Step 2: tree, tabbed by type */}
+          <div className="flex min-w-0 flex-col overflow-hidden">
+            <div className="flex shrink-0 items-center gap-1 border-b px-2 pt-2">
+              {!fixedWorkspaceName && (
+                <button type="button" onClick={() => setStep('workspace')} className="mr-1 rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Back to workspaces">
+                  <ChevronRight className="h-4 w-4 rotate-180" />
+                </button>
+              )}
+              {(['context', 'directory'] as TreeTab[]).map(tab => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setActiveTab(tab)}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-t-md border-b-2 px-3 py-2 text-xs font-medium transition-colors',
+                    activeTab === tab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {TAB_ICONS[tab]}
+                  {TAB_LABELS[tab]}
+                </button>
+              ))}
+            </div>
+
+            <div className="shrink-0 border-b p-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search paths…"
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background py-2 pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+            </div>
+
+            {multiple && selected.size > 0 && (
+              <div className="flex shrink-0 flex-wrap gap-1.5 border-b bg-primary/[0.04] px-3 py-2">
+                {Array.from(selected).map(path => (
+                  <span key={path} className="inline-flex max-w-full items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
+                    <span className="truncate" title={path}>{path}</span>
+                    <button type="button" onClick={() => toggle(path)} className="shrink-0 rounded-full hover:bg-primary-foreground/20" aria-label={`Remove ${path}`}>
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-3">
+              {loadingTree ? (
+                <div className="px-2 py-3 text-xs text-muted-foreground">Loading…</div>
+              ) : (
+                <>
+                  <div
+                    className={cn(
+                      'group relative flex min-h-10 items-center gap-2 rounded-md px-3 py-2 cursor-pointer transition-all select-none text-sm shadow-sm hover:shadow',
+                      'before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1.5 before:transition-colors',
+                      selected.has('/')
+                        ? 'bg-primary/[0.08] hover:bg-primary/[0.12] before:bg-primary'
+                        : 'bg-card hover:bg-primary/[0.04] before:bg-transparent',
+                    )}
+                    onClick={() => toggle('/')}
+                    title="/"
+                  >
+                    <ChevronDown className="w-4 h-4 shrink-0 text-muted-foreground" />
+                    <span className="flex-1 truncate font-medium">/</span>
+                  </div>
+                  <div className="ml-[22px] space-y-1.5">
+                    {tree?.children?.length ? (
+                      tree.children.map(child => (
+                        <LinkNode key={child.id || child.name} node={child} parentPath="/" query={q} selected={selected} onToggle={toggle} />
+                      ))
+                    ) : (
+                      <p className="px-2 py-1.5 text-xs text-muted-foreground">Empty tree</p>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {step === 'tree' && (
+        <div className="flex shrink-0 items-center justify-between border-t px-4 py-3">
+          <span className="text-xs text-muted-foreground">
+            {selected.size} path{selected.size !== 1 ? 's' : ''} selected
+          </span>
+          <Button size="sm" onClick={confirm} disabled={selected.size === 0 || saving}>
+            {saving ? (<><Loader className="mr-1.5 h-3.5 w-3.5" />Linking…</>) : (<><Link2 className="mr-1 h-3.5 w-3.5" />Link</>)}
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}

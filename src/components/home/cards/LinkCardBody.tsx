@@ -4,8 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { TagInput } from '@/components/toolbox/add/TagInput'
 import { useLinkFields } from '@/components/toolbox/add/useLinkFields'
-import type { TreePickerTarget } from '@/components/menu/shared/TreePicker'
-import { B5Card } from '../B5Card'
+import { B5Card, type B5SaveTarget } from '../B5Card'
 import type { QuickAddInitialData } from '../quick-add-types'
 
 export function LinkCardBody({ onClose, initialData }: { onClose: () => void; initialData?: QuickAddInitialData }) {
@@ -23,7 +22,7 @@ export function LinkCardBody({ onClose, initialData }: { onClose: () => void; in
       title="New Link"
       icon={LinkIcon}
       onClose={onClose}
-      onSave={(target: TreePickerTarget) => f.save({ mode: 'workspace', ...target })}
+      onSave={(target: B5SaveTarget) => f.save({ mode: 'workspace', ...target })}
       canSave={f.canSave}
       saving={f.saving}
       successMessage="Link created"

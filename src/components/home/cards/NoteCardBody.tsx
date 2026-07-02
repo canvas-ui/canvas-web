@@ -5,8 +5,7 @@ import { Label } from '@/components/ui/label'
 import { LazyMarkdownEditor as MarkdownEditor } from '@/components/common/lazy-editor'
 import { TagInput } from '@/components/toolbox/add/TagInput'
 import { useNoteFields } from '@/components/toolbox/add/useNoteFields'
-import type { TreePickerTarget } from '@/components/menu/shared/TreePicker'
-import { B5Card } from '../B5Card'
+import { B5Card, type B5SaveTarget } from '../B5Card'
 import type { QuickAddInitialData } from '../quick-add-types'
 
 export function NoteCardBody({ onClose, initialData }: { onClose: () => void; initialData?: QuickAddInitialData }) {
@@ -24,7 +23,7 @@ export function NoteCardBody({ onClose, initialData }: { onClose: () => void; in
       title="New Note"
       icon={StickyNote}
       onClose={onClose}
-      onSave={(target: TreePickerTarget) => f.save({ mode: 'workspace', ...target })}
+      onSave={(target: B5SaveTarget) => f.save({ mode: 'workspace', ...target })}
       canSave={f.canSave}
       saving={f.saving}
       successMessage="Note created"

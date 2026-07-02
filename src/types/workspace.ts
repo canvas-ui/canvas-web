@@ -122,6 +122,8 @@ export interface Document {
     contentType: string
     contentEncoding: string
     size?: number
+    // tag/<name> entries — see components/toolbox/add/tags.ts's tagsToFeatures
+    features?: string[]
   }
   locations?: Array<{ url: string; metadata?: Record<string, any> }>
   indexOptions: {

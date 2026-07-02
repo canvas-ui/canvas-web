@@ -47,7 +47,9 @@ export function useAddTarget(): AddTarget {
 // A document carries its own tags inside metadata.features, so submission is the same
 // shape for both targets. Workspace mode additionally fires a refresh event so the
 // open list reloads immediately (context mode refreshes via socket events).
-export async function submitDocuments(target: AddTarget, documents: Record<string, unknown>[]): Promise<boolean> {
+// Returns the created document ids — callers linking to additional paths
+// (multi-select Save/Link To) reuse the first id instead of re-creating.
+export async function submitDocuments(target: AddTarget, documents: Record<string, unknown>[]): Promise<number[]> {
   if (!target) throw new Error('No active workspace or context to add to')
 
   if (target.mode === 'workspace') {
@@ -63,21 +65,21 @@ export async function submitDocuments(target: AddTarget, documents: Record<strin
       /* fall back to the best-effort type from useAddTarget */
     }
 
-    const ok = await importDocumentsToWorkspacePath(
+    const ids = await importDocumentsToWorkspacePath(
       target.workspaceName,
       target.path,
       documents,
       target.treeName,
       treeType,
     )
-    if (ok) {
+    if (ids.length) {
       window.dispatchEvent(
         new CustomEvent('workspace:documents:refresh', {
           detail: { workspaceName: target.workspaceName, treeName: target.treeName },
         }),
       )
     }
-    return ok
+    return ids
   }
 
   return insertDocumentsToContextById(target.contextId, documents)

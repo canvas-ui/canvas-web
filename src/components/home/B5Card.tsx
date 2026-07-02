@@ -4,17 +4,30 @@ import { RotateCw, Maximize2, Minimize2, X, type LucideIcon } from 'lucide-react
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
-import { TreePicker, type TreePickerTarget } from '@/components/menu/shared/TreePicker'
+import { LinkToCard, type LinkToTarget } from '@/components/menu/shared/LinkToCard'
+import { pasteDocumentsToWorkspacePath } from '@/services/workspace'
+
+export type B5SaveTarget = LinkToTarget & { path: string }
 
 interface B5CardProps {
   title: string
   icon: LucideIcon
   onClose: () => void
-  onSave: (target: TreePickerTarget) => Promise<unknown>
-  canSave: boolean
-  saving: boolean
+  // Omit entirely to render a view-only card with no Save/"Link To" button
+  // (e.g. DocumentSideCard's read-only peek at an existing document).
+  // Must return the created/linked document id(s) — when the picker's tree
+  // is multi-selected, B5Card links those same ids into every additional
+  // path itself (see handleSelect) rather than re-creating per path.
+  onSave?: (target: B5SaveTarget) => Promise<number[]>
+  canSave?: boolean
+  saving?: boolean
   successMessage?: string
   lockedWorkspaceName?: string
+  // Fills the parent's height instead of the fixed B5 aspect-ratio sizing —
+  // e.g. DocumentSideCard, which should match ContentArea's full height
+  // rather than look like a floating quick-add card. Orientation toggle
+  // (aspect-ratio only makes sense for the fixed-size card) is hidden.
+  fillParent?: boolean
   children: ReactNode
 }
 
@@ -23,16 +36,21 @@ interface B5CardProps {
 // side) rather than a modal — it only portals to a fullscreen overlay while
 // explicitly maximized.
 export function B5Card({
-  title, icon: Icon, onClose, onSave, canSave, saving, successMessage = 'Saved', lockedWorkspaceName, children,
+  title, icon: Icon, onClose, onSave, canSave = false, saving = false, successMessage = 'Saved', lockedWorkspaceName, fillParent = false, children,
 }: B5CardProps) {
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait')
   const [maximized, setMaximized] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
   const { showSuccessToast, showErrorToast } = useToastHelpers()
 
-  const handleSelect = async (target: TreePickerTarget) => {
+  const handleSelect = async (paths: string[], ctx: LinkToTarget) => {
+    if (!onSave) return
     try {
-      await onSave(target)
+      const ids = await onSave({ ...ctx, path: paths[0] })
+      const extraPaths = paths.slice(1)
+      if (ids.length && extraPaths.length) {
+        await Promise.all(extraPaths.map((p) => pasteDocumentsToWorkspacePath(ctx.workspaceName, p, ids, ctx.treeName, ctx.treeType)))
+      }
       showSuccessToast(successMessage)
       onClose()
     } catch (err) {
@@ -42,9 +60,11 @@ export function B5Card({
 
   const cardStyle = maximized
     ? (pickerOpen ? { flex: '1 1 auto', minWidth: 0, height: '100%' } : { width: '100%', height: '100%' })
-    : orientation === 'portrait'
-      ? { aspectRatio: '0.707 / 1', height: '85vh', width: 'auto', maxWidth: '90vw', flexShrink: 0 }
-      : { aspectRatio: '1 / 0.707', width: 'min(90vw, 900px)', height: 'auto', maxHeight: '85vh', flexShrink: 0 }
+    : fillParent
+      ? { height: '100%', width: 'min(480px, 90vw)', flexShrink: 0 }
+      : orientation === 'portrait'
+        ? { aspectRatio: '0.707 / 1', height: '85vh', width: 'auto', maxWidth: '90vw', flexShrink: 0 }
+        : { aspectRatio: '1 / 0.707', width: 'min(90vw, 900px)', height: 'auto', maxHeight: '85vh', flexShrink: 0 }
 
   const card = (
     <div
@@ -57,18 +77,22 @@ export function B5Card({
           <span className="truncate">{title}</span>
         </span>
         <div className="flex shrink-0 items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setOrientation((o) => (o === 'portrait' ? 'landscape' : 'portrait'))}
-            className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            aria-label="Toggle orientation"
-            title="Toggle orientation"
-          >
-            <RotateCw className="h-4 w-4" />
-          </button>
-          <Button size="sm" variant="outline" onClick={() => setPickerOpen(true)} disabled={!canSave}>
-            {saving ? 'Saving…' : 'Save / Link to…'}
-          </Button>
+          {!fillParent && (
+            <button
+              type="button"
+              onClick={() => setOrientation((o) => (o === 'portrait' ? 'landscape' : 'portrait'))}
+              className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label="Toggle orientation"
+              title="Toggle orientation"
+            >
+              <RotateCw className="h-4 w-4" />
+            </button>
+          )}
+          {onSave && (
+            <Button size="sm" variant="outline" onClick={() => setPickerOpen(true)} disabled={!canSave}>
+              {saving ? 'Saving…' : 'Save / Link to…'}
+            </Button>
+          )}
           <button
             type="button"
             onClick={() => setMaximized((m) => !m)}
@@ -94,11 +118,11 @@ export function B5Card({
     </div>
   )
 
-  const picker = pickerOpen && (
-    <TreePicker
+  const picker = onSave && pickerOpen && (
+    <LinkToCard
       onClose={() => setPickerOpen(false)}
-      onSelect={handleSelect}
-      lockedWorkspaceName={lockedWorkspaceName}
+      onConfirm={handleSelect}
+      fixedWorkspaceName={lockedWorkspaceName}
       saving={saving}
     />
   )

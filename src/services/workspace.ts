@@ -489,14 +489,17 @@ export async function pasteDocumentsToWorkspacePath(workspaceId: string, path: s
   }
 }
 
-export async function importDocumentsToWorkspacePath(workspaceId: string, path: string, documents: unknown[], treeName = DEFAULT_WORKSPACE_TREE_NAME, treeType: 'context' | 'directory' = 'context'): Promise<boolean> {
+// Returns the created document ids — callers that need to link the same
+// document into additional paths (multi-select Save/Link To) reuse the id
+// instead of re-creating the document.
+export async function importDocumentsToWorkspacePath(workspaceId: string, path: string, documents: unknown[], treeName = DEFAULT_WORKSPACE_TREE_NAME, treeType: 'context' | 'directory' = 'context'): Promise<number[]> {
   try {
     const docs = Array.isArray(documents) ? documents : [documents]
-    await api.post<{ payload: unknown; message: string; status: string; statusCode: number }>(
+    const response = await api.post<{ payload: number[]; message: string; status: string; statusCode: number }>(
       `${API_ROUTES.workspaces}/${workspaceId}/documents`,
       { documents: docs, treeNameOrTreeId: treeName, treeType, context: path }
     );
-    return true;
+    return Array.isArray(response.payload) ? response.payload : [];
   } catch (error) {
     console.error(`Failed to import documents to workspace path ${path}:`, error);
     throw error;

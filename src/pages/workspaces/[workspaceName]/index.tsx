@@ -606,7 +606,8 @@ export default function WorkspaceDetailPage() {
   const handleImportDocuments = async (docs: any[], contextPath: string): Promise<boolean> => {
     if (!workspaceName) return false;
     try {
-      const success = await importDocumentsToWorkspacePath(workspaceName, contextPath, docs, selectedTreeName, selectedTreeType);
+      const ids = await importDocumentsToWorkspacePath(workspaceName, contextPath, docs, selectedTreeName, selectedTreeType);
+      const success = ids.length > 0;
       if (success) {
         invalidateDocumentCache(workspaceName, selectedTreeName, contextPath);
         if (contextPath === selectedPath) await fetchDocuments();

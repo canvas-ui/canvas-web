@@ -24,7 +24,7 @@ export function useLinkFields() {
   const showUrlError = trimmedUrl.length > 0 && !urlValid
   const canSave = urlValid && !saving
 
-  async function save(target: AddTarget): Promise<boolean> {
+  async function save(target: AddTarget): Promise<number[]> {
     if (!urlValid) throw new Error('Enter a valid URL')
     setSaving(true)
     try {

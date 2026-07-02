@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Camera, File as FileIcon, X } from 'lucide-react'
 import { uploadWorkspaceBlob } from '@/services/blobs'
 import { submitDocuments, type AddTarget } from '@/components/toolbox/add/useAddTarget'
-import type { TreePickerTarget } from '@/components/menu/shared/TreePicker'
-import { B5Card } from '../B5Card'
+import { B5Card, type B5SaveTarget } from '../B5Card'
 
 // Capture-to-file only: the OS camera UI *is* the capture flow (no in-app
 // preview/record). Explicitly not the deferred live record-to-agent feature.
@@ -20,8 +19,8 @@ export function PhotoCardBody({ onClose }: { onClose: () => void }) {
     return () => URL.revokeObjectURL(url)
   }, [file])
 
-  const save = async (target: TreePickerTarget) => {
-    if (!file) return
+  const save = async (target: B5SaveTarget) => {
+    if (!file) return []
     setSaving(true)
     try {
       const blob = await uploadWorkspaceBlob(target.workspaceName, file)
