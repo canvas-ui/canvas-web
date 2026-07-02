@@ -1,6 +1,6 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import { useLocation } from 'react-router-dom'
-import { X, Save, Loader2, Search, Trash2, Plus, RefreshCw, ZoomIn, ZoomOut } from 'lucide-react'
+import { X, Save, Loader2, Search, Trash2, Plus, RefreshCw, ZoomIn, ZoomOut, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToolbox, type ToolsTab, type FeatureMode } from '@/components/toolbox/toolbox-context'
 import { useToast } from '@/components/ui/toast-container'
@@ -71,279 +71,244 @@ const QF_KEY_MAP: Record<QuickFilter, string> = {
   'This millennium': 'thisMillennium',
 }
 
-// ─── Zoomable timeline rail ───────────────────────────────────────────────────
+// ─── Timeline rail — reverse-chronological, click-to-tag ─────────────────────
+// "Now" is always the top row; each row below is one older period. Click a row
+// to tag it as part of the active range (multi-select, shift-click fills the
+// gap) — replaces the old free-pan/drag-brush interaction with discrete,
+// visible tags.
 
 type ZoomLevel = 0 | 1 | 2 | 3 | 4 | 5
+type Unit = 'millennium' | 'century' | 'decade' | 'year' | 'month' | 'week'
 
 interface ZoomConfig {
   label: string
-  unit: 'millennium' | 'century' | 'decade' | 'year' | 'month' | 'week'
-  tickCount: number
-  // How many ms per pixel (approx, for drag scroll)
-  msPerPx: number
+  unit: Unit
 }
 
 const ZOOM_LEVELS: ZoomConfig[] = [
-  { label: 'Millennium', unit: 'millennium', tickCount: 5,  msPerPx: 3e10 },
-  { label: 'Century',    unit: 'century',    tickCount: 10, msPerPx: 3e9  },
-  { label: 'Decade',     unit: 'decade',     tickCount: 10, msPerPx: 3e8  },
-  { label: 'Year',       unit: 'year',       tickCount: 12, msPerPx: 2.6e6},
-  { label: 'Month',      unit: 'month',      tickCount: 4,  msPerPx: 6e5  },
-  { label: 'Week',       unit: 'week',       tickCount: 7,  msPerPx: 8.6e4},
+  { label: 'Millennium', unit: 'millennium' },
+  { label: 'Century',    unit: 'century' },
+  { label: 'Decade',     unit: 'decade' },
+  { label: 'Year',       unit: 'year' },
+  { label: 'Month',      unit: 'month' },
+  { label: 'Week',       unit: 'week' },
 ]
 
-function getTickLabels(centerDate: Date, zl: ZoomConfig): { label: string; isNow: boolean }[] {
-  const now = new Date()
-  const y = centerDate.getFullYear()
-  const m = centerDate.getMonth()
+const ROWS_PER_PAGE = 10
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
-  switch (zl.unit) {
+function periodStart(unit: Unit, offset: number): Date {
+  const now = new Date()
+  switch (unit) {
     case 'millennium': {
-      const base = Math.floor(y / 1000) * 1000 - 2000
-      return Array.from({ length: zl.tickCount }, (_, i) => {
-        const yr = base + i * 1000
-        return { label: yr <= 0 ? `${1 - yr} BCE` : `${yr}`, isNow: yr === Math.floor(now.getFullYear() / 1000) * 1000 }
-      })
+      const base = Math.floor(now.getFullYear() / 1000) * 1000
+      return new Date(base - offset * 1000, 0, 1)
     }
     case 'century': {
-      const base = Math.floor(y / 100) * 100 - 500
-      return Array.from({ length: zl.tickCount }, (_, i) => {
-        const yr = base + i * 100
-        return { label: yr <= 0 ? `${1 - yr} BCE` : `${yr}`, isNow: yr === Math.floor(now.getFullYear() / 100) * 100 }
-      })
+      const base = Math.floor(now.getFullYear() / 100) * 100
+      return new Date(base - offset * 100, 0, 1)
     }
     case 'decade': {
-      const base = Math.floor(y / 10) * 10 - 50
-      return Array.from({ length: zl.tickCount }, (_, i) => {
-        const yr = base + i * 10
-        return { label: `${yr}`, isNow: yr === Math.floor(now.getFullYear() / 10) * 10 }
-      })
+      const base = Math.floor(now.getFullYear() / 10) * 10
+      return new Date(base - offset * 10, 0, 1)
     }
-    case 'year': {
-      return Array.from({ length: zl.tickCount }, (_, i) => {
-        const yr = y - 6 + i
-        return { label: `${yr}`, isNow: yr === now.getFullYear() }
-      })
-    }
-    case 'month': {
-      const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-      return Array.from({ length: zl.tickCount }, (_, i) => {
-        const mo = (m - 2 + i + 12) % 12
-        const yr = y + Math.floor((m - 2 + i) / 12)
-        return { label: `${MONTHS[mo]} ${yr}`, isNow: mo === now.getMonth() && yr === now.getFullYear() }
-      })
-    }
+    case 'year':
+      return new Date(now.getFullYear() - offset, 0, 1)
+    case 'month':
+      return new Date(now.getFullYear(), now.getMonth() - offset, 1)
     case 'week': {
-      const base = new Date(centerDate)
-      base.setDate(base.getDate() - 3)
-      return Array.from({ length: zl.tickCount }, (_, i) => {
-        const d = new Date(base)
-        d.setDate(base.getDate() + i)
-        const isNow = d.toDateString() === now.toDateString()
-        return { label: `${d.getDate()}/${d.getMonth() + 1}`, isNow }
-      })
+      const mondayOffset = (now.getDay() + 6) % 7
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - mondayOffset)
+      d.setDate(d.getDate() - offset * 7)
+      return d
     }
   }
 }
 
-// Map quick filter key → zoom level index
+function periodEnd(unit: Unit, start: Date): Date {
+  const d = new Date(start)
+  switch (unit) {
+    case 'millennium': d.setFullYear(d.getFullYear() + 1000); break
+    case 'century': d.setFullYear(d.getFullYear() + 100); break
+    case 'decade': d.setFullYear(d.getFullYear() + 10); break
+    case 'year': d.setFullYear(d.getFullYear() + 1); break
+    case 'month': d.setMonth(d.getMonth() + 1); break
+    case 'week': d.setDate(d.getDate() + 7); break
+  }
+  return d
+}
+
+function periodLabel(unit: Unit, start: Date, offset: number): string {
+  if (offset === 0) return 'Now'
+  switch (unit) {
+    case 'millennium':
+    case 'century':
+    case 'decade': {
+      const y = start.getFullYear()
+      return y <= 0 ? `${1 - y} BCE` : `${y}`
+    }
+    case 'year':
+      return `${start.getFullYear()}`
+    case 'month':
+      return `${MONTHS[start.getMonth()]} ${start.getFullYear()}`
+    case 'week': {
+      const end = new Date(start)
+      end.setDate(end.getDate() + 6)
+      return `${start.getDate()} ${MONTHS[start.getMonth()]} – ${end.getDate()} ${MONTHS[end.getMonth()]}`
+    }
+  }
+}
+
+interface TimelineRow {
+  offset: number
+  label: string
+  start: Date
+  end: Date
+  isNow: boolean
+}
+
+function getRows(unit: Unit, count: number): TimelineRow[] {
+  return Array.from({ length: count }, (_, offset) => {
+    const start = periodStart(unit, offset)
+    const end = periodEnd(unit, start)
+    return { offset, label: periodLabel(unit, start, offset), start, end, isNow: offset === 0 }
+  })
+}
+
+// Map quick filter key → zoom level index (quick filters are always "current
+// period" tokens, i.e. row offset 0 at the matching zoom unit — "yesterday"
+// is the one exception, offset 1 at week granularity).
 const QF_ZOOM: Partial<Record<string, ZoomLevel>> = {
   today: 5,
   yesterday: 5,
-  thisWeek: 4,
-  thisMonth: 3,
-  thisYear: 2,
+  thisWeek: 5,
+  thisMonth: 4,
+  thisYear: 3,
   thisCentury: 1,
   thisMillennium: 0,
 }
 
 interface TimelineRailProps {
   quickFilterKey: string | null
+  activeRange: { start: string; end: string } | null
   onSelectRange: (start: Date, end: Date) => void
 }
 
-function TimelineRail({ quickFilterKey, onSelectRange }: TimelineRailProps) {
-  const [zoomLevel, setZoomLevel] = useState<ZoomLevel>(2)
-  const [centerDate, setCenterDate] = useState(() => new Date())
-  const railRef = useRef<HTMLDivElement>(null)
-  const dragRef = useRef<{ startY: number; startDate: Date } | null>(null)
-  const [selectedRange, setSelectedRange] = useState<{ top: number; height: number } | null>(null)
-  const [brushStart, setBrushStart] = useState<number | null>(null)
+function TimelineRail({ quickFilterKey, activeRange, onSelectRange }: TimelineRailProps) {
+  const [zoomLevel, setZoomLevel] = useState<ZoomLevel>(3)
+  const [rowCount, setRowCount] = useState(ROWS_PER_PAGE)
+  const [selected, setSelected] = useState<Set<number>>(new Set())
 
-  // Sync zoom level when quick filter changes
-  useEffect(() => {
+  // Adjust state during render when external props change (React's
+  // recommended alternative to setState-in-effect for prop-driven resets —
+  // avoids the extra commit+effect round-trip a useEffect would cost here).
+  const [prevQuickFilterKey, setPrevQuickFilterKey] = useState(quickFilterKey)
+  if (quickFilterKey !== prevQuickFilterKey) {
+    setPrevQuickFilterKey(quickFilterKey)
     if (quickFilterKey && QF_ZOOM[quickFilterKey] !== undefined) {
       setZoomLevel(QF_ZOOM[quickFilterKey] as ZoomLevel)
     }
-  }, [quickFilterKey])
+    setSelected(new Set())
+  }
+
+  const [prevActiveRange, setPrevActiveRange] = useState(activeRange)
+  if (activeRange !== prevActiveRange) {
+    setPrevActiveRange(activeRange)
+    if (!activeRange) setSelected(new Set())
+  }
 
   const zl = ZOOM_LEVELS[zoomLevel]
-  const ticks = getTickLabels(centerDate, zl)
+  const rows = getRows(zl.unit, rowCount)
 
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault()
-    if (e.ctrlKey || e.metaKey) {
-      // Ctrl+scroll → zoom
-      setZoomLevel(prev => Math.max(0, Math.min(5, prev + (e.deltaY > 0 ? -1 : 1))) as ZoomLevel)
-    } else {
-      // Scroll → pan in time
-      const shift = e.deltaY * zl.msPerPx * 2
-      setCenterDate(prev => new Date(prev.getTime() + shift))
-    }
-  }, [zl.msPerPx])
+  const changeZoom = (delta: number) => {
+    setZoomLevel(prev => Math.max(0, Math.min(5, prev + delta)) as ZoomLevel)
+    setRowCount(ROWS_PER_PAGE)
+    setSelected(new Set())
+  }
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    const rect = railRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const y = e.clientY - rect.top
-    setBrushStart(y)
-    setSelectedRange(null)
-    dragRef.current = { startY: e.clientY, startDate: new Date(centerDate) }
-
-    const onMove = (ev: MouseEvent) => {
-      if (!dragRef.current || !railRef.current) return
-      const r = railRef.current.getBoundingClientRect()
-      const curY = ev.clientY - r.top
-      if (Math.abs(curY - (brushStart ?? curY)) < 4) return
-      const top = Math.min(brushStart ?? curY, curY)
-      const height = Math.abs(curY - (brushStart ?? curY))
-      setSelectedRange({ top, height })
-    }
-
-    const onUp = (ev: MouseEvent) => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-      if (!railRef.current) return
-      const r = railRef.current.getBoundingClientRect()
-      const startY = Math.min(brushStart ?? 0, ev.clientY - r.top)
-      const endY = Math.max(brushStart ?? 0, ev.clientY - r.top)
-      const h = r.height
-      const totalMs = zl.tickCount * zl.msPerPx * (h / zl.tickCount) * h
-      const centerMs = centerDate.getTime()
-      const halfMs = (totalMs / 2)
-      const startMs = centerMs - halfMs + (startY / h) * totalMs
-      const endMs = centerMs - halfMs + (endY / h) * totalMs
-      if (Math.abs(endMs - startMs) > 1000) {
-        onSelectRange(new Date(startMs), new Date(endMs))
+  const toggleRow = useCallback((offset: number, shiftKey: boolean) => {
+    setSelected(prev => {
+      let next: Set<number>
+      if (shiftKey && prev.size > 0) {
+        const lo = Math.min(offset, ...prev)
+        const hi = Math.max(offset, ...prev)
+        next = new Set(prev)
+        for (let o = lo; o <= hi; o++) next.add(o)
       } else {
-        setSelectedRange(null)
+        next = new Set(prev)
+        if (next.has(offset)) next.delete(offset)
+        else next.add(offset)
       }
-      dragRef.current = null
-    }
 
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-  }, [centerDate, brushStart, zl, onSelectRange])
-
-  const jumpToNow = () => setCenterDate(new Date())
+      if (next.size === 0) return next
+      const selectedRows = rows.filter(r => next.has(r.offset))
+      const start = new Date(Math.min(...selectedRows.map(r => r.start.getTime())))
+      const end = new Date(Math.max(...selectedRows.map(r => r.end.getTime())))
+      onSelectRange(start, end)
+      return next
+    })
+  }, [rows, onSelectRange])
 
   return (
-    <div className="w-16 shrink-0 flex flex-col border-r border-border">
+    <div className="w-44 shrink-0 flex flex-col border-r border-border bg-muted/20">
       {/* Zoom controls */}
-      <div className="flex flex-col items-center gap-0.5 py-1.5 border-b border-border shrink-0">
-        <button
-          type="button"
-          onClick={() => setZoomLevel(prev => Math.min(5, prev + 1) as ZoomLevel)}
-          className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          title="Zoom in"
-        >
-          <ZoomIn className="w-3 h-3" />
-        </button>
-        <span className="text-[9px] text-muted-foreground/60 select-none leading-none px-0.5 text-center">
-          {zl.label}
-        </span>
-        <button
-          type="button"
-          onClick={() => setZoomLevel(prev => Math.max(0, prev - 1) as ZoomLevel)}
-          className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          title="Zoom out"
-        >
-          <ZoomOut className="w-3 h-3" />
-        </button>
-      </div>
-
-      {/* Rail */}
-      <div
-        ref={railRef}
-        className="relative flex-1 overflow-hidden cursor-ns-resize select-none"
-        onWheel={handleWheel}
-        onMouseDown={handleMouseDown}
-      >
-        {/* Center line */}
-        <div className="absolute left-1/2 top-0 bottom-0 w-px bg-border -translate-x-1/2 pointer-events-none" />
-
-        {/* Ticks */}
-        {ticks.map((tick, i) => {
-          const yPct = ((i + 0.5) / ticks.length) * 100
-          return (
-            <div
-              key={i}
-              className="absolute left-0 right-0 flex items-center pointer-events-none"
-              style={{ top: `${yPct}%`, transform: 'translateY(-50%)' }}
-            >
-              <div className={cn(
-                'w-full flex items-center justify-center',
-              )}>
-                <div className={cn(
-                  'w-1.5 h-1.5 rounded-full border shrink-0',
-                  tick.isNow
-                    ? 'bg-primary border-primary'
-                    : 'bg-muted border-border',
-                )} />
-              </div>
-            </div>
-          )
-        })}
-
-        {/* Labels on hover — static for now, shown as tiny text */}
-        {ticks.map((tick, i) => {
-          const yPct = ((i + 0.5) / ticks.length) * 100
-          return (
-            <div
-              key={`lbl-${i}`}
-              className="absolute left-0 right-0 pointer-events-none flex justify-center"
-              style={{ top: `${yPct}%`, transform: 'translateY(-50%)' }}
-            >
-              <span className={cn(
-                'text-[8px] leading-none px-0.5 rounded',
-                tick.isNow
-                  ? 'text-primary font-semibold'
-                  : 'text-muted-foreground/50',
-              )}>
-                {tick.label}
-              </span>
-            </div>
-          )
-        })}
-
-        {/* Brush selection overlay */}
-        {selectedRange && (
-          <div
-            className="absolute left-1 right-1 bg-primary/20 border border-primary/40 rounded pointer-events-none"
-            style={{ top: selectedRange.top, height: selectedRange.height }}
-          />
-        )}
-
-        {/* Quick-filter highlight */}
-        {quickFilterKey && (
-          <div className="absolute left-0 right-0 pointer-events-none"
-            style={{ top: '45%', height: '10%' }}
+      <div className="flex items-center justify-between gap-1 px-2 py-1.5 border-b border-border shrink-0">
+        <span className="text-[11px] font-semibold text-foreground/80 select-none">{zl.label}</span>
+        <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={() => changeZoom(1)}
+            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            title="Zoom in (finer periods)"
           >
-            <div className="mx-1 h-full bg-primary/10 border-l-2 border-primary/60 rounded-r" />
-          </div>
-        )}
+            <ZoomIn className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => changeZoom(-1)}
+            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            title="Zoom out (coarser periods)"
+          >
+            <ZoomOut className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
-      {/* Jump to now */}
-      <button
-        type="button"
-        onClick={jumpToNow}
-        className="text-[9px] text-muted-foreground/50 hover:text-muted-foreground py-1 border-t border-border transition-colors text-center shrink-0"
-        title="Jump to now"
-      >
-        now
-      </button>
+      {/* Reverse-chronological tag list — Now pinned top, older below */}
+      <div className="flex-1 min-h-0 overflow-y-auto p-1.5 space-y-1">
+        {rows.map(row => {
+          const isSelected = selected.has(row.offset)
+          return (
+            <button
+              key={row.offset}
+              type="button"
+              onClick={(e) => toggleRow(row.offset, e.shiftKey)}
+              title={row.isNow ? 'Now' : `${row.label} — click to tag, shift-click to fill range`}
+              className={cn(
+                'w-full flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-colors select-none text-left',
+                isSelected
+                  ? 'bg-primary text-primary-foreground'
+                  : row.isNow
+                    ? 'bg-primary/10 text-primary hover:bg-primary/20'
+                    : 'bg-card text-foreground hover:bg-muted shadow-sm',
+              )}
+            >
+              {row.isNow && <Clock className="w-3 h-3 shrink-0" />}
+              <span className="truncate">{row.label}</span>
+            </button>
+          )
+        })}
+
+        {rowCount < 200 && (
+          <button
+            type="button"
+            onClick={() => setRowCount(c => c + ROWS_PER_PAGE)}
+            className="w-full text-[11px] text-muted-foreground/60 hover:text-muted-foreground py-1.5 transition-colors text-center"
+          >
+            Show older…
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -418,6 +383,7 @@ function TimelineTab() {
       {/* Graphical timeline rail */}
       <TimelineRail
         quickFilterKey={timeline.quickFilter}
+        activeRange={timeline.customRange}
         onSelectRange={handleRangeSelect}
       />
 

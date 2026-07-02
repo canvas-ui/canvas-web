@@ -2,6 +2,8 @@ import { Outlet, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { useSideView } from './side-view-context'
 import { DocumentSideCard } from './DocumentSideCard'
+import { useToolbox } from '@/components/toolbox/toolbox-context'
+import { ToolboxPanel } from '@/components/toolbox/ToolboxPanel'
 
 // Detail views (canvas, file-manager, agent chat, settings) manage their own
 // full-height scroll + padding, so the sheet stays flush for them.
@@ -23,6 +25,7 @@ export function ContentArea() {
   const fullBleed = isFullBleed(pathname)
   const bare = isBare(pathname)
   const { entry } = useSideView()
+  const { state: toolboxState } = useToolbox()
 
   return (
     <div className={cn('relative flex flex-col flex-1 min-w-0', !bare && 'canvas-sheet')}>
@@ -33,6 +36,11 @@ export function ContentArea() {
         {entry && (
           <div className="flex shrink-0 items-stretch py-2 pr-2">
             <DocumentSideCard />
+          </div>
+        )}
+        {toolboxState.t1Open && (
+          <div className="flex shrink-0 items-stretch py-2 pr-2">
+            <ToolboxPanel />
           </div>
         )}
       </div>

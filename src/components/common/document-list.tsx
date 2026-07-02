@@ -1,6 +1,7 @@
 import { Document, TreeNode } from '@/types/workspace'
-import { File, Calendar, Hash, Eye, ExternalLink, Globe, Mail, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight } from 'lucide-react'
+import { File, Calendar, Hash, Eye, ExternalLink, Globe, Mail, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch } from 'lucide-react'
 import { LinkToCard } from '@/components/menu/shared/LinkToCard'
+import { PickDocumentsCard } from '@/components/menu/shared/PickDocumentsCard'
 import { useSideView } from '@/components/shell/side-view-context'
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import Fuse from 'fuse.js'
@@ -802,6 +803,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   const [selectedDocuments, setSelectedDocuments] = useState<Set<number>>(new Set())
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; documentIds: number[] } | null>(null)
   const [linkPanelIds, setLinkPanelIds] = useState<number[] | null>(null)
+  const [pickDocsOpen, setPickDocsOpen] = useState(false)
   const [detailModal, setDetailModal] = useState<{ document: Document; tab?: DetailTab } | null>(null)
   const canLink = Boolean(linkTree && onPasteDocuments)
   const sideView = useSideView()
@@ -1350,6 +1352,19 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                   Copy ({selectedDocuments.size})
                 </Button>
 
+                {canLink && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setLinkPanelIds(Array.from(selectedDocuments))}
+                    className="flex items-center gap-2"
+                    title="Link selected documents to another path"
+                  >
+                    <Link2 className="h-4 w-4" />
+                    Link to… ({selectedDocuments.size})
+                  </Button>
+                )}
+
                 {onCutDocuments && (
                   <Button
                     variant="outline"
@@ -1457,6 +1472,19 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
               >
                 <Upload className="h-4 w-4" />
                 Import
+              </Button>
+            )}
+
+            {onPasteDocuments && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPickDocsOpen(true)}
+                className="flex items-center gap-2"
+                title="Browse and add existing documents to this folder"
+              >
+                <FileSearch className="h-4 w-4" />
+                Add existing…
               </Button>
             )}
           </div>
@@ -1647,14 +1675,30 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
       />
 
       {linkPanelIds && linkTree && (
-        // Floating card, not a modal/drawer — no dimming backdrop, same
-        // B5-family sizing as every other LinkToCard usage.
-        <div className="fixed bottom-6 right-6 z-50">
+        // Dimmed modal — was an undimmed bottom-right float, which collided
+        // with the bottom-right toolbox FAB and any open B5Card.
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
           <LinkToCard
             documentCount={linkPanelIds.length}
             fixedWorkspaceName={workspaceId}
             onConfirm={(paths) => handleLinkConfirm(paths, linkPanelIds)}
             onClose={() => setLinkPanelIds(null)}
+          />
+        </div>
+      )}
+
+      {pickDocsOpen && onPasteDocuments && (
+        // Flat, no backdrop dim — docks to the right edge like DocumentSideCard
+        // rather than a centered modal.
+        <div className="fixed inset-y-0 right-0 z-[60] flex items-stretch py-2 pr-2">
+          <PickDocumentsCard
+            sizeClassName="h-full w-[420px]"
+            fixedWorkspaceName={workspaceId}
+            onConfirm={async (documentIds) => {
+              await onPasteDocuments(contextPath, documentIds)
+              setPickDocsOpen(false)
+            }}
+            onClose={() => setPickDocsOpen(false)}
           />
         </div>
       )}

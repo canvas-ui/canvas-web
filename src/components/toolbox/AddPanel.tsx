@@ -1,9 +1,10 @@
 import { useCallback, useRef, useState } from 'react'
-import { X, StickyNote, Link as LinkIcon, Upload, Plus, Pencil } from 'lucide-react'
+import { X, StickyNote, Link as LinkIcon, Upload, Plus, Pencil, FileSearch } from 'lucide-react'
 import { useToolbox, type AddKind } from './toolbox-context'
 import { NoteForm } from './add/NoteForm'
 import { LinkForm } from './add/LinkForm'
 import { FileForm } from './add/FileForm'
+import { ExistingDocsForm } from './add/ExistingDocsForm'
 import { EditNoteForm } from './add/EditNoteForm'
 import { EditLinkForm } from './add/EditLinkForm'
 
@@ -15,6 +16,7 @@ const TITLES: Record<AddKind, { label: string; icon: typeof StickyNote }> = {
   note: { label: 'New Note', icon: StickyNote },
   link: { label: 'New Link', icon: LinkIcon },
   file: { label: 'Add Files', icon: Upload },
+  existing: { label: 'Add Existing', icon: FileSearch },
 }
 
 // Abstraction list shown in the panel's picker mode. Single source of truth —
@@ -23,6 +25,7 @@ const ABSTRACTIONS: { kind: AddKind; label: string; icon: typeof StickyNote }[] 
   { kind: 'note', label: 'Note', icon: StickyNote },
   { kind: 'link', label: 'Link', icon: LinkIcon },
   { kind: 'file', label: 'File', icon: Upload },
+  { kind: 'existing', label: 'Existing document', icon: FileSearch },
 ]
 
 export function AddPanel() {
@@ -115,6 +118,7 @@ export function AddPanel() {
         {!isEditMode && addKind === 'note' && <NoteForm />}
         {!isEditMode && addKind === 'link' && <LinkForm />}
         {!isEditMode && addKind === 'file' && <FileForm />}
+        {!isEditMode && addKind === 'existing' && <ExistingDocsForm />}
       </div>
     </div>
   )

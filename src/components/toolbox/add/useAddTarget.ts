@@ -4,8 +4,9 @@ import {
   DEFAULT_WORKSPACE_TREE_NAME,
   importDocumentsToWorkspacePath,
   listWorkspaceTrees,
+  pasteDocumentsToWorkspacePath,
 } from '@/services/workspace'
-import { insertDocumentsToContextById, getContext } from '@/services/context'
+import { insertDocumentsToContextById, pasteDocumentsToContext, getContext } from '@/services/context'
 
 export type AddTarget =
   | { mode: 'workspace'; workspaceName: string; path: string; treeName: string; treeType: 'context' | 'directory' }
@@ -98,6 +99,30 @@ export async function resolveUploadWorkspace(target: AddTarget): Promise<{ works
   const workspaceName = ctx.workspaceName || ctx.workspaceId
   if (!workspaceName) throw new Error('Context has no bound workspace')
   return { workspaceName, path: ctx.path || '/', treeName: ctx.treeId || DEFAULT_WORKSPACE_TREE_NAME, treeType: 'context' }
+}
+
+// Links already-existing document ids into the current target (as opposed to
+// submitDocuments, which creates new ones). Context-mode resolves the
+// context's own bound path first — same path handlePasteDocuments already
+// uses (pages/contexts/[contextId]/index.tsx), so this stays consistent with
+// the existing clipboard-paste flow rather than a second, subtly different one.
+export async function linkExistingDocuments(target: AddTarget, documentIds: number[]): Promise<boolean> {
+  if (!target) throw new Error('No active workspace or context to add to')
+
+  if (target.mode === 'workspace') {
+    const success = await pasteDocumentsToWorkspacePath(target.workspaceName, target.path, documentIds, target.treeName, target.treeType)
+    if (success) {
+      window.dispatchEvent(
+        new CustomEvent('workspace:documents:refresh', {
+          detail: { workspaceName: target.workspaceName, treeName: target.treeName },
+        }),
+      )
+    }
+    return success
+  }
+
+  const ctx = await getContext(target.contextId)
+  return pasteDocumentsToContext(target.contextId, ctx.path || '/', documentIds)
 }
 
 export function describeTarget(target: AddTarget): string {

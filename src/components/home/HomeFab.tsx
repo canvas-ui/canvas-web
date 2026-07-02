@@ -63,10 +63,11 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose }: HomeFa
         })}
       </div>
 
-      <div className="pointer-events-none absolute bottom-6 right-6 flex flex-col items-end gap-3">
+      {/* Stacked above the (bigger) toolbox FAB, which docks bottom-right at h-16 */}
+      <div className="pointer-events-none absolute bottom-[calc(max(1rem,env(safe-area-inset-bottom))+5rem)] right-6 flex flex-col items-end gap-2">
         <div
           className={cn(
-            'flex flex-col items-end gap-3 transition-all duration-150',
+            'flex flex-col items-end gap-2 transition-all duration-150',
             stackOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none translate-y-2 opacity-0',
           )}
         >
@@ -77,10 +78,10 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose }: HomeFa
                 key={kind}
                 type="button"
                 onClick={() => addCard(kind)}
-                className="flex items-center gap-2 rounded-full bg-card px-4 py-2 text-sm font-medium shadow-elevation-3 transition-transform hover:scale-105"
+                className="flex items-center gap-2 rounded-full bg-card px-3 py-1.5 text-sm font-medium shadow-elevation-3 transition-transform hover:scale-105"
               >
                 {label}
-                <Icon className="h-4 w-4" />
+                <Icon className="h-3.5 w-3.5" />
               </button>
             )
           })}
@@ -90,9 +91,9 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose }: HomeFa
           type="button"
           onClick={() => setStackOpen((o) => !o)}
           aria-label={stackOpen ? 'Close quick add' : 'Quick add'}
-          className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-elevation-4 transition-transform hover:scale-105"
+          className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-elevation-3 transition-transform hover:scale-105"
         >
-          {stackOpen ? <X className="h-6 w-6" /> : <Plus className="h-6 w-6" />}
+          {stackOpen ? <X className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
         </button>
       </div>
     </div>
