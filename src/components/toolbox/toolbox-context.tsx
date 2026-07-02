@@ -232,7 +232,7 @@ function extractToolboxFilters(metadata: Record<string, unknown> | undefined): T
         indexCreated: (t.timeline as ToolboxTimelineFilters)?.indexCreated ?? true,
         indexUpdated: (t.timeline as ToolboxTimelineFilters)?.indexUpdated ?? true,
         indexDeleted: (t.timeline as ToolboxTimelineFilters)?.indexDeleted ?? false,
-        searchContent: (t.timeline as ToolboxTimelineFilters)?.searchContent ?? false,
+        contentEvents: (t.timeline as ToolboxTimelineFilters)?.contentEvents ?? false,
         selectedTimelines: (t.timeline as ToolboxTimelineFilters)?.selectedTimelines ?? [],
       },
     }

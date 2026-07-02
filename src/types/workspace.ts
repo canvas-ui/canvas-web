@@ -29,8 +29,11 @@ export interface ToolboxTimelineFilters {
   indexCreated: boolean
   indexUpdated: boolean
   indexDeleted: boolean
-  searchContent: boolean
-  // Custom domain timelines to include in query (empty = all)
+  // "content" is the other built-in timeline (content-derived events: EXIF
+  // timestamps, log timestamps, extracted time periods) alongside crud:*.
+  contentEvents: boolean
+  // Additional custom domain timelines (e.g. "wikipedia", "personal") to
+  // include in the query.
   selectedTimelines: string[]
 }
 
@@ -47,7 +50,7 @@ export const DEFAULT_TOOLBOX_FILTERS: ToolboxFilters = {
     indexCreated: true,
     indexUpdated: true,
     indexDeleted: false,
-    searchContent: false,
+    contentEvents: false,
     selectedTimelines: [],
   },
 }
@@ -55,15 +58,19 @@ export const DEFAULT_TOOLBOX_FILTERS: ToolboxFilters = {
 /**
  * Convert toolbox timeline filter state → SynapsD timeline filter strings.
  *
- * The backend filter grammar is `t:crud:ACTION:TIMEFRAME` (see synapsd
- * filters.js); the old `datetime:` prefix was never parsed, so timeline filters
- * silently matched nothing. Multiple actions are OR'd (default sigil = anyOf):
- * "created OR updated in this timeframe".
+ * The backend filter grammar is `t:<name>:<spec>` (see synapsd filters.js).
+ * Only `crud:*` timeline names resolve relative quick tokens ("today",
+ * "thisWeek", ...) server-side (parseTimelineToken's CRUD_TIMEFRAMES check) —
+ * any other timeline name (the built-in "content" timeline, or a custom
+ * domain timeline like "wikipedia") requires a literal `start..end` spec.
+ * So quick-token-only filters (no explicit drag range) only ever apply to
+ * crud:*; content/domain timelines need an explicit customRange.
  *
- * Returns an empty array when no quick filter is active.
+ * Multiple actions/timelines are OR'd (default sigil = anyOf).
+ * Returns an empty array when no quick filter/range is active.
  */
 export function buildDatetimeFilters(timeline: ToolboxTimelineFilters): string[] {
-  const { quickFilter, customRange, indexCreated, indexUpdated, indexDeleted } = timeline
+  const { quickFilter, customRange, indexCreated, indexUpdated, indexDeleted, contentEvents, selectedTimelines } = timeline
   // Explicit drag range wins over a quick token; otherwise use the quick token.
   const spec = customRange ? `${customRange.start}..${customRange.end}` : quickFilter
   if (!spec) return []
@@ -71,6 +78,10 @@ export function buildDatetimeFilters(timeline: ToolboxTimelineFilters): string[]
   if (indexCreated) filters.push(`t:crud:created:${spec}`)
   if (indexUpdated) filters.push(`t:crud:updated:${spec}`)
   if (indexDeleted) filters.push(`t:crud:deleted:${spec}`)
+  if (customRange) {
+    if (contentEvents) filters.push(`t:content:${spec}`)
+    for (const name of selectedTimelines) filters.push(`t:${name}:${spec}`)
+  }
   return filters
 }
 

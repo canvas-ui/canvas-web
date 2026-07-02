@@ -398,7 +398,13 @@ function TimelineTab() {
     }
   }
 
-  const domainTimelines = availableTimelines.filter(n => !n.startsWith('crud:'))
+  // "crud:*" and "content" are built-in timelines (always present server-side,
+  // undeletable) — surfaced as dedicated toggles above, not in the generic
+  // deletable domain-timelines list.
+  const domainTimelines = availableTimelines.filter(n => !n.startsWith('crud:') && n !== 'content')
+  // Non-crud timeline names don't resolve relative quick tokens server-side
+  // (only crud:* does) — content/domain selections need an explicit drag range.
+  const needsExplicitRange = (timeline.contentEvents || selectedTimelines.size > 0) && !timeline.customRange
 
   const handleRangeSelect = useCallback((start: Date, end: Date) => {
     const iso = (d: Date) => d.toISOString().split('T')[0]
@@ -484,17 +490,27 @@ function TimelineTab() {
           </div>
         </div>
 
-        {/* Content */}
+        {/* Content-derived events timeline */}
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-            Content
+            Content timeline
           </p>
           <MD2Toggle
-            label="Search document content"
-            checked={timeline.searchContent}
-            onChange={(v) => setTimelineFilter({ searchContent: v })}
+            label="content"
+            checked={timeline.contentEvents}
+            onChange={(v) => setTimelineFilter({ contentEvents: v })}
+            accent="blue"
           />
+          <p className="text-[10px] text-muted-foreground/70 mt-1">
+            Content-derived timestamps (EXIF, logs, extracted periods)
+          </p>
         </div>
+
+        {needsExplicitRange && (
+          <p className="text-[10px] text-amber-600 dark:text-amber-400 -mt-2">
+            Content/domain timelines need a dragged range on the rail — quick filters only apply to CRUD.
+          </p>
+        )}
 
         {/* Domain timelines */}
         <div>
