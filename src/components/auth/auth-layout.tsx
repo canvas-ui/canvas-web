@@ -14,8 +14,8 @@ export function AuthLayout({ children }: AuthLayoutProps) {
   const { serverVersion, isLoading: isLoadingVersion, error: versionError } = useServerVersion()
 
   return (
-    <div className="flex min-h-screen w-full items-center justify-center p-4 flex-col">
-      <Card className="flex w-[95vw] h-[95vh] overflow-hidden">
+    <div className="flex min-h-dvh w-full items-center justify-center p-4 flex-col">
+      <Card className="flex w-[95vw] h-[95dvh] overflow-hidden">
         <div className="hidden md:block w-1/2 relative bg-black" id="particle-js">
           <Link className="absolute top-8 left-8 font-bold text-white flex items-center z-10" to="/">
             <img

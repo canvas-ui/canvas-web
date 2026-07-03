@@ -73,13 +73,17 @@ export function B5Card({
     }
   }
 
+  // fillParent width lives in the className below (w-full on mobile, fixed
+  // column width from md up) — everything here would override it inline.
   const cardStyle = maximized
     ? (pickerOpen ? { flex: '1 1 auto', minWidth: 0, height: '100%' } : { width: '100%', height: '100%' })
     : fillParent
-      ? { height: '100%', width: 'min(480px, 90vw)', flexShrink: 0 }
+      ? { height: '100%', flexShrink: 0 }
       : orientation === 'portrait'
-        ? { aspectRatio: '0.707 / 1', height: '85vh', width: 'auto', maxWidth: '90vw', flexShrink: 0 }
-        : { aspectRatio: '1 / 0.707', width: 'min(90vw, 900px)', height: 'auto', maxHeight: '85vh', flexShrink: 0 }
+        // max-width 100% keeps the B5 aspect card inside the visible cards
+        // row on narrow screens (90vw alone ignores the menubar + padding).
+        ? { aspectRatio: '0.707 / 1', height: '85dvh', width: 'auto', maxWidth: 'min(90vw, 100%)', flexShrink: 0 }
+        : { aspectRatio: '1 / 0.707', width: 'min(90vw, 900px)', maxWidth: '100%', height: 'auto', maxHeight: '85dvh', flexShrink: 0 }
 
   const card = (
     <div
@@ -89,6 +93,7 @@ export function B5Card({
       }}
       className={cn(
         'flex flex-col overflow-hidden rounded-2xl border bg-card shadow-elevation-4 transition-[width,height]',
+        fillParent && !maximized && 'w-full md:w-[min(480px,90vw)]',
         animateIn && 'animate-card-in',
       )}
     >
@@ -150,9 +155,11 @@ export function B5Card({
 
   if (maximized) {
     return createPortal(
-      <div className="fixed inset-0 z-[60] flex items-center justify-center gap-4 bg-black/40 p-4">
+      <div className="fixed inset-0 z-[60] flex items-center justify-center gap-4 bg-black/40 p-4 max-md:p-2">
         {card}
-        {picker}
+        {/* On mobile the picker can't fit beside the card, so it covers it
+            for the duration of the pick instead. */}
+        {picker && <div className="flex max-md:absolute max-md:inset-2 max-md:z-10">{picker}</div>}
       </div>,
       document.body,
     )
@@ -162,10 +169,16 @@ export function B5Card({
     // In-flow flex siblings — the picker is a real layout item right after
     // its own card, so it pushes the next card over rather than overlapping
     // it (an absolutely-positioned overlay was tried and looked wrong —
-    // covered the next card instead of sitting between the two).
+    // covered the next card instead of sitting between the two). On mobile
+    // there's no room beside the card, so the picker overlays the nearest
+    // positioned ancestor (the card area) instead.
     <>
       {card}
-      {picker && <div ref={pickerRef} className="shrink-0">{picker}</div>}
+      {picker && (
+        <div ref={pickerRef} className="shrink-0 max-md:absolute max-md:inset-2 max-md:z-20">
+          {picker}
+        </div>
+      )}
     </>
   )
 }

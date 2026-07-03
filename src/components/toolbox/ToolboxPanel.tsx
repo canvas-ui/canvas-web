@@ -23,8 +23,7 @@ export function ToolboxPanel() {
 
   return (
     <div
-      style={{ width: 'min(420px, 90vw)', height: '100%' }}
-      className="relative flex flex-col overflow-hidden rounded-2xl border bg-card text-foreground shadow-elevation-4"
+      className="relative flex h-full w-full flex-col overflow-hidden rounded-2xl border bg-card text-foreground shadow-elevation-4 md:w-[min(420px,90vw)]"
     >
       <div className="flex h-12 shrink-0 items-center justify-between gap-1 border-b px-2">
         <div className="flex items-center gap-1">

@@ -14,7 +14,9 @@ export function AppShell() {
       <AgentSessionProvider>
         <ToolboxProvider>
           <SideViewProvider>
-            <div className="flex h-screen w-screen overflow-hidden canvas-desk gap-2 p-2">
+            {/* h-dvh (not h-screen) so the shell tracks the real visible height
+                when mobile browser chrome expands/collapses */}
+            <div className="flex h-dvh w-full overflow-hidden canvas-desk gap-2 p-2">
               <MenuBar />
               <MenuPanelArea />
               {/* Toolbox now docks inside ContentArea as a card, shrinking main content */}

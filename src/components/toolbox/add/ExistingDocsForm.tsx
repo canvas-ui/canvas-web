@@ -30,7 +30,7 @@ export function ExistingDocsForm() {
   return (
     <div className="fixed inset-y-0 right-0 z-[60] flex items-stretch py-2 pr-2">
       <PickDocumentsCard
-        sizeClassName="h-full w-[420px]"
+        sizeClassName="h-full w-[min(420px,calc(100vw_-_1rem))]"
         fixedWorkspaceName={target?.mode === 'workspace' ? target.workspaceName : undefined}
         saving={saving}
         onConfirm={handleConfirm}

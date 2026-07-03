@@ -23,7 +23,7 @@ type MenuAction =
   | { type: 'OPEN_M2'; view: M2View; entityId?: string | null }
   | { type: 'CLOSE_M2' }
   | { type: 'SELECT_ENTITY'; entityId: string | null }
-  | { type: 'SYNC_FROM_URL'; section: MenuSection; entityId: string | null; m2View: M2View }
+  | { type: 'SYNC_FROM_URL'; section: MenuSection; entityId: string | null; m2View: M2View; mobile?: boolean }
   | { type: 'SET_USER'; user: MenuState['user'] }
 
 interface MenuContextValue {
@@ -61,7 +61,10 @@ function menuReducer(state: MenuState, action: MenuAction): MenuState {
       }
 
     case 'TOGGLE_SECTION':
-      if (state.activeSection === action.section) {
+      // Same section only toggles closed while the panel is visibly open — on
+      // mobile the URL sync closes the drawer while keeping activeSection, so
+      // the next tap must re-open rather than no-op.
+      if (state.activeSection === action.section && state.m1Open) {
         return { ...state, activeSection: null, m1Open: false, m2Open: false, m2View: null }
       }
       return {
@@ -91,17 +94,18 @@ function menuReducer(state: MenuState, action: MenuAction): MenuState {
       return { ...state, selectedEntityId: action.entityId }
 
     case 'SYNC_FROM_URL': {
-      if (
+      const unchanged =
         action.section === state.activeSection
         && action.entityId === state.selectedEntityId
         && action.m2View === state.m2View
-      ) {
-        return state
-      }
+      // On mobile the menu is an overlay drawer, so any navigation (this
+      // action only fires on pathname changes) closes it — even when it lands
+      // on the same section, e.g. Settings → API tokens.
+      if (unchanged && !(action.mobile && state.m1Open)) return state
       return {
         ...state,
         activeSection: action.section,
-        m1Open: action.section !== null,
+        m1Open: action.mobile ? false : action.section !== null,
         selectedEntityId: action.entityId,
         m2Open: action.m2View !== null,
         m2View: action.m2View,
@@ -160,7 +164,10 @@ function useMenuUrlSync(_state: MenuState, dispatch: React.Dispatch<MenuAction>)
       return
     }
     const { section, entityId, m2View } = sectionFromPath(location.pathname)
-    dispatch({ type: 'SYNC_FROM_URL', section, entityId, m2View })
+    // Read the breakpoint at dispatch time (not via useIsMobile, whose first
+    // render is always `false`) so a mobile deep link never opens the drawer.
+    const mobile = window.matchMedia('(max-width: 767px)').matches
+    dispatch({ type: 'SYNC_FROM_URL', section, entityId, m2View, mobile })
   }, [location.pathname, dispatch])
 
   // State → URL: navigate when entity selection changes from menu interaction

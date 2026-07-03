@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { useMenu } from './menu-context'
 import { ContextList } from '@/components/menu/contexts/ContextList'
 import { ContextM2Detail } from '@/components/menu/contexts/ContextM2Detail'
@@ -37,7 +38,8 @@ function M2Content() {
 }
 
 export function MenuPanelArea() {
-  const { state } = useMenu()
+  const { state, closeM1 } = useMenu()
+  const isMobile = useIsMobile()
   const [width, setWidth] = useState(DEFAULT_WIDTH)
   const [isDragging, setIsDragging] = useState(false)
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
@@ -65,42 +67,54 @@ export function MenuPanelArea() {
     window.addEventListener('mouseup', onUp)
   }, [width])
 
-  return (
-    <div
-      style={state.m1Open ? { width } : undefined}
-      className={cn(
-        'relative flex-shrink-0 overflow-hidden bg-sidebar',
-        !isDragging && 'transition-[width] duration-200 ease-out',
-        state.m1Open ? 'rounded-xl shadow-elevation-2' : 'w-0',
-      )}
-    >
-      {/* M1 layer */}
-      <div className="absolute inset-0 flex flex-col" style={{ minWidth: width }}>
-        {state.activeSection === 'contexts' && <ContextList />}
-        {state.activeSection === 'workspaces' && <WorkspaceList />}
-        {state.activeSection === 'agents' && <AgentList />}
-        {state.activeSection === 'admin' && <AdminMenu />}
-        {state.activeSection === 'settings' && <SettingsMenu />}
-      </div>
+  const mobileOverlay = isMobile && state.m1Open
 
-      {/* M2 layer — slides over M1 */}
+  return (
+    <>
+      {/* Mobile: the drawer floats over the content, so dim it and let a tap
+          outside close the menu (the URL sync also closes it on navigation). */}
+      {mobileOverlay && (
+        <div className="fixed inset-0 z-40 bg-black/30 animate-fade-in" onClick={closeM1} aria-hidden />
+      )}
       <div
+        style={state.m1Open && !mobileOverlay ? { width } : undefined}
         className={cn(
-          'absolute inset-0 z-10 bg-sidebar flex flex-col transition-transform duration-200 ease-out',
-          state.m2Open ? 'translate-x-0' : 'translate-x-full',
+          'flex-shrink-0 overflow-hidden bg-sidebar',
+          !isDragging && !mobileOverlay && 'transition-[width] duration-200 ease-out',
+          state.m1Open ? 'rounded-xl shadow-elevation-2' : 'w-0',
+          mobileOverlay
+            ? 'fixed bottom-2 left-16 right-2 top-2 z-40 shadow-elevation-8 animate-fade-in'
+            : 'relative',
         )}
       >
-        {state.m2Open && <M2Content />}
+        {/* M1 layer */}
+        <div className="absolute inset-0 flex flex-col" style={mobileOverlay ? undefined : { minWidth: width }}>
+          {state.activeSection === 'contexts' && <ContextList />}
+          {state.activeSection === 'workspaces' && <WorkspaceList />}
+          {state.activeSection === 'agents' && <AgentList />}
+          {state.activeSection === 'admin' && <AdminMenu />}
+          {state.activeSection === 'settings' && <SettingsMenu />}
+        </div>
 
-      </div>
-
-      {/* Drag handle — right edge for both M1 and M2 */}
-      {state.m1Open && (
+        {/* M2 layer — slides over M1 */}
         <div
-          onMouseDown={onDragStart}
-          className="absolute right-0 top-0 bottom-0 z-20 w-1 cursor-col-resize hover:bg-primary/20 transition-colors"
-        />
-      )}
-    </div>
+          className={cn(
+            'absolute inset-0 z-10 bg-sidebar flex flex-col transition-transform duration-200 ease-out',
+            state.m2Open ? 'translate-x-0' : 'translate-x-full',
+          )}
+        >
+          {state.m2Open && <M2Content />}
+
+        </div>
+
+        {/* Drag handle — right edge for both M1 and M2 (pointer devices only) */}
+        {state.m1Open && !mobileOverlay && (
+          <div
+            onMouseDown={onDragStart}
+            className="absolute right-0 top-0 bottom-0 z-20 w-1 cursor-col-resize hover:bg-primary/20 transition-colors"
+          />
+        )}
+      </div>
+    </>
   )
 }
