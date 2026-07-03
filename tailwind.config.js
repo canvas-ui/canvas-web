@@ -151,6 +151,16 @@ export default {
 						opacity: 1
 					}
 				},
+				'card-in': {
+					from: {
+						transform: 'translateY(1rem) scale(0.96)',
+						opacity: 0
+					},
+					to: {
+						transform: 'translateY(0) scale(1)',
+						opacity: 1
+					}
+				},
 				'ripple': {
 					'0%': {
 						transform: 'scale(0)',
@@ -170,6 +180,7 @@ export default {
 				'slide-in-up': 'slide-in-up 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
 				'slide-in-down': 'slide-in-down 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
 				'scale-in': 'scale-in 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+				'card-in': 'card-in 0.28s cubic-bezier(0.0, 0.0, 0.2, 1)',
 				'ripple': 'ripple 0.6s cubic-bezier(0.4, 0, 0.2, 1)'
 			},
 			transitionTimingFunction: {

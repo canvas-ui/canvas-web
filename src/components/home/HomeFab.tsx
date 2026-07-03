@@ -51,7 +51,10 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose }: HomeFa
 
   return (
     <div className="relative flex h-full w-full flex-col">
-      <div className="flex flex-1 items-center gap-4 overflow-x-auto p-6">
+      {/* `md:pr-28` reserves an invisible panel on the right so cards never
+          scroll underneath the floating buttons that dock bottom-right. On
+          mobile the buttons float over the full-width cards instead. */}
+      <div className="flex flex-1 items-center gap-4 overflow-x-auto p-6 md:pr-28">
         {openCards.map((c) => {
           const onClose = () => closeCard(c.id)
           switch (c.kind) {
@@ -63,8 +66,9 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose }: HomeFa
         })}
       </div>
 
-      {/* Stacked above the (bigger) toolbox FAB, which docks bottom-right at h-16 */}
-      <div className="pointer-events-none absolute bottom-[calc(max(1rem,env(safe-area-inset-bottom))+5rem)] right-6 flex flex-col items-end gap-2">
+      {/* Stacked above the (bigger) toolbox FAB, which docks bottom-right at
+          h-16 with a 16px gap; `z-40` keeps it above any card in the row. */}
+      <div className="pointer-events-none absolute bottom-[calc(max(1rem,env(safe-area-inset-bottom))+5rem)] right-6 z-40 flex flex-col items-end gap-2">
         <div
           className={cn(
             'flex flex-col items-end gap-2 transition-all duration-150',

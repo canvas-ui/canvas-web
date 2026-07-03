@@ -44,6 +44,13 @@ export function B5Card({
   const pickerRef = useRef<HTMLDivElement>(null)
   const { showSuccessToast, showErrorToast } = useToastHelpers()
 
+  // Play the creation animation only on the card's first inline appearance —
+  // `entered` flips once the entrance finishes, so toggling maximize/restore
+  // (which re-mounts the inline card) doesn't replay it. The full-height side
+  // card slides in via its own container, so it opts out entirely.
+  const [entered, setEntered] = useState(false)
+  const animateIn = !fillParent && !maximized && !entered
+
   // Scroll the newly-inserted picker into view — it's a real flex sibling
   // (pushes the next card right, doesn't overlap it), which in a long
   // scrollable row can land past the current viewport otherwise.
@@ -77,7 +84,13 @@ export function B5Card({
   const card = (
     <div
       style={cardStyle}
-      className="flex flex-col overflow-hidden rounded-2xl border bg-card shadow-elevation-4 transition-[width,height]"
+      onAnimationEnd={(e) => {
+        if (animateIn && e.target === e.currentTarget) setEntered(true)
+      }}
+      className={cn(
+        'flex flex-col overflow-hidden rounded-2xl border bg-card shadow-elevation-4 transition-[width,height]',
+        animateIn && 'animate-card-in',
+      )}
     >
       <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-4">
         <span className="flex min-w-0 items-center gap-2 truncate text-sm font-medium">
