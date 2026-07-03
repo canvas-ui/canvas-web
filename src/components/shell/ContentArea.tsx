@@ -33,13 +33,15 @@ export function ContentArea() {
         <main className={cn('flex-1 min-h-0 min-w-0 overflow-auto', !fullBleed && !bare && 'p-6')}>
           <Outlet />
         </main>
+        {/* Side panels sit beside the page on desktop; on mobile there's no
+            room for a second column, so they overlay the page instead. */}
         {entry && (
-          <div className="flex shrink-0 items-stretch py-2 pr-2">
+          <div className="flex shrink-0 items-stretch py-2 pr-2 max-md:absolute max-md:inset-0 max-md:z-30 max-md:pl-2">
             <DocumentSideCard />
           </div>
         )}
         {toolboxState.t1Open && (
-          <div className="flex shrink-0 items-stretch py-2 pr-2">
+          <div className="flex shrink-0 items-stretch py-2 pr-2 max-md:absolute max-md:inset-0 max-md:z-30 max-md:pl-2">
             <ToolboxPanel />
           </div>
         )}

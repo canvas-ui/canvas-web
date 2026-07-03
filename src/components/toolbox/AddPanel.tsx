@@ -1,5 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { X, StickyNote, Link as LinkIcon, Upload, Plus, Pencil, FileSearch } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { useToolbox, type AddKind } from './toolbox-context'
 import { NoteForm } from './add/NoteForm'
 import { LinkForm } from './add/LinkForm'
@@ -31,6 +33,7 @@ const ABSTRACTIONS: { kind: AddKind; label: string; icon: typeof StickyNote }[] 
 export function AddPanel() {
   const { state, openAdd, closeAdd } = useToolbox()
   const { addOpen, addKind, editDocument } = state
+  const isMobile = useIsMobile()
   const [width, setWidth] = useState(DEFAULT_WIDTH)
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
 
@@ -74,13 +77,23 @@ export function AddPanel() {
 
   return (
     <div
-      style={{ width }}
-      className="relative flex shrink-0 flex-col overflow-hidden rounded-xl border bg-card shadow-elevation-3"
+      style={isMobile ? undefined : { width }}
+      className={cn(
+        'flex flex-col overflow-hidden rounded-xl border bg-card',
+        // Mobile: fixed overlay above everything (incl. the z-50 toolbox FAB,
+        // which would otherwise cover the form's bottom controls). Desktop:
+        // a resizable flex sibling that shrinks the main content.
+        isMobile
+          ? 'fixed inset-2 z-[55] shadow-elevation-8 animate-fade-in'
+          : 'relative shrink-0 shadow-elevation-3',
+      )}
     >
-      <div
-        onMouseDown={onDragStart}
-        className="absolute left-0 top-0 bottom-0 z-10 w-1 cursor-col-resize transition-colors hover:bg-primary/20"
-      />
+      {!isMobile && (
+        <div
+          onMouseDown={onDragStart}
+          className="absolute left-0 top-0 bottom-0 z-10 w-1 cursor-col-resize transition-colors hover:bg-primary/20"
+        />
+      )}
 
       <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
         <span className="flex items-center gap-2 text-sm font-medium">

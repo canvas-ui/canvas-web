@@ -124,7 +124,7 @@ export function PickDocumentsCard({ onClose, onConfirm, fixedWorkspaceName, savi
   }
 
   return (
-    <div className={cn('flex flex-col overflow-hidden rounded-2xl border bg-card shadow-elevation-4', sizeClassName || 'h-[85vh] max-h-[85vh] w-[420px]')}>
+    <div className={cn('flex flex-col overflow-hidden rounded-2xl border bg-card shadow-elevation-4', sizeClassName || 'h-[85dvh] max-h-full w-[min(420px,90vw)] max-md:h-full max-md:w-full')}>
       <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
         <span className="flex items-center gap-2 text-sm font-medium">
           <FileSearch className="h-4 w-4" />
