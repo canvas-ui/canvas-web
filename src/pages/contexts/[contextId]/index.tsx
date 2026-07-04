@@ -13,6 +13,8 @@ import socketService from '@/lib/socket';
 import { DefaultCanvas } from '@/components/canvas/DefaultCanvas';
 import { Document as WorkspaceDocument } from '@/types/workspace';
 import { useToolbox } from '@/components/toolbox/toolbox-context';
+import { useMenu } from '@/components/shell/menu-context';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 function contextUrlToPath(url: string, workspaceName?: string): string {
   if (!url || !workspaceName) return '/';
@@ -54,6 +56,8 @@ export default function ContextDetailPage() {
   const urlSearchQuery = new URLSearchParams(location.search).get('q') || new URLSearchParams(location.search).get('search') || '';
   const { showToast } = useToast();
   const { state: toolboxState, saveFilters } = useToolbox();
+  const { openM2Drawer } = useMenu();
+  const isMobile = useIsMobile();
   const tbAllOf = toolboxState.filters.features.allOf;
   const tbAnyOf = toolboxState.filters.features.anyOf;
   const tbNoneOf = toolboxState.filters.features.noneOf;
@@ -376,6 +380,10 @@ export default function ContextDetailPage() {
         canSaveChanges={canSaveChanges}
         isSavingChanges={toolboxState.isSaving}
         onSaveChanges={saveFilters}
+        // Mobile: tapping the context URL opens the workspace tree drawer
+        // (M2 detail) so the URL can be navigated by touch. Desktop already
+        // has the tree visible in the side panel.
+        onUrlClick={isMobile && contextId ? () => openM2Drawer('contexts', 'detail', contextId) : undefined}
       />
     </div>
   );

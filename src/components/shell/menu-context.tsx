@@ -27,6 +27,7 @@ type MenuAction =
   | { type: 'CLOSE_M0' }
   | { type: 'CLOSE_M1' }
   | { type: 'OPEN_M2'; view: M2View; entityId?: string | null }
+  | { type: 'OPEN_M2_DRAWER'; section: MenuSection; view: M2View; entityId: string | null }
   | { type: 'CLOSE_M2' }
   | { type: 'SELECT_ENTITY'; entityId: string | null }
   | { type: 'SYNC_FROM_URL'; section: MenuSection; entityId: string | null; m2View: M2View; mobile?: boolean }
@@ -41,6 +42,7 @@ interface MenuContextValue {
   closeM0: () => void
   closeM1: () => void
   openM2: (view: M2View, entityId?: string | null) => void
+  openM2Drawer: (section: MenuSection, view: M2View, entityId: string | null) => void
   closeM2: () => void
   selectEntity: (entityId: string | null) => void
 }
@@ -105,6 +107,20 @@ function menuReducer(state: MenuState, action: MenuAction): MenuState {
         m2Open: true,
         m2View: action.view,
         selectedEntityId: action.entityId !== undefined ? action.entityId : state.selectedEntityId,
+      }
+
+    case 'OPEN_M2_DRAWER':
+      // Programmatic full open (rail + M1 + M2 in one shot) — used by mobile
+      // in-page shortcuts like tapping a context URL to browse its tree,
+      // where none of the layers are open yet. m0Open is a no-op on desktop.
+      return {
+        ...state,
+        m0Open: true,
+        activeSection: action.section,
+        m1Open: true,
+        m2Open: true,
+        m2View: action.view,
+        selectedEntityId: action.entityId,
       }
 
     case 'CLOSE_M2':
@@ -236,6 +252,10 @@ export function MenuProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'OPEN_M2', view, entityId })
   }, [])
 
+  const openM2Drawer = useCallback((section: MenuSection, view: M2View, entityId: string | null) => {
+    dispatch({ type: 'OPEN_M2_DRAWER', section, view, entityId })
+  }, [])
+
   const closeM2 = useCallback(() => {
     dispatch({ type: 'CLOSE_M2' })
   }, [])
@@ -253,6 +273,7 @@ export function MenuProvider({ children }: { children: ReactNode }) {
     closeM0,
     closeM1,
     openM2,
+    openM2Drawer,
     closeM2,
     selectEntity,
   }

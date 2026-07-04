@@ -74,6 +74,9 @@ interface DefaultCanvasProps {
   canSaveChanges?: boolean
   isSavingChanges?: boolean
   onSaveChanges?: () => Promise<void> | void
+  // Makes the header URL tappable — e.g. the mobile context page opens the
+  // workspace tree drawer from it so the URL can be navigated by touch.
+  onUrlClick?: () => void
   // When provided, enables the document list's "Link to…" path picker.
   linkTree?: TreeNode | null
   // When provided, replaces the document list body (e.g. the canvas widget grid)
@@ -125,6 +128,7 @@ export function DefaultCanvas({
   canSaveChanges,
   isSavingChanges,
   onSaveChanges,
+  onUrlClick,
   linkTree,
   children,
 }: DefaultCanvasProps) {
@@ -204,7 +208,18 @@ export function DefaultCanvas({
           <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-muted border text-muted-foreground shrink-0">
             [{urlType.replace('-', ':')}]
           </span>
-          <span className="text-sm text-foreground truncate flex-1">{urlDisplay}</span>
+          {onUrlClick ? (
+            <button
+              type="button"
+              onClick={onUrlClick}
+              title="Browse tree"
+              className="flex-1 truncate rounded px-1 -mx-1 text-left text-sm text-foreground transition-colors hover:bg-accent active:bg-accent"
+            >
+              {urlDisplay}
+            </button>
+          ) : (
+            <span className="text-sm text-foreground truncate flex-1">{urlDisplay}</span>
+          )}
           {onSaveAsCanvas && (
             <button
               type="button"
