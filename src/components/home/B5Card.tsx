@@ -170,14 +170,24 @@ export function B5Card({
     // its own card, so it pushes the next card over rather than overlapping
     // it (an absolutely-positioned overlay was tried and looked wrong —
     // covered the next card instead of sitting between the two). On mobile
-    // there's no room beside the card, so the picker overlays the nearest
-    // positioned ancestor (the card area) instead.
+    // there's no room beside the card, so it becomes an M1/M2-style drawer
+    // over a scrim instead.
     <>
       {card}
       {picker && (
-        <div ref={pickerRef} className="shrink-0 max-md:absolute max-md:inset-2 max-md:z-20">
-          {picker}
-        </div>
+        <>
+          <div
+            className="fixed inset-0 z-[44] bg-black/30 animate-fade-in md:hidden"
+            onClick={() => !saving && setPickerOpen(false)}
+            aria-hidden
+          />
+          <div
+            ref={pickerRef}
+            className="shrink-0 max-md:fixed max-md:bottom-2 max-md:left-16 max-md:right-2 max-md:top-2 max-md:z-[45] max-md:animate-fade-in"
+          >
+            {picker}
+          </div>
+        </>
       )}
     </>
   )
