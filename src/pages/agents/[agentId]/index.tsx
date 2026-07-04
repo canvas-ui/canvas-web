@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Bot, Cpu, Image as ImageIcon, MessageCircle, Play, Settings, Square, X } from 'lucide-react'
+import { Bot, ChevronDown, Cpu, Image as ImageIcon, MessageCircle, Play, Settings, Square, X } from 'lucide-react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import StreamingChatMessageComponent from '@/components/agent/StreamingChatMessage'
 import { useAgentSessions } from '@/components/agent/agent-session-context'
@@ -7,6 +7,7 @@ import { useMenu } from '@/components/shell/menu-context'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast-container'
 import { useAgentChat } from '@/hooks/useAgentChat'
+import { cn } from '@/lib/utils'
 import { type Agent, type AgentImageContent, type ChatMessage, getAgent, getAgentStatus, startAgent, stopAgent } from '@/services/agent'
 
 function useSessionGuard(agentId: string) {
@@ -283,6 +284,10 @@ export default function AgentDetailPage() {
   const [isStarting, setIsStarting] = useState(false)
   const [isStopping, setIsStopping] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Below xl the info panel stacks under the conversation and eats scarce
+  // vertical space — collapsed to its header by default there. At xl+ it has
+  // its own column and is always expanded (the toggle is inert).
+  const [showContextInfo, setShowContextInfo] = useState(false)
   const selectingSessionRef = useRef<string | null>(null)
   const { current, sessions, refresh, select } = useAgentSessions(agentId || '')
 
@@ -505,7 +510,9 @@ export default function AgentDetailPage() {
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+      {/* Stacked below xl: the conversation takes all remaining height and the
+          info panel only its content height (collapsed = just its header). */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 grid-rows-[minmax(0,1fr)_auto] xl:grid-rows-none xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
         <AgentConversation
           key={sessionViewKey}
           agentId={agent.id}
@@ -516,11 +523,22 @@ export default function AgentDetailPage() {
         />
 
         <div className="flex min-h-0 flex-col rounded-lg border">
-          <div className="border-b px-4 py-3">
-            <h2 className="text-sm font-semibold">Contextual Information</h2>
-            <p className="text-xs text-muted-foreground">Current session and runtime state.</p>
-          </div>
-          <div className="space-y-4 overflow-y-auto p-4 text-sm">
+          <button
+            type="button"
+            onClick={() => setShowContextInfo((o) => !o)}
+            aria-expanded={showContextInfo}
+            className={cn(
+              'flex w-full items-center justify-between gap-2 px-4 py-3 text-left xl:pointer-events-none',
+              showContextInfo ? 'border-b' : 'xl:border-b',
+            )}
+          >
+            <div>
+              <h2 className="text-sm font-semibold">Contextual Information</h2>
+              <p className="text-xs text-muted-foreground">Current session and runtime state.</p>
+            </div>
+            <ChevronDown className={cn('h-4 w-4 shrink-0 text-muted-foreground transition-transform xl:hidden', showContextInfo && 'rotate-180')} />
+          </button>
+          <div className={cn('space-y-4 overflow-y-auto p-4 text-sm max-xl:max-h-[50dvh]', !showContextInfo && 'max-xl:hidden')}>
             <div>
               <div className="text-xs uppercase tracking-wide text-muted-foreground">Mode</div>
               <div className="mt-1">{current?.mode || sessions?.mode || 'persistent'}</div>

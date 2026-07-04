@@ -4,8 +4,7 @@
  * rename, remove, copy/cut/paste, lock/unlock layer, show layer content,
  * merge/subtract layers. Ctrl/⌘-click to multi-select source + targets.
  */
-import { useState, useCallback, useRef, useEffect, useLayoutEffect } from 'react'
-import { createPortal } from 'react-dom'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import {
   ChevronRight, ChevronDown,
   Plus, Trash2, Edit2, Copy, Scissors, Clipboard,
@@ -19,6 +18,7 @@ import {
   type LayerStyle,
 } from '@/lib/layer-style'
 import { LayerIconPicker } from './LayerIconPicker'
+import { ContextMenuShell } from '@/components/common/context-menu-shell'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -102,21 +102,6 @@ function CtxMenu({
     sourceLayer.path === path || targetLayers.has(path)
   )
 
-  // Clamp into the viewport after render — menu height varies with item count,
-  // so a fixed estimate can't keep tall menus on-screen. Measure, then nudge.
-  const menuRef = useRef<HTMLDivElement>(null)
-  const [pos, setPos] = useState({ x, y })
-  useLayoutEffect(() => {
-    const el = menuRef.current
-    if (!el) return
-    const { width, height } = el.getBoundingClientRect()
-    const margin = 8
-    setPos({
-      x: Math.max(margin, Math.min(x, window.innerWidth - width - margin)),
-      y: Math.max(margin, Math.min(y, window.innerHeight - height - margin)),
-    })
-  }, [x, y])
-
   const run = async (fn: () => Promise<void>) => {
     try { await fn() } catch (err) { alert(err instanceof Error ? err.message : String(err)) }
     onClose()
@@ -136,14 +121,13 @@ function CtxMenu({
     </button>
   )
 
-  return createPortal(
-    <>
-      <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div
-        ref={menuRef}
-        className="fixed z-50 max-h-[90vh] min-w-[11rem] overflow-y-auto rounded-md border bg-popover p-1 shadow-lg"
-        style={{ left: pos.x, top: pos.y }}
-      >
+  return (
+    <ContextMenuShell
+      x={x}
+      y={y}
+      onClose={onClose}
+      className="min-w-[11rem] rounded-md border bg-popover p-1 shadow-lg"
+    >
         {/* Show layer content — workspace tree only */}
         {onShowContent && item(<Eye className="w-3 h-3" />, 'Show layer content', async () => {
           onShowContent(path, node.id || undefined)
@@ -305,8 +289,7 @@ function CtxMenu({
           </>
         )}
 
-      </div>
-    </>, document.body
+    </ContextMenuShell>
   )
 }
 
