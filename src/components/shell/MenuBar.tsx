@@ -104,7 +104,9 @@ export function MobileMenuToggle() {
       type="button"
       onClick={toggleM0}
       aria-label={state.m0Open ? 'Close menu' : 'Open menu'}
-      className="fixed bottom-[max(0.5rem,env(safe-area-inset-bottom))] left-2 z-[39] flex h-10 w-10 items-center justify-center rounded-full bg-zinc-900 text-white shadow-elevation-4 md:hidden"
+      // w-12 matches the rail card's width exactly, so toggle and rail read
+      // as one aligned column when the rail is open.
+      className="fixed bottom-[max(0.5rem,env(safe-area-inset-bottom))] left-2 z-[39] flex h-12 w-12 items-center justify-center rounded-full bg-zinc-900 text-white shadow-elevation-4 md:hidden"
     >
       {state.m0Open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
     </button>
@@ -151,7 +153,7 @@ export function MenuBar() {
           // Mobile: hidden by default; while open it floats as a slim rail
           // card anchored above the bottom-left toggle button.
           state.m0Open
-            ? 'max-md:fixed max-md:left-2 max-md:top-2 max-md:bottom-[calc(max(0.5rem,env(safe-area-inset-bottom))+3rem)] max-md:z-[46] max-md:h-auto max-md:rounded-xl max-md:bg-card max-md:shadow-elevation-8 max-md:animate-fade-in'
+            ? 'max-md:fixed max-md:left-2 max-md:top-2 max-md:bottom-[calc(max(0.5rem,env(safe-area-inset-bottom))+3.5rem)] max-md:z-[46] max-md:h-auto max-md:rounded-xl max-md:bg-card max-md:shadow-elevation-8 max-md:animate-fade-in'
             : 'max-md:hidden',
         )}
       >

@@ -18,7 +18,10 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export function FileForm() {
+// `capture` turns the form into the Photo/Video variant: the file input asks
+// the OS for the camera (mobile) or restricts the picker to media (desktop).
+// Upload plumbing is identical either way.
+export function FileForm({ capture = false }: { capture?: boolean } = {}) {
   const { closeAdd } = useToolbox()
   const target = useAddTarget()
   const { showSuccessToast, showErrorToast } = useToastHelpers()
@@ -88,12 +91,14 @@ export function FileForm() {
         )}
       >
         <Upload className="h-6 w-6 text-muted-foreground" />
-        <p className="text-sm">Drag &amp; drop files here</p>
-        <p className="text-xs text-muted-foreground">or click to browse</p>
+        <p className="text-sm">{capture ? 'Take a photo or video' : 'Drag & drop files here'}</p>
+        <p className="text-xs text-muted-foreground">{capture ? 'click to open the camera' : 'or click to browse'}</p>
         <input
           ref={inputRef}
           type="file"
           multiple
+          accept={capture ? 'image/*,video/*' : undefined}
+          capture={capture ? 'environment' : undefined}
           className="hidden"
           onChange={(e) => {
             addFiles(e.target.files)
