@@ -183,7 +183,7 @@ export function B5Card({
           />
           <div
             ref={pickerRef}
-            className="shrink-0 max-md:fixed max-md:bottom-2 max-md:left-16 max-md:right-2 max-md:top-2 max-md:z-[45] max-md:animate-fade-in"
+            className="shrink-0 max-md:fixed max-md:bottom-2 max-md:left-2 max-md:right-2 max-md:top-2 max-md:z-[45] max-md:animate-fade-in"
           >
             {picker}
           </div>

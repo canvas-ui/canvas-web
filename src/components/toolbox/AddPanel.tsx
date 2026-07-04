@@ -90,7 +90,7 @@ export function AddPanel() {
         // bottom controls). Desktop: a resizable flex sibling that shrinks
         // the main content.
         isMobile
-          ? 'fixed bottom-2 left-16 right-2 top-2 z-[55] shadow-elevation-8 animate-fade-in'
+          ? 'fixed bottom-2 left-2 right-2 top-2 z-[55] shadow-elevation-8 animate-fade-in'
           : 'relative shrink-0 shadow-elevation-3',
       )}
     >

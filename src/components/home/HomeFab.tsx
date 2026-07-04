@@ -66,9 +66,18 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose }: HomeFa
         })}
       </div>
 
-      {/* Stacked above the (bigger) toolbox FAB, which docks bottom-right at
-          h-16 with a 16px gap; `z-40` keeps it above any card in the row. */}
-      <div className="pointer-events-none absolute bottom-[calc(max(1rem,env(safe-area-inset-bottom))+5rem)] right-6 z-40 flex flex-col items-end gap-2">
+      {/* Desktop: stacked above the (bigger) toolbox FAB, which docks
+          bottom-right at h-16 with a 16px gap. Mobile: the FAB is hidden, so
+          the stack sits at the bottom edge itself — and disappears entirely
+          while a card is open so nothing floats over the card's controls.
+          `z-40` keeps it above any card in the row. */}
+      <div
+        className={cn(
+          'pointer-events-none absolute right-6 z-40 flex flex-col items-end gap-2',
+          'bottom-[max(1rem,env(safe-area-inset-bottom))] md:bottom-[calc(max(1rem,env(safe-area-inset-bottom))+5rem)]',
+          openCards.length > 0 && 'max-md:hidden',
+        )}
+      >
         <div
           className={cn(
             'flex flex-col items-end gap-2 transition-all duration-150',

@@ -10,9 +10,13 @@ import {
   Users,
   FileText,
   FolderOpen,
+  Menu,
+  Wrench,
+  X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useMenu, type MenuSection } from './menu-context'
+import { useToolbox } from '@/components/toolbox/toolbox-context'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { api } from '@/lib/api'
@@ -88,11 +92,43 @@ function NavItem({ path, icon, label }: NavItemProps) {
   )
 }
 
+// Mobile-only entry point for the M0 rail — a small fixed toggle in the
+// bottom-left corner (the bottom-right belongs to the quick-add stack).
+// z-[39] keeps it *below* every drawer scrim (z-40+), so while any overlay
+// is open the toggle is dimmed and a tap there hits the scrim instead —
+// no floating chrome ever covers a panel's bottom controls.
+export function MobileMenuToggle() {
+  const { state, toggleM0 } = useMenu()
+  return (
+    <button
+      type="button"
+      onClick={toggleM0}
+      aria-label={state.m0Open ? 'Close menu' : 'Open menu'}
+      className="fixed bottom-[max(0.5rem,env(safe-area-inset-bottom))] left-2 z-[39] flex h-10 w-10 items-center justify-center rounded-full bg-zinc-900 text-white shadow-elevation-4 md:hidden"
+    >
+      {state.m0Open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+    </button>
+  )
+}
+
 export function MenuBar() {
-  const { state } = useMenu()
+  const { state, closeM0, closeM1 } = useMenu()
+  const { state: toolboxState, setView, closeT1 } = useToolbox()
   const navigate = useNavigate()
   const { showToast } = useToast()
   const isAdmin = state.user?.userType === 'admin'
+
+  // Mobile replacement for the (hidden) toolbox FAB — opening the toolbox
+  // drawer dismisses the rail and any M1 drawer it was floating beside.
+  const handleToolbox = () => {
+    if (toolboxState.t1Open) {
+      closeT1()
+    } else {
+      setView('tools')
+    }
+    closeM1()
+    closeM0()
+  }
 
   const handleLogout = useCallback(async () => {
     try {
@@ -109,7 +145,16 @@ export function MenuBar() {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="flex flex-col items-center w-[var(--m0-width)] h-full bg-transparent shrink-0">
+      <div
+        className={cn(
+          'flex flex-col items-center w-[var(--m0-width)] h-full bg-transparent shrink-0',
+          // Mobile: hidden by default; while open it floats as a slim rail
+          // card anchored above the bottom-left toggle button.
+          state.m0Open
+            ? 'max-md:fixed max-md:left-2 max-md:top-2 max-md:bottom-[calc(max(0.5rem,env(safe-area-inset-bottom))+3rem)] max-md:z-[46] max-md:h-auto max-md:rounded-xl max-md:bg-card max-md:shadow-elevation-8 max-md:animate-fade-in'
+            : 'max-md:hidden',
+        )}
+      >
         {/* Logo */}
         <div className="flex items-center justify-center h-12 w-full shrink-0">
           <button
@@ -144,6 +189,29 @@ export function MenuBar() {
         {/* Bottom section */}
         <div className="flex flex-col items-center gap-1 py-2 shrink-0">
           <div className="w-6 h-px bg-sidebar-border mb-2" />
+
+          {/* Mobile only — the toolbox FAB is hidden below md, so the rail
+              carries the toolbox entry point instead */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={handleToolbox}
+                aria-label={toolboxState.t1Open ? 'Close toolbox' : 'Open toolbox'}
+                className={cn(
+                  'flex items-center justify-center w-10 h-10 rounded-lg transition-colors md:hidden',
+                  toolboxState.t1Open
+                    ? 'bg-accent text-foreground'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
+                )}
+              >
+                <Wrench className="w-5 h-5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>
+              Toolbox
+            </TooltipContent>
+          </Tooltip>
 
           <MenuItem section="settings" icon={<Settings className="w-5 h-5" />} label="Settings" />
 
