@@ -28,14 +28,18 @@ export function ExistingDocsForm() {
   }
 
   return (
-    <div className="fixed inset-y-0 right-0 z-[60] flex items-stretch py-2 pr-2">
-      <PickDocumentsCard
-        sizeClassName="h-full w-[min(420px,calc(100vw_-_1rem))]"
-        fixedWorkspaceName={target?.mode === 'workspace' ? target.workspaceName : undefined}
-        saving={saving}
-        onConfirm={handleConfirm}
-        onClose={openAddPicker}
-      />
-    </div>
+    <>
+      {/* Mobile: M1/M2-style drawer over a scrim instead of a flat right dock */}
+      <div className="fixed inset-0 z-[59] bg-black/30 animate-fade-in md:hidden" onClick={openAddPicker} aria-hidden />
+      <div className="fixed inset-y-0 right-0 z-[60] flex items-stretch py-2 pr-2 max-md:bottom-2 max-md:left-16 max-md:top-2 max-md:py-0 max-md:pr-0 max-md:animate-fade-in">
+        <PickDocumentsCard
+          sizeClassName="h-full w-[420px] max-w-full max-md:w-full max-md:shadow-elevation-8"
+          fixedWorkspaceName={target?.mode === 'workspace' ? target.workspaceName : undefined}
+          saving={saving}
+          onConfirm={handleConfirm}
+          onClose={openAddPicker}
+        />
+      </div>
+    </>
   )
 }

@@ -76,15 +76,21 @@ export function AddPanel() {
   }
 
   return (
+    <>
+      {/* Mobile scrim — same treatment as the M1/M2 menu drawer */}
+      {isMobile && (
+        <div className="fixed inset-0 z-[54] bg-black/30 animate-fade-in" onClick={closeAdd} aria-hidden />
+      )}
     <div
       style={isMobile ? undefined : { width }}
       className={cn(
         'flex flex-col overflow-hidden rounded-xl border bg-card',
-        // Mobile: fixed overlay above everything (incl. the z-50 toolbox FAB,
-        // which would otherwise cover the form's bottom controls). Desktop:
-        // a resizable flex sibling that shrinks the main content.
+        // Mobile: M1/M2-style drawer next to the menubar, above everything
+        // (incl. the z-50 toolbox FAB, which would otherwise cover the form's
+        // bottom controls). Desktop: a resizable flex sibling that shrinks
+        // the main content.
         isMobile
-          ? 'fixed inset-2 z-[55] shadow-elevation-8 animate-fade-in'
+          ? 'fixed bottom-2 left-16 right-2 top-2 z-[55] shadow-elevation-8 animate-fade-in'
           : 'relative shrink-0 shadow-elevation-3',
       )}
     >
@@ -134,5 +140,6 @@ export function AddPanel() {
         {!isEditMode && addKind === 'existing' && <ExistingDocsForm />}
       </div>
     </div>
+    </>
   )
 }
