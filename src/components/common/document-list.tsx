@@ -16,7 +16,7 @@ import {
   useSortableData,
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { createPortal } from 'react-dom'
+import { ContextMenuShell } from '@/components/common/context-menu-shell'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { FilePreview, isPreviewable } from '@/components/common/file-preview'
 import { Input } from '@/components/ui/input'
@@ -1562,10 +1562,13 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
         </div>
       )}
 
-      {contextMenu && createPortal(
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setContextMenu(null)} />
-          <div className="fixed z-50 bg-background border rounded-lg shadow-lg py-1 min-w-[120px]" style={{ left: contextMenu.x, top: contextMenu.y }}>
+      {contextMenu && (
+        <ContextMenuShell
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+          className="bg-background border rounded-lg shadow-lg py-1 min-w-[120px]"
+        >
             <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('copy', contextMenu.documentIds)}>
               <Copy className="h-3 w-3" />
               Copy {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
@@ -1636,15 +1639,17 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                 Destroy {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
               </button>
             )}
-          </div>
-        </>, document.body
+        </ContextMenuShell>
       )}
 
       {/* Empty Area Context Menu */}
-      {emptyAreaContextMenu && createPortal(
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setEmptyAreaContextMenu(null)} />
-          <div className="fixed z-50 bg-background border rounded-lg shadow-lg py-1 min-w-[120px]" style={{ left: emptyAreaContextMenu.x, top: emptyAreaContextMenu.y }}>
+      {emptyAreaContextMenu && (
+        <ContextMenuShell
+          x={emptyAreaContextMenu.x}
+          y={emptyAreaContextMenu.y}
+          onClose={() => setEmptyAreaContextMenu(null)}
+          className="bg-background border rounded-lg shadow-lg py-1 min-w-[120px]"
+        >
             {pastedDocumentIds && pastedDocumentIds.length > 0 && (
               <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={handleEmptyAreaPaste}>
                 <Clipboard className="h-3 w-3" />
@@ -1657,8 +1662,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                 Import Documents
               </button>
             )}
-          </div>
-        </>, document.body
+        </ContextMenuShell>
       )}
 
       <ExportModal
