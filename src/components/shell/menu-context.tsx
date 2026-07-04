@@ -9,6 +9,10 @@ export type M2View = 'detail' | 'form' | 'chat' | 'settings' | null
 
 export interface MenuState {
   activeSection: MenuSection
+  // Mobile only: the M0 icon rail is hidden by default on small screens and
+  // floats over the content while open. Ignored on desktop, where the rail
+  // is always part of the layout flow.
+  m0Open: boolean
   m1Open: boolean
   m2Open: boolean
   m2View: M2View
@@ -19,6 +23,8 @@ export interface MenuState {
 type MenuAction =
   | { type: 'SET_SECTION'; section: MenuSection }
   | { type: 'TOGGLE_SECTION'; section: MenuSection }
+  | { type: 'TOGGLE_M0' }
+  | { type: 'CLOSE_M0' }
   | { type: 'CLOSE_M1' }
   | { type: 'OPEN_M2'; view: M2View; entityId?: string | null }
   | { type: 'CLOSE_M2' }
@@ -31,6 +37,8 @@ interface MenuContextValue {
   dispatch: React.Dispatch<MenuAction>
   setSection: (section: MenuSection) => void
   toggleSection: (section: MenuSection) => void
+  toggleM0: () => void
+  closeM0: () => void
   closeM1: () => void
   openM2: (view: M2View, entityId?: string | null) => void
   closeM2: () => void
@@ -41,6 +49,7 @@ interface MenuContextValue {
 
 const initialState: MenuState = {
   activeSection: null,
+  m0Open: false,
   m1Open: false,
   m2Open: false,
   m2View: null,
@@ -76,6 +85,17 @@ function menuReducer(state: MenuState, action: MenuAction): MenuState {
         selectedEntityId: null,
       }
 
+    case 'TOGGLE_M0':
+      // Closing the rail also drops any drawer that was opened from it —
+      // otherwise the M1 drawer would float with no rail beside it.
+      if (state.m0Open) {
+        return { ...state, m0Open: false, activeSection: null, m1Open: false, m2Open: false, m2View: null }
+      }
+      return { ...state, m0Open: true }
+
+    case 'CLOSE_M0':
+      return { ...state, m0Open: false }
+
     case 'CLOSE_M1':
       return { ...state, activeSection: null, m1Open: false, m2Open: false, m2View: null }
 
@@ -98,13 +118,14 @@ function menuReducer(state: MenuState, action: MenuAction): MenuState {
         action.section === state.activeSection
         && action.entityId === state.selectedEntityId
         && action.m2View === state.m2View
-      // On mobile the menu is an overlay drawer, so any navigation (this
-      // action only fires on pathname changes) closes it — even when it lands
-      // on the same section, e.g. Settings → API tokens.
-      if (unchanged && !(action.mobile && state.m1Open)) return state
+      // On mobile the rail and menu are overlays, so any navigation (this
+      // action only fires on pathname changes) closes them — even when it
+      // lands on the same section, e.g. Settings → API tokens.
+      if (unchanged && !(action.mobile && (state.m1Open || state.m0Open))) return state
       return {
         ...state,
         activeSection: action.section,
+        m0Open: action.mobile ? false : state.m0Open,
         m1Open: action.mobile ? false : action.section !== null,
         selectedEntityId: action.entityId,
         m2Open: action.m2View !== null,
@@ -199,6 +220,14 @@ export function MenuProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'TOGGLE_SECTION', section })
   }, [])
 
+  const toggleM0 = useCallback(() => {
+    dispatch({ type: 'TOGGLE_M0' })
+  }, [])
+
+  const closeM0 = useCallback(() => {
+    dispatch({ type: 'CLOSE_M0' })
+  }, [])
+
   const closeM1 = useCallback(() => {
     dispatch({ type: 'CLOSE_M1' })
   }, [])
@@ -220,6 +249,8 @@ export function MenuProvider({ children }: { children: ReactNode }) {
     dispatch,
     setSection,
     toggleSection,
+    toggleM0,
+    closeM0,
     closeM1,
     openM2,
     closeM2,

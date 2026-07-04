@@ -1693,7 +1693,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
         // an M1/M2-style drawer over a scrim.
         <>
           <div className="fixed inset-0 z-[59] bg-black/30 animate-fade-in md:hidden" onClick={() => setPickDocsOpen(false)} aria-hidden />
-          <div className="fixed inset-y-0 right-0 z-[60] flex items-stretch py-2 pr-2 max-md:bottom-2 max-md:left-16 max-md:top-2 max-md:py-0 max-md:pr-0 max-md:animate-fade-in">
+          <div className="fixed inset-y-0 right-0 z-[60] flex items-stretch py-2 pr-2 max-md:bottom-2 max-md:left-2 max-md:top-2 max-md:py-0 max-md:pr-0 max-md:animate-fade-in">
             <PickDocumentsCard
               sizeClassName="h-full w-[420px] max-w-full max-md:w-full max-md:shadow-elevation-8"
               fixedWorkspaceName={workspaceId}

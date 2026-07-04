@@ -1,5 +1,5 @@
 import { MenuProvider } from './menu-context'
-import { MenuBar } from './MenuBar'
+import { MenuBar, MobileMenuToggle } from './MenuBar'
 import { MenuPanelArea } from './MenuPanelArea'
 import { ContentArea } from './ContentArea'
 import { ToolboxFab } from './ToolboxFab'
@@ -24,8 +24,10 @@ export function AppShell() {
               {/* Slim creation panel — opens beside the main content (workspace or context) */}
               <AddPanel />
             </div>
-            {/* Always-visible FAB — fixed to viewport so it survives on small/mobile screens */}
+            {/* Desktop-only FAB — on mobile the toolbox entry lives in the M0
+                rail, toggled by the bottom-left menu button */}
             <ToolboxFab />
+            <MobileMenuToggle />
           </SideViewProvider>
         </ToolboxProvider>
       </AgentSessionProvider>

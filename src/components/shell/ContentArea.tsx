@@ -20,11 +20,11 @@ function isBare(pathname: string): boolean {
   return section === 'home' || section === 'share-target'
 }
 
-// Shared mobile "drawer" treatment — identical to the M1/M2 menu panel
-// overlay (floats next to the menubar over a scrim, elevation-8) so every
-// panel reads with the same prominence on small screens.
+// Shared mobile "drawer" treatment — same prominence as the M1/M2 menu panel
+// overlay (floating card over a scrim, elevation-8). Spans from left-2 since
+// the M0 rail is hidden by default on small screens.
 const MOBILE_DRAWER =
-  'max-md:fixed max-md:left-16 max-md:right-2 max-md:top-2 max-md:bottom-2 max-md:z-40 ' +
+  'max-md:fixed max-md:left-2 max-md:right-2 max-md:top-2 max-md:bottom-2 max-md:z-40 ' +
   'max-md:py-0 max-md:pr-0 max-md:rounded-2xl max-md:shadow-elevation-8 max-md:animate-fade-in'
 const MOBILE_SCRIM = 'fixed inset-0 z-40 bg-black/30 animate-fade-in md:hidden'
 
