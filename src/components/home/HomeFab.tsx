@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { QUICK_ADD_CONFIG, type QuickAddKind, type QuickAddInitialData } from './quick-add-types'
+import { InsertMenu, type InsertKind } from '@/components/common/insert-menu'
+import { type QuickAddKind, type QuickAddInitialData } from './quick-add-types'
 import { NoteCardBody } from './cards/NoteCardBody'
 import { LinkCardBody } from './cards/LinkCardBody'
 import { FileCardBody } from './cards/FileCardBody'
 import { PhotoCardBody } from './cards/PhotoCardBody'
+import { ExistingCardBody } from './cards/ExistingCardBody'
+import { FolderCardBody } from './cards/FolderCardBody'
 
 interface HomeFabProps {
   // Opened directly (e.g. from the share-target flow) instead of via the FAB.
@@ -18,11 +21,9 @@ interface HomeFabProps {
 
 interface OpenCard {
   id: string
-  kind: QuickAddKind
+  kind: InsertKind
   initialData?: QuickAddInitialData
 }
-
-const KINDS: QuickAddKind[] = ['note', 'link', 'file', 'photo']
 
 let cardSeq = 0
 function nextCardId() {
@@ -35,11 +36,8 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose }: HomeFa
   const [openCards, setOpenCards] = useState<OpenCard[]>(() =>
     initialKind ? [{ id: 'initial', kind: initialKind, initialData }] : [],
   )
-  const [hasCamera] = useState(() => typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia)
 
-  const kinds = hasCamera ? KINDS : KINDS.filter((k) => k !== 'photo')
-
-  const addCard = (kind: QuickAddKind) => {
+  const addCard = (kind: InsertKind) => {
     setOpenCards((prev) => [...prev, { id: nextCardId(), kind }])
     setStackOpen(false)
   }
@@ -62,6 +60,8 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose }: HomeFa
             case 'link': return <LinkCardBody key={c.id} onClose={onClose} initialData={c.initialData} />
             case 'file': return <FileCardBody key={c.id} onClose={onClose} initialData={c.initialData} />
             case 'photo': return <PhotoCardBody key={c.id} onClose={onClose} />
+            case 'existing': return <ExistingCardBody key={c.id} onClose={onClose} />
+            case 'folder': return <FolderCardBody key={c.id} onClose={onClose} />
           }
         })}
       </div>
@@ -84,20 +84,8 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose }: HomeFa
             stackOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none translate-y-2 opacity-0',
           )}
         >
-          {kinds.map((kind) => {
-            const { label, icon: Icon } = QUICK_ADD_CONFIG[kind]
-            return (
-              <button
-                key={kind}
-                type="button"
-                onClick={() => addCard(kind)}
-                className="flex items-center gap-2 rounded-full bg-card px-3 py-1.5 text-sm font-medium shadow-elevation-3 transition-transform hover:scale-105"
-              >
-                {label}
-                <Icon className="h-3.5 w-3.5" />
-              </button>
-            )
-          })}
+          {/* Shared insertion menu — same entries/order as the AddPanel picker */}
+          <InsertMenu variant="stack" onSelect={addCard} />
         </div>
 
         <button

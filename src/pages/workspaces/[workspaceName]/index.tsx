@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
+import { Filter } from 'lucide-react';
 import { api } from '@/lib/api';
 import { API_ROUTES } from '@/config/api';
 import { useToast } from '@/components/ui/toast-container';
@@ -24,7 +25,6 @@ import {
   destroyWorkspaceDocuments,
   purgeWorkspaceDocuments,
   startWorkspace,
-  stopWorkspace,
   DEFAULT_WORKSPACE_TREE_NAME,
 } from '@/services/workspace';
 import { Document, TreeNode, buildDatetimeFilters } from '@/types/workspace';
@@ -86,7 +86,6 @@ export default function WorkspaceDetailPage() {
   // 'path' scopes to the selected tree path; 'workspace' lists every document.
   const [docScope, setDocScope] = useState<'path' | 'workspace'>('path');
   const [isStartingWorkspace, setIsStartingWorkspace] = useState(false);
-  const [isStoppingWorkspace, setIsStoppingWorkspace] = useState(false);
 
   const [clipboard, setClipboard] = useState<WorkspaceClipboard | null>(null);
 
@@ -102,7 +101,7 @@ export default function WorkspaceDetailPage() {
   const [serverSearchQueries, setServerSearchQueries] = useState<string[]>(urlSearchQueries);
   const [ignoredSavedSearchPath, setIgnoredSavedSearchPath] = useState<string | null>(null);
 
-  const { state: toolboxState, saveFilters } = useToolbox();
+  const { state: toolboxState, saveFilters, toggleView } = useToolbox();
   const tbAllOf = toolboxState.filters.features.allOf;
   const tbAnyOf = toolboxState.filters.features.anyOf;
   const tbNoneOf = toolboxState.filters.features.noneOf;
@@ -453,22 +452,6 @@ export default function WorkspaceDetailPage() {
       showToast({ title: 'Error', description: message, variant: 'destructive' });
     } finally {
       setIsStartingWorkspace(false);
-    }
-  };
-
-  const handleStopWorkspace = async () => {
-    if (!workspace) return;
-    setIsStoppingWorkspace(true);
-    try {
-      const updated = await stopWorkspace(workspace.name);
-      setWorkspace(updated);
-      showToast({ title: 'Success', description: 'Workspace stopped successfully' });
-      window.dispatchEvent(new CustomEvent('workspaces:refresh'));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to stop workspace';
-      showToast({ title: 'Error', description: message, variant: 'destructive' });
-    } finally {
-      setIsStoppingWorkspace(false);
     }
   };
 
@@ -875,13 +858,20 @@ export default function WorkspaceDetailPage() {
         />
         <span className="text-sm font-medium truncate">{workspace.label || workspace.name}</span>
         <div className="flex-1" />
+        {/* Filtering earns the header slot; stopping a workspace is a rarer
+            action that stays available on the workspace list rows (M1). */}
         {workspace.status === 'active' ? (
           <button
-            onClick={handleStopWorkspace}
-            disabled={isStoppingWorkspace}
-            className="px-3 py-1 text-xs border rounded-md hover:bg-accent disabled:opacity-50"
+            onClick={() => toggleView('tools')}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-1 text-xs border rounded-md transition-colors',
+              toolboxState.t1Open && toolboxState.t1View === 'tools'
+                ? 'bg-accent text-foreground'
+                : 'hover:bg-accent text-muted-foreground hover:text-foreground',
+            )}
           >
-            {isStoppingWorkspace ? 'Stopping…' : 'Stop'}
+            <Filter className="w-3 h-3" />
+            Filter
           </button>
         ) : (
           <button

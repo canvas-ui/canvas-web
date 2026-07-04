@@ -1,11 +1,13 @@
 import { useCallback, useRef, useState } from 'react'
-import { X, StickyNote, Link as LinkIcon, Upload, Plus, Pencil, FileSearch } from 'lucide-react'
+import { X, StickyNote, Link as LinkIcon, Upload, Camera, Plus, Pencil, FileSearch, FolderPlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { InsertMenu } from '@/components/common/insert-menu'
 import { useToolbox, type AddKind } from './toolbox-context'
 import { NoteForm } from './add/NoteForm'
 import { LinkForm } from './add/LinkForm'
 import { FileForm } from './add/FileForm'
+import { FolderForm } from './add/FolderForm'
 import { ExistingDocsForm } from './add/ExistingDocsForm'
 import { EditNoteForm } from './add/EditNoteForm'
 import { EditLinkForm } from './add/EditLinkForm'
@@ -18,17 +20,10 @@ const TITLES: Record<AddKind, { label: string; icon: typeof StickyNote }> = {
   note: { label: 'New Note', icon: StickyNote },
   link: { label: 'New Link', icon: LinkIcon },
   file: { label: 'Add Files', icon: Upload },
+  photo: { label: 'Photo/Video', icon: Camera },
   existing: { label: 'Add Existing', icon: FileSearch },
+  folder: { label: 'New Folder', icon: FolderPlus },
 }
-
-// Abstraction list shown in the panel's picker mode. Single source of truth —
-// adding one of the ~10 eventual abstractions is one entry here (+ its form).
-const ABSTRACTIONS: { kind: AddKind; label: string; icon: typeof StickyNote }[] = [
-  { kind: 'note', label: 'Note', icon: StickyNote },
-  { kind: 'link', label: 'Link', icon: LinkIcon },
-  { kind: 'file', label: 'File', icon: Upload },
-  { kind: 'existing', label: 'Existing document', icon: FileSearch },
-]
 
 export function AddPanel() {
   const { state, openAdd, closeAdd } = useToolbox()
@@ -119,25 +114,14 @@ export function AddPanel() {
       <div className="flex-1 overflow-y-auto">
         {isEditMode && editDocument!.schema === 'data/abstraction/note' && <EditNoteForm />}
         {isEditMode && editDocument!.schema === 'data/abstraction/link' && <EditLinkForm />}
-        {!isEditMode && isPicker && (
-          <div className="p-2">
-            {ABSTRACTIONS.map(({ kind, label: l, icon: I }) => (
-              <button
-                key={kind}
-                type="button"
-                onClick={() => openAdd(kind)}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-              >
-                <I className="h-4 w-4 text-muted-foreground" />
-                {l}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Shared insertion menu — same entries/order as the home quick-add */}
+        {!isEditMode && isPicker && <InsertMenu onSelect={openAdd} />}
         {!isEditMode && addKind === 'note' && <NoteForm />}
         {!isEditMode && addKind === 'link' && <LinkForm />}
         {!isEditMode && addKind === 'file' && <FileForm />}
+        {!isEditMode && addKind === 'photo' && <FileForm capture />}
         {!isEditMode && addKind === 'existing' && <ExistingDocsForm />}
+        {!isEditMode && addKind === 'folder' && <FolderForm />}
       </div>
     </div>
     </>
