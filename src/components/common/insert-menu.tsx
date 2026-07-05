@@ -25,10 +25,13 @@ interface InsertMenuProps {
   // 'list' — panel rows (AddPanel picker). 'stack' — floating pill buttons
   // (home quick-add FAB stack). Same entries and order either way.
   variant?: 'list' | 'stack'
+  // Kinds a surface can't host — e.g. the home stack omits 'folder' (folders
+  // are created inside the Link to… destination tree instead).
+  omit?: InsertKind[]
 }
 
-export function InsertMenu({ onSelect, variant = 'list' }: InsertMenuProps) {
-  const kinds = insertKindsForDevice()
+export function InsertMenu({ onSelect, variant = 'list', omit }: InsertMenuProps) {
+  const kinds = insertKindsForDevice().filter((k) => !omit?.includes(k.kind))
 
   if (variant === 'stack') {
     return (

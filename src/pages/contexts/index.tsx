@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/toast-container"
+import { FormPanel } from "@/components/common/form-panel"
 import { Plus, Trash, DoorOpen, Edit, Share2 } from "lucide-react"
 import {
   Table,
@@ -70,6 +71,7 @@ export default function ContextsPage() {
   const [newContextBaseUrl, setNewContextBaseUrl] = useState("/")
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>("")
   const [isCreating, setIsCreating] = useState(false)
+  const [showCreate, setShowCreate] = useState(false)
   const [editingContext, setEditingContext] = useState<ContextEntry | null>(null)
   const [deletingContextId, setDeletingContextId] = useState<string | null>(null)
   const { showToast } = useToast()
@@ -266,6 +268,7 @@ export default function ContextsPage() {
         title: 'Success',
         description: 'Context created successfully'
       });
+      setShowCreate(false);
       // Nudge sidebar list to refresh even if socket events are missed
       window.dispatchEvent(new CustomEvent('contexts:refresh'))
       // Navigate to the newly created context
@@ -396,15 +399,23 @@ export default function ContextsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="border-b pb-4">
-        <h1 className="text-3xl font-bold tracking-tight">Contexts</h1>
-        <p className="text-muted-foreground mt-2">Create and manage contexts in your workspaces. View contexts shared with you.</p>
+      {/* Page Header — list first; creation lives behind the button */}
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Contexts</h1>
+          <p className="text-muted-foreground mt-2">Create and manage contexts in your workspaces. View contexts shared with you.</p>
+        </div>
+        {!showCreate && (
+          <Button onClick={() => setShowCreate(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Context
+          </Button>
+        )}
       </div>
 
       {/* Create New Context Section */}
-      <div className="space-y-4">
-        <h2 className="text-xl font-semibold">Create New Context</h2>
+      {showCreate && (
+      <FormPanel title="Create New Context" onClose={() => setShowCreate(false)}>
         <form onSubmit={handleCreateContext} className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div>
@@ -487,7 +498,8 @@ export default function ContextsPage() {
             Create Context
           </Button>
         </form>
-      </div>
+      </FormPanel>
+      )}
 
       {/* Your Contexts Section */}
       <div className="space-y-4">

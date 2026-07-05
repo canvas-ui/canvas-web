@@ -179,7 +179,16 @@ export function LinkNode({
       {(shouldExpand && hasChildren) || isCreateHere ? (
         <div className="ml-[22px] mt-1.5 space-y-1.5">
           {isCreateHere && onCreateConfirm && onCreateCancel && (
-            <InlineCreateRow busy={creating} onConfirm={(name) => onCreateConfirm(path, name)} onCancel={onCreateCancel} />
+            <InlineCreateRow
+              busy={creating}
+              onConfirm={(name) => {
+                // Pin this node open so the freshly created child stays
+                // visible (and selected) once the inline row goes away.
+                setExpanded(true)
+                onCreateConfirm(path, name)
+              }}
+              onCancel={onCreateCancel}
+            />
           )}
           {shouldExpand && node.children?.map(child => (
             <LinkNode
