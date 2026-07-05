@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { generateNiceRandomHexColor } from "@/utils/color"
 import { useSocketSubscription } from "@/hooks/useSocketSubscription"
+import { FormPanel } from '@/components/common/form-panel';
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/toast-container"
@@ -31,6 +32,8 @@ export default function WorkspacesPage() {
   const [newWorkspaceColor, setNewWorkspaceColor] = useState(generateNiceRandomHexColor())
   const [newWorkspaceLabel, setNewWorkspaceLabel] = useState("")
   const [isCreating, setIsCreating] = useState(false)
+  const [showCreate, setShowCreate] = useState(false);
+  const [showShared, setShowShared] = useState(false);
   const [editingWorkspace, setEditingWorkspace] = useState<Workspace | null>(null)
   const { showToast } = useToast()
   const navigate = useNavigate()
@@ -110,6 +113,7 @@ export default function WorkspacesPage() {
         title: 'Success',
         description: `Workspace '${newWorkspace.label || newWorkspace.name}' created.`
       })
+      setShowCreate(false)
     } catch (err) {
       console.error('Workspace creation error:', err);
 
@@ -277,15 +281,28 @@ export default function WorkspacesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="border-b pb-4">
-        <h1 className="text-3xl font-bold tracking-tight">Workspaces</h1>
-        <p className="text-muted-foreground mt-2">Divide your Universe into self-contained workspaces</p>
+      {/* Page Header — list first; creation lives behind the button */}
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Workspaces</h1>
+          <p className="text-muted-foreground mt-2">Divide your Universe into self-contained workspaces</p>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <Button variant="outline" onClick={() => setShowShared(o => !o)}>
+            Open Shared…
+          </Button>
+          {!showCreate && (
+            <Button onClick={() => setShowCreate(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Workspace
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Create New Workspace Section */}
-      <div className="space-y-4">
-        <h2 className="text-xl font-semibold">Create New Workspace</h2>
+      {showCreate && (
+      <FormPanel title="Create New Workspace" onClose={() => setShowCreate(false)}>
         <form onSubmit={handleCreateWorkspace} className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <Input
@@ -332,10 +349,11 @@ export default function WorkspacesPage() {
             Create Workspace
           </Button>
         </form>
-      </div>
+      </FormPanel>
+      )}
 
-      {/* Open Shared Resource */}
-      <OpenSharedResource />
+      {/* Open Shared Resource — behind the header toggle */}
+      {showShared && <OpenSharedResource />}
 
       {/* Your Workspaces Section */}
       <div className="space-y-4">

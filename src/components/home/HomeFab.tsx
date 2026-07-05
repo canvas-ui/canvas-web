@@ -8,7 +8,6 @@ import { LinkCardBody } from './cards/LinkCardBody'
 import { FileCardBody } from './cards/FileCardBody'
 import { PhotoCardBody } from './cards/PhotoCardBody'
 import { ExistingCardBody } from './cards/ExistingCardBody'
-import { FolderCardBody } from './cards/FolderCardBody'
 
 interface HomeFabProps {
   // Opened directly (e.g. from the share-target flow) instead of via the FAB.
@@ -61,7 +60,9 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose }: HomeFa
             case 'file': return <FileCardBody key={c.id} onClose={onClose} initialData={c.initialData} />
             case 'photo': return <PhotoCardBody key={c.id} onClose={onClose} />
             case 'existing': return <ExistingCardBody key={c.id} onClose={onClose} />
-            case 'folder': return <FolderCardBody key={c.id} onClose={onClose} />
+            // 'folder' is omitted from the home stack — folders are created
+            // inside the Link to… destination tree instead.
+            case 'folder': return null
           }
         })}
       </div>
@@ -84,8 +85,11 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose }: HomeFa
             stackOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none translate-y-2 opacity-0',
           )}
         >
-          {/* Shared insertion menu — same entries/order as the AddPanel picker */}
-          <InsertMenu variant="stack" onSelect={addCard} />
+          {/* Shared insertion menu — same entries/order as the AddPanel
+              picker, minus Folder: on home a folder has no natural location,
+              so folders are created inside the Link to… destination tree
+              (long-press / right-click a row) instead. */}
+          <InsertMenu variant="stack" omit={['folder']} onSelect={addCard} />
         </div>
 
         <button

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { FormPanel } from '@/components/common/form-panel'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/toast-container"
@@ -45,6 +46,7 @@ export default function AgentsPage() {
   })
   const [newAgentSystemPrompt, setNewAgentSystemPrompt] = useState("")
   const [isCreating, setIsCreating] = useState(false)
+  const [showCreate, setShowCreate] = useState(false)
   const { showToast } = useToast()
   const navigate = useNavigate()
   const socket = useSocket()
@@ -202,6 +204,7 @@ export default function AgentsPage() {
         title: 'Success',
         description: `Agent '${newAgent.label || newAgent.name}' created.`
       })
+      setShowCreate(false)
     } catch (err) {
       console.error('Agent creation error:', err);
       let errorMessage = 'Failed to create agent';
@@ -301,15 +304,23 @@ export default function AgentsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="border-b pb-4">
-        <h1 className="text-3xl font-bold tracking-tight">AI Agents</h1>
-        <p className="text-muted-foreground mt-2">Create and manage your AI agents with multiple LLM providers</p>
+      {/* Page Header — list first; creation lives behind the button */}
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">AI Agents</h1>
+          <p className="text-muted-foreground mt-2">Create and manage your AI agents with multiple LLM providers</p>
+        </div>
+        {!showCreate && (
+          <Button onClick={() => setShowCreate(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Agent
+          </Button>
+        )}
       </div>
 
       {/* Create New Agent Section */}
-      <div className="space-y-4">
-        <h2 className="text-xl font-semibold">Create New Agent</h2>
+      {showCreate && (
+      <FormPanel title="Create New Agent" onClose={() => setShowCreate(false)}>
         <form onSubmit={handleCreateAgent} className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <Input
@@ -513,7 +524,8 @@ export default function AgentsPage() {
             Create Agent
           </Button>
         </form>
-      </div>
+      </FormPanel>
+      )}
 
       {/* Your Agents Section */}
       <div className="space-y-4">
