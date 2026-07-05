@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { ChevronRight, ChevronDown, GitBranch, FolderTree } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { ChevronRight, ChevronDown, GitBranch, FolderTree, CornerDownRight } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import type { TreeNode } from '@/types/workspace'
 import { getLayerStyle, DEFAULT_FOLDER_ICON, DEFAULT_CANVAS_ICON, DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style'
@@ -25,6 +25,85 @@ export function buildPath(parent: string, name: string) {
   return parent === '/' ? `/${name}` : `${parent}/${name}`
 }
 
+export interface RowMenuEvent {
+  clientX: number
+  clientY: number
+  path: string
+}
+
+// Right-click (desktop) + long-press (touch — iOS never fires contextmenu)
+// handlers for a tree row. `guardClick` wraps the row's click handler and
+// swallows the click that follows a long-press so it doesn't also toggle
+// the row's selection.
+export function useRowMenu(path: string, onMenu?: (e: RowMenuEvent) => void) {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const suppressClick = useRef(false)
+
+  const clear = () => {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null }
+  }
+
+  const guardClick = (fn: () => void) => () => {
+    if (suppressClick.current) { suppressClick.current = false; return }
+    fn()
+  }
+
+  if (!onMenu) return { handlers: {}, guardClick }
+
+  return {
+    guardClick,
+    handlers: {
+      onContextMenu: (e: React.MouseEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+        onMenu({ clientX: e.clientX, clientY: e.clientY, path })
+      },
+      onPointerDown: (e: React.PointerEvent) => {
+        if (e.pointerType !== 'touch') return
+        const { clientX, clientY } = e
+        clear()
+        timer.current = setTimeout(() => {
+          suppressClick.current = true
+          onMenu({ clientX, clientY, path })
+        }, 500)
+      },
+      onPointerUp: clear,
+      onPointerLeave: clear,
+      onPointerMove: clear,
+    } as const,
+  }
+}
+
+// Inline "new folder" input rendered as a pseudo child row — Enter creates,
+// Escape/blur cancels.
+export function InlineCreateRow({ onConfirm, onCancel, busy }: {
+  onConfirm: (name: string) => void
+  onCancel: () => void
+  busy?: boolean
+}) {
+  const [name, setName] = useState('')
+  return (
+    <div className="flex min-h-10 items-center gap-2 rounded-md bg-card px-3 py-2 text-sm shadow-sm">
+      <CornerDownRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <input
+        type="text"
+        value={name}
+        onChange={e => setName(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' && name.trim()) onConfirm(name.trim())
+          if (e.key === 'Escape') onCancel()
+        }}
+        onBlur={() => { if (!busy) onCancel() }}
+        placeholder="New folder name…"
+        autoFocus
+        disabled={busy}
+        className="w-full flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+      />
+      {busy && <span className="shrink-0 text-xs text-muted-foreground">Creating…</span>}
+    </div>
+  )
+}
+
 export function matchesSearch(node: TreeNode, parentPath: string, query: string): boolean {
   const path = buildPath(parentPath, node.name)
   if (path.toLowerCase().includes(query) || (node.label || '').toLowerCase().includes(query)) return true
@@ -34,21 +113,30 @@ export function matchesSearch(node: TreeNode, parentPath: string, query: string)
 // Single tree row — mirrors the MenuTreeView card style, multi-select via the
 // same selected highlight (no checkbox), so it matches the normal tree visually.
 export function LinkNode({
-  node, parentPath, query, selected, onToggle,
+  node, parentPath, query, selected, onToggle, onRowMenu, createParent, onCreateConfirm, onCreateCancel, creating,
 }: {
   node: TreeNode
   parentPath: string
   query: string
   selected: Set<string>
   onToggle: (path: string) => void
+  // Right-click / long-press menu + inline "new folder" support — all
+  // optional; PickDocumentsCard's browse tree simply doesn't pass them.
+  onRowMenu?: (e: RowMenuEvent) => void
+  createParent?: string | null
+  onCreateConfirm?: (parent: string, name: string) => void
+  onCreateCancel?: () => void
+  creating?: boolean
 }) {
   const path = buildPath(parentPath, node.name)
   const hasChildren = !!node.children?.length
   const [expanded, setExpanded] = useState(false)
+  const { handlers: menuHandlers, guardClick } = useRowMenu(path, onRowMenu)
 
   if (query && !matchesSearch(node, parentPath, query)) return null
 
-  const shouldExpand = expanded || query.length > 0
+  const isCreateHere = createParent === path
+  const shouldExpand = expanded || query.length > 0 || isCreateHere
   const isSelected = selected.has(path)
   const isCanvas = node.type === 'canvas'
   const style = getLayerStyle(node)
@@ -63,8 +151,9 @@ export function LinkNode({
             ? 'bg-primary/[0.08] hover:bg-primary/[0.12] before:bg-primary'
             : 'bg-card hover:bg-primary/[0.04] before:bg-transparent',
         )}
-        onClick={() => onToggle(path)}
+        onClick={guardClick(() => onToggle(path))}
         title={path}
+        {...menuHandlers}
       >
         <button
           type="button"
@@ -87,9 +176,12 @@ export function LinkNode({
         </span>
       </div>
 
-      {shouldExpand && hasChildren && (
+      {(shouldExpand && hasChildren) || isCreateHere ? (
         <div className="ml-[22px] mt-1.5 space-y-1.5">
-          {node.children!.map(child => (
+          {isCreateHere && onCreateConfirm && onCreateCancel && (
+            <InlineCreateRow busy={creating} onConfirm={(name) => onCreateConfirm(path, name)} onCancel={onCreateCancel} />
+          )}
+          {shouldExpand && node.children?.map(child => (
             <LinkNode
               key={child.id || child.name}
               node={child}
@@ -97,10 +189,15 @@ export function LinkNode({
               query={query}
               selected={selected}
               onToggle={onToggle}
+              onRowMenu={onRowMenu}
+              createParent={createParent}
+              onCreateConfirm={onCreateConfirm}
+              onCreateCancel={onCreateCancel}
+              creating={creating}
             />
           ))}
         </div>
-      )}
+      ) : null}
     </div>
   )
 }

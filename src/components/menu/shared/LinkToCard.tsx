@@ -3,6 +3,8 @@ import { X, Search, Link2, ChevronRight, ChevronDown, FolderPlus } from 'lucide-
 import { Button } from '@/components/ui/button'
 import { Loader } from '@/components/ui/loader'
 import { cn } from '@/lib/utils'
+import { ContextMenuShell } from '@/components/common/context-menu-shell'
+import { useToastHelpers } from '@/hooks/useToastHelpers'
 import {
   listWorkspaces,
   getCachedWorkspaceTreeByName,
@@ -11,7 +13,10 @@ import {
   DEFAULT_WORKSPACE_TREE_NAME,
 } from '@/services/workspace'
 import type { TreeNode } from '@/types/workspace'
-import { type TreeTab, TAB_ICONS, TAB_LABELS, LinkNode, WorkspaceListStep } from './tree-picker-shared'
+import {
+  type TreeTab, type RowMenuEvent,
+  TAB_ICONS, TAB_LABELS, LinkNode, WorkspaceListStep, InlineCreateRow, useRowMenu,
+} from './tree-picker-shared'
 // Workspace is a global type declared in src/types/api.d.ts
 
 export interface LinkToTarget {
@@ -54,33 +59,31 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
   const [query, setQuery] = useState('')
   const q = query.trim().toLowerCase()
 
-  // Inline "new folder" — create a destination right here instead of leaving
-  // the dialog. Creates under the most recently selected path (or /), then
-  // selects the created path so Link can be confirmed immediately.
-  const [folderOpen, setFolderOpen] = useState(false)
-  const [folderName, setFolderName] = useState('')
+  // Inline "new folder" — long-press (touch) or right-click a tree row for a
+  // context menu; picking New folder opens an inline name input under that
+  // row. Creates the path, refreshes the tree and selects the new folder so
+  // Link can be confirmed immediately.
+  const { showErrorToast } = useToastHelpers()
+  const [rowMenu, setRowMenu] = useState<RowMenuEvent | null>(null)
+  const [createParent, setCreateParent] = useState<string | null>(null)
   const [creatingFolder, setCreatingFolder] = useState(false)
-  const [folderError, setFolderError] = useState<string | null>(null)
+  const rootRowMenu = useRowMenu('/', (e) => setRowMenu(e))
 
-  const folderParent = Array.from(selected).pop() ?? '/'
-
-  const createFolder = async () => {
-    const name = folderName.trim().replace(/^\/+|\/+$/g, '')
+  const createFolder = async (parent: string, rawName: string) => {
+    const name = rawName.trim().replace(/^\/+|\/+$/g, '')
     if (!name || !workspaceName || creatingFolder) return
     setCreatingFolder(true)
-    setFolderError(null)
     try {
-      const path = `${folderParent === '/' ? '' : folderParent}/${name}`
+      const path = `${parent === '/' ? '' : parent}/${name}`
       const treeName = activeTab === 'directory' ? 'directory' : DEFAULT_WORKSPACE_TREE_NAME
       await insertWorkspacePath(workspaceName, path, true, treeName)
       invalidateWorkspaceTreeCache(workspaceName)
       const res = await getCachedWorkspaceTreeByName(workspaceName, activeTab)
       setTree(res.payload)
       setSelected(prev => (multiple ? new Set([...prev, path]) : new Set([path])))
-      setFolderName('')
-      setFolderOpen(false)
+      setCreateParent(null)
     } catch (err) {
-      setFolderError(err instanceof Error ? err.message : 'Failed to create folder')
+      showErrorToast(err instanceof Error ? err.message : 'Failed to create folder')
     } finally {
       setCreatingFolder(false)
     }
@@ -187,53 +190,17 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
               ))}
             </div>
 
-            <div className="shrink-0 space-y-2 border-b p-2">
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1">
-                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    type="text"
-                    placeholder="Search paths…"
-                    value={query}
-                    onChange={e => setQuery(e.target.value)}
-                    className="w-full rounded-md border border-input bg-background py-2 pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => { setFolderOpen(o => !o); setFolderError(null) }}
-                  aria-label="New folder"
-                  title="New folder"
-                  className={cn(
-                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-md border transition-colors',
-                    folderOpen ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                  )}
-                >
-                  <FolderPlus className="h-4 w-4" />
-                </button>
+            <div className="shrink-0 border-b p-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search paths…"
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background py-2 pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
               </div>
-              {folderOpen && (
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      placeholder={`New folder under ${folderParent}`}
-                      value={folderName}
-                      onChange={e => setFolderName(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') createFolder()
-                        if (e.key === 'Escape') setFolderOpen(false)
-                      }}
-                      autoFocus
-                      className="w-full flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
-                    <Button size="sm" onClick={createFolder} disabled={!folderName.trim() || creatingFolder}>
-                      {creatingFolder ? 'Creating…' : 'Create'}
-                    </Button>
-                  </div>
-                  {folderError && <p className="text-xs text-destructive">{folderError}</p>}
-                </div>
-              )}
             </div>
 
             {multiple && selected.size > 0 && (
@@ -262,20 +229,40 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
                         ? 'bg-primary/[0.08] hover:bg-primary/[0.12] before:bg-primary'
                         : 'bg-card hover:bg-primary/[0.04] before:bg-transparent',
                     )}
-                    onClick={() => toggle('/')}
+                    onClick={rootRowMenu.guardClick(() => toggle('/'))}
                     title="/"
+                    {...rootRowMenu.handlers}
                   >
                     <ChevronDown className="w-4 h-4 shrink-0 text-muted-foreground" />
                     <span className="flex-1 truncate font-medium">/</span>
                   </div>
                   <div className="ml-[22px] space-y-1.5">
+                    {createParent === '/' && (
+                      <InlineCreateRow
+                        busy={creatingFolder}
+                        onConfirm={(name) => createFolder('/', name)}
+                        onCancel={() => setCreateParent(null)}
+                      />
+                    )}
                     {tree?.children?.length ? (
                       tree.children.map(child => (
-                        <LinkNode key={child.id || child.name} node={child} parentPath="/" query={q} selected={selected} onToggle={toggle} />
+                        <LinkNode
+                          key={child.id || child.name}
+                          node={child}
+                          parentPath="/"
+                          query={q}
+                          selected={selected}
+                          onToggle={toggle}
+                          onRowMenu={setRowMenu}
+                          createParent={createParent}
+                          onCreateConfirm={createFolder}
+                          onCreateCancel={() => setCreateParent(null)}
+                          creating={creatingFolder}
+                        />
                       ))
-                    ) : (
+                    ) : createParent !== '/' ? (
                       <p className="px-2 py-1.5 text-xs text-muted-foreground">Empty tree</p>
-                    )}
+                    ) : null}
                   </div>
                 </>
               )}
@@ -293,6 +280,25 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
             {saving ? (<><Loader className="mr-1.5 h-3.5 w-3.5" />Linking…</>) : (<><Link2 className="mr-1 h-3.5 w-3.5" />Link</>)}
           </Button>
         </div>
+      )}
+
+      {/* Row context menu (right-click / long-press) */}
+      {rowMenu && (
+        <ContextMenuShell
+          x={rowMenu.clientX}
+          y={rowMenu.clientY}
+          onClose={() => setRowMenu(null)}
+          className="min-w-[11rem] rounded-md border bg-popover p-1 shadow-lg"
+        >
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-sm px-3 py-1.5 text-left text-xs hover:bg-accent"
+            onClick={() => { setCreateParent(rowMenu.path); setRowMenu(null) }}
+          >
+            <FolderPlus className="h-3 w-3" />
+            New folder in {rowMenu.path}
+          </button>
+        </ContextMenuShell>
       )}
     </div>
   )
