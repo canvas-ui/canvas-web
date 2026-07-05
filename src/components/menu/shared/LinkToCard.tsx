@@ -1,9 +1,15 @@
 import { useEffect, useState } from 'react'
-import { X, Search, Link2, ChevronRight, ChevronDown } from 'lucide-react'
+import { X, Search, Link2, ChevronRight, ChevronDown, FolderPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Loader } from '@/components/ui/loader'
 import { cn } from '@/lib/utils'
-import { listWorkspaces, getCachedWorkspaceTreeByName, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
+import {
+  listWorkspaces,
+  getCachedWorkspaceTreeByName,
+  invalidateWorkspaceTreeCache,
+  insertWorkspacePath,
+  DEFAULT_WORKSPACE_TREE_NAME,
+} from '@/services/workspace'
 import type { TreeNode } from '@/types/workspace'
 import { type TreeTab, TAB_ICONS, TAB_LABELS, LinkNode, WorkspaceListStep } from './tree-picker-shared'
 // Workspace is a global type declared in src/types/api.d.ts
@@ -47,6 +53,38 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [query, setQuery] = useState('')
   const q = query.trim().toLowerCase()
+
+  // Inline "new folder" — create a destination right here instead of leaving
+  // the dialog. Creates under the most recently selected path (or /), then
+  // selects the created path so Link can be confirmed immediately.
+  const [folderOpen, setFolderOpen] = useState(false)
+  const [folderName, setFolderName] = useState('')
+  const [creatingFolder, setCreatingFolder] = useState(false)
+  const [folderError, setFolderError] = useState<string | null>(null)
+
+  const folderParent = Array.from(selected).pop() ?? '/'
+
+  const createFolder = async () => {
+    const name = folderName.trim().replace(/^\/+|\/+$/g, '')
+    if (!name || !workspaceName || creatingFolder) return
+    setCreatingFolder(true)
+    setFolderError(null)
+    try {
+      const path = `${folderParent === '/' ? '' : folderParent}/${name}`
+      const treeName = activeTab === 'directory' ? 'directory' : DEFAULT_WORKSPACE_TREE_NAME
+      await insertWorkspacePath(workspaceName, path, true, treeName)
+      invalidateWorkspaceTreeCache(workspaceName)
+      const res = await getCachedWorkspaceTreeByName(workspaceName, activeTab)
+      setTree(res.payload)
+      setSelected(prev => (multiple ? new Set([...prev, path]) : new Set([path])))
+      setFolderName('')
+      setFolderOpen(false)
+    } catch (err) {
+      setFolderError(err instanceof Error ? err.message : 'Failed to create folder')
+    } finally {
+      setCreatingFolder(false)
+    }
+  }
 
   useEffect(() => {
     if (fixedWorkspaceName) return
@@ -149,17 +187,53 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
               ))}
             </div>
 
-            <div className="shrink-0 border-b p-2">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Search paths…"
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                  className="w-full rounded-md border border-input bg-background py-2 pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                />
+            <div className="shrink-0 space-y-2 border-b p-2">
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder="Search paths…"
+                    value={query}
+                    onChange={e => setQuery(e.target.value)}
+                    className="w-full rounded-md border border-input bg-background py-2 pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setFolderOpen(o => !o); setFolderError(null) }}
+                  aria-label="New folder"
+                  title="New folder"
+                  className={cn(
+                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-md border transition-colors',
+                    folderOpen ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                  )}
+                >
+                  <FolderPlus className="h-4 w-4" />
+                </button>
               </div>
+              {folderOpen && (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder={`New folder under ${folderParent}`}
+                      value={folderName}
+                      onChange={e => setFolderName(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') createFolder()
+                        if (e.key === 'Escape') setFolderOpen(false)
+                      }}
+                      autoFocus
+                      className="w-full flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    <Button size="sm" onClick={createFolder} disabled={!folderName.trim() || creatingFolder}>
+                      {creatingFolder ? 'Creating…' : 'Create'}
+                    </Button>
+                  </div>
+                  {folderError && <p className="text-xs text-destructive">{folderError}</p>}
+                </div>
+              )}
             </div>
 
             {multiple && selected.size > 0 && (
