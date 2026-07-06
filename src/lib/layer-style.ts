@@ -80,6 +80,11 @@ export const FOLDER_NAME_DEFAULTS: Record<string, LayerStyle> = {
   'finance': { icon: 'ph:piggy-bank-fill', color: '#84cc16' },
   'shopping': { icon: 'ph:shopping-cart-fill', color: '#f59e0b' },
   'ideas': { icon: 'ph:lightbulb-filament-fill', color: '#facc15' },
+  // System backend-mirror staging tree (read-only) — muted grey to set it
+  // apart from the colorful user folders. Keyed by node name (.backends);
+  // legacy .incoming kept for pre-rename workspaces.
+  '.backends': { icon: 'ph:hard-drives-fill', color: '#64748b' },
+  '.incoming': { icon: 'ph:hard-drives-fill', color: '#64748b' },
 }
 
 type StyledNode = { metadata?: LayerMetadata; color?: string | null }
