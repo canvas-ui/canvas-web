@@ -5,7 +5,7 @@ import { FormPanel } from '@/components/common/form-panel';
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/toast-container"
-import { Plus } from "lucide-react"
+import { Plus, X } from "lucide-react"
 import { WorkspaceCard } from "@/components/ui/workspace-card"
 import { useNavigate } from "react-router-dom"
 import { useSocket } from "@/hooks/useSocket"
@@ -297,6 +297,9 @@ export default function WorkspacesPage() {
               Create Workspace
             </Button>
           )}
+          <Button variant="outline" size="icon" onClick={() => navigate('/home')} aria-label="Close" title="Close">
+            <X className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 

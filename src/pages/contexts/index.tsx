@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/toast-container"
 import { FormPanel } from "@/components/common/form-panel"
-import { Plus, Trash, DoorOpen, Edit, Share2 } from "lucide-react"
+import { Plus, Trash, DoorOpen, Edit, Share2, X } from "lucide-react"
 import {
   Table,
   TableBody,
@@ -405,12 +405,17 @@ export default function ContextsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Contexts</h1>
           <p className="text-muted-foreground mt-2">Create and manage contexts in your workspaces. View contexts shared with you.</p>
         </div>
-        {!showCreate && (
-          <Button onClick={() => setShowCreate(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Create Context
+        <div className="flex shrink-0 items-center gap-2">
+          {!showCreate && (
+            <Button onClick={() => setShowCreate(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Context
+            </Button>
+          )}
+          <Button variant="outline" size="icon" onClick={() => navigate('/home')} aria-label="Close" title="Close">
+            <X className="h-4 w-4" />
           </Button>
-        )}
+        </div>
       </div>
 
       {/* Create New Context Section */}

@@ -3,7 +3,7 @@ import { FormPanel } from '@/components/common/form-panel'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/toast-container"
-import { Plus } from "lucide-react"
+import { Plus, X } from "lucide-react"
 import { AgentCard } from "@/components/ui/agent-card"
 import { useNavigate } from "react-router-dom"
 import { useSocket } from "@/hooks/useSocket"
@@ -310,12 +310,17 @@ export default function AgentsPage() {
           <h1 className="text-3xl font-bold tracking-tight">AI Agents</h1>
           <p className="text-muted-foreground mt-2">Create and manage your AI agents with multiple LLM providers</p>
         </div>
-        {!showCreate && (
-          <Button onClick={() => setShowCreate(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Create Agent
+        <div className="flex shrink-0 items-center gap-2">
+          {!showCreate && (
+            <Button onClick={() => setShowCreate(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Agent
+            </Button>
+          )}
+          <Button variant="outline" size="icon" onClick={() => navigate('/home')} aria-label="Close" title="Close">
+            <X className="h-4 w-4" />
           </Button>
-        )}
+        </div>
       </div>
 
       {/* Create New Agent Section */}
