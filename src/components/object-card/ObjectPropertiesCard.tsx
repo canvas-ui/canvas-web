@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Eye, Info, Braces, Share2, Database } from 'lucide-react'
 import { TabBar, type TabDef } from '@/components/ui/tabs'
+import { usePublicShareCode } from '@/components/renderers/public-share'
 import { ViewTab, MetadataTab, JsonTab, SynapsesTab, BackendsTab } from './tabs'
 import type { Document } from '@/types/workspace'
 
@@ -29,6 +30,9 @@ const TABS: TabDef<ObjectCardTab>[] = [
 export function ObjectPropertiesCard({
   document, workspaceId, initialTab = 'view', initialEdit = false, onChanged, className = '',
 }: ObjectPropertiesCardProps) {
+  // Public share viewer: no authenticated APIs — hide Synapses/Backends + edit.
+  const isPublic = usePublicShareCode() != null
+  const tabs = isPublic ? TABS.filter((t) => t.id === 'view' || t.id === 'metadata' || t.id === 'json') : TABS
   const [activeTab, setActiveTab] = useState<ObjectCardTab>(initialTab)
   // Render-time state reset (not an effect): switching documents or the
   // requested initial tab re-seeds the active tab.
@@ -41,13 +45,13 @@ export function ObjectPropertiesCard({
 
   return (
     <div className={`flex h-full min-h-0 flex-col ${className}`}>
-      <TabBar tabs={TABS} active={activeTab} onChange={setActiveTab} className="shrink-0 px-2" />
+      <TabBar tabs={tabs} active={activeTab} onChange={setActiveTab} className="shrink-0 px-2" />
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        {activeTab === 'view' && <ViewTab document={document} workspaceId={workspaceId} initialEdit={initialEdit} onChanged={onChanged} />}
+        {activeTab === 'view' && <ViewTab document={document} workspaceId={workspaceId} initialEdit={initialEdit && !isPublic} onChanged={onChanged} />}
         {activeTab === 'metadata' && <MetadataTab document={document} workspaceId={workspaceId} />}
         {activeTab === 'json' && <JsonTab document={document} workspaceId={workspaceId} />}
-        {activeTab === 'synapses' && <SynapsesTab document={document} workspaceId={workspaceId} />}
-        {activeTab === 'backends' && <BackendsTab document={document} workspaceId={workspaceId} onChanged={onChanged} />}
+        {activeTab === 'synapses' && !isPublic && <SynapsesTab document={document} workspaceId={workspaceId} />}
+        {activeTab === 'backends' && !isPublic && <BackendsTab document={document} workspaceId={workspaceId} onChanged={onChanged} />}
       </div>
     </div>
   )

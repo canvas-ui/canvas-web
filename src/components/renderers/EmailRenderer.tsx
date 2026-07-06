@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import DOMPurify from 'dompurify'
 import { Download, FileText } from 'lucide-react'
-import { fetchDocumentBlob, downloadDocument } from '@/services/workspace'
+import { useDocumentContent } from './public-share'
 import type { RendererProps } from './types'
 
 interface EmailParty { address?: string; name?: string }
@@ -75,6 +75,7 @@ function buildEmailHtmlBlob(rawHtml: string, cidMap: Map<string, string>): strin
 }
 
 export function EmailRenderer({ workspaceId, document: doc, className = '' }: RendererProps) {
+  const { fetchBlob, download } = useDocumentContent(workspaceId)
   const data = (doc.data || {}) as Record<string, unknown>
   const attachments = (Array.isArray(data.attachments) ? data.attachments : []) as EmailAttachment[]
   const bodyHtml = typeof data.bodyHtml === 'string' && data.bodyHtml.trim() ? data.bodyHtml : null
@@ -93,7 +94,7 @@ export function EmailRenderer({ workspaceId, document: doc, className = '' }: Re
     Promise.all(
       inline.slice(0, 20).map(async (a) => {
         try {
-          const { blob } = await fetchDocumentBlob(workspaceId, doc.id, { url: a.url })
+          const { blob } = await fetchBlob(doc.id, { url: a.url })
           const u = URL.createObjectURL(blob)
           created.push(u)
           return [String(a.contentId).replace(/^<|>$/g, ''), u] as const
@@ -123,7 +124,7 @@ export function EmailRenderer({ workspaceId, document: doc, className = '' }: Re
 
   const onDownloadAttachment = async (a: EmailAttachment) => {
     if (!a.url) return
-    try { await downloadDocument(workspaceId, doc.id, a.filename || 'attachment', { url: a.url }) }
+    try { await download(doc.id, a.filename || 'attachment', { url: a.url }) }
     catch (e) { setError(e instanceof Error ? e.message : String(e)) }
   }
 

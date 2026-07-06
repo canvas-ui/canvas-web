@@ -806,6 +806,7 @@ export default function WorkspaceSettingsPage() {
                       <span>running: {backend.running ? 'true' : 'false'}</span>
                       <span>watching: {backend.watching ? 'true' : 'false'}</span>
                       <span>incoming: {backend.indexIncoming ? 'true' : 'false'}</span>
+                      {backend.readOnly && <span className="text-amber-600">read-only</span>}
                       {backend.lastScanAt && <span>last scan: {new Date(backend.lastScanAt).toLocaleString()}</span>}
                     </div>
                     {backend.lastError && <p className="mt-2 text-xs text-destructive">{backend.lastError}</p>}
@@ -828,6 +829,16 @@ export default function WorkspaceSettingsPage() {
                           checked={!!backend.indexIncoming}
                           disabled={!backend.enabled || busyAction === `incoming:${backendId}`}
                           onClick={() => patchDataBackend(backendId, { indexIncoming: !backend.indexIncoming }, 'incoming')}
+                        />
+                      </label>
+                    )}
+                    {canToggle && (
+                      <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground" title="Read-only: Destroy never deletes bytes on this backend (references are dropped instead)">
+                        read-only
+                        <Toggle
+                          checked={!!backend.readOnly}
+                          disabled={busyAction === `readonly:${backendId}`}
+                          onClick={() => patchDataBackend(backendId, { readOnly: !backend.readOnly }, 'readonly')}
                         />
                       </label>
                     )}

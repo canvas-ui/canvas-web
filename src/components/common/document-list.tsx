@@ -20,6 +20,7 @@ import { ContextMenuShell } from '@/components/common/context-menu-shell'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { ObjectPropertiesModal } from '@/components/object-card/ObjectPropertiesModal'
 import { isEditableSchema } from '@/components/object-card/EditForm'
+import { usePublicShareCode } from '@/components/renderers/public-share'
 
 interface DocumentListProps {
   documents: Document[]
@@ -309,6 +310,7 @@ function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
 function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemoveDocument, onDeleteDocument, onLinkDocument, onOpenToSide, onRightClick, onDragStart }: DocumentTableRowProps) {
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [detailEdit, setDetailEdit] = useState(false)
+  const isPublicShare = usePublicShareCode() != null
   const isEditable = isEditableSchema(document.schema)
 
   const isTabDocument = document.schema === 'data/abstraction/tab'
@@ -408,7 +410,7 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
         <TableCell>
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="sm" onClick={handleViewDetails} title="View document details"><Eye className="h-4 w-4" /></Button>
-            {isEditable && (<Button variant="ghost" size="sm" onClick={handleEditDocument} title="Edit document"><Pencil className="h-4 w-4" /></Button>)}
+            {isEditable && !isPublicShare && (<Button variant="ghost" size="sm" onClick={handleEditDocument} title="Edit document"><Pencil className="h-4 w-4" /></Button>)}
             {onLinkDocument && (<Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onLinkDocument(document.id) }} title="Link document to other paths"><Link2 className="h-4 w-4" /></Button>)}
             {onOpenToSide && (<Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onOpenToSide(document) }} title="Open to the side"><PanelRight className="h-4 w-4" /></Button>)}
             {onRemoveDocument && (<Button variant="ghost" size="sm" onClick={handleRemoveDocument} title="Remove document from context"><X className="h-4 w-4" /></Button>)}
@@ -424,6 +426,7 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
 function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocument, onDeleteDocument, onLinkDocument, onOpenToSide, onRightClick, onDragStart }: DocumentRowProps) {
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [detailEdit, setDetailEdit] = useState(false)
+  const isPublicShare = usePublicShareCode() != null
   const isTabDocument = document.schema === 'data/abstraction/tab'
   const isEditable = isEditableSchema(document.schema)
   const tabUrl = isTabDocument ? document.data.url : null
@@ -496,7 +499,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
           </div>
           <div className="flex items-center gap-2">
             <button onClick={handleViewDetails} className="p-1 hover:bg-muted rounded-sm" title="View document details"><Eye className="h-4 w-4" /></button>
-            {isEditable && (<button onClick={handleEditDocument} className="p-1 hover:bg-muted rounded-sm" title="Edit document"><Pencil className="h-4 w-4" /></button>)}
+            {isEditable && !isPublicShare && (<button onClick={handleEditDocument} className="p-1 hover:bg-muted rounded-sm" title="Edit document"><Pencil className="h-4 w-4" /></button>)}
             {onLinkDocument && (<button onClick={(e) => { e.stopPropagation(); onLinkDocument(document.id) }} className="p-1 hover:bg-muted rounded-sm" title="Link document to other paths"><Link2 className="h-4 w-4" /></button>)}
             {onOpenToSide && (<button onClick={(e) => { e.stopPropagation(); onOpenToSide(document) }} className="p-1 hover:bg-muted rounded-sm" title="Open to the side"><PanelRight className="h-4 w-4" /></button>)}
             {onRemoveDocument && (<button onClick={handleRemoveDocument} className="p-1 hover:bg-muted rounded-sm" title="Remove document from context (keep in database)"><X className="h-4 w-4" /></button>)}

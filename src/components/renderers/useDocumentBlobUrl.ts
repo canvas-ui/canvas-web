@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchDocumentBlob } from '@/services/workspace'
+import { useDocumentContent } from './public-share'
 
 interface Options {
   // Target a specific location/attachment URL of the document.
@@ -28,7 +28,8 @@ export function useDocumentBlobUrl(
   documentId: number | string,
   { url, mode = 'blob', enabled = true, maxTextLength = 200_000 }: Options = {},
 ): State {
-  const fetchKey = `${workspaceId}:${documentId}:${url ?? ''}:${mode}:${enabled}`
+  const { isPublic, fetchBlob } = useDocumentContent(workspaceId)
+  const fetchKey = `${isPublic ? 'pub' : 'ws'}:${workspaceId}:${documentId}:${url ?? ''}:${mode}:${enabled}`
   const [state, setState] = useState<State>(idleState(enabled))
   // Render-time reset when the fetch target changes (no setState-in-effect).
   const [lastKey, setLastKey] = useState(fetchKey)
@@ -42,7 +43,7 @@ export function useDocumentBlobUrl(
     let cancelled = false
     let createdUrl: string | null = null
 
-    fetchDocumentBlob(workspaceId, documentId, url ? { url } : {})
+    fetchBlob(documentId, url ? { url } : {})
       .then(async ({ blob, mime }) => {
         if (cancelled) return
         if (mode === 'text') {

@@ -62,6 +62,21 @@ function rowHeightForContainer(height: number, layout: CanvasLayoutItem[]) {
   return Math.max(MIN_ROW_HEIGHT, Math.floor((height - totalMargin) / extent))
 }
 
+// Narrow-viewport threshold below which the grid collapses to a single
+// stacked column (widgets full-width, top-to-bottom by their grid position).
+const NARROW_WIDTH = 640
+
+function stackLayout(layout: CanvasLayoutItem[]): CanvasLayoutItem[] {
+  const sorted = [...applyFillLayout(layout)].sort((a, b) => (a.y - b.y) || (a.x - b.x))
+  let y = 0
+  return sorted.map((item) => {
+    const h = Math.max(item.h, item.minH ?? 1)
+    const stacked = { ...item, x: 0, w: COLS, y, h }
+    y += h
+    return stacked
+  })
+}
+
 function readUi(metadata?: LayerMetadata): CanvasUi {
   const ui = (metadata?.ui ?? {}) as Partial<CanvasUi>
   return {
@@ -104,10 +119,16 @@ export function CanvasGrid({
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [rowHeight, setRowHeight] = useState(MIN_ROW_HEIGHT)
+  const [isNarrow, setIsNarrow] = useState(false)
   const gridHostRef = useRef<HTMLDivElement>(null)
 
   const latest = useRef<CanvasUi>({ layout: initial.layout, widgets: initial.widgets })
-  const displayLayout = useMemo(() => applyFillLayout(layout), [layout])
+  // Narrow viewports (mobile) collapse to a stacked single column: the saved
+  // 12-col layout is unusable there and widgets never filled the area.
+  const displayLayout = useMemo(
+    () => (isNarrow ? stackLayout(layout) : applyFillLayout(layout)),
+    [layout, isNarrow],
+  )
   const savedUiKey = useMemo(() => JSON.stringify(metadata?.ui ?? null), [metadata?.ui])
 
   // Reset local state when navigating to a different canvas.
@@ -136,8 +157,12 @@ export function CanvasGrid({
 
     const measure = () => {
       const height = host.clientHeight
+      const narrow = host.clientWidth > 0 && host.clientWidth < NARROW_WIDTH
+      setIsNarrow(narrow)
       if (height <= 0) return
-      setRowHeight(rowHeightForContainer(height, layout))
+      // Stacked (mobile) mode scrolls vertically at a fixed comfortable row
+      // height instead of squeezing the whole stack into the viewport.
+      setRowHeight(narrow ? 40 : rowHeightForContainer(height, layout))
     }
 
     measure()
@@ -192,13 +217,14 @@ export function CanvasGrid({
   }, [editable, isSaving, workspaceId, path, treeName, metadata, onSaved])
 
   const handleLayoutChange = useCallback((next: Layout[]) => {
-    if (!editable) return
+    // Never persist the derived stacked (narrow) layout over the saved grid.
+    if (!editable || isNarrow) return
     setLayout((prev) => {
       const normalized = normalizeLayout(next, prev)
       markDirty(normalized, widgets)
       return normalized
     })
-  }, [editable, normalizeLayout, markDirty, widgets])
+  }, [editable, isNarrow, normalizeLayout, markDirty, widgets])
 
   const addWidget = useCallback((type: string) => {
     const def = getWidget(type)
@@ -278,7 +304,7 @@ export function CanvasGrid({
       </div>
       )}
 
-      <div ref={gridHostRef} className="canvas-grid-host flex-1 min-h-0 overflow-hidden bg-muted/10">
+      <div ref={gridHostRef} className={`canvas-grid-host flex-1 min-h-0 bg-muted/10 ${isNarrow ? 'overflow-y-auto' : 'overflow-hidden'}`}>
         {ids.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-2 text-sm text-muted-foreground">
             <p>No widgets yet.</p>
@@ -291,8 +317,8 @@ export function CanvasGrid({
             cols={COLS}
             rowHeight={rowHeight}
             margin={GRID_MARGIN}
-            isDraggable={editable}
-            isResizable={editable}
+            isDraggable={editable && !isNarrow}
+            isResizable={editable && !isNarrow}
             draggableHandle=".canvas-drag-handle"
             draggableCancel=".canvas-no-drag"
             onLayoutChange={handleLayoutChange}

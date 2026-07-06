@@ -8,6 +8,7 @@ import { api } from '@/lib/api'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CanvasGrid } from '@/components/canvas/CanvasGrid'
+import { PublicShareContext, publicDocumentContentUrl as buildPublicContentUrl } from '@/components/renderers/public-share'
 import type { Document, TreeNode } from '@/types/workspace'
 
 interface PublicCanvasPayload {
@@ -98,8 +99,7 @@ function getDocumentLink(document: Document, display: ReturnType<typeof getDocum
 }
 
 function publicDocumentContentUrl(code: string, documentId: number, download = false) {
-  const url = `${API_URL}/pub/c/${encodeURIComponent(code)}/documents/${documentId}/content`
-  return download ? `${url}?download=1` : url
+  return buildPublicContentUrl(code, documentId, { download })
 }
 
 function linkify(value: string) {
@@ -233,6 +233,7 @@ export default function PublicCanvasPage() {
   const hasWidgets = !!canvasUi.widgets && Object.keys(canvasUi.widgets).length > 0
 
   return (
+    <PublicShareContext.Provider value={code}>
     <main className="min-h-screen bg-neutral-100 p-4 text-neutral-950 md:p-10">
       <div className="mx-auto max-w-6xl">
         <Card className="bg-white shadow-xl">
@@ -400,6 +401,7 @@ export default function PublicCanvasPage() {
         </Card>
       </div>
     </main>
+    </PublicShareContext.Provider>
   )
 }
 

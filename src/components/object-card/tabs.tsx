@@ -8,6 +8,7 @@ import {
 } from '@/services/workspace'
 import { getLocationFilename } from '@/lib/document-display'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
+import { usePublicShareCode } from '@/components/renderers/public-share'
 import { DocumentEditForm, isEditableSchema } from './EditForm'
 import type { Document } from '@/types/workspace'
 
@@ -20,6 +21,8 @@ interface TabProps {
 // ── View/Edit ────────────────────────────────────────────────────────────────
 
 export function ViewTab({ document, workspaceId, initialEdit = false, onChanged }: TabProps & { initialEdit?: boolean }) {
+  const isPublic = usePublicShareCode() != null
+  const canEdit = !isPublic && isEditableSchema(document.schema)
   const [editing, setEditing] = useState(initialEdit && isEditableSchema(document.schema))
   // Render-time state reset: switching documents re-seeds the edit mode.
   const resetKey = `${document.id}:${initialEdit}`
@@ -29,7 +32,7 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
     setEditing(initialEdit && isEditableSchema(document.schema))
   }
 
-  if (editing) {
+  if (editing && canEdit) {
     return (
       <DocumentEditForm
         document={document}
@@ -40,7 +43,7 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
   }
   return (
     <div className="space-y-3">
-      {isEditableSchema(document.schema) && (
+      {canEdit && (
         <div className="flex justify-end">
           <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
             <Pencil className="mr-1 h-3 w-3" /> Edit
