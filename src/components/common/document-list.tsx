@@ -1399,7 +1399,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                     title={isWorkspaceScope ? 'Switch to “This path” to remove documents from a folder' : 'Remove selected documents from this folder (kept in index)'}
                   >
                     <X className="h-4 w-4" />
-                    Remove from folder ({selectedDocuments.size})
+                    Remove (unlink) from folder ({selectedDocuments.size})
                   </Button>
                 )}
 
@@ -1621,22 +1621,26 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
             {(removeDocument || removeDocuments) && (
               <>
                 <div className="my-1 h-px bg-border" />
-                <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('remove', contextMenu.documentIds)}>
+                <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" title="Unlinks from this folder — the document stays in the index" onClick={() => handleContextMenuAction('remove', contextMenu.documentIds)}>
                   <Move className="h-3 w-3" />
-                  Remove from folder {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
+                  Remove (unlink) from folder {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
                 </button>
               </>
             )}
             {(onDeleteDocument || onDeleteDocuments) && (
-              <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2 text-destructive" onClick={() => handleContextMenuAction('delete', contextMenu.documentIds)}>
+              <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2 text-destructive" title="Removes the document from the index entirely — file data stays on its backend(s)" onClick={() => handleContextMenuAction('delete', contextMenu.documentIds)}>
                 <Trash2 className="h-3 w-3" />
                 Delete from index {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
               </button>
             )}
-            {(onDestroyDocument || onDestroyDocuments) && (
-              <button className="w-full text-left px-3 py-1 hover:bg-destructive hover:text-destructive-foreground text-sm flex items-center gap-2 text-destructive font-medium" onClick={() => handleContextMenuAction('destroy', contextMenu.documentIds)}>
+            {/* Only offered when the selection actually has file data stored on
+                a backend (a non-empty locations array). Per-backend selection
+                is a follow-up — for now this deletes from all of them. */}
+            {(onDestroyDocument || onDestroyDocuments)
+              && contextMenu.documentIds.some(id => ((documents.find(doc => doc.id === id) as { locations?: unknown[] } | undefined)?.locations?.length ?? 0) > 0) && (
+              <button className="w-full text-left px-3 py-1 hover:bg-destructive hover:text-destructive-foreground text-sm flex items-center gap-2 text-destructive font-medium" title="Deletes the document and its file data from the storage backend(s)" onClick={() => handleContextMenuAction('destroy', contextMenu.documentIds)}>
                 <Trash2 className="h-3 w-3" />
-                Destroy {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
+                Delete from backend(s) {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
               </button>
             )}
         </ContextMenuShell>

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Settings } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast-container'
@@ -75,6 +76,9 @@ export function ContextM2Detail() {
     setUrl(context?.workspaceName ? `${context.workspaceName}://${path.replace(/^\//, '')}` : path)
   }
 
+  // Selected/typed but not committed yet — tint the input amber until Set.
+  const isDirtyUrl = context != null && url.trim() !== (context.url || '')
+
   const handleSave = async () => {
     if (!entityId) return
     const id = entityId
@@ -85,6 +89,8 @@ export function ContextM2Detail() {
       const committedPath = prefix && url.startsWith(prefix) ? `/${url.slice(prefix.length).replace(/^\/+/, '')}` : selectedPath
       setSelectedPath(committedPath)
       setPendingPath(null)
+      // The input now shows the committed URL — clear the dirty tint.
+      setContext(prev => (prev ? { ...prev, url } : prev))
       window.dispatchEvent(new CustomEvent('contexts:refresh'))
       // Refetch tree so newly auto-locked layers along the new URL render with the locked tint
       await loadTree(id)
@@ -126,8 +132,12 @@ export function ContextM2Detail() {
           <Input
             value={url}
             onChange={e => setUrl(e.target.value)}
-            className="text-xs h-7 font-mono"
+            className={cn(
+              'text-xs h-7 font-mono transition-colors',
+              isDirtyUrl && 'border-amber-500/60 bg-amber-500/10',
+            )}
             placeholder="workspace://path"
+            title={isDirtyUrl ? 'Not applied yet — press Set' : undefined}
           />
           <Button size="sm" className="h-7 px-2 text-xs shrink-0" onClick={handleSave} disabled={isSaving}>
             {isSaving ? '…' : 'Set'}
