@@ -9,12 +9,14 @@ import { Copy, ExternalLink, RefreshCw, Unlink } from 'lucide-react'
 import {
   listWorkspaces,
   createWorkspace,
+  startWorkspace,
   updateWorkspace,
   removeWorkspace,
   listWorkspaceShares,
   revokeWorkspacePublicCanvasShare,
 } from '@/services/workspace'
 import type { WorkspacePublicCanvasShare } from '@/services/workspace'
+import { DefaultFoldersPicker, createDefaultFolders, useFolderSelection } from '@/components/workspaces/DefaultFoldersPicker'
 
 export function WorkspaceM2Form() {
   const { state, closeM2 } = useMenu()
@@ -32,6 +34,7 @@ export function WorkspaceM2Form() {
   const [shares, setShares] = useState<WorkspacePublicCanvasShare[]>([])
   const [isLoadingShares, setIsLoadingShares] = useState(false)
   const [revokingCode, setRevokingCode] = useState<string | null>(null)
+  const folderPick = useFolderSelection()
 
   const loadShares = async (workspaceId = entityId) => {
     if (!workspaceId) return
@@ -71,8 +74,17 @@ export function WorkspaceM2Form() {
     if (!name.trim()) return
     setIsSaving(true)
     try {
-      await createWorkspace({ name: name.trim(), label: label.trim() || name.trim(), description: description.trim() || undefined, color })
+      const ws = await createWorkspace({ name: name.trim(), label: label.trim() || name.trim(), description: description.trim() || undefined, color })
       window.dispatchEvent(new CustomEvent('workspaces:refresh'))
+      if (folderPick.selected.size > 0) {
+        try {
+          await startWorkspace(ws.name)
+          const { ok, failed } = await createDefaultFolders(ws.name, Array.from(folderPick.selected), folderPick.tree)
+          if (failed) showToast({ title: 'Folders', description: `${ok} created, ${failed} failed`, variant: 'destructive' })
+        } catch {
+          showToast({ title: 'Folders', description: 'Workspace created, but default folders failed', variant: 'destructive' })
+        }
+      }
       showToast({ title: 'Created', description: `Workspace "${label || name}" created` })
       closeM2()
     } catch (err) {
@@ -180,6 +192,20 @@ export function WorkspaceM2Form() {
               </Button>
             </div>
           </div>
+          {isCreate && (
+            <div className="rounded-md border p-3">
+              <div className="text-xs font-medium">Default folders <span className="font-normal text-muted-foreground">(optional)</span></div>
+              <p className="mb-2 mt-0.5 text-[11px] text-muted-foreground">Created right after the workspace, with icons and colors.</p>
+              <DefaultFoldersPicker
+                selected={folderPick.selected}
+                onToggle={folderPick.toggle}
+                tree={folderPick.tree}
+                onTreeChange={folderPick.setTree}
+                disabled={isSaving}
+                idPrefix="m2-default-folders"
+              />
+            </div>
+          )}
           <Button type="submit" className="w-full h-8 text-sm" disabled={isSaving || (isCreate && !name.trim())}>
             {isSaving ? (isCreate ? 'Creating…' : 'Saving…') : (isCreate ? 'Create Workspace' : 'Save Changes')}
           </Button>

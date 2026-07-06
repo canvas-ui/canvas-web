@@ -40,7 +40,9 @@ export function ContentArea() {
   return (
     <div className={cn('relative flex flex-col flex-1 min-w-0', !bare && 'canvas-sheet')}>
       <div className="flex flex-1 min-h-0 gap-2">
-        <main className={cn('flex-1 min-h-0 min-w-0 overflow-auto', !fullBleed && !bare && 'p-6')}>
+        {/* id + relative: maximized canvas widgets portal in here and fill
+            the content area (full viewport is reserved for public shares). */}
+        <main id="content-area" className={cn('relative flex-1 min-h-0 min-w-0 overflow-auto', !fullBleed && !bare && 'p-6')}>
           <Outlet />
         </main>
         {/* Side panels sit beside the page on desktop; on mobile there's no

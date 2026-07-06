@@ -21,12 +21,17 @@ export function WidgetFrame({
   children: ReactNode
 }) {
   const [maximized, setMaximized] = useState(false)
+  // In-app: maximize fills the CONTENT AREA (portal into #content-area).
+  // Public share pages have no #content-area → fall back to full viewport.
+  const contentHost = maximized ? document.getElementById('content-area') : null
 
   const frame = (
     <div
       className={
         maximized
-          ? 'fixed inset-0 z-50 flex flex-col bg-background'
+          ? (contentHost
+              ? 'absolute inset-0 z-40 flex flex-col bg-background'
+              : 'fixed inset-0 z-50 flex flex-col bg-background')
           : 'flex flex-col h-full rounded-lg border bg-background overflow-hidden'
       }
     >
@@ -56,7 +61,7 @@ export function WidgetFrame({
     </div>
   )
 
-  // Maximized: portal to <body> — inside a react-grid-layout item the ancestor
-  // transform hijacks `fixed`, so "full screen" only covered the widget cell.
-  return maximized ? createPortal(frame, document.body) : frame
+  // Maximized: portal OUT of the grid item — inside react-grid-layout the
+  // ancestor transform hijacks `fixed`, so "full screen" only covered the cell.
+  return maximized ? createPortal(frame, contentHost ?? document.body) : frame
 }

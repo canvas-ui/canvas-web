@@ -147,7 +147,7 @@ export function ContextM2Detail() {
 
       <div className="flex-1 overflow-y-auto">
         <div className="text-[10px] text-muted-foreground px-3 pt-2 pb-1 font-medium uppercase tracking-wide shrink-0">
-          {context?.workspaceName || 'Workspace'} · context tree
+          {context?.workspaceName || 'Workspace'} · {tree?.type === 'directory' ? 'directory' : 'context'} tree
         </div>
         <MenuTreeView
           root={tree}

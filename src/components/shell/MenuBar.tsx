@@ -149,8 +149,10 @@ export function MenuBar() {
     <TooltipProvider delayDuration={200}>
       {/* Mobile: dim the content behind the open rail (tap to close), same
           treatment as the M1/M2 drawer. */}
+      {/* z-[38]: above content, below the M1/M2 drawer (z-40) and the rail
+          toggle (z-[39]) — only the content section dims, not other menus. */}
       {state.m0Open && (
-        <div className="fixed inset-0 z-[45] bg-black/30 animate-fade-in md:hidden" onClick={closeM0} aria-hidden />
+        <div className="fixed inset-0 z-[38] bg-black/30 animate-fade-in md:hidden" onClick={closeM0} aria-hidden />
       )}
       <div
         className={cn(
@@ -173,8 +175,9 @@ export function MenuBar() {
           </button>
         </div>
 
-        {/* Main nav */}
-        <nav className="flex flex-col items-center gap-1 py-2 flex-1">
+        {/* Main nav — scrolls on vertically small screens so the bottom
+            section (logout) never overlaps the rail toggle below the card. */}
+        <nav className="flex flex-col items-center gap-1 py-2 flex-1 min-h-0 overflow-y-auto">
           <MenuItem section="contexts" icon={<Layers3 className="w-5 h-5" />} label="Contexts" />
           <MenuItem section="workspaces" icon={<LayoutGrid className="w-5 h-5" />} label="Workspaces" />
           <MenuItem section="agents" icon={<Brain className="w-5 h-5" />} label="Agents" />

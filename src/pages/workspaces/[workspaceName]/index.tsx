@@ -821,7 +821,7 @@ export default function WorkspaceDetailPage() {
       onPurgeDocuments={isBackendsPath ? undefined : handlePurgeDocuments}
       disablePurgeDocuments={false}
       canvasInfo={canvasInfo ?? undefined}
-      onSaveAsCanvas={tree && selectedNodeType !== 'canvas' && !isLayerView ? handleSaveAsCanvas : undefined}
+      onSaveAsCanvas={tree && selectedNodeType !== 'canvas' && !isLayerView && !isBackendsPath ? handleSaveAsCanvas : undefined}
       onShareCanvas={selectedNodeType === 'canvas' && !isLayerView ? handleShareCanvas : undefined}
       onUnshareCanvas={publicCanvasShare ? handleUnshareCanvas : undefined}
       onDeleteCanvas={selectedNodeType === 'canvas' && !isLayerView ? handleDeleteCanvas : undefined}

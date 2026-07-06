@@ -146,18 +146,21 @@ function CtxMenu({
 
         {node.type === 'canvas' && onShareCanvas && <div className="my-1 h-px bg-border" />}
 
-        {/* New folder — inline */}
-        <button
-          type="button"
-          className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-accent rounded-sm text-left"
-          onClick={() => { onStartInlineCreate(path, false); onClose() }}
-        >
-          <Plus className="w-3 h-3" />
-          New folder here
-        </button>
+        {/* New folder — inline; hidden inside the read-only backends mirror */}
+        {!(path === '/.backends' || path.startsWith('/.backends/')) && (
+          <button
+            type="button"
+            className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-accent rounded-sm text-left"
+            onClick={() => { onStartInlineCreate(path, false); onClose() }}
+          >
+            <Plus className="w-3 h-3" />
+            New folder here
+          </button>
+        )}
 
-        {/* New canvas — inline, workspace trees only */}
-        {hasCreateCanvas && (
+        {/* New canvas — inline, workspace trees only; never inside the
+            backend-mirrored staging subtree (server rejects it anyway) */}
+        {hasCreateCanvas && !(path === '/.backends' || path.startsWith('/.backends/')) && (
           <button
             type="button"
             className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-accent rounded-sm text-left"
