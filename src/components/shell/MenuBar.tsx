@@ -147,6 +147,11 @@ export function MenuBar() {
 
   return (
     <TooltipProvider delayDuration={200}>
+      {/* Mobile: dim the content behind the open rail (tap to close), same
+          treatment as the M1/M2 drawer. */}
+      {state.m0Open && (
+        <div className="fixed inset-0 z-[45] bg-black/30 animate-fade-in md:hidden" onClick={closeM0} aria-hidden />
+      )}
       <div
         className={cn(
           'flex flex-col items-center w-[var(--m0-width)] h-full bg-transparent shrink-0',

@@ -4,6 +4,7 @@ import { LinkToCard } from '@/components/menu/shared/LinkToCard'
 import { PickDocumentsCard } from '@/components/menu/shared/PickDocumentsCard'
 import { useSideView } from '@/components/shell/side-view-context'
 import { useState, useCallback, useMemo, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import Fuse from 'fuse.js'
 import {
   Table,
@@ -160,7 +161,7 @@ function ExportModal({ isOpen, onClose, documents, selectedDocuments }: ExportMo
     }
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 max-md:p-2">
       <div className="bg-background border rounded-lg max-w-3xl w-full max-h-[85dvh] overflow-y-auto max-md:h-full max-md:max-h-none max-md:max-w-none">
         <div className="p-6">
@@ -201,7 +202,8 @@ function ExportModal({ isOpen, onClose, documents, selectedDocuments }: ExportMo
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    window.document.body,
   )
 }
 
@@ -252,7 +254,7 @@ function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
     onClose()
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 max-md:p-2">
       <div className="bg-background border rounded-lg max-w-3xl w-full max-h-[85dvh] overflow-y-auto max-md:h-full max-md:max-h-none max-md:max-w-none">
         <div className="p-6">
@@ -303,7 +305,8 @@ function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    window.document.body,
   )
 }
 
@@ -1405,7 +1408,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
         onImport={handleImport}
       />
 
-      {linkPanelIds && linkTree && (
+      {linkPanelIds && linkTree && createPortal(
         // Dimmed modal — was an undimmed bottom-right float, which collided
         // with the bottom-right toolbox FAB and any open B5Card.
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 max-md:p-2">
@@ -1415,10 +1418,11 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
             onConfirm={(paths) => handleLinkConfirm(paths, linkPanelIds)}
             onClose={() => setLinkPanelIds(null)}
           />
-        </div>
+        </div>,
+        window.document.body,
       )}
 
-      {pickDocsOpen && onPasteDocuments && (
+      {pickDocsOpen && onPasteDocuments && createPortal(
         // Flat, no backdrop dim on desktop — docks to the right edge like
         // DocumentSideCard rather than a centered modal. On mobile it becomes
         // an M1/M2-style drawer over a scrim.
@@ -1435,7 +1439,8 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
               onClose={() => setPickDocsOpen(false)}
             />
           </div>
-        </>
+        </>,
+        window.document.body,
       )}
 
       <ObjectPropertiesModal

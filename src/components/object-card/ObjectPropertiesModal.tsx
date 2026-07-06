@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { ObjectPropertiesCard, type ObjectCardTab } from './ObjectPropertiesCard'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import type { Document } from '@/types/workspace'
@@ -16,7 +17,10 @@ interface ObjectPropertiesModalProps {
 // "edit" actions). The side-view host is DocumentSideCard.
 export function ObjectPropertiesModal({ document, isOpen, onClose, workspaceId, initialTab, initialEdit }: ObjectPropertiesModalProps) {
   if (!isOpen || !document) return null
-  return (
+  // Portal to <body>: hosts can sit inside transformed ancestors (grid-layout
+  // widgets, animated drawers) where `fixed` resolves against the transform —
+  // the classic off-center-modal-on-mobile bug.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 max-md:p-2" onClick={onClose}>
       <div
         className="flex h-[85dvh] w-full max-w-3xl flex-col rounded-lg border bg-background max-md:h-full max-md:max-w-none"
@@ -38,6 +42,7 @@ export function ObjectPropertiesModal({ document, isOpen, onClose, workspaceId, 
           />
         </div>
       </div>
-    </div>
+    </div>,
+    window.document.body,
   )
 }

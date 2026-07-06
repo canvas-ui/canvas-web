@@ -5,7 +5,9 @@ import { Icon } from '@iconify/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { LayerIconPicker } from '@/components/menu/shared/LayerIconPicker'
-import { DEFAULT_WORKSPACE_ICON, FOLDER_NAME_DEFAULTS, type LayerStyle } from '@/lib/layer-style'
+import { DEFAULT_WORKSPACE_ICON, type LayerStyle } from '@/lib/layer-style'
+import { DefaultFoldersPicker, createDefaultFolders, useFolderSelection } from '@/components/workspaces/DefaultFoldersPicker'
+import { adminReindexTimelines, adminReindexSearch, adminReindexEmbeddings } from '@/services/admin'
 import { HooksPanel } from '@/components/workspace/hooks-panel'
 import { ImapMailboxesPanel } from '@/components/workspace/imap-mailboxes-panel'
 import { TokenManager } from '@/components/workspace/token-manager'
@@ -28,7 +30,6 @@ import {
   type WorkspaceDbStats,
   type WorkspacePublicCanvasShare,
   type WorkspaceServicesStatus,
-  insertWorkspacePath,
 } from '@/services/workspace'
 import {
   listDevices,
@@ -291,10 +292,12 @@ function DbStatsTab({
   stats,
   isLoading,
   onRefresh,
+  workspaceName,
 }: {
   stats: WorkspaceDbStats | null
   isLoading: boolean
   onRefresh: () => void
+  workspaceName: string
 }) {
   if (isLoading) {
     return (
@@ -314,6 +317,8 @@ function DbStatsTab({
           Refresh
         </Button>
       </div>
+
+      <ReindexSection workspaceName={workspaceName} onDone={onRefresh} />
 
       {!stats ? (
         <div className="rounded-md border p-4 text-sm text-muted-foreground">No stats available.</div>
@@ -865,6 +870,7 @@ export default function WorkspaceSettingsPage() {
           stats={dbStats}
           isLoading={isLoadingDbStats}
           onRefresh={() => loadDbStats()}
+          workspaceName={workspaceName!}
         />
       )}
 
@@ -921,45 +927,19 @@ export default function WorkspaceSettingsPage() {
   )
 }
 
-
-// ── Default folders ──────────────────────────────────────────────────────────
-// Tick well-known folders (Home, Travel, Work, …) to create them in the
-// context or directory tree — each comes with a default icon + color via
-// FOLDER_NAME_DEFAULTS, turning a fresh workspace into a stash-anything setup.
-const DEFAULT_FOLDER_NAMES = ['Home', 'Travel', 'Work', 'Books', 'Workouts', 'Beauty', 'Recipes', 'To Watch', 'To Read', 'Learning', 'Tech', 'Music', 'Finance', 'Shopping', 'Ideas']
-
+// Settings → General: create the starter folder set in this workspace.
 function DefaultFoldersSection({ workspaceName }: { workspaceName: string }) {
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [tree, setTree] = useState<'context' | 'directory'>('context')
+  const { selected, setSelected, tree, setTree, toggle } = useFolderSelection()
   const [creating, setCreating] = useState(false)
   const [result, setResult] = useState<string | null>(null)
 
-  const toggle = (name: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(name)) next.delete(name); else next.add(name)
-      return next
-    })
-  }
-
-  const createFolders = async () => {
+  const create = async () => {
     setCreating(true)
     setResult(null)
-    let ok = 0
-    let failed = 0
-    for (const name of DEFAULT_FOLDER_NAMES) {
-      if (!selected.has(name)) continue
-      try {
-        await insertWorkspacePath(workspaceName, `/${name}`, true, tree === 'directory' ? 'directory' : 'context')
-        ok += 1
-      } catch {
-        failed += 1
-      }
-    }
+    const { ok, failed } = await createDefaultFolders(workspaceName, Array.from(selected), tree)
     setCreating(false)
     setResult(failed ? `${ok} created, ${failed} failed` : `${ok} folder(s) created`)
     setSelected(new Set())
-    window.dispatchEvent(new CustomEvent('workspace:tree:refresh', { detail: { workspaceName, treeName: tree } }))
   }
 
   return (
@@ -968,33 +948,73 @@ function DefaultFoldersSection({ workspaceName }: { workspaceName: string }) {
       <p className="mt-1 text-xs text-muted-foreground">
         Create a set of common folders with matching icons and colors.
       </p>
-      <div className="mt-3 flex items-center gap-3 text-xs">
-        <span className="text-muted-foreground">Create in:</span>
-        {(['context', 'directory'] as const).map((t) => (
-          <label key={t} className="flex items-center gap-1">
-            <input type="radio" name="default-folders-tree" checked={tree === t} onChange={() => setTree(t)} />
-            {t} tree
-          </label>
-        ))}
-      </div>
-      <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-3 md:grid-cols-4">
-        {DEFAULT_FOLDER_NAMES.map((name) => {
-          const style = FOLDER_NAME_DEFAULTS[name.toLowerCase()]
-          return (
-            <label key={name} className="flex cursor-pointer items-center gap-2 rounded border px-2 py-1.5 text-sm hover:bg-accent/50">
-              <input type="checkbox" checked={selected.has(name)} onChange={() => toggle(name)} />
-              {style?.icon && <Icon icon={style.icon} width={16} height={16} color={style.color} />}
-              <span className="truncate">{name}</span>
-            </label>
-          )
-        })}
+      <div className="mt-3">
+        <DefaultFoldersPicker selected={selected} onToggle={toggle} tree={tree} onTreeChange={setTree} disabled={creating} idPrefix="settings-default-folders" />
       </div>
       <div className="mt-3 flex items-center gap-3">
-        <Button type="button" size="sm" disabled={creating || selected.size === 0} onClick={createFolders}>
+        <Button type="button" size="sm" disabled={creating || selected.size === 0} onClick={create}>
           {creating ? 'Creating…' : `Create ${selected.size || ''} folder(s)`}
         </Button>
         {result && <span className="text-xs text-muted-foreground">{result}</span>}
       </div>
+    </section>
+  )
+}
+
+// ── DB maintenance (admin reindex endpoints) ─────────────────────────────────
+// One button per admin reindex op; destructive variants (rebuild / full
+// re-embed) sit behind a confirm. All idempotent server-side.
+function ReindexSection({ workspaceName, onDone }: { workspaceName: string; onDone: () => void }) {
+  const [busy, setBusy] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
+
+  const run = async (key: string, fn: () => Promise<{ message: string }>, confirmText?: string) => {
+    if (confirmText && !window.confirm(confirmText)) return
+    setBusy(key)
+    setMessage(null)
+    try {
+      const res = await fn()
+      setMessage(res.message)
+      onDone()
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Reindex failed')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const ops: { key: string; label: string; hint: string; confirm?: string; fn: () => Promise<{ message: string }> }[] = [
+    { key: 'timelines', label: 'Reindex timelines', hint: 'Rebuild crud created/updated timelines from document data.', fn: () => adminReindexTimelines(workspaceName) },
+    { key: 'fts', label: 'Reindex FTS', hint: 'Backfill documents missing from the full-text index.', fn: () => adminReindexSearch(workspaceName) },
+    { key: 'fts-rebuild', label: 'Rebuild FTS', hint: 'Wipe + rebuild the full-text index (fixes drift).', confirm: 'Wipe the FTS index and rebuild it from scratch?', fn: () => adminReindexSearch(workspaceName, true) },
+    { key: 'embed', label: 'Backfill embeddings', hint: 'Enqueue docs without vectors (async, off-thread).', fn: () => adminReindexEmbeddings(workspaceName) },
+    { key: 'embed-full', label: 'Re-embed all', hint: 'Wipe vectors + seen-ledger, re-embed everything (async).', confirm: 'Wipe ALL embedding vectors and re-embed every document? This can take a while.', fn: () => adminReindexEmbeddings(workspaceName, { reindex: true }) },
+  ]
+
+  return (
+    <section className="rounded-lg border p-4">
+      <div className="mb-1 flex items-center gap-2">
+        <RefreshCw className="h-4 w-4 text-muted-foreground" />
+        <h2 className="text-sm font-semibold">Index maintenance</h2>
+      </div>
+      <p className="mb-3 text-xs text-muted-foreground">Admin-only. Reindex operations are idempotent; embedding ops drain asynchronously.</p>
+      <div className="flex flex-wrap gap-2">
+        {ops.map((op) => (
+          <Button
+            key={op.key}
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={busy !== null}
+            title={op.hint}
+            onClick={() => run(op.key, op.fn, op.confirm)}
+          >
+            {busy === op.key && <RefreshCw className="mr-2 h-3 w-3 animate-spin" />}
+            {op.label}
+          </Button>
+        ))}
+      </div>
+      {message && <p className="mt-3 text-xs text-muted-foreground">{message}</p>}
     </section>
   )
 }

@@ -264,6 +264,39 @@ export const adminLogService = {
   },
 };
 
+// ── Database maintenance (admin-only reindex endpoints) ─────────────────────
+
+export interface ReindexResult {
+  message: string
+  payload?: Record<string, unknown>
+}
+
+async function postReindex(workspaceName: string, path: string, body?: Record<string, unknown>): Promise<ReindexResult> {
+  const res = await api.post<{ message: string; payload?: Record<string, unknown> }>(
+    `${API_ROUTES.admin.workspaces}/${encodeURIComponent(workspaceName)}/${path}`,
+    body ?? {},
+  )
+  return { message: res.message, payload: res.payload }
+}
+
+/** Rebuild crud:created/updated timelines from document data (synchronous). */
+export function adminReindexTimelines(workspaceName: string): Promise<ReindexResult> {
+  return postReindex(workspaceName, 'reindex-timelines')
+}
+
+/** FTS (Lance/BM25) backfill; rebuild=true wipes the table + coverage bitmap first. */
+export function adminReindexSearch(workspaceName: string, rebuild = false): Promise<ReindexResult> {
+  return postReindex(workspaceName, `reindex-search${rebuild ? '?rebuild=true' : ''}`)
+}
+
+/** Embedding reconcile; reindex=true wipes the space(s) for a full re-embed (async drain). */
+export function adminReindexEmbeddings(workspaceName: string, opts: { space?: string; reindex?: boolean } = {}): Promise<ReindexResult> {
+  const body: Record<string, unknown> = {}
+  if (opts.space) body.space = opts.space
+  if (opts.reindex) body.reindex = true
+  return postReindex(workspaceName, 'reindex-embeddings', body)
+}
+
 // Combined admin service
 export const adminService = {
   users: adminUserService,

@@ -17,6 +17,7 @@ import {
   updateWorkspace,
   removeWorkspace,
 } from "@/services/workspace"
+import { DefaultFoldersPicker, createDefaultFolders, useFolderSelection } from '@/components/workspaces/DefaultFoldersPicker'
 
 
 // Using global Workspace interface from types/api.d.ts
@@ -33,6 +34,7 @@ export default function WorkspacesPage() {
   const [newWorkspaceLabel, setNewWorkspaceLabel] = useState("")
   const [isCreating, setIsCreating] = useState(false)
   const [showCreate, setShowCreate] = useState(false);
+  const folderPick = useFolderSelection();
   const [showShared, setShowShared] = useState(false);
   const [editingWorkspace, setEditingWorkspace] = useState<Workspace | null>(null)
   const { showToast } = useToast()
@@ -105,6 +107,19 @@ export default function WorkspacesPage() {
       })
       // The service now returns the new workspace object directly
       setWorkspaces(prev => [...prev, newWorkspace as Workspace])
+      // Starter folders: tree writes need the workspace running, so start it
+      // first (cheap if the server auto-started it already).
+      if (folderPick.selected.size > 0) {
+        try {
+          await startWorkspace(newWorkspace.name)
+          const { ok, failed } = await createDefaultFolders(newWorkspace.name, Array.from(folderPick.selected), folderPick.tree)
+          if (failed) showToast({ title: 'Folders', description: `${ok} folder(s) created, ${failed} failed`, variant: 'destructive' })
+        } catch (folderErr) {
+          console.error('Default folder creation failed:', folderErr)
+          showToast({ title: 'Folders', description: 'Workspace created, but default folders failed', variant: 'destructive' })
+        }
+        folderPick.setSelected(new Set())
+      }
       setNewWorkspaceName("")
       setNewWorkspaceDescription("")
       setNewWorkspaceColor(generateNiceRandomHexColor())
@@ -346,6 +361,18 @@ export default function WorkspacesPage() {
             >
               Randomize
             </Button>
+          </div>
+          <div className="rounded-lg border p-3">
+            <p className="text-sm font-medium">Default folders <span className="font-normal text-muted-foreground">(optional)</span></p>
+            <p className="mb-3 mt-0.5 text-xs text-muted-foreground">Ticked folders are created right after the workspace, with matching icons and colors.</p>
+            <DefaultFoldersPicker
+              selected={folderPick.selected}
+              onToggle={folderPick.toggle}
+              tree={folderPick.tree}
+              onTreeChange={folderPick.setTree}
+              disabled={isCreating}
+              idPrefix="create-default-folders"
+            />
           </div>
           <Button type="submit" disabled={isCreating || !newWorkspaceName.trim()}>
             <Plus className="mr-2 h-4 w-4" />

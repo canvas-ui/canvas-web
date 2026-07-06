@@ -730,8 +730,8 @@ function FeaturesTab() {
                         // Grey/white zebra keeps long bitmap lists scannable;
                         // the whole row is clickable (cycles off→any→all→not).
                         'flex items-center gap-2 group rounded-md pl-2 pr-1.5 py-1 border-l-2 transition-colors cursor-pointer select-none',
-                        rowIndex % 2 === 1 ? 'bg-muted/30' : 'bg-transparent',
-                        'hover:bg-accent/60',
+                        rowIndex % 2 === 0 ? 'bg-muted/50' : 'bg-transparent',
+                        'hover:bg-muted',
                         mode === 'off' ? 'border-l-transparent'
                           : mode === 'anyOf' ? 'border-l-blue-500 !bg-blue-500/10'
                           : mode === 'allOf' ? 'border-l-emerald-500 !bg-emerald-500/10'
