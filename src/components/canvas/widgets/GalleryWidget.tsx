@@ -17,14 +17,14 @@ function isImageDoc(doc: Document): boolean {
 // One gallery cell — blob-fetched via the share-aware hook (works on both the
 // authed app and public canvases). Swaps to server thumbnails when available.
 function GalleryCell({ workspaceId, doc, onClick }: { workspaceId: string; doc: Document; onClick: () => void }) {
-  const { blobUrl, error, loading } = useDocumentThumbnail(workspaceId, doc.id, 256)
+  const { blobUrl, error, loading } = useDocumentThumbnail(workspaceId, doc.id, 512)
   const title = getLocationFilename(doc) || `image-${doc.id}`
   return (
     <button
       type="button"
       onClick={onClick}
       title={title}
-      className="canvas-no-drag group relative block aspect-square w-full overflow-hidden rounded-md border bg-muted/40"
+      className="canvas-no-drag group relative block aspect-square w-full overflow-hidden rounded-lg border bg-muted/40 shadow-sm transition-shadow hover:shadow-md hover:ring-2 hover:ring-primary/30"
     >
       {loading && <div className="absolute inset-0 animate-pulse bg-muted/60" />}
       {error && <div className="absolute inset-0 flex items-center justify-center p-1 text-[10px] text-destructive">{error}</div>}
@@ -129,8 +129,8 @@ function GalleryWidget({ config, canvas }: WidgetProps) {
   if (images.length === 0) return <div className="p-4 text-sm text-muted-foreground">No images in this canvas' context.</div>
 
   return (
-    <div className="h-full overflow-y-auto p-2">
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-2">
+    <div className="h-full overflow-y-auto p-1">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
         {images.map((doc, i) => (
           <GalleryCell key={doc.id} workspaceId={canvas.workspaceId} doc={doc} onClick={() => setLightbox(i)} />
         ))}
