@@ -10,6 +10,7 @@ import { ImageRenderer, AudioRenderer, VideoRenderer, PdfRenderer } from './medi
 import { PlaintextRenderer, MarkdownRenderer } from './text'
 import { YouTubeEmbed } from './YouTubeEmbed'
 import { UrlPdfRenderer, isPdfUrl } from './UrlPdfRenderer'
+import { LinkCardRenderer } from './LinkCardRenderer'
 import { EmailRenderer } from './EmailRenderer'
 import { BinaryFallback } from './BinaryFallback'
 
@@ -25,7 +26,7 @@ export function resolveRenderer(document: Document): ComponentType<RendererProps
     const url = String(document.data?.url ?? document.data?.uri ?? '')
     if (youTubeVideoId(url)) return YouTubeEmbed
     if (isPdfUrl(url)) return UrlPdfRenderer
-    return null
+    return LinkCardRenderer
   }
   if (schema !== FILE_SCHEMA) return null
 
