@@ -1,11 +1,7 @@
 import { useState } from 'react'
 import { updateWorkspaceDocument } from '@/services/workspace'
-import { tagsToFeatures } from './tags'
+import { tagsToFeatures, featuresToTags } from './tags'
 import type { Document } from '@/types/workspace'
-
-function featuresToTags(features: string[] | undefined): string[] {
-  return (features || []).filter(f => f.startsWith('tag/')).map(f => f.slice(4))
-}
 
 // Field state + save for editing an existing note, shared by EditNoteForm
 // (AddPanel's edit flow) and DocumentSideCard's edit-capable body.

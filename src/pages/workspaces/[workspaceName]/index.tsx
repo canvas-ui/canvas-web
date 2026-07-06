@@ -224,6 +224,10 @@ export default function WorkspaceDetailPage() {
           noneOf: tbNoneOf,
           filters: tbDatetimeFilters,
           scope: docScope,
+          // Whole-workspace scope must also surface backend-staged docs
+          // (emails, ingested files live only under /.backends with no
+          // context membership — a context-scoped query can never see them).
+          includeBackends: docScope === 'workspace',
         });
       }
       const nextDocuments = (response.payload as Document[]) || [];

@@ -630,22 +630,65 @@ export async function updateWorkspaceDocument(
 export async function destroyWorkspaceDocuments(
   workspaceId: string,
   documentIds: readonly (string | number)[],
-  urls?: string[]
+  options: { urls?: string[]; keepDocument?: boolean } = {}
 ): Promise<DestroyResult> {
   const ids = normalizeDocumentIds(documentIds)
+  const body: Record<string, unknown> = { documentIds: ids }
+  if (options.urls) body.urls = options.urls
+  if (options.keepDocument) body.keepDocument = true
   const response = await api.delete<{ payload: DestroyResult }>(
     `${API_ROUTES.workspaces}/${workspaceId}/documents/destroy`,
     {
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(urls ? { documentIds: ids, urls } : { documentIds: ids }),
+      body: JSON.stringify(body),
     }
   )
   return response.payload
 }
 
-function buildContentApiPath(workspaceId: string, documentId: number | string, opts: { download?: boolean } = {}): string {
-  const qs = opts.download ? '?download=1' : ''
-  return `${API_ROUTES.workspaces}/${workspaceId}/documents/${documentId}/content${qs}`
+// ── Document sub-resources (object properties card) ─────────────────────────
+
+export interface DocumentLocationInfo {
+  url: string
+  scheme?: string
+  backend?: string
+  kind: 'stored' | 'workspace-file' | 'imap' | 'readonly' | 'unknown' | string
+  deletable: boolean
+}
+
+export async function getDocumentLocations(workspaceId: string, documentId: number | string): Promise<DocumentLocationInfo[]> {
+  const response = await api.get<{ payload: DocumentLocationInfo[] }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/documents/${documentId}/locations`
+  )
+  return response.payload || []
+}
+
+export interface DocumentTreeMembership {
+  tree: string
+  treeId: string
+  type: 'context' | 'directory' | string
+  paths: string[]
+}
+
+export async function getDocumentMemberships(
+  workspaceId: string,
+  documentId: number | string,
+  tree?: string
+): Promise<DocumentTreeMembership[]> {
+  const qs = tree ? `?tree=${encodeURIComponent(tree)}` : ''
+  const response = await api.get<{ payload: { documentId: number; memberships: DocumentTreeMembership[] } }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/documents/${documentId}/memberships${qs}`
+  )
+  return response.payload?.memberships || []
+}
+
+function buildContentApiPath(workspaceId: string, documentId: number | string, opts: { download?: boolean; url?: string } = {}): string {
+  const params = new URLSearchParams()
+  if (opts.download) params.set('download', '1')
+  // Target a specific location/attachment URL (must belong to the document).
+  if (opts.url) params.set('url', opts.url)
+  const qs = params.toString()
+  return `${API_ROUTES.workspaces}/${workspaceId}/documents/${documentId}/content${qs ? `?${qs}` : ''}`
 }
 
 /**
@@ -653,9 +696,9 @@ function buildContentApiPath(workspaceId: string, documentId: number | string, o
  * to drop into <img>, <audio>, <video>, <iframe>. Caller is responsible for
  * calling URL.revokeObjectURL when the URL is no longer needed.
  */
-export async function fetchDocumentBlob(workspaceId: string, documentId: number | string): Promise<{ blob: Blob; mime: string }> {
+export async function fetchDocumentBlob(workspaceId: string, documentId: number | string, opts: { url?: string } = {}): Promise<{ blob: Blob; mime: string }> {
   const token = localStorage.getItem('authToken')
-  const res = await fetch(buildContentApiPath(workspaceId, documentId), {
+  const res = await fetch(buildContentApiPath(workspaceId, documentId, opts), {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -663,8 +706,8 @@ export async function fetchDocumentBlob(workspaceId: string, documentId: number 
   return { blob: await res.blob(), mime }
 }
 
-export async function fetchDocumentBlobUrl(workspaceId: string, documentId: number | string): Promise<{ url: string; mime: string; size: number }> {
-  const { blob, mime } = await fetchDocumentBlob(workspaceId, documentId)
+export async function fetchDocumentBlobUrl(workspaceId: string, documentId: number | string, opts: { url?: string } = {}): Promise<{ url: string; mime: string; size: number }> {
+  const { blob, mime } = await fetchDocumentBlob(workspaceId, documentId, opts)
   return { url: URL.createObjectURL(blob), mime, size: blob.size }
 }
 
@@ -672,9 +715,9 @@ export async function fetchDocumentBlobUrl(workspaceId: string, documentId: numb
  * Stream the document bytes to disk via the browser's download UI. Uses the
  * authed fetch + blob roundtrip so no token ever appears in the URL.
  */
-export async function downloadDocument(workspaceId: string, documentId: number | string, filename: string): Promise<void> {
+export async function downloadDocument(workspaceId: string, documentId: number | string, filename: string, opts: { url?: string } = {}): Promise<void> {
   const token = localStorage.getItem('authToken')
-  const res = await fetch(buildContentApiPath(workspaceId, documentId, { download: true }), {
+  const res = await fetch(buildContentApiPath(workspaceId, documentId, { download: true, url: opts.url }), {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -1023,6 +1066,16 @@ export async function listWorkspaceBitmaps(workspaceId: string): Promise<string[
   } catch {
     return []
   }
+}
+
+// Tag suggestions for TagInput: existing `tag/*` bitmaps, prefix stripped.
+export async function listWorkspaceTagSuggestions(workspaceId: string): Promise<string[]> {
+  const keys = await listWorkspaceBitmaps(workspaceId)
+  return keys
+    .filter(k => k.startsWith('tag/'))
+    .map(k => k.slice('tag/'.length))
+    .filter(Boolean)
+    .sort()
 }
 
 export async function deleteWorkspaceBitmap(workspaceId: string, bitmapKey: string): Promise<boolean> {

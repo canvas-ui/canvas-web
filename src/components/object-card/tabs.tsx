@@ -1,0 +1,373 @@
+import { useEffect, useState } from 'react'
+import { Copy, Download, Trash2, Database, HardDrive, Mail, Globe, FileQuestion, Pencil } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { DocumentRenderer } from '@/components/renderers/registry'
+import {
+  getDocumentLocations, getDocumentMemberships, destroyWorkspaceDocuments, downloadDocument,
+  type DocumentLocationInfo, type DocumentTreeMembership,
+} from '@/services/workspace'
+import { getLocationFilename } from '@/lib/document-display'
+import { useToastHelpers } from '@/hooks/useToastHelpers'
+import { DocumentEditForm, isEditableSchema } from './EditForm'
+import type { Document } from '@/types/workspace'
+
+interface TabProps {
+  document: Document
+  workspaceId: string
+  onChanged?: () => void
+}
+
+// ── View/Edit ────────────────────────────────────────────────────────────────
+
+export function ViewTab({ document, workspaceId, initialEdit = false, onChanged }: TabProps & { initialEdit?: boolean }) {
+  const [editing, setEditing] = useState(initialEdit && isEditableSchema(document.schema))
+  // Render-time state reset: switching documents re-seeds the edit mode.
+  const resetKey = `${document.id}:${initialEdit}`
+  const [lastResetKey, setLastResetKey] = useState(resetKey)
+  if (resetKey !== lastResetKey) {
+    setLastResetKey(resetKey)
+    setEditing(initialEdit && isEditableSchema(document.schema))
+  }
+
+  if (editing) {
+    return (
+      <DocumentEditForm
+        document={document}
+        workspaceId={workspaceId}
+        onClose={() => { setEditing(false); onChanged?.() }}
+      />
+    )
+  }
+  return (
+    <div className="space-y-3">
+      {isEditableSchema(document.schema) && (
+        <div className="flex justify-end">
+          <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+            <Pencil className="mr-1 h-3 w-3" /> Edit
+          </Button>
+        </div>
+      )}
+      <DocumentRenderer workspaceId={workspaceId} document={document} />
+    </div>
+  )
+}
+
+// ── Metadata ────────────────────────────────────────────────────────────────
+
+const formatDate = (dateString?: string) => {
+  if (!dateString) return '—'
+  return new Date(dateString).toLocaleDateString('en-US', {
+    year: 'numeric', month: 'long', day: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  })
+}
+
+export function MetadataTab({ document }: TabProps) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="font-semibold mb-3">Basic Information</h3>
+        <div className="grid gap-3 text-sm">
+          <div><span className="font-medium">ID:</span><span className="ml-2 font-mono">{document.id}</span></div>
+          <div><span className="font-medium">Schema:</span><span className="ml-2 font-mono">{document.schema}</span></div>
+          <div><span className="font-medium">Schema Version:</span><span className="ml-2">{document.schemaVersion}</span></div>
+          <div><span className="font-medium">Version:</span><span className="ml-2">{document.versionNumber} / {document.latestVersion}</span></div>
+          <div><span className="font-medium">Created:</span><span className="ml-2">{formatDate(document.createdAt)}</span></div>
+          <div><span className="font-medium">Updated:</span><span className="ml-2">{formatDate(document.updatedAt)}</span></div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="font-semibold mb-3">Metadata</h3>
+        <div className="grid gap-3 text-sm">
+          <div><span className="font-medium">Content Type:</span><span className="ml-2">{document.metadata?.contentType ?? '—'}</span></div>
+          <div><span className="font-medium">Content Encoding:</span><span className="ml-2">{document.metadata?.contentEncoding ?? '—'}</span></div>
+          {Number.isFinite(document.metadata?.size) && (
+            <div><span className="font-medium">Size:</span><span className="ml-2">{document.metadata?.size} bytes</span></div>
+          )}
+        </div>
+      </div>
+
+      {Array.isArray(document.checksumArray) && document.checksumArray.length > 0 && (
+        <div>
+          <h3 className="font-semibold mb-3">Checksums</h3>
+          <div className="space-y-2">
+            {document.checksumArray.map((checksum, index) => {
+              const [algo, hash] = checksum.split('/')
+              return (
+                <div key={index} className="flex items-center gap-2 text-sm font-mono">
+                  <span className="font-medium">{algo}:</span>
+                  <span className="break-all text-muted-foreground">{hash}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {document.indexOptions && (
+        <div>
+          <h3 className="font-semibold mb-3">Index Options</h3>
+          <div className="space-y-3 text-sm">
+            <div><span className="font-medium">Primary Checksum Algorithm:</span><span className="ml-2">{document.indexOptions.primaryChecksumAlgorithm ?? '—'}</span></div>
+            <div>
+              <span className="font-medium">FTS Search Fields:</span>
+              <div className="ml-2 mt-1">{(document.indexOptions.ftsSearchFields ?? []).map((field, index) => (<span key={index} className="mb-1 mr-2 inline-block rounded bg-muted px-2 py-1 text-xs">{field}</span>))}</div>
+            </div>
+            <div>
+              <span className="font-medium">Vector Embedding Fields:</span>
+              <div className="ml-2 mt-1">{(document.indexOptions.vectorEmbeddingFields ?? []).map((field, index) => (<span key={index} className="mb-1 mr-2 inline-block rounded bg-muted px-2 py-1 text-xs">{field}</span>))}</div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── JSON ────────────────────────────────────────────────────────────────────
+
+export function JsonTab({ document }: TabProps) {
+  const { showSuccessToast, showErrorToast } = useToastHelpers()
+  const json = JSON.stringify(document, null, 2)
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(json); showSuccessToast('Copied to clipboard') }
+    catch { showErrorToast('Copy failed') }
+  }
+  return (
+    <div className="space-y-2">
+      <div className="flex justify-end">
+        <Button variant="outline" size="sm" onClick={copy}>
+          <Copy className="mr-1 h-3 w-3" /> Copy to clipboard
+        </Button>
+      </div>
+      <pre className="overflow-x-auto rounded-lg bg-muted p-4 text-xs">{json}</pre>
+    </div>
+  )
+}
+
+// ── Synapses (tree memberships) ─────────────────────────────────────────────
+
+export function SynapsesTab({ document, workspaceId }: TabProps) {
+  const [memberships, setMemberships] = useState<DocumentTreeMembership[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  // Render-time reset when the target document changes.
+  const fetchKey = `${workspaceId}:${document.id}`
+  const [lastKey, setLastKey] = useState(fetchKey)
+  if (fetchKey !== lastKey) {
+    setLastKey(fetchKey)
+    setMemberships(null)
+    setError(null)
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    getDocumentMemberships(workspaceId, document.id)
+      .then((m) => { if (!cancelled) setMemberships(m) })
+      .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)) })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchKey])
+
+  if (error) return <p className="text-sm text-destructive">{error}</p>
+  if (!memberships) return <p className="text-sm text-muted-foreground">Loading memberships...</p>
+
+  const groups: { title: string; type: string }[] = [
+    { title: 'Context tree', type: 'context' },
+    { title: 'Directory tree', type: 'directory' },
+  ]
+
+  return (
+    <div className="space-y-6">
+      {groups.map(({ title, type }) => {
+        const trees = memberships.filter((m) => m.type === type)
+        const paths = trees.flatMap((m) => m.paths.map((p) => ({ tree: m.tree, path: p })))
+        return (
+          <div key={type}>
+            <h3 className="mb-3 font-semibold">{title}</h3>
+            {paths.length === 0
+              ? <p className="text-sm text-muted-foreground">No placements.</p>
+              : (
+                <div className="space-y-1">
+                  {paths.map(({ tree, path }, i) => (
+                    <div key={`${tree}:${path}:${i}`} className="flex items-center gap-2 text-sm">
+                      <span className="break-all font-mono text-xs">{path}</span>
+                      {trees.length > 1 && <span className="shrink-0 text-xs text-muted-foreground">({tree})</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+          </div>
+        )
+      })}
+      <div>
+        <h3 className="mb-2 font-semibold">Documents</h3>
+        <p className="text-sm text-muted-foreground">Related documents — coming soon.</p>
+      </div>
+    </div>
+  )
+}
+
+// ── Backends ────────────────────────────────────────────────────────────────
+
+function kindIcon(kind: string) {
+  if (kind === 'stored') return Database
+  if (kind === 'workspace-file') return HardDrive
+  if (kind === 'imap') return Mail
+  if (kind === 'readonly') return Globe
+  return FileQuestion
+}
+
+// Split a location URL into backend + key for display (stored://<backend>/<key>).
+function splitUrl(url: string): { backend: string; key: string } {
+  const m = url.match(/^([a-z][a-z0-9+.-]*):\/\/([^/]*)\/?(.*)$/i)
+  if (!m) return { backend: url, key: '' }
+  return { backend: `${m[1]}://${m[2]}`, key: m[3] }
+}
+
+export function BackendsTab({ document, workspaceId, onChanged }: TabProps) {
+  const { showSuccessToast, showErrorToast } = useToastHelpers()
+  const [locations, setLocations] = useState<DocumentLocationInfo[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [busyUrl, setBusyUrl] = useState<string | null>(null)
+  // URL awaiting the "last location" decision (remove index entry vs keep it).
+  const [confirmLastUrl, setConfirmLastUrl] = useState<string | null>(null)
+
+  // Render-time reset when the target document changes.
+  const fetchKey = `${workspaceId}:${document.id}`
+  const [lastKey, setLastKey] = useState(fetchKey)
+  if (fetchKey !== lastKey) {
+    setLastKey(fetchKey)
+    setLocations(null)
+    setError(null)
+    setConfirmLastUrl(null)
+  }
+
+  const reload = () => {
+    getDocumentLocations(workspaceId, document.id)
+      .then(setLocations)
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+  }
+  useEffect(() => {
+    let cancelled = false
+    getDocumentLocations(workspaceId, document.id)
+      .then((l) => { if (!cancelled) setLocations(l) })
+      .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)) })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchKey])
+
+  const removeFromBackend = async (url: string, keepDocument?: boolean) => {
+    setBusyUrl(url)
+    setConfirmLastUrl(null)
+    try {
+      const result = await destroyWorkspaceDocuments(workspaceId, [document.id], {
+        urls: [url],
+        ...(keepDocument !== undefined ? { keepDocument } : {}),
+      })
+      const outcome = result.successful[0]
+      if (!outcome) throw new Error(result.failed[0]?.reason || 'Destroy failed')
+      if (outcome.docDeleted) {
+        showSuccessToast('Removed from backend; document removed from index')
+      } else if (outcome.deleted.includes(url)) {
+        showSuccessToast('Removed from backend')
+      } else {
+        showSuccessToast('Reference dropped (backend is read-only)')
+      }
+      window.dispatchEvent(new CustomEvent('workspace:documents:refresh'))
+      onChanged?.()
+      reload()
+    } catch (e) {
+      showErrorToast(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusyUrl(null)
+    }
+  }
+
+  const onRemoveClick = (loc: DocumentLocationInfo) => {
+    const isLast = (locations?.length ?? 0) <= 1
+    if (isLast) { setConfirmLastUrl(loc.url); return }
+    if (window.confirm(`Remove this copy from the backend?\n\n${loc.url}`)) {
+      void removeFromBackend(loc.url)
+    }
+  }
+
+  if (error) return <p className="text-sm text-destructive">{error}</p>
+  if (!locations) return <p className="text-sm text-muted-foreground">Loading locations...</p>
+
+  const isJsonDoc = locations.length === 0
+  const filename = getLocationFilename(document)
+
+  return (
+    <div className="space-y-3">
+      {/* The index entry itself — JSON docs (notes, tabs, emails' metadata)
+          live in the workspace db even when no byte locations exist. */}
+      <div className="flex items-center justify-between gap-2 rounded border px-3 py-2 text-sm">
+        <span className="inline-flex min-w-0 items-center gap-2">
+          <Database className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <span className="font-mono text-xs">workspace:db</span>
+          <span className="truncate text-xs text-muted-foreground">index entry (id {document.id})</span>
+        </span>
+        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">json</span>
+      </div>
+
+      {isJsonDoc && (
+        <p className="text-sm text-muted-foreground">No byte locations — this object lives only in the workspace database.</p>
+      )}
+
+      {locations.map((loc) => {
+        const Icon = kindIcon(loc.kind)
+        const { backend, key } = splitUrl(loc.url)
+        const busy = busyUrl === loc.url
+        return (
+          <div key={loc.url} className="space-y-2 rounded border px-3 py-2 text-sm">
+            <div className="flex items-center justify-between gap-2">
+              <span className="inline-flex min-w-0 items-center gap-2">
+                <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="shrink-0 font-mono text-xs">{loc.backend || backend}</span>
+                <span className="truncate font-mono text-xs text-muted-foreground" title={loc.url}>{key || loc.url}</span>
+              </span>
+              <span className="flex shrink-0 items-center gap-2">
+                <span className={`rounded px-1.5 py-0.5 text-[10px] uppercase ${loc.deletable ? 'bg-muted text-muted-foreground' : 'bg-amber-500/15 text-amber-600'}`}>
+                  {loc.deletable ? loc.kind : 'read-only'}
+                </span>
+                <button
+                  onClick={() => downloadDocument(workspaceId, document.id, filename || `document-${document.id}`, { url: loc.url }).catch((e) => showErrorToast(e instanceof Error ? e.message : String(e)))}
+                  className="text-muted-foreground hover:text-foreground"
+                  title="Download this copy"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={() => onRemoveClick(loc)}
+                  disabled={busy}
+                  className="text-muted-foreground hover:text-destructive disabled:opacity-50"
+                  title={loc.deletable ? 'Remove from backend' : 'Drop reference (bytes stay — backend is read-only)'}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </span>
+            </div>
+
+            {confirmLastUrl === loc.url && (
+              <div className="space-y-2 rounded border border-destructive/40 bg-destructive/5 p-2">
+                <p className="text-xs">
+                  This is the object's <strong>last</strong> location. Remove the bytes from the backend and…
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="destructive" size="sm" disabled={busy} onClick={() => void removeFromBackend(loc.url, false)}>
+                    Also remove index entry
+                  </Button>
+                  <Button variant="outline" size="sm" disabled={busy} onClick={() => void removeFromBackend(loc.url, true)}>
+                    Keep index entry (no bytes)
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setConfirmLastUrl(null)}>Cancel</Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}

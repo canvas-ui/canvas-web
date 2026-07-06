@@ -18,14 +18,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { ContextMenuShell } from '@/components/common/context-menu-shell'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
-import { FilePreview, isPreviewable } from '@/components/common/file-preview'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { LazyMarkdownEditor, LazyNoteViewer } from '@/components/common/lazy-editor'
-import { TagInput } from '@/components/toolbox/add/TagInput'
-import { tagsToFeatures } from '@/components/toolbox/add/tags'
-import { updateWorkspaceDocument } from '@/services/workspace'
-import { useToastHelpers } from '@/hooks/useToastHelpers'
+import { ObjectPropertiesModal } from '@/components/object-card/ObjectPropertiesModal'
+import { isEditableSchema } from '@/components/object-card/EditForm'
 
 interface DocumentListProps {
   documents: Document[]
@@ -100,14 +94,6 @@ interface DocumentTableRowProps {
   onOpenToSide?: (document: Document) => void
   onRightClick?: (event: React.MouseEvent, documentId: number) => void
   onDragStart?: (event: React.DragEvent, documentId: number) => void
-}
-
-interface DocumentDetailModalProps {
-  document: Document | null
-  isOpen: boolean
-  onClose: () => void
-  workspaceId?: string
-  initialTab?: DetailTab
 }
 
 interface ExportModalProps {
@@ -320,285 +306,9 @@ function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
   )
 }
 
-const NOTE_SCHEMA = 'data/abstraction/note'
-const LINK_SCHEMA = 'data/abstraction/link'
-const TAB_SCHEMA = 'data/abstraction/tab'
-
-function isEditableSchema(schema: string): boolean {
-  return schema === NOTE_SCHEMA || schema === LINK_SCHEMA || schema === TAB_SCHEMA
-}
-
-function featuresToTags(features: string[] | undefined): string[] {
-  return (features || []).filter(f => f.startsWith('tag/')).map(f => f.slice(4))
-}
-
-// Per-schema field mapping for the url/title pair. Legacy links store these as
-// uri/label; tabs use url/title. Notes have no url.
-function urlTitleKeys(schema: string): { urlKey: string | null; titleKey: string } {
-  if (schema === LINK_SCHEMA) return { urlKey: 'uri', titleKey: 'label' }
-  if (schema === TAB_SCHEMA) return { urlKey: 'url', titleKey: 'title' }
-  return { urlKey: null, titleKey: 'title' }
-}
-
-// Inline edit form rendered as the "Edit" tab inside the document detail modal.
-// Editing a link/tab url upserts the document (checksum recalculated) — accepted.
-function DocumentEditForm({ document: doc, workspaceId, onClose }: { document: Document; workspaceId?: string; onClose: () => void }) {
-  const { showSuccessToast, showErrorToast } = useToastHelpers()
-  const isNote = doc.schema === NOTE_SCHEMA
-  const { urlKey, titleKey } = urlTitleKeys(doc.schema)
-
-  const [url, setUrl] = useState<string>(urlKey ? String(doc.data?.[urlKey] ?? '') : '')
-  const [title, setTitle] = useState<string>(String(doc.data?.[titleKey] ?? ''))
-  const [content, setContent] = useState<string>(String(doc.data?.content ?? ''))
-  const [tags, setTags] = useState<string[]>(
-    featuresToTags((doc.metadata as any)?.features).length
-      ? featuresToTags((doc.metadata as any)?.features)
-      : ((doc.data?.tags as string[] | undefined) ?? [])
-  )
-  const [saving, setSaving] = useState(false)
-
-  const urlValid = !urlKey || (() => { try { new URL(url.trim()); return true } catch { return false } })()
-  const canSave = !saving && (isNote ? content.trim().length > 0 : urlValid)
-
-  const handleSave = async () => {
-    if (!workspaceId) { showErrorToast('Missing workspace'); return }
-    setSaving(true)
-    try {
-      const cleanTags = tags.map(t => t.trim()).filter(Boolean)
-      let data: Record<string, any>
-      if (isNote) {
-        data = { ...(title.trim() ? { title: title.trim() } : {}), content }
-      } else {
-        data = { ...doc.data }
-        if (urlKey) data[urlKey] = url.trim()
-        if (title.trim()) data[titleKey] = title.trim(); else delete data[titleKey]
-        data.tags = cleanTags
-      }
-      await updateWorkspaceDocument(workspaceId, {
-        id: doc.id,
-        schema: doc.schema,
-        schemaVersion: doc.schemaVersion,
-        data,
-        metadata: { features: tagsToFeatures(tags) },
-      })
-      showSuccessToast('Document updated')
-      window.dispatchEvent(new CustomEvent('workspace:documents:refresh'))
-      onClose()
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to update document')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-4">
-      {urlKey && (
-        <div className="space-y-1.5">
-          <Label htmlFor="edit-url">URL</Label>
-          <Input id="edit-url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com" className="font-mono text-xs" />
-          {url.trim() && !urlValid && (<p className="text-xs text-destructive">Enter a valid URL, e.g. https://example.com</p>)}
-        </div>
-      )}
-
-      <div className="space-y-1.5">
-        <Label htmlFor="edit-title">Title</Label>
-        <Input id="edit-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={isNote ? "Optional — defaults to today's date" : 'Optional display title'} />
-      </div>
-
-      {isNote && (
-        <div className="space-y-1.5">
-          <Label>Body</Label>
-          <LazyMarkdownEditor value={content} onChange={setContent} placeholder="Write your note…" />
-        </div>
-      )}
-
-      <div className="space-y-1.5">
-        <Label>Tags</Label>
-        <TagInput tags={tags} onChange={setTags} />
-      </div>
-
-      <div className="flex justify-end gap-2 pt-2">
-        <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>Cancel</Button>
-        <Button size="sm" onClick={handleSave} disabled={!canSave}>{saving ? 'Saving…' : 'Save changes'}</Button>
-      </div>
-    </div>
-  )
-}
-
-type DetailTab = 'content' | 'details' | 'json' | 'edit'
-
-function DocumentDetailModal({ document, isOpen, onClose, workspaceId, initialTab }: DocumentDetailModalProps) {
-  const isNote = document?.schema === 'data/abstraction/note'
-  const editable = !!document && isEditableSchema(document.schema)
-  const defaultTab: DetailTab = initialTab ?? (isNote ? 'content' : 'details')
-  const [activeTab, setActiveTab] = useState<DetailTab>(defaultTab)
-
-  useEffect(() => {
-    if (isOpen) setActiveTab(initialTab ?? (isNote ? 'content' : 'details'))
-  }, [isOpen, isNote, initialTab])
-
-  if (!isOpen || !document) return null
-
-  const showPreview = workspaceId && isPreviewable(document)
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric', month: 'long', day: 'numeric',
-      hour: '2-digit', minute: '2-digit', second: '2-digit',
-    })
-  }
-
-  const tabs: { id: DetailTab; label: string }[] = [
-    ...(isNote ? [{ id: 'content' as DetailTab, label: 'Note' }] : []),
-    ...(editable ? [{ id: 'edit' as DetailTab, label: 'Edit' }] : []),
-    { id: 'details', label: 'Details' },
-    { id: 'json', label: 'JSON' },
-  ]
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-background border rounded-lg max-w-4xl w-full max-h-[90vh] flex flex-col">
-        <div className="p-6 pb-0 shrink-0">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-2xl font-bold">Document Details</h2>
-              <p className="text-muted-foreground">ID: {document.id}</p>
-            </div>
-            <button onClick={onClose} className="p-2 hover:bg-muted rounded-sm" title="Close">✕</button>
-          </div>
-
-          <div className="flex gap-1 border-b">
-            {tabs.map(t => (
-              <button
-                key={t.id}
-                onClick={() => setActiveTab(t.id)}
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === t.id
-                    ? 'border-primary text-foreground'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="overflow-y-auto flex-1 p-6 pt-4">
-          {activeTab === 'content' && isNote && (
-            <div className="space-y-4">
-              {document.data?.title && (
-                <h3 className="text-lg font-semibold">{document.data.title}</h3>
-              )}
-              <div className="rounded-md border border-input bg-transparent">
-                <LazyNoteViewer content={document.data?.content ?? ''} />
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'edit' && editable && (
-            <DocumentEditForm document={document} workspaceId={workspaceId} onClose={onClose} />
-          )}
-
-          {activeTab === 'details' && (
-            <div className="space-y-6">
-              {showPreview && workspaceId && (
-                <div>
-                  <h3 className="font-semibold mb-3">Preview</h3>
-                  <FilePreview workspaceId={workspaceId} document={document} />
-                </div>
-              )}
-              <div>
-                <h3 className="font-semibold mb-3">Basic Information</h3>
-                <div className="grid gap-3 text-sm">
-                  <div><span className="font-medium">Schema:</span><span className="ml-2 font-mono">{document.schema}</span></div>
-                  <div><span className="font-medium">Schema Version:</span><span className="ml-2">{document.schemaVersion}</span></div>
-                  <div><span className="font-medium">Version:</span><span className="ml-2">{document.versionNumber} / {document.latestVersion}</span></div>
-                  <div><span className="font-medium">Created:</span><span className="ml-2">{formatDate(document.createdAt)}</span></div>
-                  <div><span className="font-medium">Updated:</span><span className="ml-2">{formatDate(document.updatedAt)}</span></div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="font-semibold mb-3">Document Data</h3>
-                <pre className="bg-muted p-4 rounded-lg text-sm overflow-x-auto">{JSON.stringify(document.data, null, 2)}</pre>
-              </div>
-
-              <div>
-                <h3 className="font-semibold mb-3">Metadata</h3>
-                <div className="grid gap-3 text-sm">
-                  <div><span className="font-medium">Content Type:</span><span className="ml-2">{document.metadata?.contentType ?? '—'}</span></div>
-                  <div><span className="font-medium">Content Encoding:</span><span className="ml-2">{document.metadata?.contentEncoding ?? '—'}</span></div>
-                  {(() => {
-                    const raw = (document as any).locations ?? []
-                    if (!Array.isArray(raw) || raw.length === 0) return null
-                    const items: string[] = raw.map((l: any) => typeof l === 'string' ? l : (l?.url ?? '')).filter(Boolean)
-                    if (items.length === 0) return null
-                    return (
-                      <div>
-                        <span className="font-medium">Locations:</span>
-                        <div className="ml-2 mt-1">
-                          {items.map((path, index) => (<div key={index} className="font-mono text-xs break-all">{path}</div>))}
-                        </div>
-                      </div>
-                    )
-                  })()}
-                </div>
-              </div>
-
-              {Array.isArray(document.checksumArray) && document.checksumArray.length > 0 && (
-                <div>
-                  <h3 className="font-semibold mb-3">Checksums</h3>
-                  <div className="space-y-2">
-                    {document.checksumArray.map((checksum, index) => {
-                      const [algo, hash] = checksum.split('/')
-                      return (
-                        <div key={index} className="flex items-center gap-2 text-sm font-mono">
-                          <span className="font-medium">{algo}:</span>
-                          <span className="text-muted-foreground">{hash}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {document.indexOptions && (
-                <div>
-                  <h3 className="font-semibold mb-3">Index Options</h3>
-                  <div className="space-y-3 text-sm">
-                    <div><span className="font-medium">Primary Checksum Algorithm:</span><span className="ml-2">{document.indexOptions.primaryChecksumAlgorithm ?? '—'}</span></div>
-                    <div>
-                      <span className="font-medium">FTS Search Fields:</span>
-                      <div className="ml-2 mt-1">{(document.indexOptions.ftsSearchFields ?? []).map((field, index) => (<span key={index} className="inline-block bg-muted px-2 py-1 rounded text-xs mr-2 mb-1">{field}</span>))}</div>
-                    </div>
-                    <div>
-                      <span className="font-medium">Vector Embedding Fields:</span>
-                      <div className="ml-2 mt-1">{(document.indexOptions.vectorEmbeddingFields ?? []).map((field, index) => (<span key={index} className="inline-block bg-muted px-2 py-1 rounded text-xs mr-2 mb-1">{field}</span>))}</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'json' && (
-            <pre className="bg-muted p-4 rounded-lg text-sm overflow-x-auto">{JSON.stringify(document, null, 2)}</pre>
-          )}
-        </div>
-
-        <div className="shrink-0 px-6 py-4 border-t flex justify-end">
-          <Button onClick={onClose}>Close</Button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemoveDocument, onDeleteDocument, onLinkDocument, onOpenToSide, onRightClick, onDragStart }: DocumentTableRowProps) {
   const [showDetailModal, setShowDetailModal] = useState(false)
-  const [detailTab, setDetailTab] = useState<DetailTab | undefined>(undefined)
+  const [detailEdit, setDetailEdit] = useState(false)
   const isEditable = isEditableSchema(document.schema)
 
   const isTabDocument = document.schema === 'data/abstraction/tab'
@@ -653,8 +363,8 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
     onRightClick?.(e, document.id)
   }
 
-  const handleViewDetails = (e: React.MouseEvent) => { e.stopPropagation(); setDetailTab(undefined); setShowDetailModal(true) }
-  const handleEditDocument = (e: React.MouseEvent) => { e.stopPropagation(); setDetailTab('edit'); setShowDetailModal(true) }
+  const handleViewDetails = (e: React.MouseEvent) => { e.stopPropagation(); setDetailEdit(false); setShowDetailModal(true) }
+  const handleEditDocument = (e: React.MouseEvent) => { e.stopPropagation(); setDetailEdit(true); setShowDetailModal(true) }
   const handleRemoveDocument = (e: React.MouseEvent) => { e.stopPropagation(); onRemoveDocument?.(document.id) }
   const handleDeleteDocument = (e: React.MouseEvent) => { e.stopPropagation(); onDeleteDocument?.(document.id) }
 
@@ -706,14 +416,14 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
           </div>
         </TableCell>
       </TableRow>
-      <DocumentDetailModal document={document} isOpen={showDetailModal} onClose={() => setShowDetailModal(false)} workspaceId={workspaceId} initialTab={detailTab} />
+      <ObjectPropertiesModal document={document} isOpen={showDetailModal} onClose={() => setShowDetailModal(false)} workspaceId={workspaceId} initialEdit={detailEdit} />
     </>
   )
 }
 
 function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocument, onDeleteDocument, onLinkDocument, onOpenToSide, onRightClick, onDragStart }: DocumentRowProps) {
   const [showDetailModal, setShowDetailModal] = useState(false)
-  const [detailTab, setDetailTab] = useState<DetailTab | undefined>(undefined)
+  const [detailEdit, setDetailEdit] = useState(false)
   const isTabDocument = document.schema === 'data/abstraction/tab'
   const isEditable = isEditableSchema(document.schema)
   const tabUrl = isTabDocument ? document.data.url : null
@@ -749,8 +459,8 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
   }
 
   const handleRightClick = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); if (onSelect && !isSelected) { onSelect(document.id, true, false) } onRightClick?.(e, document.id) }
-  const handleViewDetails = (e: React.MouseEvent) => { e.stopPropagation(); setDetailTab(undefined); setShowDetailModal(true) }
-  const handleEditDocument = (e: React.MouseEvent) => { e.stopPropagation(); setDetailTab('edit'); setShowDetailModal(true) }
+  const handleViewDetails = (e: React.MouseEvent) => { e.stopPropagation(); setDetailEdit(false); setShowDetailModal(true) }
+  const handleEditDocument = (e: React.MouseEvent) => { e.stopPropagation(); setDetailEdit(true); setShowDetailModal(true) }
   const handleRemoveDocument = (e: React.MouseEvent) => { e.stopPropagation(); onRemoveDocument?.(document.id) }
   const handleDeleteDocument = (e: React.MouseEvent) => { e.stopPropagation(); onDeleteDocument?.(document.id) }
 
@@ -794,7 +504,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
           </div>
         </div>
       </div>
-      <DocumentDetailModal document={document} isOpen={showDetailModal} onClose={() => setShowDetailModal(false)} workspaceId={workspaceId} initialTab={detailTab} />
+      <ObjectPropertiesModal document={document} isOpen={showDetailModal} onClose={() => setShowDetailModal(false)} workspaceId={workspaceId} initialEdit={detailEdit} />
     </>
   )
 }
@@ -804,7 +514,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; documentIds: number[] } | null>(null)
   const [linkPanelIds, setLinkPanelIds] = useState<number[] | null>(null)
   const [pickDocsOpen, setPickDocsOpen] = useState(false)
-  const [detailModal, setDetailModal] = useState<{ document: Document; tab?: DetailTab } | null>(null)
+  const [detailModal, setDetailModal] = useState<{ document: Document; edit?: boolean } | null>(null)
   const canLink = Boolean(linkTree && onPasteDocuments)
   const sideView = useSideView()
   const openToSide = workspaceId ? (doc: Document) => sideView.open(doc, workspaceId) : undefined
@@ -983,7 +693,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
       case 'edit':
         if (documentIds.length === 1) {
           const doc = documents.find(d => d.id === documentIds[0])
-          if (doc) { setDetailModal({ document: doc, tab: 'edit' }); setContextMenu(null); return }
+          if (doc) { setDetailModal({ document: doc, edit: true }); setContextMenu(null); return }
         }
         break
       case 'copy': onCopyDocuments?.(documentIds); break
@@ -1715,12 +1425,12 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
         </>
       )}
 
-      <DocumentDetailModal
+      <ObjectPropertiesModal
         document={detailModal?.document ?? null}
         isOpen={!!detailModal}
         onClose={() => setDetailModal(null)}
         workspaceId={workspaceId}
-        initialTab={detailModal?.tab}
+        initialEdit={detailModal?.edit}
       />
     </div>
   )

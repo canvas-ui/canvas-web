@@ -5,12 +5,17 @@ interface TagInputProps {
   tags: string[]
   onChange: (tags: string[]) => void
   placeholder?: string
+  // Existing tag values (e.g. from tag/* bitmaps) offered while typing.
+  suggestions?: string[]
 }
 
 // Chip-style tag entry. Emits clean (trimmed, deduped) tag strings; the caller maps
 // them to `tag/*` features via tagsToFeatures().
-export function TagInput({ tags, onChange, placeholder = 'Add tag, press Enter' }: TagInputProps) {
+export function TagInput({ tags, onChange, placeholder = 'Add tag, press Enter', suggestions = [] }: TagInputProps) {
   const [draft, setDraft] = useState('')
+  const matches = draft.trim()
+    ? suggestions.filter(s => s.toLowerCase().includes(draft.trim().toLowerCase()) && !tags.includes(s)).slice(0, 8)
+    : []
 
   const commit = () => {
     const t = draft.trim()
@@ -45,14 +50,34 @@ export function TagInput({ tags, onChange, placeholder = 'Add tag, press Enter' 
           </button>
         </span>
       ))}
-      <input
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={onKeyDown}
-        onBlur={commit}
-        placeholder={tags.length ? '' : placeholder}
-        className="flex-1 min-w-[8ch] bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-      />
+      <div className="relative flex-1 min-w-[8ch]">
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={onKeyDown}
+          onBlur={() => setTimeout(commit, 150)}
+          placeholder={tags.length ? '' : placeholder}
+          className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+        />
+        {matches.length > 0 && (
+          <div className="absolute left-0 top-full z-50 mt-1 max-h-48 w-56 overflow-auto rounded-md border bg-popover p-1 text-sm shadow-md">
+            {matches.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  if (!tags.includes(s)) onChange([...tags, s])
+                  setDraft('')
+                }}
+                className="block w-full rounded px-2 py-1 text-left hover:bg-accent"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

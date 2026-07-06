@@ -11,3 +11,8 @@ export function tagsToFeatures(tags: string[]): string[] {
   }
   return Array.from(seen)
 }
+
+// Inverse: extract the plain tag values from a document's `metadata.features`.
+export function featuresToTags(features: string[] | undefined): string[] {
+  return (features || []).filter(f => f.startsWith('tag/')).map(f => f.slice(4))
+}
