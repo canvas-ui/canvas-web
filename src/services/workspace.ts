@@ -4,7 +4,7 @@ import type { TreeNode, TimelineInfo, TimelineQueryInterval, TimelineQueryOption
 // GLOBAL Workspace type from src/types/api.d.ts will be used.
 // No local Workspace interface should be defined here.
 
-export const INCOMING_ROOT_CONTEXT = '/.incoming'
+export const BACKENDS_ROOT_CONTEXT = '/.backends'
 export const DEFAULT_WORKSPACE_TREE_NAME = 'context'
 
 type WorkspaceTreeResponse = { payload: TreeNode; status: string; statusCode: number; message: string }
@@ -234,7 +234,7 @@ export async function getWorkspaceDocuments(
   id: string,
   contextSpec: string = '/',
   featureArray: string[] = [],
-  options: { limit?: number; offset?: number; page?: number; includeIncoming?: boolean; treeName?: string; treeType?: string; q?: string; queries?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[]; scope?: 'path' | 'workspace' } = {}
+  options: { limit?: number; offset?: number; page?: number; includeBackends?: boolean; treeName?: string; treeType?: string; q?: string; queries?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[]; scope?: 'path' | 'workspace' } = {}
 ): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }> {
   try {
     const params = new URLSearchParams();
@@ -247,7 +247,7 @@ export async function getWorkspaceDocuments(
     appendAnyOf(params, options.anyOf)
     appendNoneOf(params, options.noneOf)
     appendFilters(params, options.filters)
-    if (options.includeIncoming) params.append('includeIncoming', 'true')
+    if (options.includeBackends) params.append('includeBackends', 'true')
     if (options.limit !== undefined) params.append('limit', options.limit.toString());
     if (options.offset !== undefined) params.append('offset', options.offset.toString());
     if (options.page !== undefined) params.append('page', options.page.toString());
@@ -432,13 +432,16 @@ export async function updateWorkspacePath(workspaceId: string, path: string, upd
   }
 }
 
-// `purge` only has an effect on the /.incoming subtree of a directory tree:
+// `purge` only has an effect on the /.backends subtree of a directory tree:
 // it deletes the documents under the folder from the index ("Remove and purge").
-// Elsewhere (and by default) the documents are kept — only the folder is dropped.
-export async function removeWorkspacePath(workspaceId: string, path: string, recursive = false, treeName = DEFAULT_WORKSPACE_TREE_NAME, purge = false): Promise<boolean> {
+// `destroy` (implies purge) additionally deletes the mirrored resources ON the
+// backend (rw backends only). Elsewhere (and by default) the documents are
+// kept — only the folder is dropped.
+export async function removeWorkspacePath(workspaceId: string, path: string, recursive = false, treeName = DEFAULT_WORKSPACE_TREE_NAME, purge = false, destroy = false): Promise<boolean> {
   try {
     const params = new URLSearchParams({ recursive: recursive.toString() });
     if (purge) params.set('purge', 'true');
+    if (destroy) params.set('destroy', 'true');
     await api.delete<{ payload: unknown; message: string; status: string; statusCode: number }>(
       `${getWorkspaceTreePathRoute(workspaceId, treeName, path)}?${params.toString()}`
     );
@@ -691,7 +694,7 @@ export async function purgeWorkspaceDocuments(
   contextSpec: string = '/',
   featureArray: string[] = [],
   filterArray: string[] = [],
-  options: { includeIncoming?: boolean } = {},
+  options: { includeBackends?: boolean } = {},
   treeName: string = DEFAULT_WORKSPACE_TREE_NAME
 ): Promise<{ requested: number; deleted: number }> {
   const params = new URLSearchParams()
@@ -702,7 +705,7 @@ export async function purgeWorkspaceDocuments(
   if (contextSpec) params.append('context', contextSpec)
   appendAllOf(params, featureArray)
   appendFilters(params, filterArray)
-  if (options.includeIncoming) params.append('includeIncoming', 'true')
+  if (options.includeBackends) params.append('includeBackends', 'true')
   const response = await api.delete<{ payload: { requested: number; deleted: number } }>(
     `${API_ROUTES.workspaces}/${workspaceId}/documents/purge?${params.toString()}`
   )
@@ -734,6 +737,7 @@ export interface WorkspaceDataBackendStatus {
   managed?: boolean;
   indexIncoming?: boolean;
   incomingPathMode?: 'sourceDirectories' | string;
+  readOnly?: boolean;
   running?: boolean;
   lastScanAt?: string | null;
   lastError?: string | null;

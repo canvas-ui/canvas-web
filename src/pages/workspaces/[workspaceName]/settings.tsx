@@ -61,7 +61,7 @@ const DATA_BACKEND_LABELS: Record<string, { title: string; description: string }
   },
   imap: {
     title: 'IMAP',
-    description: 'Mailbox data source; incoming mail lands in the virtual .incoming tree.',
+    description: 'Mailbox data source; ingested mail lands in the virtual .backends tree.',
   },
 }
 

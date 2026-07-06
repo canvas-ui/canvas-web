@@ -111,12 +111,12 @@ export default function WorkspaceDetailPage() {
   // Path and tree from URL segments; UI state from query params
   const selectedPath = sanitizeUrlPath('/' + (pathSplat ?? ''));
   const selectedTreeName = treeName ?? DEFAULT_WORKSPACE_TREE_NAME;
-  // Bulk "Purge All" is hidden in the /.incoming subtree: incoming docs are
-  // purged via the tree's "Remove and purge documents" (folder-scoped) or the
-  // per-doc Delete/Destroy context menu. The toolbar button queries the context
-  // tree and would no-op on these directory-tree paths anyway.
-  const isIncomingPath = selectedTreeName === 'directory'
-    && (selectedPath === '/.incoming' || selectedPath.startsWith('/.incoming/'));
+  // Bulk "Purge All" is hidden in the /.backends subtree: backend-staged docs
+  // are purged via the tree's "Remove and purge documents" (folder-scoped) or
+  // the per-doc Delete/Destroy context menu. The toolbar button queries the
+  // context tree and would no-op on these directory-tree paths anyway.
+  const isBackendsPath = selectedTreeName === 'directory'
+    && (selectedPath === '/.backends' || selectedPath.startsWith('/.backends/'));
 
   const isLayerView = searchParams.get('layer') === '1';
   const selectedLayerId = searchParams.get('layerId') || null;
@@ -810,7 +810,7 @@ export default function WorkspaceDetailPage() {
       onScopeChange={setDocScope}
       pastedDocumentIds={clipboard?.documentIds}
       linkTree={tree}
-      onPurgeDocuments={isIncomingPath ? undefined : handlePurgeDocuments}
+      onPurgeDocuments={isBackendsPath ? undefined : handlePurgeDocuments}
       disablePurgeDocuments={false}
       canvasInfo={canvasInfo ?? undefined}
       onSaveAsCanvas={tree && selectedNodeType !== 'canvas' && !isLayerView ? handleSaveAsCanvas : undefined}

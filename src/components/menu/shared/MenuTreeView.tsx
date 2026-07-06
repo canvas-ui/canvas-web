@@ -36,7 +36,7 @@ export interface MenuTreeViewProps {
   onOpenToSide?: (path: string, treeName: string) => void
   onInsertPath?: (path: string, autoCreateLayers?: boolean) => Promise<boolean>
   onCreateCanvas?: (path: string) => Promise<boolean>
-  onRemovePath?: (path: string, recursive?: boolean, purge?: boolean) => Promise<boolean>
+  onRemovePath?: (path: string, recursive?: boolean, purge?: boolean, destroy?: boolean) => Promise<boolean>
   onRenamePath?: (fromPath: string, newName: string) => Promise<boolean>
   onMovePath?: (from: string, to: string, recursive?: boolean, sourceTreeName?: string, targetTreeName?: string) => Promise<boolean>
   onCopyPath?: (from: string, to: string, recursive?: boolean, sourceTreeName?: string, targetTreeName?: string) => Promise<boolean>
@@ -212,13 +212,21 @@ function CtxMenu({
             {item(<Trash2 className="w-3 h-3" />, 'Remove recursive', async () => {
               if (confirm(`Remove "${path}" and all children?`)) await onRemove(path, true)
             }, true)}
-            {/* Incoming subtree only: also purge the ingested documents from the
-                index. Plain Remove above keeps them (an agent/user may have filed
-                the keepers elsewhere; backends re-sync the rest if re-enabled). */}
-            {(path === '/.incoming' || path.startsWith('/.incoming/')) &&
-              item(<Trash2 className="w-3 h-3" />, 'Remove and purge documents', async () => {
-                if (confirm(`Remove "${path}" and all children, and PERMANENTLY purge every document under it from the index?`)) await onRemove(path, true, true)
-              }, true)}
+            {/* /.backends subtree only: also purge the ingested documents from
+                the index. Plain Remove above keeps them (an agent/user may have
+                filed the keepers elsewhere; backends re-sync the rest if
+                re-enabled). "…and destroy" additionally deletes the mirrored
+                resources on the backend itself (rw backends only). */}
+            {(path === '/.backends' || path.startsWith('/.backends/')) && (
+              <>
+                {item(<Trash2 className="w-3 h-3" />, 'Remove and purge documents', async () => {
+                  if (confirm(`Remove "${path}" and all children, and PERMANENTLY purge every document under it from the index?`)) await onRemove(path, true, true)
+                }, true)}
+                {item(<Trash2 className="w-3 h-3" />, 'Remove, purge and destroy on backend', async () => {
+                  if (confirm(`Remove "${path}" and all children, purge every document under it from the index, and PERMANENTLY DELETE the mirrored files/messages on the backend?`)) await onRemove(path, true, true, true)
+                }, true)}
+              </>
+            )}
           </>
         )}
 
