@@ -5,7 +5,7 @@ import { Icon } from '@iconify/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { LayerIconPicker } from '@/components/menu/shared/LayerIconPicker'
-import { DEFAULT_WORKSPACE_ICON, type LayerStyle } from '@/lib/layer-style'
+import { DEFAULT_WORKSPACE_ICON, FOLDER_NAME_DEFAULTS, type LayerStyle } from '@/lib/layer-style'
 import { HooksPanel } from '@/components/workspace/hooks-panel'
 import { ImapMailboxesPanel } from '@/components/workspace/imap-mailboxes-panel'
 import { TokenManager } from '@/components/workspace/token-manager'
@@ -28,6 +28,7 @@ import {
   type WorkspaceDbStats,
   type WorkspacePublicCanvasShare,
   type WorkspaceServicesStatus,
+  insertWorkspacePath,
 } from '@/services/workspace'
 import {
   listDevices,
@@ -727,6 +728,8 @@ export default function WorkspaceSettingsPage() {
             />
           )}
 
+          <DefaultFoldersSection workspaceName={workspaceName!} />
+
           <section className="rounded-lg border border-destructive/30 p-4">
             <h2 className="mb-3 text-sm font-semibold text-destructive">Danger Zone</h2>
             <Button variant="destructive" disabled={isDestroying} onClick={handleDestroy}>
@@ -915,5 +918,83 @@ export default function WorkspaceSettingsPage() {
       )}
       </div>
     </div>
+  )
+}
+
+
+// ── Default folders ──────────────────────────────────────────────────────────
+// Tick well-known folders (Home, Travel, Work, …) to create them in the
+// context or directory tree — each comes with a default icon + color via
+// FOLDER_NAME_DEFAULTS, turning a fresh workspace into a stash-anything setup.
+const DEFAULT_FOLDER_NAMES = ['Home', 'Travel', 'Work', 'Books', 'Workouts', 'Beauty', 'Recipes', 'To Watch', 'To Read', 'Learning', 'Tech', 'Music', 'Finance', 'Shopping', 'Ideas']
+
+function DefaultFoldersSection({ workspaceName }: { workspaceName: string }) {
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [tree, setTree] = useState<'context' | 'directory'>('context')
+  const [creating, setCreating] = useState(false)
+  const [result, setResult] = useState<string | null>(null)
+
+  const toggle = (name: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name); else next.add(name)
+      return next
+    })
+  }
+
+  const createFolders = async () => {
+    setCreating(true)
+    setResult(null)
+    let ok = 0
+    let failed = 0
+    for (const name of DEFAULT_FOLDER_NAMES) {
+      if (!selected.has(name)) continue
+      try {
+        await insertWorkspacePath(workspaceName, `/${name}`, true, tree === 'directory' ? 'directory' : 'context')
+        ok += 1
+      } catch {
+        failed += 1
+      }
+    }
+    setCreating(false)
+    setResult(failed ? `${ok} created, ${failed} failed` : `${ok} folder(s) created`)
+    setSelected(new Set())
+    window.dispatchEvent(new CustomEvent('workspace:tree:refresh', { detail: { workspaceName, treeName: tree } }))
+  }
+
+  return (
+    <section className="rounded-lg border p-4">
+      <h2 className="text-sm font-semibold">Default folders</h2>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Create a set of common folders with matching icons and colors.
+      </p>
+      <div className="mt-3 flex items-center gap-3 text-xs">
+        <span className="text-muted-foreground">Create in:</span>
+        {(['context', 'directory'] as const).map((t) => (
+          <label key={t} className="flex items-center gap-1">
+            <input type="radio" name="default-folders-tree" checked={tree === t} onChange={() => setTree(t)} />
+            {t} tree
+          </label>
+        ))}
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-3 md:grid-cols-4">
+        {DEFAULT_FOLDER_NAMES.map((name) => {
+          const style = FOLDER_NAME_DEFAULTS[name.toLowerCase()]
+          return (
+            <label key={name} className="flex cursor-pointer items-center gap-2 rounded border px-2 py-1.5 text-sm hover:bg-accent/50">
+              <input type="checkbox" checked={selected.has(name)} onChange={() => toggle(name)} />
+              {style?.icon && <Icon icon={style.icon} width={16} height={16} color={style.color} />}
+              <span className="truncate">{name}</span>
+            </label>
+          )
+        })}
+      </div>
+      <div className="mt-3 flex items-center gap-3">
+        <Button type="button" size="sm" disabled={creating || selected.size === 0} onClick={createFolders}>
+          {creating ? 'Creating…' : `Create ${selected.size || ''} folder(s)`}
+        </Button>
+        {result && <span className="text-xs text-muted-foreground">{result}</span>}
+      </div>
+    </section>
   )
 }

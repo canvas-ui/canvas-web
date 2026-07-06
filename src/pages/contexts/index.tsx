@@ -407,9 +407,9 @@ export default function ContextsPage() {
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {!showCreate && (
-            <Button onClick={() => setShowCreate(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Context
+            <Button onClick={() => setShowCreate(true)} className="max-sm:h-9 max-sm:w-9 max-sm:p-0" aria-label="Create context" title="Create context">
+              <Plus className="h-4 w-4 sm:mr-2" />
+              <span className="max-sm:hidden">Create Context</span>
             </Button>
           )}
           <Button variant="outline" size="icon" onClick={() => navigate('/home')} aria-label="Close" title="Close">

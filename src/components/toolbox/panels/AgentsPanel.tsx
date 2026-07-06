@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, Brain, Play, Square } from 'lucide-react'
+import { Brain, Play, Square } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToolbox } from '../toolbox-context'
 import { useAgentListData } from '@/hooks/useAgentListData'
@@ -16,11 +16,7 @@ function StatusDot({ status }: { status: string }) {
   return <span className={cn('inline-block w-2 h-2 rounded-full shrink-0', color)} title={status} />
 }
 
-interface AgentsPanelProps {
-  onClose: () => void
-}
-
-export function AgentsPanel({ onClose }: AgentsPanelProps) {
+export function AgentsPanel() {
   const { openAgentT2 } = useToolbox()
   const { setSection, openM2 } = useMenu()
   const { agents, isLoading, refresh } = useAgentListData(true)
@@ -60,13 +56,6 @@ export function AgentsPanel({ onClose }: AgentsPanelProps) {
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-4 h-12 border-b border-border shrink-0">
         <span className="text-sm font-semibold">Agents</span>
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto py-2">

@@ -577,6 +577,7 @@ function TimelineTab() {
 
 const PREFIX_LABELS: Record<string, string> = {
   data: 'Data',
+  'data/backend': 'Backends',
   client: 'Client',
   server: 'Server',
   user: 'User',
@@ -589,11 +590,19 @@ const PREFIX_LABELS: Record<string, string> = {
 function groupBitmaps(keys: string[]): Map<string, string[]> {
   const groups = new Map<string, string[]>()
   for (const key of keys) {
-    const prefix = key.split('/')[0]
+    // Backend-source tags get their own group — they answer a different
+    // question ("where does it live") than the data/abstraction/* schema tags.
+    const prefix = key.startsWith('data/backend/') ? 'data/backend' : key.split('/')[0]
     if (!groups.has(prefix)) groups.set(prefix, [])
     groups.get(prefix)!.push(key)
   }
   return groups
+}
+
+// Whole-row click cycles the filter mode: off → any → all → not → off.
+const MODE_CYCLE: FeatureMode[] = ['off', 'anyOf', 'allOf', 'noneOf']
+function nextMode(mode: FeatureMode): FeatureMode {
+  return MODE_CYCLE[(MODE_CYCLE.indexOf(mode) + 1) % MODE_CYCLE.length]
 }
 
 // Tri-state sigil control: any (OR) · all (+ gate) · not (! exclude).
@@ -707,29 +716,39 @@ function FeaturesTab() {
                 {PREFIX_LABELS[prefix] ?? prefix}
               </p>
               <div className="flex flex-col gap-1">
-                {keys.map((key) => {
+                {keys.map((key, rowIndex) => {
                   const isProtected = key.startsWith('data/')
                   const mode = modeOf(key)
                   return (
                     <div
                       key={key}
+                      onClick={() => setFeatureMode(key, nextMode(mode))}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFeatureMode(key, nextMode(mode)) } }}
                       className={cn(
-                        'flex items-center gap-2 group rounded-md pl-2 pr-1.5 py-1 border-l-2 transition-colors',
-                        mode === 'off' ? 'border-l-transparent hover:bg-muted/40'
-                          : mode === 'anyOf' ? 'border-l-blue-500 bg-blue-500/5'
-                          : mode === 'allOf' ? 'border-l-emerald-500 bg-emerald-500/5'
-                          : 'border-l-rose-500 bg-rose-500/5',
+                        // Grey/white zebra keeps long bitmap lists scannable;
+                        // the whole row is clickable (cycles off→any→all→not).
+                        'flex items-center gap-2 group rounded-md pl-2 pr-1.5 py-1 border-l-2 transition-colors cursor-pointer select-none',
+                        rowIndex % 2 === 1 ? 'bg-muted/30' : 'bg-transparent',
+                        'hover:bg-accent/60',
+                        mode === 'off' ? 'border-l-transparent'
+                          : mode === 'anyOf' ? 'border-l-blue-500 !bg-blue-500/10'
+                          : mode === 'allOf' ? 'border-l-emerald-500 !bg-emerald-500/10'
+                          : 'border-l-rose-500 !bg-rose-500/10',
                       )}
                     >
                       <span className="flex-1 min-w-0 text-xs font-mono text-foreground truncate" title={key}>
                         {key}
                       </span>
-                      <ModeControl mode={mode} onSet={(m) => setFeatureMode(key, m)} />
+                      <span onClick={(e) => e.stopPropagation()}>
+                        <ModeControl mode={mode} onSet={(m) => setFeatureMode(key, m)} />
+                      </span>
                       {!isProtected && (
                         <button
                           type="button"
                           disabled={deleting === key}
-                          onClick={() => handleDelete(key)}
+                          onClick={(e) => { e.stopPropagation(); handleDelete(key) }}
                           className="shrink-0 p-1 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50 opacity-0 group-hover:opacity-100"
                           title={`Delete bitmap "${key}" from database`}
                           aria-label={`Delete bitmap ${key}`}
@@ -753,11 +772,7 @@ function FeaturesTab() {
 
 // ─── ToolsPanel ───────────────────────────────────────────────────────────────
 
-interface ToolsPanelProps {
-  onClose: () => void
-}
-
-export function ToolsPanel({ onClose }: ToolsPanelProps) {
+export function ToolsPanel() {
   const { state, setToolsTab, saveFilters, clearFilters, hasActiveFilters } = useToolbox()
   const { toolsTab, isDirty, isSaving, activeContextType, savedSearchQuery } = state
   const location = useLocation()
@@ -802,13 +817,6 @@ export function ToolsPanel({ onClose }: ToolsPanelProps) {
               Save changes
             </button>
           )}
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-zinc-500 hover:text-zinc-200 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
         </div>
       </div>
 

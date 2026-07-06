@@ -1,5 +1,6 @@
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useMenu } from '@/components/shell/menu-context'
 
 interface M2HeaderProps {
   title: string
@@ -9,6 +10,7 @@ interface M2HeaderProps {
 }
 
 export function M2Header({ title, onBack, action, className }: M2HeaderProps) {
+  const { closeM1 } = useMenu()
   return (
     <div className={cn('flex items-center h-12 px-2 border-b border-sidebar-border shrink-0 gap-1', className)}>
       <button
@@ -21,6 +23,15 @@ export function M2Header({ title, onBack, action, className }: M2HeaderProps) {
         <span className="text-sm font-semibold truncate">{title}</span>
       </button>
       {action && <div className="shrink-0">{action}</div>}
+      <button
+        type="button"
+        onClick={closeM1}
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+        title="Close menu"
+        aria-label="Close menu"
+      >
+        <X className="w-4 h-4" />
+      </button>
     </div>
   )
 }

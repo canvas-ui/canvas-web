@@ -15,6 +15,8 @@ export interface ObjectPropertiesCardProps {
   initialEdit?: boolean
   onChanged?: () => void
   className?: string
+  // Narrow hosts (side card): icon-only tab bar.
+  compact?: boolean
 }
 
 const TABS: TabDef<ObjectCardTab>[] = [
@@ -28,7 +30,7 @@ const TABS: TabDef<ObjectCardTab>[] = [
 // Unified tabbed object properties card — the ONE detail surface for any
 // document. Chrome-less: hosts (side card, modal) provide their own frame.
 export function ObjectPropertiesCard({
-  document, workspaceId, initialTab = 'view', initialEdit = false, onChanged, className = '',
+  document, workspaceId, initialTab = 'view', initialEdit = false, onChanged, className = '', compact = false,
 }: ObjectPropertiesCardProps) {
   // Public share viewer: no authenticated APIs — hide Synapses/Backends + edit.
   const isPublic = usePublicShareCode() != null
@@ -45,7 +47,7 @@ export function ObjectPropertiesCard({
 
   return (
     <div className={`flex h-full min-h-0 flex-col ${className}`}>
-      <TabBar tabs={tabs} active={activeTab} onChange={setActiveTab} className="shrink-0 px-2" />
+      <TabBar tabs={tabs} active={activeTab} onChange={setActiveTab} className="shrink-0 px-2" iconOnly={compact} />
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         {activeTab === 'view' && <ViewTab document={document} workspaceId={workspaceId} initialEdit={initialEdit && !isPublic} onChanged={onChanged} />}
         {activeTab === 'metadata' && <MetadataTab document={document} workspaceId={workspaceId} />}

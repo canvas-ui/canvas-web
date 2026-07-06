@@ -23,10 +23,12 @@ function isBare(pathname: string): boolean {
 // Shared mobile "drawer" treatment — same prominence as the M1/M2 menu panel
 // overlay (floating card over a scrim, elevation-8). Spans from left-2 since
 // the M0 rail is hidden by default on small screens.
+// z-[48]/z-[47]: above the open M0 rail (z-[46]) so side card / toolbox
+// drawers fully cover the menu on mobile.
 const MOBILE_DRAWER =
-  'max-md:fixed max-md:left-2 max-md:right-2 max-md:top-2 max-md:bottom-2 max-md:z-40 ' +
+  'max-md:fixed max-md:left-2 max-md:right-2 max-md:top-2 max-md:bottom-2 max-md:z-[48] ' +
   'max-md:py-0 max-md:pr-0 max-md:rounded-2xl max-md:shadow-elevation-8 max-md:animate-fade-in'
-const MOBILE_SCRIM = 'fixed inset-0 z-40 bg-black/30 animate-fade-in md:hidden'
+const MOBILE_SCRIM = 'fixed inset-0 z-[47] bg-black/30 animate-fade-in md:hidden'
 
 export function ContentArea() {
   const { pathname } = useLocation()

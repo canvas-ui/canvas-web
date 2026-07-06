@@ -39,7 +39,7 @@ export function DocumentSideCard() {
       lockedWorkspaceName={workspaceId}
       fillParent
     >
-      <ObjectPropertiesCard document={document} workspaceId={workspaceId} />
+      <ObjectPropertiesCard document={document} workspaceId={workspaceId} compact />
     </B5Card>
   )
 }

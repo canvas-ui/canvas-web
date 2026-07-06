@@ -9,6 +9,7 @@ import {
 import { ImageRenderer, AudioRenderer, VideoRenderer, PdfRenderer } from './media'
 import { PlaintextRenderer, MarkdownRenderer } from './text'
 import { YouTubeEmbed } from './YouTubeEmbed'
+import { UrlPdfRenderer, isPdfUrl } from './UrlPdfRenderer'
 import { EmailRenderer } from './EmailRenderer'
 import { BinaryFallback } from './BinaryFallback'
 
@@ -22,7 +23,9 @@ export function resolveRenderer(document: Document): ComponentType<RendererProps
   if (schema === EMAIL_SCHEMA) return EmailRenderer
   if (schema === TAB_SCHEMA || schema === LINK_SCHEMA) {
     const url = String(document.data?.url ?? document.data?.uri ?? '')
-    return youTubeVideoId(url) ? YouTubeEmbed : null
+    if (youTubeVideoId(url)) return YouTubeEmbed
+    if (isPdfUrl(url)) return UrlPdfRenderer
+    return null
   }
   if (schema !== FILE_SCHEMA) return null
 

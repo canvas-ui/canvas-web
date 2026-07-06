@@ -1,21 +1,10 @@
-import { X, Bell, Clock } from 'lucide-react'
+import { Bell, Clock } from 'lucide-react'
 
-interface HomePanelProps {
-  onClose: () => void
-}
-
-export function HomePanel({ onClose }: HomePanelProps) {
+export function HomePanel() {
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-4 h-12 bg-zinc-900 shrink-0">
         <span className="text-sm font-medium text-zinc-100">Home</span>
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-zinc-500 hover:text-zinc-200 transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
       </div>
 
       {/* Clock widget placeholder */}

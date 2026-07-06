@@ -56,9 +56,9 @@ export function ToolboxPanel() {
       </div>
 
       <div className="relative flex min-h-0 flex-1 flex-col">
-        {t1View === 'home' && <HomePanel onClose={closeT1} />}
-        {t1View === 'tools' && <ToolsPanel onClose={closeT1} />}
-        {t1View === 'agents' && <AgentsPanel onClose={closeT1} />}
+        {t1View === 'home' && <HomePanel />}
+        {t1View === 'tools' && <ToolsPanel />}
+        {t1View === 'agents' && <AgentsPanel />}
 
         {/* T2 — agent chat overlay */}
         {t2Open && t2AgentId && (

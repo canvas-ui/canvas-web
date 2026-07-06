@@ -161,8 +161,8 @@ function ExportModal({ isOpen, onClose, documents, selectedDocuments }: ExportMo
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-background border rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 max-md:p-2">
+      <div className="bg-background border rounded-lg max-w-3xl w-full max-h-[85dvh] overflow-y-auto max-md:h-full max-md:max-h-none max-md:max-w-none">
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
@@ -253,8 +253,8 @@ function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-background border rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 max-md:p-2">
+      <div className="bg-background border rounded-lg max-w-3xl w-full max-h-[85dvh] overflow-y-auto max-md:h-full max-md:max-h-none max-md:max-w-none">
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
@@ -541,6 +541,16 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   useEffect(() => {
     setSelectedDocuments(new Set())
   }, [contextPath])
+
+  // Content-header "Link selection" button (DefaultCanvas) — selection + the
+  // LinkTo modal live here, so it just pings us.
+  useEffect(() => {
+    const onLinkSelection = () => {
+      if (canLink && selectedDocuments.size > 0) setLinkPanelIds(Array.from(selectedDocuments))
+    }
+    window.addEventListener('workspace:documents:link-selection', onLinkSelection)
+    return () => window.removeEventListener('workspace:documents:link-selection', onLinkSelection)
+  }, [canLink, selectedDocuments])
 
   // Expose selection to parent (for cross-pane F5/F6 transfers)
   useEffect(() => {
@@ -1398,7 +1408,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
       {linkPanelIds && linkTree && (
         // Dimmed modal — was an undimmed bottom-right float, which collided
         // with the bottom-right toolbox FAB and any open B5Card.
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 max-md:p-2">
           <LinkToCard
             documentCount={linkPanelIds.length}
             fixedWorkspaceName={workspaceId}

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { LayoutDashboard, BookMarked, Share2, Unlink, Save, Trash2, Plus } from 'lucide-react'
+import { LayoutDashboard, BookMarked, Share2, Unlink, Save, Trash2, Plus, Link2 } from 'lucide-react'
 import { Document, TreeNode } from '@/types/workspace'
 import { DocumentList } from '@/components/common/document-list'
 import type { DocumentPasteOptions } from '@/components/common/document-list'
@@ -18,6 +18,25 @@ function AddButton() {
       className="shrink-0 flex items-center justify-center w-7 h-7 rounded-full bg-foreground text-background hover:opacity-90 transition-opacity"
     >
       <Plus className="w-4 h-4" />
+    </button>
+  )
+}
+
+// Appears beside the + button whenever documents are selected — one tap to
+// link the current selection somewhere else (fires an event the DocumentList
+// below listens for, since it owns selection + the LinkTo modal).
+function LinkSelectionButton({ count }: { count: number }) {
+  if (count <= 0) return null
+  return (
+    <button
+      type="button"
+      onClick={() => window.dispatchEvent(new CustomEvent('workspace:documents:link-selection'))}
+      title={`Link ${count} selected document(s) to…`}
+      aria-label="Link selection"
+      className="shrink-0 flex items-center justify-center gap-1 h-7 min-w-7 rounded-full bg-blue-600 px-1.5 text-white hover:bg-blue-500 transition-colors"
+    >
+      <Link2 className="w-3.5 h-3.5" />
+      <span className="text-[11px] font-semibold leading-none">{count}</span>
     </button>
   )
 }
@@ -59,6 +78,7 @@ interface DefaultCanvasProps {
   disablePurgeDocuments?: boolean
   canvasInfo?: CanvasInfo
   onSaveAsCanvas?: () => void
+  selectedCount?: number
   onShareCanvas?: () => void
   onUnshareCanvas?: () => void
   onDeleteCanvas?: () => void
@@ -130,6 +150,7 @@ export function DefaultCanvas({
   onSaveChanges,
   onUrlClick,
   linkTree,
+  selectedCount = 0,
   children,
 }: DefaultCanvasProps) {
   const isCanvas = urlType === 'canvas'
@@ -201,6 +222,7 @@ export function DefaultCanvas({
               {isDeletingCanvas ? 'Deleting…' : 'Delete'}
             </button>
           )}
+          <LinkSelectionButton count={selectedCount} />
           <AddButton />
         </div>
       ) : (
@@ -230,6 +252,7 @@ export function DefaultCanvas({
               Save as canvas
             </button>
           )}
+          <LinkSelectionButton count={selectedCount} />
           <AddButton />
         </div>
       )}

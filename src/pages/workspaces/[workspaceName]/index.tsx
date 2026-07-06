@@ -4,6 +4,7 @@ import { Filter } from 'lucide-react';
 import { api } from '@/lib/api';
 import { API_ROUTES } from '@/config/api';
 import { useToast } from '@/components/ui/toast-container';
+import { useMenu } from '@/components/shell/menu-context';
 import { DefaultCanvas } from '@/components/canvas/DefaultCanvas';
 import type { CanvasInfo } from '@/components/canvas/DefaultCanvas';
 import { CanvasGrid } from '@/components/canvas/CanvasGrid';
@@ -127,6 +128,7 @@ export default function WorkspaceDetailPage() {
   const [sidePane, setSidePane] = useState<WorkspaceSidePane | null>(null);
   const [focusedPane, setFocusedPane] = useState<FocusedPane>('left');
   const [leftSelection, setLeftSelection] = useState<number[]>([]);
+  const { openM2Drawer } = useMenu();
   const [rightSelection, setRightSelection] = useState<number[]>([]);
   const selectedNode = useMemo(() => {
     if (!tree || selectedPath === '/' || isLayerView) return null;
@@ -810,6 +812,8 @@ export default function WorkspaceDetailPage() {
       onPasteDocuments={handlePasteDocuments}
       onImportDocuments={handleImportDocuments}
       onSelectionChange={setLeftSelection}
+      selectedCount={leftSelection.length}
+      onUrlClick={() => openM2Drawer('workspaces', 'detail', workspaceName ?? null)}
       scope={docScope}
       onScopeChange={setDocScope}
       pastedDocumentIds={clipboard?.documentIds}
@@ -860,7 +864,14 @@ export default function WorkspaceDetailPage() {
           }`}
           title={workspace.status}
         />
-        <span className="text-sm font-medium truncate">{workspace.label || workspace.name}</span>
+        <button
+          type="button"
+          onClick={() => openM2Drawer('workspaces', 'detail', workspace.name)}
+          title="Browse workspace tree"
+          className="min-w-0 truncate rounded px-1 -mx-1 text-left text-sm font-medium transition-colors hover:bg-accent"
+        >
+          {workspace.label || workspace.name}
+        </button>
         <div className="flex-1" />
         {/* Filtering earns the header slot; stopping a workspace is a rarer
             action that stays available on the workspace list rows (M1). */}

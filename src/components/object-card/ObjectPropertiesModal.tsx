@@ -17,9 +17,9 @@ interface ObjectPropertiesModalProps {
 export function ObjectPropertiesModal({ document, isOpen, onClose, workspaceId, initialTab, initialEdit }: ObjectPropertiesModalProps) {
   if (!isOpen || !document) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 max-md:p-2" onClick={onClose}>
       <div
-        className="flex max-h-[90vh] w-full max-w-4xl flex-col rounded-lg border bg-background"
+        className="flex h-[85dvh] w-full max-w-3xl flex-col rounded-lg border bg-background max-md:h-full max-md:max-w-none"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex shrink-0 items-center justify-between p-4 pb-2">

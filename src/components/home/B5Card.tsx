@@ -104,7 +104,7 @@ export function B5Card({
       }}
       className={cn(
         'flex flex-col overflow-hidden rounded-2xl border bg-card shadow-elevation-4 transition-[width,height]',
-        fillParent && !maximized && 'w-full md:w-[min(480px,90vw)]',
+        fillParent && !maximized && 'w-full md:w-[min(560px,90vw)]',
         mobileFullScreen && 'fixed inset-2 z-40 shadow-elevation-8',
         animateIn && 'animate-card-in',
       )}
@@ -167,6 +167,9 @@ export function B5Card({
       onConfirm={handleSelect}
       fixedWorkspaceName={lockedWorkspaceName}
       saving={saving}
+      // fillParent hosts (side card) stretch the picker to the full column
+      // height instead of the free-floating 85dvh card.
+      sizeClassName={fillParent ? 'h-full max-h-full w-[min(380px,90vw)] max-md:h-full max-md:w-full max-md:shadow-elevation-8' : undefined}
     />
   )
 
@@ -194,13 +197,13 @@ export function B5Card({
       {picker && (
         <>
           <div
-            className="fixed inset-0 z-[44] bg-black/30 animate-fade-in md:hidden"
+            className="fixed inset-0 z-[52] bg-black/30 animate-fade-in md:hidden"
             onClick={() => !saving && setPickerOpen(false)}
             aria-hidden
           />
           <div
             ref={pickerRef}
-            className="shrink-0 max-md:fixed max-md:bottom-2 max-md:left-2 max-md:right-2 max-md:top-2 max-md:z-[45] max-md:animate-fade-in"
+            className="shrink-0 md:ml-2 max-md:fixed max-md:bottom-2 max-md:left-2 max-md:right-2 max-md:top-2 max-md:z-[53] max-md:animate-fade-in"
           >
             {picker}
           </div>
