@@ -45,14 +45,26 @@ function inferFillFlags(next: CanvasLayoutItem[], prev?: CanvasLayoutItem[]): Ca
   })
 }
 
+function itemsOverlap(a: CanvasLayoutItem, b: CanvasLayoutItem) {
+  return a.x < b.x + b.w && a.x + a.w > b.x
+}
+
 function applyFillLayout(layout: CanvasLayoutItem[]): CanvasLayoutItem[] {
   const extent = gridExtent(layout)
-  return layout.map((item) => ({
-    ...item,
-    x: (item.fillW ?? item.w >= COLS) ? 0 : item.x,
-    w: (item.fillW ?? item.w >= COLS) ? COLS : item.w,
-    h: item.fillH ? Math.max(item.minH ?? 1, extent - item.y) : item.h,
-  }))
+  return layout.map((item) => {
+    const fillW = item.fillW ?? item.w >= COLS
+    const placed = { ...item, x: fillW ? 0 : item.x, w: fillW ? COLS : item.w }
+    let h = item.h
+    if (item.fillH) {
+      // Grow to the next widget below (same column band), not over it.
+      const belowY = layout.reduce<number | null>((min, other) => {
+        if (other.i === item.i || other.y <= item.y || !itemsOverlap(placed, other)) return min
+        return min == null || other.y < min ? other.y : min
+      }, null)
+      h = Math.max(item.minH ?? 1, (belowY ?? extent) - item.y)
+    }
+    return { ...placed, h }
+  })
 }
 
 function rowHeightForContainer(height: number, layout: CanvasLayoutItem[]) {
@@ -79,8 +91,10 @@ function stackLayout(layout: CanvasLayoutItem[]): CanvasLayoutItem[] {
 
 function readUi(metadata?: LayerMetadata): CanvasUi {
   const ui = (metadata?.ui ?? {}) as Partial<CanvasUi>
+  const raw = Array.isArray(ui.layout) ? ui.layout as CanvasLayoutItem[] : []
   return {
-    layout: Array.isArray(ui.layout) ? ui.layout : [],
+    // Re-derive fill flags from saved geometry so shared/read-only views match edit mode.
+    layout: raw.length ? inferFillFlags(raw, raw) : [],
     widgets: (ui.widgets && typeof ui.widgets === 'object') ? ui.widgets as WidgetMap : {},
   }
 }
@@ -201,7 +215,12 @@ export function CanvasGrid({
     setIsSaving(true)
     setSaveError(null)
     try {
-      await saveCanvasUi(workspaceId, path, treeName, { ...(metadata || {}), ui: latest.current })
+      const ui = {
+        ...latest.current,
+        layout: inferFillFlags(latest.current.layout, latest.current.layout),
+      }
+      latest.current = ui
+      await saveCanvasUi(workspaceId, path, treeName, { ...(metadata || {}), ui })
       setIsDirty(false)
       window.dispatchEvent(new CustomEvent('workspace:tree:refresh', {
         detail: { workspaceName: workspaceId, treeName },

@@ -5,6 +5,7 @@
 }
 
 .canvas-grid-host .react-grid-layout {
+  width: 100% !important;
   min-height: 100%;
 }
 

@@ -276,7 +276,7 @@ export default function PublicCanvasPage() {
             </section>
 
             {hasWidgets && (
-              <section className="rounded-2xl border overflow-hidden flex flex-col h-[70vh]">
+              <section id="content-area" className="rounded-2xl border overflow-hidden flex flex-col w-full h-[70vh] min-h-[420px]">
                 <CanvasGrid
                   key={JSON.stringify(canvasUi)}
                   workspaceId={payload.workspace.name}
