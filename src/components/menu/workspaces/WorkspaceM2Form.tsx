@@ -203,6 +203,7 @@ export function WorkspaceM2Form() {
                 onTreeChange={folderPick.setTree}
                 disabled={isSaving}
                 idPrefix="m2-default-folders"
+                stacked
               />
             </div>
           )}

@@ -46,11 +46,13 @@ interface DefaultFoldersPickerProps {
   disabled?: boolean
   // Radio-group name must be unique per mounted instance.
   idPrefix?: string
+  // Narrow hosts (M2 panel): stack folders in one column so labels don't clip.
+  stacked?: boolean
 }
 
 // Controlled checkbox grid of the starter folders + target-tree choice.
 // Used by Settings → General and the workspace-creation dialog.
-export function DefaultFoldersPicker({ selected, onToggle, tree, onTreeChange, disabled = false, idPrefix = 'default-folders' }: DefaultFoldersPickerProps) {
+export function DefaultFoldersPicker({ selected, onToggle, tree, onTreeChange, disabled = false, idPrefix = 'default-folders', stacked = false }: DefaultFoldersPickerProps) {
   return (
     <div>
       <div className="flex items-center gap-3 text-xs">
@@ -62,7 +64,7 @@ export function DefaultFoldersPicker({ selected, onToggle, tree, onTreeChange, d
           </label>
         ))}
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-3 md:grid-cols-4">
+      <div className={`mt-3 grid gap-1.5 ${stacked ? 'grid-cols-1' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4'}`}>
         {DEFAULT_FOLDER_NAMES.map((name) => {
           const style = FOLDER_NAME_DEFAULTS[name.toLowerCase()]
           return (
