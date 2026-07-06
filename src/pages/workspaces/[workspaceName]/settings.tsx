@@ -962,8 +962,9 @@ function DefaultFoldersSection({ workspaceName }: { workspaceName: string }) {
 }
 
 // ── DB maintenance (admin reindex endpoints) ─────────────────────────────────
-// One button per admin reindex op; destructive variants (rebuild / full
-// re-embed) sit behind a confirm. All idempotent server-side.
+// Grouped per index (Timelines / FTS / Embeddings); every op shows its
+// description inline (tooltips are useless on touch). Destructive variants
+// (rebuild / full re-embed) sit behind a confirm. All idempotent server-side.
 function ReindexSection({ workspaceName, onDone }: { workspaceName: string; onDone: () => void }) {
   const [busy, setBusy] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -983,12 +984,28 @@ function ReindexSection({ workspaceName, onDone }: { workspaceName: string; onDo
     }
   }
 
-  const ops: { key: string; label: string; hint: string; confirm?: string; fn: () => Promise<{ message: string }> }[] = [
-    { key: 'timelines', label: 'Reindex timelines', hint: 'Rebuild crud created/updated timelines from document data.', fn: () => adminReindexTimelines(workspaceName) },
-    { key: 'fts', label: 'Reindex FTS', hint: 'Backfill documents missing from the full-text index.', fn: () => adminReindexSearch(workspaceName) },
-    { key: 'fts-rebuild', label: 'Rebuild FTS', hint: 'Wipe + rebuild the full-text index (fixes drift).', confirm: 'Wipe the FTS index and rebuild it from scratch?', fn: () => adminReindexSearch(workspaceName, true) },
-    { key: 'embed', label: 'Backfill embeddings', hint: 'Enqueue docs without vectors (async, off-thread).', fn: () => adminReindexEmbeddings(workspaceName) },
-    { key: 'embed-full', label: 'Re-embed all', hint: 'Wipe vectors + seen-ledger, re-embed everything (async).', confirm: 'Wipe ALL embedding vectors and re-embed every document? This can take a while.', fn: () => adminReindexEmbeddings(workspaceName, { reindex: true }) },
+  interface Op { key: string; label: string; description: string; confirm?: string; fn: () => Promise<{ message: string }> }
+  const groups: { title: string; ops: Op[] }[] = [
+    {
+      title: 'Timelines',
+      ops: [
+        { key: 'timelines', label: 'Reindex timelines', description: 'Rebuild the created/updated timelines from document data.', fn: () => adminReindexTimelines(workspaceName) },
+      ],
+    },
+    {
+      title: 'FTS',
+      ops: [
+        { key: 'fts', label: 'Reindex FTS', description: 'Backfill documents missing from the full-text index. Fast, skips already-indexed.', fn: () => adminReindexSearch(workspaceName) },
+        { key: 'fts-rebuild', label: 'Rebuild FTS', description: 'Wipe the full-text index and rebuild from scratch — use when counts drift.', confirm: 'Wipe the FTS index and rebuild it from scratch?', fn: () => adminReindexSearch(workspaceName, true) },
+      ],
+    },
+    {
+      title: 'Embeddings',
+      ops: [
+        { key: 'embed', label: 'Backfill embeddings', description: 'Enqueue documents without vectors. Runs asynchronously off-thread.', fn: () => adminReindexEmbeddings(workspaceName) },
+        { key: 'embed-full', label: 'Re-embed all', description: 'Wipe all vectors and re-embed every document. Asynchronous; can take a while.', confirm: 'Wipe ALL embedding vectors and re-embed every document? This can take a while.', fn: () => adminReindexEmbeddings(workspaceName, { reindex: true }) },
+      ],
+    },
   ]
 
   return (
@@ -997,21 +1014,30 @@ function ReindexSection({ workspaceName, onDone }: { workspaceName: string; onDo
         <RefreshCw className="h-4 w-4 text-muted-foreground" />
         <h2 className="text-sm font-semibold">Index maintenance</h2>
       </div>
-      <p className="mb-3 text-xs text-muted-foreground">Admin-only. Reindex operations are idempotent; embedding ops drain asynchronously.</p>
-      <div className="flex flex-wrap gap-2">
-        {ops.map((op) => (
-          <Button
-            key={op.key}
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={busy !== null}
-            title={op.hint}
-            onClick={() => run(op.key, op.fn, op.confirm)}
-          >
-            {busy === op.key && <RefreshCw className="mr-2 h-3 w-3 animate-spin" />}
-            {op.label}
-          </Button>
+      <p className="mb-3 text-xs text-muted-foreground">Admin-only. Reindex operations are idempotent.</p>
+      <div className="space-y-4">
+        {groups.map((group) => (
+          <div key={group.title}>
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.title}</h3>
+            <div className="space-y-2">
+              {group.ops.map((op) => (
+                <div key={op.key} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-44 justify-start"
+                    disabled={busy !== null}
+                    onClick={() => run(op.key, op.fn, op.confirm)}
+                  >
+                    {busy === op.key && <RefreshCw className="mr-2 h-3 w-3 animate-spin" />}
+                    {op.label}
+                  </Button>
+                  <span className="min-w-0 flex-1 basis-52 text-xs text-muted-foreground">{op.description}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         ))}
       </div>
       {message && <p className="mt-3 text-xs text-muted-foreground">{message}</p>}

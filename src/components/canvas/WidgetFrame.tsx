@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { Maximize2, Minimize2, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -21,7 +22,7 @@ export function WidgetFrame({
 }) {
   const [maximized, setMaximized] = useState(false)
 
-  return (
+  const frame = (
     <div
       className={
         maximized
@@ -54,4 +55,8 @@ export function WidgetFrame({
       <div className="flex-1 min-h-0 overflow-auto p-2">{children}</div>
     </div>
   )
+
+  // Maximized: portal to <body> — inside a react-grid-layout item the ancestor
+  // transform hijacks `fixed`, so "full screen" only covered the widget cell.
+  return maximized ? createPortal(frame, document.body) : frame
 }
