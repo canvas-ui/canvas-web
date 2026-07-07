@@ -18,6 +18,7 @@ import {
   lockWorkspaceLayer, unlockWorkspaceLayer, destroyWorkspaceLayer,
   createWorkspaceCanvas,
   updateWorkspacePath,
+  resyncWorkspaceDataBackend,
   DEFAULT_WORKSPACE_TREE_NAME,
 } from '@/services/workspace'
 
@@ -148,6 +149,16 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     return result
   }, [workspaceId, wsTree, refresh])
 
+  // Resync a data backend by name. Backend nodes live under the /.backends
+  // mirror as /.backends/<driver>/<backendName>/…; MVP resyncs the whole
+  // backend regardless of which sub-node was right-clicked.
+  const onResyncBackend = useCallback(async (backendName: string): Promise<boolean> => {
+    if (!workspaceId) return false
+    await resyncWorkspaceDataBackend(workspaceId, backendName)
+    refresh(300)
+    return true
+  }, [workspaceId, refresh])
+
   const onCreateCanvas = useCallback(async (path: string): Promise<boolean> => {
     if (!workspaceId) return false
     try {
@@ -168,5 +179,6 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     onUnlockLayer: workspaceId ? onUnlockLayer : undefined,
     onDestroyLayer: workspaceId && !isDirectoryTree ? onDestroyLayer : undefined,
     onCreateCanvas: workspaceId ? onCreateCanvas : undefined,
+    onResyncBackend: workspaceId ? onResyncBackend : undefined,
   }
 }

@@ -267,6 +267,7 @@ export function DefaultCanvas({
           workspaceId={workspaceId}
           totalCount={totalCount}
           viewMode="table"
+          allowViewToggle
           currentPage={currentPage}
           pageSize={pageSize}
           onPageChange={onPageChange}

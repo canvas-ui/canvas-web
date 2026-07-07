@@ -8,7 +8,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import {
   ChevronRight, ChevronDown,
   Plus, Trash2, Edit2, Copy, Scissors, Clipboard,
-  Layers, LayoutDashboard, MoreHorizontal, Lock, Unlock, Eye, Share2, Palette,
+  Layers, LayoutDashboard, MoreHorizontal, Lock, Unlock, Eye, Share2, Palette, RefreshCw,
 } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import { cn } from '@/lib/utils'
@@ -42,6 +42,7 @@ export interface MenuTreeViewProps {
   onCopyPath?: (from: string, to: string, recursive?: boolean, sourceTreeName?: string, targetTreeName?: string) => Promise<boolean>
   onShareCanvas?: (path: string) => Promise<void>
   onLockLayer?: (layerId: string) => Promise<boolean>
+  onResyncBackend?: (backendName: string) => Promise<boolean>
   onUnlockLayer?: (layerId: string, lockBy?: string) => Promise<boolean>
   onDestroyLayer?: (layerId: string) => Promise<boolean>
   onMergeLayer?: (layerId: string, targetLayers: string[]) => Promise<unknown>
@@ -57,6 +58,15 @@ type Clip = { mode: ClipboardMode; path: string; treeName: string }
 type LayerRef = { path: string; id: string }
 
 const TREE_BRANCH_GUTTER = 22
+
+// Backend nodes live under /.backends/<driver>/<backendName>/…; the backend
+// name (e.g. workspace:home) is the third path segment. Returns null for the
+// /.backends root and the driver level, where there is no single backend.
+function backendNameForPath(path: string): string | null {
+  if (path !== '/.backends' && !path.startsWith('/.backends/')) return null
+  const parts = path.split('/').filter(Boolean) // ['.backends','file','workspace:home',…]
+  return parts.length >= 3 ? parts[2] : null
+}
 
 // ─── Context menu ─────────────────────────────────────────────────────────────
 
@@ -81,6 +91,7 @@ interface CtxMenuProps {
   onDestroy?: MenuTreeViewProps['onDestroyLayer']
   onMerge?: MenuTreeViewProps['onMergeLayer']
   onSubtract?: MenuTreeViewProps['onSubtractLayer']
+  onResyncBackend?: MenuTreeViewProps['onResyncBackend']
   onCopy: (path: string) => void
   onCut: (path: string) => void
   onPaste: (target: string) => Promise<void>
@@ -92,7 +103,7 @@ function CtxMenu({
   x, y, node, path, onClose, onShowContent, onOpenToSide,
   sourceLayer, targetLayers, clipboard,
   onStartInlineCreate, onChangeIcon, hasCreateCanvas, onShareCanvas, onRemove, onRename,
-  onLock, onUnlock, onDestroy, onMerge, onSubtract,
+  onLock, onUnlock, onDestroy, onMerge, onSubtract, onResyncBackend,
   onCopy, onCut, onPaste,
   pastedDocumentIds, onPasteDocuments,
 }: CtxMenuProps) {
@@ -145,6 +156,17 @@ function CtxMenu({
         )}
 
         {node.type === 'canvas' && onShareCanvas && <div className="my-1 h-px bg-border" />}
+
+        {/* Resync backend — only under the /.backends mirror, where the node
+            maps to a data backend. MVP resyncs the whole backend. */}
+        {onResyncBackend && backendNameForPath(path) && (
+          <>
+            {item(<RefreshCw className="w-3 h-3" />, `Resync backend (${backendNameForPath(path)})`, async () => {
+              await onResyncBackend(backendNameForPath(path)!)
+            })}
+            <div className="my-1 h-px bg-border" />
+          </>
+        )}
 
         {/* New folder — inline; hidden inside the read-only backends mirror */}
         {!(path === '/.backends' || path.startsWith('/.backends/')) && (
@@ -582,6 +604,7 @@ export function MenuTreeView({
   onInsertPath, onCreateCanvas, onShareCanvas, onRemovePath, onRenamePath, onMovePath, onCopyPath,
   pastedDocumentIds, onPasteDocuments,
   onLockLayer, onUnlockLayer, onDestroyLayer, onMergeLayer, onSubtractLayer,
+  onResyncBackend,
   onUpdateNode,
   searchQuery = '',
 }: MenuTreeViewProps) {
@@ -1008,6 +1031,7 @@ export function MenuTreeView({
           onDestroy={!readOnly ? onDestroyLayer : undefined}
           onMerge={!readOnly ? onMergeLayer : undefined}
           onSubtract={!readOnly ? onSubtractLayer : undefined}
+          onResyncBackend={onResyncBackend}
           onCopy={path => {
             const next = { mode: 'copy' as const, path, treeName }
             setClipboard(next)

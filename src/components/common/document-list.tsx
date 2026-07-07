@@ -1,5 +1,5 @@
 import { Document, TreeNode } from '@/types/workspace'
-import { File, Calendar, Hash, Eye, ExternalLink, Globe, Mail, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch } from 'lucide-react'
+import { File, Calendar, Hash, Eye, ExternalLink, Globe, Mail, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, Table as TableIcon } from 'lucide-react'
 import { LinkToCard } from '@/components/menu/shared/LinkToCard'
 import { PickDocumentsCard } from '@/components/menu/shared/PickDocumentsCard'
 import { useSideView } from '@/components/shell/side-view-context'
@@ -22,6 +22,7 @@ import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { ObjectPropertiesModal } from '@/components/object-card/ObjectPropertiesModal'
 import { isEditableSchema } from '@/components/object-card/EditForm'
 import { usePublicShareCode } from '@/components/renderers/public-share'
+import { useDocumentThumbnail } from '@/components/renderers/useDocumentThumbnail'
 
 interface DocumentListProps {
   documents: Document[]
@@ -42,7 +43,11 @@ interface DocumentListProps {
   onImportDocuments?: (documents: any[], contextPath: string) => Promise<boolean>
   onSelectionChange?: (documentIds: number[]) => void
   pastedDocumentIds?: number[]
-  viewMode?: 'card' | 'table'
+  viewMode?: 'card' | 'table' | 'tile'
+  // When true, the list shows a table/tile/card view switcher and remembers the
+  // choice in localStorage (the main folder browser). Widgets that hardcode a
+  // viewMode leave this off and stay fixed.
+  allowViewToggle?: boolean
   activeContextUrl?: string
   currentContextUrl?: string
   // Pagination props
@@ -515,7 +520,95 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
   )
 }
 
-export function DocumentList({ documents, isLoading, contextPath, treeName, workspaceId, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, onSelectionChange, pastedDocumentIds, viewMode = 'card', activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQueries = [], onBackendSearch, onRemoveBackendQuery, scope = 'path', onScopeChange, canSaveChanges = false, isSavingChanges = false, onSaveChanges, linkTree }: DocumentListProps) {
+function isImageDocument(document: Document): boolean {
+  return document.schema === 'data/abstraction/file'
+    && String(document.metadata?.contentType || '').startsWith('image/')
+}
+
+// Tile view cell — a prominent picture/thumbnail tile (image docs) or a large
+// icon tile (everything else). Mirrors DocumentRow's click/selection/right-click
+// behavior. Sized for a responsive auto-fill grid, so it reads on mobile too.
+function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSide, onRightClick, onDragStart }: DocumentRowProps) {
+  const [showDetailModal, setShowDetailModal] = useState(false)
+  const isTabDocument = document.schema === 'data/abstraction/tab'
+  const tabUrl = isTabDocument ? document.data.url : null
+  const isImage = isImageDocument(document)
+  const display = getDocumentDisplayInfo(document)
+  const { blobUrl, loading } = useDocumentThumbnail(workspaceId ?? '', document.id, 512, { enabled: isImage })
+
+  const handleClick = (e: React.MouseEvent) => {
+    const isCtrlClick = e.ctrlKey || e.metaKey
+    if (onSelect) onSelect(document.id, isCtrlClick ? !isSelected : true, isCtrlClick)
+    if (!isCtrlClick) { if (isTabDocument && tabUrl) { window.open(tabUrl, '_blank', 'noopener,noreferrer') } else { setShowDetailModal(true) } }
+  }
+  const handleRightClick = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); if (onSelect && !isSelected) onSelect(document.id, true, false); onRightClick?.(e, document.id) }
+
+  return (
+    <>
+      <div
+        className={`group relative flex flex-col overflow-hidden rounded-lg border transition-shadow cursor-pointer hover:shadow-md ${isSelected ? 'ring-2 ring-blue-400 border-blue-300' : ''}`}
+        onClick={handleClick}
+        onContextMenu={handleRightClick}
+        draggable
+        onDragStart={(e) => onDragStart?.(e, document.id)}
+        title={display.title}
+      >
+        {/* Selection checkbox — always visible when selected, on hover otherwise */}
+        <input
+          type="checkbox"
+          className={`absolute left-2 top-2 z-10 h-4 w-4 cursor-pointer accent-blue-600 ${isSelected ? '' : 'opacity-0 group-hover:opacity-100'}`}
+          checked={isSelected}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => onSelect?.(document.id, e.target.checked, true)}
+        />
+        <div className="relative aspect-square w-full bg-muted/40">
+          {isImage && loading && <div className="absolute inset-0 animate-pulse bg-muted/60" />}
+          {isImage && blobUrl ? (
+            <img src={blobUrl} alt={display.title} loading="lazy" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              {display.icon === 'globe' ? <Globe className="h-10 w-10 text-blue-500/70" />
+                : display.icon === 'mail' ? <Mail className="h-10 w-10 text-blue-500/70" />
+                : <File className="h-10 w-10 text-blue-500/70" />}
+            </div>
+          )}
+          {onOpenToSide && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onOpenToSide(document) }}
+              className="absolute right-2 top-2 rounded-sm bg-black/40 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
+              title="Open to the side"
+            >
+              <PanelRight className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 border-t bg-card px-2 py-1.5">
+          <span className="truncate text-xs font-medium" title={display.title}>{display.title}</span>
+          {display.isExternal && <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />}
+        </div>
+      </div>
+      <ObjectPropertiesModal document={document} isOpen={showDetailModal} onClose={() => setShowDetailModal(false)} workspaceId={workspaceId} />
+    </>
+  )
+}
+
+export function DocumentList({ documents, isLoading, contextPath, treeName, workspaceId, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, onSelectionChange, pastedDocumentIds, viewMode = 'card', allowViewToggle = false, activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQueries = [], onBackendSearch, onRemoveBackendQuery, scope = 'path', onScopeChange, canSaveChanges = false, isSavingChanges = false, onSaveChanges, linkTree }: DocumentListProps) {
+  // View switcher (table/tile/card). Only active when allowViewToggle; the
+  // chosen view is remembered in localStorage. Widgets that hardcode viewMode
+  // leave the toggle off and pin their view.
+  const [storedView, setStoredView] = useState<'card' | 'table' | 'tile'>(() => {
+    if (!allowViewToggle) return viewMode
+    try {
+      const saved = localStorage.getItem('doclist:view')
+      if (saved === 'card' || saved === 'table' || saved === 'tile') return saved
+    } catch { /* ignore */ }
+    return viewMode
+  })
+  const view = allowViewToggle ? storedView : viewMode
+  const changeView = useCallback((v: 'card' | 'table' | 'tile') => {
+    setStoredView(v)
+    try { localStorage.setItem('doclist:view', v) } catch { /* ignore */ }
+  }, [])
   const [selectedDocuments, setSelectedDocuments] = useState<Set<number>>(new Set())
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; documentIds: number[] } | null>(null)
   const [linkPanelIds, setLinkPanelIds] = useState<number[] | null>(null)
@@ -1025,8 +1118,28 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
 
         {documents.length > 0 && (
           <div className="flex items-center gap-2 mt-3 pt-3 border-t flex-wrap">
-            {/* Table view has a header select-all checkbox; card view needs this button. */}
-            {viewMode !== 'table' && (
+            {allowViewToggle && (
+              <div className="flex items-center rounded-md border p-0.5">
+                {([
+                  ['table', TableIcon, 'Table view'],
+                  ['tile', LayoutGrid, 'Tile view'],
+                  ['card', LayoutList, 'Card view'],
+                ] as const).map(([mode, Icon, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => changeView(mode)}
+                    title={label}
+                    aria-pressed={view === mode}
+                    className={`rounded-sm p-1.5 transition-colors ${view === mode ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/50'}`}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </button>
+                ))}
+              </div>
+            )}
+            {/* Table view has a header select-all checkbox; card/tile views need this button. */}
+            {view !== 'table' && (
             <Button
               variant="outline"
               size="sm"
@@ -1244,7 +1357,15 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
             )}
           </div>
         </div>
-      ) : viewMode === 'table' ? (
+      ) : view === 'tile' ? (
+        <div className="flex-1 overflow-y-auto" onContextMenu={handleEmptyAreaRightClick}>
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3 pr-2">
+            {filteredDocuments.map((document) => (
+              <DocumentTile key={document.id} document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onRemoveDocument={removeDocument} onDeleteDocument={onDeleteDocument} onLinkDocument={canLink ? (id) => setLinkPanelIds([id]) : undefined} onOpenToSide={openToSide} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
+            ))}
+          </div>
+        </div>
+      ) : view === 'table' ? (
         <div className="flex-1 overflow-y-auto" onContextMenu={handleEmptyAreaRightClick}>
           <Table>
             <TableHeader>
