@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Plus, Save, Trash2, RefreshCw, Power, PowerOff } from 'lucide-react'
+import { Plus, Save, Trash2, RefreshCw, Power, PowerOff, GitBranch } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { CodeEditor } from '@/components/ui/code-editor'
 import { useToast } from '@/components/ui/toast-container'
+import { API_URL } from '@/config/api'
 import {
   listHooks,
   getHook,
@@ -17,13 +19,22 @@ import {
   type HookFile,
   type HooksMeta,
 } from '@/services/hooks'
+import { listScripts, getScript, saveScript, deleteScript } from '@/services/scripts'
 
 interface HooksPanelProps {
   workspaceId: string
 }
 
+type Section = 'hooks' | 'scripts'
+
+const NEW_SCRIPT_TEMPLATE = `#!/usr/bin/env bash
+# Called from a hook via: spawn('bash', [script, ...args])
+set -euo pipefail
+`
+
 export function HooksPanel({ workspaceId }: HooksPanelProps) {
   const { showToast } = useToast()
+  const [section, setSection] = useState<Section>('hooks')
   const [files, setFiles] = useState<HookFile[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [selected, setSelected] = useState<string | null>(null)
@@ -37,24 +48,39 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
   const [newActions, setNewActions] = useState<string[]>([])
   const [isCreating, setIsCreating] = useState(false)
 
+  const svc = section === 'hooks'
+    ? { list: listHooks, get: getHook, save: saveHook, del: deleteHook }
+    : { list: listScripts, get: getScript, save: saveScript, del: deleteScript }
+
   const loadFiles = async () => {
     try {
       setIsLoading(true)
-      setFiles(await listHooks(workspaceId))
+      setFiles(await svc.list(workspaceId))
     } catch {
-      showToast({ title: 'Error', description: 'Failed to load hooks', variant: 'destructive' })
+      showToast({ title: 'Error', description: `Failed to load ${section}`, variant: 'destructive' })
     } finally {
       setIsLoading(false)
     }
   }
 
-  useEffect(() => { loadFiles() }, [workspaceId])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadFiles() }, [workspaceId, section])
+
+  const switchSection = (next: Section) => {
+    if (next === section) return
+    if (isDirty && !confirm('Discard unsaved changes?')) return
+    setSection(next)
+    setSelected(null)
+    setContent('')
+    setIsDirty(false)
+    setShowNew(false)
+  }
 
   const openFile = async (path: string) => {
     if (isDirty && !confirm('Discard unsaved changes?')) return
     try {
       setSelected(path)
-      setContent(await getHook(workspaceId, path))
+      setContent(await svc.get(workspaceId, path))
       setIsDirty(false)
     } catch {
       showToast({ title: 'Error', description: `Failed to open ${path}`, variant: 'destructive' })
@@ -65,7 +91,7 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
     if (!selected) return
     try {
       setIsSaving(true)
-      await saveHook(workspaceId, selected, content)
+      await svc.save(workspaceId, selected, content)
       setIsDirty(false)
       showToast({ title: 'Saved', description: `${selected} saved` })
       await loadFiles()
@@ -89,9 +115,9 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
   }
 
   const remove = async (path: string) => {
-    if (!confirm(`Delete hook ${path}?`)) return
+    if (!confirm(`Delete ${section === 'hooks' ? 'hook' : 'script'} ${path}?`)) return
     try {
-      await deleteHook(workspaceId, path)
+      await svc.del(workspaceId, path)
       if (selected === path) { setSelected(null); setContent(''); setIsDirty(false) }
       await loadFiles()
       showToast({ title: 'Deleted', description: `${path} deleted` })
@@ -102,12 +128,32 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
 
   const openWizard = async () => {
     setShowNew(!showNew)
-    if (!meta) {
+    if (section === 'hooks' && !meta) {
       try {
         setMeta(await getHooksMeta(workspaceId))
       } catch {
         showToast({ title: 'Error', description: 'Failed to load hook metadata', variant: 'destructive' })
       }
+    }
+  }
+
+  const createScript = async () => {
+    const name = newName.trim().replace(/^\/+/, '')
+    if (!name) {
+      showToast({ title: 'Error', description: 'Give the script a name (e.g. on-image.sh)', variant: 'destructive' })
+      return
+    }
+    try {
+      setIsCreating(true)
+      await saveScript(workspaceId, name, NEW_SCRIPT_TEMPLATE)
+      setShowNew(false)
+      setNewName('')
+      await loadFiles()
+      await openFile(name)
+    } catch {
+      showToast({ title: 'Error', description: 'Failed to create script', variant: 'destructive' })
+    } finally {
+      setIsCreating(false)
     }
   }
 
@@ -140,28 +186,61 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
     }
   }
 
-  const groups = groupHooksByEvent(files)
+  const groups = section === 'hooks' ? groupHooksByEvent(files) : { scripts: files }
+  const gitUrl = `${API_URL}/workspaces/${workspaceId}/git`
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-medium">Workspace Hooks</h3>
+          <h3 className="text-lg font-medium">Workspace Hooks & Scripts</h3>
           <p className="text-sm text-muted-foreground">
-            ES modules run in-process on workspace events. Saving commits to the workspace git repo.
+            Hooks run in-process on workspace events; scripts are the shell helpers they spawn.
+            Saving commits to the workspace git repo.
           </p>
         </div>
         <div className="flex gap-2">
+          <div className="flex rounded-md border">
+            <Button
+              size="sm"
+              variant={section === 'hooks' ? 'secondary' : 'ghost'}
+              className="rounded-r-none"
+              onClick={() => switchSection('hooks')}
+            >
+              Hooks
+            </Button>
+            <Button
+              size="sm"
+              variant={section === 'scripts' ? 'secondary' : 'ghost'}
+              className="rounded-l-none"
+              onClick={() => switchSection('scripts')}
+            >
+              Scripts
+            </Button>
+          </div>
           <Button size="sm" variant="ghost" onClick={loadFiles} title="Reload">
             <RefreshCw className="h-4 w-4" />
           </Button>
           <Button size="sm" variant="outline" onClick={openWizard}>
-            <Plus className="mr-2 h-4 w-4" /> New Hook
+            <Plus className="mr-2 h-4 w-4" /> {section === 'hooks' ? 'New Hook' : 'New Script'}
           </Button>
         </div>
       </div>
 
-      {showNew && (
+      {showNew && section === 'scripts' && (
+        <div className="border rounded-lg p-3 flex gap-2 items-center bg-muted/50">
+          <Input
+            placeholder="on-image.sh"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            className="font-mono text-sm"
+          />
+          <Button size="sm" onClick={createScript} disabled={isCreating}>Create</Button>
+          <Button size="sm" variant="outline" onClick={() => setShowNew(false)}>Cancel</Button>
+        </div>
+      )}
+
+      {showNew && section === 'hooks' && (
         <div className="border rounded-lg p-4 space-y-3 bg-muted/50">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
@@ -252,13 +331,14 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
                   >
                     <span className="font-mono truncate flex items-center gap-1.5">
                       {file.path}
-                      {isExampleHook(file.path) && (
+                      {section === 'hooks' && isExampleHook(file.path) && (
                         <span className="text-[10px] uppercase tracking-wide rounded bg-muted-foreground/15 px-1 py-0.5 text-muted-foreground shrink-0">
                           example
                         </span>
                       )}
                     </span>
                     <div className="flex items-center">
+                      {section === 'hooks' && (
                       <Button
                         size="sm"
                         variant="ghost"
@@ -268,6 +348,7 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
                       >
                         {enabled ? <Power className="h-3 w-3" /> : <PowerOff className="h-3 w-3 text-muted-foreground" />}
                       </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="ghost"
@@ -294,20 +375,32 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
                   <Save className="mr-2 h-4 w-4" /> Save
                 </Button>
               </div>
-              <textarea
-                className="flex-1 min-h-[400px] w-full font-mono text-sm p-2 bg-background border rounded outline-none focus:ring-2 focus:ring-ring resize-none"
-                spellCheck={false}
-                value={content}
-                onChange={(e) => { setContent(e.target.value); setIsDirty(true) }}
-              />
+              <div className="flex-1 min-h-[400px] max-h-[60vh] overflow-auto rounded border text-sm">
+                <CodeEditor
+                  value={content}
+                  path={selected}
+                  onChange={(next) => { setContent(next); setIsDirty(true) }}
+                />
+              </div>
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground min-h-[400px]">
-              Select a hook to edit, or create a new one.
+              Select a {section === 'hooks' ? 'hook' : 'script'} to edit, or create a new one.
             </div>
           )}
         </div>
       </div>
+
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <GitBranch className="h-3.5 w-3.5 shrink-0" />
+        <span>
+          Everything here lives in the workspace git repo — clone it with{' '}
+          <code className="rounded bg-muted px-1 py-0.5 font-mono select-all">
+            git clone {gitUrl}
+          </code>{' '}
+          (username: anything, password: a canvas API token). Pushes hot-reload hooks.
+        </span>
+      </p>
     </div>
   )
 }
