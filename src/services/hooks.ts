@@ -28,17 +28,35 @@ export async function deleteHook(workspaceId: string, path: string): Promise<voi
   await api.delete(`${hooksBase(workspaceId)}/${path}`)
 }
 
-// A leading underscore on the filename marks a hook as disabled; the engine
-// skips `_*.js`. Toggling enable/disable is just a rename.
+// An `example-`, `disabled-` or (legacy) `_` prefix on the filename marks a
+// hook as inactive; the engine skips those. Toggling enable/disable is just a
+// rename: enabling strips the prefix, disabling prepends `disabled-`.
+const DISABLED_PREFIXES = ['example-', 'disabled-', '_']
+
+function splitPath(path: string): { dir: string; base: string } {
+  const slash = path.lastIndexOf('/')
+  return {
+    dir: slash === -1 ? '' : path.slice(0, slash + 1),
+    base: slash === -1 ? path : path.slice(slash + 1),
+  }
+}
+
+function disabledPrefix(base: string): string | null {
+  return DISABLED_PREFIXES.find((p) => base.startsWith(p)) ?? null
+}
+
 export function isHookEnabled(path: string): boolean {
-  return !(path.split('/').pop() || path).startsWith('_')
+  return disabledPrefix(splitPath(path).base) === null
+}
+
+export function isExampleHook(path: string): boolean {
+  return splitPath(path).base.startsWith('example-')
 }
 
 export function toggledHookPath(path: string): string {
-  const slash = path.lastIndexOf('/')
-  const dir = slash === -1 ? '' : path.slice(0, slash + 1)
-  const base = slash === -1 ? path : path.slice(slash + 1)
-  return dir + (base.startsWith('_') ? base.slice(1) : `_${base}`)
+  const { dir, base } = splitPath(path)
+  const prefix = disabledPrefix(base)
+  return dir + (prefix ? base.slice(prefix.length) : `disabled-${base}`)
 }
 
 export async function setHookEnabled(workspaceId: string, path: string, enabled: boolean): Promise<string> {
@@ -51,12 +69,58 @@ export async function setHookEnabled(workspaceId: string, path: string, enabled:
 }
 
 // Groups hook files by event for display. `{event}.js` and `{event}/*.js` both
-// group under `event`; `lib/*.js` groups under `lib`.
+// group under `event`; `lib/*.js` groups under `lib`; `rules.json` (with any
+// inactive prefix) and `rules/*.json` group under `rules`.
 export function groupHooksByEvent(files: HookFile[]): Record<string, HookFile[]> {
   const groups: Record<string, HookFile[]> = {}
   for (const file of files) {
-    const group = file.path.includes('/') ? file.path.split('/')[0] : file.path.replace(/\.js$/, '')
+    let group: string
+    if (file.path.includes('/')) {
+      group = file.path.split('/')[0]
+    } else if (/^(?:example-|disabled-|_)?rules\.json$/.test(file.path)) {
+      group = 'rules'
+    } else {
+      group = file.path.replace(/\.js$/, '')
+    }
     ;(groups[group] ||= []).push(file)
   }
   return groups
+}
+
+// ── Create-hook wizard backend (GET /hooks/meta + POST /hooks/generate) ─────
+
+export interface HookEventMeta {
+  name: string
+  document: boolean
+  description: string
+  payload: string
+}
+
+export interface HookActionMeta {
+  id: string
+  label: string
+  description: string
+}
+
+export interface HooksMeta {
+  events: HookEventMeta[]
+  actions: HookActionMeta[]
+  classifier: { predicates: string[]; fields: string[] }
+}
+
+export async function getHooksMeta(workspaceId: string): Promise<HooksMeta> {
+  const res = await api.get<{ payload: HooksMeta }>(`${hooksBase(workspaceId)}/meta`)
+  return res.payload
+}
+
+// Generates an editable, disabled-by-default skeleton on the server and
+// returns its path; the caller opens it in the editor.
+export async function generateHook(
+  workspaceId: string,
+  spec: { event: string; name: string; actions: string[] },
+): Promise<{ path: string; content: string }> {
+  const res = await api.post<{ payload: { path: string; content: string } }>(
+    `${hooksBase(workspaceId)}/generate`, spec,
+  )
+  return res.payload
 }

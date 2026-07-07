@@ -10,19 +10,17 @@ import {
   deleteHook,
   groupHooksByEvent,
   isHookEnabled,
+  isExampleHook,
   setHookEnabled,
+  getHooksMeta,
+  generateHook,
   type HookFile,
+  type HooksMeta,
 } from '@/services/hooks'
 
 interface HooksPanelProps {
   workspaceId: string
 }
-
-const NEW_HOOK_TEMPLATE = `export default async function run({ eventName, payload, workspace, logger, link, agent }) {
-  // payload.context?.path / payload.directory?.path tell you where it landed
-  logger.debug(\`hook \${eventName} id=\${payload?.id ?? payload?.ids}\`)
-}
-`
 
 export function HooksPanel({ workspaceId }: HooksPanelProps) {
   const { showToast } = useToast()
@@ -32,8 +30,12 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
   const [content, setContent] = useState('')
   const [isDirty, setIsDirty] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const [newPath, setNewPath] = useState('')
   const [showNew, setShowNew] = useState(false)
+  const [meta, setMeta] = useState<HooksMeta | null>(null)
+  const [newEvent, setNewEvent] = useState('document.inserted')
+  const [newName, setNewName] = useState('')
+  const [newActions, setNewActions] = useState<string[]>([])
+  const [isCreating, setIsCreating] = useState(false)
 
   const loadFiles = async () => {
     try {
@@ -98,20 +100,43 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
     }
   }
 
+  const openWizard = async () => {
+    setShowNew(!showNew)
+    if (!meta) {
+      try {
+        setMeta(await getHooksMeta(workspaceId))
+      } catch {
+        showToast({ title: 'Error', description: 'Failed to load hook metadata', variant: 'destructive' })
+      }
+    }
+  }
+
+  const toggleAction = (id: string) => {
+    setNewActions((prev) => prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id])
+  }
+
   const createHook = async () => {
-    const path = newPath.trim().replace(/^\/+/, '')
-    if (!path.endsWith('.js')) {
-      showToast({ title: 'Error', description: 'Hook path must end in .js (e.g. document.inserted/my-hook.js)', variant: 'destructive' })
+    if (!newName.trim()) {
+      showToast({ title: 'Error', description: 'Give the hook a name', variant: 'destructive' })
       return
     }
     try {
-      await saveHook(workspaceId, path, NEW_HOOK_TEMPLATE)
-      setNewPath('')
+      setIsCreating(true)
+      const { path } = await generateHook(workspaceId, {
+        event: newEvent,
+        name: newName.trim(),
+        actions: newActions,
+      })
       setShowNew(false)
+      setNewName('')
+      setNewActions([])
       await loadFiles()
       await openFile(path)
+      showToast({ title: 'Created', description: `${path} — edit the TODOs, then enable it` })
     } catch {
       showToast({ title: 'Error', description: 'Failed to create hook', variant: 'destructive' })
+    } finally {
+      setIsCreating(false)
     }
   }
 
@@ -130,22 +155,80 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
           <Button size="sm" variant="ghost" onClick={loadFiles} title="Reload">
             <RefreshCw className="h-4 w-4" />
           </Button>
-          <Button size="sm" variant="outline" onClick={() => setShowNew(!showNew)}>
+          <Button size="sm" variant="outline" onClick={openWizard}>
             <Plus className="mr-2 h-4 w-4" /> New Hook
           </Button>
         </div>
       </div>
 
       {showNew && (
-        <div className="border rounded-lg p-3 flex gap-2 items-center bg-muted/50">
-          <Input
-            placeholder="document.inserted/my-hook.js"
-            value={newPath}
-            onChange={(e) => setNewPath(e.target.value)}
-            className="font-mono text-sm"
-          />
-          <Button size="sm" onClick={createHook}>Create</Button>
-          <Button size="sm" variant="outline" onClick={() => setShowNew(false)}>Cancel</Button>
+        <div className="border rounded-lg p-4 space-y-3 bg-muted/50">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground block mb-1">
+                1. When (event)
+              </label>
+              <select
+                className="w-full h-9 rounded-md border bg-background px-2 font-mono text-sm outline-none focus:ring-2 focus:ring-ring"
+                value={newEvent}
+                onChange={(e) => setNewEvent(e.target.value)}
+              >
+                {(meta?.events ?? []).map((event) => (
+                  <option key={event.name} value={event.name}>
+                    {event.name} — {event.description}
+                  </option>
+                ))}
+              </select>
+              {meta && (
+                <p className="text-xs text-muted-foreground mt-1 font-mono">
+                  payload: {meta.events.find((e) => e.name === newEvent)?.payload}
+                </p>
+              )}
+              <label className="text-xs font-semibold text-muted-foreground block mt-3 mb-1">
+                2. Name
+              </label>
+              <Input
+                placeholder="my-hook"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                className="font-mono text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground block mb-1">
+                3. Then (actions — pick any)
+              </label>
+              <div className="space-y-1 max-h-52 overflow-auto pr-1">
+                {(meta?.actions ?? []).map((action) => (
+                  <label
+                    key={action.id}
+                    className="flex items-start gap-2 text-sm rounded px-2 py-1 hover:bg-muted cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={newActions.includes(action.id)}
+                      onChange={() => toggleAction(action.id)}
+                    />
+                    <span>
+                      <span className="font-medium">{action.label}</span>
+                      <span className="block text-xs text-muted-foreground">{action.description}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={createHook} disabled={isCreating || !meta}>
+              {isCreating ? 'Creating…' : 'Create skeleton'}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setShowNew(false)}>Cancel</Button>
+            <p className="text-xs text-muted-foreground">
+              Creates a disabled skeleton — edit the TODOs, then enable it. Simple match→action
+              automations can also go into <span className="font-mono">rules.json</span> (no code).
+            </p>
+          </div>
         </div>
       )}
 
@@ -167,7 +250,14 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
                     className={`flex items-center justify-between rounded px-2 py-1 cursor-pointer text-sm ${selected === file.path ? 'bg-muted' : 'hover:bg-muted/50'} ${enabled ? '' : 'opacity-50'}`}
                     onClick={() => openFile(file.path)}
                   >
-                    <span className="font-mono truncate">{file.path}</span>
+                    <span className="font-mono truncate flex items-center gap-1.5">
+                      {file.path}
+                      {isExampleHook(file.path) && (
+                        <span className="text-[10px] uppercase tracking-wide rounded bg-muted-foreground/15 px-1 py-0.5 text-muted-foreground shrink-0">
+                          example
+                        </span>
+                      )}
+                    </span>
                     <div className="flex items-center">
                       <Button
                         size="sm"
