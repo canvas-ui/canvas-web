@@ -372,8 +372,11 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
               <Plus className="mr-1 h-3 w-3" /> add action
             </Button>
             <p className="text-xs text-muted-foreground">
-              Message/prompt fields support templates: <span className="font-mono">{'{{doc.data.subject}}'}</span>,{' '}
-              <span className="font-mono">{'{{doc.data.from}}'}</span>, <span className="font-mono">{'{{doc.data.url}}'}</span>.
+              Message/prompt fields support templates over the full document schema:{' '}
+              <span className="font-mono">{'{{doc.data.subject}}'}</span>, <span className="font-mono">{'{{doc.data.from}}'}</span>,{' '}
+              <span className="font-mono">{'{{doc.data.url}}'}</span>, <span className="font-mono">{'{{doc.data.body}}'}</span> /{' '}
+              <span className="font-mono">{'{{doc.data.bodyHtml}}'}</span> (emails). Objects and arrays like{' '}
+              <span className="font-mono">{'{{doc.locations}}'}</span> are inserted as JSON.
             </p>
           </div>
 

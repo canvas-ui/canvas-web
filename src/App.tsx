@@ -28,6 +28,7 @@ import RolesPage from './pages/roles'
 import RemotesPage from './pages/remotes'
 import { AppShell } from './components/shell/AppShell'
 import { ToastContainer, useToast } from './components/ui/toast-container'
+import { NotificationsProvider } from './components/notifications/notifications-context'
 import { setGlobalErrorHandler } from './lib/error-handler'
 
 function AppContent() {
@@ -95,7 +96,9 @@ function AppContent() {
 function App() {
   return (
     <ToastContainer>
-      <AppContent />
+      <NotificationsProvider>
+        <AppContent />
+      </NotificationsProvider>
     </ToastContainer>
   )
 }

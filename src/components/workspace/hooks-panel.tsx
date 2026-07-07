@@ -257,7 +257,18 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
       {section === 'rules' && (
         <RuleBuilder
           workspaceId={workspaceId}
-          onOpenJson={() => { setSection('hooks'); void openFile('rules.json') }}
+          onOpenJson={async () => {
+            // Pre-create the file so a fresh workspace can jump straight into
+            // JSON editing without a 404.
+            try {
+              await getHook(workspaceId, 'rules.json')
+            } catch {
+              await saveHook(workspaceId, 'rules.json', JSON.stringify({ $schema: 'canvas.hook-rules/v1', rules: [] }, null, 2) + '\n')
+                .catch(() => {})
+            }
+            setSection('hooks')
+            void openFile('rules.json')
+          }}
         />
       )}
 
@@ -463,9 +474,10 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
         <span>
           Everything here lives in the workspace git repo — clone it with{' '}
           <code className="rounded bg-muted px-1 py-0.5 font-mono select-all">
-            git clone {gitUrl}
+            git clone {gitUrl.replace('://', '://canvas@')}
           </code>{' '}
-          (username: anything, password: a canvas API token). Pushes hot-reload hooks.
+          (password: a canvas API token; the <span className="font-mono">canvas@</span> username
+          is arbitrary but git needs one). Pushes hot-reload hooks.
         </span>
       </p>
     </div>
