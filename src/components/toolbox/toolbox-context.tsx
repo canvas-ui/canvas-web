@@ -285,6 +285,12 @@ export function useToolbox(): ToolboxContextValue {
   return ctx
 }
 
+// For components that also render outside the app shell (public shares):
+// null instead of throwing when no provider is mounted.
+export function useToolboxOptional(): ToolboxContextValue | null {
+  return useContext(ToolboxCtx)
+}
+
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function ToolboxProvider({ children }: { children: ReactNode }) {

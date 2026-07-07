@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ExternalLink } from 'lucide-react'
+import { API_URL } from '@/config/api'
 import type { RendererProps } from './types'
 
 // Does a link/tab URL point at a PDF? Extension match plus well-known
@@ -18,8 +19,10 @@ export function isPdfUrl(url: string | undefined | null): boolean {
 
 // Inline preview for remote PDF links (tab/link docs). The app CSP only
 // allows blob: iframes, so the PDF is fetched client-side (connect-src allows
-// https:) and framed from a blob URL. CORS-restricted hosts fall back to an
-// "open externally" notice.
+// https:) and framed from a blob URL. Hosts without CORS headers (arxiv.org
+// among them) block the direct fetch — those are retried through the server's
+// authenticated same-origin PDF proxy; only if that also fails do we fall
+// back to an "open externally" notice.
 export function UrlPdfRenderer({ document: doc, className = '' }: RendererProps) {
   const url = String(doc.data?.url ?? doc.data?.uri ?? '')
   const [state, setState] = useState<{ blobUrl: string | null; failed: boolean; loading: boolean }>({ blobUrl: null, failed: false, loading: true })
@@ -34,13 +37,26 @@ export function UrlPdfRenderer({ document: doc, className = '' }: RendererProps)
     let cancelled = false
     let createdUrl: string | null = null
 
+    const toBlobUrl = async (res: Response) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const blob = await res.blob()
+      return URL.createObjectURL(blob.type ? blob : new Blob([blob], { type: 'application/pdf' }))
+    }
+
+    const viaProxy = () => {
+      const token = localStorage.getItem('authToken')
+      return fetch(`${API_URL}/proxy/pdf?url=${encodeURIComponent(url)}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+    }
+
     fetch(url)
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const blob = await res.blob()
-        if (cancelled) return
-        createdUrl = URL.createObjectURL(blob.type ? blob : new Blob([blob], { type: 'application/pdf' }))
-        setState({ blobUrl: createdUrl, failed: false, loading: false })
+      .then(toBlobUrl)
+      .catch(() => viaProxy().then(toBlobUrl))
+      .then((blobUrl) => {
+        if (cancelled) { URL.revokeObjectURL(blobUrl); return }
+        createdUrl = blobUrl
+        setState({ blobUrl, failed: false, loading: false })
       })
       .catch(() => { if (!cancelled) setState({ blobUrl: null, failed: true, loading: false }) })
 
@@ -60,7 +76,7 @@ export function UrlPdfRenderer({ document: doc, className = '' }: RendererProps)
       {loading && <p className="text-sm text-muted-foreground">Loading PDF…</p>}
       {failed && (
         <p className="text-sm text-muted-foreground">
-          Inline preview unavailable (the host blocks cross-origin fetches) — use the link above.
+          Inline preview unavailable (direct fetch and server proxy both failed) — use the link above.
         </p>
       )}
       {blobUrl && <iframe src={blobUrl} className="h-[70vh] w-full rounded border" title={url} />}

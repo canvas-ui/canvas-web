@@ -203,7 +203,10 @@ export function B5Card({
           />
           <div
             ref={pickerRef}
-            className="shrink-0 md:ml-2 max-md:fixed max-md:bottom-2 max-md:left-2 max-md:right-2 max-md:top-2 max-md:z-[53] max-md:animate-fade-in"
+            // relative md:z-[55]: paint above the fixed toolbox FAB (z-50),
+            // which otherwise covers the picker's Link button when the card
+            // sits near the viewport's bottom-right on wide screens.
+            className="relative shrink-0 md:z-[55] md:ml-2 max-md:fixed max-md:bottom-2 max-md:left-2 max-md:right-2 max-md:top-2 max-md:z-[53] max-md:animate-fade-in"
           >
             {picker}
           </div>

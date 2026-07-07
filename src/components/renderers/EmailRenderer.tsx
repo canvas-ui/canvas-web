@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import DOMPurify from 'dompurify'
-import { Download, FileText } from 'lucide-react'
+import { Download, FileText, Code, Image, ImageOff } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { useDocumentContent } from './public-share'
 import type { RendererProps } from './types'
 
@@ -166,12 +167,37 @@ export function EmailRenderer({ workspaceId, document: doc, className = '' }: Re
   return (
     <div className={`space-y-3 ${className}`}>
       {/* Header */}
-      <div className="space-y-1 rounded-md border bg-muted/30 p-3 text-sm">
-        <div className="text-base font-semibold">{String(data.subject ?? '(no subject)')}</div>
-        <div><span className="text-muted-foreground">From:</span> {partyLabel(data.from as string | EmailParty)}</div>
-        {partiesLabel(data.to) && <div><span className="text-muted-foreground">To:</span> {partiesLabel(data.to)}</div>}
-        {partiesLabel(data.cc) && <div><span className="text-muted-foreground">Cc:</span> {partiesLabel(data.cc)}</div>}
-        {date && <div className="text-xs text-muted-foreground">{date}</div>}
+      <div className="rounded-md border bg-muted/30 p-3 text-sm">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1">
+            <div className="text-base font-semibold">{String(data.subject ?? '(no subject)')}</div>
+            <div><span className="text-muted-foreground">From:</span> {partyLabel(data.from as string | EmailParty)}</div>
+            {partiesLabel(data.to) && <div><span className="text-muted-foreground">To:</span> {partiesLabel(data.to)}</div>}
+            {partiesLabel(data.cc) && <div><span className="text-muted-foreground">Cc:</span> {partiesLabel(data.cc)}</div>}
+            {date && <div className="text-xs text-muted-foreground">{date}</div>}
+          </div>
+          {bodyHtml && (
+            <div className="flex shrink-0 flex-wrap justify-end gap-2">
+              <Button size="sm" variant="outline" onClick={() => setShowPlain(!showPlain)}>
+                {showPlain ? <Code className="mr-1.5 h-3.5 w-3.5" /> : <FileText className="mr-1.5 h-3.5 w-3.5" />}
+                {showPlain ? 'HTML' : 'Plain text'}
+              </Button>
+              {!showPlain && remoteImageCount > 0 && (
+                <Button
+                  size="sm"
+                  variant={showRemoteImages ? 'secondary' : 'outline'}
+                  onClick={() => setShowRemoteImages(!showRemoteImages)}
+                  title="Remote images can reveal your IP/read status to the sender"
+                >
+                  {showRemoteImages
+                    ? <ImageOff className="mr-1.5 h-3.5 w-3.5" />
+                    : <Image className="mr-1.5 h-3.5 w-3.5" />}
+                  {showRemoteImages ? 'Hide remote images' : `Show remote images (${remoteImageCount})`}
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
@@ -184,23 +210,6 @@ export function EmailRenderer({ workspaceId, document: doc, className = '' }: Re
       ) : (
         <pre className="whitespace-pre-wrap rounded bg-muted p-3 text-sm max-h-[60vh] overflow-auto">{bodyText || '(empty body)'}</pre>
       )}
-      {bodyHtml && (
-        <div className="flex items-center gap-3">
-          <button onClick={() => setShowPlain(!showPlain)} className="text-xs text-primary hover:underline">
-            {showPlain ? 'Show HTML' : 'Show plain text'}
-          </button>
-          {!showPlain && remoteImageCount > 0 && (
-            <button
-              onClick={() => setShowRemoteImages(!showRemoteImages)}
-              className="text-xs text-primary hover:underline"
-              title="Remote images can reveal your IP/read status to the sender"
-            >
-              {showRemoteImages ? 'Hide remote images' : `Show remote images (${remoteImageCount})`}
-            </button>
-          )}
-        </div>
-      )}
-
       {/* Attachments */}
       {visibleAttachments.length > 0 && (
         <div className="space-y-1">

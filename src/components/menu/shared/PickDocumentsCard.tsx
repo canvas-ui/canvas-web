@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { X, Search, FileSearch, ChevronRight, ChevronDown, Globe, Mail, File } from 'lucide-react'
+import { X, Search, FileSearch, ChevronRight, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Loader } from '@/components/ui/loader'
 import { cn } from '@/lib/utils'
@@ -7,6 +7,7 @@ import { listWorkspaces, getCachedWorkspaceTreeByName, getCanvasPathDocuments, D
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import type { TreeNode, Document } from '@/types/workspace'
 import { type TreeTab, TAB_ICONS, TAB_LABELS, LinkNode, WorkspaceListStep } from './tree-picker-shared'
+import { DocumentIcon } from '@/components/common/DocumentIcon'
 // Workspace is a global type declared in src/types/api.d.ts
 
 export interface PickDocumentsContext {
@@ -235,7 +236,7 @@ export function PickDocumentsCard({ onClose, onConfirm, fixedWorkspaceName, savi
                         )}
                       >
                         <input type="checkbox" checked={isSelected} onChange={() => toggleDoc(doc.id)} className="shrink-0" onClick={e => e.stopPropagation()} />
-                        {display.icon === 'globe' ? <Globe className="h-3.5 w-3.5 shrink-0 text-blue-500" /> : display.icon === 'mail' ? <Mail className="h-3.5 w-3.5 shrink-0 text-blue-500" /> : <File className="h-3.5 w-3.5 shrink-0 text-blue-500" />}
+                        <DocumentIcon document={doc} size={3.5} />
                         <span className="flex-1 truncate">{display.title}</span>
                       </div>
                     )

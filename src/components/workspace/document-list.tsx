@@ -1,7 +1,8 @@
 import { Document } from '@/types/workspace'
-import { File, Calendar, Hash, Eye, ExternalLink, Globe, Mail, X, Trash2 } from 'lucide-react'
+import { File, Calendar, Hash, Eye, ExternalLink, X, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
+import { DocumentIcon } from '@/components/common/DocumentIcon'
 
 interface DocumentListProps {
   documents: Document[]
@@ -261,13 +262,7 @@ function DocumentRow({ document, onRemoveDocument, onDeleteDocument }: DocumentR
           <div className="flex-1 min-w-0">
             {/* Header row */}
             <div className="flex items-center gap-2 mb-2 overflow-hidden">
-              {display.icon === 'globe' ? (
-                <Globe className="h-4 w-4 text-blue-500 flex-shrink-0" />
-              ) : display.icon === 'mail' ? (
-                <Mail className="h-4 w-4 text-blue-500 flex-shrink-0" />
-              ) : (
-                <File className="h-4 w-4 text-blue-500 flex-shrink-0" />
-              )}
+              <DocumentIcon document={document} chip />
               <h4 className="font-medium truncate min-w-0 flex-1 max-w-[640px]" title={display.title}>
                 {display.title}
               </h4>

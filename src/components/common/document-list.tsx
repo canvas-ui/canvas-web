@@ -1,5 +1,5 @@
 import { Document, TreeNode } from '@/types/workspace'
-import { File, Calendar, Hash, Eye, ExternalLink, Globe, Mail, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, Table as TableIcon } from 'lucide-react'
+import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, Table as TableIcon } from 'lucide-react'
 import { LinkToCard } from '@/components/menu/shared/LinkToCard'
 import { PickDocumentsCard } from '@/components/menu/shared/PickDocumentsCard'
 import { useSideView } from '@/components/shell/side-view-context'
@@ -23,6 +23,7 @@ import { ObjectPropertiesModal } from '@/components/object-card/ObjectProperties
 import { isEditableSchema } from '@/components/object-card/EditForm'
 import { usePublicShareCode } from '@/components/renderers/public-share'
 import { useDocumentThumbnail } from '@/components/renderers/useDocumentThumbnail'
+import { DocumentIcon } from '@/components/common/DocumentIcon'
 
 interface DocumentListProps {
   documents: Document[]
@@ -397,7 +398,7 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
           />
         </TableCell>
         <TableCell className="w-12">
-          {display.icon === 'globe' ? <Globe className="h-4 w-4 text-blue-500" /> : display.icon === 'mail' ? <Mail className="h-4 w-4 text-blue-500" /> : <File className="h-4 w-4 text-blue-500" />}
+          <DocumentIcon document={document} chip />
         </TableCell>
         <TableCell className="font-medium max-w-xs">
           <div className="min-w-0">
@@ -488,7 +489,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2 overflow-hidden">
-              {display.icon === 'globe' ? (<Globe className="h-4 w-4 text-blue-500 flex-shrink-0" />) : display.icon === 'mail' ? (<Mail className="h-4 w-4 text-blue-500 flex-shrink-0" />) : (<File className="h-4 w-4 text-blue-500 flex-shrink-0" />)}
+              <DocumentIcon document={document} chip />
               <h4 className="font-medium truncate min-w-0 flex-1 max-w-[640px]" title={display.title}>{display.title}</h4>
               {display.isExternal && (<ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />)}
               <span className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded border flex-shrink-0">{display.schemaLabel}</span>
@@ -567,9 +568,7 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
             <img src={blobUrl} alt={display.title} loading="lazy" className="h-full w-full object-cover" />
           ) : (
             <div className="flex h-full w-full items-center justify-center">
-              {display.icon === 'globe' ? <Globe className="h-10 w-10 text-blue-500/70" />
-                : display.icon === 'mail' ? <Mail className="h-10 w-10 text-blue-500/70" />
-                : <File className="h-10 w-10 text-blue-500/70" />}
+              <DocumentIcon document={document} size={10} chip />
             </div>
           )}
           {onOpenToSide && (
