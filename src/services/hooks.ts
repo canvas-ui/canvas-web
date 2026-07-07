@@ -87,6 +87,40 @@ export function groupHooksByEvent(files: HookFile[]): Record<string, HookFile[]>
   return groups
 }
 
+// ── Declarative rules (canvas.hook-rules/v1 in git/hooks/rules.json) ────────
+// The simple rule-builder UI reads/writes this file; advanced users can edit
+// the same JSON directly in the Hooks section.
+
+export interface HookRuleAction {
+  action: string
+  [key: string]: unknown
+}
+
+export interface HookRule {
+  id: string
+  enabled?: boolean
+  description?: string
+  when: { event: string; [key: string]: unknown }
+  then: HookRuleAction[]
+}
+
+export const RULES_PATH = 'rules.json'
+
+export async function getRules(workspaceId: string): Promise<HookRule[]> {
+  try {
+    const content = await getHook(workspaceId, RULES_PATH)
+    const parsed = JSON.parse(content || '{}')
+    return Array.isArray(parsed.rules) ? parsed.rules : []
+  } catch {
+    return [] // missing or malformed file → start empty
+  }
+}
+
+export async function saveRules(workspaceId: string, rules: HookRule[]): Promise<void> {
+  const doc = { $schema: 'canvas.hook-rules/v1', rules }
+  await saveHook(workspaceId, RULES_PATH, JSON.stringify(doc, null, 2) + '\n')
+}
+
 // ── Create-hook wizard backend (GET /hooks/meta + POST /hooks/generate) ─────
 
 export interface HookEventMeta {
@@ -102,10 +136,17 @@ export interface HookActionMeta {
   description: string
 }
 
+export interface HookContextApiEntry {
+  name: string
+  signature: string
+  description: string
+}
+
 export interface HooksMeta {
   events: HookEventMeta[]
   actions: HookActionMeta[]
   classifier: { predicates: string[]; fields: string[] }
+  contextApi: HookContextApiEntry[]
 }
 
 export async function getHooksMeta(workspaceId: string): Promise<HooksMeta> {

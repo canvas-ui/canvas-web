@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Save, Trash2, RefreshCw, Power, PowerOff, GitBranch } from 'lucide-react'
+import { Plus, Save, Trash2, RefreshCw, Power, PowerOff, GitBranch, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CodeEditor } from '@/components/ui/code-editor'
@@ -20,12 +20,13 @@ import {
   type HooksMeta,
 } from '@/services/hooks'
 import { listScripts, getScript, saveScript, deleteScript } from '@/services/scripts'
+import { RuleBuilder } from '@/components/workspace/rule-builder'
 
 interface HooksPanelProps {
   workspaceId: string
 }
 
-type Section = 'hooks' | 'scripts'
+type Section = 'rules' | 'hooks' | 'scripts'
 
 const NEW_SCRIPT_TEMPLATE = `#!/usr/bin/env bash
 # Called from a hook via: spawn('bash', [script, ...args])
@@ -34,7 +35,8 @@ set -euo pipefail
 
 export function HooksPanel({ workspaceId }: HooksPanelProps) {
   const { showToast } = useToast()
-  const [section, setSection] = useState<Section>('hooks')
+  const [section, setSection] = useState<Section>('rules')
+  const [showReference, setShowReference] = useState(false)
   const [files, setFiles] = useState<HookFile[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [selected, setSelected] = useState<string | null>(null)
@@ -48,11 +50,12 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
   const [newActions, setNewActions] = useState<string[]>([])
   const [isCreating, setIsCreating] = useState(false)
 
-  const svc = section === 'hooks'
-    ? { list: listHooks, get: getHook, save: saveHook, del: deleteHook }
-    : { list: listScripts, get: getScript, save: saveScript, del: deleteScript }
+  const svc = section === 'scripts'
+    ? { list: listScripts, get: getScript, save: saveScript, del: deleteScript }
+    : { list: listHooks, get: getHook, save: saveHook, del: deleteHook }
 
   const loadFiles = async () => {
+    if (section === 'rules') return // RuleBuilder owns its own data
     try {
       setIsLoading(true)
       setFiles(await svc.list(workspaceId))
@@ -126,15 +129,23 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
     }
   }
 
+  const loadMeta = async () => {
+    if (meta) return
+    try {
+      setMeta(await getHooksMeta(workspaceId))
+    } catch {
+      showToast({ title: 'Error', description: 'Failed to load hook metadata', variant: 'destructive' })
+    }
+  }
+
   const openWizard = async () => {
     setShowNew(!showNew)
-    if (section === 'hooks' && !meta) {
-      try {
-        setMeta(await getHooksMeta(workspaceId))
-      } catch {
-        showToast({ title: 'Error', description: 'Failed to load hook metadata', variant: 'destructive' })
-      }
-    }
+    if (section === 'hooks') await loadMeta()
+  }
+
+  const toggleReference = async () => {
+    setShowReference(!showReference)
+    await loadMeta()
   }
 
   const createScript = async () => {
@@ -193,18 +204,27 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-medium">Workspace Hooks & Scripts</h3>
+          <h3 className="text-lg font-medium">Automation</h3>
           <p className="text-sm text-muted-foreground">
-            Hooks run in-process on workspace events; scripts are the shell helpers they spawn.
-            Saving commits to the workspace git repo.
+            Rules are simple click-to-build automations (Outlook-style). Hooks are their
+            programmable big brother; scripts are the shell helpers hooks spawn. Everything
+            commits to the workspace git repo.
           </p>
         </div>
         <div className="flex gap-2">
           <div className="flex rounded-md border">
             <Button
               size="sm"
-              variant={section === 'hooks' ? 'secondary' : 'ghost'}
+              variant={section === 'rules' ? 'secondary' : 'ghost'}
               className="rounded-r-none"
+              onClick={() => switchSection('rules')}
+            >
+              Rules
+            </Button>
+            <Button
+              size="sm"
+              variant={section === 'hooks' ? 'secondary' : 'ghost'}
+              className="rounded-none"
               onClick={() => switchSection('hooks')}
             >
               Hooks
@@ -218,14 +238,59 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
               Scripts
             </Button>
           </div>
-          <Button size="sm" variant="ghost" onClick={loadFiles} title="Reload">
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-          <Button size="sm" variant="outline" onClick={openWizard}>
-            <Plus className="mr-2 h-4 w-4" /> {section === 'hooks' ? 'New Hook' : 'New Script'}
-          </Button>
+          {section !== 'rules' && (
+            <>
+              <Button size="sm" variant="ghost" onClick={loadFiles} title="Reload">
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+              <Button size="sm" variant="ghost" onClick={toggleReference} title="Hook context API & classifier reference">
+                <BookOpen className="h-4 w-4" />
+              </Button>
+              <Button size="sm" variant="outline" onClick={openWizard}>
+                <Plus className="mr-2 h-4 w-4" /> {section === 'hooks' ? 'New Hook' : 'New Script'}
+              </Button>
+            </>
+          )}
         </div>
       </div>
+
+      {section === 'rules' && (
+        <RuleBuilder
+          workspaceId={workspaceId}
+          onOpenJson={() => { setSection('hooks'); void openFile('rules.json') }}
+        />
+      )}
+
+      {section !== 'rules' && showReference && meta && (
+        <div className="border rounded-lg p-4 space-y-4 bg-muted/30 text-sm">
+          <div>
+            <h4 className="font-medium mb-2">Hook context (<span className="font-mono">ctx</span>)</h4>
+            <div className="space-y-2">
+              {meta.contextApi?.map((entry) => (
+                <div key={entry.name}>
+                  <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">{entry.signature}</code>
+                  <p className="text-xs text-muted-foreground mt-0.5">{entry.description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <h4 className="font-medium mb-2">Classifier (<span className="font-mono">const c = ctx.classify()</span>)</h4>
+            <div className="flex flex-wrap gap-1">
+              {meta.classifier.predicates.map((p) => (
+                <code key={p} className="rounded bg-muted px-1 py-0.5 font-mono text-xs">{p}</code>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Fields: {meta.classifier.fields.map((f) => <code key={f} className="font-mono">{f} </code>)}
+              — never throws; all predicates are false for a null/unknown document.
+            </p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Full reference: <span className="font-mono">docs/hooks.md</span> in the server repo.
+          </p>
+        </div>
+      )}
 
       {showNew && section === 'scripts' && (
         <div className="border rounded-lg p-3 flex gap-2 items-center bg-muted/50">
@@ -311,6 +376,7 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
         </div>
       )}
 
+      {section !== 'rules' && (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="md:col-span-1 border rounded-lg p-2 max-h-[480px] overflow-auto">
           {isLoading ? (
@@ -390,6 +456,7 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
           )}
         </div>
       </div>
+      )}
 
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <GitBranch className="h-3.5 w-3.5 shrink-0" />
