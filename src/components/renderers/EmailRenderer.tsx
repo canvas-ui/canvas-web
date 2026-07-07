@@ -39,19 +39,36 @@ function formatSize(size?: number): string {
 // from a blob: URL inside a fully sandboxed iframe. Defense in depth:
 //   1. DOMPurify strips scripts/embeds/forms.
 //   2. iframe sandbox="" (no scripts, no same-origin, no top-nav).
-//   3. Embedded CSP meta: only data:/blob: images, inline styles — remote
-//      images stay blocked (privacy default; also blocked by the app CSP).
-// cid: inline images are substituted with blob: URLs fetched from the
-// attachment blobs (matched on contentId); unresolved cid refs are stripped.
-function buildEmailHtmlBlob(rawHtml: string, cidMap: Map<string, string>): string {
+//   3. Embedded CSP meta: data: images and inline styles only; https: images
+//      are added only when the user opts in via "Show remote images".
+// cid: inline images are substituted with data: URLs built from the attachment
+// blobs (matched on contentId). data:, not blob:, on purpose — the sandboxed
+// frame has an opaque origin and cannot fetch the parent origin's blob: URLs.
+// Unresolved cid refs and (when not allowed) remote image srcs are stripped so
+// the frame shows clean placeholders instead of CSP-broken image icons.
+function buildEmailHtmlBlob(
+  rawHtml: string,
+  cidMap: Map<string, string>,
+  allowRemote: boolean,
+): { url: string; remoteCount: number } {
+  let remoteCount = 0
   DOMPurify.addHook('afterSanitizeAttributes', (node) => {
     if (node.tagName === 'IMG') {
       const src = node.getAttribute('src') || ''
-      if (src.toLowerCase().startsWith('cid:')) {
+      const lower = src.toLowerCase()
+      if (lower.startsWith('cid:')) {
         const cid = src.slice(4).replace(/^<|>$/g, '')
-        const blobUrl = cidMap.get(cid) || cidMap.get(`<${cid}>`)
-        if (blobUrl) node.setAttribute('src', blobUrl)
+        const dataUrl = cidMap.get(cid) || cidMap.get(`<${cid}>`)
+        if (dataUrl) node.setAttribute('src', dataUrl)
         else node.removeAttribute('src')
+      } else if (lower.startsWith('http:') || lower.startsWith('https:') || lower.startsWith('//')) {
+        remoteCount++
+        if (allowRemote) {
+          // Never mixed content inside the frame.
+          node.setAttribute('src', src.replace(/^http:/i, 'https:').replace(/^\/\//, 'https://'))
+        } else {
+          node.removeAttribute('src')
+        }
       }
     }
     if (node.tagName === 'A') {
@@ -64,14 +81,28 @@ function buildEmailHtmlBlob(rawHtml: string, cidMap: Map<string, string>): strin
       FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'base', 'link', 'meta'],
       FORBID_ATTR: ['srcset'],
     })
+    const csp = `default-src 'none'; img-src data:${allowRemote ? ' https:' : ''}; style-src 'unsafe-inline'`
     const doc = `<!doctype html><html><head>
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'">
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="${csp}">
 <style>body{margin:12px;font:14px/1.5 system-ui,sans-serif;color:#1a1a1a;background:#fff;word-break:break-word}img{max-width:100%}</style>
 </head><body>${clean}</body></html>`
-    return URL.createObjectURL(new Blob([doc], { type: 'text/html' }))
+    // charset both in the blob type and as <meta>: without either, the blob
+    // document defaults to the locale charset and UTF-8 bodies render mojibake.
+    const url = URL.createObjectURL(new Blob([doc], { type: 'text/html;charset=utf-8' }))
+    return { url, remoteCount }
   } finally {
     DOMPurify.removeHook('afterSanitizeAttributes')
   }
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(blob)
+  })
 }
 
 export function EmailRenderer({ workspaceId, document: doc, className = '' }: RendererProps) {
@@ -83,6 +114,8 @@ export function EmailRenderer({ workspaceId, document: doc, className = '' }: Re
 
   const [htmlUrl, setHtmlUrl] = useState<string | null>(null)
   const [showPlain, setShowPlain] = useState(!bodyHtml)
+  const [showRemoteImages, setShowRemoteImages] = useState(false)
+  const [remoteImageCount, setRemoteImageCount] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -95,8 +128,9 @@ export function EmailRenderer({ workspaceId, document: doc, className = '' }: Re
       inline.slice(0, 20).map(async (a) => {
         try {
           const { blob } = await fetchBlob(doc.id, { url: a.url })
-          const u = URL.createObjectURL(blob)
-          created.push(u)
+          // data: URL, not blob: — the sandboxed (opaque-origin) iframe cannot
+          // load the parent origin's blob: URLs.
+          const u = await blobToDataUrl(blob)
           return [String(a.contentId).replace(/^<|>$/g, ''), u] as const
         } catch {
           return null
@@ -105,9 +139,10 @@ export function EmailRenderer({ workspaceId, document: doc, className = '' }: Re
     ).then((pairs) => {
       if (cancelled) return
       const cidMap = new Map(pairs.filter(Boolean) as Array<readonly [string, string]>)
-      const url = buildEmailHtmlBlob(bodyHtml, cidMap)
+      const { url, remoteCount } = buildEmailHtmlBlob(bodyHtml, cidMap, showRemoteImages)
       created.push(url)
       setHtmlUrl(url)
+      setRemoteImageCount(remoteCount)
     }).catch((e) => { if (!cancelled) setError(String(e instanceof Error ? e.message : e)) })
 
     return () => {
@@ -117,7 +152,7 @@ export function EmailRenderer({ workspaceId, document: doc, className = '' }: Re
     }
     // attachments derives from doc.data — doc.id is the stable dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceId, doc.id, bodyHtml, showPlain])
+  }, [workspaceId, doc.id, bodyHtml, showPlain, showRemoteImages])
 
   const date = typeof data.date === 'string' ? new Date(data.date).toLocaleString() : null
   const visibleAttachments = attachments.filter((a) => !a.isInline || !a.contentId)
@@ -150,9 +185,20 @@ export function EmailRenderer({ workspaceId, document: doc, className = '' }: Re
         <pre className="whitespace-pre-wrap rounded bg-muted p-3 text-sm max-h-[60vh] overflow-auto">{bodyText || '(empty body)'}</pre>
       )}
       {bodyHtml && (
-        <button onClick={() => setShowPlain(!showPlain)} className="text-xs text-primary hover:underline">
-          {showPlain ? 'Show HTML' : 'Show plain text'}
-        </button>
+        <div className="flex items-center gap-3">
+          <button onClick={() => setShowPlain(!showPlain)} className="text-xs text-primary hover:underline">
+            {showPlain ? 'Show HTML' : 'Show plain text'}
+          </button>
+          {!showPlain && remoteImageCount > 0 && (
+            <button
+              onClick={() => setShowRemoteImages(!showRemoteImages)}
+              className="text-xs text-primary hover:underline"
+              title="Remote images can reveal your IP/read status to the sender"
+            >
+              {showRemoteImages ? 'Hide remote images' : `Show remote images (${remoteImageCount})`}
+            </button>
+          )}
+        </div>
       )}
 
       {/* Attachments */}
