@@ -780,55 +780,6 @@ export interface WorkspaceServiceStatus {
   activeMailboxCount?: number;
 }
 
-export interface WorkspaceDataBackendStatus {
-  enabled: boolean;
-  supported?: boolean;
-  driver?: string;
-  root?: string;
-  watch?: boolean;
-  watching?: boolean;
-  resync?: boolean;
-  managed?: boolean;
-  indexIncoming?: boolean;
-  incomingPathMode?: 'sourceDirectories' | string;
-  readOnly?: boolean;
-  running?: boolean;
-  lastScanAt?: string | null;
-  lastError?: string | null;
-  cacheStats?: { entries: number; size: number } | null;
-}
-
-export interface WorkspaceImapMailbox {
-  id: string;
-  enabled: boolean;
-  host: string;
-  port: number;
-  tls: boolean;
-  allowSelfSigned: boolean;
-  user: string;
-  folder: string;
-  mode: 'poll';
-  pollInterval: number;
-  initialSyncDays: number;
-  lastUid: number;
-  lastSyncAt: string | null;
-  lastError: string | null;
-  passwordConfigured: boolean;
-  runtime: {
-    active: boolean;
-    syncing: boolean;
-    status: string;
-  };
-}
-
-export interface WorkspaceImapFolder {
-  name: string;
-  path: string;
-  delimiter: string;
-  selectable: boolean;
-  attributes: string[];
-}
-
 export interface WorkspaceServicesStatus {
   dotfiles: WorkspaceServiceStatus;
   git?: WorkspaceServiceStatus;
@@ -887,29 +838,143 @@ export async function disableWorkspaceService(
   }
 }
 
-export async function getWorkspaceDataBackends(workspaceId: string): Promise<Record<string, WorkspaceDataBackendStatus>> {
-  const response = await api.get<{ payload: Record<string, WorkspaceDataBackendStatus> }>(
-    `${API_ROUTES.workspaces}/${workspaceId}/data-backends`
-  );
-  return response.payload || {};
+// ─── Unified backend/connector API (/:id/backends) ──────────────────────────
+// One surface over storage backends (file/cacache/s3) and message connectors
+// (imap accounts), mirroring the /.backends/<driver>/<address> tree. Supersedes
+// the data-backends + services/imap split; driver dispatch is server-side.
+
+export interface BackendCapabilities {
+  sync: boolean;
+  test: boolean;
+  containers: boolean;
+  mutableContainers: boolean;
+  deleteObject: boolean;
 }
 
-export async function updateWorkspaceDataBackends(
-  workspaceId: string,
-  dataBackends: Record<string, Partial<WorkspaceDataBackendStatus>>
-): Promise<Record<string, WorkspaceDataBackendStatus>> {
-  const response = await api.patch<{ payload: Record<string, WorkspaceDataBackendStatus> }>(
-    `${API_ROUTES.workspaces}/${workspaceId}/data-backends`,
-    { dataBackends }
-  );
-  return response.payload || {};
+export interface BackendContainer {
+  name: string;
+  mailboxId?: string;
+  enabled?: boolean;
+  status?: string;
+  lastSyncAt?: string | null;
+  lastError?: string | null;
 }
 
-export async function resyncWorkspaceDataBackend(workspaceId: string, backendId: string): Promise<{ backend: string; count: number }> {
-  const response = await api.post<{ payload: { backend: string; count: number } }>(
-    `${API_ROUTES.workspaces}/${workspaceId}/data-backends/${encodeURIComponent(backendId)}/resync`
-  );
+export interface Backend {
+  driver: string;
+  address: string;
+  kind: 'storage' | 'messages' | 'hybrid';
+  enabled: boolean;
+  status: 'running' | 'idle' | 'stopped' | 'error' | string;
+  lastSyncAt: string | null;
+  lastError: string | null;
+  capabilities: BackendCapabilities;
+  containers?: BackendContainer[];
+  config?: Record<string, unknown>;
+}
+
+const backendsBase = (workspaceId: string) => `${API_ROUTES.workspaces}/${workspaceId}/backends`;
+const backendPath = (workspaceId: string, driver: string, address: string) =>
+  `${backendsBase(workspaceId)}/${encodeURIComponent(driver)}/${encodeURIComponent(address)}`;
+
+export async function listBackends(workspaceId: string, driver?: string): Promise<Backend[]> {
+  const url = driver ? `${backendsBase(workspaceId)}/${encodeURIComponent(driver)}` : backendsBase(workspaceId);
+  const response = await api.get<{ payload: Backend[] }>(url);
+  return response.payload || [];
+}
+
+export async function getBackend(workspaceId: string, driver: string, address: string): Promise<Backend> {
+  const response = await api.get<{ payload: Backend }>(backendPath(workspaceId, driver, address));
   return response.payload;
+}
+
+export async function addBackend(workspaceId: string, driver: string, config: Record<string, unknown>): Promise<Backend> {
+  const response = await api.post<{ payload: Backend }>(`${backendsBase(workspaceId)}/${encodeURIComponent(driver)}`, config);
+  return response.payload;
+}
+
+export async function updateBackend(workspaceId: string, driver: string, address: string, patch: Record<string, unknown>): Promise<Backend> {
+  const response = await api.patch<{ payload: Backend }>(backendPath(workspaceId, driver, address), patch);
+  return response.payload;
+}
+
+export async function removeBackend(workspaceId: string, driver: string, address: string): Promise<{ removed: boolean }> {
+  const response = await api.delete<{ payload: { removed: boolean } }>(backendPath(workspaceId, driver, address));
+  return response.payload;
+}
+
+export async function syncBackend(workspaceId: string, driver: string, address: string): Promise<unknown> {
+  const response = await api.post<{ payload: unknown }>(`${backendPath(workspaceId, driver, address)}/sync`);
+  return response.payload;
+}
+
+export async function testBackend(workspaceId: string, driver: string, address: string): Promise<unknown> {
+  const response = await api.post<{ payload: unknown }>(`${backendPath(workspaceId, driver, address)}/test`);
+  return response.payload;
+}
+
+export async function listBackendContainers(workspaceId: string, driver: string, address: string): Promise<BackendContainer[]> {
+  const response = await api.get<{ payload: BackendContainer[] }>(`${backendPath(workspaceId, driver, address)}/containers`);
+  return response.payload || [];
+}
+
+export async function syncBackendContainer(workspaceId: string, driver: string, address: string, name: string): Promise<unknown> {
+  const response = await api.post<{ payload: unknown }>(`${backendPath(workspaceId, driver, address)}/containers/${encodeURIComponent(name)}/sync`);
+  return response.payload;
+}
+
+// Connector folders (imap boxes, …) — used for the subscribe picker.
+export interface BackendFolder {
+  name: string;
+  path: string;
+  delimiter: string;
+  selectable: boolean;
+  attributes: string[];
+}
+
+// ?available=1 lists folders that can still be subscribed (server-side).
+export async function listBackendFoldersAvailable(workspaceId: string, driver: string, address: string): Promise<BackendFolder[]> {
+  const response = await api.get<{ payload: BackendFolder[] }>(`${backendPath(workspaceId, driver, address)}/containers?available=1`);
+  return response.payload || [];
+}
+
+export async function addBackendContainers(workspaceId: string, driver: string, address: string, folders: string[]): Promise<unknown> {
+  const response = await api.post<{ payload: unknown }>(`${backendPath(workspaceId, driver, address)}/containers`, { folders });
+  return response.payload;
+}
+
+export async function removeBackendContainer(workspaceId: string, driver: string, address: string, name: string): Promise<{ removed: boolean }> {
+  const response = await api.delete<{ payload: { removed: boolean } }>(`${backendPath(workspaceId, driver, address)}/containers/${encodeURIComponent(name)}`);
+  return response.payload;
+}
+
+// Rename/move a container (file-backend folder). `name` is the current key, the
+// body carries the new name/key. Returns the new key.
+export async function renameBackendContainer(workspaceId: string, driver: string, address: string, name: string, newName: string): Promise<unknown> {
+  const response = await api.patch<{ payload: unknown }>(`${backendPath(workspaceId, driver, address)}/containers/${encodeURIComponent(name)}`, { name: newName });
+  return response.payload;
+}
+
+// Parse a /.backends/file/<address>/<sub…> tree node to its folder target.
+// key === '' means the backend root node (can create children, but not rename/delete).
+export function backendFolderTarget(path: string): { driver: string; address: string; key: string } | null {
+  const parts = String(path || '').split('/').filter(Boolean); // ['.backends','file','workspace:home','docs']
+  if (parts[0] !== '.backends' || parts[1] !== 'file' || parts.length < 3) return null;
+  return { driver: 'file', address: parts[2], key: parts.slice(3).join('/') };
+}
+
+// Pre-create folder discovery for the "add account" flow (no instance yet).
+export async function discoverBackendFolders(workspaceId: string, driver: string, config: Record<string, unknown>): Promise<BackendFolder[]> {
+  const response = await api.post<{ payload: BackendFolder[] }>(`${backendsBase(workspaceId)}/${encodeURIComponent(driver)}/discover`, config);
+  return response.payload || [];
+}
+
+// Parse a /.backends/<driver>/<address>/… tree node path to its addressable
+// (driver, address) pair. Returns null for the mirror root / driver level.
+export function backendAddressFromTreePath(path: string): { driver: string; address: string } | null {
+  const parts = String(path || '').split('/').filter(Boolean); // ['.backends','imap','me@x','inbox']
+  if (parts[0] !== '.backends' || parts.length < 3) return null;
+  return { driver: parts[1], address: parts[2] };
 }
 
 export interface WorkspaceHookFile {
@@ -941,119 +1006,6 @@ export async function saveWorkspaceHook(workspaceId: string, hookPath: string, c
 export async function deleteWorkspaceHook(workspaceId: string, hookPath: string): Promise<{ path: string }> {
   const response = await api.delete<{ payload: { path: string } }>(
     `${API_ROUTES.workspaces}/${workspaceId}/hooks/${encodeURIComponent(hookPath).replace(/%2F/g, '/')}`
-  );
-  return response.payload;
-}
-
-export interface WorkspaceImapMailboxInput {
-  id?: string;
-  enabled?: boolean;
-  host: string;
-  port?: number;
-  tls?: boolean;
-  allowSelfSigned?: boolean;
-  user: string;
-  password?: string;
-  folder?: string;
-  mode?: 'poll';
-  pollInterval?: number;
-  initialSyncDays?: number;
-  lastUid?: number;
-}
-
-export async function listWorkspaceImapMailboxes(workspaceId: string): Promise<WorkspaceImapMailbox[]> {
-  const response = await api.get<{ payload: WorkspaceImapMailbox[] }>(
-    `${API_ROUTES.workspaces}/${workspaceId}/services/imap/mailboxes`
-  );
-  return response.payload || [];
-}
-
-export async function createWorkspaceImapMailbox(
-  workspaceId: string,
-  payload: WorkspaceImapMailboxInput
-): Promise<WorkspaceImapMailbox> {
-  const response = await api.post<{ payload: WorkspaceImapMailbox }>(
-    `${API_ROUTES.workspaces}/${workspaceId}/services/imap/mailboxes`,
-    payload
-  );
-  return response.payload;
-}
-
-export async function discoverWorkspaceImapFolders(
-  workspaceId: string,
-  payload: WorkspaceImapMailboxInput
-): Promise<WorkspaceImapFolder[]> {
-  const response = await api.post<{ payload: WorkspaceImapFolder[] }>(
-    `${API_ROUTES.workspaces}/${workspaceId}/services/imap/mailboxes/folders`,
-    payload
-  );
-  return response.payload || [];
-}
-
-export async function listWorkspaceImapFolders(
-  workspaceId: string,
-  mailboxId: string
-): Promise<WorkspaceImapFolder[]> {
-  const response = await api.get<{ payload: WorkspaceImapFolder[] }>(
-    `${API_ROUTES.workspaces}/${workspaceId}/services/imap/mailboxes/folders/${encodeURIComponent(mailboxId)}`
-  );
-  return response.payload || [];
-}
-
-export async function subscribeWorkspaceImapFolders(
-  workspaceId: string,
-  mailboxId: string,
-  folders: string[]
-): Promise<WorkspaceImapMailbox[]> {
-  const response = await api.post<{ payload: WorkspaceImapMailbox[] }>(
-    `${API_ROUTES.workspaces}/${workspaceId}/services/imap/mailboxes/folders/${encodeURIComponent(mailboxId)}`,
-    { folders }
-  );
-  return response.payload || [];
-}
-
-export async function updateWorkspaceImapMailbox(
-  workspaceId: string,
-  mailboxId: string,
-  payload: Partial<WorkspaceImapMailboxInput>
-): Promise<WorkspaceImapMailbox> {
-  const response = await api.patch<{ payload: WorkspaceImapMailbox }>(
-    `${API_ROUTES.workspaces}/${workspaceId}/services/imap/mailboxes/${encodeURIComponent(mailboxId)}`,
-    payload
-  );
-  return response.payload;
-}
-
-export async function deleteWorkspaceImapMailbox(workspaceId: string, mailboxId: string): Promise<void> {
-  await api.delete(
-    `${API_ROUTES.workspaces}/${workspaceId}/services/imap/mailboxes/${encodeURIComponent(mailboxId)}`
-  );
-}
-
-export async function testWorkspaceImapMailbox(workspaceId: string, mailboxId: string): Promise<unknown> {
-  const response = await api.post<{ payload: unknown }>(
-    `${API_ROUTES.workspaces}/${workspaceId}/services/imap/mailboxes/${encodeURIComponent(mailboxId)}/test`
-  );
-  return response.payload;
-}
-
-export async function syncWorkspaceImapMailbox(workspaceId: string, mailboxId: string): Promise<unknown> {
-  const response = await api.post<{ payload: unknown }>(
-    `${API_ROUTES.workspaces}/${workspaceId}/services/imap/mailboxes/${encodeURIComponent(mailboxId)}/sync`
-  );
-  return response.payload;
-}
-
-export async function startWorkspaceImapMailbox(workspaceId: string, mailboxId: string): Promise<unknown> {
-  const response = await api.post<{ payload: unknown }>(
-    `${API_ROUTES.workspaces}/${workspaceId}/services/imap/mailboxes/${encodeURIComponent(mailboxId)}/start`
-  );
-  return response.payload;
-}
-
-export async function stopWorkspaceImapMailbox(workspaceId: string, mailboxId: string): Promise<unknown> {
-  const response = await api.post<{ payload: unknown }>(
-    `${API_ROUTES.workspaces}/${workspaceId}/services/imap/mailboxes/${encodeURIComponent(mailboxId)}/stop`
   );
   return response.payload;
 }

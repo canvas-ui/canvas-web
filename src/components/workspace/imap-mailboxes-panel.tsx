@@ -4,67 +4,66 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/toast-container';
 import {
-  createWorkspaceImapMailbox,
-  deleteWorkspaceImapMailbox,
-  discoverWorkspaceImapFolders,
-  listWorkspaceImapFolders,
-  listWorkspaceImapMailboxes,
-  startWorkspaceImapMailbox,
-  stopWorkspaceImapMailbox,
-  subscribeWorkspaceImapFolders,
-  syncWorkspaceImapMailbox,
-  testWorkspaceImapMailbox,
-  updateWorkspaceImapMailbox,
-  type WorkspaceImapFolder,
-  type WorkspaceImapMailbox,
-  type WorkspaceImapMailboxInput,
+  listBackends,
+  addBackend,
+  updateBackend,
+  removeBackend,
+  syncBackend,
+  testBackend,
+  syncBackendContainer,
+  removeBackendContainer,
+  addBackendContainers,
+  listBackendFoldersAvailable,
+  discoverBackendFolders,
+  type Backend,
+  type BackendFolder,
 } from '@/services/workspace';
-import { Loader2, Mail, Play, RefreshCw, Save, Square, Trash2 } from 'lucide-react';
+import { Loader2, Mail, RefreshCw, Save, Trash2, FolderPlus } from 'lucide-react';
 
 interface ImapMailboxesPanelProps {
   workspaceId: string;
   enabled: boolean;
 }
 
-const EMPTY_MAILBOX: WorkspaceImapMailboxInput = {
-  id: '',
-  enabled: true,
-  host: '',
-  port: 993,
-  tls: true,
-  allowSelfSigned: true,
-  user: '',
-  password: '',
-  folder: 'INBOX',
-  mode: 'poll',
-  pollInterval: 60000,
-  initialSyncDays: 180,
-  lastUid: 0,
+// Add-account form state. Editing an existing account reuses the same fields
+// (host/user immutable while editing; blank password keeps the current one).
+interface AccountForm {
+  host: string;
+  port: number;
+  tls: boolean;
+  allowSelfSigned: boolean;
+  user: string;
+  password: string;
+  folder: string;
+  pollInterval: number;
+  initialSyncDays: number;
+}
+
+const EMPTY_FORM: AccountForm = {
+  host: '', port: 993, tls: true, allowSelfSigned: true,
+  user: '', password: '', folder: 'INBOX', pollInterval: 60000, initialSyncDays: 180,
 };
 
-function toFormState(mailbox: WorkspaceImapMailbox): WorkspaceImapMailboxInput {
+function formFromBackend(b: Backend): AccountForm {
+  const c = (b.config || {}) as Record<string, unknown>;
   return {
-    id: mailbox.id,
-    enabled: mailbox.enabled,
-    host: mailbox.host,
-    port: mailbox.port,
-    tls: mailbox.tls,
-    allowSelfSigned: mailbox.allowSelfSigned,
-    user: mailbox.user,
+    host: String(c.host || ''),
+    port: Number(c.port ?? 993),
+    tls: c.tls !== false,
+    allowSelfSigned: c.allowSelfSigned !== false,
+    user: String(c.user || b.address),
     password: '',
-    folder: mailbox.folder,
-    mode: mailbox.mode,
-    pollInterval: mailbox.pollInterval,
-    initialSyncDays: mailbox.initialSyncDays,
-    lastUid: mailbox.lastUid,
+    folder: 'INBOX',
+    pollInterval: Number(c.pollInterval ?? 60000),
+    initialSyncDays: Number(c.initialSyncDays ?? 180),
   };
 }
 
 export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelProps) {
-  const [mailboxes, setMailboxes] = useState<WorkspaceImapMailbox[]>([]);
-  const [selectedId, setSelectedId] = useState('');
-  const [form, setForm] = useState<WorkspaceImapMailboxInput>(EMPTY_MAILBOX);
-  const [folders, setFolders] = useState<WorkspaceImapFolder[]>([]);
+  const [accounts, setAccounts] = useState<Backend[]>([]);
+  const [selected, setSelected] = useState<string | null>(null); // address, or null = new
+  const [form, setForm] = useState<AccountForm>(EMPTY_FORM);
+  const [folders, setFolders] = useState<BackendFolder[]>([]);
   const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingFolders, setIsLoadingFolders] = useState(false);
@@ -72,99 +71,54 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
   const [runningAction, setRunningAction] = useState<string | null>(null);
   const { showToast } = useToast();
 
-  const sortedMailboxes = useMemo(
-    () => [...mailboxes].sort((a, b) => a.id.localeCompare(b.id)),
-    [mailboxes]
-  );
+  const sorted = useMemo(() => [...accounts].sort((a, b) => a.address.localeCompare(b.address)), [accounts]);
+  const current = useMemo(() => accounts.find((a) => a.address === selected) || null, [accounts, selected]);
 
-  const loadMailboxes = useCallback(async () => {
+  const load = useCallback(async () => {
     setIsLoading(true);
     try {
-      const nextMailboxes = await listWorkspaceImapMailboxes(workspaceId);
-      setMailboxes(nextMailboxes);
-      if (!selectedId) return;
-
-      const selected = nextMailboxes.find((mailbox) => mailbox.id === selectedId);
-      if (selected) {
-        setForm((current) => ({
-          ...toFormState(selected),
-          password: current.password,
-        }));
-      }
+      setAccounts(await listBackends(workspaceId, 'imap'));
     } catch (error) {
-      showToast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to load IMAP mailboxes',
-        variant: 'destructive',
-      });
+      showToast({ title: 'Error', description: error instanceof Error ? error.message : 'Failed to load IMAP accounts', variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }
-  }, [workspaceId, selectedId, showToast]);
+  }, [workspaceId, showToast]);
 
-  useEffect(() => {
-    void loadMailboxes();
-  }, [loadMailboxes]);
+  useEffect(() => { void load(); }, [load]);
 
-  const selectMailbox = (mailbox: WorkspaceImapMailbox) => {
-    setSelectedId(mailbox.id);
-    setForm(toFormState(mailbox));
+  const selectAccount = (b: Backend) => {
+    setSelected(b.address);
+    setForm(formFromBackend(b));
     setFolders([]);
-    setSelectedFolders([mailbox.folder]);
+    setSelectedFolders((b.containers || []).map((c) => c.name));
   };
 
   const resetForm = () => {
-    setSelectedId('');
-    setForm(EMPTY_MAILBOX);
+    setSelected(null);
+    setForm(EMPTY_FORM);
     setFolders([]);
     setSelectedFolders([]);
   };
 
-  const handleChange = <K extends keyof WorkspaceImapMailboxInput>(key: K, value: WorkspaceImapMailboxInput[K]) => {
-    setForm((current) => ({ ...current, [key]: value }));
-  };
+  const change = <K extends keyof AccountForm>(key: K, value: AccountForm[K]) => setForm((f) => ({ ...f, [key]: value }));
 
-  const toggleFolder = (folderPath: string) => {
-    setSelectedFolders((current) => {
-      if (current.includes(folderPath)) return current.filter((path) => path !== folderPath);
-      return [...current, folderPath];
-    });
-    setForm((current) => ({ ...current, folder: folderPath }));
-  };
+  const toggleFolder = (path: string) =>
+    setSelectedFolders((cur) => (cur.includes(path) ? cur.filter((p) => p !== path) : [...cur, path]));
 
-  const loadFolders = async () => {
-    if (!selectedId && (!form.host.trim() || !form.user.trim() || !form.password)) {
-      showToast({
-        title: 'Missing IMAP Fields',
-        description: 'Host, user, and password are required to discover folders.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
+  const discoverFolders = async () => {
     setIsLoadingFolders(true);
     try {
-      const nextFolders = selectedId && !form.password
-        ? await listWorkspaceImapFolders(workspaceId, selectedId)
-        : await discoverWorkspaceImapFolders(workspaceId, {
-            ...form,
-            host: form.host.trim(),
-            user: form.user.trim(),
-            folder: form.folder?.trim() || 'INBOX',
+      const list = current
+        ? await listBackendFoldersAvailable(workspaceId, 'imap', current.address)
+        : await discoverBackendFolders(workspaceId, 'imap', {
+            host: form.host.trim(), port: Number(form.port) || 993, tls: form.tls,
+            allowSelfSigned: form.allowSelfSigned, user: form.user.trim(), password: form.password,
+            folder: form.folder.trim() || 'INBOX',
           });
-      const selectableFolders = nextFolders.filter((folder) => folder.selectable);
-      const accountFolders = mailboxes
-        .filter((mailbox) => mailbox.host === form.host && mailbox.user === form.user)
-        .map((mailbox) => mailbox.folder);
-      const checked = new Set([...accountFolders, form.folder || 'INBOX']);
-      setFolders(selectableFolders);
-      setSelectedFolders(selectableFolders.filter((folder) => checked.has(folder.path)).map((folder) => folder.path));
+      setFolders(list.filter((f) => f.selectable));
     } catch (error) {
-      showToast({
-        title: 'IMAP Error',
-        description: error instanceof Error ? error.message : 'Failed to discover IMAP folders',
-        variant: 'destructive',
-      });
+      showToast({ title: 'IMAP Error', description: error instanceof Error ? error.message : 'Failed to discover folders', variant: 'destructive' });
     } finally {
       setIsLoadingFolders(false);
     }
@@ -173,96 +127,77 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const fallbackFolder = form.folder?.trim() || 'INBOX';
-      const foldersToSave = selectedFolders.length > 0 ? selectedFolders : [fallbackFolder];
-      const payload: WorkspaceImapMailboxInput = {
-        ...form,
-        id: form.id?.trim() || undefined,
-        host: form.host.trim(),
-        user: form.user.trim(),
-        folder: selectedId ? fallbackFolder : foldersToSave[0],
-        port: Number(form.port) || 993,
+      const wanted = selectedFolders.length ? selectedFolders : [form.folder.trim() || 'INBOX'];
+      const base = {
+        host: form.host.trim(), user: form.user.trim(),
+        port: Number(form.port) || 993, tls: form.tls, allowSelfSigned: form.allowSelfSigned,
         pollInterval: Number(form.pollInterval) || 60000,
         initialSyncDays: Math.max(0, Number(form.initialSyncDays) || 0),
+        ...(form.password ? { password: form.password } : {}),
       };
 
-      const saved = selectedId
-        ? await updateWorkspaceImapMailbox(workspaceId, selectedId, payload)
-        : await createWorkspaceImapMailbox(workspaceId, {
-            ...payload,
-            id: foldersToSave.length === 1 ? payload.id : undefined,
-          });
-
-      const existingFolders = new Set(mailboxes
-        .filter((mailbox) => mailbox.host === payload.host && mailbox.user === payload.user)
-        .map((mailbox) => mailbox.folder));
-
-      const extraFolders = foldersToSave.filter((folder) => folder !== payload.folder && !existingFolders.has(folder));
-      if (selectedId) {
-        if (extraFolders.length > 0) {
-          await subscribeWorkspaceImapFolders(workspaceId, selectedId, extraFolders);
-        }
+      if (current) {
+        // Update shared account settings, then reconcile folder subscriptions.
+        await updateBackend(workspaceId, 'imap', current.address, base);
+        const existing = new Set((current.containers || []).map((c) => c.name));
+        const toAdd = wanted.filter((f) => !existing.has(f));
+        const toRemove = [...existing].filter((f) => !wanted.includes(f));
+        if (toAdd.length) await addBackendContainers(workspaceId, 'imap', current.address, toAdd);
+        for (const name of toRemove) await removeBackendContainer(workspaceId, 'imap', current.address, name);
       } else {
-        for (const folder of extraFolders) {
-          await createWorkspaceImapMailbox(workspaceId, {
-            ...payload,
-            id: undefined,
-            password: form.password,
-            folder,
-          });
-        }
+        // Create the account on its first folder, then subscribe the rest.
+        await addBackend(workspaceId, 'imap', { ...base, password: form.password, folder: wanted[0] });
+        const address = form.user.trim();
+        if (wanted.length > 1) await addBackendContainers(workspaceId, 'imap', address, wanted.slice(1));
       }
 
-      await loadMailboxes();
-      selectMailbox(saved);
-      showToast({ title: 'Saved', description: `${foldersToSave.length} IMAP folder subscription${foldersToSave.length === 1 ? '' : 's'} saved` });
+      await load();
+      setSelected(form.user.trim());
+      showToast({ title: 'Saved', description: `IMAP account ${form.user.trim()} saved` });
     } catch (error) {
-      showToast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to save IMAP mailbox',
-        variant: 'destructive',
-      });
+      showToast({ title: 'Error', description: error instanceof Error ? error.message : 'Failed to save IMAP account', variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!selectedId || !window.confirm(`Delete IMAP mailbox ${selectedId}?`)) return;
-
-    setRunningAction(`delete:${selectedId}`);
+    if (!current || !window.confirm(`Delete IMAP account ${current.address} and all its folders?`)) return;
+    setRunningAction(`delete:${current.address}`);
     try {
-      await deleteWorkspaceImapMailbox(workspaceId, selectedId);
-      await loadMailboxes();
+      await removeBackend(workspaceId, 'imap', current.address);
+      await load();
       resetForm();
-      showToast({ title: 'Deleted', description: `IMAP mailbox ${selectedId} deleted` });
+      showToast({ title: 'Deleted', description: `IMAP account ${current.address} deleted` });
     } catch (error) {
-      showToast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to delete IMAP mailbox',
-        variant: 'destructive',
-      });
+      showToast({ title: 'Error', description: error instanceof Error ? error.message : 'Failed to delete account', variant: 'destructive' });
     } finally {
       setRunningAction(null);
     }
   };
 
-  const runMailboxAction = async (action: 'test' | 'sync' | 'start' | 'stop', mailboxId: string) => {
-    setRunningAction(`${action}:${mailboxId}`);
+  const accountAction = async (action: 'test' | 'sync', address: string) => {
+    setRunningAction(`${action}:${address}`);
     try {
-      if (action === 'test') await testWorkspaceImapMailbox(workspaceId, mailboxId);
-      else if (action === 'sync') await syncWorkspaceImapMailbox(workspaceId, mailboxId);
-      else if (action === 'start') await startWorkspaceImapMailbox(workspaceId, mailboxId);
-      else await stopWorkspaceImapMailbox(workspaceId, mailboxId);
-
-      await loadMailboxes();
-      showToast({ title: 'Success', description: `Mailbox ${mailboxId} ${action} completed` });
+      if (action === 'test') await testBackend(workspaceId, 'imap', address);
+      else await syncBackend(workspaceId, 'imap', address);
+      await load();
+      showToast({ title: 'Success', description: `${address} ${action} completed` });
     } catch (error) {
-      showToast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : `Failed to ${action} mailbox`,
-        variant: 'destructive',
-      });
+      showToast({ title: 'Error', description: error instanceof Error ? error.message : `Failed to ${action}`, variant: 'destructive' });
+    } finally {
+      setRunningAction(null);
+    }
+  };
+
+  const syncFolder = async (address: string, name: string) => {
+    setRunningAction(`folder-sync:${address}:${name}`);
+    try {
+      await syncBackendContainer(workspaceId, 'imap', address, name);
+      await load();
+      showToast({ title: 'Synced', description: `${address} · ${name}` });
+    } catch (error) {
+      showToast({ title: 'Error', description: error instanceof Error ? error.message : 'Failed to sync folder', variant: 'destructive' });
     } finally {
       setRunningAction(null);
     }
@@ -271,49 +206,57 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
   return (
     <div className="space-y-3 border-t pt-4">
       <div className="space-y-1">
-        <h4 className="text-sm font-medium">IMAP Mailboxes</h4>
-        <p className="text-xs text-muted-foreground">
-          Configure mailbox polling, sync window, and manual syncs.
-        </p>
+        <h4 className="text-sm font-medium">IMAP Accounts</h4>
+        <p className="text-xs text-muted-foreground">Each account mirrors under /.backends/imap/&lt;account&gt;; its folders are synced as containers.</p>
       </div>
 
       {!enabled && (
         <p className="rounded-md border bg-muted/40 p-2 text-xs text-muted-foreground">
-          Enable the IMAP service before polling starts. Mailboxes can still be configured while it is off.
+          Enable the IMAP service before polling starts. Accounts can still be configured while it is off.
         </p>
       )}
 
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="outline" onClick={resetForm}>
-          <Mail className="h-3 w-3" />
-          New Mailbox
-        </Button>
-        <Button size="sm" variant="ghost" onClick={loadMailboxes} disabled={isLoading}>
-          {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-          Refresh
+        <Button size="sm" variant="outline" onClick={resetForm}><Mail className="h-3 w-3" /> New Account</Button>
+        <Button size="sm" variant="ghost" onClick={load} disabled={isLoading}>
+          {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />} Refresh
         </Button>
       </div>
 
       <div className="rounded-md border">
-        <div className="max-h-40 overflow-y-auto p-2 space-y-1">
-          {sortedMailboxes.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No IMAP mailboxes configured.</p>
+        <div className="max-h-52 overflow-y-auto p-2 space-y-1">
+          {sorted.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No IMAP accounts configured.</p>
           ) : (
-            sortedMailboxes.map((mailbox) => (
-              <button
-                key={mailbox.id}
-                onClick={() => selectMailbox(mailbox)}
-                className={`w-full rounded px-2 py-2 text-left text-xs transition-colors ${
-                  selectedId === mailbox.id ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
-                }`}
+            sorted.map((acc) => (
+              <div
+                key={acc.address}
+                className={`rounded px-2 py-2 text-xs transition-colors ${selected === acc.address ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'}`}
               >
-                <div className="font-medium">{mailbox.id}</div>
-                <div className="text-muted-foreground">{mailbox.user} on {mailbox.host} · {mailbox.folder}</div>
-                <div className="text-muted-foreground">
-                  {mailbox.runtime.status} · {mailbox.initialSyncDays} days
-                  {mailbox.lastError ? ` · error: ${mailbox.lastError}` : ''}
+                <button onClick={() => selectAccount(acc)} className="w-full text-left">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium">{acc.address}</span>
+                    <span className={`shrink-0 ${acc.status === 'error' ? 'text-destructive' : 'text-muted-foreground'}`}>{acc.status}</span>
+                  </div>
+                  <div className="text-muted-foreground">{String((acc.config as Record<string, unknown>)?.host || '')} · {(acc.containers || []).length} folder(s)</div>
+                  {acc.lastError && <div className="text-destructive">error: {acc.lastError}</div>}
+                </button>
+                <div className="mt-1 space-y-0.5">
+                  {(acc.containers || []).map((c) => (
+                    <div key={c.name} className="flex items-center justify-between gap-2 rounded bg-background/60 px-2 py-1">
+                      <span className="font-mono truncate">{c.name}</span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button title="Sync folder" className="p-1 hover:bg-accent rounded" onClick={() => syncFolder(acc.address, c.name)} disabled={!!runningAction}>
+                          {runningAction === `folder-sync:${acc.address}:${c.name}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                        </button>
+                        <button title="Remove folder" className="p-1 hover:bg-destructive/10 text-destructive rounded" onClick={() => removeBackendContainer(workspaceId, 'imap', acc.address, c.name).then(load)} disabled={!!runningAction}>
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </button>
+              </div>
             ))
           )}
         </div>
@@ -321,51 +264,42 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
 
       <div className="grid gap-3">
         <div className="grid gap-2">
-          <Label htmlFor="imap-id">Mailbox ID</Label>
-          <Input id="imap-id" value={form.id || ''} onChange={(event) => handleChange('id', event.target.value)} placeholder="acct-main-inbox" />
-        </div>
-        <div className="grid gap-2">
           <Label htmlFor="imap-host">Host</Label>
-          <Input id="imap-host" value={form.host} onChange={(event) => handleChange('host', event.target.value)} placeholder="imap.example.com" />
+          <Input id="imap-host" value={form.host} disabled={!!current} onChange={(e) => change('host', e.target.value)} placeholder="imap.example.com" />
         </div>
         <div className="grid gap-2">
-          <Label htmlFor="imap-user">User</Label>
-          <Input id="imap-user" value={form.user} onChange={(event) => handleChange('user', event.target.value)} placeholder="me@example.com" />
+          <Label htmlFor="imap-user">User (account)</Label>
+          <Input id="imap-user" value={form.user} disabled={!!current} onChange={(e) => change('user', e.target.value)} placeholder="me@example.com" />
         </div>
         <div className="grid gap-2">
           <Label htmlFor="imap-password">Password</Label>
-          <Input id="imap-password" type="password" value={form.password || ''} onChange={(event) => handleChange('password', event.target.value)} placeholder={selectedId ? 'Leave blank to keep current password' : 'Password'} />
+          <Input id="imap-password" type="password" value={form.password} onChange={(e) => change('password', e.target.value)} placeholder={current ? 'Leave blank to keep current password' : 'Password'} />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="grid gap-2">
-            <Label htmlFor="imap-folder">Fallback Folder</Label>
+            <Label htmlFor="imap-folder">Default folder</Label>
             <div className="flex gap-2">
-              <Input id="imap-folder" value={form.folder || 'INBOX'} onChange={(event) => handleChange('folder', event.target.value)} placeholder="INBOX" />
-              <Button type="button" size="sm" variant="outline" onClick={loadFolders} disabled={isLoadingFolders}>
-                {isLoadingFolders ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+              <Input id="imap-folder" value={form.folder} onChange={(e) => change('folder', e.target.value)} placeholder="INBOX" />
+              <Button type="button" size="sm" variant="outline" onClick={discoverFolders} disabled={isLoadingFolders} title="Discover folders">
+                {isLoadingFolders ? <Loader2 className="h-3 w-3 animate-spin" /> : <FolderPlus className="h-3 w-3" />}
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">Used when no discovered folders are checked.</p>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="imap-port">Port</Label>
-            <Input id="imap-port" type="number" value={String(form.port || 993)} onChange={(event) => handleChange('port', Number(event.target.value || 993))} />
+            <Input id="imap-port" type="number" value={String(form.port)} onChange={(e) => change('port', Number(e.target.value || 993))} />
           </div>
         </div>
         <div className="grid gap-2">
-          <Label>Folders To Sync</Label>
+          <Label>Folders to sync</Label>
           <div className="max-h-44 overflow-y-auto rounded-md border p-2">
             {folders.length === 0 ? (
-              <p className="text-xs text-muted-foreground">Click refresh beside the folder field to discover IMAP folders.</p>
+              <p className="text-xs text-muted-foreground">Click the folder icon to discover IMAP folders.</p>
             ) : (
               <div className="space-y-1">
                 {folders.map((folder) => (
                   <label key={folder.path} className="flex items-center gap-2 rounded px-2 py-1 text-xs hover:bg-accent/50">
-                    <input
-                      type="checkbox"
-                      checked={selectedFolders.includes(folder.path)}
-                      onChange={() => toggleFolder(folder.path)}
-                    />
+                    <input type="checkbox" checked={selectedFolders.includes(folder.path)} onChange={() => toggleFolder(folder.path)} />
                     <span className="font-mono">{folder.path}</span>
                   </label>
                 ))}
@@ -373,60 +307,40 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
             )}
           </div>
           {selectedFolders.length > 0 && (
-            <p className="text-xs text-muted-foreground">
-              {selectedFolders.length} folder{selectedFolders.length === 1 ? '' : 's'} selected. Each folder is saved as its own subscription.
-            </p>
+            <p className="text-xs text-muted-foreground">{selectedFolders.length} folder{selectedFolders.length === 1 ? '' : 's'} selected — each synced as its own container.</p>
           )}
         </div>
         <div className="grid gap-2">
-          <Label htmlFor="imap-lookback">Initial Sync Lookback (days)</Label>
-          <Input id="imap-lookback" type="number" min="0" value={String(form.initialSyncDays ?? 180)} onChange={(event) => handleChange('initialSyncDays', Number(event.target.value || 0))} />
-          <p className="text-xs text-muted-foreground">Only used for the first sync when lastUid is 0. Set 0 to import the whole mailbox.</p>
+          <Label htmlFor="imap-lookback">Initial sync lookback (days)</Label>
+          <Input id="imap-lookback" type="number" min="0" value={String(form.initialSyncDays)} onChange={(e) => change('initialSyncDays', Number(e.target.value || 0))} />
+          <p className="text-xs text-muted-foreground">First sync only (lastUid 0). Set 0 to import the whole mailbox.</p>
         </div>
         <div className="grid gap-2">
-          <Label htmlFor="imap-poll">Poll Interval (ms)</Label>
-          <Input id="imap-poll" type="number" value={String(form.pollInterval || 60000)} onChange={(event) => handleChange('pollInterval', Number(event.target.value || 60000))} />
+          <Label htmlFor="imap-poll">Poll interval (ms)</Label>
+          <Input id="imap-poll" type="number" value={String(form.pollInterval)} onChange={(e) => change('pollInterval', Number(e.target.value || 60000))} />
         </div>
         <div className="flex flex-wrap gap-4 text-xs">
           <label className="flex items-center gap-2">
-            <input type="checkbox" checked={form.enabled !== false} onChange={(event) => handleChange('enabled', event.target.checked)} />
-            Enabled
+            <input type="checkbox" checked={form.tls} onChange={(e) => change('tls', e.target.checked)} /> TLS
           </label>
           <label className="flex items-center gap-2">
-            <input type="checkbox" checked={form.tls !== false} onChange={(event) => handleChange('tls', event.target.checked)} />
-            TLS
-          </label>
-          <label className="flex items-center gap-2">
-            <input type="checkbox" checked={form.allowSelfSigned !== false} onChange={(event) => handleChange('allowSelfSigned', event.target.checked)} />
-            Allow self-signed
+            <input type="checkbox" checked={form.allowSelfSigned} onChange={(e) => change('allowSelfSigned', e.target.checked)} /> Allow self-signed
           </label>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
         <Button size="sm" onClick={handleSave} disabled={isSaving}>
-          {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-          Save
+          {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} Save
         </Button>
-        <Button size="sm" variant="outline" disabled={!selectedId || !!runningAction} onClick={() => selectedId && runMailboxAction('test', selectedId)}>
-          {runningAction === `test:${selectedId}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Mail className="h-3 w-3" />}
-          Test
+        <Button size="sm" variant="outline" disabled={!current || !!runningAction} onClick={() => current && accountAction('test', current.address)}>
+          {runningAction === `test:${current?.address}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Mail className="h-3 w-3" />} Test
         </Button>
-        <Button size="sm" variant="outline" disabled={!selectedId || !!runningAction} onClick={() => selectedId && runMailboxAction('sync', selectedId)}>
-          {runningAction === `sync:${selectedId}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-          Sync
+        <Button size="sm" variant="outline" disabled={!current || !!runningAction} onClick={() => current && accountAction('sync', current.address)}>
+          {runningAction === `sync:${current?.address}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />} Sync all
         </Button>
-        <Button size="sm" variant="outline" disabled={!selectedId || !!runningAction} onClick={() => selectedId && runMailboxAction('start', selectedId)}>
-          {runningAction === `start:${selectedId}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
-          Start
-        </Button>
-        <Button size="sm" variant="outline" disabled={!selectedId || !!runningAction} onClick={() => selectedId && runMailboxAction('stop', selectedId)}>
-          {runningAction === `stop:${selectedId}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Square className="h-3 w-3" />}
-          Stop
-        </Button>
-        <Button size="sm" variant="destructive" disabled={!selectedId || !!runningAction} onClick={handleDelete}>
-          {runningAction === `delete:${selectedId}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
-          Delete
+        <Button size="sm" variant="destructive" disabled={!current || !!runningAction} onClick={handleDelete}>
+          {runningAction === `delete:${current?.address}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />} Delete
         </Button>
       </div>
     </div>

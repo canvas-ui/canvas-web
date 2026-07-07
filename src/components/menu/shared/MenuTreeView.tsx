@@ -43,6 +43,10 @@ export interface MenuTreeViewProps {
   onShareCanvas?: (path: string) => Promise<void>
   onLockLayer?: (layerId: string) => Promise<boolean>
   onResyncBackend?: (backendName: string) => Promise<boolean>
+  // Writable file-backend folder ops (real fs dirs under /.backends/file/<addr>).
+  onCreateBackendFolder?: (parentPath: string, name: string) => Promise<boolean>
+  onRenameBackendFolder?: (path: string, newName: string) => Promise<boolean>
+  onDeleteBackendFolder?: (path: string) => Promise<boolean>
   onUnlockLayer?: (layerId: string, lockBy?: string) => Promise<boolean>
   onDestroyLayer?: (layerId: string) => Promise<boolean>
   onMergeLayer?: (layerId: string, targetLayers: string[]) => Promise<unknown>
@@ -62,6 +66,15 @@ const TREE_BRANCH_GUTTER = 22
 // Backend nodes live under /.backends/<driver>/<backendName>/…; the backend
 // name (e.g. workspace:home) is the third path segment. Returns null for the
 // /.backends root and the driver level, where there is no single backend.
+// A writable file backend's tree node (/.backends/file/<address>/<sub…>).
+// key '' = the backend root (children can be created, but it can't be renamed
+// or deleted). Only the `file` driver is mirrored writable.
+function fileBackendTarget(path: string): { address: string; key: string } | null {
+  const parts = String(path || '').split('/').filter(Boolean)
+  if (parts[0] !== '.backends' || parts[1] !== 'file' || parts.length < 3) return null
+  return { address: parts[2], key: parts.slice(3).join('/') }
+}
+
 function backendNameForPath(path: string): string | null {
   if (path !== '/.backends' && !path.startsWith('/.backends/')) return null
   const parts = path.split('/').filter(Boolean) // ['.backends','file','workspace:home',…]
@@ -92,6 +105,8 @@ interface CtxMenuProps {
   onMerge?: MenuTreeViewProps['onMergeLayer']
   onSubtract?: MenuTreeViewProps['onSubtractLayer']
   onResyncBackend?: MenuTreeViewProps['onResyncBackend']
+  onRenameBackendFolder?: MenuTreeViewProps['onRenameBackendFolder']
+  onDeleteBackendFolder?: MenuTreeViewProps['onDeleteBackendFolder']
   onCopy: (path: string) => void
   onCut: (path: string) => void
   onPaste: (target: string) => Promise<void>
@@ -104,6 +119,7 @@ function CtxMenu({
   sourceLayer, targetLayers, clipboard,
   onStartInlineCreate, onChangeIcon, hasCreateCanvas, onShareCanvas, onRemove, onRename,
   onLock, onUnlock, onDestroy, onMerge, onSubtract, onResyncBackend,
+  onRenameBackendFolder, onDeleteBackendFolder,
   onCopy, onCut, onPaste,
   pastedDocumentIds, onPasteDocuments,
 }: CtxMenuProps) {
@@ -162,14 +178,16 @@ function CtxMenu({
         {onResyncBackend && backendNameForPath(path) && (
           <>
             {item(<RefreshCw className="w-3 h-3" />, `Resync backend (${backendNameForPath(path)})`, async () => {
-              await onResyncBackend(backendNameForPath(path)!)
+              await onResyncBackend(path)
             })}
             <div className="my-1 h-px bg-border" />
           </>
         )}
 
-        {/* New folder — inline; hidden inside the read-only backends mirror */}
-        {!(path === '/.backends' || path.startsWith('/.backends/')) && (
+        {/* New folder — inline. Hidden inside the read-only backends mirror,
+            EXCEPT under a writable file backend (/.backends/file/<addr>), where
+            it creates a real directory on the backend (server mirrors it). */}
+        {(!(path === '/.backends' || path.startsWith('/.backends/')) || fileBackendTarget(path)) && (
           <button
             type="button"
             className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-accent rounded-sm text-left"
@@ -178,6 +196,22 @@ function CtxMenu({
             <Plus className="w-3 h-3" />
             New folder here
           </button>
+        )}
+
+        {/* Rename / delete a file-backend folder (real fs dir). Only on
+            subfolders — never the backend root node itself. */}
+        {onRenameBackendFolder && fileBackendTarget(path)?.key && item(
+          <Edit2 className="w-3 h-3" />, 'Rename folder', async () => {
+            const cur = path.split('/').pop() || ''
+            const n = prompt('New folder name:', cur)
+            if (!n || n === cur) return
+            await onRenameBackendFolder(path, n)
+          },
+        )}
+        {onDeleteBackendFolder && fileBackendTarget(path)?.key && item(
+          <Trash2 className="w-3 h-3" />, 'Delete folder', async () => {
+            if (confirm(`Delete folder "${path.split('/').pop()}" and its contents from the backend?`)) await onDeleteBackendFolder(path)
+          }, true,
         )}
 
         {/* New canvas — inline, workspace trees only; never inside the
@@ -605,6 +639,7 @@ export function MenuTreeView({
   pastedDocumentIds, onPasteDocuments,
   onLockLayer, onUnlockLayer, onDestroyLayer, onMergeLayer, onSubtractLayer,
   onResyncBackend,
+  onCreateBackendFolder, onRenameBackendFolder, onDeleteBackendFolder,
   onUpdateNode,
   searchQuery = '',
 }: MenuTreeViewProps) {
@@ -842,13 +877,16 @@ export function MenuTreeView({
     try {
       if (isCanvas) {
         if (onCreateCanvas && await onCreateCanvas(full)) onSelect(full)
+      } else if (fileBackendTarget(parentPath) && onCreateBackendFolder) {
+        // Under a writable file backend: create a real fs directory, not a tree layer.
+        if (await onCreateBackendFolder(parentPath, name)) onSelect(full)
       } else {
         if (onInsertPath && await onInsertPath(full, true)) onSelect(full)
       }
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err))
     }
-  }, [onInsertPath, onCreateCanvas, onSelect, inlineCreateIsCanvas])
+  }, [onInsertPath, onCreateCanvas, onCreateBackendFolder, onSelect, inlineCreateIsCanvas])
 
   const handleCancelCreate = useCallback(() => {
     setInlineCreateParent(null)
@@ -1032,6 +1070,8 @@ export function MenuTreeView({
           onMerge={!readOnly ? onMergeLayer : undefined}
           onSubtract={!readOnly ? onSubtractLayer : undefined}
           onResyncBackend={onResyncBackend}
+          onRenameBackendFolder={onRenameBackendFolder}
+          onDeleteBackendFolder={onDeleteBackendFolder}
           onCopy={path => {
             const next = { mode: 'copy' as const, path, treeName }
             setClipboard(next)

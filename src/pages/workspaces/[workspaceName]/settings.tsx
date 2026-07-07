@@ -16,17 +16,17 @@ import { generateNiceRandomHexColor } from '@/utils/color'
 import {
   disableWorkspaceService,
   enableWorkspaceService,
-  getWorkspaceDataBackends,
+  listBackends,
+  updateBackend,
+  syncBackend,
   getWorkspaceDbStats,
   getWorkspaceServicesStatus,
   listWorkspaceShares,
   listWorkspaces,
   removeWorkspace,
-  resyncWorkspaceDataBackend,
   revokeWorkspacePublicCanvasShare,
   updateWorkspace,
-  updateWorkspaceDataBackends,
-  type WorkspaceDataBackendStatus,
+  type Backend,
   type WorkspaceDbStats,
   type WorkspacePublicCanvasShare,
   type WorkspaceServicesStatus,
@@ -416,7 +416,7 @@ export default function WorkspaceSettingsPage() {
   const [pickerPos, setPickerPos] = useState<{ x: number; y: number } | null>(null)
   const [shares, setShares] = useState<WorkspacePublicCanvasShare[]>([])
   const [services, setServices] = useState<WorkspaceServicesStatus | null>(null)
-  const [dataBackends, setDataBackends] = useState<Record<string, WorkspaceDataBackendStatus>>({})
+  const [dataBackends, setDataBackends] = useState<Backend[]>([])
   const [busyAction, setBusyAction] = useState<string | null>(null)
   const [dbStats, setDbStats] = useState<WorkspaceDbStats | null>(null)
   const [isLoadingDbStats, setIsLoadingDbStats] = useState(false)
@@ -507,10 +507,11 @@ export default function WorkspaceSettingsPage() {
     if (!id) return
     const [nextServices, nextBackends] = await Promise.all([
       getWorkspaceServicesStatus(id).catch(() => null),
-      getWorkspaceDataBackends(id).catch(() => ({})),
+      listBackends(id).catch(() => [] as Backend[]),
     ])
     setServices(nextServices)
-    setDataBackends(nextBackends)
+    // The Data tab manages storage backends; imap accounts have their own panel.
+    setDataBackends(nextBackends.filter((b) => b.kind === 'storage'))
   }
 
   useEffect(() => {
@@ -575,39 +576,38 @@ export default function WorkspaceSettingsPage() {
     }
   }
 
-  const toggleDataBackend = async (backendId: string) => {
-    const backend = dataBackends[backendId]
-    if (!backend || backend.supported === false) return
-    setBusyAction(`backend:${backendId}`)
+  const toggleDataBackend = async (backend: Backend) => {
+    if (backend.config?.supported === false) return
+    setBusyAction(`backend:${backend.address}`)
     try {
-      const next = await updateWorkspaceDataBackends(workspaceId, { [backendId]: { enabled: !backend.enabled } })
-      setDataBackends(next)
-      showToast({ title: 'Saved', description: `${backendId} ${backend.enabled ? 'disabled' : 'enabled'}` })
-    } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to update backend', variant: 'destructive' })
-    } finally {
-      setBusyAction(null)
-    }
-  }
-
-  const patchDataBackend = async (backendId: string, patch: Partial<WorkspaceDataBackendStatus>, action: string) => {
-    setBusyAction(`${action}:${backendId}`)
-    try {
-      const next = await updateWorkspaceDataBackends(workspaceId, { [backendId]: patch })
-      setDataBackends(next)
-    } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to update backend', variant: 'destructive' })
-    } finally {
-      setBusyAction(null)
-    }
-  }
-
-  const resyncBackend = async (backendId: string) => {
-    setBusyAction(`resync:${backendId}`)
-    try {
-      const result = await resyncWorkspaceDataBackend(workspaceId, backendId)
+      await updateBackend(workspaceId, backend.driver, backend.address, { enabled: !backend.enabled })
       await loadRuntimeSettings()
-      showToast({ title: 'Re-synced', description: `${result.count} file(s) indexed from ${backendId}` })
+      showToast({ title: 'Saved', description: `${backend.address} ${backend.enabled ? 'disabled' : 'enabled'}` })
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to update backend', variant: 'destructive' })
+    } finally {
+      setBusyAction(null)
+    }
+  }
+
+  const patchDataBackend = async (backend: Backend, patch: Record<string, unknown>, action: string) => {
+    setBusyAction(`${action}:${backend.address}`)
+    try {
+      await updateBackend(workspaceId, backend.driver, backend.address, patch)
+      await loadRuntimeSettings()
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to update backend', variant: 'destructive' })
+    } finally {
+      setBusyAction(null)
+    }
+  }
+
+  const resyncBackend = async (backend: Backend) => {
+    setBusyAction(`resync:${backend.address}`)
+    try {
+      await syncBackend(workspaceId, backend.driver, backend.address)
+      await loadRuntimeSettings()
+      showToast({ title: 'Re-syncing', description: `${backend.address} scan started` })
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Re-sync failed', variant: 'destructive' })
     } finally {
@@ -796,9 +796,12 @@ export default function WorkspaceSettingsPage() {
 
       {activeTab === 'data' && (
         <div className="space-y-3">
-          {Object.entries(dataBackends).map(([backendId, backend]) => {
+          {dataBackends.map((backend) => {
+            const cfg = (backend.config || {}) as Record<string, unknown>
+            const backendId = backend.address
             const copy = DATA_BACKEND_LABELS[backendId] || { title: backendId, description: 'Workspace data backend.' }
-            const canToggle = backend.supported !== false && backendId !== 'stored.cache'
+            const supported = cfg.supported !== false
+            const canToggle = supported && backendId !== 'stored.cache'
             return (
               <section key={backendId} className="rounded-lg border p-4">
                 <div className="flex items-start justify-between gap-4">
@@ -806,16 +809,16 @@ export default function WorkspaceSettingsPage() {
                     <div className="flex items-center gap-2">
                       <Database className="h-4 w-4 text-muted-foreground" />
                       <h2 className="text-sm font-semibold">{copy.title}</h2>
-                      {backend.supported === false && <span className="rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">unsupported</span>}
+                      {!supported && <span className="rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">unsupported</span>}
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">{copy.description}</p>
-                    {backend.root && <p className="mt-2 truncate font-mono text-xs text-muted-foreground">{backend.root}</p>}
+                    {typeof cfg.root === 'string' && cfg.root && <p className="mt-2 truncate font-mono text-xs text-muted-foreground">{cfg.root}</p>}
                     <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                      <span>running: {backend.running ? 'true' : 'false'}</span>
-                      <span>watching: {backend.watching ? 'true' : 'false'}</span>
-                      <span>incoming: {backend.indexIncoming ? 'true' : 'false'}</span>
-                      {backend.readOnly && <span className="text-amber-600">read-only</span>}
-                      {backend.lastScanAt && <span>last scan: {new Date(backend.lastScanAt).toLocaleString()}</span>}
+                      <span>status: {backend.status}</span>
+                      <span>watch: {cfg.watch ? 'true' : 'false'}</span>
+                      <span>incoming: {cfg.indexIncoming ? 'true' : 'false'}</span>
+                      {cfg.readOnly === true && <span className="text-amber-600">read-only</span>}
+                      {backend.lastSyncAt && <span>last scan: {new Date(backend.lastSyncAt).toLocaleString()}</span>}
                     </div>
                     {backend.lastError && <p className="mt-2 text-xs text-destructive">{backend.lastError}</p>}
                   </div>
@@ -824,19 +827,19 @@ export default function WorkspaceSettingsPage() {
                       <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                         watch
                         <Toggle
-                          checked={!!backend.watch}
+                          checked={!!cfg.watch}
                           disabled={!backend.enabled || busyAction === `watch:${backendId}`}
-                          onClick={() => patchDataBackend(backendId, { watch: !backend.watch }, 'watch')}
+                          onClick={() => patchDataBackend(backend, { watch: !cfg.watch }, 'watch')}
                         />
                       </label>
                     )}
-                    {backend.indexIncoming !== undefined && canToggle && (
+                    {cfg.indexIncoming !== undefined && canToggle && (
                       <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                         incoming
                         <Toggle
-                          checked={!!backend.indexIncoming}
+                          checked={!!cfg.indexIncoming}
                           disabled={!backend.enabled || busyAction === `incoming:${backendId}`}
-                          onClick={() => patchDataBackend(backendId, { indexIncoming: !backend.indexIncoming }, 'incoming')}
+                          onClick={() => patchDataBackend(backend, { indexIncoming: !cfg.indexIncoming }, 'incoming')}
                         />
                       </label>
                     )}
@@ -844,19 +847,19 @@ export default function WorkspaceSettingsPage() {
                       <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground" title="Read-only: Destroy never deletes bytes on this backend (references are dropped instead)">
                         read-only
                         <Toggle
-                          checked={!!backend.readOnly}
+                          checked={cfg.readOnly === true}
                           disabled={busyAction === `readonly:${backendId}`}
-                          onClick={() => patchDataBackend(backendId, { readOnly: !backend.readOnly }, 'readonly')}
+                          onClick={() => patchDataBackend(backend, { readOnly: cfg.readOnly !== true }, 'readonly')}
                         />
                       </label>
                     )}
-                    {backend.resync && (
-                      <Button type="button" variant="outline" size="sm" disabled={busyAction === `resync:${backendId}`} onClick={() => resyncBackend(backendId)}>
+                    {backend.capabilities?.sync && (
+                      <Button type="button" variant="outline" size="sm" disabled={busyAction === `resync:${backendId}`} onClick={() => resyncBackend(backend)}>
                         <RefreshCw className={`mr-2 h-3.5 w-3.5 ${busyAction === `resync:${backendId}` ? 'animate-spin' : ''}`} />
                         Re-sync
                       </Button>
                     )}
-                    <Toggle checked={!!backend.enabled} disabled={!canToggle || busyAction === `backend:${backendId}`} onClick={() => toggleDataBackend(backendId)} />
+                    <Toggle checked={!!backend.enabled} disabled={!canToggle || busyAction === `backend:${backendId}`} onClick={() => toggleDataBackend(backend)} />
                   </div>
                 </div>
               </section>

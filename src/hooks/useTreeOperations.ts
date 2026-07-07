@@ -18,7 +18,12 @@ import {
   lockWorkspaceLayer, unlockWorkspaceLayer, destroyWorkspaceLayer,
   createWorkspaceCanvas,
   updateWorkspacePath,
-  resyncWorkspaceDataBackend,
+  syncBackend,
+  backendAddressFromTreePath,
+  addBackendContainers,
+  removeBackendContainer,
+  renameBackendContainer,
+  backendFolderTarget,
   DEFAULT_WORKSPACE_TREE_NAME,
 } from '@/services/workspace'
 
@@ -149,13 +154,47 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     return result
   }, [workspaceId, wsTree, refresh])
 
-  // Resync a data backend by name. Backend nodes live under the /.backends
-  // mirror as /.backends/<driver>/<backendName>/…; MVP resyncs the whole
-  // backend regardless of which sub-node was right-clicked.
-  const onResyncBackend = useCallback(async (backendName: string): Promise<boolean> => {
+  // Resync a backend from its /.backends mirror node path. Parse the node to
+  // its (driver, address) pair and hit the unified /backends/:driver/:address
+  // /sync endpoint; the server dispatches by driver (imap account fan-out vs
+  // storage scan). MVP resyncs the whole backend/account.
+  const onResyncBackend = useCallback(async (path: string): Promise<boolean> => {
     if (!workspaceId) return false
-    await resyncWorkspaceDataBackend(workspaceId, backendName)
+    const target = backendAddressFromTreePath(path)
+    if (!target) return false
+    await syncBackend(workspaceId, target.driver, target.address)
     refresh(300)
+    return true
+  }, [workspaceId, refresh])
+
+  // ── Backend file-folder ops (writable file backends under /.backends/file) ──
+  // Real fs directories on the backend; the server mirrors them into the tree
+  // (empty folders included). key '' = the backend root node (children only).
+  const onCreateBackendFolder = useCallback(async (parentPath: string, name: string): Promise<boolean> => {
+    if (!workspaceId) return false
+    const t = backendFolderTarget(parentPath)
+    if (!t) return false
+    const key = t.key ? `${t.key}/${name}` : name
+    await addBackendContainers(workspaceId, t.driver, t.address, [key])
+    refresh(200)
+    return true
+  }, [workspaceId, refresh])
+
+  const onRenameBackendFolder = useCallback(async (path: string, newName: string): Promise<boolean> => {
+    if (!workspaceId) return false
+    const t = backendFolderTarget(path)
+    if (!t || !t.key) return false
+    await renameBackendContainer(workspaceId, t.driver, t.address, t.key, newName)
+    refresh(200)
+    return true
+  }, [workspaceId, refresh])
+
+  const onDeleteBackendFolder = useCallback(async (path: string): Promise<boolean> => {
+    if (!workspaceId) return false
+    const t = backendFolderTarget(path)
+    if (!t || !t.key) return false
+    await removeBackendContainer(workspaceId, t.driver, t.address, t.key)
+    refresh(200)
     return true
   }, [workspaceId, refresh])
 
@@ -180,5 +219,8 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     onDestroyLayer: workspaceId && !isDirectoryTree ? onDestroyLayer : undefined,
     onCreateCanvas: workspaceId ? onCreateCanvas : undefined,
     onResyncBackend: workspaceId ? onResyncBackend : undefined,
+    onCreateBackendFolder: workspaceId ? onCreateBackendFolder : undefined,
+    onRenameBackendFolder: workspaceId ? onRenameBackendFolder : undefined,
+    onDeleteBackendFolder: workspaceId ? onDeleteBackendFolder : undefined,
   }
 }
