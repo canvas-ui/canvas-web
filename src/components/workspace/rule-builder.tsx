@@ -52,7 +52,16 @@ const ACTION_FIELDS: Array<{ key: ActionKey; label: string }> = [
 ]
 
 interface ConditionRow { field: ConditionKey; value: string }
-interface ActionRow { kind: ActionKey; a: string; b: string } // generic 2 slots per action
+interface ActionRow {
+  kind: ActionKey
+  a: string // primary slot: link paths / tags / notify message / agent slug / script path
+  b: string // secondary slot: link tags / agent prompt
+  notePath: string // agent only: save reply as note at this path
+  noteTitle: string // agent only: note title (templated)
+  notifyReply: boolean // agent only: also send the reply as a notification
+}
+
+const emptyAction = (kind: ActionKey): ActionRow => ({ kind, a: '', b: '', notePath: '', noteTitle: '', notifyReply: false })
 
 interface RuleForm {
   id: string | null // null = new (slug generated from description)
@@ -65,8 +74,11 @@ interface RuleForm {
 
 const EMPTY_FORM: RuleForm = {
   id: null, description: '', event: 'document.inserted', schema: '',
-  conditions: [], actions: [{ kind: 'link', a: '', b: '' }],
+  conditions: [], actions: [emptyAction('link')],
 }
+
+// 'FMO | DC Migration | SDI' → ['FMO', 'DC Migration', 'SDI'] (engine ORs arrays)
+const splitAlternatives = (value: string) => value.split('|').map((s) => s.trim()).filter(Boolean)
 
 function slugify(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || `rule-${Math.random().toString(36).slice(2, 7)}`
@@ -81,13 +93,16 @@ function buildRule(form: RuleForm): HookRule {
   if (form.schema) when.schema = form.schema
 
   const multi: Partial<Record<string, string[]>> = {}
-  const url: Record<string, string> = {}
+  const url: Record<string, unknown> = {}
   for (const row of form.conditions) {
-    const value = row.value.trim()
-    if (!value) continue
-    if (row.field === 'urlHost') url.host = value
-    else if (row.field === 'urlContains') url.contains = value
-    else (multi[row.field] ||= []).push(value)
+    const values = splitAlternatives(row.value)
+    if (!values.length) continue
+    if (row.field === 'urlHost' || row.field === 'urlContains') {
+      const key = row.field === 'urlHost' ? 'host' : 'contains'
+      const prev = url[key]
+      const merged = [...(Array.isArray(prev) ? prev : prev != null ? [prev] : []), ...values]
+      url[key] = merged.length === 1 ? merged[0] : merged
+    } else (multi[row.field] ||= []).push(...values)
   }
   for (const [key, values] of Object.entries(multi)) {
     if (values?.length) when[key] = values.length === 1 ? values[0] : values
@@ -100,7 +115,14 @@ function buildRule(form: RuleForm): HookRule {
     if (row.kind === 'link' && a) then.push({ action: 'link', paths: splitList(a), ...(b ? { tags: splitList(b) } : {}) })
     if (row.kind === 'tag' && a) then.push({ action: 'tag', tags: splitList(a) })
     if (row.kind === 'notify' && a) then.push({ action: 'notify', message: a })
-    if (row.kind === 'agent' && a && b) then.push({ action: 'agent', slug: a, prompt: b })
+    if (row.kind === 'agent' && a && b) {
+      const output: Record<string, unknown> = {}
+      if (row.notePath.trim()) {
+        output.note = { path: row.notePath.trim(), ...(row.noteTitle.trim() ? { title: row.noteTitle.trim() } : {}) }
+      }
+      if (row.notifyReply) output.notify = true
+      then.push({ action: 'agent', slug: a, prompt: b, ...(Object.keys(output).length ? { output } : {}) })
+    }
     if (row.kind === 'script' && a) then.push({ action: 'script', path: a })
   }
 
@@ -122,11 +144,11 @@ function parseRule(rule: HookRule): RuleForm | null {
   if (schema !== undefined && (typeof schema !== 'string' || !SCHEMA_OPTIONS.some((s) => s.value === schema))) return null
 
   const conditions: ConditionRow[] = []
+  // string | string[] → one row; alternatives joined with ' | ' (engine OR)
   const push = (field: ConditionKey, value: unknown): boolean => {
-    for (const v of Array.isArray(value) ? value : [value]) {
-      if (typeof v !== 'string') return false
-      conditions.push({ field, value: v })
-    }
+    const values = Array.isArray(value) ? value : [value]
+    if (!values.every((v) => typeof v === 'string')) return false
+    conditions.push({ field, value: (values as string[]).join(' | ') })
     return true
   }
   if (from !== undefined && !push('from', from)) return null
@@ -139,23 +161,34 @@ function parseRule(rule: HookRule): RuleForm | null {
       const u = url as Record<string, unknown>
       const extra = Object.keys(u).filter((k) => k !== 'host' && k !== 'contains')
       if (extra.length) return null
-      if (typeof u.host === 'string') conditions.push({ field: 'urlHost', value: u.host })
-      if (typeof u.contains === 'string') conditions.push({ field: 'urlContains', value: u.contains })
+      if (u.host !== undefined && !push('urlHost', u.host)) return null
+      if (u.contains !== undefined && !push('urlContains', u.contains)) return null
     } else return null
   }
 
   const actions: ActionRow[] = []
   for (const act of rule.then || []) {
     if (act.action === 'link' && Array.isArray(act.paths)) {
-      actions.push({ kind: 'link', a: (act.paths as string[]).join(', '), b: Array.isArray(act.tags) ? (act.tags as string[]).join(', ') : '' })
+      actions.push({ ...emptyAction('link'), a: (act.paths as string[]).join(', '), b: Array.isArray(act.tags) ? (act.tags as string[]).join(', ') : '' })
     } else if (act.action === 'tag' && Array.isArray(act.tags)) {
-      actions.push({ kind: 'tag', a: (act.tags as string[]).join(', '), b: '' })
+      actions.push({ ...emptyAction('tag'), a: (act.tags as string[]).join(', ') })
     } else if (act.action === 'notify' && typeof act.message === 'string') {
-      actions.push({ kind: 'notify', a: act.message, b: '' })
+      actions.push({ ...emptyAction('notify'), a: act.message })
     } else if (act.action === 'agent' && typeof act.slug === 'string' && typeof act.prompt === 'string') {
-      actions.push({ kind: 'agent', a: act.slug, b: act.prompt })
+      const output = (act.output && typeof act.output === 'object' ? act.output : {}) as Record<string, unknown>
+      const extra = Object.keys(output).filter((k) => k !== 'note' && k !== 'notify')
+      if (extra.length) return null
+      const note = (output.note && typeof output.note === 'object' ? output.note : {}) as Record<string, unknown>
+      actions.push({
+        ...emptyAction('agent'),
+        a: act.slug,
+        b: act.prompt,
+        notePath: typeof note.path === 'string' ? note.path : '',
+        noteTitle: typeof note.title === 'string' ? note.title : '',
+        notifyReply: output.notify === true,
+      })
     } else if (act.action === 'script' && typeof act.path === 'string') {
-      actions.push({ kind: 'script', a: act.path, b: '' })
+      actions.push({ ...emptyAction('script'), a: act.path })
     } else {
       return null
     }
@@ -167,7 +200,7 @@ function parseRule(rule: HookRule): RuleForm | null {
     event,
     schema: typeof schema === 'string' ? schema : '',
     conditions,
-    actions: actions.length ? actions : [{ kind: 'link', a: '', b: '' }],
+    actions: actions.length ? actions : [emptyAction('link')],
   }
 }
 
@@ -189,7 +222,12 @@ function summarizeThen(rule: HookRule): string {
     if (a.action === 'link') return `file into ${(a.paths as string[])?.join(', ')}`
     if (a.action === 'tag') return `tag ${(a.tags as string[])?.join(', ')}`
     if (a.action === 'notify') return 'notify me'
-    if (a.action === 'agent') return `ask agent "${a.slug}"`
+    if (a.action === 'agent') {
+      const out = (a.output || {}) as Record<string, unknown>
+      const note = (out.note || {}) as Record<string, unknown>
+      const extras = [note.path ? `reply → note ${note.path}` : '', out.notify ? 'reply → notify' : ''].filter(Boolean)
+      return `ask agent "${a.slug}"${extras.length ? ` (${extras.join(', ')})` : ''}`
+    }
     if (a.action === 'script') return `run ${a.path}`
     return a.action
   }).join(' · ') || '(no actions)'
@@ -302,7 +340,12 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
             </div>
             {form.conditions.map((row, i) => (
               <div key={i} className="flex flex-wrap items-center gap-2">
-                <span className="text-xs text-muted-foreground w-7">and</span>
+                <span
+                  className="text-xs text-muted-foreground w-7"
+                  title="Same condition again = either may match (OR); different conditions must all match (AND)"
+                >
+                  {form.conditions.slice(0, i).some((c) => c.field === row.field) ? 'or' : 'and'}
+                </span>
                 <select
                   className={selectClass}
                   value={row.field}
@@ -325,7 +368,8 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
               <Plus className="mr-1 h-3 w-3" /> add condition
             </Button>
             <p className="text-xs text-muted-foreground">
-              Conditions combine with AND; the same condition twice means either value (OR).
+              Conditions combine with AND. Separate alternatives with <span className="font-mono">|</span> for OR —
+              e.g. subject contains <span className="font-mono">FMO | DC Migration | SDI</span>.
             </p>
           </div>
 
@@ -335,11 +379,11 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
               const set = (patch: Partial<ActionRow>) => setField('actions', form.actions.map((a, j) => (j === i ? { ...a, ...patch } : a)))
               return (
                 <div key={i} className="flex flex-wrap items-center gap-2">
-                  <select className={selectClass} value={row.kind} onChange={(e) => set({ kind: e.target.value as ActionKey, a: '', b: '' })}>
+                  <select className={selectClass} value={row.kind} onChange={(e) => set(emptyAction(e.target.value as ActionKey))}>
                     {ACTION_FIELDS.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
                   </select>
                   {row.kind === 'link' && (<>
-                    <Input className="h-8 w-52 font-mono text-sm" placeholder="/work/urgent" value={row.a} onChange={(e) => set({ a: e.target.value })} />
+                    <Input className="h-8 w-64 font-mono text-sm" placeholder="/work/urgent or dir:/projects/x" title="Context-tree path by default; prefix with dir: for the directory tree, ctx: to be explicit. Comma-separate multiple paths." value={row.a} onChange={(e) => set({ a: e.target.value })} />
                     <Input className="h-8 w-44 font-mono text-sm" placeholder="tags (optional)" value={row.b} onChange={(e) => set({ b: e.target.value })} />
                   </>)}
                   {row.kind === 'tag' && (
@@ -348,10 +392,27 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
                   {row.kind === 'notify' && (
                     <Input className="h-8 w-96 max-w-full text-sm" placeholder={'New mail from {{doc.data.from}}: {{doc.data.subject}}'} value={row.a} onChange={(e) => set({ a: e.target.value })} />
                   )}
-                  {row.kind === 'agent' && (<>
-                    <Input className="h-8 w-36 font-mono text-sm" placeholder="agent slug" value={row.a} onChange={(e) => set({ a: e.target.value })} />
-                    <Input className="h-8 w-80 max-w-full text-sm" placeholder={'Summarize: {{doc.data.subject}}'} value={row.b} onChange={(e) => set({ b: e.target.value })} />
-                  </>)}
+                  {row.kind === 'agent' && (
+                    <div className="flex w-full flex-col gap-2 pl-1">
+                      <Input className="h-8 w-40 font-mono text-sm" placeholder="agent slug" value={row.a} onChange={(e) => set({ a: e.target.value })} />
+                      <textarea
+                        className="min-h-20 w-full rounded-md border bg-background p-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                        placeholder={'Dear agent, you will get an email subject and body. Summarize it in plain markdown.\n\nSubject: {{doc.data.subject}}\nBody: {{doc.data.body}}'}
+                        value={row.b}
+                        onChange={(e) => set({ b: e.target.value })}
+                      />
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="text-muted-foreground">reply →</span>
+                        <Input className="h-7 w-56 font-mono text-xs" placeholder="save as note at /path (optional)" title="Context path by default, dir:/path for the directory tree" value={row.notePath} onChange={(e) => set({ notePath: e.target.value })} />
+                        {row.notePath.trim() && (
+                          <Input className="h-7 w-56 text-xs" placeholder={'note title, e.g. Summary: {{doc.data.subject}}'} value={row.noteTitle} onChange={(e) => set({ noteTitle: e.target.value })} />
+                        )}
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input type="checkbox" checked={row.notifyReply} onChange={(e) => set({ notifyReply: e.target.checked })} /> notify me
+                        </label>
+                      </div>
+                    </div>
+                  )}
                   {row.kind === 'script' && (
                     scripts.length ? (
                       <select className={`${selectClass} font-mono`} value={row.a} onChange={(e) => set({ a: e.target.value })}>
@@ -368,7 +429,7 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
                 </div>
               )
             })}
-            <Button size="sm" variant="ghost" className="text-xs" onClick={() => setField('actions', [...form.actions, { kind: 'tag', a: '', b: '' }])}>
+            <Button size="sm" variant="ghost" className="text-xs" onClick={() => setField('actions', [...form.actions, emptyAction('tag')])}>
               <Plus className="mr-1 h-3 w-3" /> add action
             </Button>
             <p className="text-xs text-muted-foreground">
