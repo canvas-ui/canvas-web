@@ -41,27 +41,36 @@ const CONDITION_FIELDS: Array<{ key: ConditionKey; label: string; hint: string }
   { key: 'mime', label: 'file type (mime) matches', hint: 'image/*' },
 ]
 
-type ActionKey = 'link' | 'tag' | 'notify' | 'agent' | 'script'
+type ActionKey = 'link' | 'unlink' | 'tag' | 'notify' | 'agent' | 'script' | 'delete' | 'destroy'
 
 const ACTION_FIELDS: Array<{ key: ActionKey; label: string }> = [
   { key: 'link', label: 'file it into a folder' },
+  { key: 'unlink', label: 'remove it from a folder' },
   { key: 'tag', label: 'add tags' },
   { key: 'notify', label: 'send me a message' },
   { key: 'agent', label: 'ask an agent' },
   { key: 'script', label: 'run a script' },
+  { key: 'delete', label: 'delete it from Canvas' },
+  { key: 'destroy', label: 'delete it everywhere' },
 ]
 
 interface ConditionRow { field: ConditionKey; value: string }
 interface ActionRow {
   kind: ActionKey
-  a: string // primary slot: link paths / tags / notify message / agent slug / script path
+  a: string // primary slot: link/unlink paths / tags / notify message / agent slug / script path
   b: string // secondary slot: link tags / agent prompt
-  notePath: string // agent only: save reply as note at this path
-  noteTitle: string // agent only: note title (templated)
-  notifyReply: boolean // agent only: also send the reply as a notification
+  // output pipeline (agent reply / script stdout):
+  notePath: string // save output as note at this path
+  noteTitle: string // note title (templated)
+  filePath: string // save output to a file at this path
+  fileBackend: 'home' | 'data' // workspace:home file vs workspace:data blob store
+  fileInsert: string // also index the file at this tree path
+  notifyReply: boolean // also send the output as a notification
 }
 
-const emptyAction = (kind: ActionKey): ActionRow => ({ kind, a: '', b: '', notePath: '', noteTitle: '', notifyReply: false })
+const emptyAction = (kind: ActionKey): ActionRow => ({
+  kind, a: '', b: '', notePath: '', noteTitle: '', filePath: '', fileBackend: 'home', fileInsert: '', notifyReply: false,
+})
 
 interface RuleForm {
   id: string | null // null = new (slug generated from description)
@@ -109,21 +118,39 @@ function buildRule(form: RuleForm): HookRule {
   }
   if (Object.keys(url).length) when.url = url
 
+  const buildOutput = (row: ActionRow): Record<string, unknown> | null => {
+    const output: Record<string, unknown> = {}
+    if (row.notePath.trim()) {
+      output.note = { path: row.notePath.trim(), ...(row.noteTitle.trim() ? { title: row.noteTitle.trim() } : {}) }
+    }
+    if (row.filePath.trim()) {
+      output.file = {
+        path: row.filePath.trim(),
+        ...(row.fileBackend === 'data' ? { backend: 'data' } : {}),
+        ...(row.fileInsert.trim() ? { insert: row.fileInsert.trim() } : {}),
+      }
+    }
+    if (row.notifyReply) output.notify = true
+    return Object.keys(output).length ? output : null
+  }
+
   const then: HookRuleAction[] = []
   for (const row of form.actions) {
     const a = row.a.trim(); const b = row.b.trim()
     if (row.kind === 'link' && a) then.push({ action: 'link', paths: splitList(a), ...(b ? { tags: splitList(b) } : {}) })
+    if (row.kind === 'unlink' && a) then.push({ action: 'unlink', paths: splitList(a) })
     if (row.kind === 'tag' && a) then.push({ action: 'tag', tags: splitList(a) })
     if (row.kind === 'notify' && a) then.push({ action: 'notify', message: a })
+    if (row.kind === 'delete') then.push({ action: 'delete' })
+    if (row.kind === 'destroy') then.push({ action: 'destroy' })
     if (row.kind === 'agent' && a && b) {
-      const output: Record<string, unknown> = {}
-      if (row.notePath.trim()) {
-        output.note = { path: row.notePath.trim(), ...(row.noteTitle.trim() ? { title: row.noteTitle.trim() } : {}) }
-      }
-      if (row.notifyReply) output.notify = true
-      then.push({ action: 'agent', slug: a, prompt: b, ...(Object.keys(output).length ? { output } : {}) })
+      const output = buildOutput(row)
+      then.push({ action: 'agent', slug: a, prompt: b, ...(output ? { output } : {}) })
     }
-    if (row.kind === 'script' && a) then.push({ action: 'script', path: a })
+    if (row.kind === 'script' && a) {
+      const output = buildOutput(row)
+      then.push({ action: 'script', path: a, ...(output ? { output } : {}) })
+    }
   }
 
   return {
@@ -166,29 +193,47 @@ function parseRule(rule: HookRule): RuleForm | null {
     } else return null
   }
 
+  // output pipeline → row fields; foreign keys/shapes → null (JSON-only rule)
+  const parseOutput = (act: Record<string, unknown>): Partial<ActionRow> | null => {
+    const output = (act.output && typeof act.output === 'object' ? act.output : {}) as Record<string, unknown>
+    const extra = Object.keys(output).filter((k) => k !== 'note' && k !== 'file' && k !== 'notify')
+    if (extra.length) return null
+    const note = (output.note && typeof output.note === 'object' ? output.note : {}) as Record<string, unknown>
+    const file = (output.file && typeof output.file === 'object' ? output.file : {}) as Record<string, unknown>
+    const fileExtra = Object.keys(file).filter((k) => k !== 'path' && k !== 'backend' && k !== 'insert')
+    if (fileExtra.length) return null
+    return {
+      notePath: typeof note.path === 'string' ? note.path : '',
+      noteTitle: typeof note.title === 'string' ? note.title : '',
+      filePath: typeof file.path === 'string' ? file.path : '',
+      fileBackend: file.backend === 'data' ? 'data' : 'home',
+      fileInsert: typeof file.insert === 'string' ? file.insert : '',
+      notifyReply: output.notify === true,
+    }
+  }
+
   const actions: ActionRow[] = []
   for (const act of rule.then || []) {
     if (act.action === 'link' && Array.isArray(act.paths)) {
       actions.push({ ...emptyAction('link'), a: (act.paths as string[]).join(', '), b: Array.isArray(act.tags) ? (act.tags as string[]).join(', ') : '' })
+    } else if (act.action === 'unlink' && Array.isArray(act.paths)) {
+      actions.push({ ...emptyAction('unlink'), a: (act.paths as string[]).join(', ') })
     } else if (act.action === 'tag' && Array.isArray(act.tags)) {
       actions.push({ ...emptyAction('tag'), a: (act.tags as string[]).join(', ') })
     } else if (act.action === 'notify' && typeof act.message === 'string') {
       actions.push({ ...emptyAction('notify'), a: act.message })
+    } else if (act.action === 'delete') {
+      actions.push(emptyAction('delete'))
+    } else if (act.action === 'destroy') {
+      actions.push(emptyAction('destroy'))
     } else if (act.action === 'agent' && typeof act.slug === 'string' && typeof act.prompt === 'string') {
-      const output = (act.output && typeof act.output === 'object' ? act.output : {}) as Record<string, unknown>
-      const extra = Object.keys(output).filter((k) => k !== 'note' && k !== 'notify')
-      if (extra.length) return null
-      const note = (output.note && typeof output.note === 'object' ? output.note : {}) as Record<string, unknown>
-      actions.push({
-        ...emptyAction('agent'),
-        a: act.slug,
-        b: act.prompt,
-        notePath: typeof note.path === 'string' ? note.path : '',
-        noteTitle: typeof note.title === 'string' ? note.title : '',
-        notifyReply: output.notify === true,
-      })
+      const out = parseOutput(act as Record<string, unknown>)
+      if (!out) return null
+      actions.push({ ...emptyAction('agent'), a: act.slug, b: act.prompt, ...out })
     } else if (act.action === 'script' && typeof act.path === 'string') {
-      actions.push({ ...emptyAction('script'), a: act.path })
+      const out = parseOutput(act as Record<string, unknown>)
+      if (!out) return null
+      actions.push({ ...emptyAction('script'), a: act.path, ...out })
     } else {
       return null
     }
@@ -217,18 +262,33 @@ function summarizeWhen(rule: HookRule): string {
   return parts.join(' · ')
 }
 
+function summarizeOutput(a: Record<string, unknown>): string {
+  const out = (a.output || {}) as Record<string, unknown>
+  const note = (out.note || {}) as Record<string, unknown>
+  const file = (out.file || {}) as Record<string, unknown>
+  return [
+    note.path ? `output → note ${note.path}` : '',
+    file.path ? `output → file ${file.backend === 'data' ? 'data:' : 'home/'}${file.path}${file.insert ? ` (indexed at ${file.insert})` : ''}` : '',
+    out.notify ? 'output → notify' : '',
+  ].filter(Boolean).join(', ')
+}
+
 function summarizeThen(rule: HookRule): string {
   return (rule.then || []).map((a) => {
     if (a.action === 'link') return `file into ${(a.paths as string[])?.join(', ')}`
+    if (a.action === 'unlink') return `remove from ${(a.paths as string[])?.join(', ')}`
     if (a.action === 'tag') return `tag ${(a.tags as string[])?.join(', ')}`
     if (a.action === 'notify') return 'notify me'
+    if (a.action === 'delete') return 'delete from Canvas (keeps stored files/mail)'
+    if (a.action === 'destroy') return '⚠ delete everywhere (index + storage)'
     if (a.action === 'agent') {
-      const out = (a.output || {}) as Record<string, unknown>
-      const note = (out.note || {}) as Record<string, unknown>
-      const extras = [note.path ? `reply → note ${note.path}` : '', out.notify ? 'reply → notify' : ''].filter(Boolean)
-      return `ask agent "${a.slug}"${extras.length ? ` (${extras.join(', ')})` : ''}`
+      const extras = summarizeOutput(a as Record<string, unknown>)
+      return `ask agent "${a.slug}"${extras ? ` (${extras})` : ''}`
     }
-    if (a.action === 'script') return `run ${a.path}`
+    if (a.action === 'script') {
+      const extras = summarizeOutput(a as Record<string, unknown>)
+      return `run ${a.path}${extras ? ` (${extras})` : ''}`
+    }
     return a.action
   }).join(' · ') || '(no actions)'
 }
@@ -377,6 +437,27 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
             <label className="text-xs font-semibold text-muted-foreground">Then…</label>
             {form.actions.map((row, i) => {
               const set = (patch: Partial<ActionRow>) => setField('actions', form.actions.map((a, j) => (j === i ? { ...a, ...patch } : a)))
+              // Shared output pipeline UI (agent reply / script stdout).
+              const outputControls = (label: string) => (
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="text-muted-foreground">{label} →</span>
+                  <Input className="h-7 w-56 font-mono text-xs" placeholder="save as note at /path (optional)" title="Context path by default, dir:/path for the directory tree" value={row.notePath} onChange={(e) => set({ notePath: e.target.value })} />
+                  {row.notePath.trim() && (
+                    <Input className="h-7 w-56 text-xs" placeholder={'note title, e.g. Summary: {{doc.data.subject}}'} value={row.noteTitle} onChange={(e) => set({ noteTitle: e.target.value })} />
+                  )}
+                  <Input className="h-7 w-56 font-mono text-xs" placeholder="save as file, e.g. logs/agent.log" title="Relative path — written under the workspace home/ folder, or into the data blob store" value={row.filePath} onChange={(e) => set({ filePath: e.target.value })} />
+                  {row.filePath.trim() && (<>
+                    <select className="h-7 rounded-md border bg-background px-1 text-xs outline-none" value={row.fileBackend} onChange={(e) => set({ fileBackend: e.target.value as 'home' | 'data' })}>
+                      <option value="home">in home folder</option>
+                      <option value="data">in data store</option>
+                    </select>
+                    <Input className="h-7 w-48 font-mono text-xs" placeholder="then file under /path (optional)" title="Index the saved file as a document at this tree path (dir:/path for the directory tree)" value={row.fileInsert} onChange={(e) => set({ fileInsert: e.target.value })} />
+                  </>)}
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input type="checkbox" checked={row.notifyReply} onChange={(e) => set({ notifyReply: e.target.checked })} /> notify me
+                  </label>
+                </div>
+              )
               return (
                 <div key={i} className="flex flex-wrap items-center gap-2">
                   <select className={selectClass} value={row.kind} onChange={(e) => set(emptyAction(e.target.value as ActionKey))}>
@@ -386,11 +467,20 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
                     <Input className="h-8 w-64 font-mono text-sm" placeholder="/work/urgent or dir:/projects/x" title="Context-tree path by default; prefix with dir: for the directory tree, ctx: to be explicit. Comma-separate multiple paths." value={row.a} onChange={(e) => set({ a: e.target.value })} />
                     <Input className="h-8 w-44 font-mono text-sm" placeholder="tags (optional)" value={row.b} onChange={(e) => set({ b: e.target.value })} />
                   </>)}
+                  {row.kind === 'unlink' && (
+                    <Input className="h-8 w-64 font-mono text-sm" placeholder="/inbox or dir:/staging" title="Remove (unlink) the item from these paths — it stays everywhere else. Comma-separate multiple paths." value={row.a} onChange={(e) => set({ a: e.target.value })} />
+                  )}
                   {row.kind === 'tag' && (
                     <Input className="h-8 w-64 font-mono text-sm" placeholder="urgent, follow-up" value={row.a} onChange={(e) => set({ a: e.target.value })} />
                   )}
                   {row.kind === 'notify' && (
                     <Input className="h-8 w-96 max-w-full text-sm" placeholder={'New mail from {{doc.data.from}}: {{doc.data.subject}}'} value={row.a} onChange={(e) => set({ a: e.target.value })} />
+                  )}
+                  {row.kind === 'delete' && (
+                    <span className="text-xs text-muted-foreground">removes it from the Canvas index — files, blobs and mail on storage backends stay untouched</span>
+                  )}
+                  {row.kind === 'destroy' && (
+                    <span className="text-xs text-destructive">⚠ irreversible: deletes the stored bytes too (blobs, workspace files, mail on the server), then removes it from the index</span>
                   )}
                   {row.kind === 'agent' && (
                     <div className="flex w-full flex-col gap-2 pl-1">
@@ -401,27 +491,21 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
                         value={row.b}
                         onChange={(e) => set({ b: e.target.value })}
                       />
-                      <div className="flex flex-wrap items-center gap-2 text-xs">
-                        <span className="text-muted-foreground">reply →</span>
-                        <Input className="h-7 w-56 font-mono text-xs" placeholder="save as note at /path (optional)" title="Context path by default, dir:/path for the directory tree" value={row.notePath} onChange={(e) => set({ notePath: e.target.value })} />
-                        {row.notePath.trim() && (
-                          <Input className="h-7 w-56 text-xs" placeholder={'note title, e.g. Summary: {{doc.data.subject}}'} value={row.noteTitle} onChange={(e) => set({ noteTitle: e.target.value })} />
-                        )}
-                        <label className="flex items-center gap-1.5 cursor-pointer">
-                          <input type="checkbox" checked={row.notifyReply} onChange={(e) => set({ notifyReply: e.target.checked })} /> notify me
-                        </label>
-                      </div>
+                      {outputControls('reply')}
                     </div>
                   )}
                   {row.kind === 'script' && (
-                    scripts.length ? (
-                      <select className={`${selectClass} font-mono`} value={row.a} onChange={(e) => set({ a: e.target.value })}>
-                        <option value="">pick a script…</option>
-                        {scripts.map((s) => <option key={s} value={`scripts/${s}`}>{s}</option>)}
-                      </select>
-                    ) : (
-                      <Input className="h-8 w-64 font-mono text-sm" placeholder="scripts/my-script.sh" value={row.a} onChange={(e) => set({ a: e.target.value })} />
-                    )
+                    <div className="flex w-full flex-col gap-2 pl-1">
+                      {scripts.length ? (
+                        <select className={`${selectClass} w-64 font-mono`} value={row.a} onChange={(e) => set({ a: e.target.value })}>
+                          <option value="">pick a script…</option>
+                          {scripts.map((s) => <option key={s} value={`scripts/${s}`}>{s}</option>)}
+                        </select>
+                      ) : (
+                        <Input className="h-8 w-64 font-mono text-sm" placeholder="scripts/my-script.sh" value={row.a} onChange={(e) => set({ a: e.target.value })} />
+                      )}
+                      {outputControls('output')}
+                    </div>
                   )}
                   <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setField('actions', form.actions.filter((_, j) => j !== i))}>
                     <X className="h-3.5 w-3.5" />

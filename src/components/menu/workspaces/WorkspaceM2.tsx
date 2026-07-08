@@ -364,13 +364,17 @@ export function WorkspaceM2() {
             rootLabel={wsName ?? undefined}
             searchQuery={searchQuery}
             pastedDocumentIds={docClipboard?.documentIds}
-            onPasteDocuments={docClipboard && wsName ? async (path, ids) => {
+            onPasteDocuments={wsName ? async (path, ids) => {
+              // Ungated on the clipboard: also serves drag-and-drop from the
+              // content area (no prior "Copy" involved).
               const treeType: 'context' | 'directory' = activeTab === 'directory' ? 'directory' : 'context'
               const treeName = activeTab === 'directory' ? 'directory' : DEFAULT_WORKSPACE_TREE_NAME
               const success = await pasteDocumentsToWorkspacePath(wsName, path, ids, treeName, treeType)
               if (success) {
-                setDocClipboard(null)
-                window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: null }))
+                if (docClipboard) {
+                  setDocClipboard(null)
+                  window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: null }))
+                }
                 window.dispatchEvent(new CustomEvent('workspace:documents:refresh', {
                   detail: { workspaceName: wsName, path, treeName },
                 }))

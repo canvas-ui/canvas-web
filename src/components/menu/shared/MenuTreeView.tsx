@@ -759,10 +759,28 @@ export function MenuTreeView({
     isCopyRef.current = false
     setIsCopyDrag(false)
     setDragOverPath(null)
-  }, [])
+  }, [treeName])
 
   const handleDrop = useCallback(async (targetPath: string, e: React.DragEvent) => {
     e.preventDefault()
+    // Documents dragged from the content area carry an application/json
+    // payload ({ type: 'document', documentIds }) — link them into the
+    // drop path instead of treating the drop as a tree-path move.
+    const docPayload = (() => {
+      try { return JSON.parse(e.dataTransfer.getData('application/json')) as { type?: string; documentIds?: number[] } }
+      catch { return null }
+    })()
+    if (docPayload?.type === 'document' && Array.isArray(docPayload.documentIds) && docPayload.documentIds.length) {
+      draggedPathRef.current = null
+      isCopyRef.current = false
+      setIsCopyDrag(false)
+      setDragOverPath(null)
+      if (onPasteDocuments) {
+        try { await onPasteDocuments(targetPath, docPayload.documentIds) }
+        catch (err) { alert(err instanceof Error ? err.message : String(err)) }
+      }
+      return
+    }
     const payload = (() => {
       try { return JSON.parse(e.dataTransfer.getData('application/x-canvas-tree-path')) as { path?: string; treeName?: string } }
       catch { return null }
@@ -789,7 +807,7 @@ export function MenuTreeView({
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err))
     }
-  }, [isValidPathDrop, onCopyPath, onMovePath, treeName])
+  }, [isValidPathDrop, onCopyPath, onMovePath, onPasteDocuments, treeName])
 
   const q = searchQuery.toLowerCase().trim()
 
