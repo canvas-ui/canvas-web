@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Save, Trash2, RefreshCw, Power, PowerOff, GitBranch, BookOpen, History, RotateCcw } from 'lucide-react'
+import { Plus, Save, Trash2, RefreshCw, Power, PowerOff, GitBranch, BookOpen, History, RotateCcw, Maximize2, Minimize2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CodeEditor } from '@/components/ui/code-editor'
@@ -55,6 +55,15 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
   const [runs, setRuns] = useState<HookRun[]>([])
   const [runsFailedOnly, setRunsFailedOnly] = useState(false)
   const [replayingId, setReplayingId] = useState<string | null>(null)
+  const [isMaximized, setIsMaximized] = useState(false)
+
+  // Esc leaves the maximized editor (unless a dialog/confirm has focus).
+  useEffect(() => {
+    if (!isMaximized) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsMaximized(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isMaximized])
 
   const replay = async (run: HookRun) => {
     if (!confirm(`Replay ${run.handlerType} "${run.handler}" for ${run.event} (docs ${(run.docIds || []).join(', ')})?`)) return
@@ -567,16 +576,28 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
           )}
         </div>
 
-        <div className="md:col-span-2 border rounded-lg p-2 flex flex-col">
+        <div className={isMaximized
+          ? 'fixed inset-0 z-50 bg-background p-4 flex flex-col'
+          : 'md:col-span-2 border rounded-lg p-2 flex flex-col'}
+        >
           {selected ? (
             <>
               <div className="flex items-center justify-between mb-2">
                 <span className="font-mono text-sm truncate">{selected}{isDirty ? ' •' : ''}</span>
-                <Button size="sm" onClick={save} disabled={isSaving || !isDirty}>
-                  <Save className="mr-2 h-4 w-4" /> Save
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button size="sm" onClick={save} disabled={isSaving || !isDirty}>
+                    <Save className="mr-2 h-4 w-4" /> Save
+                  </Button>
+                  <Button
+                    size="sm" variant="ghost" className="h-8 w-8 p-0"
+                    title={isMaximized ? 'Exit full screen (Esc)' : 'Edit full screen'}
+                    onClick={() => setIsMaximized(!isMaximized)}
+                  >
+                    {isMaximized ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                  </Button>
+                </div>
               </div>
-              <div className="flex-1 min-h-[400px] max-h-[60vh] overflow-auto rounded border text-sm">
+              <div className={`flex-1 overflow-auto rounded border text-sm ${isMaximized ? '' : 'min-h-[400px] max-h-[60vh]'}`}>
                 <CodeEditor
                   value={content}
                   path={selected}
