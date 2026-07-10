@@ -27,12 +27,17 @@ function urlTitleKeys(schema: string): { urlKey: string | null; titleKey: string
 // (checksum recalculated) — accepted.
 export function DocumentEditForm({ document: doc, workspaceId, onClose }: { document: Document; workspaceId: string; onClose: () => void }) {
   const { showSuccessToast, showErrorToast } = useToastHelpers()
+  // Schema-specific fields (url/title/body/tags) only render for note/link/tab.
+  // The comment section is universal — every document can carry a user comment,
+  // including photos/files that are otherwise not editable.
+  const editable = isEditableSchema(doc.schema)
   const isNote = doc.schema === NOTE_SCHEMA
   const { urlKey, titleKey } = urlTitleKeys(doc.schema)
 
   const [url, setUrl] = useState<string>(urlKey ? String(doc.data?.[urlKey] ?? '') : '')
   const [title, setTitle] = useState<string>(String(doc.data?.[titleKey] ?? ''))
   const [content, setContent] = useState<string>(String(doc.data?.content ?? ''))
+  const [comment, setComment] = useState<string>(String(doc.comment ?? ''))
   const [tags, setTags] = useState<string[]>(
     featuresToTags((doc.metadata as Record<string, unknown>)?.features as string[] | undefined).length
       ? featuresToTags((doc.metadata as Record<string, unknown>)?.features as string[] | undefined)
@@ -48,28 +53,38 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
   }, [workspaceId])
 
   const urlValid = !urlKey || (() => { try { new URL(url.trim()); return true } catch { return false } })()
-  const canSave = !saving && (isNote ? content.trim().length > 0 : urlValid)
+  // Non-editable schemas (photos/files) save comment-only, so they're always valid.
+  const canSave = !saving && (!editable ? true : (isNote ? content.trim().length > 0 : urlValid))
 
   const handleSave = async () => {
     setSaving(true)
     try {
-      const cleanTags = tags.map(t => t.trim()).filter(Boolean)
-      let data: Record<string, unknown>
-      if (isNote) {
-        data = { ...(title.trim() ? { title: title.trim() } : {}), content }
-      } else {
-        data = { ...doc.data }
-        if (urlKey) data[urlKey] = url.trim()
-        if (title.trim()) data[titleKey] = title.trim(); else delete data[titleKey]
-        data.tags = cleanTags
-      }
-      await updateWorkspaceDocument(workspaceId, {
+      const payload: {
+        id: number; schema: string; schemaVersion: string
+        comment: string; data?: Record<string, unknown>; metadata?: Record<string, unknown>
+      } = {
         id: doc.id,
         schema: doc.schema,
         schemaVersion: doc.schemaVersion,
-        data,
-        metadata: { features: tagsToFeatures(tags) },
-      })
+        comment: comment.trim(),
+      }
+      // Only send data/metadata for editable schemas — sending `data` would
+      // wholesale-replace it (BaseDocument.update), clobbering a photo/file's data.
+      if (editable) {
+        const cleanTags = tags.map(t => t.trim()).filter(Boolean)
+        let data: Record<string, unknown>
+        if (isNote) {
+          data = { ...(title.trim() ? { title: title.trim() } : {}), content }
+        } else {
+          data = { ...doc.data }
+          if (urlKey) data[urlKey] = url.trim()
+          if (title.trim()) data[titleKey] = title.trim(); else delete data[titleKey]
+          data.tags = cleanTags
+        }
+        payload.data = data
+        payload.metadata = { features: tagsToFeatures(tags) }
+      }
+      await updateWorkspaceDocument(workspaceId, payload)
       showSuccessToast('Document updated')
       window.dispatchEvent(new CustomEvent('workspace:documents:refresh'))
       onClose()
@@ -82,7 +97,7 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
 
   return (
     <div className="flex flex-col gap-4">
-      {urlKey && (
+      {editable && urlKey && (
         <div className="space-y-1.5">
           <Label htmlFor="edit-url">URL</Label>
           <Input id="edit-url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com" className="font-mono text-xs" />
@@ -90,21 +105,38 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
         </div>
       )}
 
-      <div className="space-y-1.5">
-        <Label htmlFor="edit-title">Title</Label>
-        <Input id="edit-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={isNote ? "Optional — defaults to today's date" : 'Optional display title'} />
-      </div>
+      {editable && (
+        <div className="space-y-1.5">
+          <Label htmlFor="edit-title">Title</Label>
+          <Input id="edit-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={isNote ? "Optional — defaults to today's date" : 'Optional display title'} />
+        </div>
+      )}
 
-      {isNote && (
+      {editable && isNote && (
         <div className="space-y-1.5">
           <Label>Body</Label>
           <LazyMarkdownEditor value={content} onChange={setContent} placeholder="Write your note…" />
         </div>
       )}
 
+      {editable && (
+        <div className="space-y-1.5">
+          <Label>Tags</Label>
+          <TagInput tags={tags} onChange={setTags} suggestions={suggestions} />
+        </div>
+      )}
+
+      {/* Universal: every document can carry a user-authored comment. */}
       <div className="space-y-1.5">
-        <Label>Tags</Label>
-        <TagInput tags={tags} onChange={setTags} suggestions={suggestions} />
+        <Label htmlFor="edit-comment">Comment</Label>
+        <textarea
+          id="edit-comment"
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          rows={3}
+          placeholder="Add context you can't infer from the content — e.g. “sofa from the cozmo bar in Košice”"
+          className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+        />
       </div>
 
       <div className="flex justify-end gap-2 pt-2">

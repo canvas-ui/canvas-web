@@ -129,6 +129,8 @@ export interface Document {
   schema: string
   schemaVersion: string
   data: Record<string, any>
+  // Optional user-authored free-text note (top-level, never regenerated).
+  comment?: string
   metadata: {
     contentType: string
     contentEncoding: string

@@ -22,7 +22,9 @@ interface TabProps {
 
 export function ViewTab({ document, workspaceId, initialEdit = false, onChanged }: TabProps & { initialEdit?: boolean }) {
   const isPublic = usePublicShareCode() != null
-  const canEdit = !isPublic && isEditableSchema(document.schema)
+  // Every non-public document is editable — at minimum the universal comment
+  // section; schema-specific fields (url/title/body) render only for note/link/tab.
+  const canEdit = !isPublic
   const [editing, setEditing] = useState(initialEdit && isEditableSchema(document.schema))
   // Render-time state reset: switching documents re-seeds the edit mode.
   const resetKey = `${document.id}:${initialEdit}`
@@ -51,6 +53,12 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
         </div>
       )}
       <DocumentRenderer workspaceId={workspaceId} document={document} />
+      {document.comment?.trim() && (
+        <div className="rounded-md border border-border bg-muted/40 px-3 py-2">
+          <p className="text-xs font-medium text-muted-foreground mb-0.5">Comment</p>
+          <p className="text-sm whitespace-pre-wrap">{document.comment}</p>
+        </div>
+      )}
     </div>
   )
 }

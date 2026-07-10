@@ -618,7 +618,7 @@ export interface DestroyResult {
 
 export async function updateWorkspaceDocument(
   workspaceId: string,
-  document: { id: number; schema: string; schemaVersion: string; data: Record<string, any>; metadata?: Record<string, any> }
+  document: { id: number; schema: string; schemaVersion: string; data?: Record<string, any>; metadata?: Record<string, any>; comment?: string }
 ): Promise<boolean> {
   await api.put<{ payload: unknown }>(
     `${API_ROUTES.workspaces}/${workspaceId}/documents`,
