@@ -28,6 +28,8 @@ const SCHEMA_OPTIONS = [
 const EVENT_OPTIONS = [
   { value: 'document.inserted', label: 'arrives (is added)' },
   { value: 'document.updated', label: 'is updated' },
+  { value: 'document.linked', label: 'is filed into a folder' },
+  { value: 'document.unlinked', label: 'is removed from a folder' },
 ] as const
 
 type ConditionKey = 'from' | 'subject' | 'urlHost' | 'urlContains' | 'path' | 'mime'
@@ -77,12 +79,13 @@ interface RuleForm {
   description: string
   event: string
   schema: string
+  cascade: boolean // also run on items produced by other rules/hooks/agents
   conditions: ConditionRow[]
   actions: ActionRow[]
 }
 
 const EMPTY_FORM: RuleForm = {
-  id: null, description: '', event: 'document.inserted', schema: '',
+  id: null, description: '', event: 'document.inserted', schema: '', cascade: false,
   conditions: [], actions: [emptyAction('link')],
 }
 
@@ -157,6 +160,7 @@ function buildRule(form: RuleForm): HookRule {
     id: form.id || slugify(form.description),
     enabled: true,
     ...(form.description ? { description: form.description } : {}),
+    ...(form.cascade ? { cascade: true } : {}),
     when,
     then,
   }
@@ -244,6 +248,7 @@ function parseRule(rule: HookRule): RuleForm | null {
     description: rule.description || '',
     event,
     schema: typeof schema === 'string' ? schema : '',
+    cascade: rule.cascade === true,
     conditions,
     actions: actions.length ? actions : [emptyAction('link')],
   }
@@ -259,6 +264,7 @@ function summarizeWhen(rule: HookRule): string {
   for (const key of ['from', 'subject', 'url', 'path', 'mime']) {
     if (w[key] !== undefined) parts.push(`${key}: ${fmt(w[key])}`)
   }
+  if (rule.cascade === true) parts.push('incl. automation-created items')
   return parts.join(' · ')
 }
 
@@ -397,6 +403,13 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
               <select className={selectClass} value={form.event} onChange={(e) => setField('event', e.target.value)}>
                 {EVENT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
+              <label
+                className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer"
+                title="By default rules ignore items created by other rules, hooks or agents (so automations can't trigger each other in a loop). Tick to also react to those — a server-side depth limit still stops runaway chains."
+              >
+                <input type="checkbox" checked={form.cascade} onChange={(e) => setField('cascade', e.target.checked)} />
+                incl. automation-created items
+              </label>
             </div>
             {form.conditions.map((row, i) => (
               <div key={i} className="flex flex-wrap items-center gap-2">

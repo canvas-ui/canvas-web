@@ -100,6 +100,8 @@ export interface HookRule {
   id: string
   enabled?: boolean
   description?: string
+  /** Opt-in: also fire on events caused by automation (origin ≠ user). */
+  cascade?: boolean
   when: { event: string; [key: string]: unknown }
   then: HookRuleAction[]
 }
