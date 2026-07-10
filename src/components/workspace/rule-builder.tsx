@@ -32,15 +32,17 @@ const EVENT_OPTIONS = [
   { value: 'document.unlinked', label: 'is removed from a folder' },
 ] as const
 
-type ConditionKey = 'from' | 'subject' | 'urlHost' | 'urlContains' | 'path' | 'mime'
+type ConditionKey = 'from' | 'to' | 'subject' | 'urlHost' | 'urlContains' | 'path' | 'mime' | 'attachment'
 
 const CONDITION_FIELDS: Array<{ key: ConditionKey; label: string; hint: string }> = [
   { key: 'from', label: 'sender contains', hint: 'boss@company.tld' },
+  { key: 'to', label: 'sent to (To/Cc) contains', hint: 'invoice@my-company.tld' },
   { key: 'subject', label: 'subject contains', hint: 'invoice' },
   { key: 'urlHost', label: 'website (host) is', hint: 'youtube.com' },
   { key: 'urlContains', label: 'URL contains', hint: '/watch?v=' },
   { key: 'path', label: 'path starts with', hint: '/to-sort' },
   { key: 'mime', label: 'file type (mime) matches', hint: 'image/*' },
+  { key: 'attachment', label: 'has attachment (mime) matching', hint: 'application/pdf — or * for any' },
 ]
 
 type ActionKey = 'link' | 'unlink' | 'tag' | 'notify' | 'agent' | 'script' | 'delete' | 'destroy'
@@ -169,7 +171,7 @@ function buildRule(form: RuleForm): HookRule {
 // ── rule → form (only shapes the builder emits; others are JSON-only) ────────
 
 function parseRule(rule: HookRule): RuleForm | null {
-  const { event, schema, from, subject, path, mime, url, ...restWhen } = rule.when
+  const { event, schema, from, to, subject, path, mime, url, attachment, ...restWhen } = rule.when
   if (Object.keys(restWhen).length > 0) return null
   if (typeof event !== 'string' || !EVENT_OPTIONS.some((e) => e.value === event)) return null
   if (schema !== undefined && (typeof schema !== 'string' || !SCHEMA_OPTIONS.some((s) => s.value === schema))) return null
@@ -183,9 +185,13 @@ function parseRule(rule: HookRule): RuleForm | null {
     return true
   }
   if (from !== undefined && !push('from', from)) return null
+  if (to !== undefined && !push('to', to)) return null
   if (subject !== undefined && !push('subject', subject)) return null
   if (path !== undefined && !push('path', path)) return null
   if (mime !== undefined && !push('mime', mime)) return null
+  // Builder emits attachment as mime pattern string(s); `true` / object forms
+  // ({ filename }) are JSON-only.
+  if (attachment !== undefined && !push('attachment', attachment)) return null
   if (url !== undefined) {
     if (typeof url === 'string') conditions.push({ field: 'urlContains', value: url })
     else if (url && typeof url === 'object') {
@@ -261,8 +267,8 @@ function summarizeWhen(rule: HookRule): string {
   const eventLabel = EVENT_OPTIONS.find((e) => e.value === w.event)?.label || String(w.event)
   parts.push(`When ${schemaLabel} ${eventLabel}`)
   const fmt = (v: unknown) => (Array.isArray(v) ? v.join(' or ') : typeof v === 'object' ? JSON.stringify(v) : String(v))
-  for (const key of ['from', 'subject', 'url', 'path', 'mime']) {
-    if (w[key] !== undefined) parts.push(`${key}: ${fmt(w[key])}`)
+  for (const key of ['from', 'to', 'subject', 'url', 'path', 'mime', 'attachment']) {
+    if (w[key] !== undefined) parts.push(`${key === 'attachment' ? 'attachment mime' : key}: ${fmt(w[key])}`)
   }
   if (rule.cascade === true) parts.push('incl. automation-created items')
   return parts.join(' · ')
