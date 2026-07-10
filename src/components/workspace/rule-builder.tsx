@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Plus, Pencil, Trash2, Save, X, Braces } from 'lucide-react'
+import { Plus, Pencil, Trash2, Save, X, Braces, PlayCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast-container'
-import { getRules, saveRules, type HookRule, type HookRuleAction } from '@/services/hooks'
+import { getRules, saveRules, backfillHook, type HookRule, type HookRuleAction } from '@/services/hooks'
 import { listScripts } from '@/services/scripts'
 
 // Outlook-style rule builder: clickable conditions + predefined actions that
@@ -359,6 +359,31 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
     void persist(rules.filter((r) => r.id !== id), 'Rule deleted')
   }
 
+  // Backfill: dry-run first, show what would fire, then execute on confirm.
+  const [backfillingId, setBackfillingId] = useState<string | null>(null)
+  const backfillRule = async (id: string) => {
+    setBackfillingId(id)
+    try {
+      const dry = await backfillHook(workspaceId, { ruleId: id, dryRun: true })
+      const wouldFire = dry.results.filter((r) => r.matched).length
+      if (!wouldFire) {
+        showToast({ title: 'Backfill', description: `No matches among ${dry.processed} existing documents (path conditions can't match during backfill).` })
+        return
+      }
+      if (!confirm(`Rule "${id}" matches ${wouldFire} of ${dry.processed} existing documents. Run its actions on them now?`)) return
+      const run = await backfillHook(workspaceId, { ruleId: id })
+      showToast({
+        title: 'Backfill finished',
+        description: `${run.matched} documents processed, ${run.failed} failed — details in the Runs tab`,
+        ...(run.failed ? { variant: 'destructive' as const } : {}),
+      })
+    } catch (error) {
+      showToast({ title: 'Backfill failed', description: error instanceof Error ? error.message : 'Unknown error', variant: 'destructive' })
+    } finally {
+      setBackfillingId(null)
+    }
+  }
+
   const setField = <K extends keyof RuleForm>(key: K, value: RuleForm[K]) =>
     setForm((f) => (f ? { ...f, [key]: value } : f))
 
@@ -570,6 +595,14 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
                   </span>
                 </label>
                 <div className="flex items-center shrink-0">
+                  <Button
+                    size="sm" variant="ghost" className="h-7 w-7 p-0"
+                    title="Backfill: apply this rule to existing documents (dry-run first)"
+                    disabled={backfillingId !== null}
+                    onClick={() => backfillRule(rule.id)}
+                  >
+                    <PlayCircle className={`h-3.5 w-3.5 ${backfillingId === rule.id ? 'animate-pulse' : ''}`} />
+                  </Button>
                   <Button
                     size="sm" variant="ghost" className="h-7 w-7 p-0"
                     title={editable ? 'Edit rule' : 'This rule uses advanced matchers — edit it as JSON'}

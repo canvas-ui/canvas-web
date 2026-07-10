@@ -123,6 +123,97 @@ export async function saveRules(workspaceId: string, rules: HookRule[]): Promise
   await saveHook(workspaceId, RULES_PATH, JSON.stringify(doc, null, 2) + '\n')
 }
 
+// ── Run log + explain (GET /hooks/runs, POST /hooks/explain) ────────────────
+
+export interface HookRunActionResult {
+  action: string
+  status: 'ok' | 'error' | 'skipped'
+  error?: string
+}
+
+export interface HookRun {
+  runId: string
+  ts: string
+  trigger: 'event' | 'backfill' | 'replay'
+  event: string
+  eventId: string | null
+  origin: string
+  depth: number
+  batch: boolean
+  handlerType: 'hook' | 'rule' | 'dispatch'
+  handler: string
+  docIds: number[]
+  durationMs: number
+  status: 'ok' | 'error' | 'skipped'
+  error?: string
+  skipReason?: string
+  actions?: HookRunActionResult[]
+  outputTail?: string
+}
+
+export async function listRuns(
+  workspaceId: string,
+  opts: { limit?: number; handler?: string; event?: string; failed?: boolean } = {},
+): Promise<HookRun[]> {
+  const params = new URLSearchParams()
+  if (opts.limit) params.set('limit', String(opts.limit))
+  if (opts.handler) params.set('handler', opts.handler)
+  if (opts.event) params.set('event', opts.event)
+  if (opts.failed) params.set('failed', 'true')
+  const query = params.toString()
+  const res = await api.get<{ payload: HookRun[] }>(`${hooksBase(workspaceId)}/runs${query ? `?${query}` : ''}`)
+  return res.payload || []
+}
+
+export interface ExplainCheck {
+  key: string
+  expected: unknown
+  matched: boolean
+  unknown?: boolean
+}
+
+export interface ExplainResult {
+  documentId: number
+  event: string
+  schema: string
+  paths: string[]
+  rules: Array<{ id: string; description?: string; cascade: boolean; matched: boolean; enabled: boolean; checks: ExplainCheck[] }>
+  hooks: Array<{ path: string; note: string }>
+}
+
+export async function explainDocument(
+  workspaceId: string,
+  body: { documentId: number; event?: string; paths?: string[] },
+): Promise<ExplainResult> {
+  const res = await api.post<{ payload: ExplainResult }>(`${hooksBase(workspaceId)}/explain`, body)
+  return res.payload
+}
+
+// ── Backfill + replay ────────────────────────────────────────────────────────
+
+export interface BackfillResult {
+  target: { ruleId?: string; hookFile?: string }
+  event: string
+  dryRun: boolean
+  processed: number
+  matched: number
+  failed: number
+  results: Array<{ docId: number; schema: string; matched?: boolean | null; status?: string; checks?: ExplainCheck[] }>
+}
+
+export async function backfillHook(
+  workspaceId: string,
+  body: { ruleId?: string; hookFile?: string; event?: string; schema?: string; limit?: number; dryRun?: boolean },
+): Promise<BackfillResult> {
+  const res = await api.post<{ payload: BackfillResult }>(`${hooksBase(workspaceId)}/backfill`, body)
+  return res.payload
+}
+
+export async function replayRun(workspaceId: string, runId: string): Promise<{ status: string }> {
+  const res = await api.post<{ payload: { status: string } }>(`${hooksBase(workspaceId)}/runs/${runId}/replay`, {})
+  return res.payload
+}
+
 // ── Create-hook wizard backend (GET /hooks/meta + POST /hooks/generate) ─────
 
 export interface HookEventMeta {

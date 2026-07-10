@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Save, Trash2, RefreshCw, Power, PowerOff, GitBranch, BookOpen } from 'lucide-react'
+import { Plus, Save, Trash2, RefreshCw, Power, PowerOff, GitBranch, BookOpen, History, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CodeEditor } from '@/components/ui/code-editor'
@@ -16,8 +16,11 @@ import {
   setHookEnabled,
   getHooksMeta,
   generateHook,
+  listRuns,
+  replayRun,
   type HookFile,
   type HooksMeta,
+  type HookRun,
 } from '@/services/hooks'
 import { listScripts, getScript, saveScript, deleteScript } from '@/services/scripts'
 import { RuleBuilder } from '@/components/workspace/rule-builder'
@@ -26,7 +29,7 @@ interface HooksPanelProps {
   workspaceId: string
 }
 
-type Section = 'rules' | 'hooks' | 'scripts'
+type Section = 'rules' | 'hooks' | 'scripts' | 'runs'
 
 const NEW_SCRIPT_TEMPLATE = `#!/usr/bin/env bash
 # Called from a hook via: spawn('bash', [script, ...args])
@@ -49,6 +52,23 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
   const [newName, setNewName] = useState('')
   const [newActions, setNewActions] = useState<string[]>([])
   const [isCreating, setIsCreating] = useState(false)
+  const [runs, setRuns] = useState<HookRun[]>([])
+  const [runsFailedOnly, setRunsFailedOnly] = useState(false)
+  const [replayingId, setReplayingId] = useState<string | null>(null)
+
+  const replay = async (run: HookRun) => {
+    if (!confirm(`Replay ${run.handlerType} "${run.handler}" for ${run.event} (docs ${(run.docIds || []).join(', ')})?`)) return
+    setReplayingId(run.runId)
+    try {
+      const result = await replayRun(workspaceId, run.runId)
+      showToast({ title: 'Replayed', description: `${run.handler} → ${result.status}` })
+      await loadFiles()
+    } catch (error) {
+      showToast({ title: 'Replay failed', description: error instanceof Error ? error.message : 'Unknown error', variant: 'destructive' })
+    } finally {
+      setReplayingId(null)
+    }
+  }
 
   const svc = section === 'scripts'
     ? { list: listScripts, get: getScript, save: saveScript, del: deleteScript }
@@ -56,6 +76,17 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
 
   const loadFiles = async () => {
     if (section === 'rules') return // RuleBuilder owns its own data
+    if (section === 'runs') {
+      try {
+        setIsLoading(true)
+        setRuns(await listRuns(workspaceId, { limit: 100, failed: runsFailedOnly || undefined }))
+      } catch {
+        showToast({ title: 'Error', description: 'Failed to load hook runs', variant: 'destructive' })
+      } finally {
+        setIsLoading(false)
+      }
+      return
+    }
     try {
       setIsLoading(true)
       setFiles(await svc.list(workspaceId))
@@ -67,7 +98,7 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { loadFiles() }, [workspaceId, section])
+  useEffect(() => { loadFiles() }, [workspaceId, section, runsFailedOnly])
 
   const switchSection = (next: Section) => {
     if (next === section) return
@@ -232,13 +263,32 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
             <Button
               size="sm"
               variant={section === 'scripts' ? 'secondary' : 'ghost'}
-              className="rounded-l-none"
+              className="rounded-none"
               onClick={() => switchSection('scripts')}
             >
               Scripts
             </Button>
+            <Button
+              size="sm"
+              variant={section === 'runs' ? 'secondary' : 'ghost'}
+              className="rounded-l-none"
+              onClick={() => switchSection('runs')}
+            >
+              <History className="mr-1 h-3.5 w-3.5" /> Runs
+            </Button>
           </div>
-          {section !== 'rules' && (
+          {section === 'runs' && (
+            <>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+                <input type="checkbox" checked={runsFailedOnly} onChange={(e) => setRunsFailedOnly(e.target.checked)} />
+                failed only
+              </label>
+              <Button size="sm" variant="ghost" onClick={loadFiles} title="Reload">
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+          {section !== 'rules' && section !== 'runs' && (
             <>
               <Button size="sm" variant="ghost" onClick={loadFiles} title="Reload">
                 <RefreshCw className="h-4 w-4" />
@@ -272,7 +322,81 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
         />
       )}
 
-      {section !== 'rules' && showReference && meta && (
+      {section === 'runs' && (
+        <div className="border rounded-lg overflow-auto max-h-[560px]">
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground p-3">Loading...</p>
+          ) : runs.length === 0 ? (
+            <p className="text-sm text-muted-foreground p-3">
+              No runs recorded yet{runsFailedOnly ? ' (failed only)' : ''}. Runs appear here every time a rule or hook executes.
+            </p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="text-xs text-muted-foreground border-b sticky top-0 bg-background">
+                <tr>
+                  <th className="text-left font-medium px-3 py-2">Time</th>
+                  <th className="text-left font-medium px-3 py-2">Handler</th>
+                  <th className="text-left font-medium px-3 py-2">Event</th>
+                  <th className="text-left font-medium px-3 py-2">Docs</th>
+                  <th className="text-right font-medium px-3 py-2">ms</th>
+                  <th className="text-left font-medium px-3 py-2">Status</th>
+                  <th className="px-2 py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {runs.map((run) => (
+                  <tr key={run.runId} className="border-b last:border-0 align-top hover:bg-muted/40">
+                    <td className="px-3 py-1.5 whitespace-nowrap text-xs text-muted-foreground" title={run.ts}>
+                      {new Date(run.ts).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-1.5 font-mono text-xs">
+                      <span className="text-muted-foreground">{run.handlerType}:</span>{run.handler}
+                      {run.origin !== 'user' && (
+                        <span className="ml-1.5 text-[10px] uppercase tracking-wide rounded bg-muted-foreground/15 px-1 py-0.5 text-muted-foreground">
+                          {run.origin}{run.depth ? ` d${run.depth}` : ''}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-1.5 font-mono text-xs">{run.event}{run.batch ? ' (batch)' : ''}</td>
+                    <td className="px-3 py-1.5 font-mono text-xs">{(run.docIds || []).join(', ')}</td>
+                    <td className="px-3 py-1.5 text-right font-mono text-xs">{run.durationMs}</td>
+                    <td className="px-3 py-1.5 text-xs">
+                      <span className={
+                        run.status === 'error' ? 'text-destructive font-medium'
+                          : run.status === 'skipped' ? 'text-muted-foreground'
+                            : 'text-green-600 dark:text-green-500'
+                      }>
+                        {run.status}
+                      </span>
+                      {run.error && <span className="block text-destructive/80 font-mono break-all">{run.error}</span>}
+                      {run.skipReason && <span className="block text-muted-foreground">{run.skipReason}</span>}
+                      {run.actions && run.actions.length > 0 && (
+                        <span className="block text-muted-foreground font-mono">
+                          {run.actions.map((a) => `${a.action}:${a.status}`).join(' ')}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-2 py-1.5">
+                      {run.handlerType !== 'dispatch' && (
+                        <Button
+                          size="sm" variant="ghost" className="h-6 w-6 p-0"
+                          title="Replay this run (reloads the document, re-runs the handler)"
+                          disabled={replayingId !== null}
+                          onClick={() => replay(run)}
+                        >
+                          <RotateCcw className={`h-3 w-3 ${replayingId === run.runId ? 'animate-spin' : ''}`} />
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {section !== 'rules' && section !== 'runs' && showReference && meta && (
         <div className="border rounded-lg p-4 space-y-4 bg-muted/30 text-sm">
           <div>
             <h4 className="font-medium mb-2">Hook context (<span className="font-mono">ctx</span>)</h4>
@@ -387,7 +511,7 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
         </div>
       )}
 
-      {section !== 'rules' && (
+      {section !== 'rules' && section !== 'runs' && (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="md:col-span-1 border rounded-lg p-2 max-h-[480px] overflow-auto">
           {isLoading ? (
