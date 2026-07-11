@@ -578,6 +578,7 @@ function TimelineTab() {
 const PREFIX_LABELS: Record<string, string> = {
   data: 'Data',
   'data/backend': 'Backends',
+  'data/mime': 'MIME types',
   client: 'Client',
   server: 'Server',
   user: 'User',
@@ -590,9 +591,12 @@ const PREFIX_LABELS: Record<string, string> = {
 function groupBitmaps(keys: string[]): Map<string, string[]> {
   const groups = new Map<string, string[]>()
   for (const key of keys) {
-    // Backend-source tags get their own group — they answer a different
-    // question ("where does it live") than the data/abstraction/* schema tags.
-    const prefix = key.startsWith('data/backend/') ? 'data/backend' : key.split('/')[0]
+    // Backend-source tags and MIME-type tags each get their own group — they
+    // answer a different question ("where does it live" / "what kind of file")
+    // than the data/abstraction/* schema tags.
+    const prefix = key.startsWith('data/backend/') ? 'data/backend'
+      : key.startsWith('data/mime/') ? 'data/mime'
+      : key.split('/')[0]
     if (!groups.has(prefix)) groups.set(prefix, [])
     groups.get(prefix)!.push(key)
   }

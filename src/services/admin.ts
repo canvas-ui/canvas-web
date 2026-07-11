@@ -302,6 +302,11 @@ export function adminOptimize(workspaceName: string, space?: string): Promise<Re
   return postReindex(workspaceName, 'optimize', space ? { space } : {})
 }
 
+/** Rebuild per-MIME-type presence bitmaps (data/mime/*) from stored docs (synchronous). */
+export function adminReindexMime(workspaceName: string): Promise<ReindexResult> {
+  return postReindex(workspaceName, 'reindex-mime')
+}
+
 // Combined admin service
 export const adminService = {
   users: adminUserService,

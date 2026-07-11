@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { LayerIconPicker } from '@/components/menu/shared/LayerIconPicker'
 import { DEFAULT_WORKSPACE_ICON, type LayerStyle } from '@/lib/layer-style'
 import { DefaultFoldersPicker, createDefaultFolders, useFolderSelection } from '@/components/workspaces/DefaultFoldersPicker'
-import { adminReindexTimelines, adminReindexSearch, adminReindexEmbeddings, adminOptimize } from '@/services/admin'
+import { adminReindexTimelines, adminReindexSearch, adminReindexEmbeddings, adminOptimize, adminReindexMime } from '@/services/admin'
 import { HooksPanel } from '@/components/workspace/hooks-panel'
 import { ImapMailboxesPanel } from '@/components/workspace/imap-mailboxes-panel'
 import { TokenManager } from '@/components/workspace/token-manager'
@@ -1034,9 +1034,10 @@ function ReindexSection({ workspaceName, onDone }: { workspaceName: string; onDo
   interface Op { key: string; label: string; description: string; confirm?: string; fn: () => Promise<{ message: string }> }
   const groups: { title: string; ops: Op[] }[] = [
     {
-      title: 'Timelines',
+      title: 'Bitmaps',
       ops: [
         { key: 'timelines', label: 'Reindex timelines', description: 'Rebuild the created/updated timelines from document data.', fn: () => adminReindexTimelines(workspaceName) },
+        { key: 'mime', label: 'Reindex MIME types', description: 'Rebuild the per-MIME-type presence bitmaps (data/mime/*) from stored docs — backfills blobs indexed before mime bitmaps existed.', fn: () => adminReindexMime(workspaceName) },
       ],
     },
     {
