@@ -375,7 +375,7 @@ export function WorkspaceM2() {
         ) : (
           <MenuTreeView
             root={activeTree}
-            treeName={activeTab === 'layers' ? DEFAULT_WORKSPACE_TREE_NAME : activeTab}
+            treeName={activeTab}
             isBackendsTree={activeTab === 'backends'}
             selectedPath={selectedPath}
             contentPath={contentPath}
