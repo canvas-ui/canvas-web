@@ -1108,13 +1108,28 @@ export interface WorkspaceDbStats {
     dim?: number
     cacheDir?: string
     embeddableSchemas?: string[]
+    imageMaxDistance?: number | null
     vector?: { ready: boolean; rowCount?: number; error?: string } | Record<string, unknown>
+    vectorSpaces?: Record<string, { ready: boolean; dim?: number; chunkRows?: number; embeddedDocs?: number; error?: string }>
     embedder?: Record<string, unknown>
     queue?: { pending: number; draining: boolean } | null
   }
+  embedder?: { queue?: { pending: number; draining: boolean } }
 }
 
 export async function getWorkspaceDbStats(workspaceId: string): Promise<WorkspaceDbStats> {
   const res = await api.get<{ payload: WorkspaceDbStats }>(`${API_ROUTES.workspaces}/${workspaceId}/db/stats`)
+  return res.payload
+}
+
+/** Live-tune search knobs (image relevance floor). Persisted + applied without restart. */
+export async function setWorkspaceSearchTuning(
+  workspaceId: string,
+  tuning: { imageMaxDistance?: number | null },
+): Promise<{ semantic: { imageMaxDistance?: number | null } }> {
+  const res = await api.put<{ payload: { semantic: { imageMaxDistance?: number | null } } }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/db/tuning`,
+    tuning,
+  )
   return res.payload
 }

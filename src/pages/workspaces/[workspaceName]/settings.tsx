@@ -20,6 +20,7 @@ import {
   updateBackend,
   syncBackend,
   getWorkspaceDbStats,
+  setWorkspaceSearchTuning,
   getWorkspaceServicesStatus,
   listWorkspaceShares,
   listWorkspaces,
@@ -288,6 +289,42 @@ function StatRow({ label, value, mono = false }: { label: string; value: React.R
   )
 }
 
+// Image-search relevance floor: cosine distance cap (0=identical, smaller=stricter).
+// Lower it if unrelated photos leak into results; raise it if relevant photos are
+// missing. Empty = no floor (legacy top-K). Applied live, no restart.
+function SearchTuning({ workspaceName, current, onDone }: { workspaceName: string; current: number | null | undefined; onDone: () => void }) {
+  const [value, setValue] = useState<string>(current == null ? '' : String(current))
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+  const save = async () => {
+    setSaving(true)
+    setMessage(null)
+    try {
+      const trimmed = value.trim()
+      const imageMaxDistance = trimmed === '' ? null : Number(trimmed)
+      if (imageMaxDistance !== null && !Number.isFinite(imageMaxDistance)) { setMessage('Enter a number (e.g. 0.9) or leave empty'); return }
+      await setWorkspaceSearchTuning(workspaceName, { imageMaxDistance })
+      setMessage('Saved')
+      onDone()
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Failed to save')
+    } finally {
+      setSaving(false)
+    }
+  }
+  return (
+    <div className="mt-3 space-y-1.5">
+      <label className="text-xs text-muted-foreground">Image relevance floor (cosine distance, 0–2; blank = off)</label>
+      <div className="flex items-center gap-2">
+        <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="0.9" className="h-8 w-28 font-mono text-xs" inputMode="decimal" />
+        <Button size="sm" variant="outline" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
+        {message && <span className="text-xs text-muted-foreground">{message}</span>}
+      </div>
+      <p className="text-[11px] text-muted-foreground">Lower = stricter (fewer, more-relevant photos); raise if relevant photos are missing.</p>
+    </div>
+  )
+}
+
 function DbStatsTab({
   stats,
   isLoading,
@@ -370,26 +407,27 @@ function DbStatsTab({
                   <StatRow label="Model" value={stats.semantic.model} mono />
                   <StatRow label="Dimensions" value={stats.semantic.dim} />
                   <StatRow label="Embeddable schemas" value={stats.semantic.embeddableSchemas?.join(', ')} />
-                  {stats.semantic.vector && (
-                    <>
-                      <StatRow label="Vector index ready" value={String((stats.semantic.vector as any).ready)} />
-                      {(stats.semantic.vector as any).rowCount !== undefined && (
-                        <StatRow label="Vector row count" value={(stats.semantic.vector as any).rowCount?.toLocaleString()} />
-                      )}
-                      {(stats.semantic.vector as any).error && (
-                        <StatRow label="Vector error" value={<span className="text-destructive">{(stats.semantic.vector as any).error}</span>} />
-                      )}
-                    </>
+                  {/* Per-space vector stats (text 384-d, image/CLIP 768-d) — shows
+                      embedded-doc counts so a re-embed's progress is visible. */}
+                  {stats.semantic.vectorSpaces && Object.entries(stats.semantic.vectorSpaces).map(([name, sp]) => (
+                    <StatRow
+                      key={name}
+                      label={`Space: ${name} (${sp.dim ?? '?'}-d)`}
+                      value={sp.error
+                        ? <span className="text-destructive">{sp.error}</span>
+                        : `${(sp.embeddedDocs ?? 0).toLocaleString()} docs · ${(sp.chunkRows ?? 0).toLocaleString()} vectors`}
+                    />
+                  ))}
+                  {stats.embedder?.queue && (
+                    <StatRow
+                      label="Embedding queue"
+                      value={stats.embedder.queue.pending > 0
+                        ? <span>{stats.embedder.queue.pending.toLocaleString()} pending{stats.embedder.queue.draining ? ' · running' : ''}</span>
+                        : 'idle'}
+                    />
                   )}
-                  {stats.semantic.embedder && (
-                    <StatRow label="Worker spawned" value={String((stats.semantic.embedder as any).workerSpawned)} />
-                  )}
-                  {stats.semantic.queue !== null && stats.semantic.queue !== undefined && (
-                    <>
-                      <StatRow label="Queue pending" value={stats.semantic.queue.pending?.toLocaleString()} />
-                      <StatRow label="Queue draining" value={String(stats.semantic.queue.draining)} />
-                    </>
-                  )}
+                  <StatRow label="Image relevance floor" value={stats.semantic.imageMaxDistance == null ? 'off' : stats.semantic.imageMaxDistance} mono />
+                  <SearchTuning workspaceName={workspaceName} current={stats.semantic.imageMaxDistance} onDone={onRefresh} />
                 </>
               )}
             </section>
