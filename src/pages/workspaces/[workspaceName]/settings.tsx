@@ -404,9 +404,15 @@ function DbStatsTab({
               <StatRow label="Enabled" value={String(stats.semantic.enabled)} />
               {stats.semantic.enabled && (
                 <>
-                  <StatRow label="Model" value={stats.semantic.model} mono />
-                  <StatRow label="Dimensions" value={stats.semantic.dim} />
-                  <StatRow label="Embeddable schemas" value={stats.semantic.embeddableSchemas?.join(', ')} />
+                  {/* What actually embeds where — from the embedd router rules
+                      (server-wide, read-only for now): notes/emails + text-file
+                      blobs → text; image/* → image. Falls back to synapsd's gap
+                      default only if the embedd routing isn't available. */}
+                  {stats.embedder?.routing
+                    ? Object.entries(stats.embedder.routing).map(([space, matchers]) => (
+                        <StatRow key={`route-${space}`} label={`Embeds → ${space}`} value={<span className="font-mono text-[11px]">{matchers.join(', ')}</span>} />
+                      ))
+                    : <StatRow label="Text-embeddable (gap default)" value={stats.semantic.embeddableSchemas?.join(', ')} />}
                   {/* Per-space vector stats (text 384-d, image/CLIP 768-d) — shows
                       embedded-doc counts so a re-embed's progress is visible. */}
                   {stats.semantic.vectorSpaces && Object.entries(stats.semantic.vectorSpaces).map(([name, sp]) => (
@@ -420,9 +426,9 @@ function DbStatsTab({
                   ))}
                   {stats.embedder?.queue && (
                     <StatRow
-                      label="Embedding queue"
+                      label="Embedding queue (server-wide)"
                       value={stats.embedder.queue.pending > 0
-                        ? <span>{stats.embedder.queue.pending.toLocaleString()} pending{stats.embedder.queue.draining ? ' · running' : ''}</span>
+                        ? <span>{stats.embedder.queue.pending.toLocaleString()} pending{stats.embedder.queue.draining ? ' · running' : ''} <span className="text-muted-foreground">· all workspaces</span></span>
                         : 'idle'}
                     />
                   )}

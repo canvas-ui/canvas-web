@@ -1114,7 +1114,12 @@ export interface WorkspaceDbStats {
     embedder?: Record<string, unknown>
     queue?: { pending: number; draining: boolean } | null
   }
-  embedder?: { queue?: { pending: number; draining: boolean } }
+  embedder?: {
+    queue?: { pending: number; draining: boolean }
+    // Actual embed routing per space (schema ids / `mime <pattern>`), from the
+    // embedd router rules — what really embeds where, not just the gap default.
+    routing?: Record<string, string[]>
+  }
 }
 
 export async function getWorkspaceDbStats(workspaceId: string): Promise<WorkspaceDbStats> {
