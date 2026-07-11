@@ -4,8 +4,14 @@ import type { TreeNode, TimelineInfo, TimelineQueryInterval, TimelineQueryOption
 // GLOBAL Workspace type from src/types/api.d.ts will be used.
 // No local Workspace interface should be defined here.
 
-export const BACKENDS_ROOT_CONTEXT = '/.backends'
 export const DEFAULT_WORKSPACE_TREE_NAME = 'context'
+export const BACKENDS_TREE_NAME = 'backends'
+
+// Tree type from a well-known tree name. The pre-created trees are 'context'
+// (context type), 'directory' and 'backends' (both directory type); custom
+// trees should be resolved via listWorkspaceTrees instead.
+export const treeTypeForName = (treeName?: string | null): 'context' | 'directory' =>
+  treeName === 'directory' || treeName === BACKENDS_TREE_NAME ? 'directory' : 'context'
 
 type WorkspaceTreeResponse = { payload: TreeNode; status: string; statusCode: number; message: string }
 
@@ -234,7 +240,7 @@ export async function getWorkspaceDocuments(
   id: string,
   contextSpec: string = '/',
   featureArray: string[] = [],
-  options: { limit?: number; offset?: number; page?: number; includeBackends?: boolean; treeName?: string; treeType?: string; q?: string; queries?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[]; scope?: 'path' | 'workspace' } = {}
+  options: { limit?: number; offset?: number; page?: number; treeName?: string; treeType?: string; q?: string; queries?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[]; scope?: 'path' | 'workspace' } = {}
 ): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }> {
   try {
     const params = new URLSearchParams();
@@ -247,7 +253,6 @@ export async function getWorkspaceDocuments(
     appendAnyOf(params, options.anyOf)
     appendNoneOf(params, options.noneOf)
     appendFilters(params, options.filters)
-    if (options.includeBackends) params.append('includeBackends', 'true')
     if (options.limit !== undefined) params.append('limit', options.limit.toString());
     if (options.offset !== undefined) params.append('offset', options.offset.toString());
     if (options.page !== undefined) params.append('page', options.page.toString());
@@ -748,7 +753,7 @@ export async function purgeWorkspaceDocuments(
   contextSpec: string = '/',
   featureArray: string[] = [],
   filterArray: string[] = [],
-  options: { includeBackends?: boolean } = {},
+  _options: Record<string, never> = {},
   treeName: string = DEFAULT_WORKSPACE_TREE_NAME
 ): Promise<{ requested: number; deleted: number }> {
   const params = new URLSearchParams()
@@ -759,7 +764,6 @@ export async function purgeWorkspaceDocuments(
   if (contextSpec) params.append('context', contextSpec)
   appendAllOf(params, featureArray)
   appendFilters(params, filterArray)
-  if (options.includeBackends) params.append('includeBackends', 'true')
   const response = await api.delete<{ payload: { requested: number; deleted: number } }>(
     `${API_ROUTES.workspaces}/${workspaceId}/documents/purge?${params.toString()}`
   )
@@ -955,12 +959,30 @@ export async function renameBackendContainer(workspaceId: string, driver: string
   return response.payload;
 }
 
-// Parse a /.backends/file/<address>/<sub…> tree node to its folder target.
+// Parse a backends-tree /file/<address>/<sub…> node to its folder target.
 // key === '' means the backend root node (can create children, but not rename/delete).
 export function backendFolderTarget(path: string): { driver: string; address: string; key: string } | null {
-  const parts = String(path || '').split('/').filter(Boolean); // ['.backends','file','workspace:home','docs']
-  if (parts[0] !== '.backends' || parts[1] !== 'file' || parts.length < 3) return null;
-  return { driver: 'file', address: parts[2], key: parts.slice(3).join('/') };
+  const parts = String(path || '').split('/').filter(Boolean); // ['file','workspace:home','docs']
+  if (parts[0] !== 'file' || parts.length < 2) return null;
+  return { driver: 'file', address: parts[1], key: parts.slice(2).join('/') };
+}
+
+// Documents mirrored under a backend address, filtered by linkage into other
+// trees. linked=false → present ONLY on the backend, never filed into any
+// context/directory tree (safe-to-purge candidates); linked=true → the
+// inverse; undefined → everything under the address.
+export async function listBackendDocuments(
+  workspaceId: string,
+  driver: string,
+  address: string,
+  options: { linked?: boolean; limit?: number; offset?: number } = {},
+): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number }> {
+  const params = new URLSearchParams()
+  if (options.linked !== undefined) params.append('linked', String(options.linked))
+  if (options.limit !== undefined) params.append('limit', String(options.limit))
+  if (options.offset !== undefined) params.append('offset', String(options.offset))
+  const qs = params.toString()
+  return await api.get(`${backendPath(workspaceId, driver, address)}/documents${qs ? `?${qs}` : ''}`)
 }
 
 // Pre-create folder discovery for the "add account" flow (no instance yet).
@@ -969,12 +991,12 @@ export async function discoverBackendFolders(workspaceId: string, driver: string
   return response.payload || [];
 }
 
-// Parse a /.backends/<driver>/<address>/… tree node path to its addressable
-// (driver, address) pair. Returns null for the mirror root / driver level.
+// Parse a backends-tree /<driver>/<address>/… node path to its addressable
+// (driver, address) pair. Returns null for the tree root / driver level.
 export function backendAddressFromTreePath(path: string): { driver: string; address: string } | null {
-  const parts = String(path || '').split('/').filter(Boolean); // ['.backends','imap','me@x','inbox']
-  if (parts[0] !== '.backends' || parts.length < 3) return null;
-  return { driver: parts[1], address: parts[2] };
+  const parts = String(path || '').split('/').filter(Boolean); // ['imap','me@x','inbox']
+  if (parts.length < 2) return null;
+  return { driver: parts[0], address: parts[1] };
 }
 
 export interface WorkspaceHookFile {

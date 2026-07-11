@@ -38,7 +38,10 @@ export function useAddTarget(): AddTarget {
         treeName: activeTreeName || DEFAULT_WORKSPACE_TREE_NAME,
         // Best-effort default; submitDocuments resolves the real type so inserts
         // into directory (incl. virtual directory) trees aren't mislabelled.
-        treeType: (activeTreeName === 'directory' ? 'directory' : 'context'),
+        // The backends tree is a directory tree, but the server rejects generic
+        // inserts into it — the Add toolbox shouldn't target it in the first
+        // place (WorkspaceM2 keeps the toolbox on context/directory tabs).
+        treeType: (activeTreeName === 'directory' || activeTreeName === 'backends' ? 'directory' : 'context'),
       }
     }
     return null

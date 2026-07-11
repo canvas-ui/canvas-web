@@ -221,7 +221,7 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
     <div className="space-y-3 border-t pt-4">
       <div className="space-y-1">
         <h4 className="text-sm font-medium">IMAP Accounts</h4>
-        <p className="text-xs text-muted-foreground">Each account mirrors under /.backends/imap/&lt;account&gt;; its folders are synced as containers.</p>
+        <p className="text-xs text-muted-foreground">Each account mirrors under /imap/&lt;account&gt; in the backends tree; its folders are synced as containers.</p>
       </div>
 
       {!enabled && (

@@ -25,6 +25,10 @@ import { ContextMenuShell } from '@/components/common/context-menu-shell'
 export interface MenuTreeViewProps {
   root: TreeNode | null
   treeName?: string
+  // The dedicated backends tree: read-only mirror of backend storage. Gates
+  // resync / purge / destroy actions and disables generic tree mutations
+  // (except real folder ops on writable file backends).
+  isBackendsTree?: boolean
   selectedPath: string
   pendingPath?: string | null
   onSelect: (path: string) => void
@@ -43,7 +47,8 @@ export interface MenuTreeViewProps {
   onShareCanvas?: (path: string) => Promise<void>
   onLockLayer?: (layerId: string) => Promise<boolean>
   onResyncBackend?: (backendName: string) => Promise<boolean>
-  // Writable file-backend folder ops (real fs dirs under /.backends/file/<addr>).
+  // Writable file-backend folder ops (real fs dirs under /file/<addr> in the
+  // backends tree).
   onCreateBackendFolder?: (parentPath: string, name: string) => Promise<boolean>
   onRenameBackendFolder?: (path: string, newName: string) => Promise<boolean>
   onDeleteBackendFolder?: (path: string) => Promise<boolean>
@@ -63,22 +68,24 @@ type LayerRef = { path: string; id: string }
 
 const TREE_BRANCH_GUTTER = 22
 
-// Backend nodes live under /.backends/<driver>/<backendName>/…; the backend
-// name (e.g. workspace:home) is the third path segment. Returns null for the
-// /.backends root and the driver level, where there is no single backend.
-// A writable file backend's tree node (/.backends/file/<address>/<sub…>).
-// key '' = the backend root (children can be created, but it can't be renamed
-// or deleted). Only the `file` driver is mirrored writable.
-function fileBackendTarget(path: string): { address: string; key: string } | null {
+// Backends-tree nodes live at /<driver>/<backendName>/…; the backend name
+// (e.g. workspace:home) is the second path segment. Returns null for the tree
+// root and the driver level, where there is no single backend.
+// A writable file backend's tree node (/file/<address>/<sub…>). key '' = the
+// backend root (children can be created, but it can't be renamed or deleted).
+// Only the `file` driver is mirrored writable. Both helpers only apply inside
+// the backends tree (isBackendsTree).
+function fileBackendTarget(path: string, isBackendsTree: boolean): { address: string; key: string } | null {
+  if (!isBackendsTree) return null
   const parts = String(path || '').split('/').filter(Boolean)
-  if (parts[0] !== '.backends' || parts[1] !== 'file' || parts.length < 3) return null
-  return { address: parts[2], key: parts.slice(3).join('/') }
+  if (parts[0] !== 'file' || parts.length < 2) return null
+  return { address: parts[1], key: parts.slice(2).join('/') }
 }
 
-function backendNameForPath(path: string): string | null {
-  if (path !== '/.backends' && !path.startsWith('/.backends/')) return null
-  const parts = path.split('/').filter(Boolean) // ['.backends','file','workspace:home',…]
-  return parts.length >= 3 ? parts[2] : null
+function backendNameForPath(path: string, isBackendsTree: boolean): string | null {
+  if (!isBackendsTree) return null
+  const parts = String(path || '').split('/').filter(Boolean) // ['file','workspace:home',…]
+  return parts.length >= 2 ? parts[1] : null
 }
 
 // ─── Context menu ─────────────────────────────────────────────────────────────
@@ -87,6 +94,7 @@ interface CtxMenuProps {
   x: number; y: number
   node: TreeNode
   path: string
+  isBackendsTree: boolean
   onClose: () => void
   onShowContent?: (path: string, layerId?: string) => void
   onOpenToSide?: (path: string) => void
@@ -115,7 +123,7 @@ interface CtxMenuProps {
 }
 
 function CtxMenu({
-  x, y, node, path, onClose, onShowContent, onOpenToSide,
+  x, y, node, path, isBackendsTree, onClose, onShowContent, onOpenToSide,
   sourceLayer, targetLayers, clipboard,
   onStartInlineCreate, onChangeIcon, hasCreateCanvas, onShareCanvas, onRemove, onRename,
   onLock, onUnlock, onDestroy, onMerge, onSubtract, onResyncBackend,
@@ -173,21 +181,21 @@ function CtxMenu({
 
         {node.type === 'canvas' && onShareCanvas && <div className="my-1 h-px bg-border" />}
 
-        {/* Resync backend — only under the /.backends mirror, where the node
-            maps to a data backend. MVP resyncs the whole backend. */}
-        {onResyncBackend && backendNameForPath(path) && (
+        {/* Resync backend — backends tree only, where the node maps to a data
+            backend. MVP resyncs the whole backend. */}
+        {onResyncBackend && backendNameForPath(path, isBackendsTree) && (
           <>
-            {item(<RefreshCw className="w-3 h-3" />, `Resync backend (${backendNameForPath(path)})`, async () => {
+            {item(<RefreshCw className="w-3 h-3" />, `Resync backend (${backendNameForPath(path, isBackendsTree)})`, async () => {
               await onResyncBackend(path)
             })}
             <div className="my-1 h-px bg-border" />
           </>
         )}
 
-        {/* New folder — inline. Hidden inside the read-only backends mirror,
-            EXCEPT under a writable file backend (/.backends/file/<addr>), where
-            it creates a real directory on the backend (server mirrors it). */}
-        {(!(path === '/.backends' || path.startsWith('/.backends/')) || fileBackendTarget(path)) && (
+        {/* New folder — inline. Hidden inside the read-only backends tree,
+            EXCEPT under a writable file backend (/file/<addr>), where it
+            creates a real directory on the backend (server mirrors it). */}
+        {(!isBackendsTree || fileBackendTarget(path, isBackendsTree)) && (
           <button
             type="button"
             className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-accent rounded-sm text-left"
@@ -200,7 +208,7 @@ function CtxMenu({
 
         {/* Rename / delete a file-backend folder (real fs dir). Only on
             subfolders — never the backend root node itself. */}
-        {onRenameBackendFolder && fileBackendTarget(path)?.key && item(
+        {onRenameBackendFolder && fileBackendTarget(path, isBackendsTree)?.key && item(
           <Edit2 className="w-3 h-3" />, 'Rename folder', async () => {
             const cur = path.split('/').pop() || ''
             const n = prompt('New folder name:', cur)
@@ -208,15 +216,15 @@ function CtxMenu({
             await onRenameBackendFolder(path, n)
           },
         )}
-        {onDeleteBackendFolder && fileBackendTarget(path)?.key && item(
+        {onDeleteBackendFolder && fileBackendTarget(path, isBackendsTree)?.key && item(
           <Trash2 className="w-3 h-3" />, 'Delete folder', async () => {
             if (confirm(`Delete folder "${path.split('/').pop()}" and its contents from the backend?`)) await onDeleteBackendFolder(path)
           }, true,
         )}
 
         {/* New canvas — inline, workspace trees only; never inside the
-            backend-mirrored staging subtree (server rejects it anyway) */}
-        {hasCreateCanvas && !(path === '/.backends' || path.startsWith('/.backends/')) && (
+            backends tree (server rejects it anyway) */}
+        {hasCreateCanvas && !isBackendsTree && (
           <button
             type="button"
             className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-accent rounded-sm text-left"
@@ -238,7 +246,9 @@ function CtxMenu({
           </button>
         )}
 
-        {path !== '/' && !node.locked && onRename && item(<Edit2 className="w-3 h-3" />, 'Rename', async () => {
+        {/* Generic rename — not in the backends tree (folder renames on
+            writable file backends use "Rename folder" above). */}
+        {path !== '/' && !node.locked && onRename && !isBackendsTree && item(<Edit2 className="w-3 h-3" />, 'Rename', async () => {
           const cur = path.split('/').pop() || ''
           const n = prompt('New name:', cur)
           if (!n || n === cur) return
@@ -247,10 +257,12 @@ function CtxMenu({
 
         <div className="my-1 h-px bg-border" />
 
-        {/* Clipboard */}
+        {/* Clipboard — Copy out of the backends tree is allowed (cherry-picking
+            documents into context/directory trees); Cut and pasting INTO the
+            backends tree are not (it mirrors backend storage). */}
         {item(<Copy className="w-3 h-3" />, 'Copy', async () => onCopy(path))}
-        {item(<Scissors className="w-3 h-3" />, 'Cut', async () => onCut(path))}
-        {clipboard && item(
+        {!isBackendsTree && item(<Scissors className="w-3 h-3" />, 'Cut', async () => onCut(path))}
+        {clipboard && !isBackendsTree && item(
           <Clipboard className="w-3 h-3" />,
           `Paste (${clipboard.mode})`,
           async () => onPaste(path),
@@ -271,12 +283,12 @@ function CtxMenu({
             {item(<Trash2 className="w-3 h-3" />, 'Remove recursive', async () => {
               if (confirm(`Remove "${path}" and all children?`)) await onRemove(path, true)
             }, true)}
-            {/* /.backends subtree only: also purge the ingested documents from
+            {/* Backends tree only: also purge the ingested documents from
                 the index. Plain Remove above keeps them (an agent/user may have
                 filed the keepers elsewhere; backends re-sync the rest if
                 re-enabled). "…and destroy" additionally deletes the mirrored
                 resources on the backend itself (rw backends only). */}
-            {(path === '/.backends' || path.startsWith('/.backends/')) && (
+            {isBackendsTree && (
               <>
                 {item(<Trash2 className="w-3 h-3" />, 'Remove and purge documents', async () => {
                   if (confirm(`Remove "${path}" and all children, and PERMANENTLY purge every document under it from the index?`)) await onRemove(path, true, true)
@@ -633,7 +645,7 @@ function CardNode({
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export function MenuTreeView({
-  root, treeName = 'context', selectedPath, pendingPath, onSelect, isLoading = false, readOnly = false,
+  root, treeName = 'context', isBackendsTree = false, selectedPath, pendingPath, onSelect, isLoading = false, readOnly = false,
   rootLabel, contentPath, onShowContent, onOpenToSide,
   onInsertPath, onCreateCanvas, onShareCanvas, onRemovePath, onRenamePath, onMovePath, onCopyPath,
   pastedDocumentIds, onPasteDocuments,
@@ -895,7 +907,7 @@ export function MenuTreeView({
     try {
       if (isCanvas) {
         if (onCreateCanvas && await onCreateCanvas(full)) onSelect(full)
-      } else if (fileBackendTarget(parentPath) && onCreateBackendFolder) {
+      } else if (fileBackendTarget(parentPath, isBackendsTree) && onCreateBackendFolder) {
         // Under a writable file backend: create a real fs directory, not a tree layer.
         if (await onCreateBackendFolder(parentPath, name)) onSelect(full)
       } else {
@@ -904,7 +916,7 @@ export function MenuTreeView({
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err))
     }
-  }, [onInsertPath, onCreateCanvas, onCreateBackendFolder, onSelect, inlineCreateIsCanvas])
+  }, [onInsertPath, onCreateCanvas, onCreateBackendFolder, onSelect, inlineCreateIsCanvas, isBackendsTree])
 
   const handleCancelCreate = useCallback(() => {
     setInlineCreateParent(null)
@@ -1070,6 +1082,7 @@ export function MenuTreeView({
           y={ctxMenu.y}
           node={ctxMenu.node}
           path={ctxMenu.path}
+          isBackendsTree={isBackendsTree}
           onClose={() => setCtxMenu(null)}
           onShowContent={onShowContent}
           onOpenToSide={onOpenToSide ? (path) => onOpenToSide(path, treeName) : undefined}

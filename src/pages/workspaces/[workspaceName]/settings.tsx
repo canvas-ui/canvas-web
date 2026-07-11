@@ -64,7 +64,7 @@ const DATA_BACKEND_LABELS: Record<string, { title: string; description: string }
   },
   imap: {
     title: 'IMAP',
-    description: 'Mailbox data source; ingested mail lands in the virtual .backends tree.',
+    description: 'Mailbox data source; ingested mail lands in the backends tree.',
   },
 }
 
@@ -94,6 +94,79 @@ function Toggle({
     >
       <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow transition-transform ${checked ? 'translate-x-4' : 'translate-x-0'}`} />
     </button>
+  )
+}
+
+// Per-backend sync exclusions (glob patterns) for enumerable file backends.
+// Server-side defaults (dotfiles, node_modules, __pycache__, caches, …) always
+// apply; the user list here is merged on top. Patterns apply to the live
+// watcher immediately and to list/scan on the next re-sync (which also unlinks
+// already-mirrored entries that are now excluded — blobs untouched).
+function BackendExclusionsEditor({
+  backend,
+  busy,
+  onSave,
+}: {
+  backend: Backend
+  busy: boolean
+  onSave: (patterns: string[]) => void | Promise<void>
+}) {
+  const cfg = (backend.config || {}) as Record<string, unknown>
+  const userPatterns = Array.isArray(cfg.exclude) ? (cfg.exclude as string[]) : []
+  const effective = Array.isArray(cfg.effectiveExclusions) ? (cfg.effectiveExclusions as string[]) : []
+  const defaultCount = Math.max(effective.length - userPatterns.length, 0)
+  const [open, setOpen] = useState(false)
+  const [draft, setDraft] = useState(userPatterns.join('\n'))
+  const [showDefaults, setShowDefaults] = useState(false)
+
+  useEffect(() => { setDraft(userPatterns.join('\n')) }, [userPatterns.join('\n')]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div className="mt-3 border-t pt-3">
+      <button
+        type="button"
+        className="text-[11px] font-medium text-muted-foreground hover:text-foreground"
+        onClick={() => setOpen(!open)}
+      >
+        Sync exclusions {userPatterns.length > 0 ? `(${userPatterns.length} custom` : `(defaults only`}{defaultCount > 0 ? `, ${defaultCount} default)` : ')'} {open ? '▾' : '▸'}
+      </button>
+      {open && (
+        <div className="mt-2 space-y-2">
+          <p className="text-[11px] text-muted-foreground">
+            One glob pattern per line, e.g. <code className="font-mono">**/node_modules/**</code> or <code className="font-mono">**/target/**</code>.
+            Defaults (dotfiles, node_modules, __pycache__, caches, …) always apply. Changes take effect immediately for
+            the watcher; run Re-sync to also unlink already-mirrored entries.
+          </p>
+          <textarea
+            className="w-full min-h-[80px] rounded-md border bg-background p-2 font-mono text-xs"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder={'**/node_modules/**\n**/dist/**'}
+            spellCheck={false}
+          />
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              disabled={busy || draft.split('\n').map(s => s.trim()).filter(Boolean).join('\n') === userPatterns.join('\n')}
+              onClick={() => onSave(draft.split('\n').map(s => s.trim()).filter(Boolean))}
+            >
+              Save exclusions
+            </Button>
+            {defaultCount > 0 && (
+              <button type="button" className="text-[11px] text-muted-foreground hover:text-foreground" onClick={() => setShowDefaults(!showDefaults)}>
+                {showDefaults ? 'Hide' : 'Show'} default patterns
+              </button>
+            )}
+          </div>
+          {showDefaults && (
+            <pre className="max-h-40 overflow-auto rounded-md bg-muted/50 p-2 font-mono text-[11px] text-muted-foreground">
+              {effective.filter(p => !userPatterns.includes(p)).join('\n')}
+            </pre>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -860,11 +933,16 @@ export default function WorkspaceSettingsPage() {
                     <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
                       <span>status: {backend.status}</span>
                       <span>watch: {cfg.watch ? 'true' : 'false'}</span>
-                      <span>incoming: {cfg.indexIncoming ? 'true' : 'false'}</span>
-                      {cfg.readOnly === true && <span className="text-amber-600">read-only</span>}
+                      {cfg.readOnly === true && <span className="rounded bg-amber-500/15 px-1.5 py-0.5 font-medium text-amber-600">read-only</span>}
                       {backend.lastSyncAt && <span>last scan: {new Date(backend.lastSyncAt).toLocaleString()}</span>}
                     </div>
                     {backend.lastError && <p className="mt-2 text-xs text-destructive">{backend.lastError}</p>}
+                    {cfg.readOnly === true && (
+                      <p className="mt-1 text-[11px] text-amber-600">
+                        Read-only: the web UI / REST API never deletes bytes on this backend — Destroy degrades to a reference drop.
+                        Recommended when the folder is exported elsewhere (e.g. via Samba).
+                      </p>
+                    )}
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
                     {backend.driver === 'file' && canToggle && (
@@ -877,18 +955,8 @@ export default function WorkspaceSettingsPage() {
                         />
                       </label>
                     )}
-                    {cfg.indexIncoming !== undefined && canToggle && (
-                      <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                        incoming
-                        <Toggle
-                          checked={!!cfg.indexIncoming}
-                          disabled={!backend.enabled || busyAction === `incoming:${backendId}`}
-                          onClick={() => patchDataBackend(backend, { indexIncoming: !cfg.indexIncoming }, 'incoming')}
-                        />
-                      </label>
-                    )}
                     {canToggle && (
-                      <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground" title="Read-only: Destroy never deletes bytes on this backend (references are dropped instead)">
+                      <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground" title="Read-only: Destroy never deletes bytes on this backend (references are dropped instead). Important when the folder is exported via Samba or shared otherwise.">
                         read-only
                         <Toggle
                           checked={cfg.readOnly === true}
@@ -906,6 +974,13 @@ export default function WorkspaceSettingsPage() {
                     <Toggle checked={!!backend.enabled} disabled={!canToggle || busyAction === `backend:${backendId}`} onClick={() => toggleDataBackend(backend)} />
                   </div>
                 </div>
+                {backend.driver === 'file' && supported && (
+                  <BackendExclusionsEditor
+                    backend={backend}
+                    busy={busyAction === `exclude:${backendId}`}
+                    onSave={(patterns) => patchDataBackend(backend, { exclude: patterns }, 'exclude')}
+                  />
+                )}
               </section>
             )
           })}

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { Settings, ExternalLink, GitBranch, FolderTree, Layers, LayoutDashboard, Search, Lock, Unlock, Edit2, Trash2 } from 'lucide-react'
+import { Settings, ExternalLink, GitBranch, FolderTree, Layers, LayoutDashboard, Search, Lock, Unlock, Edit2, Trash2, Database } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { buildWorkspaceUrl, parseWorkspacePathFromUrl } from '@/utils/url-params'
@@ -12,19 +12,28 @@ import { useTreeOperations } from '@/hooks/useTreeOperations'
 import type { TreeNode } from '@/types/workspace'
 import socketService from '@/lib/socket'
 
-type TreeTab = 'context' | 'directory' | 'layers'
+type TreeTab = 'context' | 'layers' | 'directory' | 'backends'
+type TreeDataTab = 'context' | 'directory' | 'backends'
+
+// Display order: Context tree, Context layers, Directory tree, Backends tree.
+const TAB_ORDER: TreeTab[] = ['context', 'layers', 'directory', 'backends']
 
 const TAB_ICONS: Record<TreeTab, React.ReactNode> = {
   context: <GitBranch className="w-3.5 h-3.5" />,
-  directory: <FolderTree className="w-3.5 h-3.5" />,
   layers: <Layers className="w-3.5 h-3.5" />,
+  directory: <FolderTree className="w-3.5 h-3.5" />,
+  backends: <Database className="w-3.5 h-3.5" />,
 }
 
 const TAB_LABELS: Record<TreeTab, string> = {
   context: 'Context tree',
+  layers: 'Context layers',
   directory: 'Directory tree',
-  layers: 'Layers',
+  backends: 'Backends tree',
 }
+
+const tabForTree = (treeName: string, layerId?: string | null): TreeTab =>
+  layerId ? 'layers' : treeName === 'directory' ? 'directory' : treeName === 'backends' ? 'backends' : 'context'
 
 export function WorkspaceM2() {
   const { state, closeM2 } = useMenu()
@@ -36,16 +45,18 @@ export function WorkspaceM2() {
   const { treeName: urlTree, path: urlPath } = parseWorkspacePathFromUrl(location.pathname)
   const urlIsLayer = new URLSearchParams(location.search).get('layer') === '1'
   const urlLayerId = new URLSearchParams(location.search).get('layerId')
-  const initialTab: TreeTab = urlLayerId ? 'layers' : urlTree === 'directory' ? 'directory' : 'context'
+  const initialTab: TreeTab = tabForTree(urlTree, urlLayerId)
 
   const [wsLabel, setWsLabel] = useState<string | null>(null)
   const [wsId, setWsId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TreeTab>(initialTab)
   const [contextTree, setContextTree] = useState<TreeNode | null>(null)
   const [directoryTree, setDirectoryTree] = useState<TreeNode | null>(null)
+  const [backendsTree, setBackendsTree] = useState<TreeNode | null>(null)
   const [layers, setLayers] = useState<Layer[]>([])
   const [isLoadingContext, setIsLoadingContext] = useState(false)
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(false)
+  const [isLoadingBackends, setIsLoadingBackends] = useState(false)
   const [isLoadingLayers, setIsLoadingLayers] = useState(false)
   const [selectedPath, setSelectedPath] = useState(urlPath)
   const [contentPath, setContentPath] = useState<string | null>(urlIsLayer && urlPath !== '/' ? urlPath : null)
@@ -64,9 +75,9 @@ export function WorkspaceM2() {
     setSelectedPath(urlPath)
   }, [urlPath])
 
-  const loadTree = useCallback(async (name: string, tab: 'context' | 'directory', force = false) => {
-    const setLoading = tab === 'context' ? setIsLoadingContext : setIsLoadingDirectory
-    const setData = tab === 'context' ? setContextTree : setDirectoryTree
+  const loadTree = useCallback(async (name: string, tab: TreeDataTab, force = false) => {
+    const setLoading = tab === 'context' ? setIsLoadingContext : tab === 'directory' ? setIsLoadingDirectory : setIsLoadingBackends
+    const setData = tab === 'context' ? setContextTree : tab === 'directory' ? setDirectoryTree : setBackendsTree
     setLoading(true)
     try {
       if (force) invalidateWorkspaceTreeCache(name, tab)
@@ -99,21 +110,25 @@ export function WorkspaceM2() {
     async function loadAll() {
       setIsLoadingContext(true)
       setIsLoadingDirectory(true)
+      setIsLoadingBackends(true)
       setIsLoadingLayers(true)
       try {
-        const [ctxRes, dirRes] = await Promise.allSettled([
+        const [ctxRes, dirRes, beRes] = await Promise.allSettled([
           getCachedWorkspaceTreeByName(name, 'context'),
           getCachedWorkspaceTreeByName(name, 'directory'),
+          getCachedWorkspaceTreeByName(name, 'backends'),
         ])
         // Fetch workspace details for label (non-blocking)
         getWorkspace(name).then(ws => { if (!cancelled) { setWsLabel(ws.label || null); setWsId(ws.id || null) } }).catch(() => {})
         if (cancelled) return
         if (ctxRes.status === 'fulfilled') setContextTree(ctxRes.value.payload)
         if (dirRes.status === 'fulfilled') setDirectoryTree(dirRes.value.payload)
+        if (beRes.status === 'fulfilled') setBackendsTree(beRes.value.payload)
       } finally {
         if (!cancelled) {
           setIsLoadingContext(false)
           setIsLoadingDirectory(false)
+          setIsLoadingBackends(false)
         }
       }
       try {
@@ -133,6 +148,7 @@ export function WorkspaceM2() {
   const refreshAll = useCallback((name: string) => {
     loadTree(name, 'context', true)
     loadTree(name, 'directory', true)
+    loadTree(name, 'backends', true)
     loadLayers(name)
   }, [loadTree, loadLayers])
 
@@ -190,7 +206,7 @@ export function WorkspaceM2() {
     // A selected layer (layerId param) keeps us on the Layers tab — otherwise the
     // pathname-only derivation would kick us back to the context tree.
     const layerId = new URLSearchParams(location.search).get('layerId')
-    const tab: TreeTab = layerId ? 'layers' : tree === 'directory' ? 'directory' : 'context'
+    const tab: TreeTab = tabForTree(tree, layerId)
     setActiveTab(tab)
     setSelectedPath(path)
     setContentPath(path !== '/' ? path : null)
@@ -202,8 +218,14 @@ export function WorkspaceM2() {
     onRefresh: handleRefresh,
   })
 
-  const activeTree = activeTab === 'context' ? contextTree : activeTab === 'directory' ? directoryTree : null
-  const isLoadingTree = activeTab === 'context' ? isLoadingContext : activeTab === 'directory' ? isLoadingDirectory : false
+  const activeTree = activeTab === 'context' ? contextTree
+    : activeTab === 'directory' ? directoryTree
+    : activeTab === 'backends' ? backendsTree
+    : null
+  const isLoadingTree = activeTab === 'context' ? isLoadingContext
+    : activeTab === 'directory' ? isLoadingDirectory
+    : activeTab === 'backends' ? isLoadingBackends
+    : false
 
   const handleTabChange = (tab: TreeTab) => {
     setActiveTab(tab)
@@ -289,7 +311,7 @@ export function WorkspaceM2() {
 
       {/* Tab bar — icon only */}
       <div className="flex border-b border-sidebar-border shrink-0">
-        {(['context', 'directory', 'layers'] as TreeTab[]).map(tab => (
+        {TAB_ORDER.map(tab => (
           <button
             key={tab}
             type="button"
@@ -353,20 +375,22 @@ export function WorkspaceM2() {
         ) : (
           <MenuTreeView
             root={activeTree}
-            treeName={activeTab === 'directory' ? 'directory' : DEFAULT_WORKSPACE_TREE_NAME}
+            treeName={activeTab === 'layers' ? DEFAULT_WORKSPACE_TREE_NAME : activeTab}
+            isBackendsTree={activeTab === 'backends'}
             selectedPath={selectedPath}
             contentPath={contentPath}
             onSelect={handlePathSelect}
-            onShowContent={activeTab === 'directory' ? undefined : handleShowContent}
+            onShowContent={activeTab === 'context' ? handleShowContent : undefined}
             onOpenToSide={handleOpenToSide}
             onShareCanvas={handleShareCanvas}
             isLoading={isLoadingTree}
             rootLabel={wsName ?? undefined}
             searchQuery={searchQuery}
             pastedDocumentIds={docClipboard?.documentIds}
-            onPasteDocuments={wsName ? async (path, ids) => {
+            onPasteDocuments={wsName && activeTab !== 'backends' ? async (path, ids) => {
               // Ungated on the clipboard: also serves drag-and-drop from the
-              // content area (no prior "Copy" involved).
+              // content area (no prior "Copy" involved). The backends tree is
+              // read-only (mirrors backend storage) — no paste target there.
               const treeType: 'context' | 'directory' = activeTab === 'directory' ? 'directory' : 'context'
               const treeName = activeTab === 'directory' ? 'directory' : DEFAULT_WORKSPACE_TREE_NAME
               const success = await pasteDocumentsToWorkspacePath(wsName, path, ids, treeName, treeType)

@@ -27,6 +27,9 @@ import {
   purgeWorkspaceDocuments,
   startWorkspace,
   DEFAULT_WORKSPACE_TREE_NAME,
+  treeTypeForName,
+  listBackendDocuments,
+  backendAddressFromTreePath,
 } from '@/services/workspace';
 import { Document, TreeNode, buildDatetimeFilters } from '@/types/workspace';
 import { sanitizeUrlPath, buildWorkspaceUrl } from '@/utils/url-params';
@@ -112,12 +115,17 @@ export default function WorkspaceDetailPage() {
   // Path and tree from URL segments; UI state from query params
   const selectedPath = sanitizeUrlPath('/' + (pathSplat ?? ''));
   const selectedTreeName = treeName ?? DEFAULT_WORKSPACE_TREE_NAME;
-  // Bulk "Purge All" is hidden in the /.backends subtree: backend-staged docs
+  // Bulk "Purge All" is hidden in the backends tree: backend-mirrored docs
   // are purged via the tree's "Remove and purge documents" (folder-scoped) or
   // the per-doc Delete/Destroy context menu. The toolbar button queries the
   // context tree and would no-op on these directory-tree paths anyway.
-  const isBackendsPath = selectedTreeName === 'directory'
-    && (selectedPath === '/.backends' || selectedPath.startsWith('/.backends/'));
+  const isBackendsPath = selectedTreeName === 'backends';
+  // /<driver>/<address>/… backends-tree paths map to a syncable backend; used
+  // for the "Unfiled only" filter (docs never filed into any other tree —
+  // safe-to-purge candidates on the backend).
+  const backendTarget = isBackendsPath ? backendAddressFromTreePath(selectedPath) : null;
+  const [unfiledOnly, setUnfiledOnly] = useState(false);
+  useEffect(() => { setUnfiledOnly(false); }, [selectedTreeName, selectedPath]);
 
   const isLayerView = searchParams.get('layer') === '1';
   const selectedLayerId = searchParams.get('layerId') || null;
@@ -199,7 +207,8 @@ export default function WorkspaceDetailPage() {
   const fetchDocuments = useCallback(async (opts?: { silent?: boolean }) => {
     if (!workspaceName) return;
     const seq = ++fetchSeqRef.current;
-    const cacheKey = documentKey(workspaceName, selectedTreeName, selectedPath, currentPage, pageSize, serverSearchQueries.join('␟'), tbFiltersKey, (isLayerView && selectedLayerId) ? selectedLayerId : '', docScope);
+    const effectiveScope = unfiledOnly && backendTarget ? `${docScope}:unfiled` : docScope;
+    const cacheKey = documentKey(workspaceName, selectedTreeName, selectedPath, currentPage, pageSize, serverSearchQueries.join('␟'), tbFiltersKey, (isLayerView && selectedLayerId) ? selectedLayerId : '', effectiveScope);
     const cached = documentCache.get(cacheKey);
     if (cached) {
       setDocuments(cached.documents);
@@ -211,7 +220,15 @@ export default function WorkspaceDetailPage() {
     if (!opts?.silent) setIsLoadingDocuments(true);
     try {
       let response;
-      if (isLayerView && selectedLayerId && docScope !== 'workspace') {
+      if (unfiledOnly && backendTarget) {
+        // Backend mirror with the "unfiled only" filter: documents present on
+        // the backend but never filed into any other tree (safe to purge).
+        response = await listBackendDocuments(workspaceName, backendTarget.driver, backendTarget.address, {
+          linked: false,
+          limit: pageSize,
+          offset: (currentPage - 1) * pageSize,
+        });
+      } else if (isLayerView && selectedLayerId && docScope !== 'workspace') {
         response = await getWorkspaceLayerDocuments(workspaceName, selectedTreeName, selectedLayerId, {
           limit: pageSize,
           page: currentPage,
@@ -222,7 +239,7 @@ export default function WorkspaceDetailPage() {
           filters: tbDatetimeFilters,
         });
       } else {
-        const selectedTreeType: 'context' | 'directory' = selectedTreeName === 'directory' ? 'directory' : 'context';
+        const selectedTreeType: 'context' | 'directory' = selectedTreeName === 'directory' || selectedTreeName === 'backends' ? 'directory' : 'context';
         response = await getWorkspaceDocuments(workspaceName, selectedPath, tbAllOf, {
           limit: pageSize,
           page: currentPage,
@@ -232,11 +249,9 @@ export default function WorkspaceDetailPage() {
           anyOf: tbAnyOf,
           noneOf: tbNoneOf,
           filters: tbDatetimeFilters,
+          // Whole-workspace scope lists every doc in the DB, including backend
+          // mirrors (they live in their own tree now — no opt-in flag needed).
           scope: docScope,
-          // Whole-workspace scope must also surface backend-staged docs
-          // (emails, ingested files live only under /.backends with no
-          // context membership — a context-scoped query can never see them).
-          includeBackends: docScope === 'workspace',
         });
       }
       const nextDocuments = (response.payload as Document[]) || [];
@@ -257,7 +272,7 @@ export default function WorkspaceDetailPage() {
       if (!opts?.silent && seq === fetchSeqRef.current) setIsLoadingDocuments(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceName, selectedPath, selectedTreeName, selectedLayerId, isLayerView, currentPage, pageSize, workspace?.status, serverSearchQueries, tbFiltersKey, docScope]);
+  }, [workspaceName, selectedPath, selectedTreeName, selectedLayerId, isLayerView, currentPage, pageSize, workspace?.status, serverSearchQueries, tbFiltersKey, docScope, unfiledOnly]);
 
   useEffect(() => {
     fetchDocuments();
@@ -569,7 +584,7 @@ export default function WorkspaceDetailPage() {
     showToast({ title: 'Cut', description: `${documentIds.length} document(s) cut to clipboard` });
   };
 
-  const selectedTreeType: 'context' | 'directory' = selectedTreeName === 'directory' ? 'directory' : 'context';
+  const selectedTreeType: 'context' | 'directory' = treeTypeForName(selectedTreeName);
 
   const handlePasteDocuments = async (path: string, documentIds: number[], options: DocumentPasteOptions = {}): Promise<boolean> => {
     if (!workspaceName) return false;
@@ -581,7 +596,7 @@ export default function WorkspaceDetailPage() {
         const sourcePath = options.sourcePath || clipboard?.sourcePath;
         const shouldMove = options.move || clipboard?.operation === 'cut';
         if (shouldMove && sourcePath && sourceTreeName) {
-          const sourceTreeType: 'context' | 'directory' = sourceTreeName === 'directory' ? 'directory' : 'context';
+          const sourceTreeType: 'context' | 'directory' = treeTypeForName(sourceTreeName);
           await removeWorkspaceDocuments(workspaceName, documentIds, sourcePath, [], sourceTreeName, sourceTreeType);
           invalidateDocumentCache(workspaceName, sourceTreeName, sourcePath);
           window.dispatchEvent(new CustomEvent('workspace:documents:refresh', {
@@ -749,13 +764,13 @@ export default function WorkspaceDetailPage() {
       showToast({ title: 'Nothing selected', description: 'Tick documents in the focused pane first.' });
       return;
     }
-    const targetType: 'context' | 'directory' = target.treeName === 'directory' ? 'directory' : 'context';
+    const targetType: 'context' | 'directory' = treeTypeForName(target.treeName);
     try {
       const ok = await pasteDocumentsToWorkspacePath(workspaceName, target.path, ids, target.treeName, targetType);
       if (!ok) return;
       invalidateDocumentCache(workspaceName, target.treeName, target.path);
       if (move) {
-        const sourceType: 'context' | 'directory' = source.treeName === 'directory' ? 'directory' : 'context';
+        const sourceType: 'context' | 'directory' = treeTypeForName(source.treeName);
         await removeWorkspaceDocuments(workspaceName, ids, source.path, [], source.treeName, sourceType);
         invalidateDocumentCache(workspaceName, source.treeName, source.path);
       }
@@ -884,6 +899,22 @@ export default function WorkspaceDetailPage() {
           {workspace.label || workspace.name}
         </button>
         <div className="flex-1" />
+        {/* Backend mirrors: show only docs never filed into another tree
+            (safe-to-purge candidates on the backend). */}
+        {backendTarget && (
+          <button
+            onClick={() => { setUnfiledOnly(!unfiledOnly); setCurrentPage(1); }}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-1 text-xs border rounded-md transition-colors',
+              unfiledOnly
+                ? 'bg-amber-500/15 border-amber-500/40 text-amber-600'
+                : 'hover:bg-accent text-muted-foreground hover:text-foreground',
+            )}
+            title="Show only documents not filed into any context/directory tree — safe to purge from the backend"
+          >
+            Unfiled only
+          </button>
+        )}
         {/* Filtering earns the header slot; stopping a workspace is a rarer
             action that stays available on the workspace list rows (M1). */}
         {workspace.status === 'active' ? (
@@ -1024,7 +1055,7 @@ function SideWorkspaceCanvas({
   const [totalCount, setTotalCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
-  const treeType: 'context' | 'directory' = pane.treeName === 'directory' ? 'directory' : 'context';
+  const treeType: 'context' | 'directory' = treeTypeForName(pane.treeName);
   const selectedNode = findTreeNode(tree, pane.path);
   const isCanvas = selectedNode?.type === 'canvas';
   const urlDisplay = `${workspaceName}://${pane.path === '/' ? '' : pane.path.replace(/^\//, '')}`;
@@ -1110,7 +1141,7 @@ function SideWorkspaceCanvas({
         const sourceTreeName = options.sourceTreeName || clipboard?.sourceTreeName;
         const shouldMove = options.move || clipboard?.operation === 'cut';
         if (shouldMove && sourcePath && sourceTreeName) {
-          const sourceTreeType: 'context' | 'directory' = sourceTreeName === 'directory' ? 'directory' : 'context';
+          const sourceTreeType: 'context' | 'directory' = treeTypeForName(sourceTreeName);
           await removeWorkspaceDocuments(workspaceName, documentIds, sourcePath, [], sourceTreeName, sourceTreeType);
           invalidateDocumentCache(workspaceName, sourceTreeName, sourcePath);
           window.dispatchEvent(new CustomEvent('workspace:documents:refresh', {

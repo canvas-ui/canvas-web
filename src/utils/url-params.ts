@@ -70,8 +70,14 @@ export function parseWorkspacePathFromUrl(pathname: string): { treeName: string;
   // ['workspaces', wsName]
   if (segments[0] !== 'workspaces') return { treeName: DEFAULT_TREE, path: '/' };
 
-  if (segments[2] === 'trees' && segments[4] === 'path') {
-    const treeName = decode(segments[3] || DEFAULT_TREE);
+  if (segments[2] === 'trees' && segments[3]) {
+    const treeName = decode(segments[3]);
+    // /trees/:tree (no /path segment) is the named tree's root — buildWorkspaceUrl
+    // omits the path segment for '/', so the parser must accept it or root clicks
+    // on a named tree silently fall back to the default (context) tree.
+    if (segments[4] !== 'path') {
+      return { treeName, path: '/' };
+    }
     const rest = segments.slice(5).map(decode).join('/');
     return { treeName, path: rest ? `/${rest}` : '/' };
   }
