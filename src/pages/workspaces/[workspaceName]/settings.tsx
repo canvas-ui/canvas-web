@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { LayerIconPicker } from '@/components/menu/shared/LayerIconPicker'
 import { DEFAULT_WORKSPACE_ICON, type LayerStyle } from '@/lib/layer-style'
 import { DefaultFoldersPicker, createDefaultFolders, useFolderSelection } from '@/components/workspaces/DefaultFoldersPicker'
-import { adminReindexTimelines, adminReindexSearch, adminReindexEmbeddings } from '@/services/admin'
+import { adminReindexTimelines, adminReindexSearch, adminReindexEmbeddings, adminOptimize } from '@/services/admin'
 import { HooksPanel } from '@/components/workspace/hooks-panel'
 import { ImapMailboxesPanel } from '@/components/workspace/imap-mailboxes-panel'
 import { TokenManager } from '@/components/workspace/token-manager'
@@ -302,7 +302,7 @@ function SearchTuning({ workspaceName, current, onDone }: { workspaceName: strin
     try {
       const trimmed = value.trim()
       const imageMaxDistance = trimmed === '' ? null : Number(trimmed)
-      if (imageMaxDistance !== null && !Number.isFinite(imageMaxDistance)) { setMessage('Enter a number (e.g. 0.9) or leave empty'); return }
+      if (imageMaxDistance !== null && !Number.isFinite(imageMaxDistance)) { setMessage('Enter a number (e.g. 0.97) or leave empty'); return }
       await setWorkspaceSearchTuning(workspaceName, { imageMaxDistance })
       setMessage('Saved')
       onDone()
@@ -316,7 +316,7 @@ function SearchTuning({ workspaceName, current, onDone }: { workspaceName: strin
     <div className="mt-3 space-y-1.5">
       <label className="text-xs text-muted-foreground">Image relevance floor (cosine distance, 0–2; blank = off)</label>
       <div className="flex items-center gap-2">
-        <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="0.9" className="h-8 w-28 font-mono text-xs" inputMode="decimal" />
+        <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="0.97" className="h-8 w-28 font-mono text-xs" inputMode="decimal" />
         <Button size="sm" variant="outline" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
         {message && <span className="text-xs text-muted-foreground">{message}</span>}
       </div>
@@ -1040,17 +1040,27 @@ function ReindexSection({ workspaceName, onDone }: { workspaceName: string; onDo
       ],
     },
     {
-      title: 'FTS',
+      title: 'Full-text (BM25)',
       ops: [
-        { key: 'fts', label: 'Reindex FTS', description: 'Backfill documents missing from the full-text index. Fast, skips already-indexed.', fn: () => adminReindexSearch(workspaceName) },
-        { key: 'fts-rebuild', label: 'Rebuild FTS', description: 'Wipe the full-text index and rebuild from scratch — use when counts drift.', confirm: 'Wipe the FTS index and rebuild it from scratch?', fn: () => adminReindexSearch(workspaceName, true) },
+        { key: 'fts', label: 'Backfill', description: 'Index documents missing from the full-text table. Fast, skips already-indexed.', fn: () => adminReindexSearch(workspaceName) },
+        { key: 'fts-rebuild', label: 'Rebuild', description: 'Wipe the full-text table and rebuild from scratch — use when counts drift.', confirm: 'Wipe the FTS index and rebuild it from scratch?', fn: () => adminReindexSearch(workspaceName, true) },
+        { key: 'fts-optimize', label: 'Optimize', description: 'Compact fragments + prune old versions of the full-text table.', fn: () => adminOptimize(workspaceName, 'fts') },
       ],
     },
     {
-      title: 'Embeddings',
+      title: 'Text embeddings (384-d)',
       ops: [
-        { key: 'embed', label: 'Backfill embeddings', description: 'Enqueue documents without vectors. Runs asynchronously off-thread.', fn: () => adminReindexEmbeddings(workspaceName) },
-        { key: 'embed-full', label: 'Re-embed all', description: 'Wipe all vectors and re-embed every document. Asynchronous; can take a while.', confirm: 'Wipe ALL embedding vectors and re-embed every document? This can take a while.', fn: () => adminReindexEmbeddings(workspaceName, { reindex: true }) },
+        { key: 'text-backfill', label: 'Backfill', description: 'Enqueue text docs (notes, emails, text files) without a vector. Async, off-thread.', fn: () => adminReindexEmbeddings(workspaceName, { space: 'text' }) },
+        { key: 'text-reembed', label: 'Re-embed', description: 'Wipe the text vectors and re-embed every text doc. Async; can take a while.', confirm: 'Wipe the TEXT vectors and re-embed every text document?', fn: () => adminReindexEmbeddings(workspaceName, { space: 'text', reindex: true }) },
+        { key: 'text-optimize', label: 'Optimize', description: 'Compact + prune the text vector table and rebuild its ANN index.', fn: () => adminOptimize(workspaceName, 'text') },
+      ],
+    },
+    {
+      title: 'Image embeddings (768-d)',
+      ops: [
+        { key: 'image-backfill', label: 'Backfill', description: 'Enqueue photos without a CLIP vector. Async, off-thread.', fn: () => adminReindexEmbeddings(workspaceName, { space: 'image' }) },
+        { key: 'image-reembed', label: 'Re-embed', description: 'Wipe the image vectors and re-embed every photo. Async; can take a while.', confirm: 'Wipe the IMAGE vectors and re-embed every photo?', fn: () => adminReindexEmbeddings(workspaceName, { space: 'image', reindex: true }) },
+        { key: 'image-optimize', label: 'Optimize', description: 'Compact + prune the image vector table and rebuild its ANN index.', fn: () => adminOptimize(workspaceName, 'image') },
       ],
     },
   ]

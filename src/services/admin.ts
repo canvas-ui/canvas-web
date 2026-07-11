@@ -297,6 +297,11 @@ export function adminReindexEmbeddings(workspaceName: string, opts: { space?: st
   return postReindex(workspaceName, 'reindex-embeddings', body)
 }
 
+/** Compact + prune a Lance table and rebuild its ANN index. space: 'fts'|'text'|'image'; omit = all. */
+export function adminOptimize(workspaceName: string, space?: string): Promise<ReindexResult> {
+  return postReindex(workspaceName, 'optimize', space ? { space } : {})
+}
+
 // Combined admin service
 export const adminService = {
   users: adminUserService,
