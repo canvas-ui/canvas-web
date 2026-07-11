@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { Filter } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -189,9 +189,16 @@ export default function WorkspaceDetailPage() {
     fetchWorkspace();
   }, [workspaceName]);
 
-  // Fetch documents when path, tree, pagination, or workspace status changes
+  // Fetch documents when path, tree, pagination, or workspace status changes.
+  // A monotonic sequence guards against out-of-order responses: during a reembed
+  // (or any socket storm) many overlapping fetches are in flight, and on a slow
+  // box a stale one — an older query/scope closure — can resolve after the
+  // current one and clobber the list with unrelated documents. Only the latest
+  // fetch is allowed to write state.
+  const fetchSeqRef = useRef(0);
   const fetchDocuments = useCallback(async (opts?: { silent?: boolean }) => {
     if (!workspaceName) return;
+    const seq = ++fetchSeqRef.current;
     const cacheKey = documentKey(workspaceName, selectedTreeName, selectedPath, currentPage, pageSize, serverSearchQueries.join('␟'), tbFiltersKey, (isLayerView && selectedLayerId) ? selectedLayerId : '', docScope);
     const cached = documentCache.get(cacheKey);
     if (cached) {
@@ -234,16 +241,20 @@ export default function WorkspaceDetailPage() {
       }
       const nextDocuments = (response.payload as Document[]) || [];
       const nextTotalCount = response.totalCount || response.count || 0;
+      // Cache is keyed by the exact query/scope, so store regardless of order —
+      // but only the latest fetch may paint the live list.
+      documentCache.set(cacheKey, { documents: nextDocuments, totalCount: nextTotalCount });
+      if (seq !== fetchSeqRef.current) return;
       setDocuments(nextDocuments);
       setDocumentsTotalCount(nextTotalCount);
-      documentCache.set(cacheKey, { documents: nextDocuments, totalCount: nextTotalCount });
     } catch (err) {
+      if (seq !== fetchSeqRef.current) return;
       const message = err instanceof Error ? err.message : 'Failed to fetch documents';
       showToast({ title: 'Error', description: message, variant: 'destructive' });
       setDocuments([]);
       setDocumentsTotalCount(0);
     } finally {
-      if (!opts?.silent) setIsLoadingDocuments(false);
+      if (!opts?.silent && seq === fetchSeqRef.current) setIsLoadingDocuments(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceName, selectedPath, selectedTreeName, selectedLayerId, isLayerView, currentPage, pageSize, workspace?.status, serverSearchQueries, tbFiltersKey, docScope]);
