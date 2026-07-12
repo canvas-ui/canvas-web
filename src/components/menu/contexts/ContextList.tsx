@@ -23,7 +23,7 @@ export function ContextList() {
   const orderedContexts = optimisticOrder ?? contexts
   useEffect(() => { setOptimisticOrder(null) }, [contexts])
   const isSharedCtx = (ctx: Context & Record<string, any>) => ctx.isShared === true || ctx.type === 'shared'
-  const { rowProps, handleProps, overIndex, draggingIndex } = useListReorder((from, to) => {
+  const { rowProps, handleProps, draggingIndex, insertLineClass } = useListReorder((from, to) => {
     const next = moveItem(orderedContexts, from, to)
     setOptimisticOrder(next)
     persistSequentialOrder(next, (ctx, order) =>
@@ -74,7 +74,7 @@ export function ContextList() {
                     isWorkspaceActive
                       ? 'cursor-pointer hover:shadow ' + (isActive ? 'bg-accent shadow' : 'bg-card hover:bg-accent/50')
                       : 'cursor-not-allowed opacity-50 bg-card',
-                    overIndex === index && 'ring-2 ring-primary/40',
+                    insertLineClass(index, orderedContexts.length),
                     draggingIndex === index && 'opacity-60',
                   )}
                   onClick={() => isWorkspaceActive && handleSelect(ctx)}

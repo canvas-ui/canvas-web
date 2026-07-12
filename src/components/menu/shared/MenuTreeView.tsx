@@ -887,7 +887,9 @@ export function MenuTreeView({
       setClipboard(null)
       window.dispatchEvent(new CustomEvent('tree:path-clipboard', { detail: null }))
     } else {
-      await onCopyPath(clipboard.path, target, false, clipboard.treeName, treeName)
+      // Pasting a folder means the whole folder: recursive so subfolders and
+      // their document links are mirrored (cross-tree copies included).
+      await onCopyPath(clipboard.path, target, true, clipboard.treeName, treeName)
     }
   }, [clipboard, onMovePath, onCopyPath, treeName])
 

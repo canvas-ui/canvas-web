@@ -38,13 +38,19 @@ export async function persistSequentialOrder<T extends { order?: number | null }
 // Pointer-based drag-to-reorder for vertical lists. HTML5 drag events never
 // fire on touch devices, so the drag is driven by pointer events on a
 // dedicated grip handle: spread `handleProps(i)` onto the grip button and
-// `rowProps(i)` onto each row. While dragging, the row under the pointer is
-// resolved via elementFromPoint against the row's data attribute.
-// `draggingIndex`/`overIndex` are exposed for styling.
+// `rowProps(i)` onto each row.
+//
+// Performance: row rects are measured ONCE at drag start (no per-move
+// elementFromPoint/hit-testing), pointer moves are rAF-throttled, and the
+// floating row clone is positioned via transform (compositor-only, no
+// layout).
+//
+// Styling: `insertIndex` (0..n) marks the gap the item would be inserted
+// into — render it as a line between rows, not a highlight on a row (we are
+// moving, not merging). `draggingIndex` marks the source row.
 export function useListReorder(onDrop: (from: number, to: number) => void) {
-  const dragRef = useRef<{ from: number; over: number } | null>(null)
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
-  const [overIndex, setOverIndex] = useState<number | null>(null)
+  const [insertIndex, setInsertIndex] = useState<number | null>(null)
 
   const handleProps = (index: number) => ({
     onPointerDown: (e: React.PointerEvent) => {
@@ -53,61 +59,79 @@ export function useListReorder(onDrop: (from: number, to: number) => void) {
       // touch from scrolling the list (touch-action is set below too).
       e.preventDefault()
       e.stopPropagation()
-      dragRef.current = { from: index, over: index }
-      setDraggingIndex(index)
-      setOverIndex(index)
 
-      // Float a visual clone of the whole row under the pointer. The clone is
-      // pointer-events:none, so elementFromPoint still resolves the rows
-      // beneath it.
-      let ghost: HTMLElement | null = null
-      let grabOffset = { x: 0, y: 0 }
       const rowEl = (e.currentTarget as HTMLElement).closest('[data-reorder-index]') as HTMLElement | null
-      if (rowEl) {
-        const rect = rowEl.getBoundingClientRect()
-        ghost = rowEl.cloneNode(true) as HTMLElement
-        Object.assign(ghost.style, {
-          position: 'fixed',
-          left: `${rect.left}px`,
-          top: `${rect.top}px`,
-          width: `${rect.width}px`,
-          height: `${rect.height}px`,
-          margin: '0',
-          pointerEvents: 'none',
-          zIndex: '100',
-          opacity: '0.92',
-          boxShadow: '0 12px 32px rgba(0,0,0,.28)',
-          transform: 'scale(1.02)',
-        } as Partial<CSSStyleDeclaration>)
-        grabOffset = { x: e.clientX - rect.left, y: e.clientY - rect.top }
-        document.body.appendChild(ghost)
-      }
+      if (!rowEl) return
 
+      // Measure the sibling rows of THIS list once — drop position is then a
+      // pure array lookup per frame.
+      const listEl = rowEl.parentElement
+      const rowEls = listEl
+        ? ([...listEl.querySelectorAll(':scope > [data-reorder-index]')] as HTMLElement[])
+        : [rowEl]
+      const mids = rowEls
+        .map(el => ({ index: Number(el.dataset.reorderIndex), rect: el.getBoundingClientRect() }))
+        .filter(r => Number.isFinite(r.index))
+        .sort((a, b) => a.index - b.index)
+        .map(r => r.rect.top + r.rect.height / 2)
+
+      // Float a visual clone of the whole row under the pointer.
+      const rect = rowEl.getBoundingClientRect()
+      const ghost = rowEl.cloneNode(true) as HTMLElement
+      Object.assign(ghost.style, {
+        position: 'fixed',
+        left: `${rect.left}px`,
+        top: `${rect.top}px`,
+        width: `${rect.width}px`,
+        height: `${rect.height}px`,
+        margin: '0',
+        pointerEvents: 'none',
+        zIndex: '100',
+        opacity: '0.92',
+        boxShadow: '0 12px 32px rgba(0,0,0,.28)',
+        willChange: 'transform',
+      } as Partial<CSSStyleDeclaration>)
+      document.body.appendChild(ghost)
+      const origin = { x: e.clientX, y: e.clientY }
+
+      let insert = index
+      setDraggingIndex(index)
+      setInsertIndex(index)
+
+      // rAF throttle: pointermove can fire far above 60 Hz (and multiple
+      // times per frame); coalesce to one style write + one state check per
+      // frame.
+      let last = { x: e.clientX, y: e.clientY }
+      let raf = 0
+      const frame = () => {
+        raf = 0
+        ghost.style.transform = `translate(${last.x - origin.x}px, ${last.y - origin.y}px) scale(1.02)`
+        // Insertion gap: first row-midpoint below the pointer.
+        let next = mids.length
+        for (let i = 0; i < mids.length; i++) {
+          if (last.y < mids[i]) { next = i; break }
+        }
+        if (next !== insert) {
+          insert = next
+          setInsertIndex(next)
+        }
+      }
       const move = (ev: PointerEvent) => {
-        if (ghost) {
-          ghost.style.left = `${ev.clientX - grabOffset.x}px`
-          ghost.style.top = `${ev.clientY - grabOffset.y}px`
-        }
-        const el = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)
-          ?.closest?.('[data-reorder-index]') as HTMLElement | null
-        if (!el || !dragRef.current) return
-        const over = Number(el.dataset.reorderIndex)
-        if (Number.isFinite(over) && over !== dragRef.current.over) {
-          dragRef.current.over = over
-          setOverIndex(over)
-        }
+        last = { x: ev.clientX, y: ev.clientY }
+        if (!raf) raf = requestAnimationFrame(frame)
       }
       const up = () => {
         window.removeEventListener('pointermove', move)
         window.removeEventListener('pointerup', up)
         window.removeEventListener('pointercancel', up)
-        ghost?.remove()
-        ghost = null
-        const d = dragRef.current
-        dragRef.current = null
+        if (raf) cancelAnimationFrame(raf)
+        ghost.remove()
         setDraggingIndex(null)
-        setOverIndex(null)
-        if (d && d.from !== d.over) onDrop(d.from, d.over)
+        setInsertIndex(null)
+        // Gap → target position: gaps at `from` and `from + 1` are no-ops.
+        if (insert !== index && insert !== index + 1) {
+          onDrop(index, insert > index ? insert - 1 : insert)
+        }
       }
       window.addEventListener('pointermove', move)
       window.addEventListener('pointerup', up)
@@ -121,5 +145,15 @@ export function useListReorder(onDrop: (from: number, to: number) => void) {
 
   const rowProps = (index: number) => ({ 'data-reorder-index': index })
 
-  return { rowProps, handleProps, overIndex, draggingIndex }
+  // Tailwind classes for the insertion line: a 3px primary-colored edge on
+  // the row adjoining the active gap. Pass the list length so the below-last
+  // gap renders on the final row's bottom edge.
+  const insertLineClass = (index: number, length: number): string | false => {
+    if (insertIndex === null || draggingIndex === null) return false
+    if (insertIndex === index) return 'shadow-[0_-3px_0_0_hsl(var(--primary))]'
+    if (insertIndex === length && index === length - 1) return 'shadow-[0_3px_0_0_hsl(var(--primary))]'
+    return false
+  }
+
+  return { rowProps, handleProps, insertIndex, draggingIndex, insertLineClass }
 }

@@ -307,7 +307,7 @@ export default function WorkspacesPage() {
 
   // Drag a card to reorder; sequential order values are persisted for the
   // rows that moved and mirrored to the sidebar via workspaces:refresh.
-  const { rowProps, handleProps, overIndex, draggingIndex } = useListReorder((from, to) => {
+  const { rowProps, handleProps, draggingIndex, insertLineClass } = useListReorder((from, to) => {
     const next = moveItem(workspaces, from, to)
     setWorkspaces(next)
     persistSequentialOrder(next, (ws, order) => updateWorkspace(ws.name, { order }))
@@ -460,7 +460,7 @@ export default function WorkspacesPage() {
                 <div
                   key={ws.id}
                   {...rowProps(index)}
-                  className={`flex items-stretch rounded-lg ${overIndex === index ? 'ring-2 ring-primary/40' : ''} ${draggingIndex === index ? 'opacity-60' : ''}`}
+                  className={`flex items-stretch rounded-lg ${insertLineClass(index, workspaces.length) || ''} ${draggingIndex === index ? 'opacity-60' : ''}`}
                 >
                   {/* Widened color strip doubles as the drag handle, sitting on
                       the card's accent (left) edge. */}

@@ -36,7 +36,7 @@ export function WorkspaceList() {
   const [optimisticOrder, setOptimisticOrder] = useState<Workspace[] | null>(null)
   const orderedWorkspaces = optimisticOrder ?? workspaces
   useEffect(() => { setOptimisticOrder(null) }, [workspaces])
-  const { rowProps, handleProps, overIndex, draggingIndex } = useListReorder((from, to) => {
+  const { rowProps, handleProps, draggingIndex, insertLineClass } = useListReorder((from, to) => {
     const next = moveItem(orderedWorkspaces, from, to)
     setOptimisticOrder(next)
     persistSequentialOrder(next, (ws, order) => updateWorkspace(ws.name, { order }))
@@ -139,7 +139,7 @@ export function WorkspaceList() {
                       : isInactive
                         ? 'bg-card opacity-60 cursor-not-allowed'
                         : 'bg-card hover:bg-accent/50 cursor-pointer hover:shadow',
-                    overIndex === index && 'ring-2 ring-primary/40',
+                    insertLineClass(index, orderedWorkspaces.length),
                     draggingIndex === index && 'opacity-60',
                   )}
                   onClick={() => { if (!isInactive) handleSelect(ws) }}
