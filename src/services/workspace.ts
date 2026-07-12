@@ -1184,6 +1184,7 @@ export interface WorkspaceDbStats {
     cacheDir?: string
     embeddableSchemas?: string[]
     imageMaxDistance?: number | null
+    searchWeights?: { fts?: number; dense?: number; image?: number }
     vector?: { ready: boolean; rowCount?: number; error?: string } | Record<string, unknown>
     vectorSpaces?: Record<string, { ready: boolean; dim?: number; chunkRows?: number; embeddedDocs?: number; error?: string }>
     embedder?: Record<string, unknown>
@@ -1202,12 +1203,18 @@ export async function getWorkspaceDbStats(workspaceId: string): Promise<Workspac
   return res.payload
 }
 
-/** Live-tune search knobs (image relevance floor). Persisted + applied without restart. */
+export interface SearchWeights {
+  fts?: number
+  dense?: number
+  image?: number
+}
+
+/** Live-tune search knobs (image relevance floor + hybrid fusion weights). Persisted + applied without restart. */
 export async function setWorkspaceSearchTuning(
   workspaceId: string,
-  tuning: { imageMaxDistance?: number | null },
-): Promise<{ semantic: { imageMaxDistance?: number | null } }> {
-  const res = await api.put<{ payload: { semantic: { imageMaxDistance?: number | null } } }>(
+  tuning: { imageMaxDistance?: number | null; searchWeights?: SearchWeights },
+): Promise<{ semantic: { imageMaxDistance?: number | null; searchWeights?: SearchWeights } }> {
+  const res = await api.put<{ payload: { semantic: { imageMaxDistance?: number | null; searchWeights?: SearchWeights } } }>(
     `${API_ROUTES.workspaces}/${workspaceId}/db/tuning`,
     tuning,
   )

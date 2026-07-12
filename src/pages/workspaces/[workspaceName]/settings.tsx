@@ -482,11 +482,23 @@ function StatRow({ label, value, mono = false }: { label: string; value: React.R
   )
 }
 
-// Image-search relevance floor: cosine distance cap (0=identical, smaller=stricter).
-// Lower it if unrelated photos leak into results; raise it if relevant photos are
-// missing. Empty = no floor (legacy top-K). Applied live, no restart.
-function SearchTuning({ workspaceName, current, onDone }: { workspaceName: string; current: number | null | undefined; onDone: () => void }) {
+// Live search tuning (applied without restart, persisted to workspace.json):
+// - Image relevance floor: cosine distance cap (0=identical, smaller=stricter).
+//   Lower it if unrelated photos leak into results; raise it if relevant photos
+//   are missing. Empty = no floor (legacy top-K).
+// - Fusion weights: how much each signal counts in hybrid ranking (RRF).
+//   fts = lexical (filenames/content), dense = text semantics, image = photo
+//   matches. Equal fts/image treats a matching photo like a matching document.
+function SearchTuning({ workspaceName, current, weights, onDone }: {
+  workspaceName: string
+  current: number | null | undefined
+  weights: { fts?: number; dense?: number; image?: number } | undefined
+  onDone: () => void
+}) {
   const [value, setValue] = useState<string>(current == null ? '' : String(current))
+  const [wFts, setWFts] = useState<string>(weights?.fts == null ? '2' : String(weights.fts))
+  const [wDense, setWDense] = useState<string>(weights?.dense == null ? '1' : String(weights.dense))
+  const [wImage, setWImage] = useState<string>(weights?.image == null ? '2' : String(weights.image))
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const save = async () => {
@@ -495,8 +507,10 @@ function SearchTuning({ workspaceName, current, onDone }: { workspaceName: strin
     try {
       const trimmed = value.trim()
       const imageMaxDistance = trimmed === '' ? null : Number(trimmed)
-      if (imageMaxDistance !== null && !Number.isFinite(imageMaxDistance)) { setMessage('Enter a number (e.g. 0.97) or leave empty'); return }
-      await setWorkspaceSearchTuning(workspaceName, { imageMaxDistance })
+      if (imageMaxDistance !== null && !Number.isFinite(imageMaxDistance)) { setMessage('Enter a number (e.g. 0.95) or leave empty'); return }
+      const parsedWeights = { fts: Number(wFts), dense: Number(wDense), image: Number(wImage) }
+      if (Object.values(parsedWeights).some((v) => !Number.isFinite(v) || v < 0)) { setMessage('Weights must be numbers ≥ 0'); return }
+      await setWorkspaceSearchTuning(workspaceName, { imageMaxDistance, searchWeights: parsedWeights })
       setMessage('Saved')
       onDone()
     } catch (err) {
@@ -506,14 +520,28 @@ function SearchTuning({ workspaceName, current, onDone }: { workspaceName: strin
     }
   }
   return (
-    <div className="mt-3 space-y-1.5">
-      <label className="text-xs text-muted-foreground">Image relevance floor (cosine distance, 0–2; blank = off)</label>
+    <div className="mt-3 space-y-3">
+      <div className="space-y-1.5">
+        <label className="text-xs text-muted-foreground">Image relevance floor (cosine distance, 0–2; blank = off)</label>
+        <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="0.95" className="h-8 w-28 font-mono text-xs" inputMode="decimal" />
+        <p className="text-[11px] text-muted-foreground">Lower = stricter (fewer, more-relevant photos); raise if relevant photos are missing.</p>
+      </div>
+      <div className="space-y-1.5">
+        <label className="text-xs text-muted-foreground">Hybrid fusion weights (0 disables a signal)</label>
+        <div className="flex items-center gap-3">
+          {([['lexical', wFts, setWFts], ['text semantic', wDense, setWDense], ['image', wImage, setWImage]] as const).map(([label, v, set]) => (
+            <div key={label} className="flex items-center gap-1.5">
+              <span className="text-[11px] text-muted-foreground">{label}</span>
+              <Input value={v} onChange={(e) => set(e.target.value)} className="h-8 w-16 font-mono text-xs" inputMode="decimal" />
+            </div>
+          ))}
+        </div>
+        <p className="text-[11px] text-muted-foreground">Ranking mix: lexical (filenames/content) · text semantics · photo matches. Equal lexical/image ranks a matching photo like a matching document.</p>
+      </div>
       <div className="flex items-center gap-2">
-        <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="0.97" className="h-8 w-28 font-mono text-xs" inputMode="decimal" />
         <Button size="sm" variant="outline" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
         {message && <span className="text-xs text-muted-foreground">{message}</span>}
       </div>
-      <p className="text-[11px] text-muted-foreground">Lower = stricter (fewer, more-relevant photos); raise if relevant photos are missing.</p>
     </div>
   )
 }
@@ -626,7 +654,12 @@ function DbStatsTab({
                     />
                   )}
                   <StatRow label="Image relevance floor" value={stats.semantic.imageMaxDistance == null ? 'off' : stats.semantic.imageMaxDistance} mono />
-                  <SearchTuning workspaceName={workspaceName} current={stats.semantic.imageMaxDistance} onDone={onRefresh} />
+                  <StatRow
+                    label="Fusion weights (lexical · text · image)"
+                    value={`${stats.semantic.searchWeights?.fts ?? 2} · ${stats.semantic.searchWeights?.dense ?? 1} · ${stats.semantic.searchWeights?.image ?? 2}`}
+                    mono
+                  />
+                  <SearchTuning workspaceName={workspaceName} current={stats.semantic.imageMaxDistance} weights={stats.semantic.searchWeights} onDone={onRefresh} />
                 </>
               )}
             </section>
