@@ -61,5 +61,27 @@ export const generateNiceRandomHexColor = (): string => {
   return hslToHex(h, s, l);
 };
 
+// WCAG relative luminance (0 = black, 1 = white) of a #rgb/#rrggbb hex color.
+// Returns null for anything unparseable so callers can fall back gracefully.
+export const relativeLuminance = (hex: string): number | null => {
+  const m = hex.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (!m) return null;
+  let h = m[1];
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  const channel = (i: number) => {
+    const v = parseInt(h.slice(i * 2, i * 2 + 2), 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * channel(0) + 0.7152 * channel(1) + 0.0722 * channel(2);
+};
+
+// Whether a color is too light to be visible as an accent on our light
+// background (the white-on-white case). Unparseable colors count as low
+// contrast so callers pick the safe fallback.
+export const isLowContrastOnLight = (color: string, threshold = 0.82): boolean => {
+  const lum = relativeLuminance(color);
+  return lum === null || lum > threshold;
+};
+
 // Re-export helpers in case we want them elsewhere
 export { randomInt, generateRandomHsl, hslToHex };

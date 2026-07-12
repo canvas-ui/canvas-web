@@ -30,6 +30,7 @@ interface Workspace {
   sharedVia?: any
   color?: string
   icon?: string | null
+  order?: number | null
   label?: string
   acl: {
     tokens: {
@@ -63,6 +64,8 @@ interface Context {
   path?: string
   pathArray?: string[]
   color?: string
+  icon?: string | null
+  order?: number | null
   ownerEmail?: string
   locked?: boolean
   serverContextArray?: any[]

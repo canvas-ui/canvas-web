@@ -140,7 +140,7 @@ export async function patchContext(id: string, updates: { name?: string; descrip
   }
 }
 
-export async function updateContext(id: string, updates: { name?: string | null; baseUrl?: string | null }, ownerId?: string): Promise<Context> {
+export async function updateContext(id: string, updates: { name?: string | null; baseUrl?: string | null; order?: number }, ownerId?: string): Promise<Context> {
   try {
     const endpoint = withOwnerId(`${API_ROUTES.contexts}/${id}`, ownerId);
     const response = await api.put<{ payload: { context: Context } }>(endpoint, updates);

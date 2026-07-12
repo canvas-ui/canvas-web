@@ -130,7 +130,7 @@ function GalleryWidget({ config, canvas }: WidgetProps) {
 
   return (
     <div className="h-full overflow-y-auto p-1">
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(min(200px,100%),1fr))] gap-3">
         {images.map((doc, i) => (
           <GalleryCell key={doc.id} workspaceId={canvas.workspaceId} doc={doc} onClick={() => setLightbox(i)} />
         ))}

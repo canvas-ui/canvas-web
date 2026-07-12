@@ -1,6 +1,9 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { Filter } from 'lucide-react';
+import { Icon } from '@iconify/react';
+import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style';
+import { isLowContrastOnLight } from '@/utils/color';
 import { api } from '@/lib/api';
 import { API_ROUTES } from '@/config/api';
 import { useToast } from '@/components/ui/toast-container';
@@ -62,6 +65,18 @@ function documentKey(workspaceName: string, treeName: string, path: string, page
 
 function invalidateDocumentCache(workspaceName: string, treeName: string, path: string) {
   const prefix = paneKey(workspaceName, treeName, path);
+  for (const key of documentCache.keys()) {
+    if (key.startsWith(prefix)) documentCache.delete(key);
+  }
+}
+
+// Invalidate the refresh event's target so a later navigation there doesn't
+// serve stale data — even when no mounted pane currently shows that target.
+// treeName without path drops the whole tree's cached paths.
+function invalidateRefreshTarget(fallbackWorkspaceName: string, detail?: { workspaceName?: string; path?: string; treeName?: string }) {
+  if (!detail?.treeName) return;
+  const ws = detail.workspaceName ?? fallbackWorkspaceName;
+  const prefix = detail.path ? paneKey(ws, detail.treeName, detail.path) : `${ws}\0${detail.treeName}\0`;
   for (const key of documentCache.keys()) {
     if (key.startsWith(prefix)) documentCache.delete(key);
   }
@@ -293,6 +308,9 @@ export default function WorkspaceDetailPage() {
     const onDocumentsRefresh = (event: Event) => {
       const detail = (event as CustomEvent).detail as { workspaceName?: string; path?: string; treeName?: string } | undefined;
       if (detail?.workspaceName && detail.workspaceName !== workspaceName) return;
+      if (workspaceName) invalidateRefreshTarget(workspaceName, detail);
+      // Refetch only when this pane shows the event's target (no detail →
+      // broad refresh of the current view).
       if (detail?.treeName && detail.treeName !== selectedTreeName) return;
       if (detail?.path && detail.path !== selectedPath) return;
       if (workspaceName) invalidateDocumentCache(workspaceName, selectedTreeName, selectedPath);
@@ -624,8 +642,9 @@ export default function WorkspaceDetailPage() {
       const ids = await importDocumentsToWorkspacePath(workspaceName, contextPath, docs, selectedTreeName, selectedTreeType);
       const success = ids.length > 0;
       if (success) {
-        invalidateDocumentCache(workspaceName, selectedTreeName, contextPath);
-        if (contextPath === selectedPath) await fetchDocuments();
+        window.dispatchEvent(new CustomEvent('workspace:documents:refresh', {
+          detail: { workspaceName, path: contextPath, treeName: selectedTreeName },
+        }));
         showToast({ title: 'Success', description: `Imported ${docs.length} document(s) to "${contextPath}"` });
       }
       return success;
@@ -878,10 +897,14 @@ export default function WorkspaceDetailPage() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* Compact workspace status bar */}
+      {/* Compact workspace status bar — bottom border carries the workspace
+          color as the primary accent; near-white colors fall back to the
+          theme border so the accent never vanishes on the light background. */}
       <div
         className="flex items-center gap-3 px-4 py-2 border-b shrink-0"
-        style={workspace.color ? { borderLeft: `8px solid ${workspace.color}` } : undefined}
+        style={workspace.color && !isLowContrastOnLight(workspace.color)
+          ? { borderBottom: `3px solid ${workspace.color}` }
+          : { borderBottomWidth: 3 }}
       >
         <span
           className={`w-2 h-2 rounded-full shrink-0 ${
@@ -894,9 +917,16 @@ export default function WorkspaceDetailPage() {
           type="button"
           onClick={() => openM2Drawer('workspaces', 'detail', workspace.name)}
           title="Browse workspace tree"
-          className="min-w-0 truncate rounded px-1 -mx-1 text-left text-sm font-medium transition-colors hover:bg-accent"
+          className="flex min-w-0 items-center gap-1.5 truncate rounded px-1 -mx-1 text-left text-sm font-medium transition-colors hover:bg-accent"
         >
-          {workspace.label || workspace.name}
+          <Icon
+            icon={workspace.icon || DEFAULT_WORKSPACE_ICON}
+            width={16}
+            height={16}
+            color={workspace.color && !isLowContrastOnLight(workspace.color) ? workspace.color : undefined}
+            className={cn('shrink-0', (!workspace.color || isLowContrastOnLight(workspace.color)) && 'text-muted-foreground')}
+          />
+          <span className="truncate">{workspace.label || workspace.name}</span>
         </button>
         <div className="flex-1" />
         {/* Backend mirrors: show only docs never filed into another tree
@@ -1123,6 +1153,7 @@ function SideWorkspaceCanvas({
     const onRefresh = (event: Event) => {
       const detail = (event as CustomEvent).detail as { workspaceName?: string; path?: string; treeName?: string } | undefined;
       if (detail?.workspaceName && detail.workspaceName !== workspaceName) return;
+      invalidateRefreshTarget(workspaceName, detail);
       if (detail?.treeName && detail.treeName !== pane.treeName) return;
       if (detail?.path && detail.path !== pane.path) return;
       invalidateDocumentCache(workspaceName, pane.treeName, pane.path);

@@ -79,7 +79,7 @@ export async function submitDocuments(target: AddTarget, documents: Record<strin
     if (ids.length) {
       window.dispatchEvent(
         new CustomEvent('workspace:documents:refresh', {
-          detail: { workspaceName: target.workspaceName, treeName: target.treeName },
+          detail: { workspaceName: target.workspaceName, treeName: target.treeName, path: target.path },
         }),
       )
     }
@@ -117,7 +117,7 @@ export async function linkExistingDocuments(target: AddTarget, documentIds: numb
     if (success) {
       window.dispatchEvent(
         new CustomEvent('workspace:documents:refresh', {
-          detail: { workspaceName: target.workspaceName, treeName: target.treeName },
+          detail: { workspaceName: target.workspaceName, treeName: target.treeName, path: target.path },
         }),
       )
     }

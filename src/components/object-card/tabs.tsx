@@ -99,6 +99,23 @@ export function MetadataTab({ document }: TabProps) {
         </div>
       </div>
 
+      {Array.isArray(document.locations) && document.locations.length > 0 && (
+        <div>
+          <h3 className="font-semibold mb-3">Locations</h3>
+          <div className="space-y-2">
+            {document.locations.map((loc, index) => {
+              const { backend, key } = splitUrl(loc.url)
+              return (
+                <div key={index} className="flex items-baseline gap-2 text-sm font-mono">
+                  <span className="font-medium shrink-0">{backend}</span>
+                  {key && <span className="break-all text-muted-foreground">{key}</span>}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {Array.isArray(document.checksumArray) && document.checksumArray.length > 0 && (
         <div>
           <h3 className="font-semibold mb-3">Checksums</h3>

@@ -168,7 +168,7 @@ function ExportModal({ isOpen, onClose, documents, selectedDocuments }: ExportMo
   }
 
   return createPortal(
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 max-md:p-2">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 max-md:p-2">
       <div className="bg-background border rounded-lg max-w-3xl w-full max-h-[85dvh] overflow-y-auto max-md:h-full max-md:max-h-none max-md:max-w-none">
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
@@ -261,7 +261,7 @@ function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
   }
 
   return createPortal(
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 max-md:p-2">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 max-md:p-2">
       <div className="bg-background border rounded-lg max-w-3xl w-full max-h-[85dvh] overflow-y-auto max-md:h-full max-md:max-h-none max-md:max-w-none">
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
@@ -411,11 +411,11 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
             )}
           </div>
         </TableCell>
-        <TableCell><span className="px-2 py-1 text-xs bg-muted rounded border">{display.schemaLabel}</span></TableCell>
-        <TableCell className="text-xs text-muted-foreground">{document.id}</TableCell>
-        <TableCell className="text-xs text-muted-foreground">{primaryChecksum && (<span className="font-mono" title={`${primaryChecksum.algo} checksum`}>{primaryChecksum.hash}</span>)}</TableCell>
-        <TableCell className="text-xs text-muted-foreground">{formatDate(document.createdAt)}</TableCell>
-        <TableCell className="text-xs text-muted-foreground">{document.versionNumber > 1 ? `v${document.versionNumber}` : ''}</TableCell>
+        <TableCell className="hidden md:table-cell"><span className="px-2 py-1 text-xs bg-muted rounded border">{display.schemaLabel}</span></TableCell>
+        <TableCell className="hidden text-xs text-muted-foreground lg:table-cell">{document.id}</TableCell>
+        <TableCell className="hidden text-xs text-muted-foreground lg:table-cell">{primaryChecksum && (<span className="font-mono" title={`${primaryChecksum.algo} checksum`}>{primaryChecksum.hash}</span>)}</TableCell>
+        <TableCell className="hidden text-xs text-muted-foreground sm:table-cell">{formatDate(document.createdAt)}</TableCell>
+        <TableCell className="hidden text-xs text-muted-foreground lg:table-cell">{document.versionNumber > 1 ? `v${document.versionNumber}` : ''}</TableCell>
         <TableCell>
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="sm" onClick={handleViewDetails} title="View document details"><Eye className="h-4 w-4" /></Button>
@@ -547,7 +547,7 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
   return (
     <>
       <div
-        className={`group relative flex flex-col overflow-hidden rounded-lg border transition-shadow cursor-pointer hover:shadow-md ${isSelected ? 'ring-2 ring-blue-400 border-blue-300' : ''}`}
+        className={`group relative mb-3 flex break-inside-avoid flex-col overflow-hidden rounded-lg border transition-shadow cursor-pointer hover:shadow-md ${isSelected ? 'ring-2 ring-blue-400 border-blue-300' : ''}`}
         onClick={handleClick}
         onContextMenu={handleRightClick}
         draggable
@@ -562,10 +562,10 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
           onClick={(e) => e.stopPropagation()}
           onChange={(e) => onSelect?.(document.id, e.target.checked, true)}
         />
-        <div className="relative aspect-square w-full bg-muted/40">
+        <div className={`relative w-full bg-muted/40 ${isImage && blobUrl ? '' : 'aspect-square'}`}>
           {isImage && loading && <div className="absolute inset-0 animate-pulse bg-muted/60" />}
           {isImage && blobUrl ? (
-            <img src={blobUrl} alt={display.title} loading="lazy" className="h-full w-full object-cover" />
+            <img src={blobUrl} alt={display.title} loading="lazy" className="block h-auto w-full" />
           ) : (
             <div className="flex h-full w-full items-center justify-center">
               <DocumentIcon document={document} size={10} chip />
@@ -781,6 +781,9 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   }, [])
 
   const handleDocumentRightClick = useCallback((event: React.MouseEvent, documentId: number) => {
+    // Modals portal to <body> but React synthetic events still bubble through
+    // the JSX tree — leave right-clicks inside any dialog to the browser.
+    if ((event.target as HTMLElement).closest?.('[role="dialog"]')) return
     event.preventDefault()
     event.stopPropagation() // Prevent bubbling to empty area handler
     let targetIds: number[]
@@ -856,6 +859,9 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   }, [onCopyDocuments, onCutDocuments, onRemoveDocument, onRemoveDocuments, onDeleteDocument, onDeleteDocuments, onDestroyDocument, onDestroyDocuments, documents, workspaceId])
 
   const handleEmptyAreaRightClick = useCallback((event: React.MouseEvent) => {
+    // Right-clicks inside a portaled dialog bubble here via the React tree —
+    // keep the browser's default menu (text copy etc.) there.
+    if ((event.target as HTMLElement).closest?.('[role="dialog"]')) return
     // Show context menu if there are documents to paste or import functionality is available
     const hasPasteOption = pastedDocumentIds && pastedDocumentIds.length > 0 && onPasteDocuments
     const hasImportOption = onImportDocuments
@@ -1358,7 +1364,9 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
         </div>
       ) : view === 'tile' ? (
         <div className="flex-1 overflow-y-auto" onContextMenu={handleEmptyAreaRightClick}>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3 pr-2">
+          {/* Masonry via CSS columns: image tiles keep their natural aspect,
+              so column heights interleave into a mosaic. */}
+          <div className="columns-[160px] gap-3 pr-2">
             {filteredDocuments.map((document) => (
               <DocumentTile key={document.id} document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onRemoveDocument={removeDocument} onDeleteDocument={onDeleteDocument} onLinkDocument={canLink ? (id) => setLinkPanelIds([id]) : undefined} onOpenToSide={openToSide} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
             ))}
@@ -1381,11 +1389,11 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                 </TableHead>
                 <TableHead className="w-12">Type</TableHead>
                 <SortableTableHead label="Title" sortKey="title" sort={sort} onSort={toggleSort} />
-                <SortableTableHead label="Schema" sortKey="schema" sort={sort} onSort={toggleSort} />
-                <SortableTableHead label="ID" sortKey="id" sort={sort} onSort={toggleSort} />
-                <TableHead>Checksum</TableHead>
-                <SortableTableHead label="Created" sortKey="created" sort={sort} onSort={toggleSort} />
-                <SortableTableHead label="Version" sortKey="version" sort={sort} onSort={toggleSort} />
+                <SortableTableHead label="Schema" sortKey="schema" sort={sort} onSort={toggleSort} className="hidden md:table-cell" />
+                <SortableTableHead label="ID" sortKey="id" sort={sort} onSort={toggleSort} className="hidden lg:table-cell" />
+                <TableHead className="hidden lg:table-cell">Checksum</TableHead>
+                <SortableTableHead label="Created" sortKey="created" sort={sort} onSort={toggleSort} className="hidden sm:table-cell" />
+                <SortableTableHead label="Version" sortKey="version" sort={sort} onSort={toggleSort} className="hidden lg:table-cell" />
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>

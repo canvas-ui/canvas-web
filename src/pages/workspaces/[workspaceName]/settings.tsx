@@ -49,6 +49,7 @@ import {
 } from '@/services/devices'
 
 type SettingsTab = 'general' | 'data' | 'db' | 'devices' | 'services' | 'shares' | 'hooks'
+const SETTINGS_TABS: readonly SettingsTab[] = ['general', 'data', 'db', 'devices', 'services', 'shares', 'hooks']
 type ServiceId = 'dotfiles' | 'git' | 'home' | 'webdav' | 'imap' | 'imapSync'
 
 const DATA_BACKEND_LABELS: Record<string, { title: string; description: string }> = {
@@ -637,10 +638,16 @@ function DbStatsTab({
 }
 
 export default function WorkspaceSettingsPage() {
-  const { workspaceName } = useParams<{ workspaceName: string }>()
+  const { workspaceName, tab } = useParams<{ workspaceName: string; tab?: string }>()
   const navigate = useNavigate()
   const { showToast } = useToast()
-  const [activeTab, setActiveTab] = useState<SettingsTab>('general')
+  // Tab is URL-driven (/workspaces/:name/settings/:tab); bare or invalid tab
+  // segments normalize to /settings/general below.
+  const activeTab: SettingsTab = SETTINGS_TABS.includes(tab as SettingsTab) ? (tab as SettingsTab) : 'general'
+  useEffect(() => {
+    if (tab !== activeTab) navigate(`/workspaces/${workspaceName}/settings/${activeTab}`, { replace: true })
+  }, [tab, activeTab, workspaceName, navigate])
+  const setActiveTab = (next: SettingsTab) => navigate(`/workspaces/${workspaceName}/settings/${next}`)
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)

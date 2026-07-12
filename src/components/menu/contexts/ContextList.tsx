@@ -1,13 +1,37 @@
+import { useEffect, useState } from 'react'
 import { Plus, Settings, Link2 } from 'lucide-react'
+import { Icon } from '@iconify/react'
 import { cn } from '@/lib/utils'
 import { useMenu } from '@/components/shell/menu-context'
 import { useContextListData } from '@/hooks/useContextListData'
+import { updateContext } from '@/services/context'
+import { moveItem, persistSequentialOrder, useListReorder } from '@/lib/list-order'
+import { useToast } from '@/components/ui/toast-container'
 import { useNavigate } from 'react-router-dom'
 
 export function ContextList() {
   const { state, selectEntity, openM2 } = useMenu()
   const { contexts, isLoading } = useContextListData(state.activeSection === 'contexts')
+  const { showToast } = useToast()
   const navigate = useNavigate()
+
+  // Drag-to-reorder (own contexts only — shared rows aren't writable and keep
+  // their unordered sort-last position).
+  const [optimisticOrder, setOptimisticOrder] = useState<Context[] | null>(null)
+  const orderedContexts = optimisticOrder ?? contexts
+  useEffect(() => { setOptimisticOrder(null) }, [contexts])
+  const isSharedCtx = (ctx: Context & Record<string, any>) => ctx.isShared === true || ctx.type === 'shared'
+  const { rowProps, overIndex } = useListReorder((from, to) => {
+    const next = moveItem(orderedContexts, from, to)
+    setOptimisticOrder(next)
+    persistSequentialOrder(next, (ctx, order) =>
+      isSharedCtx(ctx) ? Promise.resolve() : updateContext(ctx.id, { order }))
+      .then(() => window.dispatchEvent(new CustomEvent('contexts:refresh')))
+      .catch(err => {
+        setOptimisticOrder(null)
+        showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Reorder failed', variant: 'destructive' })
+      })
+  })
 
   const handleSelect = (ctx: Context & Record<string, any>) => {
     selectEntity(ctx.id)
@@ -34,25 +58,37 @@ export function ContextList() {
           <div className="px-4 py-3 text-xs text-muted-foreground">No contexts found</div>
         ) : (
           <div className="space-y-1.5 px-2">
-            {contexts.map((ctx) => {
+            {orderedContexts.map((ctx, index) => {
               const isActive = state.selectedEntityId === ctx.id
-              const isShared = (ctx as any).isShared === true || (ctx as any).type === 'shared'
+              const isShared = isSharedCtx(ctx)
               const isWorkspaceActive = ctx.workspaceActive !== false
 
               return (
                 <div
                   key={`${ctx.userId || 'u'}-${ctx.id}`}
+                  {...(isShared ? {} : rowProps(index))}
                   className={cn(
                     'group relative rounded-l-md px-3 py-2.5 transition-all shadow-sm',
                     isWorkspaceActive
                       ? 'cursor-pointer hover:shadow ' + (isActive ? 'bg-accent shadow' : 'bg-card hover:bg-accent/50')
                       : 'cursor-not-allowed opacity-50 bg-card',
+                    overIndex === index && 'ring-2 ring-primary/40',
                   )}
                   style={{ borderRight: `6px solid ${ctx.color || 'transparent'}` }}
                   onClick={() => isWorkspaceActive && handleSelect(ctx)}
                   title={isWorkspaceActive ? undefined : `Workspace "${ctx.workspaceName}" is not active`}
                 >
                   <div className="flex items-start gap-2">
+                    {/* Icon derived server-side from the bound path's layer, falling back to the workspace style */}
+                    {ctx.icon && (
+                      <Icon
+                        icon={ctx.icon}
+                        width={16}
+                        height={16}
+                        color={ctx.color || undefined}
+                        className={cn('mt-0.5 shrink-0', !ctx.color && 'text-muted-foreground')}
+                      />
+                    )}
                     <span className="text-sm font-medium truncate flex-1">{ctx.name || ctx.id}</span>
                     {isShared && (
                       <span className="rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[9px] text-blue-700 shrink-0">

@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { listWorkspaces } from '@/services/workspace'
+import { sortByOrder } from '@/lib/list-order'
 import socketService from '@/lib/socket'
 
 export function useWorkspaceListData(enabled: boolean) {
@@ -84,5 +85,6 @@ export function useWorkspaceListData(enabled: boolean) {
     return () => window.removeEventListener('workspaces:refresh', handleRefresh)
   }, [fetch])
 
-  return { workspaces, isLoading, refresh }
+  const sortedWorkspaces = useMemo(() => sortByOrder(workspaces), [workspaces])
+  return { workspaces: sortedWorkspaces, isLoading, refresh }
 }

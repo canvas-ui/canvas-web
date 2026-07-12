@@ -61,6 +61,7 @@ function AppContent() {
           <Route path="workspaces" element={<WorkspacesPage />} />
           <Route path="workspaces/:workspaceName" element={<WorkspaceDetailPage />} />
           <Route path="workspaces/:workspaceName/settings" element={<WorkspaceSettingsPage />} />
+          <Route path="workspaces/:workspaceName/settings/:tab" element={<WorkspaceSettingsPage />} />
           <Route path="workspaces/:workspaceName/path/*" element={<WorkspaceDetailPage />} />
           <Route path="workspaces/:workspaceName/trees/:treeName" element={<WorkspaceDetailPage />} />
           <Route path="workspaces/:workspaceName/trees/:treeName/path/*" element={<WorkspaceDetailPage />} />

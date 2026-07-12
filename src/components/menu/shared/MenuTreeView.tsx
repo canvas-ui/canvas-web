@@ -666,12 +666,19 @@ export function MenuTreeView({
   const [styleOverrides, setStyleOverrides] = useState<Map<string, LayerStyle>>(new Map())
   const [prevRoot, setPrevRoot] = useState(root)
   const persistTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  // Latest merged style for the open picker session. Survives the
+  // styleOverrides reset below — the debounced persist triggers a refetch
+  // mid-session, and without this the next pick would merge onto the stale
+  // pre-edit style from picker.node, dropping the change just saved.
+  const pickerStyleRef = useRef<{ path: string; style: LayerStyle } | null>(null)
 
   // Drop optimistic style overrides once fresh server data arrives (root
   // identity changes on refetch). Reset-on-prop-change happens during render.
+  // Keep the open picker session's style so its preview doesn't flicker back.
   if (root !== prevRoot) {
     setPrevRoot(root)
-    setStyleOverrides(new Map())
+    const kept = pickerStyleRef.current
+    setStyleOverrides(kept ? new Map([[kept.path, kept.style]]) : new Map())
   }
   const [inlineCreateParent, setInlineCreateParent] = useState<string | null>(null)
   const [inlineCreateIsCanvas, setInlineCreateIsCanvas] = useState(false)
@@ -830,13 +837,17 @@ export function MenuTreeView({
 
   const openPicker = useCallback((e: React.MouseEvent, path: string, node: TreeNode) => {
     e.stopPropagation()
+    pickerStyleRef.current = null
     setPicker({ x: e.clientX, y: e.clientY, path, node })
   }, [])
 
   const handleStyleChange = useCallback((change: LayerStyle) => {
     if (!picker || !onUpdateNode) return
     const path = picker.path
-    const next: LayerStyle = { ...(styleOverrides.get(path) ?? getLayerStyle(picker.node)), ...change }
+    const base: LayerStyle = styleOverrides.get(path)
+      ?? (pickerStyleRef.current?.path === path ? pickerStyleRef.current.style : getLayerStyle(picker.node))
+    const next: LayerStyle = { ...base, ...change }
+    pickerStyleRef.current = { path, style: next }
     // Instant local preview for both the tree row and the picker.
     setStyleOverrides(prev => new Map(prev).set(path, next))
     // Debounced persist — the native color input fires rapidly while dragging.

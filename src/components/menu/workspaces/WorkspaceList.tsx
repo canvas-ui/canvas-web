@@ -1,7 +1,8 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Plus, Play, Square, Settings } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import { cn } from '@/lib/utils'
+import { moveItem, persistSequentialOrder, useListReorder } from '@/lib/list-order'
 import { useMenu } from '@/components/shell/menu-context'
 import { useWorkspaceListData } from '@/hooks/useWorkspaceListData'
 import { startWorkspace, stopWorkspace, updateWorkspace } from '@/services/workspace'
@@ -28,6 +29,22 @@ export function WorkspaceList() {
   const [picker, setPicker] = useState<{ x: number; y: number; name: string } | null>(null)
   const [styleOverrides, setStyleOverrides] = useState<Map<string, LayerStyle>>(new Map())
   const persistTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+
+  // Drag-to-reorder: optimistic order shown until the refetched (sorted) list
+  // replaces it. Sequential ints are persisted only for rows that moved.
+  const [optimisticOrder, setOptimisticOrder] = useState<Workspace[] | null>(null)
+  const orderedWorkspaces = optimisticOrder ?? workspaces
+  useEffect(() => { setOptimisticOrder(null) }, [workspaces])
+  const { rowProps, overIndex } = useListReorder((from, to) => {
+    const next = moveItem(orderedWorkspaces, from, to)
+    setOptimisticOrder(next)
+    persistSequentialOrder(next, (ws, order) => updateWorkspace(ws.name, { order }))
+      .then(() => window.dispatchEvent(new CustomEvent('workspaces:refresh')))
+      .catch(err => {
+        setOptimisticOrder(null)
+        showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Reorder failed', variant: 'destructive' })
+      })
+  })
 
   const styleFor = (ws: Workspace): LayerStyle =>
     styleOverrides.get(ws.name) ?? { icon: ws.icon ?? undefined, color: ws.color ?? undefined }
@@ -104,7 +121,7 @@ export function WorkspaceList() {
           <div className="px-4 py-3 text-xs text-muted-foreground">No workspaces found</div>
         ) : (
           <div className="space-y-1.5 px-2">
-            {workspaces.map((ws) => {
+            {orderedWorkspaces.map((ws, index) => {
               const isActive = state.selectedEntityId === ws.name
               const isBusy = busyIds.has(ws.name)
               const isInactive = ws.status !== 'active'
@@ -113,6 +130,7 @@ export function WorkspaceList() {
               return (
                 <div
                   key={ws.id || ws.name}
+                  {...rowProps(index)}
                   className={cn(
                     'group relative rounded-md px-3 py-2.5 transition-all shadow-sm',
                     isActive
@@ -120,6 +138,7 @@ export function WorkspaceList() {
                       : isInactive
                         ? 'bg-card opacity-60 cursor-not-allowed'
                         : 'bg-card hover:bg-accent/50 cursor-pointer hover:shadow',
+                    overIndex === index && 'ring-2 ring-primary/40',
                   )}
                   style={{ borderRight: `6px solid ${style.color || 'transparent'}`, borderRadius: style.color ? '6px 0 0 6px' : undefined }}
                   onClick={() => { if (!isInactive) handleSelect(ws) }}

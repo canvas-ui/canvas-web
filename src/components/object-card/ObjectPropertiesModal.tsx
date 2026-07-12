@@ -38,6 +38,8 @@ export function ObjectPropertiesModal({ document, isOpen, onClose, workspaceId, 
   // the classic off-center-modal-on-mobile bug.
   return createPortal(
     <div
+      role="dialog"
+      aria-modal="true"
       className={cn(
         'fixed inset-0 z-50 flex items-center justify-center bg-black/50',
         fullscreen ? 'p-0' : 'p-4 max-md:p-2',

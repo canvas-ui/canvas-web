@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { listContexts } from '@/services/context'
+import { sortByOrder } from '@/lib/list-order'
 import socketService from '@/lib/socket'
 
 export function useContextListData(enabled: boolean) {
@@ -103,5 +104,6 @@ export function useContextListData(enabled: boolean) {
     return () => window.removeEventListener('contexts:refresh', handleRefresh)
   }, [fetch])
 
-  return { contexts, isLoading, refresh }
+  const sortedContexts = useMemo(() => sortByOrder(contexts), [contexts])
+  return { contexts: sortedContexts, isLoading, refresh }
 }

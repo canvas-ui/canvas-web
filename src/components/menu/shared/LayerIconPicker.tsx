@@ -95,7 +95,7 @@ export function LayerIconPicker({ x, y, current, onChange, onClose }: LayerIconP
       <div className="fixed inset-0 z-40" onClick={onClose} />
       <div
         ref={panelRef}
-        className="fixed z-50 w-[270px] rounded-md border bg-popover p-2 shadow-xl"
+        className="fixed z-50 w-[270px] max-w-[90vw] rounded-md border bg-popover p-2 shadow-xl"
         style={{ left: pos.x, top: pos.y }}
       >
         <div className="flex items-center justify-between px-1 pb-1.5">

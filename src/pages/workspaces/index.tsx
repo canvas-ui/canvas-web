@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react"
+import { Icon } from "@iconify/react"
 import { generateNiceRandomHexColor } from "@/utils/color"
+import { LayerIconPicker } from "@/components/menu/shared/LayerIconPicker"
+import { DEFAULT_WORKSPACE_ICON, type LayerStyle } from "@/lib/layer-style"
 import { useSocketSubscription } from "@/hooks/useSocketSubscription"
 import { FormPanel } from '@/components/common/form-panel';
 import { Button } from "@/components/ui/button"
@@ -18,6 +21,7 @@ import {
   removeWorkspace,
 } from "@/services/workspace"
 import { DefaultFoldersPicker, createDefaultFolders, useFolderSelection } from '@/components/workspaces/DefaultFoldersPicker'
+import { sortByOrder, moveItem, persistSequentialOrder, useListReorder } from '@/lib/list-order'
 
 
 // Using global Workspace interface from types/api.d.ts
@@ -31,7 +35,10 @@ export default function WorkspacesPage() {
   const [newWorkspaceName, setNewWorkspaceName] = useState("")
   const [newWorkspaceDescription, setNewWorkspaceDescription] = useState("")
   const [newWorkspaceColor, setNewWorkspaceColor] = useState(generateNiceRandomHexColor())
+  const [newWorkspaceIcon, setNewWorkspaceIcon] = useState<string | null>(null)
   const [newWorkspaceLabel, setNewWorkspaceLabel] = useState("")
+  const [createPickerPos, setCreatePickerPos] = useState<{ x: number; y: number } | null>(null)
+  const [editPickerPos, setEditPickerPos] = useState<{ x: number; y: number } | null>(null)
   const [isCreating, setIsCreating] = useState(false)
   const [showCreate, setShowCreate] = useState(false);
   const folderPick = useFolderSelection();
@@ -57,7 +64,7 @@ export default function WorkspacesPage() {
         setIsLoading(true)
         const workspacesData = await listWorkspaces()
         // The service now returns the array directly
-        setWorkspaces(workspacesData as Workspace[])
+        setWorkspaces(sortByOrder(workspacesData as Workspace[]))
         setError(null)
       } catch (err) {
         console.error('Workspace fetch error:', err);
@@ -103,6 +110,7 @@ export default function WorkspacesPage() {
         name: newWorkspaceName,
         description: newWorkspaceDescription || undefined,
         color: newWorkspaceColor,
+        icon: newWorkspaceIcon,
         label: newWorkspaceLabel || newWorkspaceName,
       })
       // The service now returns the new workspace object directly
@@ -123,6 +131,7 @@ export default function WorkspacesPage() {
       setNewWorkspaceName("")
       setNewWorkspaceDescription("")
       setNewWorkspaceColor(generateNiceRandomHexColor())
+      setNewWorkspaceIcon(null)
       setNewWorkspaceLabel("")
       showToast({
         title: 'Success',
@@ -167,17 +176,20 @@ export default function WorkspacesPage() {
         label: editingWorkspace.label,
         description: editingWorkspace.description,
         color: editingWorkspace.color,
+        icon: editingWorkspace.icon ?? null,
       };
 
-      const updatedWorkspace = await updateWorkspace(editingWorkspace.name, payloadToUpdate);
+      // PATCH returns success(true), not the workspace — merge locally.
+      await updateWorkspace(editingWorkspace.name, payloadToUpdate);
 
       setWorkspaces(prev => prev.map(ws =>
-        ws.id === updatedWorkspace.id ? updatedWorkspace : ws
+        ws.id === editingWorkspace.id ? { ...ws, ...payloadToUpdate } : ws
       ))
+      window.dispatchEvent(new CustomEvent('workspaces:refresh'))
 
       showToast({
         title: 'Success',
-        description: `Workspace '${updatedWorkspace.label}' details updated.`
+        description: `Workspace '${editingWorkspace.label}' details updated.`
       })
       setEditingWorkspace(null)
 
@@ -293,6 +305,16 @@ export default function WorkspacesPage() {
     navigate(`/workspaces/${workspaceName}`)
   }
 
+  // Drag a card to reorder; sequential order values are persisted for the
+  // rows that moved and mirrored to the sidebar via workspaces:refresh.
+  const { rowProps, overIndex } = useListReorder((from, to) => {
+    const next = moveItem(workspaces, from, to)
+    setWorkspaces(next)
+    persistSequentialOrder(next, (ws, order) => updateWorkspace(ws.name, { order }))
+      .then(() => window.dispatchEvent(new CustomEvent('workspaces:refresh')))
+      .catch(err => showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Reorder failed', variant: 'destructive' }))
+  })
+
 
   return (
     <div className="space-y-6">
@@ -343,7 +365,16 @@ export default function WorkspacesPage() {
             disabled={isCreating}
           />
           <div className="flex items-center gap-2">
-            <label htmlFor="workspace-color" className="text-sm font-medium">Workspace Color</label>
+            <label htmlFor="workspace-color" className="text-sm font-medium">Icon &amp; Color</label>
+            <button
+              type="button"
+              title="Pick icon &amp; color"
+              disabled={isCreating}
+              onClick={(e) => setCreatePickerPos({ x: Math.min(e.clientX, window.innerWidth - 290), y: Math.min(e.clientY, window.innerHeight - 360) })}
+              className="flex h-10 w-10 items-center justify-center rounded-md border hover:bg-accent"
+            >
+              <Icon icon={newWorkspaceIcon || DEFAULT_WORKSPACE_ICON} width={22} height={22} color={newWorkspaceColor || undefined} />
+            </button>
             <Input
               id="workspace-color"
               type="color"
@@ -362,6 +393,18 @@ export default function WorkspacesPage() {
               Randomize
             </Button>
           </div>
+          {createPickerPos && (
+            <LayerIconPicker
+              x={createPickerPos.x}
+              y={createPickerPos.y}
+              current={{ icon: newWorkspaceIcon ?? undefined, color: newWorkspaceColor }}
+              onChange={(change: LayerStyle) => {
+                if ('icon' in change) setNewWorkspaceIcon(change.icon ?? null)
+                if ('color' in change && change.color) setNewWorkspaceColor(change.color)
+              }}
+              onClose={() => setCreatePickerPos(null)}
+            />
+          )}
           <div className="rounded-lg border p-3">
             <p className="text-sm font-medium">Default folders <span className="font-normal text-muted-foreground">(optional)</span></p>
             <p className="mb-3 mt-0.5 text-xs text-muted-foreground">Ticked folders are created right after the workspace, with matching icons and colors.</p>
@@ -403,7 +446,7 @@ export default function WorkspacesPage() {
 
         {workspaces.length > 0 && (
           <div className="grid gap-4">
-            {workspaces.map((ws) => {
+            {workspaces.map((ws, index) => {
               const workspaceCardProps = {
                 ...ws,
                 createdAt: ws.createdAt,
@@ -411,15 +454,16 @@ export default function WorkspacesPage() {
                 color: ws.color === null ? undefined : ws.color,
               };
               return (
-                <WorkspaceCard
-                  key={ws.id}
-                  workspace={workspaceCardProps}
-                  onStart={handleStartWorkspace}
-                  onStop={handleStopWorkspace}
-                  onEnter={handleEnterWorkspace}
-                  onEdit={handleEditWorkspace}
-                  onDestroy={handleDestroyWorkspace}
-                />
+                <div key={ws.id} {...rowProps(index)} className={overIndex === index ? 'rounded-lg ring-2 ring-primary/40' : undefined}>
+                  <WorkspaceCard
+                    workspace={workspaceCardProps}
+                    onStart={handleStartWorkspace}
+                    onStop={handleStopWorkspace}
+                    onEnter={handleEnterWorkspace}
+                    onEdit={handleEditWorkspace}
+                    onDestroy={handleDestroyWorkspace}
+                  />
+                </div>
               );
             })}
           </div>
@@ -450,8 +494,16 @@ export default function WorkspacesPage() {
               />
             </div>
             <div>
-              <label htmlFor="edit-color" className="text-sm font-medium">Color</label>
+              <label htmlFor="edit-color" className="text-sm font-medium">Icon &amp; Color</label>
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  title="Pick icon &amp; color"
+                  onClick={(e) => setEditPickerPos({ x: Math.min(e.clientX, window.innerWidth - 290), y: Math.min(e.clientY, window.innerHeight - 360) })}
+                  className="flex h-10 w-10 items-center justify-center rounded-md border hover:bg-accent"
+                >
+                  <Icon icon={editingWorkspace.icon || DEFAULT_WORKSPACE_ICON} width={22} height={22} color={editingWorkspace.color || undefined} />
+                </button>
                 <Input
                   id="edit-workspace-color"
                   type="color"
@@ -482,6 +534,23 @@ export default function WorkspacesPage() {
               </Button>
             </div>
           </form>
+          {editPickerPos && (
+            <LayerIconPicker
+              x={editPickerPos.x}
+              y={editPickerPos.y}
+              current={{ icon: editingWorkspace.icon ?? undefined, color: editingWorkspace.color ?? undefined }}
+              onChange={(change: LayerStyle) => {
+                setEditingWorkspace(prev => {
+                  if (!prev) return null
+                  const next = { ...prev }
+                  if ('icon' in change) next.icon = change.icon ?? null
+                  if ('color' in change && change.color) next.color = change.color
+                  return next
+                })
+              }}
+              onClose={() => setEditPickerPos(null)}
+            />
+          )}
         </div>
       )}
     </div>
