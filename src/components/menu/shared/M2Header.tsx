@@ -1,18 +1,29 @@
 import { ChevronLeft, X } from 'lucide-react'
+import { Icon } from '@iconify/react'
 import { cn } from '@/lib/utils'
 import { useMenu } from '@/components/shell/menu-context'
+import { visibleAccentColor } from '@/utils/color'
 
 interface M2HeaderProps {
   title: string
   onBack: () => void
   action?: React.ReactNode
   className?: string
+  // Workspace/context style cues: icon prepended to the title, accent color as
+  // a left border (M1 rows carry it on the right, so entering M2 keeps the
+  // color flowing left-to-right). Near-white colors fall back to neutral.
+  icon?: string | null
+  accentColor?: string | null
 }
 
-export function M2Header({ title, onBack, action, className }: M2HeaderProps) {
+export function M2Header({ title, onBack, action, className, icon, accentColor }: M2HeaderProps) {
   const { closeM1 } = useMenu()
+  const accent = visibleAccentColor(accentColor)
   return (
-    <div className={cn('flex items-center h-12 px-2 border-b border-sidebar-border shrink-0 gap-1', className)}>
+    <div
+      className={cn('flex items-center h-12 px-2 border-b border-sidebar-border shrink-0 gap-1', className)}
+      style={accent ? { borderLeft: `6px solid ${accent}` } : undefined}
+    >
       <button
         type="button"
         onClick={onBack}
@@ -20,6 +31,15 @@ export function M2Header({ title, onBack, action, className }: M2HeaderProps) {
         title="Back"
       >
         <ChevronLeft className="w-4 h-4 shrink-0" />
+        {icon && (
+          <Icon
+            icon={icon}
+            width={16}
+            height={16}
+            color={accent}
+            className={cn('mr-1 shrink-0', !accent && 'text-muted-foreground')}
+          />
+        )}
         <span className="text-sm font-semibold truncate">{title}</span>
       </button>
       {action && <div className="shrink-0">{action}</div>}

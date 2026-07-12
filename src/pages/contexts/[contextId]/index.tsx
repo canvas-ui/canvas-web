@@ -15,6 +15,10 @@ import { Document as WorkspaceDocument } from '@/types/workspace';
 import { useToolbox } from '@/components/toolbox/toolbox-context';
 import { useMenu } from '@/components/shell/menu-context';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { Icon } from '@iconify/react';
+import { visibleAccentColor } from '@/utils/color';
+import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style';
+import { cn } from '@/lib/utils';
 
 function contextUrlToPath(url: string, workspaceName?: string): string {
   if (!url || !workspaceName) return '/';
@@ -46,6 +50,9 @@ interface ContextData {
   pendingUrl: string | null;
   description?: string | null;
   metadata?: Record<string, unknown>;
+  name?: string | null;
+  color?: string | null;
+  icon?: string | null;
 }
 
 export default function ContextDetailPage() {
@@ -144,6 +151,9 @@ export default function ContextDetailPage() {
         pendingUrl: fetched.pendingUrl || null,
         description: fetched.description || null,
         metadata: (fetched as any).metadata || {},
+        name: fetched.name ?? null,
+        color: fetched.color ?? null,
+        icon: fetched.icon ?? null,
       });
       setError(null);
     } catch (err) {
@@ -352,8 +362,29 @@ export default function ContextDetailPage() {
     return <div className="flex items-center justify-center h-full text-muted-foreground">Context not found.</div>;
   }
 
+  const accent = visibleAccentColor(context.color);
+
   return (
     <div className="flex flex-col h-full min-h-0">
+      {/* Workspace indicator — a context is bound to exactly one workspace;
+          icon + color keep that visible even when only the content area is
+          shown (mobile). Mirrors the workspace view's status bar. */}
+      <div
+        className="flex items-center gap-2 px-4 py-2 border-b shrink-0"
+        style={accent ? { borderBottom: `3px solid ${accent}` } : { borderBottomWidth: 3 }}
+      >
+        <Icon
+          icon={context.icon || DEFAULT_WORKSPACE_ICON}
+          width={16}
+          height={16}
+          color={accent}
+          className={cn('shrink-0', !accent && 'text-muted-foreground')}
+        />
+        <span className="min-w-0 truncate text-sm font-medium">{context.name || context.id}</span>
+        <span className="min-w-0 truncate text-xs text-muted-foreground">
+          @ {context.workspaceName || context.workspaceId}
+        </span>
+      </div>
       <DefaultCanvas
         urlType={urlType}
         urlDisplay={context.url}

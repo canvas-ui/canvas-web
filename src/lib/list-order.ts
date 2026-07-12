@@ -56,7 +56,38 @@ export function useListReorder(onDrop: (from: number, to: number) => void) {
       dragRef.current = { from: index, over: index }
       setDraggingIndex(index)
       setOverIndex(index)
+
+      // Float a visual clone of the whole row under the pointer. The clone is
+      // pointer-events:none, so elementFromPoint still resolves the rows
+      // beneath it.
+      let ghost: HTMLElement | null = null
+      let grabOffset = { x: 0, y: 0 }
+      const rowEl = (e.currentTarget as HTMLElement).closest('[data-reorder-index]') as HTMLElement | null
+      if (rowEl) {
+        const rect = rowEl.getBoundingClientRect()
+        ghost = rowEl.cloneNode(true) as HTMLElement
+        Object.assign(ghost.style, {
+          position: 'fixed',
+          left: `${rect.left}px`,
+          top: `${rect.top}px`,
+          width: `${rect.width}px`,
+          height: `${rect.height}px`,
+          margin: '0',
+          pointerEvents: 'none',
+          zIndex: '100',
+          opacity: '0.92',
+          boxShadow: '0 12px 32px rgba(0,0,0,.28)',
+          transform: 'scale(1.02)',
+        } as Partial<CSSStyleDeclaration>)
+        grabOffset = { x: e.clientX - rect.left, y: e.clientY - rect.top }
+        document.body.appendChild(ghost)
+      }
+
       const move = (ev: PointerEvent) => {
+        if (ghost) {
+          ghost.style.left = `${ev.clientX - grabOffset.x}px`
+          ghost.style.top = `${ev.clientY - grabOffset.y}px`
+        }
         const el = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)
           ?.closest?.('[data-reorder-index]') as HTMLElement | null
         if (!el || !dragRef.current) return
@@ -70,6 +101,8 @@ export function useListReorder(onDrop: (from: number, to: number) => void) {
         window.removeEventListener('pointermove', move)
         window.removeEventListener('pointerup', up)
         window.removeEventListener('pointercancel', up)
+        ghost?.remove()
+        ghost = null
         const d = dragRef.current
         dragRef.current = null
         setDraggingIndex(null)

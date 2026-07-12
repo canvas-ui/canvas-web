@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast-container'
 import { M2Header } from '@/components/menu/shared/M2Header'
+import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style'
 import { MenuTreeView } from '@/components/menu/shared/MenuTreeView'
 import { useMenu } from '@/components/shell/menu-context'
 import { getContext, updateContextUrl, getContextTree } from '@/services/context'
@@ -112,6 +113,8 @@ export function ContextM2Detail() {
     <div className="flex flex-col h-full">
       <M2Header
         title={entityId || 'Context'}
+        icon={context?.icon || DEFAULT_WORKSPACE_ICON}
+        accentColor={context?.color}
         onBack={closeM2}
         action={
           <button

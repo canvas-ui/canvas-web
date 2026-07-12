@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { buildWorkspaceUrl, parseWorkspacePathFromUrl } from '@/utils/url-params'
 import { M2Header } from '@/components/menu/shared/M2Header'
+import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style'
 import { MenuTreeView } from '@/components/menu/shared/MenuTreeView'
 import { useMenu } from '@/components/shell/menu-context'
 import { getWorkspace, getCachedWorkspaceTreeByName, invalidateWorkspaceTreeCache, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer, pasteDocumentsToWorkspacePath, createPublicCanvasShare, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
@@ -49,6 +50,7 @@ export function WorkspaceM2() {
 
   const [wsLabel, setWsLabel] = useState<string | null>(null)
   const [wsId, setWsId] = useState<string | null>(null)
+  const [wsStyle, setWsStyle] = useState<{ icon: string | null; color: string | null }>({ icon: null, color: null })
   const [activeTab, setActiveTab] = useState<TreeTab>(initialTab)
   const [contextTree, setContextTree] = useState<TreeNode | null>(null)
   const [directoryTree, setDirectoryTree] = useState<TreeNode | null>(null)
@@ -119,7 +121,7 @@ export function WorkspaceM2() {
           getCachedWorkspaceTreeByName(name, 'backends'),
         ])
         // Fetch workspace details for label (non-blocking)
-        getWorkspace(name).then(ws => { if (!cancelled) { setWsLabel(ws.label || null); setWsId(ws.id || null) } }).catch(() => {})
+        getWorkspace(name).then(ws => { if (!cancelled) { setWsLabel(ws.label || null); setWsId(ws.id || null); setWsStyle({ icon: ws.icon ?? null, color: ws.color ?? null }) } }).catch(() => {})
         if (cancelled) return
         if (ctxRes.status === 'fulfilled') setContextTree(ctxRes.value.payload)
         if (dirRes.status === 'fulfilled') setDirectoryTree(dirRes.value.payload)
@@ -283,6 +285,8 @@ export function WorkspaceM2() {
     <div className="flex flex-col h-full">
       <M2Header
         title={wsLabel || wsName || 'Workspace'}
+        icon={wsStyle.icon || DEFAULT_WORKSPACE_ICON}
+        accentColor={wsStyle.color}
         onBack={closeM2}
         action={
           <div className="flex items-center gap-0.5">

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Plus, Settings, Link2, GripVertical } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import { visibleAccentColor } from '@/utils/color'
+import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style'
 import { cn } from '@/lib/utils'
 import { useMenu } from '@/components/shell/menu-context'
 import { useContextListData } from '@/hooks/useContextListData'
@@ -93,15 +94,13 @@ export function ContextList() {
                       </button>
                     )}
                     {/* Icon derived server-side from the bound path's layer, falling back to the workspace style */}
-                    {ctx.icon && (
-                      <Icon
-                        icon={ctx.icon}
-                        width={16}
-                        height={16}
-                        color={accent}
-                        className={cn('mt-0.5 shrink-0', !accent && 'text-muted-foreground')}
-                      />
-                    )}
+                    <Icon
+                      icon={ctx.icon || DEFAULT_WORKSPACE_ICON}
+                      width={16}
+                      height={16}
+                      color={accent}
+                      className={cn('mt-0.5 shrink-0', !accent && 'text-muted-foreground')}
+                    />
                     <span className="text-sm font-medium truncate flex-1">{ctx.name || ctx.id}</span>
                     {isShared && (
                       <span className="rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[9px] text-blue-700 shrink-0">
