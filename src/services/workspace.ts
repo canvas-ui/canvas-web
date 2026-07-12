@@ -915,6 +915,13 @@ export async function getBackendDiskUsage(workspaceId: string, driver: string, a
   return response.payload;
 }
 
+// Wipe the on-demand thumbnail cache (derived artifacts — regenerated on
+// demand, always safe to clear).
+export async function clearThumbnailCache(workspaceId: string): Promise<{ removed: number }> {
+  const response = await api.delete<{ payload: { removed: number } }>(`${API_ROUTES.workspaces}/${workspaceId}/thumbnails`);
+  return response.payload;
+}
+
 // On-demand on-disk size of the whole workspace root (per-dir breakdown
 // included) — the export/sync planning number. Slow on large workspaces.
 export async function getWorkspaceDiskUsage(workspaceId: string): Promise<WorkspaceDiskUsage> {

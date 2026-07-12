@@ -29,6 +29,7 @@ import {
   updateWorkspace,
   getBackendDiskUsage,
   getWorkspaceDiskUsage,
+  clearThumbnailCache,
   formatBytes,
   type Backend,
   type BackendDiskUsage,
@@ -61,7 +62,7 @@ const DATA_BACKEND_LABELS: Record<string, { title: string; description: string }
   },
   'stored.cache': {
     title: 'Stored Cache',
-    description: 'Local cacache used for content-addressed blobs and public resource serving.',
+    description: 'Internal cache: local copies of remote resources and derived artifacts (thumbnails). Regenerable — safe to clear.',
   },
   s3: {
     title: 'S3',
@@ -131,6 +132,32 @@ function BackendSizeButton({ workspaceId, backend }: { workspaceId: string; back
       <HardDrive className={`h-3 w-3 ${busy ? 'animate-pulse' : ''}`} />
       {busy ? 'Calculating…' : usage ? formatBytes(usage.bytes) : 'Size'}
     </button>
+  )
+}
+
+// Wipe the on-demand thumbnail cache (thumb:* entries in stored.cache).
+// Thumbnails are derived artifacts regenerated on demand — always safe.
+function ClearThumbnailsButton({ workspaceId }: { workspaceId: string }) {
+  const [busy, setBusy] = useState(false)
+  const { showToast } = useToast()
+
+  const clear = async () => {
+    setBusy(true)
+    try {
+      const { removed } = await clearThumbnailCache(workspaceId)
+      showToast({ title: 'Thumbnail cache cleared', description: `${removed} cached thumbnail(s) removed` })
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to clear thumbnail cache', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Button type="button" variant="outline" size="sm" disabled={busy} onClick={clear} title="Remove all cached thumbnails — they regenerate on demand">
+      <Trash2 className={`mr-2 h-3.5 w-3.5 ${busy ? 'animate-pulse' : ''}`} />
+      {busy ? 'Clearing…' : 'Clear thumbnails'}
+    </Button>
   )
 }
 
@@ -1067,6 +1094,9 @@ export default function WorkspaceSettingsPage() {
                     {(backend.driver === 'file' || backend.driver === 'cacache') && supported && (
                       <BackendSizeButton workspaceId={workspaceId} backend={backend} />
                     )}
+                    {backendId === 'stored.cache' && (
+                      <ClearThumbnailsButton workspaceId={workspaceId} />
+                    )}
                     {backend.capabilities?.sync && (
                       <Button type="button" variant="outline" size="sm" disabled={busyAction === `resync:${backendId}`} onClick={() => resyncBackend(backend)}>
                         <RefreshCw className={`mr-2 h-3.5 w-3.5 ${busyAction === `resync:${backendId}` ? 'animate-spin' : ''}`} />
@@ -1080,7 +1110,9 @@ export default function WorkspaceSettingsPage() {
                     )}
                   </div>
                 </div>
-                {backend.driver === 'file' && supported && (
+                {/* Sync exclusions only apply to enumerable/synced backends —
+                    the internal cache is not synced or mirrored. */}
+                {backend.driver === 'file' && supported && !alwaysOn && (
                   <BackendExclusionsEditor
                     backend={backend}
                     busy={busyAction === `exclude:${backendId}`}
