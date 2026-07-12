@@ -1,4 +1,3 @@
-import { Wrench } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToolbox } from '@/components/toolbox/toolbox-context'
 
@@ -20,12 +19,15 @@ export function ToolboxFab() {
         // Hidden below md — it floated over every drawer's bottom-right Save/
         // confirm controls there. The mobile toolbox entry lives in the M0
         // rail (MenuBar) instead.
-        'fixed z-50 hidden md:flex h-16 w-16 items-center justify-center rounded-full shadow-elevation-4 transition-colors',
+        'fixed z-50 hidden md:flex h-16 w-16 items-center justify-center rounded-2xl shadow-elevation-4 transition-colors',
         'bottom-[max(1rem,env(safe-area-inset-bottom))] right-6',
         isOpen ? 'bg-primary text-primary-foreground' : 'bg-zinc-900 text-white hover:bg-zinc-800',
       )}
     >
-      <Wrench className="h-6 w-6" />
+      {/* Placeholder mark — a big round dot in currentColor (white on the
+          black button, primary-foreground when open). Swap for a real
+          symmetric logo later. */}
+      <span className="h-7 w-7 rounded-full bg-current" />
     </button>
   )
 }

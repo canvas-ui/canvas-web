@@ -3,6 +3,7 @@ import { ChevronRight, ChevronDown, GitBranch, FolderTree, CornerDownRight } fro
 import { Icon } from '@iconify/react'
 import type { TreeNode } from '@/types/workspace'
 import { getLayerStyle, DEFAULT_FOLDER_ICON, DEFAULT_CANVAS_ICON, DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style'
+import { visibleAccentColor } from '@/utils/color'
 import { cn } from '@/lib/utils'
 // Workspace is a global type declared in src/types/api.d.ts
 
@@ -167,8 +168,8 @@ export function LinkNode({
           icon={style.icon || (isCanvas ? DEFAULT_CANVAS_ICON : DEFAULT_FOLDER_ICON)}
           width={16}
           height={16}
-          color={style.color || undefined}
-          className={cn('shrink-0', !style.color && (isCanvas ? 'text-violet-500' : 'text-muted-foreground'))}
+          color={visibleAccentColor(style.color)}
+          className={cn('shrink-0', !visibleAccentColor(style.color) && (isCanvas ? 'text-violet-500' : 'text-muted-foreground'))}
         />
 
         <span className="flex-1 truncate font-medium" title={node.description || undefined}>
@@ -228,18 +229,21 @@ export function WorkspaceListStep({
   }
   return (
     <div className="space-y-1.5">
-      {workspaces.map(ws => (
+      {workspaces.map(ws => {
+        const accent = visibleAccentColor(ws.color)
+        return (
         <div
           key={ws.id || ws.name}
           onClick={() => onPick(ws.name)}
           className="group relative flex cursor-pointer items-center gap-2 rounded-md bg-card px-3 py-2.5 shadow-sm transition-all hover:bg-accent/50 hover:shadow"
-          style={{ borderRight: `6px solid ${ws.color || 'transparent'}`, borderRadius: ws.color ? '6px 0 0 6px' : undefined }}
+          style={{ borderRight: `6px solid ${accent || 'transparent'}`, borderRadius: accent ? '6px 0 0 6px' : undefined }}
         >
-          <Icon icon={ws.icon || DEFAULT_WORKSPACE_ICON} width={18} height={18} color={ws.color || undefined} className={cn('shrink-0', !ws.color && 'text-muted-foreground')} />
+          <Icon icon={ws.icon || DEFAULT_WORKSPACE_ICON} width={18} height={18} color={accent} className={cn('shrink-0', !accent && 'text-muted-foreground')} />
           <span className="flex-1 truncate text-sm font-medium">{ws.label || ws.name}</span>
           <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
         </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

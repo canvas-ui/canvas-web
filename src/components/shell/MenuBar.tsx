@@ -171,7 +171,7 @@ export function MenuBar() {
             onClick={() => navigate('/home')}
             className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-accent/50 transition-colors"
           >
-            <img src="/images/logo-wr_128x128.png" alt="Canvas" className="w-6 h-6" />
+            <img src="/images/logo-br_128x128.png" alt="Canvas" className="w-6 h-6" />
           </button>
         </div>
 

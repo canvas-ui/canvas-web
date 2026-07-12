@@ -74,7 +74,11 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose }: HomeFa
           `z-40` keeps it above any card in the row. */}
       <div
         className={cn(
-          'pointer-events-none absolute right-6 z-40 flex flex-col items-end gap-2',
+          // `fixed` (not absolute) so this shares the toolbox FAB's viewport
+          // reference frame — an `absolute` box here is inset by the home
+          // scroll container's scrollbar and drifts out of alignment with the
+          // fixed toolbox FAB below it.
+          'pointer-events-none fixed right-6 z-40 flex flex-col items-end gap-2',
           'bottom-[max(1rem,env(safe-area-inset-bottom))] md:bottom-[calc(max(1rem,env(safe-area-inset-bottom))+5rem)]',
           openCards.length > 0 && 'max-md:hidden',
         )}
@@ -92,14 +96,19 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose }: HomeFa
           <InsertMenu variant="stack" omit={['folder']} onSelect={addCard} />
         </div>
 
-        <button
-          type="button"
-          onClick={() => setStackOpen((o) => !o)}
-          aria-label={stackOpen ? 'Close quick add' : 'Quick add'}
-          className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-elevation-3 transition-transform hover:scale-105"
-        >
-          {stackOpen ? <X className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
-        </button>
+        {/* Center the smaller + over the toolbox FAB's column (both dock at
+            right-6; the toolbox is w-16). Centering in a w-16 wrapper aligns
+            their centers regardless of scrollbar width. */}
+        <div className="pointer-events-none flex w-16 justify-center">
+          <button
+            type="button"
+            onClick={() => setStackOpen((o) => !o)}
+            aria-label={stackOpen ? 'Close quick add' : 'Quick add'}
+            className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-elevation-3 transition-transform hover:scale-105"
+          >
+            {stackOpen ? <X className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+          </button>
+        </div>
       </div>
     </div>
   )
