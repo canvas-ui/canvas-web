@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Plus, Play, Square, Settings } from 'lucide-react'
+import { Plus, Play, Square, Settings, GripVertical } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import { cn } from '@/lib/utils'
 import { moveItem, persistSequentialOrder, useListReorder } from '@/lib/list-order'
+import { visibleAccentColor } from '@/utils/color'
 import { useMenu } from '@/components/shell/menu-context'
 import { useWorkspaceListData } from '@/hooks/useWorkspaceListData'
 import { startWorkspace, stopWorkspace, updateWorkspace } from '@/services/workspace'
@@ -35,14 +36,13 @@ export function WorkspaceList() {
   const [optimisticOrder, setOptimisticOrder] = useState<Workspace[] | null>(null)
   const orderedWorkspaces = optimisticOrder ?? workspaces
   useEffect(() => { setOptimisticOrder(null) }, [workspaces])
-  const { rowProps, overIndex } = useListReorder((from, to) => {
+  const { rowProps, handleProps, overIndex, draggingIndex } = useListReorder((from, to) => {
     const next = moveItem(orderedWorkspaces, from, to)
     setOptimisticOrder(next)
     persistSequentialOrder(next, (ws, order) => updateWorkspace(ws.name, { order }))
-      .then(() => window.dispatchEvent(new CustomEvent('workspaces:refresh')))
-      .catch(err => {
-        setOptimisticOrder(null)
-        showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Reorder failed', variant: 'destructive' })
+      .then(({ failed }) => {
+        window.dispatchEvent(new CustomEvent('workspaces:refresh'))
+        if (failed) showToast({ title: 'Partial reorder', description: `${failed} workspace(s) could not be reordered`, variant: 'destructive' })
       })
   })
 
@@ -126,6 +126,7 @@ export function WorkspaceList() {
               const isBusy = busyIds.has(ws.name)
               const isInactive = ws.status !== 'active'
               const style = styleFor(ws)
+              const accent = visibleAccentColor(style.color)
 
               return (
                 <div
@@ -139,12 +140,22 @@ export function WorkspaceList() {
                         ? 'bg-card opacity-60 cursor-not-allowed'
                         : 'bg-card hover:bg-accent/50 cursor-pointer hover:shadow',
                     overIndex === index && 'ring-2 ring-primary/40',
+                    draggingIndex === index && 'opacity-60',
                   )}
-                  style={{ borderRight: `6px solid ${style.color || 'transparent'}`, borderRadius: style.color ? '6px 0 0 6px' : undefined }}
+                  style={{ borderRight: `6px solid ${accent || 'transparent'}`, borderRadius: accent ? '6px 0 0 6px' : undefined }}
                   onClick={() => { if (!isInactive) handleSelect(ws) }}
                 >
                   {/* Top row: label + controls */}
                   <div className="flex items-start gap-2">
+                    <button
+                      type="button"
+                      {...handleProps(index)}
+                      title="Drag to reorder"
+                      aria-label="Drag to reorder"
+                      className="shrink-0 -ml-1.5 cursor-grab rounded p-0.5 text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing"
+                    >
+                      <GripVertical className="w-3.5 h-3.5" />
+                    </button>
                     <button
                       type="button"
                       title="Change icon"
@@ -158,8 +169,8 @@ export function WorkspaceList() {
                         icon={style.icon || DEFAULT_WORKSPACE_ICON}
                         width={18}
                         height={18}
-                        color={style.color || undefined}
-                        className={cn(!style.color && 'text-muted-foreground')}
+                        color={accent}
+                        className={cn(!accent && 'text-muted-foreground')}
                       />
                     </button>
                     {/* Left: status + label */}

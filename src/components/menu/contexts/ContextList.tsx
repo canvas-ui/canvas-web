@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Plus, Settings, Link2 } from 'lucide-react'
+import { Plus, Settings, Link2, GripVertical } from 'lucide-react'
 import { Icon } from '@iconify/react'
+import { visibleAccentColor } from '@/utils/color'
 import { cn } from '@/lib/utils'
 import { useMenu } from '@/components/shell/menu-context'
 import { useContextListData } from '@/hooks/useContextListData'
@@ -21,15 +22,14 @@ export function ContextList() {
   const orderedContexts = optimisticOrder ?? contexts
   useEffect(() => { setOptimisticOrder(null) }, [contexts])
   const isSharedCtx = (ctx: Context & Record<string, any>) => ctx.isShared === true || ctx.type === 'shared'
-  const { rowProps, overIndex } = useListReorder((from, to) => {
+  const { rowProps, handleProps, overIndex, draggingIndex } = useListReorder((from, to) => {
     const next = moveItem(orderedContexts, from, to)
     setOptimisticOrder(next)
     persistSequentialOrder(next, (ctx, order) =>
       isSharedCtx(ctx) ? Promise.resolve() : updateContext(ctx.id, { order }))
-      .then(() => window.dispatchEvent(new CustomEvent('contexts:refresh')))
-      .catch(err => {
-        setOptimisticOrder(null)
-        showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Reorder failed', variant: 'destructive' })
+      .then(({ failed }) => {
+        window.dispatchEvent(new CustomEvent('contexts:refresh'))
+        if (failed) showToast({ title: 'Partial reorder', description: `${failed} context(s) could not be reordered`, variant: 'destructive' })
       })
   })
 
@@ -62,31 +62,44 @@ export function ContextList() {
               const isActive = state.selectedEntityId === ctx.id
               const isShared = isSharedCtx(ctx)
               const isWorkspaceActive = ctx.workspaceActive !== false
+              const accent = visibleAccentColor(ctx.color)
 
               return (
                 <div
                   key={`${ctx.userId || 'u'}-${ctx.id}`}
-                  {...(isShared ? {} : rowProps(index))}
+                  {...rowProps(index)}
                   className={cn(
                     'group relative rounded-l-md px-3 py-2.5 transition-all shadow-sm',
                     isWorkspaceActive
                       ? 'cursor-pointer hover:shadow ' + (isActive ? 'bg-accent shadow' : 'bg-card hover:bg-accent/50')
                       : 'cursor-not-allowed opacity-50 bg-card',
                     overIndex === index && 'ring-2 ring-primary/40',
+                    draggingIndex === index && 'opacity-60',
                   )}
-                  style={{ borderRight: `6px solid ${ctx.color || 'transparent'}` }}
+                  style={{ borderRight: `6px solid ${accent || 'transparent'}` }}
                   onClick={() => isWorkspaceActive && handleSelect(ctx)}
                   title={isWorkspaceActive ? undefined : `Workspace "${ctx.workspaceName}" is not active`}
                 >
                   <div className="flex items-start gap-2">
+                    {!isShared && (
+                      <button
+                        type="button"
+                        {...handleProps(index)}
+                        title="Drag to reorder"
+                        aria-label="Drag to reorder"
+                        className="shrink-0 -ml-1.5 mt-0.5 cursor-grab rounded p-0.5 text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing"
+                      >
+                        <GripVertical className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     {/* Icon derived server-side from the bound path's layer, falling back to the workspace style */}
                     {ctx.icon && (
                       <Icon
                         icon={ctx.icon}
                         width={16}
                         height={16}
-                        color={ctx.color || undefined}
-                        className={cn('mt-0.5 shrink-0', !ctx.color && 'text-muted-foreground')}
+                        color={accent}
+                        className={cn('mt-0.5 shrink-0', !accent && 'text-muted-foreground')}
                       />
                     )}
                     <span className="text-sm font-medium truncate flex-1">{ctx.name || ctx.id}</span>

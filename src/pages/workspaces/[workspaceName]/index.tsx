@@ -3,7 +3,7 @@ import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { Filter } from 'lucide-react';
 import { Icon } from '@iconify/react';
 import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style';
-import { isLowContrastOnLight } from '@/utils/color';
+import { visibleAccentColor } from '@/utils/color';
 import { api } from '@/lib/api';
 import { API_ROUTES } from '@/config/api';
 import { useToast } from '@/components/ui/toast-container';
@@ -902,8 +902,8 @@ export default function WorkspaceDetailPage() {
           theme border so the accent never vanishes on the light background. */}
       <div
         className="flex items-center gap-3 px-4 py-2 border-b shrink-0"
-        style={workspace.color && !isLowContrastOnLight(workspace.color)
-          ? { borderBottom: `3px solid ${workspace.color}` }
+        style={visibleAccentColor(workspace.color)
+          ? { borderBottom: `3px solid ${visibleAccentColor(workspace.color)}` }
           : { borderBottomWidth: 3 }}
       >
         <span
@@ -923,8 +923,8 @@ export default function WorkspaceDetailPage() {
             icon={workspace.icon || DEFAULT_WORKSPACE_ICON}
             width={16}
             height={16}
-            color={workspace.color && !isLowContrastOnLight(workspace.color) ? workspace.color : undefined}
-            className={cn('shrink-0', (!workspace.color || isLowContrastOnLight(workspace.color)) && 'text-muted-foreground')}
+            color={visibleAccentColor(workspace.color)}
+            className={cn('shrink-0', !visibleAccentColor(workspace.color) && 'text-muted-foreground')}
           />
           <span className="truncate">{workspace.label || workspace.name}</span>
         </button>

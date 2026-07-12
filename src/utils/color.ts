@@ -83,5 +83,11 @@ export const isLowContrastOnLight = (color: string, threshold = 0.82): boolean =
   return lum === null || lum > threshold;
 };
 
+// Accent color safe to render on our light background: returns the color
+// itself, or undefined when it would be invisible (white-on-white) so callers
+// fall back to their neutral styling.
+export const visibleAccentColor = (color?: string | null): string | undefined =>
+  color && !isLowContrastOnLight(color) ? color : undefined;
+
 // Re-export helpers in case we want them elsewhere
 export { randomInt, generateRandomHsl, hslToHex };

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Icon } from "@iconify/react"
-import { generateNiceRandomHexColor } from "@/utils/color"
+import { generateNiceRandomHexColor, visibleAccentColor } from "@/utils/color"
 import { LayerIconPicker } from "@/components/menu/shared/LayerIconPicker"
 import { DEFAULT_WORKSPACE_ICON, type LayerStyle } from "@/lib/layer-style"
 import { useSocketSubscription } from "@/hooks/useSocketSubscription"
@@ -8,7 +8,7 @@ import { FormPanel } from '@/components/common/form-panel';
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/toast-container"
-import { Plus, X } from "lucide-react"
+import { Plus, X, GripVertical } from "lucide-react"
 import { WorkspaceCard } from "@/components/ui/workspace-card"
 import { useNavigate } from "react-router-dom"
 import { useSocket } from "@/hooks/useSocket"
@@ -307,12 +307,14 @@ export default function WorkspacesPage() {
 
   // Drag a card to reorder; sequential order values are persisted for the
   // rows that moved and mirrored to the sidebar via workspaces:refresh.
-  const { rowProps, overIndex } = useListReorder((from, to) => {
+  const { rowProps, handleProps, overIndex, draggingIndex } = useListReorder((from, to) => {
     const next = moveItem(workspaces, from, to)
     setWorkspaces(next)
     persistSequentialOrder(next, (ws, order) => updateWorkspace(ws.name, { order }))
-      .then(() => window.dispatchEvent(new CustomEvent('workspaces:refresh')))
-      .catch(err => showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Reorder failed', variant: 'destructive' }))
+      .then(({ failed }) => {
+        window.dispatchEvent(new CustomEvent('workspaces:refresh'))
+        if (failed) showToast({ title: 'Partial reorder', description: `${failed} workspace(s) could not be reordered`, variant: 'destructive' })
+      })
   })
 
 
@@ -373,7 +375,7 @@ export default function WorkspacesPage() {
               onClick={(e) => setCreatePickerPos({ x: Math.min(e.clientX, window.innerWidth - 290), y: Math.min(e.clientY, window.innerHeight - 360) })}
               className="flex h-10 w-10 items-center justify-center rounded-md border hover:bg-accent"
             >
-              <Icon icon={newWorkspaceIcon || DEFAULT_WORKSPACE_ICON} width={22} height={22} color={newWorkspaceColor || undefined} />
+              <Icon icon={newWorkspaceIcon || DEFAULT_WORKSPACE_ICON} width={22} height={22} color={visibleAccentColor(newWorkspaceColor)} />
             </button>
             <Input
               id="workspace-color"
@@ -454,15 +456,30 @@ export default function WorkspacesPage() {
                 color: ws.color === null ? undefined : ws.color,
               };
               return (
-                <div key={ws.id} {...rowProps(index)} className={overIndex === index ? 'rounded-lg ring-2 ring-primary/40' : undefined}>
-                  <WorkspaceCard
-                    workspace={workspaceCardProps}
-                    onStart={handleStartWorkspace}
-                    onStop={handleStopWorkspace}
-                    onEnter={handleEnterWorkspace}
-                    onEdit={handleEditWorkspace}
-                    onDestroy={handleDestroyWorkspace}
-                  />
+                <div
+                  key={ws.id}
+                  {...rowProps(index)}
+                  className={`flex items-center gap-1 rounded-lg ${overIndex === index ? 'ring-2 ring-primary/40' : ''} ${draggingIndex === index ? 'opacity-60' : ''}`}
+                >
+                  <button
+                    type="button"
+                    {...handleProps(index)}
+                    title="Drag to reorder"
+                    aria-label="Drag to reorder"
+                    className="shrink-0 cursor-grab rounded p-1 text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing"
+                  >
+                    <GripVertical className="h-5 w-5" />
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    <WorkspaceCard
+                      workspace={workspaceCardProps}
+                      onStart={handleStartWorkspace}
+                      onStop={handleStopWorkspace}
+                      onEnter={handleEnterWorkspace}
+                      onEdit={handleEditWorkspace}
+                      onDestroy={handleDestroyWorkspace}
+                    />
+                  </div>
                 </div>
               );
             })}
@@ -502,7 +519,7 @@ export default function WorkspacesPage() {
                   onClick={(e) => setEditPickerPos({ x: Math.min(e.clientX, window.innerWidth - 290), y: Math.min(e.clientY, window.innerHeight - 360) })}
                   className="flex h-10 w-10 items-center justify-center rounded-md border hover:bg-accent"
                 >
-                  <Icon icon={editingWorkspace.icon || DEFAULT_WORKSPACE_ICON} width={22} height={22} color={editingWorkspace.color || undefined} />
+                  <Icon icon={editingWorkspace.icon || DEFAULT_WORKSPACE_ICON} width={22} height={22} color={visibleAccentColor(editingWorkspace.color)} />
                 </button>
                 <Input
                   id="edit-workspace-color"

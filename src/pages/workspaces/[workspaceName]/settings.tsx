@@ -12,7 +12,7 @@ import { HooksPanel } from '@/components/workspace/hooks-panel'
 import { ImapMailboxesPanel } from '@/components/workspace/imap-mailboxes-panel'
 import { TokenManager } from '@/components/workspace/token-manager'
 import { useToast } from '@/components/ui/toast-container'
-import { generateNiceRandomHexColor } from '@/utils/color'
+import { generateNiceRandomHexColor, visibleAccentColor } from '@/utils/color'
 import {
   disableWorkspaceService,
   enableWorkspaceService,
@@ -954,7 +954,7 @@ export default function WorkspaceSettingsPage() {
                   onClick={(e) => setPickerPos({ x: Math.min(e.clientX, window.innerWidth - 290), y: Math.min(e.clientY, window.innerHeight - 360) })}
                   className="flex h-10 w-10 items-center justify-center rounded-md border hover:bg-accent"
                 >
-                  <Icon icon={icon || DEFAULT_WORKSPACE_ICON} width={22} height={22} color={color || undefined} />
+                  <Icon icon={icon || DEFAULT_WORKSPACE_ICON} width={22} height={22} color={visibleAccentColor(color)} />
                 </button>
                 <Input id="ws-color" type="color" value={color} onChange={e => setColor(e.target.value)} className="h-10 w-16 p-1" />
                 <Button type="button" variant="outline" size="sm" onClick={() => setColor(generateNiceRandomHexColor())}>Randomize</Button>

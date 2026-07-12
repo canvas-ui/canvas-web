@@ -23,50 +23,70 @@ export function moveItem<T>(items: T[], from: number, to: number): T[] {
 
 // Renumber to sequential integers and persist only the items whose order
 // actually changed (small lists, but no reason to write untouched rows).
+// Individual failures (e.g. a broken/not-found workspace rejecting the PATCH)
+// must not undo the rest of the reorder — collect them instead of throwing.
 export async function persistSequentialOrder<T extends { order?: number | null }>(
   items: T[],
   update: (item: T, order: number) => Promise<unknown>,
-): Promise<void> {
-  await Promise.all(items.map((item, index) =>
+): Promise<{ failed: number }> {
+  const results = await Promise.allSettled(items.map((item, index) =>
     item.order === index ? Promise.resolve() : update(item, index),
   ))
+  return { failed: results.filter(r => r.status === 'rejected').length }
 }
 
-// Minimal HTML5 drag-to-reorder state for vertical lists. Spread the returned
-// props onto each row; `overIndex` marks the current drop target for styling.
+// Pointer-based drag-to-reorder for vertical lists. HTML5 drag events never
+// fire on touch devices, so the drag is driven by pointer events on a
+// dedicated grip handle: spread `handleProps(i)` onto the grip button and
+// `rowProps(i)` onto each row. While dragging, the row under the pointer is
+// resolved via elementFromPoint against the row's data attribute.
+// `draggingIndex`/`overIndex` are exposed for styling.
 export function useListReorder(onDrop: (from: number, to: number) => void) {
-  const dragIndex = useRef<number | null>(null)
+  const dragRef = useRef<{ from: number; over: number } | null>(null)
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
   const [overIndex, setOverIndex] = useState<number | null>(null)
 
-  const rowProps = (index: number) => ({
-    draggable: true,
-    onDragStart: (e: React.DragEvent) => {
-      dragIndex.current = index
-      e.dataTransfer.effectAllowed = 'move'
-      // Some browsers require data for a drag to start.
-      e.dataTransfer.setData('text/plain', String(index))
-    },
-    onDragOver: (e: React.DragEvent) => {
-      if (dragIndex.current === null) return
+  const handleProps = (index: number) => ({
+    onPointerDown: (e: React.PointerEvent) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return
+      // Keep the row's own click/drag behavior out of the gesture and stop
+      // touch from scrolling the list (touch-action is set below too).
       e.preventDefault()
-      e.dataTransfer.dropEffect = 'move'
-      if (overIndex !== index) setOverIndex(index)
+      e.stopPropagation()
+      dragRef.current = { from: index, over: index }
+      setDraggingIndex(index)
+      setOverIndex(index)
+      const move = (ev: PointerEvent) => {
+        const el = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)
+          ?.closest?.('[data-reorder-index]') as HTMLElement | null
+        if (!el || !dragRef.current) return
+        const over = Number(el.dataset.reorderIndex)
+        if (Number.isFinite(over) && over !== dragRef.current.over) {
+          dragRef.current.over = over
+          setOverIndex(over)
+        }
+      }
+      const up = () => {
+        window.removeEventListener('pointermove', move)
+        window.removeEventListener('pointerup', up)
+        window.removeEventListener('pointercancel', up)
+        const d = dragRef.current
+        dragRef.current = null
+        setDraggingIndex(null)
+        setOverIndex(null)
+        if (d && d.from !== d.over) onDrop(d.from, d.over)
+      }
+      window.addEventListener('pointermove', move)
+      window.addEventListener('pointerup', up)
+      window.addEventListener('pointercancel', up)
     },
-    onDragLeave: () => {
-      if (overIndex === index) setOverIndex(null)
-    },
-    onDrop: (e: React.DragEvent) => {
-      e.preventDefault()
-      const from = dragIndex.current
-      dragIndex.current = null
-      setOverIndex(null)
-      if (from !== null && from !== index) onDrop(from, index)
-    },
-    onDragEnd: () => {
-      dragIndex.current = null
-      setOverIndex(null)
-    },
+    // The grip is not a clickable action — swallow the click that follows
+    // pointerup so it doesn't bubble into the row's onClick.
+    onClick: (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation() },
+    style: { touchAction: 'none' } as React.CSSProperties,
   })
 
-  return { rowProps, overIndex }
+  const rowProps = (index: number) => ({ 'data-reorder-index': index })
+
+  return { rowProps, handleProps, overIndex, draggingIndex }
 }

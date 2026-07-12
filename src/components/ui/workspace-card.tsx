@@ -13,6 +13,7 @@ import {
   AlertDialogTrigger,
 } from "./alert-dialog";
 import { useState } from "react";
+import { visibleAccentColor } from "@/utils/color";
 
 interface WorkspaceCardProps {
   workspace: Workspace;
@@ -32,8 +33,11 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onD
   const isShared = (workspace as any).isShared === true || workspace.type === 'shared';
   const sharedFrom = (workspace as any).ownerEmail || workspace.owner;
 
-  const borderColorClass = workspace.color ? '' : 'border-slate-300'; // Default border color
-  const borderStyle = workspace.color ? { borderLeftColor: workspace.color, borderLeftWidth: '4px' } : { borderLeftWidth: '4px' };
+  // Near-white workspace colors would vanish against the card background —
+  // fall back to the neutral border in that case.
+  const accent = visibleAccentColor(workspace.color);
+  const borderColorClass = accent ? '' : 'border-slate-300'; // Default border color
+  const borderStyle = accent ? { borderLeftColor: accent, borderLeftWidth: '4px' } : { borderLeftWidth: '4px' };
 
   const getStatusColor = () => {
     switch (workspace.status) {
