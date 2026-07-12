@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Icon } from "@iconify/react"
-import { generateNiceRandomHexColor, visibleAccentColor } from "@/utils/color"
+import { generateNiceRandomHexColor, visibleAccentColor, onAccentTextClass } from "@/utils/color"
 import { LayerIconPicker } from "@/components/menu/shared/LayerIconPicker"
 import { DEFAULT_WORKSPACE_ICON, type LayerStyle } from "@/lib/layer-style"
 import { useSocketSubscription } from "@/hooks/useSocketSubscription"
@@ -455,20 +455,24 @@ export default function WorkspacesPage() {
                 updatedAt: ws.updatedAt,
                 color: ws.color === null ? undefined : ws.color,
               };
+              const accent = visibleAccentColor(ws.color);
               return (
                 <div
                   key={ws.id}
                   {...rowProps(index)}
-                  className={`flex items-center gap-1 rounded-lg ${overIndex === index ? 'ring-2 ring-primary/40' : ''} ${draggingIndex === index ? 'opacity-60' : ''}`}
+                  className={`flex items-stretch rounded-lg ${overIndex === index ? 'ring-2 ring-primary/40' : ''} ${draggingIndex === index ? 'opacity-60' : ''}`}
                 >
+                  {/* Widened color strip doubles as the drag handle, sitting on
+                      the card's accent (left) edge. */}
                   <button
                     type="button"
                     {...handleProps(index)}
                     title="Drag to reorder"
                     aria-label="Drag to reorder"
-                    className="shrink-0 cursor-grab rounded p-1 text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing"
+                    className={`flex w-5 shrink-0 cursor-grab items-center justify-center rounded-l-lg active:cursor-grabbing ${accent ? '' : 'bg-muted'}`}
+                    style={accent ? { backgroundColor: accent } : undefined}
                   >
-                    <GripVertical className="h-5 w-5" />
+                    <GripVertical className={`h-4 w-4 ${onAccentTextClass(accent)}`} />
                   </button>
                   <div className="min-w-0 flex-1">
                     <WorkspaceCard

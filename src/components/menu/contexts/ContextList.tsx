@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, Settings, Link2, GripVertical } from 'lucide-react'
 import { Icon } from '@iconify/react'
-import { visibleAccentColor } from '@/utils/color'
+import { visibleAccentColor, onAccentTextClass } from '@/utils/color'
 import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style'
 import { cn } from '@/lib/utils'
 import { useMenu } from '@/components/shell/menu-context'
@@ -70,29 +70,39 @@ export function ContextList() {
                   key={`${ctx.userId || 'u'}-${ctx.id}`}
                   {...rowProps(index)}
                   className={cn(
-                    'group relative rounded-l-md px-3 py-2.5 transition-all shadow-sm',
+                    'group relative rounded-md py-2.5 pl-3 pr-7 transition-all shadow-sm',
                     isWorkspaceActive
                       ? 'cursor-pointer hover:shadow ' + (isActive ? 'bg-accent shadow' : 'bg-card hover:bg-accent/50')
                       : 'cursor-not-allowed opacity-50 bg-card',
                     overIndex === index && 'ring-2 ring-primary/40',
                     draggingIndex === index && 'opacity-60',
                   )}
-                  style={{ borderRight: `6px solid ${accent || 'transparent'}` }}
                   onClick={() => isWorkspaceActive && handleSelect(ctx)}
                   title={isWorkspaceActive ? undefined : `Workspace "${ctx.workspaceName}" is not active`}
                 >
+                  {/* The color strip IS the drag handle; shared contexts keep
+                      the strip as a passive color cue (not reorderable). */}
+                  {isShared ? (
+                    <div
+                      className={cn('absolute inset-y-0 right-0 w-4 rounded-r-md', !accent && 'bg-muted')}
+                      style={accent ? { backgroundColor: accent } : undefined}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      {...handleProps(index)}
+                      title="Drag to reorder"
+                      aria-label="Drag to reorder"
+                      className={cn(
+                        'absolute inset-y-0 right-0 flex w-4 cursor-grab items-center justify-center rounded-r-md active:cursor-grabbing',
+                        !accent && 'bg-muted',
+                      )}
+                      style={accent ? { backgroundColor: accent } : undefined}
+                    >
+                      <GripVertical className={cn('h-3.5 w-3.5', onAccentTextClass(accent))} />
+                    </button>
+                  )}
                   <div className="flex items-start gap-2">
-                    {!isShared && (
-                      <button
-                        type="button"
-                        {...handleProps(index)}
-                        title="Drag to reorder"
-                        aria-label="Drag to reorder"
-                        className="shrink-0 -ml-1.5 mt-0.5 cursor-grab rounded p-0.5 text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing"
-                      >
-                        <GripVertical className="w-3.5 h-3.5" />
-                      </button>
-                    )}
                     {/* Icon derived server-side from the bound path's layer, falling back to the workspace style */}
                     <Icon
                       icon={ctx.icon || DEFAULT_WORKSPACE_ICON}

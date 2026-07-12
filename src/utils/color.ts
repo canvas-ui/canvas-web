@@ -89,5 +89,14 @@ export const isLowContrastOnLight = (color: string, threshold = 0.82): boolean =
 export const visibleAccentColor = (color?: string | null): string | undefined =>
   color && !isLowContrastOnLight(color) ? color : undefined;
 
+// Tailwind text class for an icon rendered ON an accent-colored surface
+// (e.g. the drag-strip handle): dark glyph on light strips, light glyph on
+// dark ones, muted on the neutral fallback.
+export const onAccentTextClass = (accent?: string): string => {
+  if (!accent) return 'text-muted-foreground/70';
+  const lum = relativeLuminance(accent);
+  return lum !== null && lum > 0.5 ? 'text-black/45' : 'text-white/80';
+};
+
 // Re-export helpers in case we want them elsewhere
 export { randomInt, generateRandomHsl, hslToHex };
