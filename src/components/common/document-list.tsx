@@ -3,7 +3,7 @@ import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, 
 import { LinkToCard } from '@/components/menu/shared/LinkToCard'
 import { PickDocumentsCard } from '@/components/menu/shared/PickDocumentsCard'
 import { useSideView } from '@/components/shell/side-view-context'
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef, useDeferredValue } from 'react'
 import { createPortal } from 'react-dom'
 import Fuse from 'fuse.js'
 import {
@@ -758,6 +758,27 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   const [searchQuery, setSearchQuery] = useState('')
   const [isDragOver, setIsDragOver] = useState(false)
   const hasServerSearch = backendSearchQueries.length > 0
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  // Android/Gboard composes even latin text (autocorrect/suggestions). Writing
+  // the controlled value back mid-composition desyncs the IME and reverses/
+  // dupes characters ("lamp" → "pmal"), badly on slow devices where the
+  // heavy per-keystroke filter render widens the window. Hold the commit
+  // until composition ends; the DOM keeps the in-progress text meanwhile.
+  const composingRef = useRef(false)
+
+  // Autofocus the search box on the primary browsing surface (not in side
+  // panes / canvas widgets, which would fight for focus). Desktop only —
+  // on mobile it would pop the on-screen keyboard on every navigation and
+  // cover the document list. onFocus still handles the keyboard-occlusion
+  // scroll when the user taps it on mobile.
+  useEffect(() => {
+    if (!allowViewToggle) return
+    if (window.matchMedia('(max-width: 767px)').matches) return
+    const el = searchInputRef.current
+    if (!el) return
+    const t = setTimeout(() => el.focus(), 60)
+    return () => clearTimeout(t)
+  }, [allowViewToggle])
 
   // Clear selection when context path changes
   useEffect(() => {
@@ -876,14 +897,17 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     return new Fuse(documents, fuseOptions)
   }, [documents, fuseOptions])
 
-  // Filter documents based on search query
+  // Filter documents based on search query. Defer the query so the expensive
+  // fuse pass (+ list re-render) lags behind keystrokes instead of running
+  // synchronously on each one — keeps the input snappy on slow devices.
+  const deferredQuery = useDeferredValue(searchQuery)
   const filteredDocuments = useMemo(() => {
-    if (!searchQuery.trim()) return documents
+    if (!deferredQuery.trim()) return documents
     if (!fuse) return documents
 
-    const searchResults = fuse.search(searchQuery)
+    const searchResults = fuse.search(deferredQuery)
     return searchResults.map(result => result.item)
-  }, [documents, searchQuery, fuse])
+  }, [documents, deferredQuery, fuse])
 
   // Column sort for the table view
   const sortAccessors = useMemo(() => ({
@@ -1072,7 +1096,10 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
 
         {/* Search Input */}
         <div className="mt-3 space-y-2">
-          <div className="relative flex items-center gap-2">
+          {/* flex-wrap: on narrow screens the scope toggle stays on top and the
+              search input wraps to its own full-width line (min-w forces the
+              wrap) instead of being squeezed to a sliver. */}
+          <div className="relative flex flex-wrap items-center gap-2">
             {onScopeChange && (
               <div className="flex shrink-0 rounded-md border border-input overflow-hidden text-xs font-medium">
                 <button
@@ -1094,13 +1121,25 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                 </button>
               </div>
             )}
-            <div className="relative flex-1">
+            <div className="relative flex-1 min-w-[12rem]">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
               <input
+                ref={searchInputRef}
                 type="text"
                 placeholder={onBackendSearch ? (hasServerSearch ? 'Refine: add another query (Enter)…' : 'Search documents (Enter for server search)…') : 'Search documents...'}
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => { if (!composingRef.current) setSearchQuery(e.target.value) }}
+                onCompositionStart={() => { composingRef.current = true }}
+                onCompositionEnd={(e) => { composingRef.current = false; setSearchQuery(e.currentTarget.value) }}
+                onFocus={(e) => {
+                  // Mobile: the keyboard covers the field (PWA standalone often
+                  // doesn't auto-scroll it into view). Scroll it up once the
+                  // keyboard has animated in.
+                  const el = e.currentTarget
+                  if (window.matchMedia('(max-width: 767px)').matches) {
+                    setTimeout(() => el.scrollIntoView({ block: 'center', behavior: 'smooth' }), 250)
+                  }
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && onBackendSearch) {
                     e.preventDefault()
