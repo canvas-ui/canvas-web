@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Copy, Database, ExternalLink, RefreshCw, Server, Trash2, Unlink, Activity, Monitor, Link2, Check, X as XIcon, Pencil } from 'lucide-react'
+import { ArrowLeft, Copy, Database, ExternalLink, HardDrive, RefreshCw, Server, Trash2, Unlink, Activity, Monitor, Link2, Check, X as XIcon, Pencil } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,7 +27,12 @@ import {
   removeWorkspace,
   revokeWorkspacePublicCanvasShare,
   updateWorkspace,
+  getBackendDiskUsage,
+  getWorkspaceDiskUsage,
+  formatBytes,
   type Backend,
+  type BackendDiskUsage,
+  type WorkspaceDiskUsage,
   type WorkspaceDbStats,
   type WorkspacePublicCanvasShare,
   type WorkspaceServicesStatus,
@@ -94,6 +99,93 @@ function Toggle({
     >
       <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow transition-transform ${checked ? 'translate-x-4' : 'translate-x-0'}`} />
     </button>
+  )
+}
+
+// On-demand on-disk size for a local backend. Never computed automatically —
+// the server walks the whole backend root (slow on a large home dir).
+function BackendSizeButton({ workspaceId, backend }: { workspaceId: string; backend: Backend }) {
+  const [usage, setUsage] = useState<BackendDiskUsage | null>(backend.usage ?? null)
+  const [busy, setBusy] = useState(false)
+  const { showToast } = useToast()
+
+  const compute = async () => {
+    setBusy(true)
+    try {
+      setUsage(await getBackendDiskUsage(workspaceId, backend.driver, backend.address))
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to compute size', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={compute}
+      disabled={busy}
+      className="flex items-center gap-1.5 rounded border px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
+      title={usage ? `Computed ${new Date(usage.computedAt).toLocaleString()} — click to refresh` : 'Compute on-disk size (walks the backend folder — may take a while)'}
+    >
+      <HardDrive className={`h-3 w-3 ${busy ? 'animate-pulse' : ''}`} />
+      {busy ? 'Calculating…' : usage ? formatBytes(usage.bytes) : 'Size'}
+    </button>
+  )
+}
+
+// On-demand on-disk size of the whole workspace root with a per-directory
+// breakdown — the number a future export/sync needs to plan around.
+function WorkspaceUsageSection({ workspaceId }: { workspaceId: string }) {
+  const [usage, setUsage] = useState<WorkspaceDiskUsage | null>(null)
+  const [busy, setBusy] = useState(false)
+  const { showToast } = useToast()
+
+  const compute = async () => {
+    setBusy(true)
+    try {
+      setUsage(await getWorkspaceDiskUsage(workspaceId))
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to compute workspace size', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="rounded-lg border p-4">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <HardDrive className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold">Disk usage</h2>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Total on-disk size of this workspace (index, blobs, home, cache) — what an export or sync would move.
+            Computed on demand; may take a while on large workspaces.
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
+          {usage && <span className="text-sm font-semibold">{formatBytes(usage.bytes)}</span>}
+          <Button type="button" variant="outline" size="sm" disabled={busy} onClick={compute}>
+            <RefreshCw className={`mr-2 h-3.5 w-3.5 ${busy ? 'animate-spin' : ''}`} />
+            {busy ? 'Calculating…' : usage ? 'Recalculate' : 'Calculate size'}
+          </Button>
+        </div>
+      </div>
+      {usage && (
+        <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 border-t pt-3 sm:grid-cols-3">
+          {Object.entries(usage.breakdown)
+            .sort(([, a], [, b]) => b - a)
+            .map(([dir, bytes]) => (
+              <div key={dir} className="flex items-baseline justify-between gap-2 text-xs">
+                <span className="truncate font-mono text-muted-foreground">{dir}</span>
+                <span>{formatBytes(bytes)}</span>
+              </div>
+            ))}
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -852,6 +944,8 @@ export default function WorkspaceSettingsPage() {
 
           <DefaultFoldersSection workspaceName={workspaceName!} />
 
+          <WorkspaceUsageSection workspaceId={workspaceId} />
+
           <section className="rounded-lg border border-destructive/30 p-4">
             <h2 className="mb-3 text-sm font-semibold text-destructive">Danger Zone</h2>
             <Button variant="destructive" disabled={isDestroying} onClick={handleDestroy}>
@@ -969,6 +1063,9 @@ export default function WorkspaceSettingsPage() {
                           onClick={() => patchDataBackend(backend, { readOnly: cfg.readOnly !== true }, 'readonly')}
                         />
                       </label>
+                    )}
+                    {(backend.driver === 'file' || backend.driver === 'cacache') && supported && (
+                      <BackendSizeButton workspaceId={workspaceId} backend={backend} />
                     )}
                     {backend.capabilities?.sync && (
                       <Button type="button" variant="outline" size="sm" disabled={busyAction === `resync:${backendId}`} onClick={() => resyncBackend(backend)}>

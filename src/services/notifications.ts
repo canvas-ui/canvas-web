@@ -9,11 +9,13 @@ export interface AppNotification {
   timestamp: string
 }
 
+// Optional/background fetches: on auth failure they must reject quietly (the
+// callers `.catch()` them) rather than bounce the user to /login.
 export async function listNotifications(): Promise<AppNotification[]> {
-  const res = await api.get<{ payload: AppNotification[] }>('/messaging/notifications')
+  const res = await api.get<{ payload: AppNotification[] }>('/messaging/notifications', { noAuthRedirect: true })
   return res.payload || []
 }
 
 export async function clearNotifications(): Promise<void> {
-  await api.delete('/messaging/notifications')
+  await api.delete('/messaging/notifications', { noAuthRedirect: true })
 }

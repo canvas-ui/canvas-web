@@ -15,6 +15,22 @@ function getAppName(): string {
 
 interface RequestOptions extends RequestInit {
   skipAuth?: boolean
+  // Make an authenticated request, but on auth failure (missing/invalid token
+  // or a 401) reject WITHOUT redirecting to /login or touching global auth
+  // state. For optional/background fetches whose failure must never hijack
+  // navigation — e.g. a `.catch()`ed notifications poll on a public page.
+  noAuthRedirect?: boolean
+}
+
+// Centralized "auth failed → bounce to login" side effect. Skipped entirely
+// when a caller opts out via noAuthRedirect, so a caught optional request can
+// never navigate the user away.
+function redirectToLogin(clearToken: boolean): void {
+  if (clearToken) localStorage.removeItem('authToken');
+  isRedirecting = true;
+  if (!window.location.pathname.includes('/login')) {
+    window.location.href = '/login';
+  }
 }
 
 // Get the authorization token from localStorage
@@ -38,10 +54,11 @@ function isValidTokenFormat(token: string): boolean {
 }
 
 async function fetchWithDefaults(endpoint: string, options: RequestOptions = {}): Promise<Response> {
-  const { skipAuth = false, headers = {}, body, ...rest } = options;
+  const { skipAuth = false, noAuthRedirect = false, headers = {}, body, ...rest } = options;
 
-  // Don't make requests if we're already redirecting
-  if (isRedirecting && !skipAuth) {
+  // Don't make requests if we're already redirecting. Opt-out callers are
+  // decoupled from the global redirect state and may still proceed.
+  if (isRedirecting && !skipAuth && !noAuthRedirect) {
     throw new Error('Authentication required');
   }
 
@@ -51,21 +68,17 @@ async function fetchWithDefaults(endpoint: string, options: RequestOptions = {})
   // For authenticated requests, verify we have a valid token
   if (!skipAuth && !authToken) {
     console.warn('Attempting authenticated request without token');
-    isRedirecting = true;
-    if (!window.location.pathname.includes('/login')) {
-      window.location.href = '/login';
-    }
+    if (!noAuthRedirect) redirectToLogin(false);
     throw new Error('Authentication required');
   }
 
   // Validate token format for authenticated requests
   if (!skipAuth && authToken && !isValidTokenFormat(authToken)) {
     console.warn('Invalid token format detected, clearing');
-    localStorage.removeItem('authToken');
-    isRedirecting = true;
-    if (!window.location.pathname.includes('/login')) {
-      window.location.href = '/login';
+    if (noAuthRedirect) {
+      throw new Error('Invalid authentication token format');
     }
+    redirectToLogin(true);
     throw new Error('Invalid authentication token format');
   }
 
@@ -116,19 +129,14 @@ async function fetchWithDefaults(endpoint: string, options: RequestOptions = {})
     if (!response.ok) {
       // Handle 401 Unauthorized specifically
       if (response.status === 401 && !skipAuth && !isRedirecting) {
-        console.error('Authentication failed, redirecting to login');
-
-        // Clear token if authentication failed
-        localStorage.removeItem('authToken');
-
-        // Set redirecting flag
-        isRedirecting = true;
-
-        // Only redirect if we're not already on the login page
-        if (!window.location.pathname.includes('/login')) {
-          window.location.href = '/login';
+        // Opt-out callers reject without clearing the token or navigating away,
+        // so a caught optional fetch can't sign the user out or bounce them.
+        if (noAuthRedirect) {
+          throw new Error('Authentication required');
         }
 
+        console.error('Authentication failed, redirecting to login');
+        redirectToLogin(true);
         throw new Error('Authentication required');
       }
 

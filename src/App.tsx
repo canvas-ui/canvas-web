@@ -54,7 +54,7 @@ function AppContent() {
         <Route path="/pub/c/:code" element={<PublicCanvasPage />} />
 
         {/* Dashboard layout for authenticated routes */}
-        <Route path="/" element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
+        <Route path="/" element={<ProtectedRoute><NotificationsProvider><AppShell /></NotificationsProvider></ProtectedRoute>}>
           <Route index element={<Navigate to="/workspaces" replace />} />
           <Route path="home" element={<HomePage />} />
           <Route path="share-target" element={<ShareTargetPage />} />
@@ -96,9 +96,7 @@ function AppContent() {
 function App() {
   return (
     <ToastContainer>
-      <NotificationsProvider>
-        <AppContent />
-      </NotificationsProvider>
+      <AppContent />
     </ToastContainer>
   )
 }

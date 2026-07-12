@@ -864,6 +864,20 @@ export interface BackendContainer {
   lastError?: string | null;
 }
 
+export interface BackendDiskUsage {
+  backend: string;
+  bytes: number;
+  computedAt: string;
+}
+
+export interface WorkspaceDiskUsage {
+  workspaceId: string;
+  bytes: number;
+  // Per top-level directory of the workspace root (db, data, home, cache, …).
+  breakdown: Record<string, number>;
+  computedAt: string;
+}
+
 export interface Backend {
   driver: string;
   address: string;
@@ -872,6 +886,8 @@ export interface Backend {
   status: 'running' | 'idle' | 'stopped' | 'error' | string;
   lastSyncAt: string | null;
   lastError: string | null;
+  // Last on-demand disk usage, if computed this server runtime.
+  usage?: BackendDiskUsage | null;
   capabilities: BackendCapabilities;
   containers?: BackendContainer[];
   config?: Record<string, unknown>;
@@ -890,6 +906,35 @@ export async function listBackends(workspaceId: string, driver?: string): Promis
 export async function getBackend(workspaceId: string, driver: string, address: string): Promise<Backend> {
   const response = await api.get<{ payload: Backend }>(backendPath(workspaceId, driver, address));
   return response.payload;
+}
+
+// On-demand on-disk size of a local storage backend. Walks the backend root
+// server-side — potentially slow on large trees, so only call on user action.
+export async function getBackendDiskUsage(workspaceId: string, driver: string, address: string): Promise<BackendDiskUsage> {
+  const response = await api.get<{ payload: BackendDiskUsage }>(`${backendPath(workspaceId, driver, address)}/usage`);
+  return response.payload;
+}
+
+// On-demand on-disk size of the whole workspace root (per-dir breakdown
+// included) — the export/sync planning number. Slow on large workspaces.
+export async function getWorkspaceDiskUsage(workspaceId: string): Promise<WorkspaceDiskUsage> {
+  const response = await api.get<{ payload: WorkspaceDiskUsage }>(`${API_ROUTES.workspaces}/${workspaceId}/usage`);
+  return response.payload;
+}
+
+// Human-readable byte size (1024-based, one decimal above KB).
+export function formatBytes(bytes: number | null | undefined): string {
+  if (bytes == null || !Number.isFinite(bytes)) return '—'
+  if (bytes < 1024) return `${bytes} B`
+  const units = ['KB', 'MB', 'GB', 'TB']
+  let value = bytes
+  let unit = 'B'
+  for (const next of units) {
+    if (value < 1024) break
+    value /= 1024
+    unit = next
+  }
+  return `${value.toFixed(value >= 100 ? 0 : 1)} ${unit}`
 }
 
 export async function addBackend(workspaceId: string, driver: string, config: Record<string, unknown>): Promise<Backend> {
