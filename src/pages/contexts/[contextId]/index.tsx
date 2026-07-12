@@ -370,7 +370,7 @@ export default function ContextDetailPage() {
           icon + color keep that visible even when only the content area is
           shown (mobile). Mirrors the workspace view's status bar. */}
       <div
-        className="flex items-center gap-2 px-4 py-2 border-b shrink-0"
+        className="flex h-12 items-center gap-2 border-b px-4 shrink-0"
         style={accent ? { borderBottom: `3px solid ${accent}` } : { borderBottomWidth: 3 }}
       >
         <Icon

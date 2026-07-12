@@ -901,7 +901,7 @@ export default function WorkspaceDetailPage() {
           color as the primary accent; near-white colors fall back to the
           theme border so the accent never vanishes on the light background. */}
       <div
-        className="flex items-center gap-3 px-4 py-2 border-b shrink-0"
+        className="flex h-12 items-center gap-3 border-b px-4 shrink-0"
         style={visibleAccentColor(workspace.color)
           ? { borderBottom: `3px solid ${visibleAccentColor(workspace.color)}` }
           : { borderBottomWidth: 3 }}

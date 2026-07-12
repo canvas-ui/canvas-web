@@ -22,7 +22,13 @@ export function M2Header({ title, onBack, action, className, icon, accentColor }
   return (
     <div
       className={cn('flex items-center h-12 px-2 border-b border-sidebar-border shrink-0 gap-1', className)}
-      style={accent ? { borderLeft: `6px solid ${accent}` } : undefined}
+      // 3px bottom border matches the content-area header bars (also h-12), so
+      // the accent line flows continuously from M2 into the content area.
+      style={{
+        ...(accent ? { borderLeft: `6px solid ${accent}` } : {}),
+        borderBottomWidth: 3,
+        ...(accent ? { borderBottomColor: accent } : {}),
+      }}
     >
       <button
         type="button"
