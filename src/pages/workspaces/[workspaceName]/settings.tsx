@@ -46,13 +46,13 @@ type SettingsTab = 'general' | 'data' | 'db' | 'devices' | 'services' | 'shares'
 type ServiceId = 'dotfiles' | 'git' | 'home' | 'webdav' | 'imap' | 'imapSync'
 
 const DATA_BACKEND_LABELS: Record<string, { title: string; description: string }> = {
-  'fs:home': {
-    title: 'Local FS: Home',
-    description: 'User-managed roaming home folder, exported through WebDAV and watched for changes.',
+  'workspace:home': {
+    title: 'Workspace Home',
+    description: 'User-managed roaming home folder, exported through WebDAV and watched for changes. Mirrored into the backends tree.',
   },
-  'fs:data': {
-    title: 'Local FS: Data',
-    description: 'Stored-managed workspace data. Humans poking here directly are asking for a boring afternoon.',
+  'workspace:data': {
+    title: 'Workspace Data',
+    description: 'Managed content-addressable blob store (deduped, checksum-keyed). Opaque by design — the tree is the navigation; not meant for direct edits or export.',
   },
   'stored.cache': {
     title: 'Stored Cache',
@@ -918,7 +918,12 @@ export default function WorkspaceSettingsPage() {
             const backendId = backend.address
             const copy = DATA_BACKEND_LABELS[backendId] || { title: backendId, description: 'Workspace data backend.' }
             const supported = cfg.supported !== false
-            const canToggle = supported && backendId !== 'stored.cache'
+            // Structural local stores: workspace:data (managed blob target) and
+            // stored.cache can never be disabled; as managed, non-exported
+            // stores the read-only knob doesn't apply to them either.
+            const alwaysOn = backendId === 'workspace:data' || backendId === 'stored.cache'
+            const canToggle = supported && !alwaysOn
+            const hasReadOnly = canToggle && cfg.managed !== true
             return (
               <section key={backendId} className="rounded-lg border p-4">
                 <div className="flex items-start justify-between gap-4">
@@ -955,7 +960,7 @@ export default function WorkspaceSettingsPage() {
                         />
                       </label>
                     )}
-                    {canToggle && (
+                    {hasReadOnly && (
                       <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground" title="Read-only: Destroy never deletes bytes on this backend (references are dropped instead). Important when the folder is exported via Samba or shared otherwise.">
                         read-only
                         <Toggle
@@ -971,7 +976,11 @@ export default function WorkspaceSettingsPage() {
                         Re-sync
                       </Button>
                     )}
-                    <Toggle checked={!!backend.enabled} disabled={!canToggle || busyAction === `backend:${backendId}`} onClick={() => toggleDataBackend(backend)} />
+                    {alwaysOn ? (
+                      <span className="rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground" title="Structural workspace store — cannot be disabled">always on</span>
+                    ) : (
+                      <Toggle checked={!!backend.enabled} disabled={!canToggle || busyAction === `backend:${backendId}`} onClick={() => toggleDataBackend(backend)} />
+                    )}
                   </div>
                 </div>
                 {backend.driver === 'file' && supported && (
