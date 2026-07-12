@@ -350,8 +350,10 @@ export function CanvasGrid({
                 <div key={id}>
                   {def ? (
                     <WidgetFrame title={def.name} icon={def.icon} readOnly={!editable} onRemove={() => removeWidget(id)}>
+                      {/* Older saved layouts can lack config entirely — widgets
+                          index into it (config.format etc.), so default it. */}
                       <def.component
-                        config={entry.config}
+                        config={entry.config ?? { ...(def.defaultConfig || {}) }}
                         setConfig={(config) => setWidgetConfig(id, config)}
                         canvas={canvas}
                       />
