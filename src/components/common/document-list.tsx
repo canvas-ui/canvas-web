@@ -1,5 +1,5 @@
 import { Document, TreeNode } from '@/types/workspace'
-import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, Table as TableIcon } from 'lucide-react'
+import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, Table as TableIcon } from 'lucide-react'
 import { LinkToCard } from '@/components/menu/shared/LinkToCard'
 import { PickDocumentsCard } from '@/components/menu/shared/PickDocumentsCard'
 import { useSideView } from '@/components/shell/side-view-context'
@@ -316,9 +316,102 @@ function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
   )
 }
 
+interface DocumentActionSheetProps {
+  document: Document
+  open: boolean
+  onClose: () => void
+  onViewDetails: () => void
+  onEdit?: () => void
+  onLink?: () => void
+  onOpenToSide?: () => void
+  onRemove?: () => void
+  onDelete?: () => void
+}
+
+// Mobile replacement for the row action icon strip: a full-screen slide-in
+// card. Actions anchor to the bottom of the screen so everything is reachable
+// one-handed; the empty top area and Cancel both dismiss.
+function DocumentActionSheet({ document, open, onClose, onViewDetails, onEdit, onLink, onOpenToSide, onRemove, onDelete }: DocumentActionSheetProps) {
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, onClose])
+
+  if (!open) return null
+  const display = getDocumentDisplayInfo(document)
+  const run = (fn: () => void) => () => { onClose(); fn() }
+
+  const actionClass = 'flex w-full items-center gap-3 rounded-xl border bg-card px-4 py-4 text-base font-medium transition-transform active:scale-[.98]'
+
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-[80] flex flex-col bg-background animate-in slide-in-from-bottom-10 fade-in duration-200"
+      onClick={onClose}
+    >
+      <div className="flex shrink-0 items-start gap-3 border-b p-4" onClick={(e) => e.stopPropagation()}>
+        <DocumentIcon document={document} chip />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-base font-semibold">{display.title}</div>
+          <div className="truncate text-xs text-muted-foreground">ID: {document.id} · {document.schema}</div>
+        </div>
+        <button onClick={onClose} className="rounded-sm p-2 hover:bg-muted" title="Close" aria-label="Close">
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      {/* Empty flex spacer — tapping it dismisses, keeping actions in thumb reach */}
+      <div className="flex-1" />
+
+      <div
+        className="shrink-0 space-y-2 px-4 pt-2"
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.25rem)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button onClick={run(onViewDetails)} className={actionClass}>
+          <Eye className="h-5 w-5 shrink-0 text-muted-foreground" /> View details
+        </button>
+        {onEdit && (
+          <button onClick={run(onEdit)} className={actionClass}>
+            <Pencil className="h-5 w-5 shrink-0 text-muted-foreground" /> Edit
+          </button>
+        )}
+        {onLink && (
+          <button onClick={run(onLink)} className={actionClass}>
+            <Link2 className="h-5 w-5 shrink-0 text-muted-foreground" /> Link to…
+          </button>
+        )}
+        {onOpenToSide && (
+          <button onClick={run(onOpenToSide)} className={actionClass}>
+            <PanelRight className="h-5 w-5 shrink-0 text-muted-foreground" /> Open to the side
+          </button>
+        )}
+        {onRemove && (
+          <button onClick={run(onRemove)} className={actionClass}>
+            <X className="h-5 w-5 shrink-0 text-muted-foreground" /> Remove from context
+          </button>
+        )}
+        {onDelete && (
+          <button onClick={run(onDelete)} className={`${actionClass} border-destructive/30 text-destructive`}>
+            <Trash2 className="h-5 w-5 shrink-0" /> Delete permanently
+          </button>
+        )}
+        <button onClick={onClose} className={`${actionClass} justify-center bg-muted`}>
+          Cancel
+        </button>
+      </div>
+    </div>,
+    window.document.body,
+  )
+}
+
 function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemoveDocument, onDeleteDocument, onLinkDocument, onOpenToSide, onRightClick, onDragStart }: DocumentTableRowProps) {
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [detailEdit, setDetailEdit] = useState(false)
+  const [actionSheet, setActionSheet] = useState(false)
   const isPublicShare = usePublicShareCode() != null
   const isEditable = isEditableSchema(document.schema)
 
@@ -417,7 +510,7 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
         <TableCell className="hidden text-xs text-muted-foreground sm:table-cell">{formatDate(document.createdAt)}</TableCell>
         <TableCell className="hidden text-xs text-muted-foreground lg:table-cell">{document.versionNumber > 1 ? `v${document.versionNumber}` : ''}</TableCell>
         <TableCell>
-          <div className="flex items-center gap-1">
+          <div className="hidden items-center gap-1 md:flex">
             <Button variant="ghost" size="sm" onClick={handleViewDetails} title="View document details"><Eye className="h-4 w-4" /></Button>
             {isEditable && !isPublicShare && (<Button variant="ghost" size="sm" onClick={handleEditDocument} title="Edit document"><Pencil className="h-4 w-4" /></Button>)}
             {onLinkDocument && (<Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onLinkDocument(document.id) }} title="Link document to other paths"><Link2 className="h-4 w-4" /></Button>)}
@@ -425,8 +518,22 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
             {onRemoveDocument && (<Button variant="ghost" size="sm" onClick={handleRemoveDocument} title="Remove document from context"><X className="h-4 w-4" /></Button>)}
             {onDeleteDocument && (<Button variant="ghost" size="sm" onClick={handleDeleteDocument} title="Delete document permanently" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>)}
           </div>
+          <Button variant="ghost" size="sm" className="md:hidden" onClick={(e) => { e.stopPropagation(); setActionSheet(true) }} title="Actions" aria-label="Document actions">
+            <MoreVertical className="h-4 w-4" />
+          </Button>
         </TableCell>
       </TableRow>
+      <DocumentActionSheet
+        document={document}
+        open={actionSheet}
+        onClose={() => setActionSheet(false)}
+        onViewDetails={() => { setDetailEdit(false); setShowDetailModal(true) }}
+        onEdit={isEditable && !isPublicShare ? () => { setDetailEdit(true); setShowDetailModal(true) } : undefined}
+        onLink={onLinkDocument ? () => onLinkDocument(document.id) : undefined}
+        onOpenToSide={onOpenToSide ? () => onOpenToSide(document) : undefined}
+        onRemove={onRemoveDocument ? () => onRemoveDocument(document.id) : undefined}
+        onDelete={onDeleteDocument ? () => onDeleteDocument(document.id) : undefined}
+      />
       <ObjectPropertiesModal document={document} isOpen={showDetailModal} onClose={() => setShowDetailModal(false)} workspaceId={workspaceId} initialEdit={detailEdit} />
     </>
   )
@@ -435,6 +542,7 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
 function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocument, onDeleteDocument, onLinkDocument, onOpenToSide, onRightClick, onDragStart }: DocumentRowProps) {
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [detailEdit, setDetailEdit] = useState(false)
+  const [actionSheet, setActionSheet] = useState(false)
   const isPublicShare = usePublicShareCode() != null
   const isTabDocument = document.schema === 'data/abstraction/tab'
   const isEditable = isEditableSchema(document.schema)
@@ -506,7 +614,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
               {document.versionNumber > 1 && (<div className="flex items-center gap-1 flex-shrink-0"><span className="font-medium">v{document.versionNumber}</span></div>)}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="hidden items-center gap-2 md:flex">
             <button onClick={handleViewDetails} className="p-1 hover:bg-muted rounded-sm" title="View document details"><Eye className="h-4 w-4" /></button>
             {isEditable && !isPublicShare && (<button onClick={handleEditDocument} className="p-1 hover:bg-muted rounded-sm" title="Edit document"><Pencil className="h-4 w-4" /></button>)}
             {onLinkDocument && (<button onClick={(e) => { e.stopPropagation(); onLinkDocument(document.id) }} className="p-1 hover:bg-muted rounded-sm" title="Link document to other paths"><Link2 className="h-4 w-4" /></button>)}
@@ -514,8 +622,27 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
             {onRemoveDocument && (<button onClick={handleRemoveDocument} className="p-1 hover:bg-muted rounded-sm" title="Remove document from context (keep in database)"><X className="h-4 w-4" /></button>)}
             {onDeleteDocument && (<button onClick={handleDeleteDocument} className="p-1 hover:bg-destructive hover:text-destructive-foreground rounded-sm text-destructive" title="Delete document permanently from database"><Trash2 className="h-4 w-4" /></button>)}
           </div>
+          <button
+            onClick={(e) => { e.stopPropagation(); setActionSheet(true) }}
+            className="p-2 hover:bg-muted rounded-sm md:hidden"
+            title="Actions"
+            aria-label="Document actions"
+          >
+            <MoreVertical className="h-4 w-4" />
+          </button>
         </div>
       </div>
+      <DocumentActionSheet
+        document={document}
+        open={actionSheet}
+        onClose={() => setActionSheet(false)}
+        onViewDetails={() => { setDetailEdit(false); setShowDetailModal(true) }}
+        onEdit={isEditable && !isPublicShare ? () => { setDetailEdit(true); setShowDetailModal(true) } : undefined}
+        onLink={onLinkDocument ? () => onLinkDocument(document.id) : undefined}
+        onOpenToSide={onOpenToSide ? () => onOpenToSide(document) : undefined}
+        onRemove={onRemoveDocument ? () => onRemoveDocument(document.id) : undefined}
+        onDelete={onDeleteDocument ? () => onDeleteDocument(document.id) : undefined}
+      />
       <ObjectPropertiesModal document={document} isOpen={showDetailModal} onClose={() => setShowDetailModal(false)} workspaceId={workspaceId} initialEdit={detailEdit} />
     </>
   )
