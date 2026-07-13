@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react'
-import { LayoutDashboard, BookMarked, Share2, Unlink, Save, Trash2, Plus, Link2 } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import { LayoutDashboard, BookMarked, Share2, Unlink, Save, Trash2, Plus, Link2, FolderTree } from 'lucide-react'
 import { Document, TreeNode } from '@/types/workspace'
 import { DocumentList } from '@/components/common/document-list'
 import type { DocumentPasteOptions } from '@/components/common/document-list'
@@ -42,6 +42,106 @@ function LinkSelectionButton({ count }: { count: number }) {
 }
 
 type CanvasUrlType = 'context' | 'canvas' | 'directory' | 'context-layer' | 'directory-layer'
+
+// The content-area address bar: a `[treeType]` chip that opens the tree drawer
+// (browse), plus an editable URL. Typing a path and pressing Enter navigates
+// the content area to that path's directory listing. Falls back to a plain
+// read-only label when neither handler is wired (e.g. multi-pane, public).
+function UrlBar({
+  urlType,
+  urlDisplay,
+  onUrlClick,
+  onUrlSubmit,
+}: {
+  urlType: CanvasUrlType
+  urlDisplay: string
+  onUrlClick?: () => void
+  onUrlSubmit?: (path: string) => void
+}) {
+  // Split "workspace://foo/bar" into a fixed scheme prefix + the editable path.
+  const schemeMatch = urlDisplay.match(/^(.*?:\/\/)(.*)$/)
+  const scheme = schemeMatch?.[1] ?? ''
+  const initialPath = schemeMatch?.[2] ?? urlDisplay
+
+  const [value, setValue] = useState(initialPath)
+  // Re-seed when navigation changes the URL out from under the input. Done as a
+  // render-time reset (React's "adjust state on prop change" pattern) rather
+  // than an effect, so the field tracks the address bar without a flash.
+  const [seed, setSeed] = useState(initialPath)
+  if (seed !== initialPath) {
+    setSeed(initialPath)
+    setValue(initialPath)
+  }
+
+  const chip = (
+    <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-muted border text-muted-foreground shrink-0">
+      [{urlType.replace('-', ':')}]
+    </span>
+  )
+
+  // The [treeType] chip always browses the tree when we can.
+  const chipEl = onUrlClick ? (
+    <button
+      type="button"
+      onClick={onUrlClick}
+      title="Browse tree"
+      aria-label="Browse tree"
+      className="shrink-0 flex items-center gap-1 rounded hover:opacity-80 transition-opacity"
+    >
+      <FolderTree className="w-3.5 h-3.5 text-muted-foreground" />
+      {chip}
+    </button>
+  ) : chip
+
+  // Editable address bar when a submit handler is provided; otherwise the old
+  // read-only URL (kept clickable to browse the tree if onUrlClick is set).
+  if (onUrlSubmit) {
+    return (
+      <>
+        {chipEl}
+        <form
+          className="flex flex-1 min-w-0 items-center rounded border border-transparent transition-colors hover:border-border focus-within:border-border focus-within:bg-background"
+          onSubmit={(e) => {
+            e.preventDefault()
+            onUrlSubmit(value)
+          }}
+        >
+          {scheme && (
+            <span className="shrink-0 pl-2 font-mono text-sm text-muted-foreground select-none">{scheme}</span>
+          )}
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Escape') setValue(initialPath) }}
+            spellCheck={false}
+            autoComplete="off"
+            title="Edit path — press Enter to go"
+            className="w-full min-w-0 flex-1 truncate bg-transparent px-2 py-1 font-mono text-sm text-foreground focus:outline-none"
+          />
+        </form>
+      </>
+    )
+  }
+
+  return (
+    <>
+      {chipEl}
+      {onUrlClick ? (
+        <button
+          type="button"
+          onClick={onUrlClick}
+          title="Browse tree"
+          className="flex-1 truncate rounded px-1 -mx-1 text-left text-sm text-foreground transition-colors hover:bg-accent active:bg-accent"
+        >
+          {urlDisplay}
+        </button>
+      ) : (
+        <span className="text-sm text-foreground truncate flex-1">{urlDisplay}</span>
+      )}
+    </>
+  )
+}
 
 export interface CanvasInfo {
   label?: string
@@ -99,6 +199,9 @@ interface DefaultCanvasProps {
   // Makes the header URL tappable — e.g. the mobile context page opens the
   // workspace tree drawer from it so the URL can be navigated by touch.
   onUrlClick?: () => void
+  // Turns the URL into an editable address bar: submitting a path (Enter)
+  // navigates the content area to that path's directory listing.
+  onUrlSubmit?: (path: string) => void
   // When provided, enables the document list's "Link to…" path picker.
   linkTree?: TreeNode | null
   // When provided, replaces the document list body (e.g. the canvas widget grid)
@@ -153,6 +256,7 @@ export function DefaultCanvas({
   isSavingChanges,
   onSaveChanges,
   onUrlClick,
+  onUrlSubmit,
   linkTree,
   selectedCount = 0,
   children,
@@ -231,21 +335,12 @@ export function DefaultCanvas({
         </div>
       ) : (
         <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/20 shrink-0">
-          <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-muted border text-muted-foreground shrink-0">
-            [{urlType.replace('-', ':')}]
-          </span>
-          {onUrlClick ? (
-            <button
-              type="button"
-              onClick={onUrlClick}
-              title="Browse tree"
-              className="flex-1 truncate rounded px-1 -mx-1 text-left text-sm text-foreground transition-colors hover:bg-accent active:bg-accent"
-            >
-              {urlDisplay}
-            </button>
-          ) : (
-            <span className="text-sm text-foreground truncate flex-1">{urlDisplay}</span>
-          )}
+          <UrlBar
+            urlType={urlType}
+            urlDisplay={urlDisplay}
+            onUrlClick={onUrlClick}
+            onUrlSubmit={onUrlSubmit}
+          />
           {onSaveAsCanvas && (
             <button
               type="button"

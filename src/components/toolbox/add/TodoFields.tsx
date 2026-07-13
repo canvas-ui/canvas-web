@@ -2,6 +2,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { TODO_STATUSES, TODO_STATUS_LABELS, type TodoStatus } from './useTodoFields'
 
+// RFC 5545 priority is 1 (highest) … 9 (lowest); 0/unset = none. Label the
+// endpoints and the midpoint so the selectbox reads meaningfully.
+const PRIORITY_LABELS: Record<number, string> = {
+  1: '1 — Highest', 2: '2', 3: '3 — High', 4: '4', 5: '5 — Medium',
+  6: '6', 7: '7 — Low', 8: '8', 9: '9 — Lowest',
+}
+
 // Shared Todo form fields (title/description/due/status/priority) so the add
 // form, home quick-add card, and edit dialog render an identical control set.
 export interface TodoFieldValues {
@@ -46,16 +53,18 @@ export function TodoFields({
           <Input id={`${idPrefix}-due`} type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor={`${idPrefix}-priority`}>Priority (1–9)</Label>
-          <Input
+          <Label htmlFor={`${idPrefix}-priority`}>Priority</Label>
+          <select
             id={`${idPrefix}-priority`}
-            type="number"
-            min={1}
-            max={9}
-            value={priority}
-            onChange={(e) => setPriority(e.target.value === '' ? '' : Math.max(1, Math.min(9, Number(e.target.value))))}
-            placeholder="—"
-          />
+            value={priority === '' ? '' : String(priority)}
+            onChange={(e) => setPriority(e.target.value === '' ? '' : Number(e.target.value))}
+            className={selectClass}
+          >
+            <option value="">None</option>
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((p) => (
+              <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>
+            ))}
+          </select>
         </div>
       </div>
 

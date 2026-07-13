@@ -200,7 +200,18 @@ const SESSION_KEY = 'toolbox:session:filters'
 function loadSessionFilters(): ToolboxFilters | null {
   try {
     const raw = localStorage.getItem(SESSION_KEY)
-    return raw ? (JSON.parse(raw) as ToolboxFilters) : null
+    if (!raw) return null
+    // Merge over the defaults so a blob persisted before a field existed (e.g.
+    // `sort`, added later) can't leave `filters.sort` undefined and crash
+    // consumers that read `filters.sort.sortBy`.
+    const parsed = JSON.parse(raw) as Partial<ToolboxFilters>
+    return {
+      ...DEFAULT_TOOLBOX_FILTERS,
+      ...parsed,
+      features: { ...DEFAULT_TOOLBOX_FILTERS.features, ...(parsed.features ?? {}) },
+      timeline: { ...DEFAULT_TOOLBOX_FILTERS.timeline, ...(parsed.timeline ?? {}) },
+      sort: { ...DEFAULT_TOOLBOX_SORT, ...(parsed.sort ?? {}) },
+    }
   } catch {
     return null
   }

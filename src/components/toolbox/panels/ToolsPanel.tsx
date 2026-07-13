@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { useLocation } from 'react-router-dom'
-import { X, Save, Loader2, Search, Trash2, Plus, RefreshCw, ZoomIn, ZoomOut, Clock } from 'lucide-react'
+import { X, Save, Loader2, Search, Trash2, Plus, RefreshCw, ZoomIn, ZoomOut, Clock, FileText, StickyNote, ListTodo, Globe, Mail, Link as LinkIcon, Tag as TagIcon, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToolbox, type ToolsTab, type FeatureMode } from '@/components/toolbox/toolbox-context'
 import { useToast } from '@/components/ui/toast-container'
@@ -588,6 +588,26 @@ const PREFIX_LABELS: Record<string, string> = {
   feature: 'Feature',
 }
 
+// Document-type (`data/abstraction/*`) schemas get a prominent, icon-led picker
+// at the top of the Features tab — they are the filter users reach for most.
+// icon + friendly label per known schema; unknown abstractions fall back to a
+// generic tag icon and their trailing segment as the label.
+const SCHEMA_META: Record<string, { label: string; icon: LucideIcon }> = {
+  'data/abstraction/file': { label: 'Files', icon: FileText },
+  'data/abstraction/note': { label: 'Notes', icon: StickyNote },
+  'data/abstraction/todo': { label: 'Todos', icon: ListTodo },
+  'data/abstraction/tab': { label: 'Tabs', icon: Globe },
+  'data/abstraction/email': { label: 'Emails', icon: Mail },
+  'data/abstraction/link': { label: 'Links', icon: LinkIcon },
+}
+const ABSTRACTION_PREFIX = 'data/abstraction/'
+function schemaMeta(key: string): { label: string; icon: LucideIcon } {
+  return SCHEMA_META[key] ?? {
+    label: key.slice(ABSTRACTION_PREFIX.length).replace(/(^|\/)(\w)/g, (_, s, c) => s + c.toUpperCase()) || key,
+    icon: TagIcon,
+  }
+}
+
 function groupBitmaps(keys: string[]): Map<string, string[]> {
   const groups = new Map<string, string[]>()
   for (const key of keys) {
@@ -638,6 +658,59 @@ function ModeControl({ mode, onSet }: { mode: FeatureMode; onSet: (m: FeatureMod
   )
 }
 
+// Big, tap-friendly document-type picker. Each tile cycles its filter mode
+// (off → any → all → not) like the rows below, but with an icon + label and a
+// mode badge, so the most-used filter is easy to hit — especially on mobile.
+function SchemaTypePicker({
+  keys,
+  modeOf,
+  onCycle,
+}: {
+  keys: string[]
+  modeOf: (key: string) => FeatureMode
+  onCycle: (key: string) => void
+}) {
+  if (!keys.length) return null
+  return (
+    <div>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+        Document types
+      </p>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {keys.map((key) => {
+          const { label, icon: Icon } = schemaMeta(key)
+          const mode = modeOf(key)
+          const badge = MODE_OPTS.find((o) => o.m === mode)
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => onCycle(key)}
+              title={`${key} — ${mode === 'off' ? 'tap to filter' : mode}`}
+              className={cn(
+                'relative flex flex-col items-center justify-center gap-1.5 rounded-lg border p-3 min-h-[4.5rem] transition-colors select-none',
+                mode === 'off'
+                  ? 'border-border bg-muted/40 text-foreground hover:bg-muted'
+                  : mode === 'anyOf' ? 'border-blue-500 bg-blue-500/10 text-foreground'
+                  : mode === 'allOf' ? 'border-emerald-500 bg-emerald-500/10 text-foreground'
+                  : 'border-rose-500 bg-rose-500/10 text-foreground',
+              )}
+            >
+              {badge && (
+                <span className={cn('absolute right-1.5 top-1.5 rounded px-1 py-0.5 text-[9px] font-semibold leading-none', badge.on)}>
+                  {badge.label}
+                </span>
+              )}
+              <Icon className="h-5 w-5 text-muted-foreground" />
+              <span className="text-xs font-medium leading-none">{label}</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function FeaturesTab() {
   const { state, setFeatureMode, clearFilters, hasActiveFilters, deleteBitmap } = useToolbox()
   const { availableBitmaps, bitmapsLoading, filters } = state
@@ -682,7 +755,13 @@ function FeaturesTab() {
 
   const q = search.trim().toLowerCase()
   const filtered = q ? availableBitmaps.filter(k => k.toLowerCase().includes(q)) : availableBitmaps
-  const groups = groupBitmaps(filtered)
+  // Pull the document-type schemas out into the prominent picker; group the rest.
+  const schemaKeys = filtered.filter(k => k.startsWith(ABSTRACTION_PREFIX)).sort((a, b) => {
+    const order = Object.keys(SCHEMA_META)
+    const ia = order.indexOf(a), ib = order.indexOf(b)
+    return (ia === -1 ? order.length : ia) - (ib === -1 ? order.length : ib) || a.localeCompare(b)
+  })
+  const groups = groupBitmaps(filtered.filter(k => !k.startsWith(ABSTRACTION_PREFIX)))
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -711,7 +790,12 @@ function FeaturesTab() {
 
       {/* Scrollable list */}
       <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5">
-        {groups.size === 0 ? (
+        <SchemaTypePicker
+          keys={schemaKeys}
+          modeOf={modeOf}
+          onCycle={(key) => setFeatureMode(key, nextMode(modeOf(key)))}
+        />
+        {groups.size === 0 && schemaKeys.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-6">No matches</p>
         ) : (
           Array.from(groups.entries()).map(([prefix, keys]) => (

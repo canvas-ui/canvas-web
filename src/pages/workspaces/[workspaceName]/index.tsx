@@ -34,7 +34,7 @@ import {
   listBackendDocuments,
   backendAddressFromTreePath,
 } from '@/services/workspace';
-import { Document, TreeNode, buildDatetimeFilters } from '@/types/workspace';
+import { Document, TreeNode, buildDatetimeFilters, DEFAULT_TOOLBOX_SORT } from '@/types/workspace';
 import { sanitizeUrlPath, buildWorkspaceUrl } from '@/utils/url-params';
 import { useToolbox } from '@/components/toolbox/toolbox-context';
 import { cn } from '@/lib/utils';
@@ -125,7 +125,7 @@ export default function WorkspaceDetailPage() {
   const tbAnyOf = toolboxState.filters.features.anyOf;
   const tbNoneOf = toolboxState.filters.features.noneOf;
   const tbDatetimeFilters = buildDatetimeFilters(toolboxState.filters.timeline);
-  const tbSort = toolboxState.filters.sort;
+  const tbSort = toolboxState.filters.sort ?? DEFAULT_TOOLBOX_SORT;
   const tbFiltersKey = JSON.stringify({ a: tbAllOf, b: tbAnyOf, c: tbNoneOf, d: tbDatetimeFilters, s: tbSort });
 
   // Path and tree from URL segments; UI state from query params
@@ -865,6 +865,7 @@ export default function WorkspaceDetailPage() {
       onSelectionChange={setLeftSelection}
       selectedCount={leftSelection.length}
       onUrlClick={() => openM2Drawer('workspaces', 'detail', workspaceName ?? null)}
+      onUrlSubmit={(p) => navigate(buildWorkspaceUrl(workspaceName!, sanitizeUrlPath('/' + p), selectedTreeName))}
       scope={docScope}
       onScopeChange={setDocScope}
       pastedDocumentIds={clipboard?.documentIds}
