@@ -44,17 +44,22 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
     )
   }
   return (
-    <div className="space-y-3">
+    // Fill the host's definite height (modal/side card) as a flex column: the
+    // renderer gets a flex-1 scroll area, so height-filling viewers (PDF) can be
+    // h-full and long content scrolls, while the Edit button / comment stay put.
+    <div className="flex h-full min-h-0 flex-col gap-3">
       {canEdit && (
-        <div className="flex justify-end">
+        <div className="flex shrink-0 justify-end">
           <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
             <Pencil className="mr-1 h-3 w-3" /> Edit
           </Button>
         </div>
       )}
-      <DocumentRenderer workspaceId={workspaceId} document={document} />
+      <div className="min-h-0 flex-1 overflow-auto">
+        <DocumentRenderer workspaceId={workspaceId} document={document} />
+      </div>
       {document.comment?.trim() && (
-        <div className="rounded-md border border-border bg-muted/40 px-3 py-2">
+        <div className="shrink-0 rounded-md border border-border bg-muted/40 px-3 py-2">
           <p className="text-xs font-medium text-muted-foreground mb-0.5">Comment</p>
           <p className="text-sm whitespace-pre-wrap">{document.comment}</p>
         </div>

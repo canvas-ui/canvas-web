@@ -50,7 +50,9 @@ export function ImageRenderer({ workspaceId, document: doc, className = '' }: Re
     <MediaShell error={error} loading={loading}>
       {blobUrl && (
         <div className={`space-y-2 ${className}`}>
-          <img src={blobUrl} alt={filename} className="max-h-[70vh] max-w-full rounded border" />
+          {/* Fill the width of the (possibly maximized) modal/preview area,
+              keeping aspect via h-auto. */}
+          <img src={blobUrl} alt={filename} className="w-full h-auto rounded border" />
           <button
             type="button"
             onClick={downloadOriginal}
@@ -89,7 +91,9 @@ export function PdfRenderer({ workspaceId, document, className = '' }: RendererP
   const filename = getLocationFilename(document) || `document-${document.id}`
   return (
     <MediaShell error={error} loading={loading}>
-      {blobUrl && <iframe src={blobUrl} className={`w-full h-[70vh] border rounded ${className}`} title={filename} />}
+      {/* Fill the free height of the (definite-height) preview area; min-h keeps
+          it usable when the host isn't height-constrained. */}
+      {blobUrl && <iframe src={blobUrl} className={`w-full h-full min-h-[300px] border rounded ${className}`} title={filename} />}
     </MediaShell>
   )
 }

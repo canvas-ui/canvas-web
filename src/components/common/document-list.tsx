@@ -1552,9 +1552,11 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
           </div>
         </div>
       ) : view === 'map' ? (
-        // `relative` + the map's `absolute inset-0` sidesteps the percentage-
-        // height-in-flex gotcha (the map has no intrinsic height like tiles do).
-        <div className="relative flex-1 min-h-0">
+        // The map has no intrinsic height (its children are absolute) and the
+        // list often sits in a block scroll container where `flex-1` is inert —
+        // so give it a definite height (capped to the parent when that IS sized,
+        // e.g. inside a canvas widget) and let the map fill it via absolute.
+        <div className="relative h-[70vh] max-h-full min-h-[320px]">
           <DocumentMap documents={filteredDocuments} onOpen={(doc) => setDetailModal({ document: doc })} />
         </div>
       ) : view === 'tile' ? (
