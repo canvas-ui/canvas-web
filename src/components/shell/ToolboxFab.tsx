@@ -24,10 +24,12 @@ export function ToolboxFab() {
         isOpen ? 'bg-primary text-primary-foreground' : 'bg-zinc-900 text-white hover:bg-zinc-800',
       )}
     >
-      {/* Placeholder mark — a big round dot in currentColor (white on the
-          black button, primary-foreground when open). Swap for a real
-          symmetric logo later. */}
-      <span className="h-7 w-7 rounded-full bg-current" />
+      {/* Brand mark — a "·|" glyph echoing the canvas icon (a dot beside an
+          upright bar). currentColor so it inverts with the button state. */}
+      <span className="flex items-center gap-1.5" aria-hidden>
+        <span className="h-2 w-2 rounded-full bg-current" />
+        <span className="h-7 w-[3px] rounded-full bg-current" />
+      </span>
     </button>
   )
 }

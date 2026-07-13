@@ -669,7 +669,8 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
   const tabUrl = isTabDocument ? document.data.url : null
   const isImage = isImageDocument(document)
   const display = getDocumentDisplayInfo(document)
-  const { blobUrl, loading } = useDocumentThumbnail(workspaceId ?? '', document.id, 512, { enabled: isImage })
+  // 768px render keeps the larger (300px column, retina) photo tiles crisp.
+  const { blobUrl, loading } = useDocumentThumbnail(workspaceId ?? '', document.id, 768, { enabled: isImage })
 
   const handleClick = (e: React.MouseEvent) => {
     const isCtrlClick = e.ctrlKey || e.metaKey
@@ -1546,8 +1547,9 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
       ) : view === 'tile' ? (
         <div className="flex-1 overflow-y-auto" onContextMenu={handleEmptyAreaRightClick}>
           {/* Masonry via CSS columns: image tiles keep their natural aspect,
-              so column heights interleave into a mosaic. */}
-          <div className="columns-[160px] gap-3 pr-2">
+              so column heights interleave into a 500px-style mosaic. Wide
+              columns (fewer per row) make photos read big, like a feed. */}
+          <div className="columns-[300px] gap-3 pr-2">
             {filteredDocuments.map((document) => (
               <DocumentTile key={document.id} document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onRemoveDocument={removeDocument} onDeleteDocument={onDeleteDocument} onLinkDocument={canLink ? (id) => setLinkPanelIds([id]) : undefined} onOpenToSide={openToSide} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
             ))}

@@ -1,6 +1,15 @@
+import { useState } from 'react'
+import { Download } from 'lucide-react'
 import { useDocumentBlobUrl } from './useDocumentBlobUrl'
+import { useDocumentThumbnail } from './useDocumentThumbnail'
+import { useDocumentContent } from './public-share'
 import { getLocationFilename } from '@/lib/document-display'
 import type { RendererProps } from './types'
+
+// Preview cap: a server-downscaled render (same sharp pipeline as thumbnails),
+// so opening a 7MP photo no longer streams the full original — that stays one
+// click away via "Download original".
+const IMAGE_PREVIEW_SIZE = 1600
 
 // Small blob-backed media renderers. Kept together — they share the exact
 // fetch/loading/error skeleton and differ only in the final element.
@@ -11,12 +20,48 @@ function MediaShell({ error, loading, children }: { error: string | null; loadin
   return <>{children}</>
 }
 
-export function ImageRenderer({ workspaceId, document, className = '' }: RendererProps) {
-  const { blobUrl, error, loading } = useDocumentBlobUrl(workspaceId, document.id)
-  const filename = getLocationFilename(document) || `document-${document.id}`
+export function ImageRenderer({ workspaceId, document: doc, className = '' }: RendererProps) {
+  // Downscaled preview (falls back to full bytes only if no thumbnail exists).
+  const { blobUrl, error, loading } = useDocumentThumbnail(workspaceId, doc.id, IMAGE_PREVIEW_SIZE)
+  const { fetchBlob } = useDocumentContent(workspaceId)
+  const filename = getLocationFilename(doc) || `document-${doc.id}`
+  const [downloading, setDownloading] = useState(false)
+
+  // Fetch the FULL original only on demand, then trigger a browser download.
+  // Share-aware (fetchBlob) so it works on public canvases too.
+  const downloadOriginal = async () => {
+    setDownloading(true)
+    try {
+      const { blob } = await fetchBlob(doc.id)
+      const url = URL.createObjectURL(blob)
+      const a = window.document.createElement('a')
+      a.href = url
+      a.download = filename
+      window.document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 30_000)
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   return (
     <MediaShell error={error} loading={loading}>
-      {blobUrl && <img src={blobUrl} alt={filename} className={`max-h-[70vh] max-w-full border rounded ${className}`} />}
+      {blobUrl && (
+        <div className={`space-y-2 ${className}`}>
+          <img src={blobUrl} alt={filename} className="max-h-[70vh] max-w-full rounded border" />
+          <button
+            type="button"
+            onClick={downloadOriginal}
+            disabled={downloading}
+            className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+          >
+            <Download className="h-3.5 w-3.5" />
+            {downloading ? 'Preparing…' : 'Download original'}
+          </button>
+        </div>
+      )}
     </MediaShell>
   )
 }
