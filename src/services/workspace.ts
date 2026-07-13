@@ -367,8 +367,13 @@ export async function createWorkspaceCanvas(workspaceId: string, path: string, t
 // Persist a canvas' UI state (widget layout + config) into its layer metadata.
 // The caller passes the full, already-merged metadata object so sibling keys
 // (e.g. metadata.toolbox) are preserved regardless of server merge semantics.
-export async function saveCanvasUi(workspaceId: string, path: string, treeName: string, metadata: Record<string, unknown>): Promise<boolean> {
-  await api.patch(getWorkspaceTreePathRoute(workspaceId, treeName, path), { metadata })
+// `querySpec` is optional: pass it to bake a widget-configured view order (sort)
+// into the canvas so the frozen view — folder listing and public shares — sorts
+// the same way. Omit to leave the stored querySpec untouched.
+export async function saveCanvasUi(workspaceId: string, path: string, treeName: string, metadata: Record<string, unknown>, querySpec?: Record<string, unknown>): Promise<boolean> {
+  const body: Record<string, unknown> = { metadata }
+  if (querySpec) body.querySpec = querySpec
+  await api.patch(getWorkspaceTreePathRoute(workspaceId, treeName, path), body)
   return true
 }
 

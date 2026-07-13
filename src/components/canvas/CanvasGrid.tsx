@@ -8,6 +8,7 @@ import './canvas-grid.css'
 import './widgets'
 import { getWidget, listWidgets } from './widget-registry'
 import { WidgetFrame } from './WidgetFrame'
+import { DEFAULT_TIMELINE_SORT, type TimelineSort } from './widgets/sort-control'
 import type { WidgetCanvasContext, WidgetConfig, WidgetDocumentsResult, WidgetFetchOpts } from './widget-types'
 import { saveCanvasUi, getCanvasPathDocuments } from '@/services/workspace'
 import type { CanvasQuerySpec, Document, LayerMetadata } from '@/types/workspace'
@@ -134,6 +135,11 @@ export function CanvasGrid({
   const [saveError, setSaveError] = useState<string | null>(null)
   const [rowHeight, setRowHeight] = useState(MIN_ROW_HEIGHT)
   const [isNarrow, setIsNarrow] = useState(false)
+  // Canvas-level view order. Seeded from the stored querySpec so widgets show
+  // the baked sort; edited via a widget's sort control and persisted back into
+  // querySpec.sort on Save (only when actually touched → sortDirtyRef).
+  const [canvasSort, setCanvasSortState] = useState<TimelineSort>(() => querySpec?.sort ?? DEFAULT_TIMELINE_SORT)
+  const sortDirtyRef = useRef(false)
   const gridHostRef = useRef<HTMLDivElement>(null)
 
   const latest = useRef<CanvasUi>({ layout: initial.layout, widgets: initial.widgets })
@@ -151,6 +157,8 @@ export function CanvasGrid({
     setLayout(next.layout)
     setWidgets(next.widgets)
     latest.current = next
+    setCanvasSortState(querySpec?.sort ?? DEFAULT_TIMELINE_SORT)
+    sortDirtyRef.current = false
     setIsDirty(false)
   }, [path, layerId])
 
@@ -185,6 +193,12 @@ export function CanvasGrid({
     return () => observer.disconnect()
   }, [layout])
 
+  const setCanvasSort = useCallback((sort: TimelineSort) => {
+    setCanvasSortState(sort)
+    sortDirtyRef.current = true
+    setIsDirty(true)
+  }, [])
+
   const canvas: WidgetCanvasContext = useMemo(
     () => ({
       workspaceId,
@@ -193,12 +207,14 @@ export function CanvasGrid({
       layerId,
       querySpec,
       readOnly: !editable,
+      canvasSort,
+      setCanvasSort: editable ? setCanvasSort : undefined,
       fetchDocuments: fetchDocuments ?? (async (opts) => {
         const res = await getCanvasPathDocuments(workspaceId, path, treeName, opts)
         return { payload: (res.payload as Document[]) || [], count: res.count, totalCount: res.totalCount }
       }),
     }),
-    [workspaceId, treeName, path, layerId, querySpec, editable, fetchDocuments],
+    [workspaceId, treeName, path, layerId, querySpec, editable, fetchDocuments, canvasSort, setCanvasSort],
   )
 
   const markDirty = useCallback((nextLayout: CanvasLayoutItem[], nextWidgets: WidgetMap) => {
@@ -220,7 +236,14 @@ export function CanvasGrid({
         layout: inferFillFlags(latest.current.layout, latest.current.layout),
       }
       latest.current = ui
-      await saveCanvasUi(workspaceId, path, treeName, { ...(metadata || {}), ui })
+      // Bake a widget-changed view order into the canvas querySpec so the frozen
+      // view (folder listing + public shares) sorts identically. Only send it
+      // when touched, to avoid clobbering a folder-view-saved sort.
+      const nextQuerySpec = sortDirtyRef.current
+        ? { ...(querySpec || {}), sort: canvasSort.sortBy ? canvasSort : null }
+        : undefined
+      await saveCanvasUi(workspaceId, path, treeName, { ...(metadata || {}), ui }, nextQuerySpec)
+      sortDirtyRef.current = false
       setIsDirty(false)
       window.dispatchEvent(new CustomEvent('workspace:tree:refresh', {
         detail: { workspaceName: workspaceId, treeName },
@@ -233,7 +256,7 @@ export function CanvasGrid({
     } finally {
       setIsSaving(false)
     }
-  }, [editable, isSaving, workspaceId, path, treeName, metadata, onSaved])
+  }, [editable, isSaving, workspaceId, path, treeName, metadata, onSaved, querySpec, canvasSort])
 
   const handleLayoutChange = useCallback((next: Layout[]) => {
     // Never persist the derived stacked (narrow) layout over the saved grid.

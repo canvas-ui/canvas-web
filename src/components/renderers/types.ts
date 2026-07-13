@@ -14,6 +14,7 @@ export const LINK_SCHEMA = 'data/abstraction/link'
 export const TAB_SCHEMA = 'data/abstraction/tab'
 export const FILE_SCHEMA = 'data/abstraction/file'
 export const EMAIL_SCHEMA = 'data/abstraction/email'
+export const TODO_SCHEMA = 'data/abstraction/todo'
 
 export type MimeKind = 'image' | 'audio' | 'video' | 'pdf' | 'text' | 'markdown' | 'binary'
 

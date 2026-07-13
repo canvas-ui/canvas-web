@@ -47,7 +47,8 @@ export function useCanvasImages(canvas: WidgetCanvasContext, pageSize: number): 
   const [error, setError] = useState<string | null>(null)
   const [input, setInput] = useState('')
   const [activeQueries, setActiveQueries] = useState<string[]>([])
-  const [sort, setSort] = useState<TimelineSort>(DEFAULT_TIMELINE_SORT)
+  // View order is canvas-level (bakes into querySpec on Save), not hook-local.
+  const sort = canvas.canvasSort ?? DEFAULT_TIMELINE_SORT
 
   useEffect(() => {
     let cancelled = false
@@ -99,9 +100,9 @@ export function useCanvasImages(canvas: WidgetCanvasContext, pageSize: number): 
   }, [])
 
   const changeSort = useCallback((next: TimelineSort) => {
-    setSort(next)
+    canvas.setCanvasSort?.(next)
     setPage(1)
-  }, [])
+  }, [canvas])
 
   const totalPages = useMemo(
     () => Math.max(1, Math.ceil(totalCount / pageSize)),

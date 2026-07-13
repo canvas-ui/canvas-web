@@ -18,7 +18,9 @@ function DocumentsTableWidget({ config, canvas }: WidgetProps) {
   const [totalCount, setTotalCount] = useState(0)
   const [currentPage, setCurrentPage] = useState(1)
   const [isLoading, setIsLoading] = useState(true)
-  const [sort, setSort] = useState<TimelineSort>(DEFAULT_TIMELINE_SORT)
+  // View order is a canvas-level property (bakes into querySpec on Save), not
+  // widget-local — so changing it here and saving sorts the public canvas too.
+  const sort = canvas.canvasSort ?? DEFAULT_TIMELINE_SORT
   // Free-text terms only — never a spec — so canvas search stays scoped to
   // the path server-side (see WidgetFetchOpts). A stack: each submitted term
   // refines (narrows) the previous result set; the last one ranks.
@@ -49,7 +51,7 @@ function DocumentsTableWidget({ config, canvas }: WidgetProps) {
     return () => { cancelled = true }
   }, [canvas, pageSize, currentPage, sort.sortBy, sort.order, activeQueries])
 
-  const changeSort = useCallback((next: TimelineSort) => { setSort(next); setCurrentPage(1) }, [])
+  const changeSort = useCallback((next: TimelineSort) => { canvas.setCanvasSort?.(next); setCurrentPage(1) }, [canvas])
   const runSearch = useCallback((q: string) => {
     const term = q.trim()
     if (!term) return

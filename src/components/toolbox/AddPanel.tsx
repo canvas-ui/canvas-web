@@ -1,11 +1,12 @@
 import { useCallback, useRef, useState } from 'react'
-import { X, StickyNote, Link as LinkIcon, Upload, Camera, Plus, Pencil, FileSearch, FolderPlus } from 'lucide-react'
+import { X, StickyNote, Link as LinkIcon, Upload, Camera, Plus, Pencil, FileSearch, FolderPlus, ListTodo } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { InsertMenu } from '@/components/common/insert-menu'
 import { useToolbox, type AddKind } from './toolbox-context'
 import { NoteForm } from './add/NoteForm'
 import { LinkForm } from './add/LinkForm'
+import { TodoForm } from './add/TodoForm'
 import { FileForm } from './add/FileForm'
 import { FolderForm } from './add/FolderForm'
 import { ExistingDocsForm } from './add/ExistingDocsForm'
@@ -19,6 +20,7 @@ const MAX_WIDTH = 560
 const TITLES: Record<AddKind, { label: string; icon: typeof StickyNote }> = {
   note: { label: 'New Note', icon: StickyNote },
   link: { label: 'New Link', icon: LinkIcon },
+  todo: { label: 'New Todo', icon: ListTodo },
   file: { label: 'Add Files', icon: Upload },
   photo: { label: 'Photo/Video', icon: Camera },
   existing: { label: 'Add Existing', icon: FileSearch },
@@ -118,6 +120,7 @@ export function AddPanel() {
         {!isEditMode && isPicker && <InsertMenu onSelect={openAdd} />}
         {!isEditMode && addKind === 'note' && <NoteForm />}
         {!isEditMode && addKind === 'link' && <LinkForm />}
+        {!isEditMode && addKind === 'todo' && <TodoForm />}
         {!isEditMode && addKind === 'file' && <FileForm />}
         {!isEditMode && addKind === 'photo' && <FileForm capture />}
         {!isEditMode && addKind === 'existing' && <ExistingDocsForm />}

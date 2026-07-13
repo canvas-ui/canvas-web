@@ -38,6 +38,12 @@ export interface WidgetCanvasContext {
   querySpec?: CanvasQuerySpec
   readOnly?: boolean
   fetchDocuments: (opts?: WidgetFetchOpts) => Promise<WidgetDocumentsResult>
+  // Canvas-level view order (timeline sort). A widget's sort control edits THIS
+  // (not local state) so it bakes into the canvas querySpec on Save — the frozen
+  // view then sorts identically for the folder view and public shares.
+  // `setCanvasSort` is absent on read-only canvases.
+  canvasSort?: { sortBy: string; order: 'asc' | 'desc' }
+  setCanvasSort?: (sort: { sortBy: string; order: 'asc' | 'desc' }) => void
 }
 
 export type WidgetConfig = Record<string, unknown>

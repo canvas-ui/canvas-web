@@ -3,7 +3,7 @@ import { getLocationFilename } from '@/lib/document-display'
 import type { Document } from '@/types/workspace'
 import {
   classifyMime, youTubeVideoId,
-  NOTE_SCHEMA, EMAIL_SCHEMA, FILE_SCHEMA, LINK_SCHEMA, TAB_SCHEMA,
+  NOTE_SCHEMA, EMAIL_SCHEMA, FILE_SCHEMA, LINK_SCHEMA, TAB_SCHEMA, TODO_SCHEMA,
   type RendererProps,
 } from './types'
 import { ImageRenderer, AudioRenderer, VideoRenderer, PdfRenderer } from './media'
@@ -11,6 +11,7 @@ import { PlaintextRenderer, MarkdownRenderer } from './text'
 import { YouTubeEmbed } from './YouTubeEmbed'
 import { UrlPdfRenderer, isPdfUrl } from './UrlPdfRenderer'
 import { LinkCardRenderer } from './LinkCardRenderer'
+import { TodoRenderer } from './TodoRenderer'
 import { EmailRenderer } from './EmailRenderer'
 import { BinaryFallback } from './BinaryFallback'
 
@@ -21,6 +22,7 @@ import { BinaryFallback } from './BinaryFallback'
 export function resolveRenderer(document: Document): ComponentType<RendererProps> | null {
   const schema = document.schema
   if (schema === NOTE_SCHEMA) return MarkdownRenderer
+  if (schema === TODO_SCHEMA) return TodoRenderer
   if (schema === EMAIL_SCHEMA) return EmailRenderer
   if (schema === TAB_SCHEMA || schema === LINK_SCHEMA) {
     const url = String(document.data?.url ?? document.data?.uri ?? '')

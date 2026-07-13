@@ -7,11 +7,13 @@ import { TagInput } from '@/components/toolbox/add/TagInput'
 import { tagsToFeatures, featuresToTags } from '@/components/toolbox/add/tags'
 import { updateWorkspaceDocument, listWorkspaceTagSuggestions } from '@/services/workspace'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
-import { NOTE_SCHEMA, LINK_SCHEMA, TAB_SCHEMA } from '@/components/renderers/types'
+import { NOTE_SCHEMA, LINK_SCHEMA, TAB_SCHEMA, TODO_SCHEMA } from '@/components/renderers/types'
+import { TodoFields } from '@/components/toolbox/add/TodoFields'
+import { buildTodoData, isoToLocalInput, todayEndOfDayLocal, type TodoStatus } from '@/components/toolbox/add/useTodoFields'
 import type { Document } from '@/types/workspace'
 
 export function isEditableSchema(schema: string): boolean {
-  return schema === NOTE_SCHEMA || schema === LINK_SCHEMA || schema === TAB_SCHEMA
+  return schema === NOTE_SCHEMA || schema === LINK_SCHEMA || schema === TAB_SCHEMA || schema === TODO_SCHEMA
 }
 
 // Per-schema field mapping for the url/title pair. Legacy links store these as
@@ -32,11 +34,17 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
   // including photos/files that are otherwise not editable.
   const editable = isEditableSchema(doc.schema)
   const isNote = doc.schema === NOTE_SCHEMA
+  const isTodo = doc.schema === TODO_SCHEMA
   const { urlKey, titleKey } = urlTitleKeys(doc.schema)
 
   const [url, setUrl] = useState<string>(urlKey ? String(doc.data?.[urlKey] ?? '') : '')
   const [title, setTitle] = useState<string>(String(doc.data?.[titleKey] ?? ''))
   const [content, setContent] = useState<string>(String(doc.data?.content ?? ''))
+  // Todo-specific fields (seeded from the document; dueDate ISO → local input).
+  const [description, setDescription] = useState<string>(String(doc.data?.description ?? ''))
+  const [status, setStatus] = useState<TodoStatus>((doc.data?.status as TodoStatus) ?? 'pending')
+  const [priority, setPriority] = useState<number | ''>(typeof doc.data?.priority === 'number' ? doc.data.priority : '')
+  const [due, setDue] = useState<string>(doc.data?.dueDate ? isoToLocalInput(String(doc.data.dueDate)) : todayEndOfDayLocal())
   const [comment, setComment] = useState<string>(String(doc.comment ?? ''))
   const [tags, setTags] = useState<string[]>(
     featuresToTags((doc.metadata as Record<string, unknown>)?.features as string[] | undefined).length
@@ -54,7 +62,7 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
 
   const urlValid = !urlKey || (() => { try { new URL(url.trim()); return true } catch { return false } })()
   // Non-editable schemas (photos/files) save comment-only, so they're always valid.
-  const canSave = !saving && (!editable ? true : (isNote ? content.trim().length > 0 : urlValid))
+  const canSave = !saving && (!editable ? true : (isTodo ? title.trim().length > 0 : (isNote ? content.trim().length > 0 : urlValid)))
 
   const handleSave = async () => {
     setSaving(true)
@@ -70,7 +78,11 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
       }
       // Only send data/metadata for editable schemas — sending `data` would
       // wholesale-replace it (BaseDocument.update), clobbering a photo/file's data.
-      if (editable) {
+      if (isTodo) {
+        // Preserve other data fields (e.g. completedAt) while updating the
+        // editable ones; leave metadata untouched (no tags on todos here).
+        payload.data = { ...doc.data, ...buildTodoData({ title, description, status, priority, due }) }
+      } else if (editable) {
         const cleanTags = tags.map(t => t.trim()).filter(Boolean)
         let data: Record<string, unknown>
         if (isNote) {
@@ -105,7 +117,18 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
         </div>
       )}
 
-      {editable && (
+      {editable && isTodo && (
+        <TodoFields
+          idPrefix="edit-todo"
+          title={title} setTitle={setTitle}
+          description={description} setDescription={setDescription}
+          status={status} setStatus={setStatus}
+          priority={priority} setPriority={setPriority}
+          due={due} setDue={setDue}
+        />
+      )}
+
+      {editable && !isTodo && (
         <div className="space-y-1.5">
           <Label htmlFor="edit-title">Title</Label>
           <Input id="edit-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={isNote ? "Optional — defaults to today's date" : 'Optional display title'} />
@@ -119,7 +142,7 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
         </div>
       )}
 
-      {editable && (
+      {editable && !isTodo && (
         <div className="space-y-1.5">
           <Label>Tags</Label>
           <TagInput tags={tags} onChange={setTags} suggestions={suggestions} />
