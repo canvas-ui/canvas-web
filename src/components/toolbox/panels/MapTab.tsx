@@ -39,27 +39,35 @@ export function MapTab() {
     }).addTo(map)
     mapRef.current = map
 
-    // Drag-to-draw rectangle. Only active while `drawing`; dragging is disabled
-    // then (toggled in a separate effect) so the drag draws instead of pans.
+    // Drag-to-draw rectangle. Uses POINTER events on the map container so it
+    // works for both mouse and touch (leaflet's `mousedown`/`mousemove` map
+    // events don't fire for touch drags — that broke selection on mobile/PWA).
+    // Dragging is disabled while `drawing` (toggled in a separate effect) so the
+    // gesture draws instead of panning.
+    const container = map.getContainer()
     let start: L.LatLng | null = null
     let temp: L.Rectangle | null = null
     const clearTemp = () => { if (temp) { temp.remove(); temp = null } }
-    const onDown = (e: L.LeafletMouseEvent) => {
+    const onDown = (ev: PointerEvent) => {
       if (!drawingRef.current) return
-      start = e.latlng
+      ev.preventDefault()
+      start = map.mouseEventToLatLng(ev)
       clearTemp()
+      try { container.setPointerCapture(ev.pointerId) } catch { /* ignore */ }
     }
-    const onMove = (e: L.LeafletMouseEvent) => {
+    const onMove = (ev: PointerEvent) => {
       if (!drawingRef.current || !start) return
-      const bounds = L.latLngBounds(start, e.latlng)
+      ev.preventDefault()
+      const bounds = L.latLngBounds(start, map.mouseEventToLatLng(ev))
       if (!temp) temp = L.rectangle(bounds, SELECT_STYLE).addTo(map)
       else temp.setBounds(bounds)
     }
-    const onUp = (e: L.LeafletMouseEvent) => {
+    const onUp = (ev: PointerEvent) => {
       if (!drawingRef.current || !start) return
-      const bounds = L.latLngBounds(start, e.latlng)
+      const bounds = L.latLngBounds(start, map.mouseEventToLatLng(ev))
       start = null
       clearTemp()
+      try { container.releasePointerCapture(ev.pointerId) } catch { /* ignore */ }
       const sw = bounds.getSouthWest()
       const ne = bounds.getNorthEast()
       if (sw.lat !== ne.lat && sw.lng !== ne.lng) {
@@ -70,11 +78,18 @@ export function MapTab() {
       }
       setDrawing(false)
     }
-    map.on('mousedown', onDown)
-    map.on('mousemove', onMove)
-    map.on('mouseup', onUp)
+    container.addEventListener('pointerdown', onDown)
+    container.addEventListener('pointermove', onMove)
+    container.addEventListener('pointerup', onUp)
+    container.addEventListener('pointercancel', onUp)
 
-    return () => { map.remove(); mapRef.current = null; selectionRef.current = null }
+    return () => {
+      container.removeEventListener('pointerdown', onDown)
+      container.removeEventListener('pointermove', onMove)
+      container.removeEventListener('pointerup', onUp)
+      container.removeEventListener('pointercancel', onUp)
+      map.remove(); mapRef.current = null; selectionRef.current = null
+    }
   }, [setGeoBBox])
 
   // ── Keep the map sized to its (resizable) container ────────────────────────
@@ -93,8 +108,16 @@ export function MapTab() {
     drawingRef.current = drawing
     const map = mapRef.current
     if (!map) return
-    if (drawing) { map.dragging.disable(); map.getContainer().style.cursor = 'crosshair' }
-    else { map.dragging.enable(); map.getContainer().style.cursor = '' }
+    const el = map.getContainer()
+    if (drawing) {
+      map.dragging.disable(); map.touchZoom.disable(); map.doubleClickZoom.disable()
+      el.style.cursor = 'crosshair'
+      el.style.touchAction = 'none' // let the pointer draw instead of scroll/zoom
+    } else {
+      map.dragging.enable(); map.touchZoom.enable(); map.doubleClickZoom.enable()
+      el.style.cursor = ''
+      el.style.touchAction = ''
+    }
   }, [drawing])
 
   // ── Reflect the current selection (from filter state) onto the map ─────────

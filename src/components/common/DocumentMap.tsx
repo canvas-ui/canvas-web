@@ -74,7 +74,7 @@ export function DocumentMap({ documents, onOpen }: { documents: Document[]; onOp
   const geoCount = documents.reduce((n, d) => n + (docGeo(d) ? 1 : 0), 0)
 
   return (
-    <div className="relative h-full w-full">
+    <div className="absolute inset-0">
       <div ref={containerRef} className="absolute inset-0" />
 
       {/* Located-count badge */}

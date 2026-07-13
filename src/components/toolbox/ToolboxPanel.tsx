@@ -110,11 +110,10 @@ export function ToolboxPanel() {
           filtered (workspace/context accent); default border when none (→ black
           once a global section exists). */}
       <div
-        className={cn(
-          'flex h-12 shrink-0 items-center justify-between gap-1 px-2',
-          // 3px to match the content header's accent underline width.
-          activeAccentColor ? 'border-b-[3px]' : 'border-b',
-        )}
+        // Always 3px (matches the content header's accent underline); only the
+        // colour varies — the content accent when there is one, else the default
+        // border colour (e.g. a white/no-accent workspace like Universe).
+        className="flex h-12 shrink-0 items-center justify-between gap-1 border-b-[3px] px-2"
         style={activeAccentColor ? { borderBottomColor: activeAccentColor } : undefined}
       >
         <div className="flex items-center gap-1">

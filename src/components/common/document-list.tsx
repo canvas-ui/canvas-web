@@ -768,12 +768,13 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   const [isDragOver, setIsDragOver] = useState(false)
   const hasServerSearch = backendSearchQueries.length > 0
   const searchInputRef = useRef<HTMLInputElement>(null)
-  // Android/Gboard composes even latin text (autocorrect/suggestions). Writing
-  // the controlled value back mid-composition desyncs the IME and reverses/
-  // dupes characters ("lamp" → "pmal"), badly on slow devices where the
-  // heavy per-keystroke filter render widens the window. Hold the commit
-  // until composition ends; the DOM keeps the in-progress text meanwhile.
-  const composingRef = useRef(false)
+  // Clear both the filter state and the uncontrolled input's DOM value. The
+  // search box is uncontrolled (see the input) so programmatic clears must
+  // reset the element directly.
+  const resetSearchInput = useCallback(() => {
+    setSearchQuery('')
+    if (searchInputRef.current) searchInputRef.current.value = ''
+  }, [])
 
   // Autofocus the search box on the primary browsing surface (not in side
   // panes / canvas widgets, which would fight for focus). Desktop only —
@@ -814,13 +815,13 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     const q = searchQuery.trim()
     if (!q) return
     onBackendSearch(q)   // parent appends to the stack
-    setSearchQuery('')   // clear buffer for the next refinement
-  }, [onBackendSearch, searchQuery])
+    resetSearchInput()   // clear buffer for the next refinement
+  }, [onBackendSearch, searchQuery, resetSearchInput])
 
   const clearAllSearch = useCallback(() => {
-    setSearchQuery('')
+    resetSearchInput()
     if (onRemoveBackendQuery && backendSearchQueries.length > 0) onRemoveBackendQuery(-1) // clear all
-  }, [onRemoveBackendQuery, backendSearchQueries.length])
+  }, [onRemoveBackendQuery, backendSearchQueries.length, resetSearchInput])
       // Handle drag start for selected documents
   const handleMultiDragStart = useCallback((e: React.DragEvent, documentId: number) => {
     // Always ensure the dragged document is included
@@ -1138,10 +1139,14 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                 ref={searchInputRef}
                 type="text"
                 placeholder={onBackendSearch ? (hasServerSearch ? 'Refine: add another query (Enter)…' : 'Search documents (Enter for server search)…') : 'Search documents...'}
-                value={searchQuery}
-                onChange={(e) => { if (!composingRef.current) setSearchQuery(e.target.value) }}
-                onCompositionStart={() => { composingRef.current = true }}
-                onCompositionEnd={(e) => { composingRef.current = false; setSearchQuery(e.currentTarget.value) }}
+                // UNCONTROLLED (no `value` prop): the DOM owns the text while
+                // typing, so mobile IMEs (Gboard composes even latin text) aren't
+                // fought by a controlled write-back — that both broke typing and
+                // reversed characters. `searchQuery` state still mirrors it via
+                // onChange for filtering; programmatic clears reset the DOM via
+                // `resetSearchInput` (the ref).
+                defaultValue=""
+                onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={(e) => {
                   // Mobile: the keyboard covers the field (PWA standalone often
                   // doesn't auto-scroll it into view). Scroll it up once the
@@ -1535,7 +1540,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
             </p>
             {searchQuery && (
               <button
-                onClick={() => setSearchQuery('')}
+                onClick={resetSearchInput}
                 className="text-xs text-primary hover:text-primary/80 underline mt-1"
               >
                 Clear search
@@ -1547,7 +1552,9 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
           </div>
         </div>
       ) : view === 'map' ? (
-        <div className="flex-1 min-h-0">
+        // `relative` + the map's `absolute inset-0` sidesteps the percentage-
+        // height-in-flex gotcha (the map has no intrinsic height like tiles do).
+        <div className="relative flex-1 min-h-0">
           <DocumentMap documents={filteredDocuments} onOpen={(doc) => setDetailModal({ document: doc })} />
         </div>
       ) : view === 'tile' ? (
