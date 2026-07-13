@@ -47,18 +47,19 @@ function MosaicWidget({ config, canvas }: WidgetProps) {
   const pageSize = typeof config.pageSize === 'number' ? config.pageSize : 60
   const state = useCanvasImages(canvas, pageSize)
   const [lightbox, setLightbox] = useState<number | null>(null)
-  const { images, isLoading, error, activeQuery } = state
+  const { images, isLoading, error, activeQueries } = state
 
   return (
     <div className="flex h-full flex-col">
-      <ImageGridToolbar workspaceId={canvas.workspaceId} state={state} />
+      {/* See GalleryWidget: hide the authed/inert toolbar on read-only shares. */}
+      {!canvas.readOnly && <ImageGridToolbar workspaceId={canvas.workspaceId} state={state} />}
 
       <div className="flex-1 overflow-y-auto p-1">
         {error ? (
           <div className="p-4 text-sm text-destructive">{error}</div>
         ) : images.length === 0 ? (
           <div className="p-4 text-sm text-muted-foreground">
-            {isLoading ? 'Loading images…' : activeQuery ? 'No images match your search.' : "No images in this canvas' context."}
+            {isLoading ? 'Loading images…' : activeQueries.length ? 'No images match your search.' : "No images in this canvas' context."}
           </div>
         ) : (
           <div

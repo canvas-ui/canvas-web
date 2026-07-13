@@ -19,9 +19,10 @@ function DocumentsTableWidget({ config, canvas }: WidgetProps) {
   const [currentPage, setCurrentPage] = useState(1)
   const [isLoading, setIsLoading] = useState(true)
   const [sort, setSort] = useState<TimelineSort>(DEFAULT_TIMELINE_SORT)
-  // Single free-text term only — never a spec — so canvas search stays scoped
-  // to the path server-side (see WidgetFetchOpts).
-  const [activeQuery, setActiveQuery] = useState('')
+  // Free-text terms only — never a spec — so canvas search stays scoped to
+  // the path server-side (see WidgetFetchOpts). A stack: each submitted term
+  // refines (narrows) the previous result set; the last one ranks.
+  const [activeQueries, setActiveQueries] = useState<string[]>([])
 
   useEffect(() => {
     let cancelled = false
@@ -33,7 +34,7 @@ function DocumentsTableWidget({ config, canvas }: WidgetProps) {
           page: currentPage,
           sortBy: sort.sortBy,
           order: sort.order,
-          q: activeQuery || undefined,
+          queries: activeQueries.length ? activeQueries : undefined,
         })
         if (cancelled) return
         setDocuments(res.payload || [])
@@ -46,18 +47,34 @@ function DocumentsTableWidget({ config, canvas }: WidgetProps) {
     }
     load()
     return () => { cancelled = true }
-  }, [canvas, pageSize, currentPage, sort.sortBy, sort.order, activeQuery])
+  }, [canvas, pageSize, currentPage, sort.sortBy, sort.order, activeQueries])
 
   const changeSort = useCallback((next: TimelineSort) => { setSort(next); setCurrentPage(1) }, [])
-  const runSearch = useCallback((q: string) => { setActiveQuery(q.trim()); setCurrentPage(1) }, [])
-  const clearSearch = useCallback(() => { setActiveQuery(''); setCurrentPage(1) }, [])
+  const runSearch = useCallback((q: string) => {
+    const term = q.trim()
+    if (!term) return
+    setActiveQueries((prev) => (prev.includes(term) ? prev : [...prev, term]))
+    setCurrentPage(1)
+  }, [])
+  // index -1 = clear the whole stack (DocumentList convention).
+  const removeQuery = useCallback((index: number) => {
+    setActiveQueries((prev) => (index < 0 ? [] : prev.filter((_, i) => i !== index)))
+    setCurrentPage(1)
+  }, [])
+
+  // Read-only public shares are a preloaded snapshot: server sort/search are
+  // inert, and the sort control's timelines fetch hits an authed endpoint
+  // (401 → login bounce). Drop the interactive bits on read-only.
+  const readOnly = canvas.readOnly === true
 
   return (
     <div className="flex h-full flex-col">
-      <div className="canvas-no-drag flex items-center gap-2 border-b px-1 pb-2">
-        <span className="text-xs text-muted-foreground">Sort</span>
-        <TimelineSortControl workspaceId={canvas.workspaceId} value={sort} onChange={changeSort} />
-      </div>
+      {!readOnly && (
+        <div className="canvas-no-drag flex items-center gap-2 border-b px-1 pb-2">
+          <span className="text-xs text-muted-foreground">Sort</span>
+          <TimelineSortControl workspaceId={canvas.workspaceId} value={sort} onChange={changeSort} />
+        </div>
+      )}
       <div className="min-h-0 flex-1 overflow-auto">
         <DocumentList
           documents={documents}
@@ -71,9 +88,9 @@ function DocumentsTableWidget({ config, canvas }: WidgetProps) {
           currentPage={currentPage}
           pageSize={pageSize}
           onPageChange={setCurrentPage}
-          backendSearchQueries={activeQuery ? [activeQuery] : []}
-          onBackendSearch={runSearch}
-          onRemoveBackendQuery={clearSearch}
+          backendSearchQueries={activeQueries}
+          onBackendSearch={readOnly ? undefined : runSearch}
+          onRemoveBackendQuery={readOnly ? undefined : removeQuery}
         />
       </div>
     </div>

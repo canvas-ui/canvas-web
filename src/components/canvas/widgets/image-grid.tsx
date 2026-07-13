@@ -107,7 +107,8 @@ export function ImageGridToolbar({ workspaceId, state }: {
   workspaceId: string
   state: CanvasImages
 }) {
-  const { input, setInput, submit, clearSearch, activeQuery, sort, setSort, page, setPage, totalPages, totalCount, isLoading } = state
+  const { input, setInput, submit, clearSearch, removeQuery, activeQueries, sort, setSort, page, setPage, totalPages, totalCount, isLoading } = state
+  const hasSearch = activeQueries.length > 0
 
   return (
     <div className="canvas-no-drag flex flex-wrap items-center gap-2 border-b px-1 pb-2">
@@ -117,10 +118,10 @@ export function ImageGridToolbar({ workspaceId, state }: {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') submit() }}
-          placeholder="Search images (Enter)…"
+          placeholder={hasSearch ? 'Refine: add another query (Enter)…' : 'Search images (Enter)…'}
           className="h-7 w-full rounded-md border bg-background pl-7 pr-7 text-xs"
         />
-        {activeQuery && (
+        {hasSearch && (
           <button
             type="button"
             onClick={clearSearch}
@@ -131,6 +132,27 @@ export function ImageGridToolbar({ workspaceId, state }: {
           </button>
         )}
       </div>
+
+      {hasSearch && (
+        <div className="flex w-full flex-wrap items-center gap-1 order-last">
+          {activeQueries.map((term, i) => (
+            <span key={`${term}-${i}`} className="inline-flex items-center gap-1">
+              {i > 0 && <span className="text-[10px] uppercase text-muted-foreground">then</span>}
+              <span className="inline-flex items-center gap-1 rounded-full border bg-accent/50 px-2 py-0.5 text-xs">
+              <span className="max-w-[10rem] truncate">{term}</span>
+              <button
+                type="button"
+                onClick={() => removeQuery(i)}
+                title={`Remove "${term}"`}
+                className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3 w-3" />
+              </button>
+              </span>
+            </span>
+          ))}
+        </div>
+      )}
 
       <TimelineSortControl workspaceId={workspaceId} value={sort} onChange={setSort} />
 

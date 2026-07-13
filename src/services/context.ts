@@ -19,6 +19,8 @@ type PaginationOptions = {
   offset?: number;
   page?: number;
   q?: string;
+  /** Stacked refinement queries (repeated ?q=): each narrows the previous, last ranks. Wins over `q`. */
+  queries?: string[];
   anyOf?: string[];
   noneOf?: string[];
 };
@@ -203,7 +205,9 @@ export async function getContextDocuments(
     if (options.limit !== undefined) params.append('limit', options.limit.toString());
     if (options.offset !== undefined) params.append('offset', options.offset.toString());
     if (options.page !== undefined) params.append('page', options.page.toString());
-    if (options.q && options.q.trim()) params.append('q', options.q.trim());
+    const queryStack = (options.queries && options.queries.length ? options.queries : (options.q ? [options.q] : []))
+      .map(s => s.trim()).filter(Boolean);
+    queryStack.forEach(term => params.append('q', term));
 
     const url = `${API_ROUTES.contexts}/${id}/documents${params.toString() ? '?' + params.toString() : ''}`;
     const response = await api.get<{ payload: DocumentResponse['data']; count: number; totalCount: number }>(url);

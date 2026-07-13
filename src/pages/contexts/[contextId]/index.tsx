@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useToast } from '@/components/ui/toast-container';
 import {
@@ -60,7 +60,14 @@ export default function ContextDetailPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const ownerId = new URLSearchParams(location.search).get('ownerId') || undefined;
-  const urlSearchQuery = new URLSearchParams(location.search).get('q') || new URLSearchParams(location.search).get('search') || '';
+  // Repeated ?q= params form a refinement stack (each term narrows the
+  // previous set, the last ranks); ?search= stays as a legacy single-term alias.
+  const urlSearchQueries = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const stack = params.getAll('q').map(s => s.trim()).filter(Boolean);
+    const legacy = (params.get('search') || '').trim();
+    return stack.length ? stack : (legacy ? [legacy] : []);
+  }, [location.search]);
   const { showToast } = useToast();
   const { state: toolboxState, saveFilters } = useToolbox();
   const { openM2Drawer } = useMenu();
@@ -79,7 +86,7 @@ export default function ContextDetailPage() {
   const [copiedDocuments, setCopiedDocuments] = useState<number[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
-  const [serverSearchQuery, setServerSearchQuery] = useState(urlSearchQuery);
+  const [serverSearchQueries, setServerSearchQueries] = useState<string[]>(urlSearchQueries);
   const [ignoreSavedSearch, setIgnoreSavedSearch] = useState(false);
 
   const layerParam = new URLSearchParams(location.search).get('layer');
@@ -96,7 +103,7 @@ export default function ContextDetailPage() {
         contextId,
         tbAllOf,
         [],
-        { limit: pageSize, page: currentPage, q: serverSearchQuery || undefined, anyOf: tbAnyOf, noneOf: tbNoneOf },
+        { limit: pageSize, page: currentPage, queries: serverSearchQueries.length ? serverSearchQueries : undefined, anyOf: tbAnyOf, noneOf: tbNoneOf },
         ownerId,
       );
       setDocuments(
@@ -114,7 +121,7 @@ export default function ContextDetailPage() {
       setIsLoadingDocuments(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contextId, currentPage, pageSize, ownerId, serverSearchQuery, tbFiltersKey]);
+  }, [contextId, currentPage, pageSize, ownerId, serverSearchQueries, tbFiltersKey]);
 
   const fetchContextDetails = useCallback(async () => {
     if (!contextId) return;
@@ -173,30 +180,43 @@ export default function ContextDetailPage() {
     return () => window.removeEventListener('workspace:documents:refresh', onRefresh);
   }, [fetchDocuments]);
   useEffect(() => { setCurrentPage(1); setIgnoreSavedSearch(false); }, [contextId]);
-  useEffect(() => { setServerSearchQuery(urlSearchQuery); setCurrentPage(1); }, [urlSearchQuery]);
+  useEffect(() => { setServerSearchQueries(urlSearchQueries); setCurrentPage(1); }, [urlSearchQueries]);
   useEffect(() => {
-    if (urlSearchQuery || ignoreSavedSearch) return;
-    setServerSearchQuery(savedContextSearchQuery);
+    if (urlSearchQueries.length || ignoreSavedSearch) return;
+    setServerSearchQueries(savedContextSearchQuery ? [savedContextSearchQuery] : []);
     setCurrentPage(1);
-  }, [urlSearchQuery, ignoreSavedSearch, savedContextSearchQuery]);
+  }, [urlSearchQueries, ignoreSavedSearch, savedContextSearchQuery]);
 
-  const handleBackendSearch = useCallback((query: string) => {
-    const trimmed = query.trim();
-    setServerSearchQuery(trimmed);
+  const syncQueriesToUrl = useCallback((queries: string[]) => {
     const params = new URLSearchParams(location.search);
-    if (trimmed) {
-      setIgnoreSavedSearch(false);
-      params.set('q', trimmed);
-    } else {
-      setIgnoreSavedSearch(true);
-      params.delete('q');
-      params.delete('search');
-    }
+    params.delete('q');
+    params.delete('search');
+    for (const term of queries) params.append('q', term);
     const next = params.toString();
     navigate(`${location.pathname}${next ? `?${next}` : ''}`);
   }, [location.pathname, location.search, navigate]);
 
-  const currentSearchQuery = serverSearchQuery.trim();
+  // Appends to the refinement stack (dedupes); the URL is the source of truth.
+  const handleBackendSearch = useCallback((query: string) => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    setIgnoreSavedSearch(false);
+    const next = serverSearchQueries.includes(trimmed) ? serverSearchQueries : [...serverSearchQueries, trimmed];
+    setServerSearchQueries(next);
+    syncQueriesToUrl(next);
+  }, [serverSearchQueries, syncQueriesToUrl]);
+
+  // index -1 = clear the whole stack (DocumentList convention).
+  const handleRemoveBackendQuery = useCallback((index: number) => {
+    const next = index < 0 ? [] : serverSearchQueries.filter((_, i) => i !== index);
+    if (next.length === 0) setIgnoreSavedSearch(true);
+    setServerSearchQueries(next);
+    syncQueriesToUrl(next);
+  }, [serverSearchQueries, syncQueriesToUrl]);
+
+  // Toolbox saved-search stays single-term: the stack's first term is "the"
+  // search for save/compare purposes; refinements are ephemeral.
+  const currentSearchQuery = (serverSearchQueries[0] || '').trim();
   const canSaveChanges = Boolean(toolboxState.activeContextType)
     && (toolboxState.isDirty || currentSearchQuery !== (toolboxState.savedSearchQuery || savedContextSearchQuery || ''));
 
@@ -405,9 +425,9 @@ export default function ContextDetailPage() {
         onPasteDocuments={handlePasteDocuments}
         onImportDocuments={!isSharedContext ? handleImportDocuments : undefined}
         pastedDocumentIds={copiedDocuments}
-        backendSearchQueries={serverSearchQuery ? [serverSearchQuery] : []}
+        backendSearchQueries={serverSearchQueries}
         onBackendSearch={handleBackendSearch}
-        onRemoveBackendQuery={() => handleBackendSearch('')}
+        onRemoveBackendQuery={handleRemoveBackendQuery}
         canSaveChanges={canSaveChanges}
         isSavingChanges={toolboxState.isSaving}
         onSaveChanges={saveFilters}

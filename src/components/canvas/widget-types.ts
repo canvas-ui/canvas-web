@@ -18,6 +18,8 @@ export interface WidgetFetchOpts {
   page?: number
   /** User-controlled free-text search term (FTS/vector only, never spec grammar). */
   q?: string
+  /** Stacked refinement queries (repeated ?q=): each narrows the previous, last ranks. Wins over `q`. */
+  queries?: string[]
   /** Timeline to sort by: 'crud:created' | 'crud:updated' | 'content' | any timeline name. */
   sortBy?: string
   order?: 'asc' | 'desc'

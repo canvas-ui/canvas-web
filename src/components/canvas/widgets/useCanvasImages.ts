@@ -24,13 +24,15 @@ export interface CanvasImages {
   setPage: (page: number) => void
   totalCount: number
   totalPages: number
-  // Search: `input` is the buffered term; `submit()` promotes it to the active
-  // query and resets to page 1. Only the term is user-controlled.
+  // Search: `input` buffers the NEXT term; `submit()` appends it to the active
+  // refinement stack (each term narrows the previous set, the last ranks) and
+  // resets to page 1. Only the terms are user-controlled.
   input: string
   setInput: (value: string) => void
   submit: () => void
   clearSearch: () => void
-  activeQuery: string
+  removeQuery: (index: number) => void
+  activeQueries: string[]
   sort: TimelineSort
   setSort: (next: TimelineSort) => void
 }
@@ -44,7 +46,7 @@ export function useCanvasImages(canvas: WidgetCanvasContext, pageSize: number): 
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [input, setInput] = useState('')
-  const [activeQuery, setActiveQuery] = useState('')
+  const [activeQueries, setActiveQueries] = useState<string[]>([])
   const [sort, setSort] = useState<TimelineSort>(DEFAULT_TIMELINE_SORT)
 
   useEffect(() => {
@@ -56,7 +58,7 @@ export function useCanvasImages(canvas: WidgetCanvasContext, pageSize: number): 
         const res = await canvas.fetchDocuments({
           limit: pageSize,
           page,
-          q: activeQuery || undefined,
+          queries: activeQueries.length ? activeQueries : undefined,
           sortBy: sort.sortBy,
           order: sort.order,
           allOf: [IMAGE_MIME_FEATURE],
@@ -75,16 +77,24 @@ export function useCanvasImages(canvas: WidgetCanvasContext, pageSize: number): 
     }
     load()
     return () => { cancelled = true }
-  }, [canvas, pageSize, page, activeQuery, sort.sortBy, sort.order])
+  }, [canvas, pageSize, page, activeQueries, sort.sortBy, sort.order])
 
   const submit = useCallback(() => {
-    setActiveQuery(input.trim())
+    const term = input.trim()
+    setInput('')
+    if (!term) return
+    setActiveQueries((prev) => (prev.includes(term) ? prev : [...prev, term]))
     setPage(1)
   }, [input])
 
   const clearSearch = useCallback(() => {
     setInput('')
-    setActiveQuery('')
+    setActiveQueries([])
+    setPage(1)
+  }, [])
+
+  const removeQuery = useCallback((index: number) => {
+    setActiveQueries((prev) => (index < 0 ? [] : prev.filter((_, i) => i !== index)))
     setPage(1)
   }, [])
 
@@ -101,7 +111,7 @@ export function useCanvasImages(canvas: WidgetCanvasContext, pageSize: number): 
   return {
     images, isLoading, error,
     page, setPage, totalCount, totalPages,
-    input, setInput, submit, clearSearch, activeQuery,
+    input, setInput, submit, clearSearch, removeQuery, activeQueries,
     sort, setSort: changeSort,
   }
 }

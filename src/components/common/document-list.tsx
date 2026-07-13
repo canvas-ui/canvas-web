@@ -1164,7 +1164,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                 variant="default"
                 onClick={submitBackendSearch}
                 className="shrink-0"
-                title={hasServerSearch ? 'Refine: add this query (AND)' : 'Run full-text search on the server'}
+                title={hasServerSearch ? 'Refine: narrow the current results by this query' : 'Run full-text search on the server'}
               >
                 <Search className="h-3.5 w-3.5 mr-1" />
                 {hasServerSearch ? 'Refine' : 'Search server'}
@@ -1189,7 +1189,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
               <span className="text-muted-foreground">Server search:</span>
               {backendSearchQueries.map((q, i) => (
                 <span key={`${q}-${i}`} className="flex items-center gap-1">
-                  {i > 0 && <span className="text-muted-foreground/70 font-medium">AND</span>}
+                  {i > 0 && <span className="text-muted-foreground/70 font-medium uppercase text-[10px]">then</span>}
                   <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-muted text-foreground border">
                     <span className="font-mono">"{q}"</span>
                     {onRemoveBackendQuery && (
