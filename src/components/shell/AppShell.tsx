@@ -6,6 +6,7 @@ import { ToolboxFab } from './ToolboxFab'
 import { AgentSessionProvider } from '@/components/agent/agent-session-context'
 import { ToolboxProvider } from '@/components/toolbox/toolbox-context'
 import { AddPanel } from '@/components/toolbox/AddPanel'
+import { ToolboxPanel } from '@/components/toolbox/ToolboxPanel'
 import { SideViewProvider } from './side-view-context'
 
 export function AppShell() {
@@ -23,6 +24,9 @@ export function AppShell() {
               <ContentArea />
               {/* Slim creation panel — opens beside the main content (workspace or context) */}
               <AddPanel />
+              {/* Toolbox (Filters/Agents/Notifications) — its own card, pinned as the
+                  last sibling so it is ALWAYS the right-most element on screen. */}
+              <ToolboxPanel />
             </div>
             {/* Desktop-only FAB — on mobile the toolbox entry lives in the M0
                 rail, toggled by the bottom-left menu button */}

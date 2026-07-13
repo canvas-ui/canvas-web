@@ -34,7 +34,7 @@ import {
   listBackendDocuments,
   backendAddressFromTreePath,
 } from '@/services/workspace';
-import { Document, TreeNode, buildDatetimeFilters, DEFAULT_TOOLBOX_SORT } from '@/types/workspace';
+import { Document, TreeNode, buildDatetimeFilters, buildGeoFilters, DEFAULT_TOOLBOX_SORT } from '@/types/workspace';
 import { sanitizeUrlPath, buildWorkspaceUrl } from '@/utils/url-params';
 import { useToolbox } from '@/components/toolbox/toolbox-context';
 import { cn } from '@/lib/utils';
@@ -120,13 +120,15 @@ export default function WorkspaceDetailPage() {
   const [serverSearchQueries, setServerSearchQueries] = useState<string[]>(urlSearchQueries);
   const [ignoredSavedSearchPath, setIgnoredSavedSearchPath] = useState<string | null>(null);
 
-  const { state: toolboxState, saveFilters, toggleView, setSort } = useToolbox();
+  const { state: toolboxState, saveFilters, toggleView, setSort, setAccentColor } = useToolbox();
   const tbAllOf = toolboxState.filters.features.allOf;
   const tbAnyOf = toolboxState.filters.features.anyOf;
   const tbNoneOf = toolboxState.filters.features.noneOf;
   const tbDatetimeFilters = buildDatetimeFilters(toolboxState.filters.timeline);
+  const tbGeoFilters = buildGeoFilters(toolboxState.filters.geo);
+  const tbScopeFilters = [...tbDatetimeFilters, ...tbGeoFilters];
   const tbSort = toolboxState.filters.sort ?? DEFAULT_TOOLBOX_SORT;
-  const tbFiltersKey = JSON.stringify({ a: tbAllOf, b: tbAnyOf, c: tbNoneOf, d: tbDatetimeFilters, s: tbSort });
+  const tbFiltersKey = JSON.stringify({ a: tbAllOf, b: tbAnyOf, c: tbNoneOf, d: tbScopeFilters, s: tbSort });
 
   // Path and tree from URL segments; UI state from query params
   const selectedPath = sanitizeUrlPath('/' + (pathSplat ?? ''));
@@ -174,6 +176,14 @@ export default function WorkspaceDetailPage() {
   const urlDisplay = workspaceName
     ? `${workspaceName}://${selectedPath === '/' ? '' : selectedPath.replace(/^\//, '')}`
     : '';
+
+  // Publish the workspace accent color to the toolbox so its selected-tab
+  // underline matches the content being filtered. Cleared on unmount (→ black).
+  const workspaceAccent = visibleAccentColor(workspace?.color) || null;
+  useEffect(() => {
+    setAccentColor(workspaceAccent);
+    return () => setAccentColor(null);
+  }, [workspaceAccent, setAccentColor]);
 
   // Fetch workspace details
   useEffect(() => {
@@ -252,7 +262,7 @@ export default function WorkspaceDetailPage() {
           allOf: tbAllOf,
           anyOf: tbAnyOf,
           noneOf: tbNoneOf,
-          filters: tbDatetimeFilters,
+          filters: tbScopeFilters,
           sortBy: tbSort.sortBy || undefined,
           order: tbSort.order,
         });
@@ -266,7 +276,7 @@ export default function WorkspaceDetailPage() {
           queries: serverSearchQueries,
           anyOf: tbAnyOf,
           noneOf: tbNoneOf,
-          filters: tbDatetimeFilters,
+          filters: tbScopeFilters,
           sortBy: tbSort.sortBy || undefined,
           order: tbSort.order,
           // Whole-workspace scope lists every doc in the DB, including backend
@@ -688,7 +698,7 @@ export default function WorkspaceDetailPage() {
         metadata: { toolbox: toolboxState.filters },
         querySpec: {
           features: toolboxState.filters.features,
-          filters: buildDatetimeFilters(toolboxState.filters.timeline),
+          filters: [...buildDatetimeFilters(toolboxState.filters.timeline), ...buildGeoFilters(toolboxState.filters.geo)],
           // Canvas querySpec holds a single query; a refine stack collapses to a
           // combined search string on save (reload runs it as one query).
           query: currentSearchQuery || undefined,

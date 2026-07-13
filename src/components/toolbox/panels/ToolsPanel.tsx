@@ -4,6 +4,7 @@ import { X, Save, Loader2, Search, Trash2, Plus, RefreshCw, ZoomIn, ZoomOut, Clo
 import { cn } from '@/lib/utils'
 import { useToolbox, type ToolsTab, type FeatureMode } from '@/components/toolbox/toolbox-context'
 import { useToast } from '@/components/ui/toast-container'
+import { MapTab } from './MapTab'
 
 // ─── MD2-style toggle switch ─────────────────────────────────────────────────
 
@@ -869,21 +870,42 @@ export function ToolsPanel() {
   const canSave = activeContextType !== null && (isDirty || searchDirty)
 
   const tabs: { id: ToolsTab; label: string }[] = [
-    { id: 'timeline', label: 'Timeline' },
     { id: 'features', label: 'Features' },
+    { id: 'timeline', label: 'Timeline' },
+    { id: 'map', label: 'Map' },
   ]
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 h-12 bg-zinc-900 shrink-0">
-        <span className="text-sm font-medium text-zinc-100">Tools</span>
-        <div className="flex items-center gap-2">
+      {/* Tab bar — full-width underline tabs (matches the M2 tab style). The old
+          dark title header was dropped; the toolbox top bar already names this
+          panel, and Clear/Save live in the contextual action row below. */}
+      <div className="flex border-b border-border shrink-0">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setToolsTab(tab.id)}
+            className={cn(
+              'flex-1 py-2.5 text-xs transition-colors',
+              toolsTab === tab.id
+                ? '-mb-px border-b-2 border-foreground font-semibold text-foreground'
+                : 'font-medium text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Contextual action row — only present when there's something to do. */}
+      {(hasActiveFilters || canSave) && (
+        <div className="flex items-center justify-end gap-2 border-b border-border px-3 py-1.5 shrink-0">
           {hasActiveFilters && (
             <button
               type="button"
               onClick={clearFilters}
-              className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors"
+              className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               title="Clear all active filters"
             >
               <X className="w-3 h-3" />
@@ -895,42 +917,20 @@ export function ToolsPanel() {
               type="button"
               onClick={saveFilters}
               disabled={isSaving}
-              className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md bg-violet-600 hover:bg-violet-500 text-white transition-colors disabled:opacity-60"
+              className="flex items-center gap-1.5 rounded-md bg-violet-600 px-2.5 py-1 text-xs text-white transition-colors hover:bg-violet-500 disabled:opacity-60"
             >
-              {isSaving ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : (
-                <Save className="w-3 h-3" />
-              )}
+              {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
               Save changes
             </button>
           )}
         </div>
-      </div>
-
-      {/* Tab bar */}
-      <div className="flex border-b border-border shrink-0">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setToolsTab(tab.id)}
-            className={cn(
-              'flex-1 py-2.5 text-xs font-medium transition-colors',
-              toolsTab === tab.id
-                ? 'border-b-2 border-primary text-foreground'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      )}
 
       {/* Tab content */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        {toolsTab === 'timeline' && <TimelineTab />}
         {toolsTab === 'features' && <FeaturesTab />}
+        {toolsTab === 'timeline' && <TimelineTab />}
+        {toolsTab === 'map' && <MapTab />}
       </div>
     </div>
   )

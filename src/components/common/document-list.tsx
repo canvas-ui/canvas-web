@@ -1,5 +1,5 @@
 import { Document, TreeNode } from '@/types/workspace'
-import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, Table as TableIcon } from 'lucide-react'
+import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, Table as TableIcon, Map as MapIcon } from 'lucide-react'
 import { LinkToCard } from '@/components/menu/shared/LinkToCard'
 import { PickDocumentsCard } from '@/components/menu/shared/PickDocumentsCard'
 import { useSideView } from '@/components/shell/side-view-context'
@@ -19,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { ContextMenuShell } from '@/components/common/context-menu-shell'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
+import { DocumentMap } from './DocumentMap'
 import { ObjectPropertiesModal } from '@/components/object-card/ObjectPropertiesModal'
 import { isEditableSchema } from '@/components/object-card/EditForm'
 import { usePublicShareCode } from '@/components/renderers/public-share'
@@ -730,16 +731,16 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   // View switcher (table/tile/card). Only active when allowViewToggle; the
   // chosen view is remembered in localStorage. Widgets that hardcode viewMode
   // leave the toggle off and pin their view.
-  const [storedView, setStoredView] = useState<'card' | 'table' | 'tile'>(() => {
+  const [storedView, setStoredView] = useState<'card' | 'table' | 'tile' | 'map'>(() => {
     if (!allowViewToggle) return viewMode
     try {
       const saved = localStorage.getItem('doclist:view')
-      if (saved === 'card' || saved === 'table' || saved === 'tile') return saved
+      if (saved === 'card' || saved === 'table' || saved === 'tile' || saved === 'map') return saved
     } catch { /* ignore */ }
     return viewMode
   })
   const view = allowViewToggle ? storedView : viewMode
-  const changeView = useCallback((v: 'card' | 'table' | 'tile') => {
+  const changeView = useCallback((v: 'card' | 'table' | 'tile' | 'map') => {
     setStoredView(v)
     try { localStorage.setItem('doclist:view', v) } catch { /* ignore */ }
   }, [])
@@ -1311,6 +1312,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                   ['table', TableIcon, 'Table view'],
                   ['tile', LayoutGrid, 'Tile view'],
                   ['card', LayoutList, 'Card view'],
+                  ['map', MapIcon, 'Map view'],
                 ] as const).map(([mode, Icon, label]) => (
                   <button
                     key={mode}
@@ -1543,6 +1545,10 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
               <p className="text-xs text-muted-foreground">Right-click to paste {pastedDocumentIds.length} document(s)</p>
             )}
           </div>
+        </div>
+      ) : view === 'map' ? (
+        <div className="flex-1 min-h-0">
+          <DocumentMap documents={filteredDocuments} onOpen={(doc) => setDetailModal({ document: doc })} />
         </div>
       ) : view === 'tile' ? (
         <div className="flex-1 overflow-y-auto" onContextMenu={handleEmptyAreaRightClick}>

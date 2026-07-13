@@ -69,7 +69,7 @@ export default function ContextDetailPage() {
     return stack.length ? stack : (legacy ? [legacy] : []);
   }, [location.search]);
   const { showToast } = useToast();
-  const { state: toolboxState, saveFilters } = useToolbox();
+  const { state: toolboxState, saveFilters, setAccentColor } = useToolbox();
   const { openM2Drawer } = useMenu();
   const isMobile = useIsMobile();
   const tbAllOf = toolboxState.filters.features.allOf;
@@ -173,6 +173,14 @@ export default function ContextDetailPage() {
   }, [contextId, ownerId, isSharedContext]);
 
   useEffect(() => { fetchContextDetails(); }, [fetchContextDetails]);
+
+  // Publish the context accent to the toolbox so its top-bar bottom border
+  // matches the content being filtered. Cleared on unmount (→ black).
+  const contextAccent = visibleAccentColor(context?.color) || null;
+  useEffect(() => {
+    setAccentColor(contextAccent);
+    return () => setAccentColor(null);
+  }, [contextAccent, setAccentColor]);
   useEffect(() => { if (context) fetchDocuments(); }, [context?.id, fetchDocuments]);
   useEffect(() => {
     const onRefresh = () => fetchDocuments();

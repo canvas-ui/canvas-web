@@ -8,8 +8,8 @@ import {
   type ReactNode,
 } from 'react'
 import { useLocation } from 'react-router-dom'
-import type { ToolboxFilters, ToolboxTimelineFilters, ToolboxSort, Document as WorkspaceDocument } from '@/types/workspace'
-import { DEFAULT_TOOLBOX_FILTERS, DEFAULT_TOOLBOX_SORT, buildDatetimeFilters } from '@/types/workspace'
+import type { ToolboxFilters, ToolboxTimelineFilters, ToolboxGeoFilters, GeoBBox, ToolboxSort, Document as WorkspaceDocument } from '@/types/workspace'
+import { DEFAULT_TOOLBOX_FILTERS, DEFAULT_TOOLBOX_SORT, buildDatetimeFilters, buildGeoFilters } from '@/types/workspace'
 import {
   DEFAULT_WORKSPACE_TREE_NAME,
   listWorkspaceBitmaps,
@@ -27,8 +27,8 @@ import { parseWorkspacePathFromUrl } from '@/utils/url-params'
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
-export type T1View = 'home' | 'tools' | 'agents' | null
-export type ToolsTab = 'timeline' | 'features'
+export type T1View = 'home' | 'tools' | 'agents' | 'notifications' | null
+export type ToolsTab = 'features' | 'timeline' | 'map'
 // Maps directly to synapsd feature sigil algebra: anyOf (OR), allOf (+ gate), noneOf (! exclude).
 export type FeatureMode = 'off' | 'anyOf' | 'allOf' | 'noneOf'
 export type ActiveContextType = 'canvas' | 'context' | null
@@ -55,6 +55,10 @@ export interface ToolboxState {
   activeTreeName: string | null
   activeCanvasId: string | null
   activeContextId: string | null
+  // Accent color of the content being filtered (workspace/context color). Drives
+  // the selected-tab underline so the toolbox visually ties to its content. Null
+  // = no active content (e.g. a future global section) → falls back to black.
+  activeAccentColor: string | null
   // Filters
   filters: ToolboxFilters
   savedFilters: ToolboxFilters | null
@@ -81,6 +85,7 @@ type ToolboxAction =
   | { type: 'CLOSE_ADD' }
   | { type: 'OPEN_EDIT'; document: WorkspaceDocument; workspaceId: string }
   | { type: 'SET_TOOLS_TAB'; tab: ToolsTab }
+  | { type: 'SET_ACCENT_COLOR'; color: string | null }
   | {
       type: 'SET_NAVIGATION'
       workspaceName: string | null
@@ -107,7 +112,7 @@ function isDirtyCheck(filters: ToolboxFilters, savedFilters: ToolboxFilters | nu
 const initialState: ToolboxState = {
   t1Open: false,
   t1View: null,
-  toolsTab: 'timeline',
+  toolsTab: 'features',
   t2Open: false,
   t2AgentId: null,
   addOpen: false,
@@ -120,6 +125,7 @@ const initialState: ToolboxState = {
   activeTreeName: null,
   activeCanvasId: null,
   activeContextId: null,
+  activeAccentColor: null,
   filters: DEFAULT_TOOLBOX_FILTERS,
   savedFilters: null,
   savedSearchQuery: null,
@@ -152,6 +158,8 @@ function toolboxReducer(state: ToolboxState, action: ToolboxAction): ToolboxStat
       return { ...state, addOpen: true, addKind: null, editDocument: action.document, editWorkspaceId: action.workspaceId }
     case 'SET_TOOLS_TAB':
       return { ...state, toolsTab: action.tab }
+    case 'SET_ACCENT_COLOR':
+      return state.activeAccentColor === action.color ? state : { ...state, activeAccentColor: action.color }
     case 'SET_NAVIGATION':
       return {
         ...state,
@@ -210,6 +218,7 @@ function loadSessionFilters(): ToolboxFilters | null {
       ...parsed,
       features: { ...DEFAULT_TOOLBOX_FILTERS.features, ...(parsed.features ?? {}) },
       timeline: { ...DEFAULT_TOOLBOX_FILTERS.timeline, ...(parsed.timeline ?? {}) },
+      geo: { ...DEFAULT_TOOLBOX_FILTERS.geo, ...(parsed.geo ?? {}) },
       sort: { ...DEFAULT_TOOLBOX_SORT, ...(parsed.sort ?? {}) },
     }
   } catch {
@@ -246,6 +255,7 @@ function extractToolboxFilters(metadata: Record<string, unknown> | undefined): T
         contentEvents: (t.timeline as ToolboxTimelineFilters)?.contentEvents ?? false,
         selectedTimelines: (t.timeline as ToolboxTimelineFilters)?.selectedTimelines ?? [],
       },
+      geo: { bbox: (t.geo as ToolboxGeoFilters)?.bbox ?? null },
       sort: {
         sortBy: (t.sort as ToolboxSort)?.sortBy ?? DEFAULT_TOOLBOX_SORT.sortBy,
         order: (t.sort as ToolboxSort)?.order === 'asc' ? 'asc' : 'desc',
@@ -279,12 +289,14 @@ interface ToolboxContextValue {
   closeAdd: () => void
   openEdit: (document: WorkspaceDocument, workspaceId: string) => void
   setToolsTab: (tab: ToolsTab) => void
+  setAccentColor: (color: string | null) => void
   setFilters: (filters: ToolboxFilters) => void
   setFeatureToggle: (key: string, on: boolean) => void
   setFeatureMode: (key: string, mode: FeatureMode) => void
   clearFilters: () => void
   hasActiveFilters: boolean
   setTimelineFilter: (update: Partial<ToolboxTimelineFilters>) => void
+  setGeoBBox: (bbox: GeoBBox | null) => void
   setSort: (sort: ToolboxSort) => void
   saveFilters: () => Promise<void>
   deleteBitmap: (key: string) => Promise<void>
@@ -436,6 +448,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
   const closeAdd = useCallback(() => dispatch({ type: 'CLOSE_ADD' }), [])
   const openEdit = useCallback((document: WorkspaceDocument, workspaceId: string) => dispatch({ type: 'OPEN_EDIT', document, workspaceId }), [])
   const setToolsTab = useCallback((tab: ToolsTab) => dispatch({ type: 'SET_TOOLS_TAB', tab }), [])
+  const setAccentColor = useCallback((color: string | null) => dispatch({ type: 'SET_ACCENT_COLOR', color }), [])
 
   const setFilters = useCallback((filters: ToolboxFilters) => {
     dispatch({ type: 'SET_FILTERS', filters })
@@ -491,6 +504,15 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
+  // Set (or clear, with null) the map-selected spatial bounding box.
+  const setGeoBBox = useCallback((bbox: GeoBBox | null) => {
+    const { filters } = stateRef.current
+    dispatch({
+      type: 'SET_FILTERS',
+      filters: { ...filters, geo: { ...filters.geo, bbox } },
+    })
+  }, [])
+
   const saveFilters = useCallback(async () => {
     const { activeContextType, activeContextId, activeWorkspaceName, activeTreeName, activeContextPath, filters, isSaving } = stateRef.current
     if (isSaving) return
@@ -509,7 +531,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
             // tokens the folder view lists with) so it scopes the WHOLE canvas —
             // widgets and public shares inherit it, not just this folder view.
             // metadata.toolbox above only round-trips the UI state.
-            filters: buildDatetimeFilters(filters.timeline),
+            filters: [...buildDatetimeFilters(filters.timeline), ...buildGeoFilters(filters.geo)],
             query: searchQuery.trim() || undefined,
             // Saved view order → server-enforced, so public shares/widgets sort
             // the same way. Empty sortBy = DB default; store null then.
@@ -590,7 +612,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
 
   return (
     <ToolboxCtx.Provider
-      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, closeAdd, openEdit, setToolsTab, setFilters, setFeatureToggle, setFeatureMode, clearFilters, hasActiveFilters, setTimelineFilter, setSort, saveFilters, deleteBitmap, createTimeline, deleteTimeline, refreshTimelines }}
+      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, closeAdd, openEdit, setToolsTab, setAccentColor, setFilters, setFeatureToggle, setFeatureMode, clearFilters, hasActiveFilters, setTimelineFilter, setGeoBBox, setSort, saveFilters, deleteBitmap, createTimeline, deleteTimeline, refreshTimelines }}
     >
       {children}
     </ToolboxCtx.Provider>

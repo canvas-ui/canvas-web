@@ -48,9 +48,24 @@ export interface ToolboxSort {
   order: 'asc' | 'desc'
 }
 
+// Spatial filter: a bounding box selected on the map. The backend geo grammar
+// (synapsd filters.js) supports bbox / near / cell; the map UI draws a box, so
+// we model a bbox. A polygon selection is reduced to its bounding box until the
+// backend gains a polygon coverer.
+export interface GeoBBox {
+  minLat: number
+  minLon: number
+  maxLat: number
+  maxLon: number
+}
+export interface ToolboxGeoFilters {
+  bbox: GeoBBox | null
+}
+
 export interface ToolboxFilters {
   features: ToolboxFeatureFilters
   timeline: ToolboxTimelineFilters
+  geo: ToolboxGeoFilters
   sort: ToolboxSort
 }
 
@@ -68,7 +83,19 @@ export const DEFAULT_TOOLBOX_FILTERS: ToolboxFilters = {
     contentEvents: false,
     selectedTimelines: [],
   },
+  geo: { bbox: null },
   sort: { ...DEFAULT_TOOLBOX_SORT },
+}
+
+/**
+ * Convert the toolbox geo filter state → SynapsD geo filter strings.
+ * Grammar: `geo:bbox:<minLat>,<minLon>,<maxLat>,<maxLon>` (synapsd filters.js).
+ * Returns an empty array when no area is selected.
+ */
+export function buildGeoFilters(geo: ToolboxGeoFilters): string[] {
+  const b = geo.bbox
+  if (!b) return []
+  return [`geo:bbox:${b.minLat},${b.minLon},${b.maxLat},${b.maxLon}`]
 }
 
 /**
