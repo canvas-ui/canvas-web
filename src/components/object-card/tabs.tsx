@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Copy, Download, Trash2, Database, HardDrive, Mail, Globe, FileQuestion, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DocumentRenderer } from '@/components/renderers/registry'
@@ -73,7 +73,60 @@ const formatDate = (dateString?: string) => {
   })
 }
 
+// Extracted image metadata (EXIF/GPS/dimensions) — populated by the stored
+// ingest pipeline for photos. Optional and best-effort; render only what's set.
+interface ImageMeta {
+  geo?: { lat?: number; lon?: number; alt?: number }
+  exif?: {
+    make?: string; model?: string; lensModel?: string; orientation?: string
+    iso?: number; fNumber?: number; exposureTime?: number; focalLength?: number
+    capturedAt?: string
+  }
+  dimensions?: { width?: number; height?: number; type?: string; orientation?: number }
+}
+
+// 1/1250-style shutter label from a fractional-second exposure.
+const formatExposure = (s?: number) => {
+  if (!Number.isFinite(s) || !s) return null
+  return s >= 1 ? `${s}s` : `1/${Math.round(1 / (s as number))}s`
+}
+
+function PhotoMetadata({ meta }: { meta: ImageMeta }) {
+  const { geo, exif, dimensions } = meta
+  if (!geo && !exif && !dimensions) return null
+  const row = (label: string, value: ReactNode) =>
+    value == null || value === '' ? null : (
+      <div><span className="font-medium">{label}:</span><span className="ml-2">{value}</span></div>
+    )
+
+  return (
+    <div>
+      <h3 className="font-semibold mb-3">Photo</h3>
+      <div className="grid gap-3 text-sm">
+        {dimensions && row('Dimensions', dimensions.width && dimensions.height ? `${dimensions.width} × ${dimensions.height}` : null)}
+        {exif && row('Camera', [exif.make, exif.model].filter(Boolean).join(' '))}
+        {exif && row('Lens', exif.lensModel)}
+        {exif && row('Aperture', Number.isFinite(exif.fNumber) ? `ƒ/${exif.fNumber}` : null)}
+        {exif && row('Shutter', formatExposure(exif.exposureTime))}
+        {exif && row('ISO', Number.isFinite(exif.iso) ? exif.iso : null)}
+        {exif && row('Focal length', Number.isFinite(exif.focalLength) ? `${exif.focalLength} mm` : null)}
+        {exif && row('Captured', formatDate(exif.capturedAt))}
+        {geo && Number.isFinite(geo.lat) && Number.isFinite(geo.lon) && row('Location', (
+          <a
+            href={`https://www.openstreetmap.org/?mlat=${geo.lat}&mlon=${geo.lon}#map=15/${geo.lat}/${geo.lon}`}
+            target="_blank" rel="noopener noreferrer"
+            className="text-primary underline underline-offset-2"
+          >
+            {geo.lat!.toFixed(5)}, {geo.lon!.toFixed(5)}{Number.isFinite(geo.alt) ? ` · ${Math.round(geo.alt as number)} m` : ''}
+          </a>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function MetadataTab({ document }: TabProps) {
+  const imageMeta = document.metadata as unknown as ImageMeta
   return (
     <div className="space-y-6">
       <div>
@@ -98,6 +151,8 @@ export function MetadataTab({ document }: TabProps) {
           )}
         </div>
       </div>
+
+      <PhotoMetadata meta={imageMeta} />
 
       {Array.isArray(document.locations) && document.locations.length > 0 && (
         <div>

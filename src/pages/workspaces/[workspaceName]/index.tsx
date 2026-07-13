@@ -120,12 +120,13 @@ export default function WorkspaceDetailPage() {
   const [serverSearchQueries, setServerSearchQueries] = useState<string[]>(urlSearchQueries);
   const [ignoredSavedSearchPath, setIgnoredSavedSearchPath] = useState<string | null>(null);
 
-  const { state: toolboxState, saveFilters, toggleView } = useToolbox();
+  const { state: toolboxState, saveFilters, toggleView, setSort } = useToolbox();
   const tbAllOf = toolboxState.filters.features.allOf;
   const tbAnyOf = toolboxState.filters.features.anyOf;
   const tbNoneOf = toolboxState.filters.features.noneOf;
   const tbDatetimeFilters = buildDatetimeFilters(toolboxState.filters.timeline);
-  const tbFiltersKey = JSON.stringify({ a: tbAllOf, b: tbAnyOf, c: tbNoneOf, d: tbDatetimeFilters });
+  const tbSort = toolboxState.filters.sort;
+  const tbFiltersKey = JSON.stringify({ a: tbAllOf, b: tbAnyOf, c: tbNoneOf, d: tbDatetimeFilters, s: tbSort });
 
   // Path and tree from URL segments; UI state from query params
   const selectedPath = sanitizeUrlPath('/' + (pathSplat ?? ''));
@@ -252,6 +253,8 @@ export default function WorkspaceDetailPage() {
           anyOf: tbAnyOf,
           noneOf: tbNoneOf,
           filters: tbDatetimeFilters,
+          sortBy: tbSort.sortBy || undefined,
+          order: tbSort.order,
         });
       } else {
         const selectedTreeType: 'context' | 'directory' = selectedTreeName === 'directory' || selectedTreeName === 'backends' ? 'directory' : 'context';
@@ -264,6 +267,8 @@ export default function WorkspaceDetailPage() {
           anyOf: tbAnyOf,
           noneOf: tbNoneOf,
           filters: tbDatetimeFilters,
+          sortBy: tbSort.sortBy || undefined,
+          order: tbSort.order,
           // Whole-workspace scope lists every doc in the DB, including backend
           // mirrors (they live in their own tree now — no opt-in flag needed).
           scope: docScope,
@@ -683,10 +688,11 @@ export default function WorkspaceDetailPage() {
         metadata: { toolbox: toolboxState.filters },
         querySpec: {
           features: toolboxState.filters.features,
-          filters: [],
+          filters: buildDatetimeFilters(toolboxState.filters.timeline),
           // Canvas querySpec holds a single query; a refine stack collapses to a
           // combined search string on save (reload runs it as one query).
           query: currentSearchQuery || undefined,
+          sort: toolboxState.filters.sort?.sortBy ? toolboxState.filters.sort : null,
         },
       });
       setSaveAsCanvasOpen(false);
@@ -876,6 +882,8 @@ export default function WorkspaceDetailPage() {
       isCanvasLocked={!!selectedNode?.locked}
       backendSearchQueries={serverSearchQueries}
       onBackendSearch={handleBackendSearch}
+      serverSort={toolboxState.filters.sort}
+      onServerSortChange={setSort}
       onRemoveBackendQuery={handleRemoveBackendQuery}
       canSaveChanges={canSaveChanges}
       isSavingChanges={toolboxState.isSaving}

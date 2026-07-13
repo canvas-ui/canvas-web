@@ -89,6 +89,8 @@ interface DefaultCanvasProps {
   backendSearchQueries?: string[]
   onBackendSearch?: (query: string) => void
   onRemoveBackendQuery?: (index: number) => void
+  serverSort?: import('@/types/workspace').ToolboxSort
+  onServerSortChange?: (sort: import('@/types/workspace').ToolboxSort) => void
   scope?: 'path' | 'workspace'
   onScopeChange?: (scope: 'path' | 'workspace') => void
   canSaveChanges?: boolean
@@ -143,6 +145,8 @@ export function DefaultCanvas({
   backendSearchQueries,
   onBackendSearch,
   onRemoveBackendQuery,
+  serverSort,
+  onServerSortChange,
   scope,
   onScopeChange,
   canSaveChanges,
@@ -288,6 +292,8 @@ export function DefaultCanvas({
           disablePurgeDocuments={disablePurgeDocuments}
           backendSearchQueries={backendSearchQueries}
           onBackendSearch={onBackendSearch}
+          serverSort={serverSort}
+          onServerSortChange={onServerSortChange}
           onRemoveBackendQuery={onRemoveBackendQuery}
           scope={scope}
           onScopeChange={onScopeChange}

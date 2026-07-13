@@ -8,8 +8,8 @@ import {
   type ReactNode,
 } from 'react'
 import { useLocation } from 'react-router-dom'
-import type { ToolboxFilters, ToolboxTimelineFilters, Document as WorkspaceDocument } from '@/types/workspace'
-import { DEFAULT_TOOLBOX_FILTERS, buildDatetimeFilters } from '@/types/workspace'
+import type { ToolboxFilters, ToolboxTimelineFilters, ToolboxSort, Document as WorkspaceDocument } from '@/types/workspace'
+import { DEFAULT_TOOLBOX_FILTERS, DEFAULT_TOOLBOX_SORT, buildDatetimeFilters } from '@/types/workspace'
 import {
   DEFAULT_WORKSPACE_TREE_NAME,
   listWorkspaceBitmaps,
@@ -235,6 +235,10 @@ function extractToolboxFilters(metadata: Record<string, unknown> | undefined): T
         contentEvents: (t.timeline as ToolboxTimelineFilters)?.contentEvents ?? false,
         selectedTimelines: (t.timeline as ToolboxTimelineFilters)?.selectedTimelines ?? [],
       },
+      sort: {
+        sortBy: (t.sort as ToolboxSort)?.sortBy ?? DEFAULT_TOOLBOX_SORT.sortBy,
+        order: (t.sort as ToolboxSort)?.order === 'asc' ? 'asc' : 'desc',
+      },
     }
   } catch {
     return null
@@ -270,6 +274,7 @@ interface ToolboxContextValue {
   clearFilters: () => void
   hasActiveFilters: boolean
   setTimelineFilter: (update: Partial<ToolboxTimelineFilters>) => void
+  setSort: (sort: ToolboxSort) => void
   saveFilters: () => Promise<void>
   deleteBitmap: (key: string) => Promise<void>
   createTimeline: (name: string) => Promise<void>
@@ -462,6 +467,11 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SET_FILTERS', filters: { ...DEFAULT_TOOLBOX_FILTERS, timeline: { ...filters.timeline, quickFilter: null, customRange: null, selectedTimelines: [] } } })
   }, [])
 
+  const setSort = useCallback((sort: ToolboxSort) => {
+    const { filters } = stateRef.current
+    dispatch({ type: 'SET_FILTERS', filters: { ...filters, sort } })
+  }, [])
+
   const setTimelineFilter = useCallback((update: Partial<ToolboxTimelineFilters>) => {
     const { filters } = stateRef.current
     dispatch({
@@ -490,6 +500,9 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
             // metadata.toolbox above only round-trips the UI state.
             filters: buildDatetimeFilters(filters.timeline),
             query: searchQuery.trim() || undefined,
+            // Saved view order → server-enforced, so public shares/widgets sort
+            // the same way. Empty sortBy = DB default; store null then.
+            sort: filters.sort?.sortBy ? filters.sort : null,
           },
         }, treeName)
         invalidateWorkspaceTreeCache(activeWorkspaceName, treeName)
@@ -566,7 +579,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
 
   return (
     <ToolboxCtx.Provider
-      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, closeAdd, openEdit, setToolsTab, setFilters, setFeatureToggle, setFeatureMode, clearFilters, hasActiveFilters, setTimelineFilter, saveFilters, deleteBitmap, createTimeline, deleteTimeline, refreshTimelines }}
+      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, closeAdd, openEdit, setToolsTab, setFilters, setFeatureToggle, setFeatureMode, clearFilters, hasActiveFilters, setTimelineFilter, setSort, saveFilters, deleteBitmap, createTimeline, deleteTimeline, refreshTimelines }}
     >
       {children}
     </ToolboxCtx.Provider>

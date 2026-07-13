@@ -24,6 +24,8 @@ import { isEditableSchema } from '@/components/object-card/EditForm'
 import { usePublicShareCode } from '@/components/renderers/public-share'
 import { useDocumentThumbnail } from '@/components/renderers/useDocumentThumbnail'
 import { DocumentIcon } from '@/components/common/DocumentIcon'
+import { TimelineSortControl } from '@/components/canvas/widgets/sort-control'
+import type { ToolboxSort } from '@/types/workspace'
 
 interface DocumentListProps {
   documents: Document[]
@@ -61,6 +63,11 @@ interface DocumentListProps {
   backendSearchQueries?: string[]
   onBackendSearch?: (query: string) => void
   onRemoveBackendQuery?: (index: number) => void
+  // Server-side view order (timeline sort). When onServerSortChange is provided
+  // the toolbar shows a sort control; the choice reorders the whole result set
+  // (across pages) and, on canvas save, persists into the canvas querySpec.
+  serverSort?: ToolboxSort
+  onServerSortChange?: (sort: ToolboxSort) => void
   // Document scope: 'path' lists the selected tree path; 'workspace' lists every doc.
   scope?: 'path' | 'workspace'
   onScopeChange?: (scope: 'path' | 'workspace') => void
@@ -718,7 +725,7 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
   )
 }
 
-export function DocumentList({ documents, isLoading, contextPath, treeName, workspaceId, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, onSelectionChange, pastedDocumentIds, viewMode = 'card', allowViewToggle = false, activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQueries = [], onBackendSearch, onRemoveBackendQuery, scope = 'path', onScopeChange, canSaveChanges = false, isSavingChanges = false, onSaveChanges, linkTree }: DocumentListProps) {
+export function DocumentList({ documents, isLoading, contextPath, treeName, workspaceId, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, onSelectionChange, pastedDocumentIds, viewMode = 'card', allowViewToggle = false, activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQueries = [], onBackendSearch, onRemoveBackendQuery, serverSort, onServerSortChange, scope = 'path', onScopeChange, canSaveChanges = false, isSavingChanges = false, onSaveChanges, linkTree }: DocumentListProps) {
   // View switcher (table/tile/card). Only active when allowViewToggle; the
   // chosen view is remembered in localStorage. Widgets that hardcode viewMode
   // leave the toggle off and pin their view.
@@ -913,6 +920,8 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   const sortAccessors = useMemo(() => ({
     title: (d: Document) => getDocumentDisplayInfo(d).title?.toLowerCase() ?? '',
     schema: (d: Document) => getDocumentDisplayInfo(d).schemaLabel ?? '',
+    // Group by kind: mime content-type first (jpeg/png/pdf…), else the schema.
+    type: (d: Document) => (d.metadata?.contentType || d.schema || '').toLowerCase(),
     id: (d: Document) => d.id,
     created: (d: Document) => Date.parse(d.createdAt) || 0,
     version: (d: Document) => d.versionNumber ?? 0,
@@ -1289,6 +1298,12 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
 
         {documents.length > 0 && (
           <div className="flex items-center gap-2 mt-3 pt-3 border-t flex-wrap">
+            {onServerSortChange && serverSort && workspaceId && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-muted-foreground">Sort</span>
+                <TimelineSortControl workspaceId={workspaceId} value={serverSort} onChange={onServerSortChange} />
+              </div>
+            )}
             {allowViewToggle && (
               <div className="flex items-center rounded-md border p-0.5">
                 {([
@@ -1553,7 +1568,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                     title="Select all on this page"
                   />
                 </TableHead>
-                <TableHead className="w-12">Type</TableHead>
+                <SortableTableHead label="Type" sortKey="type" sort={sort} onSort={toggleSort} className="w-12" />
                 <SortableTableHead label="Title" sortKey="title" sort={sort} onSort={toggleSort} />
                 <SortableTableHead label="Schema" sortKey="schema" sort={sort} onSort={toggleSort} className="hidden md:table-cell" />
                 <SortableTableHead label="ID" sortKey="id" sort={sort} onSort={toggleSort} className="hidden lg:table-cell" />

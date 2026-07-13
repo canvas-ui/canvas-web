@@ -11,6 +11,11 @@ export interface CanvasQuerySpec {
   features: string[] | CanvasFeatureBuckets | null
   filters: string[]
   query?: string | null
+  // Default ordering the canvas view is saved with (timeline sort). Applied
+  // server-side on list so the whole canvas — folder view, widgets, public
+  // shares — inherits it. `sortBy` is a timeline name (crud:created/updated/
+  // content/…); empty/absent means the DB default (newest-id order).
+  sort?: { sortBy: string; order: 'asc' | 'desc' } | null
 }
 
 // Toolbox filter state — stored in metadata.toolbox on canvas/context objects,
@@ -37,10 +42,20 @@ export interface ToolboxTimelineFilters {
   selectedTimelines: string[]
 }
 
+// Server-side ordering for the whole content view, by a named timeline.
+export interface ToolboxSort {
+  sortBy: string
+  order: 'asc' | 'desc'
+}
+
 export interface ToolboxFilters {
   features: ToolboxFeatureFilters
   timeline: ToolboxTimelineFilters
+  sort: ToolboxSort
 }
+
+// Default view order: CRUD "created" timeline, newest first (≈ DB default).
+export const DEFAULT_TOOLBOX_SORT: ToolboxSort = { sortBy: 'crud:created', order: 'desc' }
 
 export const DEFAULT_TOOLBOX_FILTERS: ToolboxFilters = {
   features: { allOf: [], anyOf: [], noneOf: [] },
@@ -53,6 +68,7 @@ export const DEFAULT_TOOLBOX_FILTERS: ToolboxFilters = {
     contentEvents: false,
     selectedTimelines: [],
   },
+  sort: { ...DEFAULT_TOOLBOX_SORT },
 }
 
 /**

@@ -304,7 +304,7 @@ export async function getWorkspaceLayerDocuments(
   id: string,
   treeName: string,
   layerId: string,
-  options: { limit?: number; offset?: number; page?: number; q?: string; queries?: string[]; allOf?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[] } = {}
+  options: { limit?: number; offset?: number; page?: number; q?: string; queries?: string[]; allOf?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[]; sortBy?: string; order?: 'asc' | 'desc' } = {}
 ): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }> {
   try {
     const params = new URLSearchParams();
@@ -316,6 +316,8 @@ export async function getWorkspaceLayerDocuments(
     appendAnyOf(params, options.anyOf);
     appendNoneOf(params, options.noneOf);
     appendFilters(params, options.filters);
+    if (options.sortBy) params.append('sortBy', options.sortBy);
+    if (options.order) params.append('order', options.order);
     const queryString = params.toString();
     const url = `${API_ROUTES.workspaces}/${id}/trees/${encodeURIComponent(treeName)}/layers/${encodeURIComponent(layerId)}/documents${queryString ? '?' + queryString : ''}`;
     return await api.get<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }>(url);
