@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { useLocation } from 'react-router-dom'
 import type { ToolboxFilters, ToolboxTimelineFilters, Document as WorkspaceDocument } from '@/types/workspace'
-import { DEFAULT_TOOLBOX_FILTERS } from '@/types/workspace'
+import { DEFAULT_TOOLBOX_FILTERS, buildDatetimeFilters } from '@/types/workspace'
 import {
   DEFAULT_WORKSPACE_TREE_NAME,
   listWorkspaceBitmaps,
@@ -484,7 +484,11 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
           metadata: { ...(node?.metadata || {}), toolbox: filters },
           querySpec: {
             features: filters.features,
-            filters: [],
+            // Persist the timeline scope into the server-enforced querySpec (same
+            // tokens the folder view lists with) so it scopes the WHOLE canvas —
+            // widgets and public shares inherit it, not just this folder view.
+            // metadata.toolbox above only round-trips the UI state.
+            filters: buildDatetimeFilters(filters.timeline),
             query: searchQuery.trim() || undefined,
           },
         }, treeName)

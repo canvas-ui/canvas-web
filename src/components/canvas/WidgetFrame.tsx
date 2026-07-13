@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { Maximize2, Minimize2, X } from 'lucide-react'
+import { Maximize2, Minimize2, Expand, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 // Shared chrome for every widget: a draggable title bar (the `.canvas-drag-handle`
@@ -11,12 +11,15 @@ export function WidgetFrame({
   title,
   icon: Icon,
   onRemove,
+  onFill,
   readOnly = false,
   children,
 }: {
   title: string
   icon?: LucideIcon
   onRemove?: () => void
+  /** Expand this widget to fill the whole canvas (single-widget canvas setup). */
+  onFill?: () => void
   readOnly?: boolean
   children: ReactNode
 }) {
@@ -38,6 +41,16 @@ export function WidgetFrame({
       <div className="canvas-drag-handle flex items-center gap-2 px-2 py-1 border-b bg-muted/30 cursor-move select-none">
         {Icon && <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
         <span className="text-xs font-medium truncate flex-1">{title}</span>
+        {!readOnly && onFill && !maximized && (
+          <button
+            type="button"
+            onClick={onFill}
+            className="canvas-no-drag shrink-0 p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent"
+            title="Fill canvas"
+          >
+            <Expand className="w-3.5 h-3.5" />
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setMaximized((v) => !v)}

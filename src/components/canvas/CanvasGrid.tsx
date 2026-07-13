@@ -8,7 +8,7 @@ import './canvas-grid.css'
 import './widgets'
 import { getWidget, listWidgets } from './widget-registry'
 import { WidgetFrame } from './WidgetFrame'
-import type { WidgetCanvasContext, WidgetConfig, WidgetDocumentsResult } from './widget-types'
+import type { WidgetCanvasContext, WidgetConfig, WidgetDocumentsResult, WidgetFetchOpts } from './widget-types'
 import { saveCanvasUi, getCanvasPathDocuments } from '@/services/workspace'
 import type { CanvasQuerySpec, Document, LayerMetadata } from '@/types/workspace'
 
@@ -120,7 +120,7 @@ export function CanvasGrid({
   /** Kept for callers; shared canvases stay structurally locked in the tree but remain widget-editable. */
   isLocked?: boolean
   readOnly?: boolean
-  fetchDocuments?: (opts?: { limit?: number; page?: number }) => Promise<WidgetDocumentsResult>
+  fetchDocuments?: (opts?: WidgetFetchOpts) => Promise<WidgetDocumentsResult>
   onSaved?: () => void
 }) {
   void isLocked
@@ -267,6 +267,24 @@ export function CanvasGrid({
     markDirty(nextLayout, nextWidgets)
   }, [layout, widgets, markDirty])
 
+  // Expand one widget to occupy the whole canvas (full width + height), pushing
+  // any other widgets below it. Makes a single-widget canvas trivial to set up.
+  const fillWidget = useCallback((id: string) => {
+    if (!editable) return
+    setLayout((prev) => {
+      const target = prev.find((item) => item.i === id)
+      if (!target) return prev
+      const h = Math.max(target.h, target.minH ?? 4, 4)
+      const filled: CanvasLayoutItem = { ...target, x: 0, y: 0, w: COLS, h, fillW: true, fillH: true }
+      const pushed = prev
+        .filter((item) => item.i !== id)
+        .map((item) => ({ ...item, y: item.y + h }))
+      const next = inferFillFlags([filled, ...pushed], prev)
+      markDirty(next, widgets)
+      return next
+    })
+  }, [editable, markDirty, widgets])
+
   const setWidgetConfig = useCallback((id: string, config: WidgetConfig) => {
     setWidgets((prev) => {
       const next = { ...prev, [id]: { ...prev[id], config } }
@@ -349,7 +367,7 @@ export function CanvasGrid({
               return (
                 <div key={id}>
                   {def ? (
-                    <WidgetFrame title={def.name} icon={def.icon} readOnly={!editable} onRemove={() => removeWidget(id)}>
+                    <WidgetFrame title={def.name} icon={def.icon} readOnly={!editable} onRemove={() => removeWidget(id)} onFill={editable ? () => fillWidget(id) : undefined}>
                       {/* Older saved layouts can lack config entirely — widgets
                           index into it (config.format etc.), so default it. */}
                       <def.component
