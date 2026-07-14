@@ -131,8 +131,12 @@ export default function WorkspaceDetailPage() {
   const tbSort = toolboxState.filters.sort ?? DEFAULT_TOOLBOX_SORT;
   const tbFiltersKey = JSON.stringify({ a: tbAllOf, b: tbAnyOf, c: tbNoneOf, d: tbScopeFilters, s: tbSort });
 
-  // Path and tree from URL segments; UI state from query params
-  const selectedPath = sanitizeUrlPath('/' + (pathSplat ?? ''));
+  // Path and tree from URL segments; UI state from query params. React Router v7
+  // does NOT decode the `*` splat, so a non-ASCII path arrives percent-encoded
+  // (buildWorkspaceUrl encodes segments). Decode per-segment so the path matches
+  // the decoded tree node names and the address bar shows "Náš Domček".
+  const decodeSeg = (s: string) => { try { return decodeURIComponent(s); } catch { return s; } };
+  const selectedPath = sanitizeUrlPath('/' + (pathSplat ?? '').split('/').map(decodeSeg).join('/'));
   const selectedTreeName = treeName ?? DEFAULT_WORKSPACE_TREE_NAME;
   // Bulk "Purge All" is hidden in the backends tree: backend-mirrored docs
   // are purged via the tree's "Remove and purge documents" (folder-scoped) or

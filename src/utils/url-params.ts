@@ -98,9 +98,16 @@ export function parseWorkspacePathFromUrl(pathname: string): { treeName: string;
  * /workspaces/:ws/trees/:tree/path/foo/bar     — path, named tree
  */
 export function buildWorkspaceUrl(workspaceName: string, path: string, treeName?: string): string {
-  const tree = treeName && treeName !== DEFAULT_TREE ? `/trees/${treeName}` : '';
+  const tree = treeName && treeName !== DEFAULT_TREE ? `/trees/${encodeURIComponent(treeName)}` : '';
   const p = sanitizeUrlPath(path);
-  const pathSegment = p === '/' ? '' : `/path${p}`;
+  // Percent-encode each segment so non-ASCII / spaces / ':' survive the URL
+  // intact. React Router v7 does NOT auto-decode the `*` splat, so readers must
+  // decode (parseWorkspacePathFromUrl does; the workspace page does too). Without
+  // encoding here, a raw non-ASCII path round-trips lossily — "Náš Domček" came
+  // back "N Domek" (percent-escapes stripped, accents lost).
+  const pathSegment = p === '/'
+    ? ''
+    : `/path/${p.split('/').filter(Boolean).map(encodeURIComponent).join('/')}`;
   return `/workspaces/${workspaceName}${tree}${pathSegment}`;
 }
 
