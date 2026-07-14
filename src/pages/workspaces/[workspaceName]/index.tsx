@@ -35,7 +35,7 @@ import {
   backendAddressFromTreePath,
 } from '@/services/workspace';
 import { Document, TreeNode, buildDatetimeFilters, buildGeoFilters, DEFAULT_TOOLBOX_SORT } from '@/types/workspace';
-import { sanitizeUrlPath, buildWorkspaceUrl } from '@/utils/url-params';
+import { sanitizeUrlPath, buildWorkspaceUrl, parseWorkspacePathFromUrl } from '@/utils/url-params';
 import { docInGeoSelection } from '@/utils/geo';
 import { useToolbox } from '@/components/toolbox/toolbox-context';
 import { cn } from '@/lib/utils';
@@ -84,7 +84,7 @@ function invalidateRefreshTarget(fallbackWorkspaceName: string, detail?: { works
 }
 
 export default function WorkspaceDetailPage() {
-  const { workspaceName, treeName, '*': pathSplat } = useParams<{ workspaceName: string; treeName?: string; '*'?: string }>();
+  const { workspaceName, treeName } = useParams<{ workspaceName: string; treeName?: string; '*'?: string }>();
   const location = useLocation();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -131,12 +131,14 @@ export default function WorkspaceDetailPage() {
   const tbSort = toolboxState.filters.sort ?? DEFAULT_TOOLBOX_SORT;
   const tbFiltersKey = JSON.stringify({ a: tbAllOf, b: tbAnyOf, c: tbNoneOf, d: tbScopeFilters, s: tbSort });
 
-  // Path and tree from URL segments; UI state from query params. React Router v7
-  // does NOT decode the `*` splat, so a non-ASCII path arrives percent-encoded
-  // (buildWorkspaceUrl encodes segments). Decode per-segment so the path matches
-  // the decoded tree node names and the address bar shows "Náš Domček".
-  const decodeSeg = (s: string) => { try { return decodeURIComponent(s); } catch { return s; } };
-  const selectedPath = sanitizeUrlPath('/' + (pathSplat ?? '').split('/').map(decodeSeg).join('/'));
+  // Path from the URL. Derive it by parsing location.pathname with the shared
+  // decoder (parseWorkspacePathFromUrl safely decodes each segment) rather than
+  // the `useParams` `*` splat — React Router v7 leaves the splat percent-encoded
+  // (buildWorkspaceUrl encodes segments), and reading it raw round-tripped
+  // non-ASCII lossily ("Náš Domček" → "N Domek" on submit). Using the same
+  // decoder as the rest of the app keeps every entry point (tree select, address
+  // bar submit, reload, shared link) consistent.
+  const selectedPath = parseWorkspacePathFromUrl(location.pathname).path;
   const selectedTreeName = treeName ?? DEFAULT_WORKSPACE_TREE_NAME;
   // Bulk "Purge All" is hidden in the backends tree: backend-mirrored docs
   // are purged via the tree's "Remove and purge documents" (folder-scoped) or
