@@ -5,9 +5,19 @@ import type { Document, GeoSelection } from '@/types/workspace'
 // and notes most commonly, but also todos, files and emails.
 export function readDocGeo(doc: Document): { lat: number; lon: number } | null {
   const g = (doc.metadata as Record<string, unknown> | undefined)?.geo as { lat?: unknown; lon?: unknown } | undefined
-  const lat = Number(g?.lat)
-  const lon = Number(g?.lon)
+  const rawLat = g?.lat
+  const rawLon = g?.lon
+  // Reject missing/empty coords BEFORE coercing — Number(null) and Number('')
+  // are 0 (both finite), which would drop the document on "Null Island" (0,0)
+  // in the middle of the ocean. A record with { lat: null, lon: null } is
+  // "no location", not the equator.
+  if (rawLat == null || rawLon == null || rawLat === '' || rawLon === '') return null
+  const lat = Number(rawLat)
+  const lon = Number(rawLon)
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
+  // Exact (0,0) is almost always sentinel/bad data rather than a real fix off
+  // the Gulf of Guinea — treat it as unlocated too.
+  if (lat === 0 && lon === 0) return null
   return { lat, lon }
 }
 

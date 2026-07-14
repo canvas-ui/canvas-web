@@ -2,6 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState, createElement } from
 import { renderToStaticMarkup } from 'react-dom/server'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+// Marker clustering: overlapping/nearby pins collapse into a numbered circle
+// (shows the count), split on zoom, and spiderfy at max zoom so each doc stays
+// individually hoverable/clickable — the standard fix for stacked map pins.
+import 'leaflet.markercluster'
+import 'leaflet.markercluster/dist/MarkerCluster.css'
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 import { Square, Hexagon, Trash2, X, Check, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToolbox } from '../toolbox-context'
@@ -17,6 +23,14 @@ const DRAFT_STYLE: L.PathOptions = { color: IN_COLOR, weight: 2, dashArray: '5,5
 
 type DrawMode = 'idle' | 'rect' | 'polygon'
 const round6 = (n: number) => Math.round(n * 1e6) / 1e6
+
+// Cluster badge: a violet circle with the child count. Grows a little with the
+// order of magnitude so 3-digit counts still fit.
+function clusterIcon(count: number): L.DivIcon {
+  const size = count < 10 ? 32 : count < 100 ? 38 : 44
+  const html = `<div style="display:flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;border-radius:9999px;background:${IN_COLOR};color:#fff;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);font:600 12px system-ui,sans-serif;cursor:pointer">${count}</div>`
+  return L.divIcon({ html, className: 'canvas-map-cluster', iconSize: [size, size], iconAnchor: [size / 2, size / 2] })
+}
 
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
@@ -56,7 +70,7 @@ export function MapTab() {
 
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
-  const pinsRef = useRef<L.LayerGroup | null>(null)
+  const pinsRef = useRef<L.MarkerClusterGroup | null>(null)
   const selectionRef = useRef<L.Layer | null>(null)
   const draftLayerRef = useRef<L.LayerGroup | null>(null)
   const draftRef = useRef<L.LatLng[]>([])
@@ -116,7 +130,13 @@ export function MapTab() {
       attribution: '&copy; OpenStreetMap contributors',
       maxZoom: 19,
     }).addTo(map)
-    pinsRef.current = L.layerGroup().addTo(map)
+    pinsRef.current = L.markerClusterGroup({
+      showCoverageOnHover: false,   // no polygon flash on hover — keep it clean
+      maxClusterRadius: 44,
+      spiderfyOnMaxZoom: true,      // fan out exact-overlap pins at max zoom
+      chunkedLoading: true,
+      iconCreateFunction: (cluster) => clusterIcon(cluster.getChildCount()),
+    }).addTo(map)
     draftLayerRef.current = L.layerGroup().addTo(map)
     mapRef.current = map
 
@@ -223,6 +243,7 @@ export function MapTab() {
     if (!map || !layer) return
     layer.clearLayers()
     const pts: L.LatLngExpression[] = []
+    const markers: L.Marker[] = []
     for (const doc of mapDocuments) {
       const g = readDocGeo(doc)
       if (!g) continue
@@ -239,8 +260,9 @@ export function MapTab() {
       marker.on('click', () => {
         if (modeRef.current === 'idle') openDocument(doc, mapWorkspaceId ?? '')
       })
-      marker.addTo(layer)
+      markers.push(marker)
     }
+    layer.addLayers(markers)   // bulk add → clustering computed once
     // Frame the data once, so the map opens on the documents rather than the globe.
     if (!didFitRef.current && pts.length && !geoSelection) {
       didFitRef.current = true
