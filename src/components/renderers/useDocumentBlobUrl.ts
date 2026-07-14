@@ -9,6 +9,10 @@ interface Options {
   mode?: 'blob' | 'text'
   enabled?: boolean
   maxTextLength?: number
+  // Correct MIME to stamp on the object URL when the server returns a generic
+  // one (missing / application/octet-stream). <video>/<audio> won't decode a
+  // typeless blob, so a `.mp4` served as octet-stream must be re-typed.
+  typeHint?: string
 }
 
 interface State {
@@ -26,10 +30,10 @@ const idleState = (loading: boolean): State => ({ blobUrl: null, text: null, mim
 export function useDocumentBlobUrl(
   workspaceId: string,
   documentId: number | string,
-  { url, mode = 'blob', enabled = true, maxTextLength = 200_000 }: Options = {},
+  { url, mode = 'blob', enabled = true, maxTextLength = 200_000, typeHint }: Options = {},
 ): State {
   const { isPublic, fetchBlob } = useDocumentContent(workspaceId)
-  const fetchKey = `${isPublic ? 'pub' : 'ws'}:${workspaceId}:${documentId}:${url ?? ''}:${mode}:${enabled}`
+  const fetchKey = `${isPublic ? 'pub' : 'ws'}:${workspaceId}:${documentId}:${url ?? ''}:${mode}:${enabled}:${typeHint ?? ''}`
   const [state, setState] = useState<State>(idleState(enabled))
   // Render-time reset when the fetch target changes (no setState-in-effect).
   const [lastKey, setLastKey] = useState(fetchKey)
@@ -50,9 +54,13 @@ export function useDocumentBlobUrl(
           const txt = await blob.text()
           if (!cancelled) setState({ blobUrl: null, text: txt.slice(0, maxTextLength), mime, error: null, loading: false })
         } else {
-          createdUrl = URL.createObjectURL(blob)
+          // Re-type when the server gave a generic/empty MIME but we know better
+          // from the filename — otherwise <video>/<audio> refuse to decode.
+          const needsRetype = typeHint && (!blob.type || blob.type === 'application/octet-stream')
+          const typed = needsRetype ? blob.slice(0, blob.size, typeHint) : blob
+          createdUrl = URL.createObjectURL(typed)
           if (cancelled) { URL.revokeObjectURL(createdUrl); createdUrl = null; return }
-          setState({ blobUrl: createdUrl, text: null, mime, error: null, loading: false })
+          setState({ blobUrl: createdUrl, text: null, mime: needsRetype ? typeHint : mime, error: null, loading: false })
         }
       })
       .catch((e) => {
