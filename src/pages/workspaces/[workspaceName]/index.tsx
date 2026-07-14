@@ -11,10 +11,12 @@ import { useMenu } from '@/components/shell/menu-context';
 import { DefaultCanvas } from '@/components/canvas/DefaultCanvas';
 import type { CanvasInfo } from '@/components/canvas/DefaultCanvas';
 import { CanvasGrid } from '@/components/canvas/CanvasGrid';
+import type { WidgetFetchOpts, WidgetDocumentsResult } from '@/components/canvas/widget-types';
 import type { DocumentPasteOptions } from '@/components/common/document-list';
 import {
   getWorkspaceDocuments,
   getWorkspaceLayerDocuments,
+  getCanvasPathDocuments,
   getCachedWorkspaceTreeByName,
   invalidateWorkspaceTreeCache,
   createWorkspaceCanvas,
@@ -202,6 +204,32 @@ export default function WorkspaceDetailPage() {
     () => (geoSelection ? documents.filter((d) => docInGeoSelection(d, geoSelection)) : documents),
     [documents, geoSelection],
   );
+
+  // Live canvas filter preview: while the toolbox filters are dirty on a canvas,
+  // feed the widgets from a client-driven fetch (applyCanvasSpec:false) so every
+  // filter edit — including loosening/removing one — reloads the canvas in real
+  // time. When clean we pass undefined, so CanvasGrid uses its default
+  // (server-composed) read and a saved canvas renders exactly as stored.
+  const canvasFetchDocuments = useCallback(async (opts?: WidgetFetchOpts): Promise<WidgetDocumentsResult> => {
+    const res = await getCanvasPathDocuments(workspaceName!, selectedPath, selectedTreeName, {
+      limit: opts?.limit,
+      offset: opts?.offset,
+      page: opts?.page,
+      sortBy: opts?.sortBy,
+      order: opts?.order,
+      // Keep the widget's fixed scope (e.g. gallery's data/mime/image) AND apply
+      // the live toolbox feature filters on top.
+      allOf: [...tbAllOf, ...(opts?.allOf ?? [])],
+      anyOf: tbAnyOf,
+      noneOf: tbNoneOf,
+      filters: tbScopeFilters,
+      queries: [...serverSearchQueries, ...(opts?.queries ?? []), ...(opts?.q ? [opts.q] : [])],
+      applyCanvasSpec: false,
+    });
+    return { payload: (res.payload as Document[]) || [], count: res.count, totalCount: res.totalCount };
+  // tbFiltersKey encodes all the tb* filter arrays; serverSearchQueries covers the query stack.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceName, selectedPath, selectedTreeName, tbFiltersKey, serverSearchQueries]);
 
   // Fetch workspace details
   useEffect(() => {
@@ -927,6 +955,9 @@ export default function WorkspaceDetailPage() {
           querySpec={selectedNode.querySpec}
           metadata={selectedNode.metadata}
           isLocked={!!selectedNode.locked}
+          // Only override the widget fetch while previewing dirty toolbox
+          // filters; a clean canvas keeps the default server-composed read.
+          fetchDocuments={toolboxState.isDirty ? canvasFetchDocuments : undefined}
         />
       )}
     </DefaultCanvas>

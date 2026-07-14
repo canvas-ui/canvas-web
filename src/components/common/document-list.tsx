@@ -1195,7 +1195,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                 title="Save current query and filters"
               >
                 <Save className="h-3.5 w-3.5 mr-1" />
-                {isSavingChanges ? 'Saving...' : 'Save changes'}
+                {isSavingChanges ? 'Saving...' : 'Save filters'}
               </Button>
             )}
           </div>

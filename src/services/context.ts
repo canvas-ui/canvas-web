@@ -23,6 +23,10 @@ type PaginationOptions = {
   queries?: string[];
   anyOf?: string[];
   noneOf?: string[];
+  sortBy?: string;
+  order?: 'asc' | 'desc';
+  /** When false, the context skips folding its STORED binding — the caller drives filters (live preview). */
+  applyContextSpec?: boolean;
 };
 
 interface ApiPayload<T = unknown> {
@@ -128,7 +132,7 @@ export async function createContext(contextData: CreateContextPayload): Promise<
   }
 }
 
-export async function patchContext(id: string, updates: { name?: string; description?: string; metadata?: Record<string, unknown> }, ownerId?: string): Promise<Context> {
+export async function patchContext(id: string, updates: { name?: string; description?: string; metadata?: Record<string, unknown>; features?: { allOf: string[]; anyOf: string[]; noneOf: string[] }; filters?: string[] }, ownerId?: string): Promise<Context> {
   try {
     const endpoint = withOwnerId(`${API_ROUTES.contexts}/${id}`, ownerId);
     const response = await api.put<{ payload: { context: Context } }>(endpoint, updates);
@@ -195,6 +199,9 @@ export async function getContextDocuments(
     filterArray.forEach(filter => params.append('filters', filter));
     (options.anyOf || []).filter(Boolean).forEach(k => params.append('anyOf', k));
     (options.noneOf || []).filter(Boolean).forEach(k => params.append('noneOf', k));
+    if (options.sortBy) params.append('sortBy', options.sortBy);
+    if (options.order) params.append('order', options.order);
+    if (options.applyContextSpec === false) params.append('applyContextSpec', 'false');
     if (ownerId) params.append('ownerId', ownerId);
     if (options.includeServerContext !== undefined) {
       params.append('includeServerContext', options.includeServerContext.toString());

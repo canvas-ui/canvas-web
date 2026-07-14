@@ -241,12 +241,15 @@ export async function getWorkspaceDocuments(
   id: string,
   contextSpec: string = '/',
   featureArray: string[] = [],
-  options: { limit?: number; offset?: number; page?: number; treeName?: string; treeType?: string; q?: string; queries?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[]; scope?: 'path' | 'workspace'; sortBy?: string; order?: 'asc' | 'desc' } = {}
+  options: { limit?: number; offset?: number; page?: number; treeName?: string; treeType?: string; q?: string; queries?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[]; scope?: 'path' | 'workspace'; sortBy?: string; order?: 'asc' | 'desc'; applyCanvasSpec?: boolean } = {}
 ): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }> {
   try {
     const params = new URLSearchParams();
     const wholeWorkspace = options.scope === 'workspace'
     if (wholeWorkspace) params.append('scope', 'workspace')
+    // Live canvas preview: opt out of server-side canvas querySpec folding so the
+    // client's (toolbox) filters fully drive the read, incl. removing a filter.
+    if (options.applyCanvasSpec === false) params.append('applyCanvasSpec', 'false')
     params.append('treeNameOrTreeId', options.treeName || DEFAULT_WORKSPACE_TREE_NAME)
     if (options.treeType) params.append('treeType', options.treeType)
     if (contextSpec && !wholeWorkspace) params.append('context', contextSpec)
@@ -281,7 +284,7 @@ export async function getCanvasPathDocuments(
   id: string,
   path: string,
   treeName = DEFAULT_WORKSPACE_TREE_NAME,
-  options: { limit?: number; offset?: number; page?: number; q?: string; queries?: string[]; allOf?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[]; sortBy?: string; order?: 'asc' | 'desc' } = {}
+  options: { limit?: number; offset?: number; page?: number; q?: string; queries?: string[]; allOf?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[]; sortBy?: string; order?: 'asc' | 'desc'; applyCanvasSpec?: boolean } = {}
 ): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }> {
   const treeType = treeName === 'directory' ? 'directory' : 'context'
   return getWorkspaceDocuments(id, path, options.allOf || [], {
@@ -297,6 +300,7 @@ export async function getCanvasPathDocuments(
     filters: options.filters,
     sortBy: options.sortBy,
     order: options.order,
+    applyCanvasSpec: options.applyCanvasSpec,
   })
 }
 

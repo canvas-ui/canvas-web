@@ -64,8 +64,12 @@ function pinIcon(schema: string, inside: boolean): L.DivIcon {
 // refine the content area in real time — pins recolor in/out and the browser
 // filters the ALREADY-fetched set (no re-fetch, no backend polygon needed).
 export function MapTab() {
-  const { state, setGeoSelection } = useToolbox()
+  const { state, setGeoSelection, setGeoBBox } = useToolbox()
   const { mapDocuments, geoSelection, mapWorkspaceId } = state
+  // Rectangle = a STORABLE geo filter (geo:bbox → server-applied, savable to
+  // canvas/context). Polygon stays a client-side ephemeral refine (no backend
+  // polygon coverer).
+  const bbox = state.filters.geo.bbox
   const { open: openDocument } = useDocumentModal()
 
   const containerRef = useRef<HTMLDivElement>(null)
@@ -119,7 +123,8 @@ export function MapTab() {
     clearDraft()
     setMode('idle')
     setGeoSelection(null)
-  }, [clearDraft, setGeoSelection])
+    setGeoBBox(null)
+  }, [clearDraft, setGeoSelection, setGeoBBox])
 
   // ── Init the map once ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -168,10 +173,7 @@ export function MapTab() {
       try { container.releasePointerCapture(ev.pointerId) } catch { /* ignore */ }
       const sw = bounds.getSouthWest(); const ne = bounds.getNorthEast()
       if (sw.lat !== ne.lat && sw.lng !== ne.lng) {
-        setGeoSelection({
-          kind: 'rect',
-          bbox: { minLat: round6(sw.lat), minLon: round6(sw.lng), maxLat: round6(ne.lat), maxLon: round6(ne.lng) },
-        })
+        setGeoBBox({ minLat: round6(sw.lat), minLon: round6(sw.lng), maxLat: round6(ne.lat), maxLon: round6(ne.lng) })
       }
       setMode('idle')
     }
@@ -204,7 +206,7 @@ export function MapTab() {
       map.remove()
       mapRef.current = null; pinsRef.current = null; draftLayerRef.current = null; selectionRef.current = null
     }
-  }, [setGeoSelection, redrawDraft])
+  }, [setGeoSelection, setGeoBBox, redrawDraft])
 
   // ── Toggle pan-drag vs draw ────────────────────────────────────────────────
   useEffect(() => {
@@ -275,18 +277,21 @@ export function MapTab() {
     const map = mapRef.current
     if (!map) return
     if (selectionRef.current) { selectionRef.current.remove(); selectionRef.current = null }
-    if (!geoSelection) return
-    if (geoSelection.kind === 'rect') {
-      const b = geoSelection.bbox
-      selectionRef.current = L.rectangle(L.latLngBounds([b.minLat, b.minLon], [b.maxLat, b.maxLon]), SELECT_STYLE).addTo(map)
-    } else {
-      selectionRef.current = L.polygon(geoSelection.points.map((p) => [p.lat, p.lon]) as L.LatLngExpression[], SELECT_STYLE).addTo(map)
+    if (!bbox && !geoSelection) return
+    const group = L.layerGroup()
+    if (bbox) {
+      L.rectangle(L.latLngBounds([bbox.minLat, bbox.minLon], [bbox.maxLat, bbox.maxLon]), SELECT_STYLE).addTo(group)
     }
-  }, [geoSelection])
+    if (geoSelection?.kind === 'polygon') {
+      L.polygon(geoSelection.points.map((p) => [p.lat, p.lon]) as L.LatLngExpression[], SELECT_STYLE).addTo(group)
+    }
+    group.addTo(map)
+    selectionRef.current = group
+  }, [bbox, geoSelection])
 
   const status = mode === 'rect' ? 'Drag a box on the map…'
     : mode === 'polygon' ? `Tap to add points${draftCount ? ` · ${draftCount}` : ''}`
-    : geoSelection ? 'Area selected' : 'Pan & pick an area'
+    : (bbox || geoSelection) ? 'Area selected' : 'Pan & pick an area'
 
   const drawBtn = 'flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors'
 
@@ -339,7 +344,7 @@ export function MapTab() {
         <button
           type="button"
           onClick={clearSelection}
-          disabled={!geoSelection && mode === 'idle'}
+          disabled={!bbox && !geoSelection && mode === 'idle'}
           className={cn(drawBtn, 'border-border text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent')}
           title="Clear the area selection"
         >

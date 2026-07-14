@@ -290,10 +290,10 @@ export function DefaultCanvas({
               onClick={onSaveChanges}
               disabled={isSavingChanges}
               className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 text-xs border rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground disabled:opacity-50"
-              title="Save canvas"
+              title="Save filters"
             >
               <Save className="w-3 h-3" />
-              <span className="hidden sm:inline">{isSavingChanges ? 'Saving...' : 'Save canvas'}</span>
+              <span className="hidden sm:inline">{isSavingChanges ? 'Saving...' : 'Save filters'}</span>
             </button>
           )}
           {onShareCanvas && (

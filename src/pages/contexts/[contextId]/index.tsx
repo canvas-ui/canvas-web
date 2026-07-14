@@ -11,7 +11,7 @@ import {
 } from '@/services/context';
 import socketService from '@/lib/socket';
 import { DefaultCanvas } from '@/components/canvas/DefaultCanvas';
-import { Document as WorkspaceDocument } from '@/types/workspace';
+import { Document as WorkspaceDocument, buildDatetimeFilters, buildGeoFilters } from '@/types/workspace';
 import { docInGeoSelection } from '@/utils/geo';
 import { useToolbox } from '@/components/toolbox/toolbox-context';
 import { useMenu } from '@/components/shell/menu-context';
@@ -77,7 +77,12 @@ export default function ContextDetailPage() {
   const tbAllOf = toolboxState.filters.features.allOf;
   const tbAnyOf = toolboxState.filters.features.anyOf;
   const tbNoneOf = toolboxState.filters.features.noneOf;
-  const tbFiltersKey = JSON.stringify({ a: tbAllOf, b: tbAnyOf, c: tbNoneOf });
+  // Timeline + geo tokens scope the context view live too — a context is a
+  // dynamic binding, so changing them refetches (and, once saved, is what bound
+  // clients inherit). The web UI drives filters (applyContextSpec:false), so
+  // removing one previews immediately.
+  const tbScopeFilters = [...buildDatetimeFilters(toolboxState.filters.timeline), ...buildGeoFilters(toolboxState.filters.geo)];
+  const tbFiltersKey = JSON.stringify({ a: tbAllOf, b: tbAnyOf, c: tbNoneOf, d: tbScopeFilters });
 
   const [context, setContext] = useState<ContextData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -104,8 +109,8 @@ export default function ContextDetailPage() {
       const data = await getContextDocuments(
         contextId,
         tbAllOf,
-        [],
-        { limit: pageSize, page: currentPage, queries: serverSearchQueries.length ? serverSearchQueries : undefined, anyOf: tbAnyOf, noneOf: tbNoneOf },
+        tbScopeFilters,
+        { limit: pageSize, page: currentPage, queries: serverSearchQueries.length ? serverSearchQueries : undefined, anyOf: tbAnyOf, noneOf: tbNoneOf, applyContextSpec: false },
         ownerId,
       );
       setDocuments(

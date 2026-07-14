@@ -579,7 +579,11 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
         const existingMeta = (ctx as Context & { metadata?: Record<string, unknown> }).metadata || {}
         const searchQuery = new URLSearchParams(location.search).get('q') || new URLSearchParams(location.search).get('search') || ''
         await patchContext(activeContextId, {
+          // metadata.toolbox = UI state (reconstructs the toolbox + dirty check);
+          // features/filters = the SERVER-ENFORCED binding bound clients inherit.
           metadata: { ...existingMeta, toolbox: filters, toolboxSearchQuery: searchQuery.trim() || undefined },
+          features: filters.features,
+          filters: [...buildDatetimeFilters(filters.timeline), ...buildGeoFilters(filters.geo)],
         })
       }
       const searchQuery = new URLSearchParams(location.search).get('q') || new URLSearchParams(location.search).get('search') || ''
@@ -640,10 +644,11 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const { features: f, timeline: tl } = state.filters
+  const { features: f, timeline: tl, geo } = state.filters
   const hasActiveFilters =
     f.allOf.length > 0 || f.anyOf.length > 0 || f.noneOf.length > 0 ||
-    tl.quickFilter !== null || (tl.selectedTimelines?.length ?? 0) > 0
+    tl.quickFilter !== null || (tl.selectedTimelines?.length ?? 0) > 0 ||
+    geo.bbox !== null
 
   return (
     <ToolboxCtx.Provider

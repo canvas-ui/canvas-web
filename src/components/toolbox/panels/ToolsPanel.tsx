@@ -906,7 +906,7 @@ export function ToolsPanel() {
               className="flex items-center gap-1.5 rounded-md bg-violet-600 px-2.5 py-1 text-xs text-white transition-colors hover:bg-violet-500 disabled:opacity-60"
             >
               {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-              Save changes
+              Save filters
             </button>
           )}
         </div>
