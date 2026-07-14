@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css'
 import { Square, Hexagon, Trash2, X, Check, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToolbox } from '../toolbox-context'
+import { useDocumentModal } from '@/components/shell/document-modal-context'
 import { schemaIcon } from '@/lib/schema-meta'
 import { readDocGeo, pointInGeoSelection } from '@/utils/geo'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
@@ -37,7 +38,7 @@ function pinIcon(schema: string, inside: boolean): L.DivIcon {
   let icon = divIconCache.get(key)
   if (!icon) {
     const bg = inside ? IN_COLOR : OUT_COLOR
-    const html = `<div style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:9999px;background:${bg};color:#fff;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4)">${glyph(schema)}</div>`
+    const html = `<div style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:9999px;background:${bg};color:#fff;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);cursor:pointer">${glyph(schema)}</div>`
     icon = L.divIcon({ html, className: 'canvas-map-pin', iconSize: [26, 26], iconAnchor: [13, 13] })
     divIconCache.set(key, icon)
   }
@@ -50,7 +51,8 @@ function pinIcon(schema: string, inside: boolean): L.DivIcon {
 // filters the ALREADY-fetched set (no re-fetch, no backend polygon needed).
 export function MapTab() {
   const { state, setGeoSelection } = useToolbox()
-  const { mapDocuments, geoSelection } = state
+  const { mapDocuments, geoSelection, mapWorkspaceId } = state
+  const { open: openDocument } = useDocumentModal()
 
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
@@ -232,6 +234,11 @@ export function MapTab() {
         zIndexOffset: inside ? 1000 : 0,
       })
       marker.bindTooltip(escapeHtml(getDocumentDisplayInfo(doc).title), { direction: 'top', offset: [0, -14] })
+      // Click a pin → open the shared document details modal. Suppressed while
+      // drawing so a rect/polygon gesture isn't hijacked by a pin.
+      marker.on('click', () => {
+        if (modeRef.current === 'idle') openDocument(doc, mapWorkspaceId ?? '')
+      })
       marker.addTo(layer)
     }
     // Frame the data once, so the map opens on the documents rather than the globe.
@@ -239,7 +246,7 @@ export function MapTab() {
       didFitRef.current = true
       map.fitBounds(L.latLngBounds(pts), { padding: [30, 30], maxZoom: 14, animate: false })
     }
-  }, [mapDocuments, geoSelection])
+  }, [mapDocuments, geoSelection, openDocument, mapWorkspaceId])
 
   // ── Reflect the committed selection shape ──────────────────────────────────
   useEffect(() => {

@@ -67,6 +67,9 @@ export interface ToolboxState {
   // browser — no re-fetch, not persisted. Cleared on navigation.
   geoSelection: GeoSelection | null
   mapDocuments: WorkspaceDocument[]
+  // Workspace id/name the map documents belong to — needed to open a pin's
+  // details (renderers fetch bytes per workspace).
+  mapWorkspaceId: string | null
   savedFilters: ToolboxFilters | null
   savedSearchQuery: string | null
   isDirty: boolean
@@ -93,7 +96,7 @@ type ToolboxAction =
   | { type: 'SET_TOOLS_TAB'; tab: ToolsTab }
   | { type: 'SET_ACCENT_COLOR'; color: string | null }
   | { type: 'SET_GEO_SELECTION'; selection: GeoSelection | null }
-  | { type: 'SET_MAP_DOCUMENTS'; documents: WorkspaceDocument[] }
+  | { type: 'SET_MAP_DOCUMENTS'; documents: WorkspaceDocument[]; workspaceId: string | null }
   | {
       type: 'SET_NAVIGATION'
       workspaceName: string | null
@@ -137,6 +140,7 @@ const initialState: ToolboxState = {
   filters: DEFAULT_TOOLBOX_FILTERS,
   geoSelection: null,
   mapDocuments: [],
+  mapWorkspaceId: null,
   savedFilters: null,
   savedSearchQuery: null,
   isDirty: false,
@@ -173,7 +177,9 @@ function toolboxReducer(state: ToolboxState, action: ToolboxAction): ToolboxStat
     case 'SET_GEO_SELECTION':
       return { ...state, geoSelection: action.selection }
     case 'SET_MAP_DOCUMENTS':
-      return state.mapDocuments === action.documents ? state : { ...state, mapDocuments: action.documents }
+      return (state.mapDocuments === action.documents && state.mapWorkspaceId === action.workspaceId)
+        ? state
+        : { ...state, mapDocuments: action.documents, mapWorkspaceId: action.workspaceId }
     case 'SET_NAVIGATION':
       return {
         ...state,
@@ -316,7 +322,7 @@ interface ToolboxContextValue {
   // Map filter (client-side): the drawn area, and the result set the page
   // publishes for the Map tab to plot.
   setGeoSelection: (selection: GeoSelection | null) => void
-  setMapDocuments: (documents: WorkspaceDocument[]) => void
+  setMapDocuments: (documents: WorkspaceDocument[], workspaceId?: string | null) => void
   setSort: (sort: ToolboxSort) => void
   saveFilters: () => Promise<void>
   deleteBitmap: (key: string) => Promise<void>
@@ -538,8 +544,8 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
   const setGeoSelection = useCallback((selection: GeoSelection | null) => {
     dispatch({ type: 'SET_GEO_SELECTION', selection })
   }, [])
-  const setMapDocuments = useCallback((documents: WorkspaceDocument[]) => {
-    dispatch({ type: 'SET_MAP_DOCUMENTS', documents })
+  const setMapDocuments = useCallback((documents: WorkspaceDocument[], workspaceId: string | null = null) => {
+    dispatch({ type: 'SET_MAP_DOCUMENTS', documents, workspaceId })
   }, [])
 
   const saveFilters = useCallback(async () => {

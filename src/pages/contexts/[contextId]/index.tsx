@@ -187,7 +187,8 @@ export default function ContextDetailPage() {
   // Feed the toolbox map with this context's results and refine them by any
   // drawn area — client-side, over the already-fetched set.
   const geoSelection = toolboxState.geoSelection;
-  useEffect(() => { setMapDocuments(documents); }, [documents, setMapDocuments]);
+  const mapWsId = context?.workspaceName || context?.workspaceId || null;
+  useEffect(() => { setMapDocuments(documents, mapWsId); }, [documents, mapWsId, setMapDocuments]);
   useEffect(() => () => setMapDocuments([]), [setMapDocuments]);
   const shownDocuments = useMemo(
     () => (geoSelection ? documents.filter((d) => docInGeoSelection(d, geoSelection)) : documents),

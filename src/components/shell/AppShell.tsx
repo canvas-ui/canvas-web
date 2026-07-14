@@ -8,6 +8,7 @@ import { ToolboxProvider } from '@/components/toolbox/toolbox-context'
 import { AddPanel } from '@/components/toolbox/AddPanel'
 import { ToolboxPanel } from '@/components/toolbox/ToolboxPanel'
 import { SideViewProvider } from './side-view-context'
+import { DocumentModalProvider } from './document-modal-context'
 
 export function AppShell() {
   return (
@@ -15,6 +16,7 @@ export function AppShell() {
       <AgentSessionProvider>
         <ToolboxProvider>
           <SideViewProvider>
+            <DocumentModalProvider>
             {/* h-dvh (not h-screen) so the shell tracks the real visible height
                 when mobile browser chrome expands/collapses */}
             <div className="flex h-dvh w-full overflow-hidden canvas-desk gap-2 p-2">
@@ -32,6 +34,7 @@ export function AppShell() {
                 rail, toggled by the bottom-left menu button */}
             <ToolboxFab />
             <MobileMenuToggle />
+            </DocumentModalProvider>
           </SideViewProvider>
         </ToolboxProvider>
       </AgentSessionProvider>

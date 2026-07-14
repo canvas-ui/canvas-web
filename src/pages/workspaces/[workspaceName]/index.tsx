@@ -196,7 +196,7 @@ export default function WorkspaceDetailPage() {
   // as pins) and refine the content area by any drawn area — client-side, over
   // the already-fetched set, so navigating the map never triggers a re-fetch.
   const geoSelection = toolboxState.geoSelection;
-  useEffect(() => { setMapDocuments(documents); }, [documents, setMapDocuments]);
+  useEffect(() => { setMapDocuments(documents, workspace?.name ?? null); }, [documents, workspace?.name, setMapDocuments]);
   useEffect(() => () => setMapDocuments([]), [setMapDocuments]);
   const shownDocuments = useMemo(
     () => (geoSelection ? documents.filter((d) => docInGeoSelection(d, geoSelection)) : documents),
