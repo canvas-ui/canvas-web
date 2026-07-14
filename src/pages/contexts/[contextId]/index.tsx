@@ -17,6 +17,7 @@ import { useToolbox } from '@/components/toolbox/toolbox-context';
 import { useMenu } from '@/components/shell/menu-context';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Icon } from '@iconify/react';
+import { Filter } from 'lucide-react';
 import { visibleAccentColor } from '@/utils/color';
 import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style';
 import { cn } from '@/lib/utils';
@@ -70,7 +71,7 @@ export default function ContextDetailPage() {
     return stack.length ? stack : (legacy ? [legacy] : []);
   }, [location.search]);
   const { showToast } = useToast();
-  const { state: toolboxState, saveFilters, setAccentColor, setMapDocuments } = useToolbox();
+  const { state: toolboxState, saveFilters, setAccentColor, setMapDocuments, toggleView } = useToolbox();
   const { openM2Drawer } = useMenu();
   const isMobile = useIsMobile();
   const tbAllOf = toolboxState.filters.features.allOf;
@@ -423,6 +424,21 @@ export default function ContextDetailPage() {
         <span className="min-w-0 truncate text-xs text-muted-foreground">
           @ {context.workspaceName || context.workspaceId}
         </span>
+        <div className="flex-1" />
+        {/* Mirrors the workspace status bar — opens the toolbox Filters panel.
+            Especially needed on mobile, where the toolbox FAB is easy to miss. */}
+        <button
+          onClick={() => toggleView('tools')}
+          className={cn(
+            'flex shrink-0 items-center gap-1.5 px-3 py-1 text-xs border rounded-md transition-colors',
+            toolboxState.t1Open && toolboxState.t1View === 'tools'
+              ? 'bg-accent text-foreground'
+              : 'hover:bg-accent text-muted-foreground hover:text-foreground',
+          )}
+        >
+          <Filter className="w-3 h-3" />
+          Filter
+        </button>
       </div>
       <DefaultCanvas
         urlType={urlType}
