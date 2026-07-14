@@ -81,7 +81,18 @@ export function VideoRenderer({ workspaceId, document, className = '' }: Rendere
   const { blobUrl, error, loading } = useDocumentBlobUrl(workspaceId, document.id)
   return (
     <MediaShell error={error} loading={loading}>
-      {blobUrl && <video src={blobUrl} controls className={`max-h-[70vh] w-full ${className}`} />}
+      {/* playsInline is REQUIRED for inline playback on iOS / iOS-PWA (without it
+          the element refuses to play inline and reads as "broken"). preload=
+          metadata avoids buffering the whole file up front. */}
+      {blobUrl && (
+        <video
+          src={blobUrl}
+          controls
+          playsInline
+          preload="metadata"
+          className={`max-h-[70vh] w-full ${className}`}
+        />
+      )}
     </MediaShell>
   )
 }

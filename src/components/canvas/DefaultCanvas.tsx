@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { LayoutDashboard, BookMarked, Share2, Unlink, Save, Trash2, Plus, Link2, FolderTree } from 'lucide-react'
 import { Document, TreeNode } from '@/types/workspace'
 import { DocumentList } from '@/components/common/document-list'
@@ -63,15 +63,14 @@ function UrlBar({
   const scheme = schemeMatch?.[1] ?? ''
   const initialPath = schemeMatch?.[2] ?? urlDisplay
 
-  const [value, setValue] = useState(initialPath)
-  // Re-seed when navigation changes the URL out from under the input. Done as a
-  // render-time reset (React's "adjust state on prop change" pattern) rather
-  // than an effect, so the field tracks the address bar without a flash.
-  const [seed, setSeed] = useState(initialPath)
-  if (seed !== initialPath) {
-    setSeed(initialPath)
-    setValue(initialPath)
-  }
+  // UNCONTROLLED input (the DOM owns the text): a controlled `value` write-back
+  // fights mobile IMEs (Gboard composes even latin text), which mangled
+  // selected/typed paths — "Nas Domcek" came out "N Domcek". `submit` reads the
+  // ref; navigation re-seeds the DOM value via the effect below.
+  const inputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (inputRef.current) inputRef.current.value = initialPath
+  }, [initialPath])
 
   const chip = (
     <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-muted border text-muted-foreground shrink-0">
@@ -103,17 +102,17 @@ function UrlBar({
           className="flex flex-1 min-w-0 items-center rounded border border-transparent transition-colors hover:border-border focus-within:border-border focus-within:bg-background"
           onSubmit={(e) => {
             e.preventDefault()
-            onUrlSubmit(value)
+            onUrlSubmit(inputRef.current?.value ?? initialPath)
           }}
         >
           {scheme && (
             <span className="shrink-0 pl-2 font-mono text-sm text-muted-foreground select-none">{scheme}</span>
           )}
           <input
+            ref={inputRef}
             type="text"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Escape') setValue(initialPath) }}
+            defaultValue={initialPath}
+            onKeyDown={(e) => { if (e.key === 'Escape' && inputRef.current) inputRef.current.value = initialPath }}
             spellCheck={false}
             autoComplete="off"
             title="Edit path — press Enter to go"
@@ -291,9 +290,10 @@ export function DefaultCanvas({
               onClick={onSaveChanges}
               disabled={isSavingChanges}
               className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 text-xs border rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground disabled:opacity-50"
+              title="Save canvas"
             >
               <Save className="w-3 h-3" />
-              {isSavingChanges ? 'Saving...' : 'Save canvas'}
+              <span className="hidden sm:inline">{isSavingChanges ? 'Saving...' : 'Save canvas'}</span>
             </button>
           )}
           {onShareCanvas && (
@@ -302,9 +302,10 @@ export function DefaultCanvas({
               onClick={onShareCanvas}
               disabled={isSharingCanvas || isDeletingCanvas}
               className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 text-xs border rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground disabled:opacity-50"
+              title={isCanvasShared ? 'Copy public link' : 'Share canvas'}
             >
               <Share2 className="w-3 h-3" />
-              {isSharingCanvas ? 'Sharing...' : isCanvasShared ? 'Copy link' : 'Share'}
+              <span className="hidden sm:inline">{isSharingCanvas ? 'Sharing...' : isCanvasShared ? 'Copy link' : 'Share'}</span>
             </button>
           )}
           {isCanvasShared && onUnshareCanvas && (
@@ -315,7 +316,7 @@ export function DefaultCanvas({
               className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 text-xs border rounded-md hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive disabled:opacity-50"
             >
               <Unlink className="w-3 h-3" />
-              Unshare
+              <span className="hidden sm:inline">Unshare</span>
             </button>
           )}
           {onDeleteCanvas && (
@@ -327,7 +328,7 @@ export function DefaultCanvas({
               className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 text-xs border rounded-md hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive disabled:opacity-50"
             >
               <Trash2 className="w-3 h-3" />
-              {isDeletingCanvas ? 'Deleting…' : 'Delete'}
+              <span className="hidden sm:inline">{isDeletingCanvas ? 'Deleting…' : 'Delete'}</span>
             </button>
           )}
           <LinkSelectionButton count={selectedCount} />
@@ -346,9 +347,10 @@ export function DefaultCanvas({
               type="button"
               onClick={onSaveAsCanvas}
               className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 text-xs border rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+              title="Save as canvas"
             >
               <BookMarked className="w-3 h-3" />
-              Save as canvas
+              <span className="hidden sm:inline">Save as canvas</span>
             </button>
           )}
           <LinkSelectionButton count={selectedCount} />
