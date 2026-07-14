@@ -743,6 +743,31 @@ export async function fetchDocumentBlobUrl(workspaceId: string, documentId: numb
 }
 
 /**
+ * Direct, range-streamable content URL for a media element (<video>/<audio>).
+ * Auth rides on the short-lived media cookie minted by requestContentTicket —
+ * a media element can't send an Authorization header, so we never put a token
+ * in this URL. Requires the ticket to have been minted first.
+ */
+export function documentStreamUrl(workspaceId: string, documentId: number | string, opts: { url?: string } = {}): string {
+  return buildContentApiPath(workspaceId, documentId, opts)
+}
+
+/**
+ * Mint the short-lived, HttpOnly media cookie so a subsequent <video>/<audio>
+ * GET to documentStreamUrl authenticates via the cookie. `credentials:'include'`
+ * lets the browser store the Set-Cookie (same-origin API).
+ */
+export async function requestContentTicket(workspaceId: string, documentId: number | string): Promise<boolean> {
+  const token = localStorage.getItem('authToken')
+  const res = await fetch(`${API_ROUTES.workspaces}/${workspaceId}/documents/${documentId}/content-ticket`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: 'include',
+  })
+  return res.ok
+}
+
+/**
  * Stream the document bytes to disk via the browser's download UI. Uses the
  * authed fetch + blob roundtrip so no token ever appears in the URL.
  */

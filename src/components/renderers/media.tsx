@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Download } from 'lucide-react'
-import { useDocumentBlobUrl } from './useDocumentBlobUrl'
+import { useDocumentBlobUrl, useDocumentStreamSrc } from './useDocumentBlobUrl'
 import { useDocumentThumbnail } from './useDocumentThumbnail'
 import { useDocumentContent } from './public-share'
 import { getLocationFilename } from '@/lib/document-display'
-import { mimeFromFilename, type RendererProps } from './types'
+import type { RendererProps } from './types'
 
 // Share-aware "Download original" button — hits the content endpoint with
 // download=1 (Content-Disposition: attachment) via an authed fetch, so no token
@@ -89,13 +89,13 @@ export function ImageRenderer({ workspaceId, document: doc, className = '' }: Re
 }
 
 export function AudioRenderer({ workspaceId, document, className = '' }: RendererProps) {
-  const typeHint = mimeFromFilename(getLocationFilename(document))
-  const { blobUrl, error, loading } = useDocumentBlobUrl(workspaceId, document.id, { typeHint })
+  // Stream via a direct (range-capable) URL — no full-file download.
+  const { src, error, loading } = useDocumentStreamSrc(workspaceId, document.id)
   return (
     <MediaShell error={error} loading={loading}>
-      {blobUrl && (
+      {src && (
         <div className={`space-y-2 ${className}`}>
-          <audio src={blobUrl} controls className="w-full" />
+          <audio src={src} controls preload="metadata" className="w-full" />
           <DownloadButton workspaceId={workspaceId} document={document} />
         </div>
       )}
@@ -104,19 +104,20 @@ export function AudioRenderer({ workspaceId, document, className = '' }: Rendere
 }
 
 export function VideoRenderer({ workspaceId, document, className = '' }: RendererProps) {
-  // Give the blob a real MIME from the filename when the server sent a generic
-  // one — <video> won't decode a typeless blob.
-  const typeHint = mimeFromFilename(getLocationFilename(document))
-  const { blobUrl, error, loading } = useDocumentBlobUrl(workspaceId, document.id, { typeHint })
+  // Stream directly from the content endpoint (HTTP Range → seek + no upfront
+  // full-file download). Auth rides on a short-lived media cookie (mintTicket
+  // inside the hook); the server sets a real Content-Type via its filename
+  // fallback, so a generic stored contentType no longer blocks playback.
+  const { src, error, loading } = useDocumentStreamSrc(workspaceId, document.id)
   const [playError, setPlayError] = useState(false)
   return (
     <MediaShell error={error} loading={loading}>
-      {blobUrl && (
+      {src && (
         <div className={`space-y-2 ${className}`}>
           {/* playsInline is REQUIRED for inline playback on iOS / iOS-PWA.
               preload=metadata avoids buffering the whole file up front. */}
           <video
-            src={blobUrl}
+            src={src}
             controls
             playsInline
             preload="metadata"
@@ -125,7 +126,7 @@ export function VideoRenderer({ workspaceId, document, className = '' }: Rendere
           />
           {playError && (
             <p className="text-xs text-muted-foreground">
-              This video can’t be played inline in your browser{typeHint ? ` (${typeHint})` : ''}. Download it to view.
+              This video can’t be played inline in your browser. Download it to view.
             </p>
           )}
           <DownloadButton workspaceId={workspaceId} document={document} />

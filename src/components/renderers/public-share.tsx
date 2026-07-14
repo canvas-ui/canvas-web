@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react'
 import { API_URL } from '@/config/api'
-import { fetchDocumentBlob, downloadDocument, fetchDocumentThumbnail } from '@/services/workspace'
+import { fetchDocumentBlob, downloadDocument, fetchDocumentThumbnail, documentStreamUrl, requestContentTicket } from '@/services/workspace'
 
 // Public canvas share scope. When a share code is provided (pub viewer page),
 // every document byte-fetch below it goes through the unauthenticated
@@ -62,5 +62,12 @@ export function useDocumentContent(workspaceId: string) {
       code ? fetchPublicThumbnail(code, documentId, size) : fetchDocumentThumbnail(workspaceId, documentId, size),
     download: (documentId: number | string, filename: string, opts: { url?: string } = {}) =>
       code ? downloadPublicDocument(code, documentId, filename, opts) : downloadDocument(workspaceId, documentId, filename, opts),
+    // Direct, range-streamable src for <video>/<audio>. Public shares hit the
+    // unauthenticated mirror directly; the authed app streams via a short-lived
+    // media cookie (mintTicket) so no token rides in the URL.
+    streamUrl: (documentId: number | string, opts: { url?: string } = {}) =>
+      code ? publicDocumentContentUrl(code, documentId, opts) : documentStreamUrl(workspaceId, documentId, opts),
+    mintTicket: (documentId: number | string) =>
+      code ? Promise.resolve(true) : requestContentTicket(workspaceId, documentId),
   }
 }

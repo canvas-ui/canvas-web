@@ -77,3 +77,40 @@ export function useDocumentBlobUrl(
 
   return state
 }
+
+// Direct streaming source for a media element: mints the short-lived media
+// cookie (authed app) or uses the public mirror URL (share), then returns a
+// URL the browser can range-request. Unlike useDocumentBlobUrl this never
+// downloads the whole file — playback/seeking stream on demand.
+export function useDocumentStreamSrc(
+  workspaceId: string,
+  documentId: number | string,
+): { src: string | null; error: string | null; loading: boolean } {
+  const { isPublic, streamUrl, mintTicket } = useDocumentContent(workspaceId)
+  const key = `${isPublic ? 'pub' : 'ws'}:${workspaceId}:${documentId}`
+  const [state, setState] = useState<{ src: string | null; error: string | null; loading: boolean }>({ src: null, error: null, loading: true })
+  // Render-time reset when the target changes (no setState-in-effect).
+  const [lastKey, setLastKey] = useState(key)
+  if (key !== lastKey) {
+    setLastKey(key)
+    setState({ src: null, error: null, loading: true })
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    mintTicket(documentId)
+      .then((ok) => {
+        if (cancelled) return
+        if (ok) setState({ src: streamUrl(documentId), error: null, loading: false })
+        else setState({ src: null, error: 'Could not authorize stream', loading: false })
+      })
+      .catch((e) => {
+        if (!cancelled) setState({ src: null, error: e instanceof Error ? e.message : String(e), loading: false })
+      })
+    return () => { cancelled = true }
+    // key encodes workspace + document + public/authed; the helpers are stable per that.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key])
+
+  return state
+}
