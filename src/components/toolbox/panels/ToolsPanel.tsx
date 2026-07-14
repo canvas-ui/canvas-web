@@ -1,9 +1,10 @@
 import { useState, useCallback } from 'react'
 import { useLocation } from 'react-router-dom'
-import { X, Save, Loader2, Search, Trash2, Plus, RefreshCw, ZoomIn, ZoomOut, Clock, FileText, StickyNote, ListTodo, Globe, Mail, Link as LinkIcon, Tag as TagIcon, type LucideIcon } from 'lucide-react'
+import { X, Save, Loader2, Search, Trash2, Plus, RefreshCw, ZoomIn, ZoomOut, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToolbox, type ToolsTab, type FeatureMode } from '@/components/toolbox/toolbox-context'
 import { useToast } from '@/components/ui/toast-container'
+import { SCHEMA_META, ABSTRACTION_PREFIX, schemaMeta } from '@/lib/schema-meta'
 import { MapTab } from './MapTab'
 
 // ─── MD2-style toggle switch ─────────────────────────────────────────────────
@@ -591,23 +592,8 @@ const PREFIX_LABELS: Record<string, string> = {
 
 // Document-type (`data/abstraction/*`) schemas get a prominent, icon-led picker
 // at the top of the Features tab — they are the filter users reach for most.
-// icon + friendly label per known schema; unknown abstractions fall back to a
-// generic tag icon and their trailing segment as the label.
-const SCHEMA_META: Record<string, { label: string; icon: LucideIcon }> = {
-  'data/abstraction/file': { label: 'Files', icon: FileText },
-  'data/abstraction/note': { label: 'Notes', icon: StickyNote },
-  'data/abstraction/todo': { label: 'Todos', icon: ListTodo },
-  'data/abstraction/tab': { label: 'Tabs', icon: Globe },
-  'data/abstraction/email': { label: 'Emails', icon: Mail },
-  'data/abstraction/link': { label: 'Links', icon: LinkIcon },
-}
-const ABSTRACTION_PREFIX = 'data/abstraction/'
-function schemaMeta(key: string): { label: string; icon: LucideIcon } {
-  return SCHEMA_META[key] ?? {
-    label: key.slice(ABSTRACTION_PREFIX.length).replace(/(^|\/)(\w)/g, (_, s, c) => s + c.toUpperCase()) || key,
-    icon: TagIcon,
-  }
-}
+// The icon + label registry (SCHEMA_META / schemaMeta) is shared with the map
+// filter, so a note reads the same everywhere (see @/lib/schema-meta).
 
 function groupBitmaps(keys: string[]): Map<string, string[]> {
   const groups = new Map<string, string[]>()

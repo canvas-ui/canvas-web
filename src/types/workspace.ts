@@ -62,6 +62,15 @@ export interface ToolboxGeoFilters {
   bbox: GeoBBox | null
 }
 
+// Ephemeral, client-side map selection used by the toolbox Map filter. Unlike
+// `ToolboxGeoFilters` (which feeds the backend `geo:bbox` query), this refines
+// the ALREADY-fetched result set in the browser — so it can be an arbitrary
+// polygon, not just a bbox, and never triggers a new fetch. It is not persisted
+// with saved canvases.
+export type GeoSelection =
+  | { kind: 'rect'; bbox: GeoBBox }
+  | { kind: 'polygon'; points: Array<{ lat: number; lon: number }> }
+
 export interface ToolboxFilters {
   features: ToolboxFeatureFilters
   timeline: ToolboxTimelineFilters

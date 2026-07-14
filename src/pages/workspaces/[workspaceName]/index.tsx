@@ -36,6 +36,7 @@ import {
 } from '@/services/workspace';
 import { Document, TreeNode, buildDatetimeFilters, buildGeoFilters, DEFAULT_TOOLBOX_SORT } from '@/types/workspace';
 import { sanitizeUrlPath, buildWorkspaceUrl } from '@/utils/url-params';
+import { docInGeoSelection } from '@/utils/geo';
 import { useToolbox } from '@/components/toolbox/toolbox-context';
 import { cn } from '@/lib/utils';
 import socketService from '@/lib/socket';
@@ -120,7 +121,7 @@ export default function WorkspaceDetailPage() {
   const [serverSearchQueries, setServerSearchQueries] = useState<string[]>(urlSearchQueries);
   const [ignoredSavedSearchPath, setIgnoredSavedSearchPath] = useState<string | null>(null);
 
-  const { state: toolboxState, saveFilters, toggleView, setSort, setAccentColor } = useToolbox();
+  const { state: toolboxState, saveFilters, toggleView, setSort, setAccentColor, setMapDocuments } = useToolbox();
   const tbAllOf = toolboxState.filters.features.allOf;
   const tbAnyOf = toolboxState.filters.features.anyOf;
   const tbNoneOf = toolboxState.filters.features.noneOf;
@@ -184,6 +185,17 @@ export default function WorkspaceDetailPage() {
     setAccentColor(workspaceAccent);
     return () => setAccentColor(null);
   }, [workspaceAccent, setAccentColor]);
+
+  // Publish the current result set to the toolbox map (it plots geo-tagged docs
+  // as pins) and refine the content area by any drawn area — client-side, over
+  // the already-fetched set, so navigating the map never triggers a re-fetch.
+  const geoSelection = toolboxState.geoSelection;
+  useEffect(() => { setMapDocuments(documents); }, [documents, setMapDocuments]);
+  useEffect(() => () => setMapDocuments([]), [setMapDocuments]);
+  const shownDocuments = useMemo(
+    () => (geoSelection ? documents.filter((d) => docInGeoSelection(d, geoSelection)) : documents),
+    [documents, geoSelection],
+  );
 
   // Fetch workspace details
   useEffect(() => {
@@ -855,7 +867,7 @@ export default function WorkspaceDetailPage() {
       contextPath={selectedPath}
       treeName={selectedTreeName}
       workspaceId={workspace.name}
-      documents={documents}
+      documents={shownDocuments}
       isLoading={isLoadingDocuments}
       totalCount={documentsTotalCount}
       currentPage={currentPage}

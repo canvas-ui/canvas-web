@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useLocation } from 'react-router-dom'
-import type { ToolboxFilters, ToolboxTimelineFilters, ToolboxGeoFilters, GeoBBox, ToolboxSort, Document as WorkspaceDocument } from '@/types/workspace'
+import type { ToolboxFilters, ToolboxTimelineFilters, ToolboxGeoFilters, GeoBBox, GeoSelection, ToolboxSort, Document as WorkspaceDocument } from '@/types/workspace'
 import { DEFAULT_TOOLBOX_FILTERS, DEFAULT_TOOLBOX_SORT, buildDatetimeFilters, buildGeoFilters } from '@/types/workspace'
 import {
   DEFAULT_WORKSPACE_TREE_NAME,
@@ -61,6 +61,12 @@ export interface ToolboxState {
   activeAccentColor: string | null
   // Filters
   filters: ToolboxFilters
+  // Map filter (ephemeral, client-side): the drawn area and the current result
+  // set to plot on the map. The page publishes its fetched documents here; the
+  // Map tab draws them as pins and refines them by `geoSelection` in the
+  // browser — no re-fetch, not persisted. Cleared on navigation.
+  geoSelection: GeoSelection | null
+  mapDocuments: WorkspaceDocument[]
   savedFilters: ToolboxFilters | null
   savedSearchQuery: string | null
   isDirty: boolean
@@ -86,6 +92,8 @@ type ToolboxAction =
   | { type: 'OPEN_EDIT'; document: WorkspaceDocument; workspaceId: string }
   | { type: 'SET_TOOLS_TAB'; tab: ToolsTab }
   | { type: 'SET_ACCENT_COLOR'; color: string | null }
+  | { type: 'SET_GEO_SELECTION'; selection: GeoSelection | null }
+  | { type: 'SET_MAP_DOCUMENTS'; documents: WorkspaceDocument[] }
   | {
       type: 'SET_NAVIGATION'
       workspaceName: string | null
@@ -127,6 +135,8 @@ const initialState: ToolboxState = {
   activeContextId: null,
   activeAccentColor: null,
   filters: DEFAULT_TOOLBOX_FILTERS,
+  geoSelection: null,
+  mapDocuments: [],
   savedFilters: null,
   savedSearchQuery: null,
   isDirty: false,
@@ -160,6 +170,10 @@ function toolboxReducer(state: ToolboxState, action: ToolboxAction): ToolboxStat
       return { ...state, toolsTab: action.tab }
     case 'SET_ACCENT_COLOR':
       return state.activeAccentColor === action.color ? state : { ...state, activeAccentColor: action.color }
+    case 'SET_GEO_SELECTION':
+      return { ...state, geoSelection: action.selection }
+    case 'SET_MAP_DOCUMENTS':
+      return state.mapDocuments === action.documents ? state : { ...state, mapDocuments: action.documents }
     case 'SET_NAVIGATION':
       return {
         ...state,
@@ -169,6 +183,8 @@ function toolboxReducer(state: ToolboxState, action: ToolboxAction): ToolboxStat
         activeContextId: action.contextId,
         activeContextType: action.contextType,
         activeContextPath: action.contextPath,
+        // A drawn map area is view-specific — drop it when navigating away.
+        geoSelection: null,
       }
     case 'SET_FILTERS':
       return {
@@ -297,6 +313,10 @@ interface ToolboxContextValue {
   hasActiveFilters: boolean
   setTimelineFilter: (update: Partial<ToolboxTimelineFilters>) => void
   setGeoBBox: (bbox: GeoBBox | null) => void
+  // Map filter (client-side): the drawn area, and the result set the page
+  // publishes for the Map tab to plot.
+  setGeoSelection: (selection: GeoSelection | null) => void
+  setMapDocuments: (documents: WorkspaceDocument[]) => void
   setSort: (sort: ToolboxSort) => void
   saveFilters: () => Promise<void>
   deleteBitmap: (key: string) => Promise<void>
@@ -513,6 +533,15 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
+  // Map filter (ephemeral, client-side): set/clear the drawn area, and publish
+  // the current result set for the Map tab to plot as pins.
+  const setGeoSelection = useCallback((selection: GeoSelection | null) => {
+    dispatch({ type: 'SET_GEO_SELECTION', selection })
+  }, [])
+  const setMapDocuments = useCallback((documents: WorkspaceDocument[]) => {
+    dispatch({ type: 'SET_MAP_DOCUMENTS', documents })
+  }, [])
+
   const saveFilters = useCallback(async () => {
     const { activeContextType, activeContextId, activeWorkspaceName, activeTreeName, activeContextPath, filters, isSaving } = stateRef.current
     if (isSaving) return
@@ -612,7 +641,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
 
   return (
     <ToolboxCtx.Provider
-      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, closeAdd, openEdit, setToolsTab, setAccentColor, setFilters, setFeatureToggle, setFeatureMode, clearFilters, hasActiveFilters, setTimelineFilter, setGeoBBox, setSort, saveFilters, deleteBitmap, createTimeline, deleteTimeline, refreshTimelines }}
+      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, closeAdd, openEdit, setToolsTab, setAccentColor, setFilters, setFeatureToggle, setFeatureMode, clearFilters, hasActiveFilters, setTimelineFilter, setGeoBBox, setGeoSelection, setMapDocuments, setSort, saveFilters, deleteBitmap, createTimeline, deleteTimeline, refreshTimelines }}
     >
       {children}
     </ToolboxCtx.Provider>

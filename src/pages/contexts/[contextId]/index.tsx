@@ -12,6 +12,7 @@ import {
 import socketService from '@/lib/socket';
 import { DefaultCanvas } from '@/components/canvas/DefaultCanvas';
 import { Document as WorkspaceDocument } from '@/types/workspace';
+import { docInGeoSelection } from '@/utils/geo';
 import { useToolbox } from '@/components/toolbox/toolbox-context';
 import { useMenu } from '@/components/shell/menu-context';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -69,7 +70,7 @@ export default function ContextDetailPage() {
     return stack.length ? stack : (legacy ? [legacy] : []);
   }, [location.search]);
   const { showToast } = useToast();
-  const { state: toolboxState, saveFilters, setAccentColor } = useToolbox();
+  const { state: toolboxState, saveFilters, setAccentColor, setMapDocuments } = useToolbox();
   const { openM2Drawer } = useMenu();
   const isMobile = useIsMobile();
   const tbAllOf = toolboxState.filters.features.allOf;
@@ -181,6 +182,16 @@ export default function ContextDetailPage() {
     setAccentColor(contextAccent);
     return () => setAccentColor(null);
   }, [contextAccent, setAccentColor]);
+
+  // Feed the toolbox map with this context's results and refine them by any
+  // drawn area — client-side, over the already-fetched set.
+  const geoSelection = toolboxState.geoSelection;
+  useEffect(() => { setMapDocuments(documents); }, [documents, setMapDocuments]);
+  useEffect(() => () => setMapDocuments([]), [setMapDocuments]);
+  const shownDocuments = useMemo(
+    () => (geoSelection ? documents.filter((d) => docInGeoSelection(d, geoSelection)) : documents),
+    [documents, geoSelection],
+  );
   useEffect(() => { if (context) fetchDocuments(); }, [context?.id, fetchDocuments]);
   useEffect(() => {
     const onRefresh = () => fetchDocuments();
@@ -418,7 +429,7 @@ export default function ContextDetailPage() {
         urlDisplay={context.url}
         contextPath={selectedPath}
         workspaceId={context.workspaceName || context.workspaceId}
-        documents={documents}
+        documents={shownDocuments}
         isLoading={isLoadingDocuments}
         totalCount={documentsTotalCount}
         currentPage={currentPage}
