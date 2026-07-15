@@ -13,6 +13,19 @@ export const BACKENDS_TREE_NAME = 'backends'
 export const treeTypeForName = (treeName?: string | null): 'context' | 'directory' =>
   treeName === 'directory' || treeName === BACKENDS_TREE_NAME ? 'directory' : 'context'
 
+// Resolve an absolute tree path to its node. Returns null for the root path
+// (which is the tree itself, not a node) and for any path that no longer exists.
+export function findTreeNodeByPath(root: TreeNode | null, path: string): TreeNode | null {
+  if (!root || path === '/') return null
+  const segments = path.split('/').filter(Boolean)
+  let node: TreeNode | undefined = root
+  for (const seg of segments) {
+    node = node?.children?.find(c => c.name === seg)
+    if (!node) return null
+  }
+  return node ?? null
+}
+
 type WorkspaceTreeResponse = { payload: TreeNode; status: string; statusCode: number; message: string }
 
 const workspaceTreeCache = new Map<string, WorkspaceTreeResponse>()

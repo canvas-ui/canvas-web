@@ -51,8 +51,13 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose }: HomeFa
     <div className="relative flex h-full w-full flex-col">
       {/* `md:pr-28` reserves an invisible panel on the right so cards never
           scroll underneath the floating buttons that dock bottom-right. On
-          mobile the buttons float over the full-width cards instead. */}
-      <div className="flex flex-1 items-center gap-4 overflow-x-auto p-6 md:pr-28">
+          mobile the buttons float over the full-width cards instead.
+          Only mounted while a card is open: home overlays this row on top of
+          its pinned canvases, so an empty row would swallow clicks on them
+          (and, in flow, stack a second full page height under the content).
+          `pointer-events-auto` re-enables clicks inside that overlay. */}
+      {openCards.length > 0 && (
+      <div className="pointer-events-auto flex flex-1 items-center gap-4 overflow-x-auto p-6 md:pr-28">
         {openCards.map((c) => {
           const onClose = () => closeCard(c.id)
           switch (c.kind) {
@@ -68,6 +73,7 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose }: HomeFa
           }
         })}
       </div>
+      )}
 
       {/* Desktop: stacked above the (bigger) toolbox FAB, which docks
           bottom-right at h-16 with a 16px gap. Mobile: the FAB is hidden, so

@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react'
-import { LayoutDashboard, BookMarked, Share2, Unlink, Save, Trash2, Plus, Link2, FolderTree } from 'lucide-react'
+import { LayoutDashboard, BookMarked, Share2, Unlink, Save, Trash2, Plus, Link2, FolderTree, Pin, PinOff } from 'lucide-react'
 import { Document, TreeNode } from '@/types/workspace'
 import { DocumentList } from '@/components/common/document-list'
 import type { DocumentPasteOptions } from '@/components/common/document-list'
@@ -176,6 +176,9 @@ interface DefaultCanvasProps {
   onPurgeDocuments?: () => void
   disablePurgeDocuments?: boolean
   canvasInfo?: CanvasInfo
+  // Pin this canvas to /home. Only wired for real canvases; undefined hides it.
+  isCanvasPinned?: boolean
+  onTogglePinCanvas?: () => void
   onSaveAsCanvas?: () => void
   selectedCount?: number
   onShareCanvas?: () => void
@@ -236,6 +239,8 @@ export function DefaultCanvas({
   onPurgeDocuments,
   disablePurgeDocuments,
   canvasInfo,
+  isCanvasPinned,
+  onTogglePinCanvas,
   onSaveAsCanvas,
   onShareCanvas,
   onUnshareCanvas,
@@ -294,6 +299,18 @@ export function DefaultCanvas({
             >
               <Save className="w-3 h-3" />
               <span className="hidden sm:inline">{isSavingChanges ? 'Saving...' : 'Save filters'}</span>
+            </button>
+          )}
+          {onTogglePinCanvas && (
+            <button
+              type="button"
+              onClick={onTogglePinCanvas}
+              aria-pressed={!!isCanvasPinned}
+              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 text-xs border rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+              title={isCanvasPinned ? 'Unpin from home' : 'Pin to home'}
+            >
+              {isCanvasPinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
+              <span className="hidden sm:inline">{isCanvasPinned ? 'Unpin' : 'Pin'}</span>
             </button>
           )}
           {onShareCanvas && (

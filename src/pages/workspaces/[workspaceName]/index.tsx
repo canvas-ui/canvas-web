@@ -42,6 +42,7 @@ import { Document, TreeNode, buildDatetimeFilters, buildGeoFilters, DEFAULT_TOOL
 import { sanitizeUrlPath, buildWorkspaceUrl, parseWorkspacePathFromUrl } from '@/utils/url-params';
 import { docInGeoSelection } from '@/utils/geo';
 import { useToolbox } from '@/components/toolbox/toolbox-context';
+import { useCanvasPins } from '@/components/home/pins-context';
 import { cn } from '@/lib/utils';
 import socketService from '@/lib/socket';
 
@@ -191,6 +192,36 @@ export default function WorkspaceDetailPage() {
   const canvasInfo: CanvasInfo | null = selectedNodeType === 'canvas'
     ? { label: selectedNode?.label, description: selectedNode?.description, color: selectedNode?.color }
     : null;
+
+  // Pinning a canvas to /home. Layer views are excluded: they are a filtered
+  // read of a canvas, not an addressable canvas node of their own.
+  const { isPinned, pin, unpin, pins } = useCanvasPins();
+  const pinWorkspaceName = workspace?.name;
+  const pinAddress = useMemo(
+    () => (pinWorkspaceName && selectedNodeType === 'canvas' && !isLayerView
+      ? { workspaceName: pinWorkspaceName, treeName: selectedTreeName, path: selectedPath }
+      : null),
+    [pinWorkspaceName, selectedNodeType, isLayerView, selectedTreeName, selectedPath],
+  );
+  const isCanvasPinned = pinAddress ? isPinned(pinAddress) : false;
+  const pinLayerId = selectedNode?.id;
+  const pinLabel = selectedNode?.label;
+  const handleTogglePin = useCallback(async () => {
+    if (!pinAddress) return;
+    try {
+      const existing = pins.find(p =>
+        p.workspaceName === pinAddress.workspaceName &&
+        p.treeName === pinAddress.treeName &&
+        p.path === pinAddress.path);
+      if (existing) {
+        await unpin(existing.id);
+      } else {
+        await pin({ ...pinAddress, layerId: pinLayerId, label: pinLabel });
+      }
+    } catch (error) {
+      console.error('Failed to update home pins:', error);
+    }
+  }, [pinAddress, pins, pin, unpin, pinLayerId, pinLabel]);
   const urlDisplay = workspaceName
     ? `${workspaceName}://${selectedPath === '/' ? '' : selectedPath.replace(/^\//, '')}`
     : '';
@@ -938,6 +969,8 @@ export default function WorkspaceDetailPage() {
       onPurgeDocuments={isBackendsPath ? undefined : handlePurgeDocuments}
       disablePurgeDocuments={false}
       canvasInfo={canvasInfo ?? undefined}
+      isCanvasPinned={isCanvasPinned}
+      onTogglePinCanvas={pinAddress ? handleTogglePin : undefined}
       onSaveAsCanvas={tree && selectedNodeType !== 'canvas' && !isLayerView && !isBackendsPath ? handleSaveAsCanvas : undefined}
       onShareCanvas={selectedNodeType === 'canvas' && !isLayerView ? handleShareCanvas : undefined}
       onUnshareCanvas={publicCanvasShare ? handleUnshareCanvas : undefined}

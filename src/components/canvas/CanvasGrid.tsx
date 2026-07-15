@@ -71,7 +71,11 @@ function applyFillLayout(layout: CanvasLayoutItem[]): CanvasLayoutItem[] {
 function rowHeightForContainer(height: number, layout: CanvasLayoutItem[]) {
   const extent = gridExtent(applyFillLayout(layout))
   const marginY = GRID_MARGIN[1]
-  const totalMargin = Math.max(0, extent - 1) * marginY
+  // react-grid-layout's containerPadding (which defaults to `margin`) adds a
+  // gutter above the first row and below the last, on top of the extent-1
+  // inter-row margins. Budgeting only the inter-row ones overflows the host by
+  // 2*marginY, which the host then silently clips.
+  const totalMargin = (extent + 1) * marginY
   return Math.max(MIN_ROW_HEIGHT, Math.floor((height - totalMargin) / extent))
 }
 
@@ -364,7 +368,17 @@ export function CanvasGrid({
       </div>
       )}
 
-      <div ref={gridHostRef} className={`canvas-grid-host flex-1 min-h-0 bg-muted/10 ${isNarrow ? 'overflow-y-auto' : 'overflow-hidden'}`}>
+      {/* Always scrollable on y, not just when stacked: rows only scale down to
+          a 32px floor, so a host shorter than that floor allows (a home tile, a
+          short window) used to clip the bottom of the canvas with no way to
+          reach it. When the rows do fit, the grid is exactly the host's height
+          and no scrollbar appears.
+          overflow-x-hidden is required, not cosmetic: an unset overflow-x
+          computes to `auto` once overflow-y is set, and that x-scrollbar eats
+          16px of clientHeight -> the grid no longer fits -> a y-scrollbar
+          appears on every canvas. The grid never needs to scroll sideways (12
+          columns, measured to the host width), so pin it shut. */}
+      <div ref={gridHostRef} className="canvas-grid-host flex-1 min-h-0 bg-muted/10 overflow-y-auto overflow-x-hidden">
         {ids.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-2 text-sm text-muted-foreground">
             <p>No widgets yet.</p>

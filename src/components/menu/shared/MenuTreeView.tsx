@@ -19,6 +19,7 @@ import {
 } from '@/lib/layer-style'
 import { LayerIconPicker } from './LayerIconPicker'
 import { ContextMenuShell } from '@/components/common/context-menu-shell'
+import { findTreeNodeByPath } from '@/services/workspace'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -419,17 +420,6 @@ function InlineCreateInput({ onConfirm, onCancel, placeholder = 'folder name…'
 
 function buildPath(parent: string, name: string) {
   return parent === '/' ? `/${name}` : `${parent}/${name}`
-}
-
-function findNodeByPath(root: TreeNode | null, path: string): TreeNode | null {
-  if (!root || path === '/') return null
-  const segments = path.split('/').filter(Boolean)
-  let node: TreeNode | undefined = root
-  for (const seg of segments) {
-    node = node?.children?.find(c => c.name === seg)
-    if (!node) return null
-  }
-  return node ?? null
 }
 
 function nodeMatchesSearch(node: TreeNode, parentPath: string, query: string): boolean {
@@ -950,7 +940,7 @@ export function MenuTreeView({
     if (el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA') return
     if (!selectedPath || selectedPath === '/') return
     event.preventDefault()
-    const node = findNodeByPath(root, selectedPath)
+    const node = findTreeNodeByPath(root, selectedPath)
     if (node?.locked) { alert(`"${selectedPath}" is locked`); return }
     if (confirm(`Remove "${selectedPath}"?`)) {
       onRemovePath(selectedPath, false).catch(err => alert(err instanceof Error ? err.message : String(err)))

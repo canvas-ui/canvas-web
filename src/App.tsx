@@ -29,6 +29,7 @@ import RemotesPage from './pages/remotes'
 import { AppShell } from './components/shell/AppShell'
 import { ToastContainer, useToast } from './components/ui/toast-container'
 import { NotificationsProvider } from './components/notifications/notifications-context'
+import { CanvasPinsProvider } from './components/home/pins-context'
 import { setGlobalErrorHandler } from './lib/error-handler'
 
 function AppContent() {
@@ -54,7 +55,7 @@ function AppContent() {
         <Route path="/pub/c/:code" element={<PublicCanvasPage />} />
 
         {/* Dashboard layout for authenticated routes */}
-        <Route path="/" element={<ProtectedRoute><NotificationsProvider><AppShell /></NotificationsProvider></ProtectedRoute>}>
+        <Route path="/" element={<ProtectedRoute><NotificationsProvider><CanvasPinsProvider><AppShell /></CanvasPinsProvider></NotificationsProvider></ProtectedRoute>}>
           <Route index element={<Navigate to="/workspaces" replace />} />
           <Route path="home" element={<HomePage />} />
           <Route path="share-target" element={<ShareTargetPage />} />
