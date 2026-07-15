@@ -68,24 +68,29 @@ type LayerRef = { path: string; id: string }
 
 const TREE_BRANCH_GUTTER = 22
 
-// Backends-tree nodes live at /<driver>/<backendName>/…; the backend name
-// (e.g. workspace:home) is the second path segment. Returns null for the tree
-// root and the driver level, where there is no single backend.
-// A writable file backend's tree node (/file/<address>/<sub…>). key '' = the
+// Backends-tree nodes follow the anchor-first grammar:
+//   /workspace/<store>/<sub…>        workspace-anchored file stores (→ address workspace:<store>)
+//   /device/<device>/<mount>/<sub…>  device-anchored fs mounts (→ address <mount>)
+//   /<driver>/<address>/<sub…>       connectors (imap, s3, …)
+// A writable file backend's tree node yields { address, key }; key '' = the
 // backend root (children can be created, but it can't be renamed or deleted).
-// Only the `file` driver is mirrored writable. Both helpers only apply inside
-// the backends tree (isBackendsTree).
+// Both helpers only apply inside the backends tree (isBackendsTree); the
+// legacy /file/<address> form is kept for un-migrated trees.
 function fileBackendTarget(path: string, isBackendsTree: boolean): { address: string; key: string } | null {
   if (!isBackendsTree) return null
   const parts = String(path || '').split('/').filter(Boolean)
-  if (parts[0] !== 'file' || parts.length < 2) return null
-  return { address: parts[1], key: parts.slice(2).join('/') }
+  if (parts[0] === 'workspace' && parts.length >= 2) return { address: `workspace:${parts[1]}`, key: parts.slice(2).join('/') }
+  if (parts[0] === 'device' && parts.length >= 3) return { address: parts[2], key: parts.slice(3).join('/') }
+  if (parts[0] === 'file' && parts.length >= 2) return { address: parts[1], key: parts.slice(2).join('/') }
+  return null
 }
 
 function backendNameForPath(path: string, isBackendsTree: boolean): string | null {
   if (!isBackendsTree) return null
-  const parts = String(path || '').split('/').filter(Boolean) // ['file','workspace:home',…]
-  return parts.length >= 2 ? parts[1] : null
+  const parts = String(path || '').split('/').filter(Boolean)
+  if (parts[0] === 'workspace' && parts.length >= 2) return `workspace:${parts[1]}`
+  if (parts[0] === 'device') return parts.length >= 3 ? parts[2] : null
+  return parts.length >= 2 ? parts[1] : null // /imap/<account>, legacy /file/<address>
 }
 
 // ─── Context menu ─────────────────────────────────────────────────────────────

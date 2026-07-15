@@ -4,6 +4,7 @@ import { useToolbox } from '../toolbox-context'
 import { useAddTarget, describeTarget } from './useAddTarget'
 import { useTodoFields } from './useTodoFields'
 import { TodoFields } from './TodoFields'
+import { GeotagToggle } from './GeotagToggle'
 
 export function TodoForm() {
   const { closeAdd } = useToolbox()
@@ -27,6 +28,7 @@ export function TodoForm() {
   return (
     <div className="flex flex-col gap-4 p-4">
       <TodoFields {...f} />
+      <GeotagToggle geotag={f.geotag} idPrefix="todo-geotag" />
       <p className="text-xs text-muted-foreground">{describeTarget(target)}</p>
       <div className="flex justify-end gap-2">
         <Button variant="outline" size="sm" onClick={closeAdd} disabled={f.saving}>Cancel</Button>

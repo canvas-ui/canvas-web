@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Copy, Database, ExternalLink, HardDrive, RefreshCw, Server, Trash2, Unlink, Activity, Monitor, Link2, Check, X as XIcon, Pencil } from 'lucide-react'
+import { ArrowLeft, Copy, Database, ExternalLink, FolderPlus, HardDrive, RefreshCw, Server, Trash2, Unlink, Activity, Monitor, Link2, Check, X as XIcon, Pencil } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,6 +17,8 @@ import {
   disableWorkspaceService,
   enableWorkspaceService,
   listBackends,
+  addBackend,
+  removeBackend,
   updateBackend,
   syncBackend,
   getWorkspaceDbStats,
@@ -101,6 +103,89 @@ function Toggle({
     >
       <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow transition-transform ${checked ? 'translate-x-4' : 'translate-x-0'}`} />
     </button>
+  )
+}
+
+// Mount an arbitrary server-local folder as an fs data backend. The name is
+// the human handle (its slug becomes the backend address and the
+// /device/<device>/<mount> node in the backends tree); the path must be an
+// absolute, readable directory on the server host.
+function AddLocalFolderForm({ workspaceId, onAdded }: { workspaceId: string; onAdded: () => Promise<void> | void }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [path, setPath] = useState('')
+  const [watch, setWatch] = useState(false)
+  const [readOnly, setReadOnly] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const { showToast } = useToast()
+
+  const reset = () => { setName(''); setPath(''); setWatch(false); setReadOnly(false) }
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!name.trim() || !path.trim()) return
+    setBusy(true)
+    try {
+      await addBackend(workspaceId, 'file', { name: name.trim(), path: path.trim(), watch, readOnly })
+      showToast({ title: 'Added', description: `${name.trim()} mounted — initial scan running in the background` })
+      reset()
+      setOpen(false)
+      await onAdded()
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to add folder backend', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
+        <FolderPlus className="mr-2 h-3.5 w-3.5" />
+        Add local folder
+      </Button>
+    )
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-3 rounded-lg border p-4">
+      <div className="flex items-center gap-2">
+        <FolderPlus className="h-4 w-4 text-muted-foreground" />
+        <h2 className="text-sm font-semibold">Add local folder</h2>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Index a folder on the server host as a data source. Files stay in place; the index records them as
+        device-scoped locations, so they remain addressable if the workspace moves to another server.
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-1">
+          <label className="text-xs font-medium">Name</label>
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Financial Reports" required />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium">Absolute path on server</label>
+          <Input value={path} onChange={(e) => setPath(e.target.value)} placeholder="/mnt/data/reports" required className="font-mono" />
+        </div>
+      </div>
+      <div className="flex items-center gap-6 text-[11px] text-muted-foreground">
+        <label className="flex items-center gap-1.5">
+          watch
+          <Toggle checked={watch} onClick={() => setWatch((v) => !v)} />
+        </label>
+        <label className="flex items-center gap-1.5" title="Never delete bytes in this folder — Destroy degrades to a reference drop. Recommended for folders managed outside Canvas.">
+          read-only
+          <Toggle checked={readOnly} onClick={() => setReadOnly((v) => !v)} />
+        </label>
+      </div>
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" disabled={busy || !name.trim() || !path.trim()}>
+          {busy ? 'Adding…' : 'Add folder'}
+        </Button>
+        <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => { reset(); setOpen(false) }}>
+          Cancel
+        </Button>
+      </div>
+    </form>
   )
 }
 
@@ -878,6 +963,21 @@ export default function WorkspaceSettingsPage() {
     }
   }
 
+  const removeDataBackend = async (backend: Backend) => {
+    const label = (typeof backend.config?.label === 'string' && backend.config.label) || backend.address
+    if (!window.confirm(`Remove backend "${label}"? No files are deleted; indexed entries remain until purged from the backends tree.`)) return
+    setBusyAction(`remove:${backend.address}`)
+    try {
+      await removeBackend(workspaceId, backend.driver, backend.address)
+      await loadRuntimeSettings()
+      showToast({ title: 'Removed', description: `${label} unmounted` })
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to remove backend', variant: 'destructive' })
+    } finally {
+      setBusyAction(null)
+    }
+  }
+
   const resyncBackend = async (backend: Backend) => {
     setBusyAction(`resync:${backend.address}`)
     try {
@@ -1077,7 +1177,15 @@ export default function WorkspaceSettingsPage() {
           {dataBackends.map((backend) => {
             const cfg = (backend.config || {}) as Record<string, unknown>
             const backendId = backend.address
-            const copy = DATA_BACKEND_LABELS[backendId] || { title: backendId, description: 'Workspace data backend.' }
+            const device = (cfg.device || null) as { id?: string; name?: string } | null
+            // User-added local-folder mount: labelled, device-scoped, removable.
+            const isUserMount = backend.driver === 'file' && cfg.managed !== true && !DATA_BACKEND_LABELS[backendId]
+            const copy = DATA_BACKEND_LABELS[backendId] || {
+              title: (typeof cfg.label === 'string' && cfg.label) || backendId,
+              description: isUserMount
+                ? `Local folder${device?.name ? ` on ${device.name}` : ''}, indexed in place${backend.treePath ? ` and mirrored at ${backend.treePath}` : ''}.`
+                : 'Workspace data backend.',
+            }
             const supported = cfg.supported !== false
             // Structural local stores: workspace:data (managed blob target) and
             // stored.cache can never be disabled; as managed, non-exported
@@ -1099,6 +1207,7 @@ export default function WorkspaceSettingsPage() {
                     <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
                       <span>status: {backend.status}</span>
                       <span>watch: {cfg.watch ? 'true' : 'false'}</span>
+                      {device?.name && <span title={device.id}>device: {device.name}</span>}
                       {cfg.readOnly === true && <span className="rounded bg-amber-500/15 px-1.5 py-0.5 font-medium text-amber-600">read-only</span>}
                       {backend.lastSyncAt && <span>last scan: {new Date(backend.lastSyncAt).toLocaleString()}</span>}
                     </div>
@@ -1148,6 +1257,19 @@ export default function WorkspaceSettingsPage() {
                     ) : (
                       <Toggle checked={!!backend.enabled} disabled={!canToggle || busyAction === `backend:${backendId}`} onClick={() => toggleDataBackend(backend)} />
                     )}
+                    {isUserMount && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        disabled={busyAction === `remove:${backendId}`}
+                        title="Unmount this folder (no files are deleted)"
+                        onClick={() => removeDataBackend(backend)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </div>
                 </div>
                 {/* Sync exclusions only apply to enumerable/synced backends —
@@ -1162,6 +1284,7 @@ export default function WorkspaceSettingsPage() {
               </section>
             )
           })}
+          <AddLocalFolderForm workspaceId={workspaceId} onAdded={() => loadRuntimeSettings()} />
         </div>
       )}
 

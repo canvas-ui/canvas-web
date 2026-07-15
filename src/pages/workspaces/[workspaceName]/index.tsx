@@ -34,7 +34,9 @@ import {
   DEFAULT_WORKSPACE_TREE_NAME,
   treeTypeForName,
   listBackendDocuments,
+  listBackends,
   backendAddressFromTreePath,
+  type Backend,
 } from '@/services/workspace';
 import { Document, TreeNode, buildDatetimeFilters, buildGeoFilters, DEFAULT_TOOLBOX_SORT } from '@/types/workspace';
 import { sanitizeUrlPath, buildWorkspaceUrl, parseWorkspacePathFromUrl } from '@/utils/url-params';
@@ -147,10 +149,17 @@ export default function WorkspaceDetailPage() {
   // the per-doc Delete/Destroy context menu. The toolbar button queries the
   // context tree and would no-op on these directory-tree paths anyway.
   const isBackendsPath = selectedTreeName === 'backends';
+  // Backends list — needed to resolve device-scoped mount nodes
+  // (/device/<device>/<mount>) to their (driver, address) by treePath.
+  const [wsBackends, setWsBackends] = useState<Backend[]>([]);
+  useEffect(() => {
+    if (!isBackendsPath || !workspaceName) return;
+    listBackends(workspaceName).then(setWsBackends).catch(() => setWsBackends([]));
+  }, [isBackendsPath, workspaceName]);
   // /<driver>/<address>/… backends-tree paths map to a syncable backend; used
   // for the "Unfiled only" filter (docs never filed into any other tree —
   // safe-to-purge candidates on the backend).
-  const backendTarget = isBackendsPath ? backendAddressFromTreePath(selectedPath) : null;
+  const backendTarget = isBackendsPath ? backendAddressFromTreePath(selectedPath, wsBackends) : null;
   const [unfiledOnly, setUnfiledOnly] = useState(false);
   useEffect(() => { setUnfiledOnly(false); }, [selectedTreeName, selectedPath]);
 

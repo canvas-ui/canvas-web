@@ -7,6 +7,7 @@ import { LazyMarkdownEditor as MarkdownEditor } from '@/components/common/lazy-e
 import { TagInput } from './TagInput'
 import { useAddTarget, describeTarget } from './useAddTarget'
 import { useNoteFields } from './useNoteFields'
+import { GeotagToggle } from './GeotagToggle'
 
 export function NoteForm() {
   const { closeAdd } = useToolbox()
@@ -48,6 +49,8 @@ export function NoteForm() {
         <Label>Tags</Label>
         <TagInput tags={f.tags} onChange={f.setTags} />
       </div>
+
+      <GeotagToggle geotag={f.geotag} idPrefix="note-geotag" />
 
       <p className="text-xs text-muted-foreground">{describeTarget(target)}</p>
 

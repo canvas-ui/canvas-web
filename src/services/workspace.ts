@@ -930,6 +930,8 @@ export interface Backend {
   status: 'running' | 'idle' | 'stopped' | 'error' | string;
   lastSyncAt: string | null;
   lastError: string | null;
+  // Mirror node in the backends tree (/device/<device>/<mount> for fs mounts).
+  treePath?: string | null;
   // Last on-demand disk usage, if computed this server runtime.
   usage?: BackendDiskUsage | null;
   capabilities: BackendCapabilities;
@@ -1055,12 +1057,38 @@ export async function renameBackendContainer(workspaceId: string, driver: string
   return response.payload;
 }
 
+// Match a backends-tree node path to a known backend by its server-provided
+// mirror node (treePath) — required for device-scoped fs mounts, whose nodes
+// are /device/<device>/<mount> (three segments, not two). Returns the backend
+// and the sub-path below its node, or null.
+function matchBackendByTreePath(path: string, backends?: Backend[]): { backend: Backend; key: string } | null {
+  if (!backends?.length) return null;
+  const clean = '/' + String(path || '').split('/').filter(Boolean).join('/');
+  for (const backend of backends) {
+    if (!backend.treePath) continue;
+    if (clean === backend.treePath) return { backend, key: '' };
+    if (clean.startsWith(backend.treePath + '/')) return { backend, key: clean.slice(backend.treePath.length + 1) };
+  }
+  return null;
+}
+
 // Parse a backends-tree /file/<address>/<sub…> node to its folder target.
 // key === '' means the backend root node (can create children, but not rename/delete).
-export function backendFolderTarget(path: string): { driver: string; address: string; key: string } | null {
-  const parts = String(path || '').split('/').filter(Boolean); // ['file','workspace:home','docs']
-  if (parts[0] !== 'file' || parts.length < 2) return null;
-  return { driver: 'file', address: parts[1], key: parts.slice(2).join('/') };
+// Pass the workspace's backends when available — device-scoped mounts
+// (/device/<device>/<mount>) can only be resolved via their treePath.
+export function backendFolderTarget(path: string, backends?: Backend[]): { driver: string; address: string; key: string } | null {
+  const match = matchBackendByTreePath(path, backends);
+  if (match) {
+    if (match.backend.driver !== 'file') return null;
+    return { driver: 'file', address: match.backend.address, key: match.key };
+  }
+  // Structural fallback for the anchor-first grammar (and the legacy
+  // driver-first /file/<address> form) when no backends list is at hand.
+  const parts = String(path || '').split('/').filter(Boolean);
+  if (parts[0] === 'workspace' && parts.length >= 2) return { driver: 'file', address: `workspace:${parts[1]}`, key: parts.slice(2).join('/') };
+  if (parts[0] === 'device' && parts.length >= 3) return { driver: 'file', address: parts[2], key: parts.slice(3).join('/') };
+  if (parts[0] === 'file' && parts.length >= 2) return { driver: 'file', address: parts[1], key: parts.slice(2).join('/') };
+  return null;
 }
 
 // Documents mirrored under a backend address, filtered by linkage into other
@@ -1089,9 +1117,17 @@ export async function discoverBackendFolders(workspaceId: string, driver: string
 
 // Parse a backends-tree /<driver>/<address>/… node path to its addressable
 // (driver, address) pair. Returns null for the tree root / driver level.
-export function backendAddressFromTreePath(path: string): { driver: string; address: string } | null {
-  const parts = String(path || '').split('/').filter(Boolean); // ['imap','me@x','inbox']
+// Pass the workspace's backends when available — device-scoped mounts
+// (/device/<device>/<mount>) can only be resolved via their treePath.
+export function backendAddressFromTreePath(path: string, backends?: Backend[]): { driver: string; address: string } | null {
+  const match = matchBackendByTreePath(path, backends);
+  if (match) return { driver: match.backend.driver, address: match.backend.address };
+  // Structural fallback for the anchor-first grammar; connector paths
+  // (/imap/<account>/…) keep driver-first shape.
+  const parts = String(path || '').split('/').filter(Boolean);
   if (parts.length < 2) return null;
+  if (parts[0] === 'workspace') return { driver: 'file', address: `workspace:${parts[1]}` };
+  if (parts[0] === 'device') return parts.length >= 3 ? { driver: 'file', address: parts[2] } : null;
   return { driver: parts[0], address: parts[1] };
 }
 

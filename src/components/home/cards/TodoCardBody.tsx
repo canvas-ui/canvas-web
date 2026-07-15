@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { ListTodo } from 'lucide-react'
 import { useTodoFields } from '@/components/toolbox/add/useTodoFields'
 import { TodoFields } from '@/components/toolbox/add/TodoFields'
+import { GeotagToggle } from '@/components/toolbox/add/GeotagToggle'
 import { B5Card, type B5SaveTarget } from '../B5Card'
 import type { QuickAddInitialData } from '../quick-add-types'
 
@@ -27,6 +28,7 @@ export function TodoCardBody({ onClose, initialData }: { onClose: () => void; in
     >
       <div className="flex h-full flex-col gap-4 p-4">
         <TodoFields {...f} idPrefix="qa-todo" />
+        <GeotagToggle geotag={f.geotag} idPrefix="qa-todo-geotag" />
       </div>
     </B5Card>
   )

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { submitDocuments, type AddTarget } from './useAddTarget'
 import { TODO_SCHEMA } from '@/components/renderers/types'
+import { useGeotag } from '@/hooks/useGeotag'
 
 const TODO_SCHEMA_VERSION = '2.1'
 
@@ -64,17 +65,21 @@ export function useTodoFields() {
   // Pre-selected: today, till end of day.
   const [due, setDue] = useState<string>(todayEndOfDayLocal())
   const [saving, setSaving] = useState(false)
+  const geotag = useGeotag()
 
   const canSave = title.trim().length > 0 && !saving
 
   async function save(target: AddTarget): Promise<number[]> {
     setSaving(true)
     try {
+      // Off by default; capture() resolves null unless the user opted in, and
+      // never rejects — a missing fix must not block saving the todo.
+      const geo = await geotag.capture()
       const doc = {
         schema: TODO_SCHEMA,
         schemaVersion: TODO_SCHEMA_VERSION,
         data: buildTodoData({ title, description, status, priority, due }),
-        metadata: {},
+        metadata: { ...(geo ? { geo } : {}) },
       }
       return await submitDocuments(target, [doc])
     } finally {
@@ -84,6 +89,6 @@ export function useTodoFields() {
 
   return {
     title, setTitle, description, setDescription, status, setStatus,
-    priority, setPriority, due, setDue, saving, canSave, save,
+    priority, setPriority, due, setDue, saving, canSave, save, geotag,
   }
 }

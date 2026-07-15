@@ -175,6 +175,23 @@ export interface TreeNode {
   children: TreeNode[]
 }
 
+// Where a document's location came from. Ranked server-side (core/workspace/lib/geo.js)
+// as manual > exif > device, so re-indexing a photo never reverts a hand-fixed pin:
+// `exif` is where the shot was TAKEN, `device` where the client was when it uploaded.
+export type GeoSource = 'device' | 'exif' | 'manual'
+
+// Any document type can carry a location — photos and notes most commonly, but
+// also todos, files and emails. Indexed by synapsd from metadata.geo.{lat,lon}.
+export interface DocumentGeo {
+  lat: number
+  lon: number
+  alt?: number
+  // Horizontal error radius in metres (Geolocation coords.accuracy, or EXIF
+  // GPSHPositioningError) — why a pin can sit a block off from the real spot.
+  accuracy?: number
+  source?: GeoSource
+}
+
 // Document structure from API
 export interface Document {
   id: number
@@ -189,6 +206,7 @@ export interface Document {
     size?: number
     // tag/<name> entries — see components/toolbox/add/tags.ts's tagsToFeatures
     features?: string[]
+    geo?: DocumentGeo
   }
   locations?: Array<{ url: string; metadata?: Record<string, any> }>
   indexOptions: {

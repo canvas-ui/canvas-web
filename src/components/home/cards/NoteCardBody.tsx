@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label'
 import { LazyMarkdownEditor as MarkdownEditor } from '@/components/common/lazy-editor'
 import { TagInput } from '@/components/toolbox/add/TagInput'
 import { useNoteFields } from '@/components/toolbox/add/useNoteFields'
+import { GeotagToggle } from '@/components/toolbox/add/GeotagToggle'
 import { B5Card, type B5SaveTarget } from '../B5Card'
 import type { QuickAddInitialData } from '../quick-add-types'
 
@@ -50,6 +51,8 @@ export function NoteCardBody({ onClose, initialData }: { onClose: () => void; in
           <Label>Tags</Label>
           <TagInput tags={f.tags} onChange={f.setTags} />
         </div>
+
+        <GeotagToggle geotag={f.geotag} idPrefix="qa-note-geotag" />
       </div>
     </B5Card>
   )

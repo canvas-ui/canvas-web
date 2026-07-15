@@ -19,6 +19,7 @@ import {
   createWorkspaceCanvas,
   updateWorkspacePath,
   syncBackend,
+  listBackends,
   backendAddressFromTreePath,
   addBackendContainers,
   removeBackendContainer,
@@ -160,7 +161,10 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
   // storage scan). MVP resyncs the whole backend/account.
   const onResyncBackend = useCallback(async (path: string): Promise<boolean> => {
     if (!workspaceId) return false
-    const target = backendAddressFromTreePath(path)
+    // Backends list resolves device-scoped mount nodes (/device/<device>/<mount>)
+    // by treePath; fetched per op — these are rare, user-triggered actions.
+    const backends = await listBackends(workspaceId).catch(() => [])
+    const target = backendAddressFromTreePath(path, backends)
     if (!target) return false
     await syncBackend(workspaceId, target.driver, target.address)
     refresh(300)
@@ -172,7 +176,8 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
   // (empty folders included). key '' = the backend root node (children only).
   const onCreateBackendFolder = useCallback(async (parentPath: string, name: string): Promise<boolean> => {
     if (!workspaceId) return false
-    const t = backendFolderTarget(parentPath)
+    const backends = await listBackends(workspaceId).catch(() => [])
+    const t = backendFolderTarget(parentPath, backends)
     if (!t) return false
     const key = t.key ? `${t.key}/${name}` : name
     await addBackendContainers(workspaceId, t.driver, t.address, [key])
@@ -182,7 +187,8 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
 
   const onRenameBackendFolder = useCallback(async (path: string, newName: string): Promise<boolean> => {
     if (!workspaceId) return false
-    const t = backendFolderTarget(path)
+    const backends = await listBackends(workspaceId).catch(() => [])
+    const t = backendFolderTarget(path, backends)
     if (!t || !t.key) return false
     await renameBackendContainer(workspaceId, t.driver, t.address, t.key, newName)
     refresh(200)
@@ -191,7 +197,8 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
 
   const onDeleteBackendFolder = useCallback(async (path: string): Promise<boolean> => {
     if (!workspaceId) return false
-    const t = backendFolderTarget(path)
+    const backends = await listBackends(workspaceId).catch(() => [])
+    const t = backendFolderTarget(path, backends)
     if (!t || !t.key) return false
     await removeBackendContainer(workspaceId, t.driver, t.address, t.key)
     refresh(200)
