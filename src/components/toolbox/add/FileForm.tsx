@@ -1,10 +1,12 @@
-import { useRef, useState, type DragEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { Upload, File as FileIcon, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { useToolbox } from '../toolbox-context'
 import { useAddTarget, describeTarget, submitDocuments, resolveUploadWorkspace } from './useAddTarget'
+import { useFileFields, buildFileDocument } from './useFileFields'
+import { FileMetaFields } from './FileMetaFields'
 import { uploadWorkspaceBlob } from '@/services/blobs'
 import { cn } from '@/lib/utils'
 
@@ -31,6 +33,25 @@ export function FileForm({ capture = false }: { capture?: boolean } = {}) {
   const [dragOver, setDragOver] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
+  // Workspace mode already knows where it uploads; only a context has to be
+  // resolved to its bound workspace (an API call), and the result is kept keyed
+  // by contextId so the workspace name below derives instead of lingering from
+  // a previous target.
+  const [ctxWorkspace, setCtxWorkspace] = useState<{ contextId: string; workspaceName: string } | null>(null)
+  useEffect(() => {
+    if (target?.mode !== 'context') return
+    let cancelled = false
+    resolveUploadWorkspace(target)
+      .then((w) => { if (!cancelled) setCtxWorkspace({ contextId: target.contextId, workspaceName: w.workspaceName }) })
+      .catch(() => { /* no suggestions */ })
+    return () => { cancelled = true }
+  }, [target])
+
+  const uploadWorkspace = target?.mode === 'workspace'
+    ? target.workspaceName
+    : (target && ctxWorkspace?.contextId === target.contextId ? ctxWorkspace.workspaceName : null)
+  const meta = useFileFields(uploadWorkspace)
+
   const addFiles = (list: FileList | null) => {
     if (!list) return
     const incoming = Array.from(list)
@@ -56,14 +77,7 @@ export function FileForm({ capture = false }: { capture?: boolean } = {}) {
       const docs = []
       for (const file of files) {
         const blob = await uploadWorkspaceBlob(workspaceName, file)
-        docs.push({
-          schema: 'data/abstraction/file',
-          schemaVersion: '3.0',
-          data: {},
-          checksumArray: [`sha256/${blob.checksum}`],
-          locations: [{ url: blob.url, metadata: { filename: file.name } }],
-          metadata: { contentType: file.type, size: blob.size },
-        })
+        docs.push(buildFileDocument(blob, file, { tags: meta.tags, comment: meta.comment }))
       }
       await submitDocuments(target, docs)
       showSuccessToast(`${files.length} file(s) uploaded`)
@@ -132,6 +146,8 @@ export function FileForm({ capture = false }: { capture?: boolean } = {}) {
           </ul>
         </div>
       )}
+
+      <FileMetaFields fields={meta} idPrefix="file" multiple={files.length > 1} />
 
       <p className="text-xs text-muted-foreground">{describeTarget(target)}</p>
 

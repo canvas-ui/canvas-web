@@ -4,6 +4,9 @@ import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { uploadWorkspaceBlob } from '@/services/blobs'
 import { submitDocuments, type AddTarget } from '@/components/toolbox/add/useAddTarget'
+import { useFileFields, buildFileDocument } from '@/components/toolbox/add/useFileFields'
+import { FileMetaFields } from '@/components/toolbox/add/FileMetaFields'
+import { useToolbox } from '@/components/toolbox/toolbox-context'
 import { B5Card, type B5SaveTarget } from '../B5Card'
 import type { QuickAddInitialData } from '../quick-add-types'
 
@@ -18,6 +21,11 @@ export function FileCardBody({ onClose, initialData }: { onClose: () => void; in
   const [files, setFiles] = useState<File[]>([])
   const [dragOver, setDragOver] = useState(false)
   const [saving, setSaving] = useState(false)
+  // The real target is only known once the Save/Link-to picker runs, so tag
+  // suggestions fall back to the toolbox's active workspace — null on the home
+  // screen, where TagInput just goes freeform.
+  const { state } = useToolbox()
+  const meta = useFileFields(state.activeWorkspaceName)
 
   useEffect(() => {
     if (initialData?.files?.length) setFiles(initialData.files)
@@ -49,14 +57,7 @@ export function FileCardBody({ onClose, initialData }: { onClose: () => void; in
       const docs = []
       for (const file of files) {
         const blob = await uploadWorkspaceBlob(target.workspaceName, file)
-        docs.push({
-          schema: 'data/abstraction/file',
-          schemaVersion: '3.0',
-          data: {},
-          checksumArray: [`sha256/${blob.checksum}`],
-          locations: [{ url: blob.url, metadata: { filename: file.name } }],
-          metadata: { contentType: file.type, size: blob.size },
-        })
+        docs.push(buildFileDocument(blob, file, { tags: meta.tags, comment: meta.comment }))
       }
       return await submitDocuments(addTarget, docs)
     } finally {
@@ -122,6 +123,8 @@ export function FileCardBody({ onClose, initialData }: { onClose: () => void; in
             </ul>
           </div>
         )}
+
+        <FileMetaFields fields={meta} idPrefix="qa-file" multiple={files.length > 1} />
       </div>
     </B5Card>
   )
