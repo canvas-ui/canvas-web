@@ -47,3 +47,11 @@ We need to replace the current  tree+document view frankenstein with a nice clea
 ## Tools
 
 - simple MVP level editors to add / edit notes, todo items, contacts
+
+## Timeline map (design session needed)
+
+Full "map, but for time" element: zoomable vertical ruler, one rule per timeline in the wide/extended view, colored per-timeline doc-type markers, zooming in gradually morphs the ruler into 2-week / 4-week / 2-month strips up to a standard calendar view. Requires UI mockups and a real-world usability test - deliberately descoped from the 2026-07-16 timeline revamp (which landed the density rail + quick-filter matrix + calendar picker as the functional baseline).
+
+## Folder-as-task UX (idea, not spec'd)
+
+Creating a "folder" in a context/directory tree is essentially creating a task/goal (work://customer-a/devops/jira-1234). Proposed: after creating an empty folder, open a dual B5-card canvas - its (empty) content on one side, an "associate data" picker (contacts, email subject matchers, folders, tabs) on the other; matching incoming data auto-associates with the path. Check scope with user before implementing.
