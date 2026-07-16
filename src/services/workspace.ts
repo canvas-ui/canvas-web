@@ -940,7 +940,10 @@ export interface Backend {
   address: string;
   kind: 'storage' | 'messages' | 'hybrid';
   enabled: boolean;
-  status: 'running' | 'idle' | 'stopped' | 'error' | string;
+  status: 'running' | 'idle' | 'stopped' | 'error' | 'syncing' | string;
+  // Live resync state (initial/catch-up scan running in the background).
+  resyncing?: boolean;
+  progress?: { scanned: number; total: number | null } | null;
   lastSyncAt: string | null;
   lastError: string | null;
   // Mirror node in the backends tree (/device/<device>/<mount> for fs mounts).
@@ -1243,6 +1246,43 @@ export async function createWorkspaceTimeline(workspaceId: string, name: string)
 export async function deleteWorkspaceTimeline(workspaceId: string, name: string): Promise<boolean> {
   await api.delete<{ payload: unknown }>(`${timelineBase(workspaceId)}/${encodeURIComponent(name)}`)
   return true
+}
+
+// Per-bucket document counts for one or more timelines — the data behind the
+// toolbox timeline density rail. Buckets are caller-supplied intervals (the
+// rail knows its visible periods); counts are intersected server-side with the
+// same candidate scope as the documents listing (context path, features,
+// filters, canvas querySpec folding).
+export interface TimelineHistogramBucket {
+  start: string
+  end: string
+  counts: Record<string, number>
+  total: number
+}
+
+export interface TimelineHistogramRequest {
+  names: string[]
+  buckets: Array<{ start: string; end: string }>
+  context?: string
+  treeNameOrTreeId?: string
+  treeType?: 'context' | 'directory'
+  allOf?: string[]
+  anyOf?: string[]
+  noneOf?: string[]
+  filters?: string[]
+  scope?: 'path' | 'workspace'
+  applyCanvasSpec?: boolean
+}
+
+export async function fetchTimelineHistogram(
+  workspaceId: string,
+  request: TimelineHistogramRequest,
+): Promise<TimelineHistogramBucket[]> {
+  const res = await api.post<{ payload: { buckets: TimelineHistogramBucket[] } }>(
+    `${timelineBase(workspaceId)}/histogram`,
+    request,
+  )
+  return res.payload?.buckets ?? []
 }
 
 export async function queryWorkspaceTimeline(

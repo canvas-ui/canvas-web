@@ -7,7 +7,7 @@ import { M2Header } from '@/components/menu/shared/M2Header'
 import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style'
 import { MenuTreeView } from '@/components/menu/shared/MenuTreeView'
 import { useMenu } from '@/components/shell/menu-context'
-import { getWorkspace, getCachedWorkspaceTreeByName, invalidateWorkspaceTreeCache, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer, pasteDocumentsToWorkspacePath, createPublicCanvasShare, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
+import { getWorkspace, getCachedWorkspaceTreeByName, invalidateWorkspaceTreeCache, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer, pasteDocumentsToWorkspacePath, createPublicCanvasShare, listBackends, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
 import type { Layer } from '@/services/workspace'
 import { useTreeOperations } from '@/hooks/useTreeOperations'
 import type { TreeNode } from '@/types/workspace'
@@ -61,6 +61,10 @@ export function WorkspaceM2() {
   const [isLoadingBackends, setIsLoadingBackends] = useState(false)
   const [isLoadingLayers, setIsLoadingLayers] = useState(false)
   const [selectedPath, setSelectedPath] = useState(urlPath)
+  // Backends-tree mirror roots with a resync (initial/catch-up scan) in flight
+  // — badged with a spinner in the tree. Seeded from the backends list, kept
+  // live via the backend.resync.changed ws event.
+  const [resyncingPaths, setResyncingPaths] = useState<Set<string>>(new Set())
   const [contentPath, setContentPath] = useState<string | null>(urlIsLayer && urlPath !== '/' ? urlPath : null)
   const [searchQuery, setSearchQuery] = useState('')
   const [docClipboard, setDocClipboard] = useState<{ documentIds: number[]; operation: 'copy' | 'cut' } | null>(null)
@@ -168,6 +172,19 @@ export function WorkspaceM2() {
     return () => window.removeEventListener('workspace:tree:refresh', handler as EventListener)
   }, [wsName, refreshAll])
 
+  // Seed the resyncing set (covers opening the menu while a scan is running).
+  useEffect(() => {
+    if (!wsName) return
+    let cancelled = false
+    listBackends(wsName)
+      .then(backends => {
+        if (cancelled) return
+        setResyncingPaths(new Set(backends.filter(b => b.resyncing && b.treePath).map(b => b.treePath as string)))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [wsName])
+
   // Subscribe to the workspace channel and refresh trees on relevant DB events:
   //  • context.path.changed — lock/unlock state shifts
   //  • tree.path.* / tree.layer.updated — folders created/moved/removed by any
@@ -194,11 +211,27 @@ export function WorkspaceM2() {
     ]
     events.forEach(ev => socketService.on(ev, refreshSoon))
 
+    // Live resync badge: toggle the spinner on the backend's mirror node; when
+    // a scan finishes, refresh the trees once so final counts/paths settle.
+    const onResync = (payload: { workspaceId?: string; treePath?: string | null; resyncing?: boolean }) => {
+      if (payload?.workspaceId && wsId && payload.workspaceId !== wsId) return
+      const treePath = payload?.treePath
+      if (!treePath) return
+      setResyncingPaths(prev => {
+        const next = new Set(prev)
+        if (payload.resyncing) next.add(treePath); else next.delete(treePath)
+        return next
+      })
+      if (!payload.resyncing) refreshSoon()
+    }
+    socketService.on('backend.resync.changed', onResync)
+
     return () => {
       if (timer) clearTimeout(timer)
       channels.forEach(ch => socketService.emit('unsubscribe', { channel: ch }))
       offConnect?.()
       events.forEach(ev => socketService.off(ev, refreshSoon))
+      socketService.off('backend.resync.changed', onResync)
     }
   }, [wsName, wsId, refreshAll])
 
@@ -390,6 +423,7 @@ export function WorkspaceM2() {
             isLoading={isLoadingTree}
             rootLabel={wsName ?? undefined}
             searchQuery={searchQuery}
+            resyncingPaths={activeTab === 'backends' ? resyncingPaths : undefined}
             pastedDocumentIds={docClipboard?.documentIds}
             onPasteDocuments={wsName && activeTab !== 'backends' ? async (path, ids) => {
               // Ungated on the clipboard: also serves drag-and-drop from the

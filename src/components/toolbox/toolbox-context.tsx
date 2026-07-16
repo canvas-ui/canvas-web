@@ -270,7 +270,9 @@ function extractToolboxFilters(metadata: Record<string, unknown> | undefined): T
       },
       timeline: {
         quickFilter: (t.timeline as ToolboxTimelineFilters)?.quickFilter ?? null,
-        customRange: (t.timeline as ToolboxTimelineFilters)?.customRange ?? null,
+        // Multi-range canonical; old saved filters carry a single customRange.
+        customRanges: (t.timeline as ToolboxTimelineFilters)?.customRanges
+          ?? ((t.timeline as ToolboxTimelineFilters)?.customRange ? [(t.timeline as ToolboxTimelineFilters).customRange!] : []),
         indexCreated: (t.timeline as ToolboxTimelineFilters)?.indexCreated ?? true,
         indexUpdated: (t.timeline as ToolboxTimelineFilters)?.indexUpdated ?? true,
         indexDeleted: (t.timeline as ToolboxTimelineFilters)?.indexDeleted ?? false,
@@ -514,7 +516,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
 
   const clearFilters = useCallback(() => {
     const { filters } = stateRef.current
-    dispatch({ type: 'SET_FILTERS', filters: { ...DEFAULT_TOOLBOX_FILTERS, timeline: { ...filters.timeline, quickFilter: null, customRange: null, selectedTimelines: [] } } })
+    dispatch({ type: 'SET_FILTERS', filters: { ...DEFAULT_TOOLBOX_FILTERS, timeline: { ...filters.timeline, quickFilter: null, customRanges: [], customRange: null, selectedTimelines: [] } } })
   }, [])
 
   const setSort = useCallback((sort: ToolboxSort) => {

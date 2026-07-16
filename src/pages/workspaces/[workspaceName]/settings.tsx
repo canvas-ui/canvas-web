@@ -32,6 +32,7 @@ import {
   getBackendDiskUsage,
   getWorkspaceDiskUsage,
   clearThumbnailCache,
+  invalidateWorkspaceTreeCache,
   formatBytes,
   type Backend,
   type BackendDiskUsage,
@@ -875,6 +876,14 @@ export default function WorkspaceSettingsPage() {
     setDataBackends(nextBackends.filter((b) => b.kind === 'storage'))
   }
 
+  // Keep the "indexing m / n" readout live while any backend scan is running.
+  const anyResyncing = dataBackends.some((b) => b.resyncing)
+  useEffect(() => {
+    if (!anyResyncing || !workspaceId) return
+    const timer = setInterval(() => { loadRuntimeSettings() }, 4000)
+    return () => clearInterval(timer)
+  }, [anyResyncing, workspaceId])
+
   useEffect(() => {
     async function load() {
       try {
@@ -937,12 +946,23 @@ export default function WorkspaceSettingsPage() {
     }
   }
 
+  // Backend mutations change the backends tree (mount nodes come and go) but
+  // the menu tree caches per workspace — drop the cache and poke any mounted
+  // tree view so the change shows without a manual reload.
+  const refreshBackendsTree = () => {
+    for (const id of [workspaceName, workspace?.name, workspace?.id]) {
+      if (id) invalidateWorkspaceTreeCache(id, 'backends')
+    }
+    window.dispatchEvent(new CustomEvent('workspace:tree:refresh', { detail: { workspaceName: workspace?.name || workspaceName } }))
+  }
+
   const toggleDataBackend = async (backend: Backend) => {
     if (backend.config?.supported === false) return
     setBusyAction(`backend:${backend.address}`)
     try {
       await updateBackend(workspaceId, backend.driver, backend.address, { enabled: !backend.enabled })
       await loadRuntimeSettings()
+      refreshBackendsTree()
       showToast({ title: 'Saved', description: `${backend.address} ${backend.enabled ? 'disabled' : 'enabled'}` })
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to update backend', variant: 'destructive' })
@@ -970,6 +990,7 @@ export default function WorkspaceSettingsPage() {
     try {
       await removeBackend(workspaceId, backend.driver, backend.address)
       await loadRuntimeSettings()
+      refreshBackendsTree()
       showToast({ title: 'Removed', description: `${label} unmounted` })
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to remove backend', variant: 'destructive' })
@@ -1206,6 +1227,12 @@ export default function WorkspaceSettingsPage() {
                     {typeof cfg.root === 'string' && cfg.root && <p className="mt-2 truncate font-mono text-xs text-muted-foreground">{cfg.root}</p>}
                     <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
                       <span>status: {backend.status}</span>
+                      {backend.resyncing && (
+                        <span className="flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
+                          <RefreshCw className="h-3 w-3 animate-spin" />
+                          indexing{backend.progress ? ` ${backend.progress.scanned}${backend.progress.total != null ? ` / ${backend.progress.total}` : ''}` : ''}
+                        </span>
+                      )}
                       <span>watch: {cfg.watch ? 'true' : 'false'}</span>
                       {device?.name && <span title={device.id}>device: {device.name}</span>}
                       {cfg.readOnly === true && <span className="rounded bg-amber-500/15 px-1.5 py-0.5 font-medium text-amber-600">read-only</span>}
@@ -1284,7 +1311,7 @@ export default function WorkspaceSettingsPage() {
               </section>
             )
           })}
-          <AddLocalFolderForm workspaceId={workspaceId} onAdded={() => loadRuntimeSettings()} />
+          <AddLocalFolderForm workspaceId={workspaceId} onAdded={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />
         </div>
       )}
 

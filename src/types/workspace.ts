@@ -26,11 +26,21 @@ export interface ToolboxFeatureFilters {
   noneOf: string[]
 }
 
+export interface TimelineRange {
+  start: string
+  end: string
+}
+
 export interface ToolboxTimelineFilters {
   quickFilter: string | null
-  // Explicit date range (ISO YYYY-MM-DD), e.g. from dragging the timeline rail.
-  // Takes precedence over quickFilter when set.
-  customRange: { start: string; end: string } | null
+  // Explicit date ranges (ISO YYYY-MM-DD) from the rail or calendar. Multiple
+  // disjoint ranges are OR'd server-side (one t:<name>:<start..end> token per
+  // range, default anyOf sigil) — e.g. "these 3 Mondays". Takes precedence
+  // over quickFilter when non-empty.
+  customRanges: TimelineRange[]
+  // Legacy single-range field (pre-multi-range saved filters/sessions). Only
+  // read as a fallback when customRanges is absent; never written anymore.
+  customRange?: TimelineRange | null
   indexCreated: boolean
   indexUpdated: boolean
   indexDeleted: boolean
@@ -85,7 +95,7 @@ export const DEFAULT_TOOLBOX_FILTERS: ToolboxFilters = {
   features: { allOf: [], anyOf: [], noneOf: [] },
   timeline: {
     quickFilter: null,
-    customRange: null,
+    customRanges: [],
     indexCreated: true,
     indexUpdated: true,
     indexDeleted: false,
@@ -111,30 +121,38 @@ export function buildGeoFilters(geo: ToolboxGeoFilters): string[] {
  * Convert toolbox timeline filter state → SynapsD timeline filter strings.
  *
  * The backend filter grammar is `t:<name>:<spec>` (see synapsd filters.js).
- * Only `crud:*` timeline names resolve relative quick tokens ("today",
- * "thisWeek", ...) server-side (parseTimelineToken's CRUD_TIMEFRAMES check) —
- * any other timeline name (the built-in "content" timeline, or a custom
- * domain timeline like "wikipedia") requires a literal `start..end` spec.
- * So quick-token-only filters (no explicit drag range) only ever apply to
- * crud:*; content/domain timelines need an explicit customRange.
+ * One active spec — a named wall-clock token ("today", "nextWeek", ...) or an
+ * explicit `start..end` range — applies uniformly to every selected timeline:
+ * the server resolves quick tokens on ANY timeline name (parseTimelineToken),
+ * so `t:tasks:tomorrow` = "due tomorrow" and `t:wikipedia:thisCentury` work
+ * the same as the crud:* lifecycle stamps.
  *
  * Multiple actions/timelines are OR'd (default sigil = anyOf).
  * Returns an empty array when no quick filter/range is active.
  */
+// Active explicit ranges, with legacy single-range fallback (old saved
+// filters/sessions carry `customRange`; new state always writes `customRanges`).
+export function getTimelineRanges(timeline: ToolboxTimelineFilters): TimelineRange[] {
+  if (timeline.customRanges?.length) return timeline.customRanges
+  return timeline.customRange ? [timeline.customRange] : []
+}
+
 export function buildDatetimeFilters(timeline: ToolboxTimelineFilters): string[] {
-  const { quickFilter, customRange, indexCreated, indexUpdated, indexDeleted, contentEvents, selectedTimelines } = timeline
-  // Explicit drag range wins over a quick token; otherwise use the quick token.
-  const spec = customRange ? `${customRange.start}..${customRange.end}` : quickFilter
-  if (!spec) return []
-  const filters: string[] = []
-  if (indexCreated) filters.push(`t:crud:created:${spec}`)
-  if (indexUpdated) filters.push(`t:crud:updated:${spec}`)
-  if (indexDeleted) filters.push(`t:crud:deleted:${spec}`)
-  if (customRange) {
-    if (contentEvents) filters.push(`t:content:${spec}`)
-    for (const name of selectedTimelines) filters.push(`t:${name}:${spec}`)
-  }
-  return filters
+  const { quickFilter, indexCreated, indexUpdated, indexDeleted, contentEvents, selectedTimelines } = timeline
+  // Explicit ranges (calendar/rail) win over a quick token. Each range emits
+  // its own token per timeline; the sigil algebra ORs them (anyOf default).
+  const ranges = getTimelineRanges(timeline)
+  const specs = ranges.length > 0
+    ? ranges.map(r => `${r.start}..${r.end}`)
+    : (quickFilter ? [quickFilter] : [])
+  if (specs.length === 0) return []
+  const names: string[] = []
+  if (indexCreated) names.push('crud:created')
+  if (indexUpdated) names.push('crud:updated')
+  if (indexDeleted) names.push('crud:deleted')
+  if (contentEvents) names.push('content')
+  names.push(...selectedTimelines)
+  return names.flatMap(name => specs.map(spec => `t:${name}:${spec}`))
 }
 
 // Timeline types

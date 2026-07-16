@@ -61,6 +61,9 @@ export interface MenuTreeViewProps {
   searchQuery?: string
   pastedDocumentIds?: number[]
   onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
+  // Backends tree only: mirror-root paths with a resync scan in flight — their
+  // nodes get a spinner badge.
+  resyncingPaths?: Set<string>
 }
 
 type ClipboardMode = 'copy' | 'cut'
@@ -460,6 +463,7 @@ interface CardNodeProps {
   onDragLeave: (path: string, e: React.DragEvent) => void
   onDragEnd: () => void
   onDrop: (path: string, e: React.DragEvent) => void
+  resyncingPaths?: Set<string>
 }
 
 function CardNode({
@@ -469,6 +473,7 @@ function CardNode({
   onSelect, onShowContent, onCtrl, onCtxMenu,
   onConfirmCreate, onCancelCreate, onOpenPicker, styleOverrides,
   dragOverPath, isCopyDrag, onDragStart, onDragEnter, onDragOver, onDragLeave, onDragEnd, onDrop,
+  resyncingPaths,
 }: CardNodeProps) {
 
   const path = buildPath(parentPath, node.name)
@@ -576,6 +581,13 @@ function CardNode({
           {node.label || node.name}
         </span>
 
+        {resyncingPaths?.has(path) && (
+          <RefreshCw
+            className="w-3.5 h-3.5 shrink-0 animate-spin text-muted-foreground"
+            aria-label="Indexing"
+          />
+        )}
+
         {!readOnly && (
           <button
             type="button"
@@ -629,6 +641,7 @@ function CardNode({
               onDragLeave={onDragLeave}
               onDragEnd={onDragEnd}
               onDrop={onDrop}
+              resyncingPaths={resyncingPaths}
             />
           ))}
         </div>
@@ -649,6 +662,7 @@ export function MenuTreeView({
   onCreateBackendFolder, onRenameBackendFolder, onDeleteBackendFolder,
   onUpdateNode,
   searchQuery = '',
+  resyncingPaths,
 }: MenuTreeViewProps) {
 
   const [clipboard, setClipboard] = useState<Clip | null>(null)
@@ -979,6 +993,7 @@ export function MenuTreeView({
     onDragLeave: handleDragLeave,
     onDragEnd: handleDragEnd,
     onDrop: handleDrop,
+    resyncingPaths,
   }
 
   return (
