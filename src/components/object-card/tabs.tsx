@@ -140,7 +140,6 @@ export function MetadataTab({ document }: TabProps) {
           <div><span className="font-medium">ID:</span><span className="ml-2 font-mono">{document.id}</span></div>
           <div><span className="font-medium">Schema:</span><span className="ml-2 font-mono">{document.schema}</span></div>
           <div><span className="font-medium">Schema Version:</span><span className="ml-2">{document.schemaVersion}</span></div>
-          <div><span className="font-medium">Version:</span><span className="ml-2">{document.versionNumber} / {document.latestVersion}</span></div>
           <div><span className="font-medium">Created:</span><span className="ml-2">{formatDate(document.createdAt)}</span></div>
           <div><span className="font-medium">Updated:</span><span className="ml-2">{formatDate(document.updatedAt)}</span></div>
         </div>
@@ -197,7 +196,6 @@ export function MetadataTab({ document }: TabProps) {
         <div>
           <h3 className="font-semibold mb-3">Index Options</h3>
           <div className="space-y-3 text-sm">
-            <div><span className="font-medium">Primary Checksum Algorithm:</span><span className="ml-2">{document.indexOptions.primaryChecksumAlgorithm ?? '—'}</span></div>
             <div>
               <span className="font-medium">FTS Search Fields:</span>
               <div className="ml-2 mt-1">{(document.indexOptions.ftsSearchFields ?? []).map((field, index) => (<span key={index} className="mb-1 mr-2 inline-block rounded bg-muted px-2 py-1 text-xs">{field}</span>))}</div>

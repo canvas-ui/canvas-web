@@ -229,7 +229,6 @@ export interface Document {
   locations?: Array<{ url: string; metadata?: Record<string, any> }>
   indexOptions: {
     checksumAlgorithms: string[]
-    primaryChecksumAlgorithm: string
     checksumFields: string[]
     ftsSearchFields: string[]
     vectorEmbeddingFields: string[]
@@ -248,11 +247,6 @@ export interface Document {
   createdAt: string
   updatedAt: string
   checksumArray: string[]
-  embeddingsArray: any[]
-  parentId: number | null
-  versions: any[]
-  versionNumber: number
-  latestVersion: number
 }
 
 // API response structure for documents

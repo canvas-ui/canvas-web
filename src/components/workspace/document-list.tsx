@@ -74,10 +74,6 @@ function DocumentDetailModal({ document, isOpen, onClose }: DocumentDetailModalP
                   <span className="ml-2">{document.schemaVersion}</span>
                 </div>
                 <div>
-                  <span className="font-medium">Version:</span>
-                  <span className="ml-2">{document.versionNumber} / {document.latestVersion}</span>
-                </div>
-                <div>
                   <span className="font-medium">Created:</span>
                   <span className="ml-2">{formatDate(document.createdAt)}</span>
                 </div>
@@ -144,10 +140,6 @@ function DocumentDetailModal({ document, isOpen, onClose }: DocumentDetailModalP
               <h3 className="font-semibold mb-3">Index Options</h3>
               <div className="space-y-3 text-sm">
                 <div>
-                  <span className="font-medium">Primary Checksum Algorithm:</span>
-                  <span className="ml-2">{document.indexOptions.primaryChecksumAlgorithm}</span>
-                </div>
-                <div>
                   <span className="font-medium">FTS Search Fields:</span>
                   <div className="ml-2 mt-1">
                     {document.indexOptions.ftsSearchFields.map((field, index) => (
@@ -205,14 +197,11 @@ function DocumentRow({ document, onRemoveDocument, onDeleteDocument }: DocumentR
   }
 
   const getPrimaryChecksum = () => {
-    if (document.checksumArray && document.checksumArray.length > 0) {
-      const primary = document.checksumArray.find(c =>
-        c.startsWith(document.indexOptions?.primaryChecksumAlgorithm || 'sha1')
-      )
-      if (primary) {
-        const [algo, hash] = primary.split('/')
-        if (hash) return { algo, hash: hash.substring(0, 8) + '...' }
-      }
+    // Array position encodes primacy (matches synapsd's getPrimaryChecksum).
+    const primary = document.checksumArray?.[0]
+    if (primary) {
+      const [algo, hash] = primary.split('/')
+      if (hash) return { algo, hash: hash.substring(0, 8) + '...' }
     }
     return null
   }
@@ -310,11 +299,6 @@ function DocumentRow({ document, onRemoveDocument, onDeleteDocument }: DocumentR
                 </span>
               </div>
 
-              {document.versionNumber > 1 && (
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  <span className="font-medium">v{document.versionNumber}</span>
-                </div>
-              )}
             </div>
           </div>
 

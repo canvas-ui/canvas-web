@@ -48,7 +48,6 @@ interface DocumentResponse {
     };
     indexOptions: {
       checksumAlgorithms: string[];
-      primaryChecksumAlgorithm: string;
       checksumFields: string[];
       ftsSearchFields: string[];
       vectorEmbeddingFields: string[];
@@ -67,11 +66,6 @@ interface DocumentResponse {
     createdAt: string;
     updatedAt: string;
     checksumArray: string[];
-    embeddingsArray: unknown[];
-    parentId: string | null;
-    versions: unknown[];
-    versionNumber: number;
-    latestVersion: number;
   }>;
   count: number;
   error: string | null;

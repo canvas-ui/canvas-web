@@ -113,12 +113,7 @@ export default function ContextDetailPage() {
         { limit: pageSize, page: currentPage, queries: serverSearchQueries.length ? serverSearchQueries : undefined, anyOf: tbAnyOf, noneOf: tbNoneOf, applyContextSpec: false },
         ownerId,
       );
-      setDocuments(
-        (data as any[]).map((doc: any) => ({
-          ...doc,
-          parentId: doc.parentId ? parseInt(doc.parentId as string) : null,
-        }))
-      );
+      setDocuments(data as any[]);
       setDocumentsTotalCount((data as any).totalCount || (data as any).count || (data as any[]).length);
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to fetch documents', variant: 'destructive' });

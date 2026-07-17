@@ -433,10 +433,9 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
   const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 
   const getPrimaryChecksum = () => {
-    if (document.checksumArray && document.checksumArray.length > 0) {
-      const primary = document.checksumArray.find(c => c.startsWith(document.indexOptions?.primaryChecksumAlgorithm || 'sha1'))
-      if (primary) { const [algo, hash] = primary.split('/'); if (hash) return { algo, hash: hash.substring(0, 8) + '...' } }
-    }
+    // Array position encodes primacy (matches synapsd's getPrimaryChecksum).
+    const primary = document.checksumArray?.[0]
+    if (primary) { const [algo, hash] = primary.split('/'); if (hash) return { algo, hash: hash.substring(0, 8) + '...' } }
     return null
   }
 
@@ -515,7 +514,6 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
         <TableCell className="hidden text-xs text-muted-foreground lg:table-cell">{document.id}</TableCell>
         <TableCell className="hidden text-xs text-muted-foreground lg:table-cell">{primaryChecksum && (<span className="font-mono" title={`${primaryChecksum.algo} checksum`}>{primaryChecksum.hash}</span>)}</TableCell>
         <TableCell className="hidden text-xs text-muted-foreground sm:table-cell">{formatDate(document.createdAt)}</TableCell>
-        <TableCell className="hidden text-xs text-muted-foreground lg:table-cell">{document.versionNumber > 1 ? `v${document.versionNumber}` : ''}</TableCell>
         <TableCell>
           <div className="hidden items-center gap-1 md:flex">
             <Button variant="ghost" size="sm" onClick={handleViewDetails} title="View document details"><Eye className="h-4 w-4" /></Button>
@@ -562,7 +560,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
 
   const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 
-  const getPrimaryChecksum = () => { if (document.checksumArray && document.checksumArray.length > 0) { const primary = document.checksumArray.find(c => c.startsWith(document.indexOptions?.primaryChecksumAlgorithm || 'sha1')); if (primary) { const [algo, hash] = primary.split('/'); if (hash) return { algo, hash: hash.substring(0, 8) + '...' } } } return null }
+  const getPrimaryChecksum = () => { const primary = document.checksumArray?.[0]; if (primary) { const [algo, hash] = primary.split('/'); if (hash) return { algo, hash: hash.substring(0, 8) + '...' } } return null }
 
   const primaryChecksum = getPrimaryChecksum()
 
@@ -618,7 +616,6 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
               <div className="flex items-center gap-1 flex-shrink-0"><span className="font-medium">ID:</span><span className="font-mono truncate max-w-[60px]" title={`ID: ${document.id}`}>{document.id}</span></div>
               {primaryChecksum && (<div className="flex items-center gap-1 flex-shrink-0"><Hash className="h-3 w-3" /><span className="font-mono" title={`${primaryChecksum.algo} checksum`}>{primaryChecksum.hash}</span></div>)}
               <div className="flex items-center gap-1 flex-shrink-0"><Calendar className="h-3 w-3" /><span title={`Created: ${formatDate(document.createdAt)}`}>{formatDate(document.createdAt)}</span></div>
-              {document.versionNumber > 1 && (<div className="flex items-center gap-1 flex-shrink-0"><span className="font-medium">v{document.versionNumber}</span></div>)}
             </div>
           </div>
           <div className="hidden items-center gap-2 md:flex">
@@ -926,7 +923,6 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     type: (d: Document) => (d.metadata?.contentType || d.schema || '').toLowerCase(),
     id: (d: Document) => d.id,
     created: (d: Document) => Date.parse(d.createdAt) || 0,
-    version: (d: Document) => d.versionNumber ?? 0,
   }), [])
   const { sorted: sortedDocuments, sort, toggleSort } = useSortableData(filteredDocuments, sortAccessors)
 
@@ -1581,7 +1577,6 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                 <SortableTableHead label="ID" sortKey="id" sort={sort} onSort={toggleSort} className="hidden lg:table-cell" />
                 <TableHead className="hidden lg:table-cell">Checksum</TableHead>
                 <SortableTableHead label="Created" sortKey="created" sort={sort} onSort={toggleSort} className="hidden sm:table-cell" />
-                <SortableTableHead label="Version" sortKey="version" sort={sort} onSort={toggleSort} className="hidden lg:table-cell" />
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>

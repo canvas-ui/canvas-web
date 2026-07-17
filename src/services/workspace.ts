@@ -1183,7 +1183,7 @@ export async function deleteWorkspaceHook(workspaceId: string, hookPath: string)
 // ─── Bitmaps ────────────────────────────────────────────────────────────────
 
 // Prefixes that are structural/internal and not shown to users in the toolbox.
-const EXCLUDED_BITMAP_PREFIXES = ['internal/', 'context/', 'vfs/', 'nested/']
+const EXCLUDED_BITMAP_PREFIXES = ['internal/', 'context/', 'vfs/']
 
 export async function listWorkspaceBitmaps(workspaceId: string): Promise<string[]> {
   try {
