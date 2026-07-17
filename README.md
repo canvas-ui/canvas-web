@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/canvas-ai/.github/main/banners/canvas-banner_1200x480.jpg" alt="Canvas" width="100%" />
+</p>
+
 # Canvas web frontend
 
 - Bundled with [Canvas Server](https://github.com/canvas-ui/canvas-server)  
