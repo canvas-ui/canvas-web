@@ -76,6 +76,17 @@ function invalidateDocumentCache(workspaceName: string, treeName: string, path: 
   }
 }
 
+// Drop every cached path/tree for a workspace. Socket document events don't
+// carry the affected path, so a doc inserted into a non-viewed path would stay
+// stale on later navigation if we only cleared the current pane — clear the
+// whole workspace instead.
+function invalidateWorkspaceDocumentCache(workspaceName: string) {
+  const prefix = `${workspaceName}\0`;
+  for (const key of documentCache.keys()) {
+    if (key.startsWith(prefix)) documentCache.delete(key);
+  }
+}
+
 // Invalidate the refresh event's target so a later navigation there doesn't
 // serve stale data — even when no mounted pane currently shows that target.
 // treeName without path drops the whole tree's cached paths.
@@ -438,7 +449,10 @@ export default function WorkspaceDetailPage() {
     const refresh = () => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
-        if (workspaceName) invalidateDocumentCache(workspaceName, selectedTreeName, selectedPath);
+        // Whole-workspace invalidation: the event may target a path this pane
+        // isn't showing, so clearing only the current pane would leave those
+        // paths stale until reload.
+        if (workspaceName) invalidateWorkspaceDocumentCache(workspaceName);
         fetchDocuments({ silent: true });
       }, 200);
     };
