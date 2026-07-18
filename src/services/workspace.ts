@@ -1223,6 +1223,37 @@ export async function deleteWorkspaceBitmap(workspaceId: string, bitmapKey: stri
   return true
 }
 
+// ─── Datasets ─────────────────────────────────────────────────────────────────
+// Path-independent ingest provenance (data/dataset/<name>). The 'default'
+// dataset is virtual (unstamped documents) — engine-side, never listed here.
+
+export interface WorkspaceDataset {
+  name: string
+  key: string
+  documentCount: number
+}
+
+export async function listWorkspaceDatasets(workspaceId: string): Promise<WorkspaceDataset[]> {
+  const res = await api.get<{ payload: WorkspaceDataset[] }>(
+    `${API_ROUTES.workspaces}/${encodeURIComponent(workspaceId)}/datasets`
+  )
+  return res.payload || []
+}
+
+export async function deleteWorkspaceDataset(
+  workspaceId: string,
+  name: string,
+  dropDocuments = true
+): Promise<{ name: string; documentsDeleted: number }> {
+  const cleaned = name.replace(/^data\/dataset\//, '').replace(/^\/+|\/+$/g, '')
+  if (!cleaned) throw new Error('Dataset name is required')
+  if (cleaned === 'default') throw new Error('The "default" dataset is virtual and cannot be deleted')
+  const res = await api.delete<{ payload: { name: string; documentsDeleted: number } }>(
+    `${API_ROUTES.workspaces}/${encodeURIComponent(workspaceId)}/datasets/${cleaned.split('/').map(encodeURIComponent).join('/')}?dropDocuments=${dropDocuments}`
+  )
+  return res.payload
+}
+
 // ─── Timeline API ─────────────────────────────────────────────────────────────
 
 function timelineBase(workspaceId: string) {

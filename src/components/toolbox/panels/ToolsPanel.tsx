@@ -14,14 +14,16 @@ const PREFIX_LABELS: Record<string, string> = {
   data: 'Data',
   'data/backend': 'Backends',
   'data/mime': 'MIME types',
+  'data/dataset': 'Datasets',
   client: 'Client',
-  server: 'Server',
-  user: 'User',
   tag: 'Tags',
   device: 'Device',
   custom: 'Custom',
   feature: 'Feature',
 }
+
+// Virtual dataset: unstamped documents, always included unless deselected.
+const DEFAULT_DATASET_KEY = 'data/dataset/default'
 
 // Document-type (`data/abstraction/*`) schemas get a prominent, icon-led picker
 // at the top of the Features tab — they are the filter users reach for most.
@@ -36,6 +38,7 @@ function groupBitmaps(keys: string[]): Map<string, string[]> {
     // than the data/abstraction/* schema tags.
     const prefix = key.startsWith('data/backend/') ? 'data/backend'
       : key.startsWith('data/mime/') ? 'data/mime'
+      : key.startsWith('data/dataset/') ? 'data/dataset'
       : key.split('/')[0]
     if (!groups.has(prefix)) groups.set(prefix, [])
     groups.get(prefix)!.push(key)
@@ -132,7 +135,7 @@ function SchemaTypePicker({
 }
 
 function FeaturesTab() {
-  const { state, setFeatureMode, clearFilters, hasActiveFilters, deleteBitmap } = useToolbox()
+  const { state, setFeatureMode, clearFilters, hasActiveFilters, deleteBitmap, deleteDataset } = useToolbox()
   const { availableBitmaps, bitmapsLoading, filters } = state
   const allOf = new Set(filters.features.allOf)
   const anyOf = new Set(filters.features.anyOf)
@@ -144,6 +147,21 @@ function FeaturesTab() {
   const { showToast } = useToast()
 
   const handleDelete = async (key: string) => {
+    // Named datasets: lifecycle drop — deletes the STAMPED DOCUMENTS too.
+    if (key.startsWith('data/dataset/') && key !== DEFAULT_DATASET_KEY) {
+      const name = key.slice('data/dataset/'.length)
+      if (!window.confirm(`Drop dataset "${name}"?\n\nALL documents stamped with this dataset will be PERMANENTLY DELETED. Documents in other datasets (or the default dataset) are unaffected. Re-ingesting recreates the dataset from scratch.`)) return
+      setDeleting(key)
+      try {
+        const deleted = await deleteDataset(key)
+        showToast({ title: 'Dataset dropped', description: `"${name}" — ${deleted} document(s) deleted` })
+      } catch (e) {
+        showToast({ title: 'Dataset drop failed', description: e instanceof Error ? e.message : String(e), variant: 'destructive' })
+      } finally {
+        setDeleting(null)
+      }
+      return
+    }
     if (key.startsWith('data/')) return
     if (!window.confirm(`Delete bitmap "${key}"?\n\nThis removes the bitmap from the database. Documents are unaffected, but any features/filters relying on this bitmap will lose their grouping.`)) return
     setDeleting(key)
@@ -182,6 +200,13 @@ function FeaturesTab() {
     return (ia === -1 ? order.length : ia) - (ib === -1 ? order.length : ib) || a.localeCompare(b)
   })
   const groups = groupBitmaps(filtered.filter(k => !k.startsWith(ABSTRACTION_PREFIX)))
+  // The virtual 'default' dataset (unstamped documents) is engine-side and never
+  // listed as a bitmap — synthesize its row whenever named datasets exist, so
+  // the tri-state reads: default is on; 'not' hides it; 'all' shows only it.
+  const datasetKeys = groups.get('data/dataset')
+  if (datasetKeys && !datasetKeys.includes(DEFAULT_DATASET_KEY) && (!q || DEFAULT_DATASET_KEY.includes(q))) {
+    datasetKeys.unshift(DEFAULT_DATASET_KEY)
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -226,6 +251,8 @@ function FeaturesTab() {
               <div className="flex flex-col gap-1">
                 {keys.map((key, rowIndex) => {
                   const isProtected = key.startsWith('data/')
+                  const isVirtualDefault = key === DEFAULT_DATASET_KEY
+                  const isNamedDataset = key.startsWith('data/dataset/') && !isVirtualDefault
                   const mode = modeOf(key)
                   return (
                     <div
@@ -246,20 +273,28 @@ function FeaturesTab() {
                           : 'border-l-rose-500 !bg-rose-500/10',
                       )}
                     >
-                      <span className="flex-1 min-w-0 text-xs font-mono text-foreground truncate" title={key}>
+                      <span
+                        className="flex-1 min-w-0 text-xs font-mono text-foreground truncate"
+                        title={isVirtualDefault
+                          ? 'Virtual dataset: documents not stamped with any dataset. Included by default — "not" hides them, "all" shows only them.'
+                          : key}
+                      >
                         {key}
+                        {isVirtualDefault && <span className="ml-1.5 text-[10px] text-muted-foreground font-sans">virtual · on by default</span>}
                       </span>
                       <span onClick={(e) => e.stopPropagation()}>
                         <ModeControl mode={mode} onSet={(m) => setFeatureMode(key, m)} />
                       </span>
-                      {!isProtected && (
+                      {(!isProtected || isNamedDataset) && (
                         <button
                           type="button"
                           disabled={deleting === key}
                           onClick={(e) => { e.stopPropagation(); handleDelete(key) }}
                           className="shrink-0 p-1 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50 opacity-0 group-hover:opacity-100"
-                          title={`Delete bitmap "${key}" from database`}
-                          aria-label={`Delete bitmap ${key}`}
+                          title={isNamedDataset
+                            ? `Drop dataset "${key.slice('data/dataset/'.length)}" — DELETES its documents`
+                            : `Delete bitmap "${key}" from database`}
+                          aria-label={isNamedDataset ? `Drop dataset ${key}` : `Delete bitmap ${key}`}
                         >
                           {deleting === key
                             ? <Loader2 className="w-3.5 h-3.5 animate-spin" />

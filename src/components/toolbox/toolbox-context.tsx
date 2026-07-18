@@ -14,6 +14,7 @@ import {
   DEFAULT_WORKSPACE_TREE_NAME,
   listWorkspaceBitmaps,
   deleteWorkspaceBitmap,
+  deleteWorkspaceDataset,
   listWorkspaceTimelines,
   createWorkspaceTimeline,
   deleteWorkspaceTimeline,
@@ -328,6 +329,7 @@ interface ToolboxContextValue {
   setSort: (sort: ToolboxSort) => void
   saveFilters: () => Promise<void>
   deleteBitmap: (key: string) => Promise<void>
+  deleteDataset: (key: string) => Promise<number>
   createTimeline: (name: string) => Promise<void>
   deleteTimeline: (name: string) => Promise<void>
   refreshTimelines: () => void
@@ -595,13 +597,10 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
     }
   }, [location.search])
 
-  const deleteBitmap = useCallback(async (key: string) => {
-    const wn = stateRef.current.activeWorkspaceName
-    if (!wn) throw new Error('No active workspace')
-    await deleteWorkspaceBitmap(wn, key)
+  // Drop a bitmap key from the available list and any active feature filters.
+  const stripBitmapKey = useCallback((key: string) => {
     const remaining = stateRef.current.availableBitmaps.filter(k => k !== key)
     dispatch({ type: 'SET_BITMAPS', keys: remaining })
-    // Strip from active filters if present
     const f = stateRef.current.filters
     const stripped: ToolboxFilters = {
       ...f,
@@ -615,6 +614,24 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'SET_FILTERS', filters: stripped })
     }
   }, [])
+
+  const deleteBitmap = useCallback(async (key: string) => {
+    const wn = stateRef.current.activeWorkspaceName
+    if (!wn) throw new Error('No active workspace')
+    await deleteWorkspaceBitmap(wn, key)
+    stripBitmapKey(key)
+  }, [stripBitmapKey])
+
+  // Dataset lifecycle: drops the dataset AND its documents (trash-and-repipe).
+  const deleteDataset = useCallback(async (key: string) => {
+    const wn = stateRef.current.activeWorkspaceName
+    if (!wn) throw new Error('No active workspace')
+    const result = await deleteWorkspaceDataset(wn, key)
+    stripBitmapKey(key)
+    // Documents were deleted — nudge open document lists to reload.
+    window.dispatchEvent(new CustomEvent('workspace:documents:refresh', { detail: { workspaceName: wn } }))
+    return result.documentsDeleted
+  }, [stripBitmapKey])
 
   const refreshTimelines = useCallback(() => {
     const wn = stateRef.current.activeWorkspaceName
@@ -654,7 +671,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
 
   return (
     <ToolboxCtx.Provider
-      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, closeAdd, openEdit, setToolsTab, setAccentColor, setFilters, setFeatureToggle, setFeatureMode, clearFilters, hasActiveFilters, setTimelineFilter, setGeoBBox, setGeoSelection, setMapDocuments, setSort, saveFilters, deleteBitmap, createTimeline, deleteTimeline, refreshTimelines }}
+      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, closeAdd, openEdit, setToolsTab, setAccentColor, setFilters, setFeatureToggle, setFeatureMode, clearFilters, hasActiveFilters, setTimelineFilter, setGeoBBox, setGeoSelection, setMapDocuments, setSort, saveFilters, deleteBitmap, deleteDataset, createTimeline, deleteTimeline, refreshTimelines }}
     >
       {children}
     </ToolboxCtx.Provider>
