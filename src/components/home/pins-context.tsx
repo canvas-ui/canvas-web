@@ -16,6 +16,8 @@ interface PinsValue {
   isPinned: (address: CanvasAddress) => boolean
   pin: (address: CanvasAddress) => Promise<void>
   unpin: (id: string) => Promise<void>
+  /** Reorder: move pin `id` before `beforeId` (null = to the end). */
+  movePin: (id: string, beforeId: string | null) => Promise<void>
 }
 
 const PinsContext = createContext<PinsValue | null>(null)
@@ -70,9 +72,22 @@ export function CanvasPinsProvider({ children }: { children: ReactNode }) {
     await persist(pins.filter((p) => p.id !== id))
   }, [pins, persist])
 
+  // Home tiles render in array order, so reordering IS the arrangement.
+  // persist() is optimistic with rollback, same as pin/unpin.
+  const movePin = useCallback(async (id: string, beforeId: string | null) => {
+    const moved = pins.find((p) => p.id === id)
+    if (!moved || id === beforeId) return
+    const without = pins.filter((p) => p.id !== id)
+    const at = beforeId === null ? without.length : without.findIndex((p) => p.id === beforeId)
+    if (at === -1) return
+    const next = [...without.slice(0, at), moved, ...without.slice(at)]
+    if (next.every((p, i) => p === pins[i])) return // no-op move — skip the write
+    await persist(next)
+  }, [pins, persist])
+
   const value = useMemo(
-    () => ({ pins, isLoading, isPinned, pin, unpin }),
-    [pins, isLoading, isPinned, pin, unpin],
+    () => ({ pins, isLoading, isPinned, pin, unpin, movePin }),
+    [pins, isLoading, isPinned, pin, unpin, movePin],
   )
 
   return <PinsContext.Provider value={value}>{children}</PinsContext.Provider>

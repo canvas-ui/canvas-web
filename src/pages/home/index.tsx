@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { LayoutDashboard, Pin } from 'lucide-react';
 import { HomeFab } from '@/components/home/HomeFab';
@@ -26,34 +26,82 @@ function tabLabel(pin: PinnedCanvas) {
   return pin.label || pin.path.split('/').filter(Boolean).pop() || 'Canvas';
 }
 
-// Browser-like tab strip for minimized tiles. Sits at the bottom of the home
-// area (absolute, not fixed: fixed would cross the shell's rail/sidebar).
-// Clicking a tab restores its tile.
+// Minimized tiles, two presentations:
+//   md+   — browser-like tab strip at the bottom of the home area (absolute,
+//           not fixed: fixed would cross the shell's rail/sidebar).
+//   <md   — a horizontal tab strip would eat scarce viewport height, so it
+//           collapses into a round floating button docked right of the
+//           bottom-left burger toggle (same size/skin/z as MobileMenuToggle:
+//           z-[39] keeps it under every drawer scrim). Tapping it pops a
+//           restore list above; the list card matches the rail card's z-[46].
+// Clicking a tab / list row restores its tile.
 function MinimizedTabBar({ pins, onRestore }: { pins: PinnedCanvas[]; onRestore: (id: string) => void }) {
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // The last tile restored from the mobile list leaves nothing to pop over.
+  useEffect(() => {
+    if (pins.length === 0) setMobileOpen(false);
+  }, [pins.length]);
+
   if (pins.length === 0) return null;
   return (
-    <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-40">
-      {/* md:pr-28 keeps tabs from sliding under the FAB column (right-6, w-16). */}
-      <div className="pointer-events-auto flex items-end gap-1 overflow-x-auto px-3 md:pr-28 pb-[env(safe-area-inset-bottom)]">
-        {pins.map((pin) => (
-          <button
-            key={pin.id}
-            type="button"
-            onClick={() => onRestore(pin.id)}
-            title={`Restore ${tabLabel(pin)}`}
-            className="flex max-w-[180px] shrink-0 items-center gap-1.5 rounded-t-lg border border-b-0 bg-background px-3 py-1.5 text-xs shadow-sm hover:bg-accent"
-          >
-            <LayoutDashboard className="h-3.5 w-3.5 shrink-0 text-violet-500" />
-            <span className="truncate">{tabLabel(pin)}</span>
-          </button>
-        ))}
+    <>
+      <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-40 max-md:hidden">
+        {/* pr-28 keeps tabs from sliding under the FAB column (right-6, w-16). */}
+        <div className="pointer-events-auto flex items-end gap-1 overflow-x-auto px-3 pr-28 pb-[env(safe-area-inset-bottom)]">
+          {pins.map((pin) => (
+            <button
+              key={pin.id}
+              type="button"
+              onClick={() => onRestore(pin.id)}
+              title={`Restore ${tabLabel(pin)}`}
+              className="flex max-w-[180px] shrink-0 items-center gap-1.5 rounded-t-lg border border-b-0 bg-background px-3 py-1.5 text-xs shadow-sm hover:bg-accent"
+            >
+              <LayoutDashboard className="h-3.5 w-3.5 shrink-0 text-violet-500" />
+              <span className="truncate">{tabLabel(pin)}</span>
+            </button>
+          ))}
+        </div>
       </div>
-    </div>
+
+      {mobileOpen && (
+        <>
+          {/* Transparent click-catcher so a tap outside closes the list. */}
+          <div className="fixed inset-0 z-[45] md:hidden" onClick={() => setMobileOpen(false)} aria-hidden />
+          <div className="fixed bottom-[calc(max(0.5rem,env(safe-area-inset-bottom))+3.5rem)] left-2 z-[46] w-60 max-w-[calc(100vw-1rem)] rounded-xl border bg-card p-1.5 shadow-elevation-8 animate-fade-in md:hidden">
+            {pins.map((pin) => (
+              <button
+                key={pin.id}
+                type="button"
+                onClick={() => onRestore(pin.id)}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-accent"
+              >
+                <LayoutDashboard className="h-4 w-4 shrink-0 text-violet-500" />
+                <span className="truncate">{tabLabel(pin)}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      <button
+        type="button"
+        onClick={() => setMobileOpen((open) => !open)}
+        aria-label={mobileOpen ? 'Close minimized canvases' : `Minimized canvases (${pins.length})`}
+        // left-2 (burger) + w-12 + 0.5rem gap → left-16; sizing/skin mirrors
+        // MobileMenuToggle so the two read as one docked pair.
+        className="fixed bottom-[max(0.5rem,env(safe-area-inset-bottom))] left-16 z-[39] flex h-12 w-12 items-center justify-center rounded-full bg-zinc-900 text-white shadow-elevation-4 md:hidden"
+      >
+        <LayoutDashboard className="h-5 w-5" />
+        <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-violet-500 px-1 text-[10px] font-semibold">
+          {pins.length}
+        </span>
+      </button>
+    </>
   );
 }
 
 export default function HomePage() {
-  const { pins, unpin, isLoading } = useCanvasPins();
+  const { pins, unpin, movePin, isLoading } = useCanvasPins();
   const [minimizedIds, setMinimizedIds] = useState<ReadonlySet<string>>(new Set());
   // Tiles the quick-add flow minimized (vs. the tile's own minimize button):
   // only these restore automatically when the last quick-add card closes.
@@ -103,6 +151,15 @@ export default function HomePage() {
   const visiblePins = pins.filter((pin) => !minimizedIds.has(pin.id));
   const minimizedPins = pins.filter((pin) => minimizedIds.has(pin.id));
 
+  // A tile was dropped on `target`: insert the dragged pin before/after it in
+  // the FULL pins array (minimized pins keep their slot in the order).
+  const handleDropPin = (draggedId: string, target: PinnedCanvas, after: boolean) => {
+    const targetIdx = pins.findIndex((pin) => pin.id === target.id);
+    if (targetIdx === -1) return;
+    const beforeId = after ? (pins[targetIdx + 1]?.id ?? null) : target.id;
+    void movePin(draggedId, beforeId);
+  };
+
   return (
     // HomeFab owns a full-page box (it centres its quick-add cards in it), so
     // it overlays the canvases rather than sitting after them in flow - as a
@@ -129,10 +186,10 @@ export default function HomePage() {
           // spans the full width (auto-fit collapses the empty track).
           // min(640px,100%) keeps the column from overflowing a narrow phone.
           // Extra bottom padding while the tab strip is up so no tile hides
-          // behind it.
+          // behind it (md+ only — mobile has the floating button instead).
           <div
             className={`grid gap-4 p-4 h-full grid-cols-[repeat(auto-fit,minmax(min(640px,100%),1fr))] auto-rows-fr ${
-              minimizedPins.length > 0 ? 'pb-12' : ''
+              minimizedPins.length > 0 ? 'md:pb-12' : ''
             }`}
           >
             {visiblePins.map((pin) => (
@@ -141,6 +198,7 @@ export default function HomePage() {
                 pin={pin}
                 onUnpin={() => { void unpin(pin.id); }}
                 onMinimize={() => minimize(pin.id)}
+                onDropPin={(draggedId, after) => handleDropPin(draggedId, pin, after)}
               />
             ))}
           </div>

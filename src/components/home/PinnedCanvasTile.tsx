@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { LayoutDashboard, PinOff, ExternalLink, Maximize2, Minimize2, Minus } from 'lucide-react'
+import { GripVertical, LayoutDashboard, PinOff, ExternalLink, Maximize2, Minimize2, Minus } from 'lucide-react'
 import { CanvasGrid } from '@/components/canvas/CanvasGrid'
 import { findTreeNodeByPath, getWorkspaceTreeByName } from '@/services/workspace'
 import type { PinnedCanvas } from '@/services/user-config'
@@ -40,14 +40,50 @@ function canvasUrl(pin: PinnedCanvas) {
     : `${base}/trees/${encodeURIComponent(pin.treeName)}/path/${path}`
 }
 
-export function PinnedCanvasTile({ pin, onUnpin, onMinimize }: {
+// HTML5 drag-and-drop payload type for tile reordering. A custom type keeps
+// foreign drags (files, text selections) from lighting up drop indicators.
+export const PIN_DRAG_TYPE = 'application/x-canvas-pin'
+
+export function PinnedCanvasTile({ pin, onUnpin, onMinimize, onDropPin }: {
   pin: PinnedCanvas
   onUnpin: () => void
   /** Collapse the tile into the home tab strip (tile unmounts, pin untouched). */
   onMinimize?: () => void
+  /** Another tile was dropped on this one; insert it before/after this pin.
+      Presence also enables dragging this tile (by its header). */
+  onDropPin?: (draggedId: string, after: boolean) => void
 }) {
   const resolved = usePinnedCanvas(pin)
   const [isFilled, setIsFilled] = useState(false)
+  // 'before' | 'after' while a pin drag hovers this tile (drop indicator side).
+  const [dropSide, setDropSide] = useState<'before' | 'after' | null>(null)
+
+  const canDrag = Boolean(onDropPin) && !isFilled
+
+  // Left half of the tile = insert before, right half = insert after — the
+  // home grid flows rows of columns, so the horizontal midpoint is the
+  // natural split.
+  const sideOf = (e: React.DragEvent) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    return e.clientX > rect.left + rect.width / 2 ? 'after' as const : 'before' as const
+  }
+
+  const dragProps = canDrag ? {
+    onDragOver: (e: React.DragEvent) => {
+      if (!e.dataTransfer.types.includes(PIN_DRAG_TYPE)) return
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+      setDropSide(sideOf(e))
+    },
+    onDragLeave: () => setDropSide(null),
+    onDrop: (e: React.DragEvent) => {
+      const draggedId = e.dataTransfer.getData(PIN_DRAG_TYPE)
+      setDropSide(null)
+      if (!draggedId || draggedId === pin.id) return
+      e.preventDefault()
+      onDropPin?.(draggedId, sideOf(e) === 'after')
+    },
+  } : {}
   const node = resolved.state === 'ready' ? resolved.node : null
   const label = node?.label || pin.label || pin.path.split('/').filter(Boolean).pop() || 'Canvas'
   const color = node?.color
@@ -67,13 +103,26 @@ export function PinnedCanvasTile({ pin, onUnpin, onMinimize }: {
     // drawers (z-[48]). Nothing in the shell transforms, so `fixed` resolves
     // against the viewport rather than the content area.
     <section
+      {...dragProps}
       className={
         isFilled
           ? 'fixed inset-0 z-[60] flex flex-col bg-background'
-          : 'flex flex-col rounded-lg border bg-background overflow-hidden min-h-0 min-w-0'
+          : `flex flex-col rounded-lg border bg-background overflow-hidden min-h-0 min-w-0 ${
+              dropSide ? 'ring-2 ring-primary/60' : ''
+            }`
       }
     >
-      <header className="flex items-center gap-2 px-3 py-2 border-b bg-muted/20 shrink-0 min-w-0">
+      <header
+        draggable={canDrag}
+        onDragStart={canDrag ? (e) => {
+          e.dataTransfer.setData(PIN_DRAG_TYPE, pin.id)
+          e.dataTransfer.effectAllowed = 'move'
+        } : undefined}
+        className={`flex items-center gap-2 px-3 py-2 border-b bg-muted/20 shrink-0 min-w-0 ${
+          canDrag ? 'cursor-grab active:cursor-grabbing' : ''
+        }`}
+      >
+        {canDrag && <GripVertical className="w-3.5 h-3.5 shrink-0 text-muted-foreground/60" aria-hidden />}
         {color && <div className="w-1 h-5 rounded-full shrink-0" style={{ backgroundColor: color }} />}
         <LayoutDashboard className="w-4 h-4 shrink-0 text-violet-500" />
         <div className="flex flex-col min-w-0 flex-1">
