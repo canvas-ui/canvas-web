@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { LayoutDashboard, PinOff, ExternalLink, Maximize2, Minimize2 } from 'lucide-react'
+import { LayoutDashboard, PinOff, ExternalLink, Maximize2, Minimize2, Minus } from 'lucide-react'
 import { CanvasGrid } from '@/components/canvas/CanvasGrid'
 import { findTreeNodeByPath, getWorkspaceTreeByName } from '@/services/workspace'
 import type { PinnedCanvas } from '@/services/user-config'
@@ -40,7 +40,12 @@ function canvasUrl(pin: PinnedCanvas) {
     : `${base}/trees/${encodeURIComponent(pin.treeName)}/path/${path}`
 }
 
-export function PinnedCanvasTile({ pin, onUnpin }: { pin: PinnedCanvas; onUnpin: () => void }) {
+export function PinnedCanvasTile({ pin, onUnpin, onMinimize }: {
+  pin: PinnedCanvas
+  onUnpin: () => void
+  /** Collapse the tile into the home tab strip (tile unmounts, pin untouched). */
+  onMinimize?: () => void
+}) {
   const resolved = usePinnedCanvas(pin)
   const [isFilled, setIsFilled] = useState(false)
   const node = resolved.state === 'ready' ? resolved.node : null
@@ -77,6 +82,17 @@ export function PinnedCanvasTile({ pin, onUnpin }: { pin: PinnedCanvas; onUnpin:
             {pin.workspaceName}://{pin.path.replace(/^\//, '')}
           </span>
         </div>
+        {onMinimize && (
+          <button
+            type="button"
+            onClick={onMinimize}
+            title="Minimize to tab bar"
+            aria-label="Minimize to tab bar"
+            className="shrink-0 flex items-center justify-center w-7 h-7 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          >
+            <Minus className="w-3.5 h-3.5" />
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setIsFilled((v) => !v)}

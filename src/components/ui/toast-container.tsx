@@ -4,7 +4,7 @@ import { ToastProvider, ToastViewport, Toast, ToastTitle, ToastDescription, Toas
 type ToastType = {
   id: string
   title: string
-  description: string
+  description?: string
   variant?: 'default' | 'destructive'
 }
 
@@ -21,7 +21,7 @@ export function ToastContainer({ children }: { children?: React.ReactNode }) {
   const recentToastKeys = useRef<Set<string>>(new Set())
 
   const showToast = useCallback((toast: Omit<ToastType, 'id'>) => {
-    const key = `${toast.title}:${toast.description}`
+    const key = `${toast.title}:${toast.description ?? ''}`
     // If we already displayed the exact same toast very recently, skip it
     if (recentToastKeys.current.has(key)) {
       return
@@ -49,7 +49,7 @@ export function ToastContainer({ children }: { children?: React.ReactNode }) {
           <Toast key={toast.id} variant={toast.variant}>
             <div className="grid gap-1">
               <ToastTitle>{toast.title}</ToastTitle>
-              <ToastDescription>{toast.description}</ToastDescription>
+              {toast.description != null && <ToastDescription>{toast.description}</ToastDescription>}
             </div>
             <ToastClose />
           </Toast>

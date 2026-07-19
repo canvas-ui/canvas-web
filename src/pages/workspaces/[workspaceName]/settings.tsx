@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Copy, Database, ExternalLink, FolderPlus, HardDrive, RefreshCw, Server, Trash2, Unlink, Activity, Monitor, Link2, Check, X as XIcon, Pencil } from 'lucide-react'
+import { ArrowLeft, Copy, Database, ExternalLink, FolderPlus, HardDrive, RefreshCw, Server, Square, Trash2, Unlink, Activity, Monitor, Link2, Check, X as XIcon, Pencil } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,6 +21,8 @@ import {
   removeBackend,
   updateBackend,
   syncBackend,
+  cancelBackendSync,
+  setEmbeddPaused,
   getWorkspaceDbStats,
   setWorkspaceSearchTuning,
   getWorkspaceServicesStatus,
@@ -628,6 +630,61 @@ function SearchTuning({ workspaceName, current, weights, onDone }: {
   )
 }
 
+// Server-wide embedd queue readout + pause/resume. Pausing quiets the
+// CPU-heavy CLIP/ONNX inference after the in-flight batch — the escape hatch
+// while a big photo mount indexes. Enqueues keep accumulating; nothing is
+// lost, and the durable gap ledger re-drives anything missed after a restart.
+function EmbeddQueueControl({
+  queue,
+  onChanged,
+}: {
+  queue: { pending: number; draining: boolean; paused?: boolean; ingestDisabled?: boolean }
+  onChanged: () => void
+}) {
+  const { showToast } = useToast()
+  const [busy, setBusy] = useState(false)
+
+  const toggle = async () => {
+    setBusy(true)
+    try {
+      const res = await setEmbeddPaused(!queue.paused)
+      showToast({
+        title: res.paused ? 'Embedding paused' : 'Embedding resumed',
+        description: res.paused
+          ? `${res.pending.toLocaleString()} job(s) held — resume any time (a restart also resumes)`
+          : `${res.pending.toLocaleString()} job(s) draining`,
+      })
+      onChanged()
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to toggle embedding queue (admin only)', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <span className="flex items-center gap-2">
+      <span>
+        {queue.pending > 0
+          ? <>{queue.pending.toLocaleString()} pending{queue.draining ? ' · running' : ''}{queue.paused ? ' · paused' : ''} <span className="text-muted-foreground">· all workspaces</span></>
+          : (queue.paused ? 'paused' : 'idle')}
+        {queue.ingestDisabled && <span className="ml-1.5 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600" title="CANVAS_EMBEDD_INGEST_DISABLED=true — nothing new is enqueued; existing vectors still serve search">ingest disabled</span>}
+      </span>
+      <button
+        type="button"
+        onClick={toggle}
+        disabled={busy}
+        className="rounded border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
+        title={queue.paused
+          ? 'Resume embedding — the held backlog drains'
+          : 'Pause embedding after the current batch — stops the CPU-heavy model inference; documents keep indexing and stay searchable via full-text'}
+      >
+        {busy ? '…' : queue.paused ? 'Resume' : 'Pause'}
+      </button>
+    </span>
+  )
+}
+
 function DbStatsTab({
   stats,
   isLoading,
@@ -730,9 +787,7 @@ function DbStatsTab({
                   {stats.embedder?.queue && (
                     <StatRow
                       label="Embedding queue (server-wide)"
-                      value={stats.embedder.queue.pending > 0
-                        ? <span>{stats.embedder.queue.pending.toLocaleString()} pending{stats.embedder.queue.draining ? ' · running' : ''} <span className="text-muted-foreground">· all workspaces</span></span>
-                        : 'idle'}
+                      value={<EmbeddQueueControl queue={stats.embedder.queue} onChanged={onRefresh} />}
                     />
                   )}
                   <StatRow label="Image relevance floor" value={stats.semantic.imageMaxDistance == null ? 'off' : stats.semantic.imageMaxDistance} mono />
@@ -1008,6 +1063,21 @@ export default function WorkspaceSettingsPage() {
     }
   }
 
+  // Stop an in-flight resync. Indexed files stay; a later Re-sync resumes
+  // cheaply via the checksum cache, so stop + re-sync ≈ pause/resume.
+  const stopResync = async (backend: Backend) => {
+    setBusyAction(`stopsync:${backend.address}`)
+    try {
+      await cancelBackendSync(workspaceId, backend.driver, backend.address)
+      await loadRuntimeSettings()
+      showToast({ title: 'Sync stopped', description: `${backend.address} — indexed files are kept; Re-sync resumes where it left off` })
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to stop sync', variant: 'destructive' })
+    } finally {
+      setBusyAction(null)
+    }
+  }
+
   const toggleService = async (serviceId: ServiceId, enabled: boolean) => {
     setBusyAction(`service:${serviceId}`)
     try {
@@ -1270,12 +1340,22 @@ export default function WorkspaceSettingsPage() {
                     {(backend.driver === 'file' || backend.driver === 'cacache') && supported && (
                       <BackendSizeButton workspaceId={workspaceId} backend={backend} />
                     )}
-                    {backend.capabilities?.sync && (
+                    {backend.capabilities?.sync && (backend.resyncing ? (
+                      <Button
+                        type="button" variant="outline" size="sm"
+                        disabled={busyAction === `stopsync:${backendId}`}
+                        onClick={() => stopResync(backend)}
+                        title="Stop the running scan. Files indexed so far are kept; Re-sync later resumes where it left off (unchanged files are skipped)."
+                      >
+                        <Square className="mr-2 h-3.5 w-3.5 fill-current" />
+                        {busyAction === `stopsync:${backendId}` ? 'Stopping…' : 'Stop sync'}
+                      </Button>
+                    ) : (
                       <Button type="button" variant="outline" size="sm" disabled={busyAction === `resync:${backendId}`} onClick={() => resyncBackend(backend)}>
                         <RefreshCw className={`mr-2 h-3.5 w-3.5 ${busyAction === `resync:${backendId}` ? 'animate-spin' : ''}`} />
                         Re-sync
                       </Button>
-                    )}
+                    ))}
                     {alwaysOn ? (
                       <span className="rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground" title="Structural workspace store — cannot be disabled">always on</span>
                     ) : (

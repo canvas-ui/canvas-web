@@ -1,3 +1,4 @@
+import { useLocation } from 'react-router-dom'
 import { useToolbox } from '@/components/toolbox/toolbox-context'
 
 // Single entry point into the toolbox — biggest button on screen, fixed to
@@ -6,9 +7,15 @@ import { useToolbox } from '@/components/toolbox/toolbox-context'
 // keeps it clear of Android gesture-nav / iOS home-indicator bars in PWA mode.
 export function ToolboxFab() {
   const { state, setView } = useToolbox()
+  const { pathname } = useLocation()
 
   // The panel has its own close control, so the FAB is redundant while open.
   if (state.t1Open) return null
+
+  // Settings pages have no documents to filter — the toolbox is dead weight
+  // there (covers workspaces/contexts/agents .../settings and any tab under
+  // them).
+  if (pathname.split('/').includes('settings')) return null
 
   return (
     <button

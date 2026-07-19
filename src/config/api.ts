@@ -57,6 +57,7 @@ export const API_ROUTES = {
     workspaces: `${API_URL}/admin/workspaces`,
     logs: `${API_URL}/admin/logs`,
     logsStream: `${API_URL}/admin/logs/stream`,
+    embedd: `${API_URL}/admin/embedd`,
   },
 
   // Roles

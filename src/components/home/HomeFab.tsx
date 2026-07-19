@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { InsertMenu, type InsertKind } from '@/components/common/insert-menu'
@@ -17,6 +17,10 @@ interface HomeFabProps {
   // Called instead of the normal "just drop the card" close when the initial
   // (share-target) card closes, e.g. to navigate back to /home.
   onInitialCardClose?: () => void
+  // Fires on open/close transitions of the quick-add card row (true while at
+  // least one card is open). Home uses it to minimize its pinned tiles so the
+  // cards get the stage.
+  onCardsOpenChange?: (open: boolean) => void
 }
 
 interface OpenCard {
@@ -31,11 +35,20 @@ function nextCardId() {
   return `card-${cardSeq}`
 }
 
-export function HomeFab({ initialKind, initialData, onInitialCardClose }: HomeFabProps) {
+export function HomeFab({ initialKind, initialData, onInitialCardClose, onCardsOpenChange }: HomeFabProps) {
   const [stackOpen, setStackOpen] = useState(false)
   const [openCards, setOpenCards] = useState<OpenCard[]>(() =>
     initialKind ? [{ id: 'initial', kind: initialKind, initialData }] : [],
   )
+
+  // Notify only on open/close transitions; the callback rides in a ref so a
+  // parent re-render can never re-fire the effect with the same value.
+  const hasOpenCards = openCards.length > 0
+  const onCardsOpenChangeRef = useRef(onCardsOpenChange)
+  onCardsOpenChangeRef.current = onCardsOpenChange
+  useEffect(() => {
+    onCardsOpenChangeRef.current?.(hasOpenCards)
+  }, [hasOpenCards])
 
   const addCard = (kind: InsertKind) => {
     setOpenCards((prev) => [...prev, { id: nextCardId(), kind }])

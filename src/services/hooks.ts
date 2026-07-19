@@ -102,6 +102,12 @@ export interface HookRule {
   description?: string
   /** Opt-in: also fire on events caused by automation (origin ≠ user). */
   cascade?: boolean
+  /** Hold the whole then-block (or set on a single action) for human review. */
+  approval?: boolean
+  /** JSON paths (e.g. 'actions.0.paths') the reviewer may amend before approving. */
+  editable?: string[]
+  /** Expire undecided proposals after e.g. '24h', '15m' or ms. */
+  ttl?: string | number
   when: { event: string; [key: string]: unknown }
   then: HookRuleAction[]
 }
@@ -121,6 +127,77 @@ export async function getRules(workspaceId: string): Promise<HookRule[]> {
 export async function saveRules(workspaceId: string, rules: HookRule[]): Promise<void> {
   const doc = { $schema: 'canvas.hook-rules/v1', rules }
   await saveHook(workspaceId, RULES_PATH, JSON.stringify(doc, null, 2) + '\n')
+}
+
+// ── Pending actions (approval queue) ────────────────────────────────────────
+// Automation held for review: GET /hooks/pending lists proposals, POST
+// /hooks/pending/decisions approves (optionally amended) or declines in bulk.
+
+export type PendingActionStatus = 'pending' | 'approved' | 'declined' | 'failed' | 'expired'
+
+export interface PendingActionResult {
+  action: string
+  status: 'ok' | 'error' | 'skipped'
+  error?: string
+}
+
+export interface PendingAction {
+  actionId: string
+  ts: string
+  status: PendingActionStatus
+  handlerType: 'rule' | 'hook'
+  handler: string
+  event: string | null
+  envelope: { event: string | null; payload: Record<string, unknown> }
+  provenance: { origin: string; causedBy: string | null; depth: number }
+  title: string
+  summary: string | null
+  actions: HookRuleAction[]
+  /** JSON paths (rooted at the record, e.g. 'actions.0.paths') the reviewer may amend. */
+  editable: string[]
+  expiresAt?: string
+  decidedAt?: string | null
+  decidedBy?: string | null
+  amended?: boolean
+  result?: PendingActionResult[] | null
+}
+
+export interface PendingDecisionOutcome {
+  actionId: string
+  status: string
+  error?: string
+  result?: PendingActionResult[] | null
+}
+
+export async function listPendingActions(
+  workspaceId: string,
+  opts: { status?: PendingActionStatus; handler?: string; limit?: number } = {},
+): Promise<PendingAction[]> {
+  const params = new URLSearchParams()
+  if (opts.status) params.set('status', opts.status)
+  if (opts.handler) params.set('handler', opts.handler)
+  if (opts.limit) params.set('limit', String(opts.limit))
+  const query = params.toString()
+  const res = await api.get<{ payload: PendingAction[] }>(`${hooksBase(workspaceId)}/pending${query ? `?${query}` : ''}`)
+  return res.payload || []
+}
+
+export async function getPendingAction(workspaceId: string, actionId: string): Promise<PendingAction> {
+  const res = await api.get<{ payload: PendingAction }>(`${hooksBase(workspaceId)}/pending/${actionId}`)
+  return res.payload
+}
+
+export async function decidePendingActions(
+  workspaceId: string,
+  decisions: {
+    approve?: Array<string | { actionId: string; amend?: Record<string, unknown> }>
+    decline?: string[]
+  },
+): Promise<{ decided: number; failed: number; results: PendingDecisionOutcome[] }> {
+  const res = await api.post<{ payload: { decided: number; failed: number; results: PendingDecisionOutcome[] } }>(
+    `${hooksBase(workspaceId)}/pending/decisions`, decisions,
+  )
+  return res.payload
 }
 
 // ── Run log + explain (GET /hooks/runs, POST /hooks/explain) ────────────────

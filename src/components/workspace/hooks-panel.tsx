@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Save, Trash2, RefreshCw, Power, PowerOff, GitBranch, BookOpen, History, RotateCcw, Maximize2, Minimize2 } from 'lucide-react'
+import { Plus, Save, Trash2, RefreshCw, Power, PowerOff, GitBranch, BookOpen, History, RotateCcw, Maximize2, Minimize2, Inbox } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CodeEditor } from '@/components/ui/code-editor'
@@ -18,18 +18,20 @@ import {
   generateHook,
   listRuns,
   replayRun,
+  listPendingActions,
   type HookFile,
   type HooksMeta,
   type HookRun,
 } from '@/services/hooks'
 import { listScripts, getScript, saveScript, deleteScript } from '@/services/scripts'
 import { RuleBuilder } from '@/components/workspace/rule-builder'
+import { PendingActionsPanel } from '@/components/workspace/pending-actions-panel'
 
 interface HooksPanelProps {
   workspaceId: string
 }
 
-type Section = 'rules' | 'hooks' | 'scripts' | 'runs'
+type Section = 'pending' | 'rules' | 'hooks' | 'scripts' | 'runs'
 
 const NEW_SCRIPT_TEMPLATE = `#!/usr/bin/env bash
 # Called from a hook via: spawn('bash', [script, ...args])
@@ -56,6 +58,16 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
   const [runsFailedOnly, setRunsFailedOnly] = useState(false)
   const [replayingId, setReplayingId] = useState<string | null>(null)
   const [isMaximized, setIsMaximized] = useState(false)
+  const [pendingCount, setPendingCount] = useState(0)
+
+  // Badge count on the Pending tab; the panel keeps it fresh while open.
+  useEffect(() => {
+    let cancelled = false
+    listPendingActions(workspaceId, { status: 'pending', limit: 500 })
+      .then((list) => { if (!cancelled) setPendingCount(list.length) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [workspaceId])
 
   // Esc leaves the maximized editor (unless a dialog/confirm has focus).
   useEffect(() => {
@@ -83,8 +95,12 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
     ? { list: listScripts, get: getScript, save: saveScript, del: deleteScript }
     : { list: listHooks, get: getHook, save: saveHook, del: deleteHook }
 
+  // Sections owning their own data (RuleBuilder / PendingActionsPanel) skip
+  // the shared file loader; `isFileSection` gates the file-list + editor UI.
+  const isFileSection = section === 'hooks' || section === 'scripts'
+
   const loadFiles = async () => {
-    if (section === 'rules') return // RuleBuilder owns its own data
+    if (section === 'rules' || section === 'pending') return
     if (section === 'runs') {
       try {
         setIsLoading(true)
@@ -255,8 +271,21 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
           <div className="flex rounded-md border">
             <Button
               size="sm"
-              variant={section === 'rules' ? 'secondary' : 'ghost'}
+              variant={section === 'pending' ? 'secondary' : 'ghost'}
               className="rounded-r-none"
+              onClick={() => switchSection('pending')}
+            >
+              <Inbox className="mr-1 h-3.5 w-3.5" /> Pending
+              {pendingCount > 0 && (
+                <span className="ml-1.5 rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
+                  {pendingCount}
+                </span>
+              )}
+            </Button>
+            <Button
+              size="sm"
+              variant={section === 'rules' ? 'secondary' : 'ghost'}
+              className="rounded-none"
               onClick={() => switchSection('rules')}
             >
               Rules
@@ -297,7 +326,7 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
               </Button>
             </>
           )}
-          {section !== 'rules' && section !== 'runs' && (
+          {isFileSection && (
             <>
               <Button size="sm" variant="ghost" onClick={loadFiles} title="Reload">
                 <RefreshCw className="h-4 w-4" />
@@ -312,6 +341,10 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
           )}
         </div>
       </div>
+
+      {section === 'pending' && (
+        <PendingActionsPanel workspaceId={workspaceId} onPendingCount={setPendingCount} />
+      )}
 
       {section === 'rules' && (
         <RuleBuilder
@@ -405,7 +438,7 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
         </div>
       )}
 
-      {section !== 'rules' && section !== 'runs' && showReference && meta && (
+      {isFileSection && showReference && meta && (
         <div className="border rounded-lg p-4 space-y-4 bg-muted/30 text-sm">
           <div>
             <h4 className="font-medium mb-2">Hook context (<span className="font-mono">ctx</span>)</h4>
@@ -520,7 +553,7 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
         </div>
       )}
 
-      {section !== 'rules' && section !== 'runs' && (
+      {isFileSection && (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="md:col-span-1 border rounded-lg p-2 max-h-[480px] overflow-auto">
           {isLoading ? (

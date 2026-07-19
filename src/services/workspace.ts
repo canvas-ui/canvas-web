@@ -1026,6 +1026,14 @@ export async function syncBackend(workspaceId: string, driver: string, address: 
   return response.payload;
 }
 
+// Stop an in-flight resync. The server aborts the walk at the next file;
+// already-indexed files stay indexed and a later sync resumes cheaply via the
+// checksum cache — so stop + later re-sync behaves like pause/resume.
+export async function cancelBackendSync(workspaceId: string, driver: string, address: string): Promise<unknown> {
+  const response = await api.post<{ payload: unknown }>(`${backendPath(workspaceId, driver, address)}/sync/cancel`);
+  return response.payload;
+}
+
 export async function testBackend(workspaceId: string, driver: string, address: string): Promise<unknown> {
   const response = await api.post<{ payload: unknown }>(`${backendPath(workspaceId, driver, address)}/test`);
   return response.payload;
@@ -1354,11 +1362,21 @@ export interface WorkspaceDbStats {
     queue?: { pending: number; draining: boolean } | null
   }
   embedder?: {
-    queue?: { pending: number; draining: boolean }
+    queue?: { pending: number; draining: boolean; paused?: boolean; ingestDisabled?: boolean }
     // Actual embed routing per space (schema ids / `mime <pattern>`), from the
     // embedd router rules — what really embeds where, not just the gap default.
     routing?: Record<string, string[]>
   }
+}
+
+// Pause/resume the server-wide embedd queue (admin). Pause holds the backlog
+// after the in-flight batch — the CPU-heavy CLIP child goes quiet — and
+// resume drains it; a server restart also clears the pause.
+export async function setEmbeddPaused(paused: boolean): Promise<{ paused: boolean; pending: number }> {
+  const res = await api.post<{ payload: { paused: boolean; pending: number } }>(
+    `${API_ROUTES.admin.embedd}/${paused ? 'pause' : 'resume'}`,
+  )
+  return res.payload
 }
 
 export async function getWorkspaceDbStats(workspaceId: string): Promise<WorkspaceDbStats> {

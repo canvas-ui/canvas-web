@@ -82,12 +82,16 @@ interface RuleForm {
   event: string
   schema: string
   cascade: boolean // also run on items produced by other rules/hooks/agents
+  approval: boolean // hold the actions in the pending queue for review instead of running
+  // JSON-only knobs carried through so a builder edit never strips them:
+  editable?: string[] // reviewer-amendable JSON paths (pending queue)
+  ttl?: string | number // pending-proposal expiry
   conditions: ConditionRow[]
   actions: ActionRow[]
 }
 
 const EMPTY_FORM: RuleForm = {
-  id: null, description: '', event: 'document.inserted', schema: '', cascade: false,
+  id: null, description: '', event: 'document.inserted', schema: '', cascade: false, approval: false,
   conditions: [], actions: [emptyAction('link')],
 }
 
@@ -163,6 +167,9 @@ function buildRule(form: RuleForm): HookRule {
     enabled: true,
     ...(form.description ? { description: form.description } : {}),
     ...(form.cascade ? { cascade: true } : {}),
+    ...(form.approval ? { approval: true } : {}),
+    ...(form.editable?.length ? { editable: form.editable } : {}),
+    ...(form.ttl !== undefined ? { ttl: form.ttl } : {}),
     when,
     then,
   }
@@ -224,6 +231,9 @@ function parseRule(rule: HookRule): RuleForm | null {
 
   const actions: ActionRow[] = []
   for (const act of rule.then || []) {
+    // Per-action approval holds are JSON-only — the builder only models the
+    // rule-level checkbox, and re-emitting this action would strip the flag.
+    if (act.approval !== undefined) return null
     if (act.action === 'link' && Array.isArray(act.paths)) {
       actions.push({ ...emptyAction('link'), a: (act.paths as string[]).join(', '), b: Array.isArray(act.tags) ? (act.tags as string[]).join(', ') : '' })
     } else if (act.action === 'unlink' && Array.isArray(act.paths)) {
@@ -255,6 +265,9 @@ function parseRule(rule: HookRule): RuleForm | null {
     event,
     schema: typeof schema === 'string' ? schema : '',
     cascade: rule.cascade === true,
+    approval: rule.approval === true,
+    ...(rule.editable?.length ? { editable: rule.editable } : {}),
+    ...(rule.ttl !== undefined ? { ttl: rule.ttl } : {}),
     conditions,
     actions: actions.length ? actions : [emptyAction('link')],
   }
@@ -271,6 +284,7 @@ function summarizeWhen(rule: HookRule): string {
     if (w[key] !== undefined) parts.push(`${key === 'attachment' ? 'attachment mime' : key}: ${fmt(w[key])}`)
   }
   if (rule.cascade === true) parts.push('incl. automation-created items')
+  if (rule.approval === true) parts.push('requires approval')
   return parts.join(' · ')
 }
 
@@ -440,6 +454,13 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
               >
                 <input type="checkbox" checked={form.cascade} onChange={(e) => setField('cascade', e.target.checked)} />
                 incl. automation-created items
+              </label>
+              <label
+                className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer"
+                title="Instead of running immediately, the rule's actions are held in the Pending queue for you to review — approve (optionally amended) or decline. Leave unticked to run automatically."
+              >
+                <input type="checkbox" checked={form.approval} onChange={(e) => setField('approval', e.target.checked)} />
+                request my approval before running
               </label>
             </div>
             {form.conditions.map((row, i) => (
