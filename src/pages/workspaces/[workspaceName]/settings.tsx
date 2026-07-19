@@ -64,10 +64,6 @@ const DATA_BACKEND_LABELS: Record<string, { title: string; description: string }
     title: 'Workspace Data',
     description: 'Managed content-addressable blob store (deduped, checksum-keyed). Opaque by design — the tree is the navigation; not meant for direct edits or export.',
   },
-  'stored.cache': {
-    title: 'Stored Cache',
-    description: 'Internal cache: local copies of remote resources and derived artifacts (thumbnails). Regenerable — safe to clear.',
-  },
   s3: {
     title: 'S3',
     description: 'Remote object storage. Placeholder until Stored gets a real S3 driver.',
@@ -222,7 +218,7 @@ function BackendSizeButton({ workspaceId, backend }: { workspaceId: string; back
   )
 }
 
-// Wipe the on-demand thumbnail cache (thumb:* entries in stored.cache).
+// Wipe the on-demand thumbnail cache (thumb:* entries in the stored cache).
 // Thumbnails are derived artifacts regenerated on demand — always safe.
 function ClearThumbnailsButton({ workspaceId }: { workspaceId: string }) {
   const [busy, setBusy] = useState(false)
@@ -1208,10 +1204,10 @@ export default function WorkspaceSettingsPage() {
                 : 'Workspace data backend.',
             }
             const supported = cfg.supported !== false
-            // Structural local stores: workspace:data (managed blob target) and
-            // stored.cache can never be disabled; as managed, non-exported
-            // stores the read-only knob doesn't apply to them either.
-            const alwaysOn = backendId === 'workspace:data' || backendId === 'stored.cache'
+            // Structural local store: workspace:data (managed blob target) can
+            // never be disabled; as a managed, non-exported store the
+            // read-only knob doesn't apply to it either.
+            const alwaysOn = backendId === 'workspace:data'
             const canToggle = supported && !alwaysOn
             const hasReadOnly = canToggle && cfg.managed !== true
             // Distinct default glyph per store/driver (workspace:home → house,
@@ -1274,9 +1270,6 @@ export default function WorkspaceSettingsPage() {
                     {(backend.driver === 'file' || backend.driver === 'cacache') && supported && (
                       <BackendSizeButton workspaceId={workspaceId} backend={backend} />
                     )}
-                    {backendId === 'stored.cache' && (
-                      <ClearThumbnailsButton workspaceId={workspaceId} />
-                    )}
                     {backend.capabilities?.sync && (
                       <Button type="button" variant="outline" size="sm" disabled={busyAction === `resync:${backendId}`} onClick={() => resyncBackend(backend)}>
                         <RefreshCw className={`mr-2 h-3.5 w-3.5 ${busyAction === `resync:${backendId}` ? 'animate-spin' : ''}`} />
@@ -1315,6 +1308,26 @@ export default function WorkspaceSettingsPage() {
               </section>
             )
           })}
+          {/* Stored cache — stored's internal working store, not a data
+              backend: local copies of remote resources + derived artifacts
+              (thumbnails). Rendered as its own control, not a backend row. */}
+          <section className="rounded-lg border p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <Icon icon="ph:lightning-fill" width={16} height={16} color="#f59e0b" className="shrink-0" />
+                  <h2 className="text-sm font-semibold">Stored Cache</h2>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Internal working store: local copies of remote resources and derived artifacts (thumbnails).
+                  Regenerable — safe to clear.
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-3">
+                <ClearThumbnailsButton workspaceId={workspaceId} />
+              </div>
+            </div>
+          </section>
           <AddLocalFolderForm workspaceId={workspaceId} onAdded={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />
         </div>
       )}

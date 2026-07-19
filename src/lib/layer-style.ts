@@ -94,7 +94,6 @@ export const FOLDER_NAME_DEFAULTS: Record<string, LayerStyle> = {
 const BACKEND_ADDRESS_DEFAULTS: Record<string, LayerStyle> = {
   'workspace:home': { icon: 'ph:house-fill', color: '#3b82f6' },
   'workspace:data': { icon: 'ph:database-fill', color: '#14b8a6' },
-  'stored.cache': { icon: 'ph:lightning-fill', color: '#f59e0b' },
 }
 
 const BACKEND_DRIVER_DEFAULTS: Record<string, LayerStyle> = {
