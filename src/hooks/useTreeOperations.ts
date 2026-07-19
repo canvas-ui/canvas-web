@@ -155,7 +155,7 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     return result
   }, [workspaceId, wsTree, refresh])
 
-  // Resync a backend from its /.backends mirror node path. Parse the node to
+  // Resync a backend from its backends-tree mirror node path. Parse the node to
   // its (driver, address) pair and hit the unified /backends/:driver/:address
   // /sync endpoint; the server dispatches by driver (imap account fan-out vs
   // storage scan). MVP resyncs the whole backend/account.
@@ -171,7 +171,7 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     return true
   }, [workspaceId, refresh])
 
-  // ── Backend file-folder ops (writable file backends under /.backends/file) ──
+  // ── Backend file-folder ops (writable file backends in the backends tree) ──
   // Real fs directories on the backend; the server mirrors them into the tree
   // (empty folders included). key '' = the backend root node (children only).
   const onCreateBackendFolder = useCallback(async (parentPath: string, name: string): Promise<boolean> => {

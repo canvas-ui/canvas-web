@@ -469,7 +469,7 @@ export async function updateWorkspacePath(workspaceId: string, path: string, upd
   }
 }
 
-// `purge` only has an effect on the /.backends subtree of a directory tree:
+// `purge` only has an effect inside the backends tree:
 // it deletes the documents under the folder from the index ("Remove and purge").
 // `destroy` (implies purge) additionally deletes the mirrored resources ON the
 // backend (rw backends only). Elsewhere (and by default) the documents are
@@ -901,7 +901,7 @@ export async function disableWorkspaceService(
 
 // ─── Unified backend/connector API (/:id/backends) ──────────────────────────
 // One surface over storage backends (file/cacache/s3) and message connectors
-// (imap accounts), mirroring the /.backends/<driver>/<address> tree. Supersedes
+// (imap accounts), mirroring the backends tree (/<anchor>/<address>). Supersedes
 // the data-backends + services/imap split; driver dispatch is server-side.
 
 export interface BackendCapabilities {

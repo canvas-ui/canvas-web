@@ -80,11 +80,47 @@ export const FOLDER_NAME_DEFAULTS: Record<string, LayerStyle> = {
   'finance': { icon: 'ph:piggy-bank-fill', color: '#84cc16' },
   'shopping': { icon: 'ph:shopping-cart-fill', color: '#f59e0b' },
   'ideas': { icon: 'ph:lightbulb-filament-fill', color: '#facc15' },
-  // System backend-mirror staging tree (read-only) — muted grey to set it
-  // apart from the colorful user folders. Keyed by node name (.backends);
-  // legacy .incoming kept for pre-rename workspaces.
-  '.backends': { icon: 'ph:hard-drives-fill', color: '#64748b' },
-  '.incoming': { icon: 'ph:hard-drives-fill', color: '#64748b' },
+  // The two built-in local stores, as they appear in the backends tree
+  // (workspace:home → /workspace/home node; the managed blob store surfaces its
+  // node only where enumerable). 'home' already resolves via the entry above.
+  'data': { icon: 'ph:database-fill', color: '#14b8a6' },
+}
+
+// Nice default icon/color for the built-in workspace stores and storage drivers,
+// keyed by backend ADDRESS then driver. Used by the settings data-backends list
+// (where the non-enumerable blob store is visible even though it has no tree
+// node), so the two default stores read as distinct at a glance instead of all
+// wearing the same database glyph. Icons are Iconify (ph:*) names, like layers.
+const BACKEND_ADDRESS_DEFAULTS: Record<string, LayerStyle> = {
+  'workspace:home': { icon: 'ph:house-fill', color: '#3b82f6' },
+  'workspace:data': { icon: 'ph:database-fill', color: '#14b8a6' },
+  'stored.cache': { icon: 'ph:lightning-fill', color: '#f59e0b' },
+}
+
+const BACKEND_DRIVER_DEFAULTS: Record<string, LayerStyle> = {
+  file: { icon: 'ph:folder-fill', color: '#64748b' },
+  cacache: { icon: 'ph:database-fill', color: '#14b8a6' },
+  s3: { icon: 'ph:cloud-fill', color: '#0ea5e9' },
+  http: { icon: 'ph:globe-fill', color: '#0ea5e9' },
+  imap: { icon: 'ph:envelope-fill', color: '#a855f7' },
+}
+
+const BACKEND_FALLBACK_STYLE: LayerStyle = { icon: 'ph:hard-drive-fill', color: '#64748b' }
+
+/**
+ * Effective icon/color for a storage backend in the settings data-backends
+ * list: an explicit style on the backend wins, then the well-known address,
+ * then the driver, then a neutral fallback.
+ */
+export function getBackendStyle(backend: { address?: string; driver?: string; config?: Record<string, unknown> | null }): Required<LayerStyle> {
+  const ui = (backend.config?.ui ?? {}) as LayerStyle
+  const known = (backend.address && BACKEND_ADDRESS_DEFAULTS[backend.address])
+    || (backend.driver && BACKEND_DRIVER_DEFAULTS[backend.driver])
+    || BACKEND_FALLBACK_STYLE
+  return {
+    icon: typeof ui.icon === 'string' ? ui.icon : (known.icon ?? BACKEND_FALLBACK_STYLE.icon!),
+    color: typeof ui.color === 'string' ? ui.color : (known.color ?? BACKEND_FALLBACK_STYLE.color!),
+  }
 }
 
 type StyledNode = { metadata?: LayerMetadata; color?: string | null }

@@ -5,7 +5,7 @@ import { Icon } from '@iconify/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { LayerIconPicker } from '@/components/menu/shared/LayerIconPicker'
-import { DEFAULT_WORKSPACE_ICON, type LayerStyle } from '@/lib/layer-style'
+import { DEFAULT_WORKSPACE_ICON, getBackendStyle, type LayerStyle } from '@/lib/layer-style'
 import { DefaultFoldersPicker, createDefaultFolders, useFolderSelection } from '@/components/workspaces/DefaultFoldersPicker'
 import { adminReindexTimelines, adminReindexSearch, adminReindexEmbeddings, adminOptimize, adminReindexMime } from '@/services/admin'
 import { HooksPanel } from '@/components/workspace/hooks-panel'
@@ -1214,12 +1214,16 @@ export default function WorkspaceSettingsPage() {
             const alwaysOn = backendId === 'workspace:data' || backendId === 'stored.cache'
             const canToggle = supported && !alwaysOn
             const hasReadOnly = canToggle && cfg.managed !== true
+            // Distinct default glyph per store/driver (workspace:home → house,
+            // workspace:data → database, mounts → folder, …) so the built-in
+            // stores don't all read as the same database icon.
+            const style = getBackendStyle(backend)
             return (
               <section key={backendId} className="rounded-lg border p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <Database className="h-4 w-4 text-muted-foreground" />
+                      <Icon icon={style.icon} width={16} height={16} color={style.color} className="shrink-0" />
                       <h2 className="text-sm font-semibold">{copy.title}</h2>
                       {!supported && <span className="rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">unsupported</span>}
                     </div>

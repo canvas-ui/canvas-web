@@ -4,6 +4,27 @@ import { registerWidget } from '../widget-registry'
 import type { WidgetProps } from '../widget-types'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import type { Document } from '@/types/workspace'
+import { useDocumentActivation } from '../useDocumentActivation'
+
+// A single recent-document line. Click / tap / long-press opens the shared
+// document modal (the full view/edit controls) — the widget is a shortcut, not
+// a dead-end view. No-op on the public share (no modal provider).
+function RecentDocRow({ doc, workspaceId }: { doc: Document; workspaceId: string }) {
+  const display = getDocumentDisplayInfo(doc)
+  const { activationProps } = useDocumentActivation(doc, workspaceId)
+  return (
+    <li
+      {...activationProps}
+      title="Open details"
+      className="canvas-no-drag cursor-pointer py-1.5 min-w-0 rounded px-1 transition-colors hover:bg-accent/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <div className="truncate font-medium">{display.title}</div>
+      {display.preview && (
+        <div className="truncate text-xs text-muted-foreground">{display.preview}</div>
+      )}
+    </li>
+  )
+}
 
 function RecentDocumentsWidget({ config, canvas }: WidgetProps) {
   const limit = typeof config.limit === 'number' ? config.limit : 10
@@ -38,17 +59,9 @@ function RecentDocumentsWidget({ config, canvas }: WidgetProps) {
 
   return (
     <ul className="divide-y text-sm">
-      {documents.map((doc) => {
-        const display = getDocumentDisplayInfo(doc)
-        return (
-          <li key={doc.id} className="py-1.5 min-w-0">
-            <div className="truncate font-medium">{display.title}</div>
-            {display.preview && (
-              <div className="truncate text-xs text-muted-foreground">{display.preview}</div>
-            )}
-          </li>
-        )
-      })}
+      {documents.map((doc) => (
+        <RecentDocRow key={doc.id} doc={doc} workspaceId={canvas.workspaceId} />
+      ))}
     </ul>
   )
 }

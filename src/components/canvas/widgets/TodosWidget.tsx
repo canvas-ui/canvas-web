@@ -6,6 +6,7 @@ import type { Document } from '@/types/workspace'
 import { TODO_SCHEMA } from '@/components/renderers/types'
 import { TODO_STATUS_LABELS } from '@/components/toolbox/add/useTodoFields'
 import { todoData, TODO_STATUS_STYLE, isOverdue, formatDue, setTodoStatus } from '@/lib/todo'
+import { useDocumentActivation } from '../useDocumentActivation'
 
 const TODO_FEATURE = 'data/abstraction/todo'
 
@@ -15,6 +16,9 @@ function TodoRow({ doc, workspaceId, readOnly, onChanged }: { doc: Document; wor
   const done = t.status === 'completed'
   const status = t.status ?? 'pending'
   const overdue = isOverdue(t)
+  // The row is a shortcut into the full document modal (edit priority/status/…);
+  // the checkbox keeps its own quick-toggle and stops the row from also opening.
+  const { activationProps, stopRowActivation } = useDocumentActivation(doc, workspaceId)
 
   const toggle = async () => {
     if (readOnly || busy) return
@@ -24,10 +28,14 @@ function TodoRow({ doc, workspaceId, readOnly, onChanged }: { doc: Document; wor
   }
 
   return (
-    <div className="flex items-start gap-2.5 rounded-md border bg-card px-2.5 py-2">
+    <div
+      {...activationProps}
+      title="Open details"
+      className="canvas-no-drag flex cursor-pointer items-start gap-2.5 rounded-md border bg-card px-2.5 py-2 transition-colors hover:bg-accent/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
       <button
         type="button"
-        onClick={toggle}
+        onClick={(e) => { stopRowActivation(e); toggle() }}
         disabled={readOnly || busy}
         aria-pressed={done}
         title={done ? 'Mark not done' : 'Mark done'}
