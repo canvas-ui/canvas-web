@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { tagsToFeatures } from './tags'
 import { submitDocuments, type AddTarget } from './useAddTarget'
 import { TODO_SCHEMA } from '@/components/renderers/types'
 import { useGeotag } from '@/hooks/useGeotag'
@@ -64,6 +65,8 @@ export function useTodoFields() {
   const [priority, setPriority] = useState<number | ''>('')
   // Pre-selected: today, till end of day.
   const [due, setDue] = useState<string>(todayEndOfDayLocal())
+  const [tags, setTags] = useState<string[]>([])
+  const [comment, setComment] = useState('')
   const [saving, setSaving] = useState(false)
   const geotag = useGeotag()
 
@@ -75,11 +78,13 @@ export function useTodoFields() {
       // Off by default; capture() resolves null unless the user opted in, and
       // never rejects — a missing fix must not block saving the todo.
       const geo = await geotag.capture()
+      const trimmedComment = comment.trim()
       const doc = {
         schema: TODO_SCHEMA,
         schemaVersion: TODO_SCHEMA_VERSION,
         data: buildTodoData({ title, description, status, priority, due }),
-        metadata: { ...(geo ? { geo } : {}) },
+        ...(trimmedComment ? { comment: trimmedComment } : {}),
+        metadata: { features: tagsToFeatures(tags), ...(geo ? { geo } : {}) },
       }
       return await submitDocuments(target, [doc])
     } finally {
@@ -89,6 +94,7 @@ export function useTodoFields() {
 
   return {
     title, setTitle, description, setDescription, status, setStatus,
-    priority, setPriority, due, setDue, saving, canSave, save, geotag,
+    priority, setPriority, due, setDue, tags, setTags, comment, setComment,
+    saving, canSave, save, geotag,
   }
 }

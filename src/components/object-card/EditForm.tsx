@@ -79,9 +79,9 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
       // Only send data/metadata for editable schemas — sending `data` would
       // wholesale-replace it (BaseDocument.update), clobbering a photo/file's data.
       if (isTodo) {
-        // Preserve other data fields (e.g. completedAt) while updating the
-        // editable ones; leave metadata untouched (no tags on todos here).
+        // Preserve other data fields (e.g. completedAt) while updating the editable ones.
         payload.data = { ...doc.data, ...buildTodoData({ title, description, status, priority, due }) }
+        payload.metadata = { features: tagsToFeatures(tags) }
       } else if (editable) {
         const cleanTags = tags.map(t => t.trim()).filter(Boolean)
         let data: Record<string, unknown>
@@ -142,7 +142,7 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
         </div>
       )}
 
-      {editable && !isTodo && (
+      {editable && (
         <div className="space-y-1.5">
           <Label>Tags</Label>
           <TagInput tags={tags} onChange={setTags} suggestions={suggestions} />
