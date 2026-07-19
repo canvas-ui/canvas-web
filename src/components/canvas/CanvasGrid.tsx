@@ -15,7 +15,16 @@ import type { CanvasQuerySpec, Document, LayerMetadata } from '@/types/workspace
 
 const ReactGridLayout = WidthProvider(GridLayout)
 const COLS = 12
-const MIN_ROW_HEIGHT = 32
+// A FIXED cell height (metro-style), so resizing a widget taller changes its
+// pixel height by an absolute, predictable amount and the grid scrolls when it
+// outgrows the host. This deliberately replaces the old "scale rowHeight to
+// exactly fill the host" behaviour: dividing the host height by the live row
+// count made every vertical resize a no-op for the bottom widget (its pixel
+// height resolved to host-2*margin regardless of row span). Widgets that should
+// still stretch to the bottom use the fillH flag / "Fill canvas" button, which
+// grows them to the host's row count (see hostRows).
+const ROW_HEIGHT = 80
+const NARROW_ROW_HEIGHT = 40
 const GRID_MARGIN: [number, number] = [12, 12]
 
 type CanvasLayoutItem = Layout & { fillW?: boolean; fillH?: boolean }
@@ -50,33 +59,36 @@ function itemsOverlap(a: CanvasLayoutItem, b: CanvasLayoutItem) {
   return a.x < b.x + b.w && a.x + a.w > b.x
 }
 
-function applyFillLayout(layout: CanvasLayoutItem[]): CanvasLayoutItem[] {
+// `hostRows` is how many rows fit in the visible host. A fillH widget that is
+// the last one in its column band grows to reach it (fill to the bottom);
+// without it, a fillH widget only grows to the next widget below. When the host
+// hasn't been measured yet (0) we fall back to the grid's own extent.
+function applyFillLayout(layout: CanvasLayoutItem[], hostRows = 0): CanvasLayoutItem[] {
   const extent = gridExtent(layout)
+  const bottomRows = hostRows > extent ? hostRows : extent
   return layout.map((item) => {
     const fillW = item.fillW ?? item.w >= COLS
     const placed = { ...item, x: fillW ? 0 : item.x, w: fillW ? COLS : item.w }
     let h = item.h
     if (item.fillH) {
-      // Grow to the next widget below (same column band), not over it.
+      // Grow to the next widget below (same column band), not over it; if none,
+      // grow to the host bottom.
       const belowY = layout.reduce<number | null>((min, other) => {
         if (other.i === item.i || other.y <= item.y || !itemsOverlap(placed, other)) return min
         return min == null || other.y < min ? other.y : min
       }, null)
-      h = Math.max(item.minH ?? 1, (belowY ?? extent) - item.y)
+      h = Math.max(item.minH ?? 1, (belowY ?? bottomRows) - item.y)
     }
     return { ...placed, h }
   })
 }
 
-function rowHeightForContainer(height: number, layout: CanvasLayoutItem[]) {
-  const extent = gridExtent(applyFillLayout(layout))
+// How many whole rows fit in the visible host. react-grid-layout's
+// containerPadding (defaults to `margin`) adds a gutter above the first row and
+// below the last, so n rows occupy n*ROW_HEIGHT + (n+1)*marginY.
+function hostRowCapacity(height: number) {
   const marginY = GRID_MARGIN[1]
-  // react-grid-layout's containerPadding (which defaults to `margin`) adds a
-  // gutter above the first row and below the last, on top of the extent-1
-  // inter-row margins. Budgeting only the inter-row ones overflows the host by
-  // 2*marginY, which the host then silently clips.
-  const totalMargin = (extent + 1) * marginY
-  return Math.max(MIN_ROW_HEIGHT, Math.floor((height - totalMargin) / extent))
+  return Math.max(1, Math.floor((height - marginY) / (ROW_HEIGHT + marginY)))
 }
 
 // Narrow-viewport threshold below which the grid collapses to a single
@@ -113,6 +125,7 @@ export function CanvasGrid({
   metadata,
   isLocked = false,
   readOnly = false,
+  interactive = true,
   fetchDocuments,
   onSaved,
 }: {
@@ -125,6 +138,9 @@ export function CanvasGrid({
   /** Kept for callers; shared canvases stay structurally locked in the tree but remain widget-editable. */
   isLocked?: boolean
   readOnly?: boolean
+  /** Allow document-level controls (todo toggle, etc.). Defaults true for the
+   *  authenticated app; the public share passes false. Independent of readOnly. */
+  interactive?: boolean
   fetchDocuments?: (opts?: WidgetFetchOpts) => Promise<WidgetDocumentsResult>
   onSaved?: () => void
 }) {
@@ -137,8 +153,10 @@ export function CanvasGrid({
   const [isDirty, setIsDirty] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [rowHeight, setRowHeight] = useState(MIN_ROW_HEIGHT)
   const [isNarrow, setIsNarrow] = useState(false)
+  // Rows that fit the visible host — only used to let a fillH widget reach the
+  // bottom; the row height itself is fixed.
+  const [hostRows, setHostRows] = useState(0)
   // Canvas-level view order. Seeded from the stored querySpec so widgets show
   // the baked sort; edited via a widget's sort control and persisted back into
   // querySpec.sort on Save (only when actually touched → sortDirtyRef).
@@ -150,9 +168,10 @@ export function CanvasGrid({
   // Narrow viewports (mobile) collapse to a stacked single column: the saved
   // 12-col layout is unusable there and widgets never filled the area.
   const displayLayout = useMemo(
-    () => (isNarrow ? stackLayout(layout) : applyFillLayout(layout)),
-    [layout, isNarrow],
+    () => (isNarrow ? stackLayout(layout) : applyFillLayout(layout, hostRows)),
+    [layout, isNarrow, hostRows],
   )
+  const rowHeight = isNarrow ? NARROW_ROW_HEIGHT : ROW_HEIGHT
   const savedUiKey = useMemo(() => JSON.stringify(metadata?.ui ?? null), [metadata?.ui])
 
   // Reset local state when navigating to a different canvas.
@@ -175,8 +194,8 @@ export function CanvasGrid({
     latest.current = next
   }, [readOnly, savedUiKey, metadata])
 
-  // Scale row height so the grid always fills the host — keeps full-width /
-  // full-height widgets proportional on workspace and shared canvases alike.
+  // Track the narrow (stacked) breakpoint and how many rows fit the host, so a
+  // fillH widget can stretch to the bottom. The row height itself is fixed.
   useEffect(() => {
     const host = gridHostRef.current
     if (!host || layout.length === 0) return
@@ -185,10 +204,7 @@ export function CanvasGrid({
       const height = host.clientHeight
       const narrow = host.clientWidth > 0 && host.clientWidth < NARROW_WIDTH
       setIsNarrow(narrow)
-      if (height <= 0) return
-      // Stacked (mobile) mode scrolls vertically at a fixed comfortable row
-      // height instead of squeezing the whole stack into the viewport.
-      setRowHeight(narrow ? 40 : rowHeightForContainer(height, layout))
+      if (height > 0) setHostRows(hostRowCapacity(height))
     }
 
     measure()
@@ -211,6 +227,7 @@ export function CanvasGrid({
       layerId,
       querySpec,
       readOnly: !editable,
+      interactive,
       canvasSort,
       setCanvasSort: editable ? setCanvasSort : undefined,
       fetchDocuments: fetchDocuments ?? (async (opts) => {
@@ -218,7 +235,7 @@ export function CanvasGrid({
         return { payload: (res.payload as Document[]) || [], count: res.count, totalCount: res.totalCount }
       }),
     }),
-    [workspaceId, treeName, path, layerId, querySpec, editable, fetchDocuments, canvasSort, setCanvasSort],
+    [workspaceId, treeName, path, layerId, querySpec, editable, interactive, fetchDocuments, canvasSort, setCanvasSort],
   )
 
   const markDirty = useCallback((nextLayout: CanvasLayoutItem[], nextWidgets: WidgetMap) => {
@@ -301,7 +318,10 @@ export function CanvasGrid({
     setLayout((prev) => {
       const target = prev.find((item) => item.i === id)
       if (!target) return prev
-      const h = Math.max(target.h, target.minH ?? 4, 4)
+      // Fill the whole VISIBLE canvas: as many rows as fit the host (row height
+      // is fixed now, so this is what "cover the canvas" means), falling back to
+      // a sensible span before the host is measured.
+      const h = Math.max(target.minH ?? 1, hostRows || target.h, 4)
       const filled: CanvasLayoutItem = { ...target, x: 0, y: 0, w: COLS, h, fillW: true, fillH: true }
       const pushed = prev
         .filter((item) => item.i !== id)
@@ -310,7 +330,7 @@ export function CanvasGrid({
       markDirty(next, widgets)
       return next
     })
-  }, [editable, markDirty, widgets])
+  }, [editable, markDirty, widgets, hostRows])
 
   const setWidgetConfig = useCallback((id: string, config: WidgetConfig) => {
     setWidgets((prev) => {
@@ -368,11 +388,10 @@ export function CanvasGrid({
       </div>
       )}
 
-      {/* Always scrollable on y, not just when stacked: rows only scale down to
-          a 32px floor, so a host shorter than that floor allows (a home tile, a
-          short window) used to clip the bottom of the canvas with no way to
-          reach it. When the rows do fit, the grid is exactly the host's height
-          and no scrollbar appears.
+      {/* Scrollable on y: with a fixed ROW_HEIGHT the grid is as tall as its
+          rows demand, which may exceed the host (a home tile, a short window, a
+          canvas the user grew) — it scrolls instead of clipping. When the rows
+          fit, no scrollbar appears.
           overflow-x-hidden is required, not cosmetic: an unset overflow-x
           computes to `auto` once overflow-y is set, and that x-scrollbar eats
           16px of clientHeight -> the grid no longer fits -> a y-scrollbar
@@ -393,6 +412,9 @@ export function CanvasGrid({
             margin={GRID_MARGIN}
             isDraggable={editable && !isNarrow}
             isResizable={editable && !isNarrow}
+            // Edge handles too (not just the SE corner): dragging the bottom
+            // edge to resize vertically is the metro-tile gesture users expect.
+            resizeHandles={['s', 'e', 'se']}
             draggableHandle=".canvas-drag-handle"
             draggableCancel=".canvas-no-drag"
             onLayoutChange={handleLayoutChange}

@@ -6,6 +6,7 @@ import { useToolbox } from '../toolbox-context'
 import { LazyMarkdownEditor as MarkdownEditor } from '@/components/common/lazy-editor'
 import { TagInput } from './TagInput'
 import { useEditNoteFields } from './useEditNoteFields'
+import { useTagSuggestions } from './useTagSuggestions'
 import type { Document } from '@/types/workspace'
 
 export function EditNoteForm() {
@@ -30,6 +31,7 @@ export function EditNoteFormBody({ doc, workspaceId, onCancel, onSaved, showSucc
   showErrorToast: (msg: string) => void
 }) {
   const f = useEditNoteFields(doc, workspaceId)
+  const suggestions = useTagSuggestions(workspaceId)
 
   const handleSave = async () => {
     try {
@@ -62,7 +64,7 @@ export function EditNoteFormBody({ doc, workspaceId, onCancel, onSaved, showSucc
 
       <div className="space-y-1.5">
         <Label>Tags</Label>
-        <TagInput tags={f.tags} onChange={f.setTags} />
+        <TagInput tags={f.tags} onChange={f.setTags} suggestions={suggestions} />
       </div>
 
       <div className="flex shrink-0 justify-end gap-2">

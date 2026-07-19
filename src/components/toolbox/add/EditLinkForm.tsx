@@ -5,6 +5,7 @@ import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { useToolbox } from '../toolbox-context'
 import { TagInput } from './TagInput'
 import { useEditLinkFields } from './useEditLinkFields'
+import { useTagSuggestions } from './useTagSuggestions'
 import type { Document } from '@/types/workspace'
 
 export function EditLinkForm() {
@@ -29,6 +30,7 @@ export function EditLinkFormBody({ doc, workspaceId, onCancel, onSaved, showSucc
   showErrorToast: (msg: string) => void
 }) {
   const f = useEditLinkFields(doc, workspaceId)
+  const suggestions = useTagSuggestions(workspaceId)
 
   const handleSave = async () => {
     try {
@@ -60,7 +62,7 @@ export function EditLinkFormBody({ doc, workspaceId, onCancel, onSaved, showSucc
 
       <div className="space-y-1.5">
         <Label>Tags</Label>
-        <TagInput tags={f.tags} onChange={f.setTags} />
+        <TagInput tags={f.tags} onChange={f.setTags} suggestions={suggestions} />
       </div>
 
       <div className="flex justify-end gap-2">

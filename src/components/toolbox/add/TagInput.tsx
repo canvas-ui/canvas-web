@@ -13,9 +13,17 @@ interface TagInputProps {
 // them to `tag/*` features via tagsToFeatures().
 export function TagInput({ tags, onChange, placeholder = 'Add tag, press Enter', suggestions = [] }: TagInputProps) {
   const [draft, setDraft] = useState('')
-  const matches = draft.trim()
-    ? suggestions.filter(s => s.toLowerCase().includes(draft.trim().toLowerCase()) && !tags.includes(s)).slice(0, 8)
-    : []
+  const [focused, setFocused] = useState(false)
+  const q = draft.trim().toLowerCase()
+  // With text: filter by substring. Focused with an empty box: show every
+  // existing tag not already added, so the whole `tag/*` vocabulary is browsable
+  // without having to guess a prefix. Capped so a large vocabulary stays usable.
+  const matches = (q
+    ? suggestions.filter(s => s.toLowerCase().includes(q) && !tags.includes(s))
+    : focused
+      ? suggestions.filter(s => !tags.includes(s))
+      : []
+  ).slice(0, 8)
 
   const commit = () => {
     const t = draft.trim()
@@ -55,7 +63,8 @@ export function TagInput({ tags, onChange, placeholder = 'Add tag, press Enter',
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
-          onBlur={() => setTimeout(commit, 150)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => { setTimeout(commit, 150); setFocused(false) }}
           placeholder={tags.length ? '' : placeholder}
           className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
         />

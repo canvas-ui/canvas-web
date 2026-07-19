@@ -61,7 +61,10 @@ function TodosWidget({ config, canvas }: WidgetProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [hideDone, setHideDone] = useState(config.hideDone === true)
   const [reload, setReload] = useState(0)
-  const readOnly = canvas.readOnly === true
+  // Ticking a todo done mutates the document server-side, not the canvas config,
+  // so it follows `interactive` (any authed view, incl. a read-only home tile),
+  // not `readOnly`. Only the unauthenticated public share sets interactive=false.
+  const readOnly = canvas.interactive === false
 
   useEffect(() => {
     let cancelled = false

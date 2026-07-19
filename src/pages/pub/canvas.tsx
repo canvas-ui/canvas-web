@@ -286,6 +286,7 @@ export default function PublicCanvasPage() {
                   querySpec={payload.canvas.querySpec}
                   metadata={payload.canvas.metadata}
                   readOnly
+                  interactive={false}
                   fetchDocuments={publicFetchDocuments}
                 />
               </section>

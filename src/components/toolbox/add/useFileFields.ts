@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { listWorkspaceTagSuggestions } from '@/services/workspace'
+import { useState } from 'react'
 import { tagsToFeatures } from './tags'
+import { useTagSuggestions } from './useTagSuggestions'
 import type { BlobUploadResult } from '@/services/blobs'
 
 const FILE_SCHEMA = 'data/abstraction/file'
@@ -26,23 +26,7 @@ export interface FileFields {
 export function useFileFields(workspaceName?: string | null): FileFields {
   const [tags, setTags] = useState<string[]>([])
   const [comment, setComment] = useState('')
-  // Kept keyed by workspace so `suggestions` can be DERIVED below: switching
-  // target then shows nothing rather than the previous workspace's tags, with
-  // no synchronous reset in the effect.
-  const [loaded, setLoaded] = useState<{ workspace: string; tags: string[] } | null>(null)
-
-  useEffect(() => {
-    if (!workspaceName) return
-    let cancelled = false
-    // Existing `tag/*` bitmaps in the target workspace. Best-effort: a failure
-    // here just means no autocomplete.
-    listWorkspaceTagSuggestions(workspaceName)
-      .then((s) => { if (!cancelled) setLoaded({ workspace: workspaceName, tags: s }) })
-      .catch(() => { /* freeform */ })
-    return () => { cancelled = true }
-  }, [workspaceName])
-
-  const suggestions = loaded && loaded.workspace === workspaceName ? loaded.tags : []
+  const suggestions = useTagSuggestions(workspaceName)
 
   return { tags, setTags, comment, setComment, suggestions }
 }

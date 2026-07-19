@@ -36,7 +36,14 @@ export interface WidgetCanvasContext {
   path: string
   layerId: string
   querySpec?: CanvasQuerySpec
+  // Layout/config is frozen (no add/remove/resize, no widget-config edits that
+  // need a Save). True on home tiles AND public shares.
   readOnly?: boolean
+  // Document-level controls are allowed (e.g. tick a todo done). These mutate
+  // the underlying documents server-side, independent of the canvas config, so
+  // they're available on any authenticated view — the workspace AND a read-only
+  // home tile — and only withheld from the unauthenticated public share.
+  interactive?: boolean
   fetchDocuments: (opts?: WidgetFetchOpts) => Promise<WidgetDocumentsResult>
   // Canvas-level view order (timeline sort). A widget's sort control edits THIS
   // (not local state) so it bakes into the canvas querySpec on Save — the frozen

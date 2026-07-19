@@ -6,12 +6,14 @@ import { useToolbox } from '../toolbox-context'
 import { TagInput } from './TagInput'
 import { useAddTarget, describeTarget } from './useAddTarget'
 import { useLinkFields } from './useLinkFields'
+import { useTagSuggestions } from './useTagSuggestions'
 
 export function LinkForm() {
-  const { closeAdd } = useToolbox()
+  const { closeAdd, state } = useToolbox()
   const target = useAddTarget()
   const { showSuccessToast, showErrorToast } = useToastHelpers()
   const f = useLinkFields()
+  const suggestions = useTagSuggestions(state.activeWorkspaceName)
 
   const canSave = !!target && f.canSave
 
@@ -54,7 +56,7 @@ export function LinkForm() {
 
       <div className="space-y-1.5">
         <Label>Tags</Label>
-        <TagInput tags={f.tags} onChange={f.setTags} />
+        <TagInput tags={f.tags} onChange={f.setTags} suggestions={suggestions} />
       </div>
 
       <p className="text-xs text-muted-foreground">{describeTarget(target)}</p>

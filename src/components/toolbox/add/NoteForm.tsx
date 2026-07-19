@@ -7,13 +7,15 @@ import { LazyMarkdownEditor as MarkdownEditor } from '@/components/common/lazy-e
 import { TagInput } from './TagInput'
 import { useAddTarget, describeTarget } from './useAddTarget'
 import { useNoteFields } from './useNoteFields'
+import { useTagSuggestions } from './useTagSuggestions'
 import { GeotagToggle } from './GeotagToggle'
 
 export function NoteForm() {
-  const { closeAdd } = useToolbox()
+  const { closeAdd, state } = useToolbox()
   const target = useAddTarget()
   const { showSuccessToast, showErrorToast } = useToastHelpers()
   const f = useNoteFields()
+  const suggestions = useTagSuggestions(state.activeWorkspaceName)
 
   const canSave = !!target && f.canSave
 
@@ -47,7 +49,7 @@ export function NoteForm() {
 
       <div className="space-y-1.5">
         <Label>Tags</Label>
-        <TagInput tags={f.tags} onChange={f.setTags} />
+        <TagInput tags={f.tags} onChange={f.setTags} suggestions={suggestions} />
       </div>
 
       <GeotagToggle geotag={f.geotag} idPrefix="note-geotag" />
