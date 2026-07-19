@@ -87,7 +87,7 @@ export const FOLDER_NAME_DEFAULTS: Record<string, LayerStyle> = {
 }
 
 // Nice default icon/color for the built-in workspace stores and storage drivers,
-// keyed by backend ADDRESS then driver. Used by the settings data-backends list
+// keyed by backend ADDRESS then driver. Used by the settings backends list
 // (where the non-enumerable blob store is visible even though it has no tree
 // node), so the two default stores read as distinct at a glance instead of all
 // wearing the same database glyph. Icons are Iconify (ph:*) names, like layers.
@@ -107,7 +107,7 @@ const BACKEND_DRIVER_DEFAULTS: Record<string, LayerStyle> = {
 const BACKEND_FALLBACK_STYLE: LayerStyle = { icon: 'ph:hard-drive-fill', color: '#64748b' }
 
 /**
- * Effective icon/color for a storage backend in the settings data-backends
+ * Effective icon/color for a storage backend in the settings backends
  * list: an explicit style on the backend wins, then the well-known address,
  * then the driver, then a neutral fallback.
  */
