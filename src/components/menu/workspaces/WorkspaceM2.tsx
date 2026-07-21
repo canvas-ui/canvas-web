@@ -453,6 +453,51 @@ export function WorkspaceM2() {
 
 // ─── Layers list ──────────────────────────────────────────────────────────────
 
+// Layer-type grouping. The list is divided into per-type sections rendered in
+// this order — canvases first, then the (future) dataset type, then plain
+// context layers, then the rest. Types not listed here fall through to a
+// title-cased group ordered after the known ones. Forward-compatible: a new
+// backend layer type shows up as its own section without a code change.
+const LAYER_TYPE_META: Record<string, { label: string; order: number }> = {
+  canvas: { label: 'Canvases', order: 0 },
+  dataset: { label: 'Datasets', order: 1 },
+  context: { label: 'Context layers', order: 2 },
+  workspace: { label: 'Workspaces', order: 3 },
+  universe: { label: 'Universe', order: 4 },
+  label: { label: 'Labels', order: 5 },
+  system: { label: 'System', order: 6 },
+}
+const UNKNOWN_TYPE_ORDER = 100
+
+const titleCase = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s)
+
+const layerTypeMeta = (type: string): { label: string; order: number } =>
+  LAYER_TYPE_META[type] ?? { label: `${titleCase(type)} layers`, order: UNKNOWN_TYPE_ORDER }
+
+// Per-type row icon (matches the group it sits under).
+function LayerTypeIcon({ type }: { type: string }) {
+  if (type === 'canvas')
+    return <LayoutDashboard className="w-3.5 h-3.5 shrink-0 text-violet-500" aria-label="Canvas" />
+  if (type === 'dataset')
+    return <Database className="w-3.5 h-3.5 shrink-0 text-teal-500" aria-label="Dataset" />
+  return <Layers className="w-3.5 h-3.5 shrink-0 text-muted-foreground/60" aria-label="Layer" />
+}
+
+// Group a flat layer list into ordered per-type sections.
+function groupLayersByType(layers: Layer[]): Array<{ type: string; label: string; items: Layer[] }> {
+  const byType = new Map<string, Layer[]>()
+  for (const layer of layers) {
+    const type = layer.type || 'context'
+    const bucket = byType.get(type)
+    if (bucket) bucket.push(layer)
+    else byType.set(type, [layer])
+  }
+  return [...byType.entries()]
+    .map(([type, items]) => ({ type, items, meta: layerTypeMeta(type) }))
+    .sort((a, b) => a.meta.order - b.meta.order || a.meta.label.localeCompare(b.meta.label))
+    .map(({ type, items, meta }) => ({ type, label: meta.label, items }))
+}
+
 interface LayersListProps {
   layers: Layer[]
   isLoading: boolean
@@ -487,9 +532,17 @@ function LayersList({ layers, isLoading, onSelect, onLock, onUnlock, onRename, o
     try { await onRename(layer, trimmed) } catch (err) { alert(err instanceof Error ? err.message : String(err)) }
   }
 
+  const groups = groupLayersByType(layers)
+
   return (
-    <div className="px-2 py-1.5 space-y-0.5">
-      {layers.map(layer => (
+    <div className="px-2 py-1.5 space-y-2">
+      {groups.map(group => (
+        <div key={group.type} className="space-y-0.5">
+          <div className="px-1 pt-1 pb-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            {group.label}
+            <span className="ml-1 text-muted-foreground/60">({group.items.length})</span>
+          </div>
+          {group.items.map(layer => (
         <div
           key={layer.id}
           className="group flex items-center gap-2 rounded-l-md px-2 py-1.5 text-xs bg-card shadow-sm cursor-pointer hover:bg-accent/40 transition-colors"
@@ -501,11 +554,7 @@ function LayersList({ layers, isLoading, onSelect, onLock, onUnlock, onRename, o
             style={layer.color ? { backgroundColor: layer.color } : undefined}
           />
 
-          {layer.type === 'canvas' ? (
-            <LayoutDashboard className="w-3.5 h-3.5 shrink-0 text-violet-500" aria-label="Canvas" />
-          ) : (
-            <Layers className="w-3.5 h-3.5 shrink-0 text-muted-foreground/60" aria-label="Layer" />
-          )}
+          <LayerTypeIcon type={layer.type} />
 
           {renamingId === layer.id ? (
             <input
@@ -572,6 +621,8 @@ function LayersList({ layers, isLoading, onSelect, onLock, onUnlock, onRename, o
               )}
             </div>
           )}
+        </div>
+          ))}
         </div>
       ))}
     </div>
