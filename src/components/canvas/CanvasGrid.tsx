@@ -11,6 +11,7 @@ import { WidgetFrame } from './WidgetFrame'
 import { DEFAULT_TIMELINE_SORT, type TimelineSort } from './widgets/sort-control'
 import type { WidgetCanvasContext, WidgetConfig, WidgetDocumentsResult, WidgetFetchOpts } from './widget-types'
 import { saveCanvasUi, getCanvasPathDocuments } from '@/services/workspace'
+import { cn } from '@/lib/utils'
 import type { CanvasQuerySpec, Document, LayerMetadata } from '@/types/workspace'
 
 const ReactGridLayout = WidthProvider(GridLayout)
@@ -375,7 +376,15 @@ export function CanvasGrid({
           type="button"
           onClick={saveNow}
           disabled={!isDirty || isSaving}
-          className="flex items-center gap-1.5 px-2.5 py-1 text-xs border rounded-md hover:bg-accent disabled:opacity-50"
+          // Purple when there are unsaved layout changes — same affordance as the
+          // toolbox "Save filters" button, so a dirty canvas is spottable at a
+          // glance. Falls back to the neutral bordered look once saved/disabled.
+          className={cn(
+            'flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md transition-colors disabled:opacity-50',
+            isDirty
+              ? 'bg-violet-600 text-white hover:bg-violet-500'
+              : 'border hover:bg-accent',
+          )}
         >
           <Save className="w-3.5 h-3.5" />
           {isSaving ? 'Saving…' : 'Save'}
