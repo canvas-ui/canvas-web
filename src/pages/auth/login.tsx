@@ -13,6 +13,7 @@ interface FormData {
 }
 
 interface AuthConfig {
+  allowUserRegistrations?: boolean
   strategies: {
     local: { enabled: boolean }
     imap: {
@@ -27,6 +28,7 @@ interface AuthConfig {
 }
 
 const localEnabled = (config: AuthConfig | null) => config?.strategies?.local?.enabled !== false
+const registrationsAllowed = (config: AuthConfig | null) => config?.allowUserRegistrations !== false
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -189,7 +191,7 @@ export default function LoginPage() {
               <Button type="submit" disabled={isLoading}>
                 {isLoading ? "Signing in..." : "Sign In"}
               </Button>
-              {localEnabled(authConfig) && (
+              {localEnabled(authConfig) && registrationsAllowed(authConfig) && (
                 <Button
                   variant="outline"
                   type="button"

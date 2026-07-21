@@ -31,7 +31,7 @@ export default function RegisterPage() {
     (async () => {
       const conf = await getAuthConfig()
       const local = conf?.strategies?.local
-      if (local?.enabled === false) {
+      if (conf?.allowUserRegistrations === false || local?.enabled === false) {
         navigate('/login', { replace: true })
         return
       }
