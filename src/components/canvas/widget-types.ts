@@ -51,6 +51,13 @@ export interface WidgetCanvasContext {
   // `setCanvasSort` is absent on read-only canvases.
   canvasSort?: { sortBy: string; order: 'asc' | 'desc' }
   setCanvasSort?: (sort: { sortBy: string; order: 'asc' | 'desc' }) => void
+  // Canvas-level search stack. A widget's search box appends to THIS (not local
+  // state) so every widget on the canvas shares one query and it bakes into
+  // querySpec.query on Save. Each term narrows the previous set (intersection),
+  // the last ranks. `setCanvasQueries` is absent on read-only canvases (public
+  // shares fall back to ephemeral local refinement).
+  canvasQueries?: string[]
+  setCanvasQueries?: (queries: string[]) => void
 }
 
 export type WidgetConfig = Record<string, unknown>

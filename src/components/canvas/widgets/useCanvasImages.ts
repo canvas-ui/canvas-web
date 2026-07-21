@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { WidgetCanvasContext } from '../widget-types'
 import type { Document } from '@/types/workspace'
 import { DEFAULT_TIMELINE_SORT, type TimelineSort } from './sort-control'
+import { useCanvasQueries } from './useCanvasQueries'
 
 const FILE_SCHEMA = 'data/abstraction/file'
 
@@ -46,7 +47,11 @@ export function useCanvasImages(canvas: WidgetCanvasContext, pageSize: number): 
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [input, setInput] = useState('')
-  const [activeQueries, setActiveQueries] = useState<string[]>([])
+  // The refinement stack is canvas-level (shared across widgets, bakes into
+  // querySpec.query on Save), not hook-local — mirrors `sort` below. Only the
+  // `input` buffer above stays local.
+  const { queries: activeQueries, runSearch, removeQuery: removeCanvasQuery, clearSearch: clearCanvasQueries } =
+    useCanvasQueries(canvas, () => setPage(1))
   // View order is canvas-level (bakes into querySpec on Save), not hook-local.
   const sort = canvas.canvasSort ?? DEFAULT_TIMELINE_SORT
 
@@ -83,21 +88,17 @@ export function useCanvasImages(canvas: WidgetCanvasContext, pageSize: number): 
   const submit = useCallback(() => {
     const term = input.trim()
     setInput('')
-    if (!term) return
-    setActiveQueries((prev) => (prev.includes(term) ? prev : [...prev, term]))
-    setPage(1)
-  }, [input])
+    runSearch(term)
+  }, [input, runSearch])
 
   const clearSearch = useCallback(() => {
     setInput('')
-    setActiveQueries([])
-    setPage(1)
-  }, [])
+    clearCanvasQueries()
+  }, [clearCanvasQueries])
 
   const removeQuery = useCallback((index: number) => {
-    setActiveQueries((prev) => (index < 0 ? [] : prev.filter((_, i) => i !== index)))
-    setPage(1)
-  }, [])
+    removeCanvasQuery(index)
+  }, [removeCanvasQuery])
 
   const changeSort = useCallback((next: TimelineSort) => {
     canvas.setCanvasSort?.(next)

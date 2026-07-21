@@ -12,6 +12,10 @@ const NOTE_SCHEMA_VERSION = '2.0'
 export function useNoteFields() {
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
+  // Top-level doc field (BaseDocument.comment) — user-authored context that
+  // isn't part of the note body; FTS'd and ticks feature/has-comment. Mirrors
+  // the Comment field in the object-card EditForm.
+  const [comment, setComment] = useState('')
   const [tags, setTags] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const geotag = useGeotag()
@@ -27,6 +31,7 @@ export function useNoteFields() {
       const doc = {
         schema: NOTE_SCHEMA,
         schemaVersion: NOTE_SCHEMA_VERSION,
+        ...(comment.trim() ? { comment: comment.trim() } : {}),
         data: {
           ...(title.trim() ? { title: title.trim() } : {}),
           content,
@@ -39,5 +44,5 @@ export function useNoteFields() {
     }
   }
 
-  return { title, setTitle, content, setContent, tags, setTags, saving, canSave, save, geotag }
+  return { title, setTitle, content, setContent, comment, setComment, tags, setTags, saving, canSave, save, geotag }
 }

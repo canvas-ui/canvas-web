@@ -721,10 +721,15 @@ export default function WorkspaceDetailPage() {
 
   const handlePasteDocuments = async (path: string, documentIds: number[], options: DocumentPasteOptions = {}): Promise<boolean> => {
     if (!workspaceName) return false;
+    // "Link to…" targets an explicit tree (options.target*); a plain paste
+    // targets whatever tree is in view. The former lets you link documents out
+    // of a read-only backends path into a context/directory tree.
+    const targetTreeName = options.targetTreeName ?? selectedTreeName;
+    const targetTreeType = options.targetTreeType ?? selectedTreeType;
     try {
-      const success = await pasteDocumentsToWorkspacePath(workspaceName, path, documentIds, selectedTreeName, selectedTreeType);
+      const success = await pasteDocumentsToWorkspacePath(workspaceName, path, documentIds, targetTreeName, targetTreeType);
       if (success) {
-        invalidateDocumentCache(workspaceName, selectedTreeName, path);
+        invalidateDocumentCache(workspaceName, targetTreeName, path);
         const sourceTreeName = options.sourceTreeName || clipboard?.sourceTreeName;
         const sourcePath = options.sourcePath || clipboard?.sourcePath;
         const shouldMove = options.move || clipboard?.operation === 'cut';
@@ -740,7 +745,7 @@ export default function WorkspaceDetailPage() {
         setClipboard(null);
         window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: null }));
         window.dispatchEvent(new CustomEvent('workspace:documents:refresh', {
-          detail: { workspaceName, path, treeName: selectedTreeName },
+          detail: { workspaceName, path, treeName: targetTreeName },
         }));
         showToast({ title: 'Success', description: `${documentIds.length} document(s) ${options.move || clipboard?.operation === 'cut' ? 'moved' : 'pasted'} to "${path}"` });
       }
@@ -1288,10 +1293,13 @@ function SideWorkspaceCanvas({
   }, [fetchPaneDocuments, workspaceName, pane.treeName, pane.path]);
 
   const pasteDocuments = useCallback(async (path: string, documentIds: number[], options: DocumentPasteOptions = {}) => {
+    // "Link to…" targets an explicit tree; a plain paste targets this pane's tree.
+    const targetTreeName = options.targetTreeName ?? pane.treeName;
+    const targetTreeType = options.targetTreeType ?? treeType;
     try {
-      const success = await pasteDocumentsToWorkspacePath(workspaceName, path, documentIds, pane.treeName, treeType);
+      const success = await pasteDocumentsToWorkspacePath(workspaceName, path, documentIds, targetTreeName, targetTreeType);
       if (success) {
-        invalidateDocumentCache(workspaceName, pane.treeName, path);
+        invalidateDocumentCache(workspaceName, targetTreeName, path);
         const sourcePath = options.sourcePath || clipboard?.sourcePath;
         const sourceTreeName = options.sourceTreeName || clipboard?.sourceTreeName;
         const shouldMove = options.move || clipboard?.operation === 'cut';
@@ -1306,7 +1314,7 @@ function SideWorkspaceCanvas({
         setClipboard(null);
         await fetchPaneDocuments();
         window.dispatchEvent(new CustomEvent('workspace:documents:refresh', {
-          detail: { workspaceName, path, treeName: pane.treeName },
+          detail: { workspaceName, path, treeName: targetTreeName },
         }));
       }
       return success;

@@ -107,6 +107,10 @@ function stackLayout(layout: CanvasLayoutItem[]): CanvasLayoutItem[] {
   })
 }
 
+// A canvas stores one query string; the widget search stack restores as a
+// single element (matching the folder view — see index.tsx serverSearchQueries).
+const queriesFromSpec = (q?: string | null): string[] => (q && q.trim() ? [q] : [])
+
 function readUi(metadata?: LayerMetadata): CanvasUi {
   const ui = (metadata?.ui ?? {}) as Partial<CanvasUi>
   const raw = Array.isArray(ui.layout) ? ui.layout as CanvasLayoutItem[] : []
@@ -163,6 +167,12 @@ export function CanvasGrid({
   // querySpec.sort on Save (only when actually touched → sortDirtyRef).
   const [canvasSort, setCanvasSortState] = useState<TimelineSort>(() => querySpec?.sort ?? DEFAULT_TIMELINE_SORT)
   const sortDirtyRef = useRef(false)
+  // Canvas-level search stack, seeded from the stored querySpec.query. Widget
+  // search boxes append to this (via the canvas context) and it persists back
+  // into querySpec.query on Save — only when touched (queriesDirtyRef), so a
+  // folder-view-saved query is not clobbered by an untouched canvas save.
+  const [canvasQueries, setCanvasQueriesState] = useState<string[]>(() => queriesFromSpec(querySpec?.query))
+  const queriesDirtyRef = useRef(false)
   const gridHostRef = useRef<HTMLDivElement>(null)
 
   const latest = useRef<CanvasUi>({ layout: initial.layout, widgets: initial.widgets })
@@ -183,6 +193,8 @@ export function CanvasGrid({
     latest.current = next
     setCanvasSortState(querySpec?.sort ?? DEFAULT_TIMELINE_SORT)
     sortDirtyRef.current = false
+    setCanvasQueriesState(queriesFromSpec(querySpec?.query))
+    queriesDirtyRef.current = false
     setIsDirty(false)
   }, [path, layerId])
 
@@ -220,6 +232,12 @@ export function CanvasGrid({
     setIsDirty(true)
   }, [])
 
+  const setCanvasQueries = useCallback((next: string[]) => {
+    setCanvasQueriesState(next)
+    queriesDirtyRef.current = true
+    setIsDirty(true)
+  }, [])
+
   const canvas: WidgetCanvasContext = useMemo(
     () => ({
       workspaceId,
@@ -231,12 +249,14 @@ export function CanvasGrid({
       interactive,
       canvasSort,
       setCanvasSort: editable ? setCanvasSort : undefined,
+      canvasQueries,
+      setCanvasQueries: editable ? setCanvasQueries : undefined,
       fetchDocuments: fetchDocuments ?? (async (opts) => {
         const res = await getCanvasPathDocuments(workspaceId, path, treeName, opts)
         return { payload: (res.payload as Document[]) || [], count: res.count, totalCount: res.totalCount }
       }),
     }),
-    [workspaceId, treeName, path, layerId, querySpec, editable, interactive, fetchDocuments, canvasSort, setCanvasSort],
+    [workspaceId, treeName, path, layerId, querySpec, editable, interactive, fetchDocuments, canvasSort, setCanvasSort, canvasQueries, setCanvasQueries],
   )
 
   const markDirty = useCallback((nextLayout: CanvasLayoutItem[], nextWidgets: WidgetMap) => {
@@ -258,14 +278,19 @@ export function CanvasGrid({
         layout: inferFillFlags(latest.current.layout, latest.current.layout),
       }
       latest.current = ui
-      // Bake a widget-changed view order into the canvas querySpec so the frozen
-      // view (folder listing + public shares) sorts identically. Only send it
-      // when touched, to avoid clobbering a folder-view-saved sort.
-      const nextQuerySpec = sortDirtyRef.current
-        ? { ...(querySpec || {}), sort: canvasSort.sortBy ? canvasSort : null }
+      // Bake widget-changed view order / search into the canvas querySpec so the
+      // frozen view (folder listing + public shares) matches. Only send the keys
+      // actually touched, to avoid clobbering a folder-view-saved sort or query.
+      const nextQuerySpec = (sortDirtyRef.current || queriesDirtyRef.current)
+        ? {
+            ...(querySpec || {}),
+            ...(sortDirtyRef.current ? { sort: canvasSort.sortBy ? canvasSort : null } : {}),
+            ...(queriesDirtyRef.current ? { query: canvasQueries.join(' ').trim() || null } : {}),
+          }
         : undefined
       await saveCanvasUi(workspaceId, path, treeName, { ...(metadata || {}), ui }, nextQuerySpec)
       sortDirtyRef.current = false
+      queriesDirtyRef.current = false
       setIsDirty(false)
       window.dispatchEvent(new CustomEvent('workspace:tree:refresh', {
         detail: { workspaceName: workspaceId, treeName },
@@ -278,7 +303,7 @@ export function CanvasGrid({
     } finally {
       setIsSaving(false)
     }
-  }, [editable, isSaving, workspaceId, path, treeName, metadata, onSaved, querySpec, canvasSort])
+  }, [editable, isSaving, workspaceId, path, treeName, metadata, onSaved, querySpec, canvasSort, canvasQueries])
 
   const handleLayoutChange = useCallback((next: Layout[]) => {
     // Never persist the derived stacked (narrow) layout over the saved grid.

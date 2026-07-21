@@ -1572,7 +1572,7 @@ function ReindexSection({ workspaceName, onDone }: { workspaceName: string; onDo
         <RefreshCw className="h-4 w-4 text-muted-foreground" />
         <h2 className="text-sm font-semibold">Index maintenance</h2>
       </div>
-      <p className="mb-3 text-xs text-muted-foreground">Admin-only. Reindex operations are idempotent.</p>
+      <p className="mb-3 text-xs text-muted-foreground">Runs against this workspace. Reindex operations are idempotent.</p>
       <div className="space-y-4">
         {groups.map((group) => (
           <div key={group.title}>

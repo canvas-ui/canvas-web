@@ -1,6 +1,6 @@
 import { Document, TreeNode } from '@/types/workspace'
 import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, Table as TableIcon } from 'lucide-react'
-import { LinkToCard } from '@/components/menu/shared/LinkToCard'
+import { LinkToCard, type LinkToTarget } from '@/components/menu/shared/LinkToCard'
 import { PickDocumentsCard } from '@/components/menu/shared/PickDocumentsCard'
 import { useSideView } from '@/components/shell/side-view-context'
 import { useState, useCallback, useMemo, useEffect, useRef, useDeferredValue } from 'react'
@@ -83,6 +83,12 @@ export interface DocumentPasteOptions {
   move?: boolean
   sourcePath?: string
   sourceTreeName?: string
+  // Explicit paste target tree. Set by "Link to…", where the destination tree
+  // is chosen in the LinkToCard and differs from whatever tree is currently in
+  // view (e.g. linking out of a read-only backends path into a context tree).
+  // Falls back to the current view's tree when unset.
+  targetTreeName?: string
+  targetTreeType?: 'context' | 'directory'
 }
 
 interface DocumentRowProps {
@@ -949,10 +955,17 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     setContextMenu({ x: event.clientX, y: event.clientY, documentIds: targetIds })
   }, [selectedDocuments])
 
-  const handleLinkConfirm = useCallback(async (paths: string[], documentIds: number[]) => {
+  const handleLinkConfirm = useCallback(async (paths: string[], documentIds: number[], ctx?: LinkToTarget) => {
     if (!onPasteDocuments) return
     for (const path of paths) {
-      await onPasteDocuments(path, documentIds, { move: false })
+      // Link into the tree chosen in the LinkToCard, not the current view's
+      // tree — otherwise linking out of a backends path targets the read-only
+      // backends tree and fails.
+      await onPasteDocuments(path, documentIds, {
+        move: false,
+        targetTreeName: ctx?.treeName,
+        targetTreeType: ctx?.treeType,
+      })
     }
     setSelectedDocuments(new Set())
   }, [onPasteDocuments])
@@ -1726,7 +1739,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
           <LinkToCard
             documentCount={linkPanelIds.length}
             fixedWorkspaceName={workspaceId}
-            onConfirm={(paths) => handleLinkConfirm(paths, linkPanelIds)}
+            onConfirm={(paths, ctx) => handleLinkConfirm(paths, linkPanelIds, ctx)}
             onClose={() => setLinkPanelIds(null)}
           />
         </div>,

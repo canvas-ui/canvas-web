@@ -5,6 +5,7 @@ import type { WidgetProps } from '../widget-types'
 import { DocumentList } from '@/components/common/document-list'
 import type { Document } from '@/types/workspace'
 import { TimelineSortControl, DEFAULT_TIMELINE_SORT, type TimelineSort } from './sort-control'
+import { useCanvasQueries } from './useCanvasQueries'
 
 // The "default" widget: the canvas path's documents in any of the three view
 // modes (table / grid-tile / card), with timeline sort and scoped server
@@ -21,10 +22,11 @@ function DocumentsTableWidget({ config, canvas }: WidgetProps) {
   // View order is a canvas-level property (bakes into querySpec on Save), not
   // widget-local — so changing it here and saving sorts the public canvas too.
   const sort = canvas.canvasSort ?? DEFAULT_TIMELINE_SORT
-  // Free-text terms only — never a spec — so canvas search stays scoped to
-  // the path server-side (see WidgetFetchOpts). A stack: each submitted term
-  // refines (narrows) the previous result set; the last one ranks.
-  const [activeQueries, setActiveQueries] = useState<string[]>([])
+  // Free-text terms only — never a spec — so canvas search stays scoped to the
+  // path server-side (see WidgetFetchOpts). The stack is canvas-level (shared
+  // with the other widgets, bakes into querySpec.query on Save); each submitted
+  // term refines (narrows) the previous result set, the last one ranks.
+  const { queries: activeQueries, runSearch, removeQuery } = useCanvasQueries(canvas, () => setCurrentPage(1))
 
   useEffect(() => {
     let cancelled = false
@@ -52,17 +54,6 @@ function DocumentsTableWidget({ config, canvas }: WidgetProps) {
   }, [canvas, pageSize, currentPage, sort.sortBy, sort.order, activeQueries])
 
   const changeSort = useCallback((next: TimelineSort) => { canvas.setCanvasSort?.(next); setCurrentPage(1) }, [canvas])
-  const runSearch = useCallback((q: string) => {
-    const term = q.trim()
-    if (!term) return
-    setActiveQueries((prev) => (prev.includes(term) ? prev : [...prev, term]))
-    setCurrentPage(1)
-  }, [])
-  // index -1 = clear the whole stack (DocumentList convention).
-  const removeQuery = useCallback((index: number) => {
-    setActiveQueries((prev) => (index < 0 ? [] : prev.filter((_, i) => i !== index)))
-    setCurrentPage(1)
-  }, [])
 
   // Read-only public shares are a preloaded snapshot: server sort/search are
   // inert, and the sort control's timelines fetch hits an authed endpoint
