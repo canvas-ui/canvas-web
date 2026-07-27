@@ -1362,19 +1362,29 @@ export interface WorkspaceDbStats {
     queue?: { pending: number; draining: boolean } | null
   }
   embedder?: {
-    queue?: { pending: number; draining: boolean; paused?: boolean; ingestDisabled?: boolean }
+    // THIS workspace's queue — each workspace owns one, so the backlog shown is
+    // its own work rather than a server-wide total.
+    queue?: { pending: number; draining: boolean; paused?: boolean; ingestDisabled?: boolean } | null
     // Actual embed routing per space (schema ids / `mime <pattern>`), from the
     // embedd router rules — what really embeds where, not just the gap default.
     routing?: Record<string, string[]>
+    // Provider/model filling each space. Both are config now, so the UI reports
+    // what is actually running instead of implying the old hardcoded pair.
+    spaces?: Record<string, { provider: string; model: string; dim: number }>
   }
 }
 
-// Pause/resume the server-wide embedd queue (admin). Pause holds the backlog
-// after the in-flight batch — the CPU-heavy CLIP child goes quiet — and
-// resume drains it; a server restart also clears the pause.
-export async function setEmbeddPaused(paused: boolean): Promise<{ paused: boolean; pending: number }> {
-  const res = await api.post<{ payload: { paused: boolean; pending: number } }>(
-    `${API_ROUTES.admin.embedd}/${paused ? 'pause' : 'resume'}`,
+// Pause/resume embedding (admin). Pause holds the backlog after the in-flight
+// batch — the CPU-heavy inference goes quiet — and resume drains it; a server
+// restart also clears the pause. Queues are per-workspace: pass a workspaceId to
+// pause just that one, omit it to pause every workspace.
+export async function setEmbeddPaused(
+  paused: boolean,
+  workspaceId?: string,
+): Promise<{ paused: boolean; pending: number; workspace?: string }> {
+  const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ''
+  const res = await api.post<{ payload: { paused: boolean; pending: number; workspace?: string } }>(
+    `${API_ROUTES.admin.embedd}/${paused ? 'pause' : 'resume'}${query}`,
   )
   return res.payload
 }

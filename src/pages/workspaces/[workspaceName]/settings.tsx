@@ -630,15 +630,19 @@ function SearchTuning({ workspaceName, current, weights, onDone }: {
   )
 }
 
-// Server-wide embedd queue readout + pause/resume. Pausing quiets the
-// CPU-heavy CLIP/ONNX inference after the in-flight batch — the escape hatch
-// while a big photo mount indexes. Enqueues keep accumulating; nothing is
-// lost, and the durable gap ledger re-drives anything missed after a restart.
+// This workspace's embedd queue readout + pause/resume. Each workspace owns its
+// own queue, so the pending count is genuinely this workspace's work and pausing
+// leaves the others draining. Pausing quiets the CPU-heavy inference after the
+// in-flight batch — the escape hatch while a big photo mount indexes. Enqueues
+// keep accumulating; nothing is lost, and the durable gap ledger re-drives
+// anything missed after a restart.
 function EmbeddQueueControl({
   queue,
+  workspaceName,
   onChanged,
 }: {
   queue: { pending: number; draining: boolean; paused?: boolean; ingestDisabled?: boolean }
+  workspaceName: string
   onChanged: () => void
 }) {
   const { showToast } = useToast()
@@ -647,11 +651,11 @@ function EmbeddQueueControl({
   const toggle = async () => {
     setBusy(true)
     try {
-      const res = await setEmbeddPaused(!queue.paused)
+      const res = await setEmbeddPaused(!queue.paused, workspaceName)
       showToast({
         title: res.paused ? 'Embedding paused' : 'Embedding resumed',
         description: res.paused
-          ? `${res.pending.toLocaleString()} job(s) held — resume any time (a restart also resumes)`
+          ? `${res.pending.toLocaleString()} job(s) held for this workspace — resume any time (a restart also resumes)`
           : `${res.pending.toLocaleString()} job(s) draining`,
       })
       onChanged()
@@ -666,7 +670,7 @@ function EmbeddQueueControl({
     <span className="flex items-center gap-2">
       <span>
         {queue.pending > 0
-          ? <>{queue.pending.toLocaleString()} pending{queue.draining ? ' · running' : ''}{queue.paused ? ' · paused' : ''} <span className="text-muted-foreground">· all workspaces</span></>
+          ? <>{queue.pending.toLocaleString()} pending{queue.draining ? ' · running' : ''}{queue.paused ? ' · paused' : ''}</>
           : (queue.paused ? 'paused' : 'idle')}
         {queue.ingestDisabled && <span className="ml-1.5 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600" title="CANVAS_EMBEDD_INGEST_DISABLED=true — nothing new is enqueued; existing vectors still serve search">ingest disabled</span>}
       </span>
@@ -784,10 +788,19 @@ function DbStatsTab({
                         : `${(sp.embeddedDocs ?? 0).toLocaleString()} docs · ${(sp.chunkRows ?? 0).toLocaleString()} vectors`}
                     />
                   ))}
+                  {/* Which provider/model actually fills each space — both are
+                      config now, so a remote/GPU model shows up here by name. */}
+                  {stats.embedder?.spaces && Object.entries(stats.embedder.spaces).map(([space, cfg]) => (
+                    <StatRow
+                      key={`model-${space}`}
+                      label={`Model → ${space}`}
+                      value={<span className="font-mono text-[11px]">{cfg.model} <span className="text-muted-foreground">· {cfg.provider} · {cfg.dim}-d</span></span>}
+                    />
+                  ))}
                   {stats.embedder?.queue && (
                     <StatRow
-                      label="Embedding queue (server-wide)"
-                      value={<EmbeddQueueControl queue={stats.embedder.queue} onChanged={onRefresh} />}
+                      label="Embedding queue"
+                      value={<EmbeddQueueControl queue={stats.embedder.queue} workspaceName={workspaceName} onChanged={onRefresh} />}
                     />
                   )}
                   <StatRow label="Image relevance floor" value={stats.semantic.imageMaxDistance == null ? 'off' : stats.semantic.imageMaxDistance} mono />
