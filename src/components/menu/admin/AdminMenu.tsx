@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Users, FileText, Layers3, FolderOpen, Brain, Shield } from 'lucide-react'
+import { Users, FileText, Layers3, FolderOpen, Brain, Shield, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const adminLinks = [
@@ -9,6 +9,7 @@ const adminLinks = [
   { path: '/admin/workspaces', icon: FolderOpen, label: 'All Workspaces' },
   { path: '/admin/agents', icon: Brain, label: 'All Agents' },
   { path: '/admin/roles', icon: Shield, label: 'All Roles' },
+  { path: '/admin/embedding', icon: Sparkles, label: 'Embedding' },
 ]
 
 export function AdminMenu() {

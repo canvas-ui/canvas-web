@@ -12,6 +12,7 @@ import ContextsPage from './pages/contexts'
 import ContextDetailPage from './pages/contexts/[contextId]'
 import ApiTokensPage from './pages/api-tokens'
 import DevicesPage from './pages/devices'
+import EmbeddingDefaultsPage from './pages/embedding'
 import SharedViewerPage from './pages/shared'
 import PublicCanvasPage from './pages/pub/canvas'
 import AdminWorkspacesPage from './pages/admin/workspaces'
@@ -20,6 +21,7 @@ import AdminAgentsPage from './pages/admin/agents'
 import AdminLogsPage from './pages/admin/logs'
 import AdminRolesPage from './pages/admin/roles'
 import AdminUsersPage from './pages/admin/users'
+import AdminEmbeddingPage from './pages/admin/embedding'
 import AgentsPage from './pages/agents'
 import AgentDetailPage from './pages/agents/[agentId]'
 import WorkspaceSettingsPage from './pages/workspaces/[workspaceName]/settings'
@@ -77,6 +79,7 @@ function AppContent() {
           <Route path="remotes" element={<RemotesPage />} />
           <Route path="api-tokens" element={<ApiTokensPage />} />
           <Route path="devices" element={<DevicesPage />} />
+          <Route path="embedding" element={<EmbeddingDefaultsPage />} />
           <Route path="shared" element={<SharedViewerPage />} />
 
           {/* Admin routes */}
@@ -86,6 +89,7 @@ function AppContent() {
           <Route path="admin/agents" element={<AdminAgentsPage />} />
           <Route path="admin/logs" element={<AdminLogsPage />} />
           <Route path="admin/roles" element={<AdminRolesPage />} />
+          <Route path="admin/embedding" element={<AdminEmbeddingPage />} />
         </Route>
 
         {/* Catch-all redirect to home */}
