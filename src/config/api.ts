@@ -51,6 +51,10 @@ export const API_ROUTES = {
   // Contexts
   contexts: `${API_URL}/contexts`,
 
+  // Embedding config (per-user defaults, backend test, server defaults).
+  // The per-workspace layer lives under /workspaces/:id/embedd.
+  embedd: `${API_URL}/embedd`,
+
   // Admin routes
   admin: {
     users: `${API_URL}/admin/users`,
