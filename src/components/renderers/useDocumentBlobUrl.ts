@@ -17,13 +17,16 @@ interface Options {
 
 interface State {
   blobUrl: string | null
+  // The fetched bytes themselves (blob mode) — for consumers that must read
+  // the data (pdf.js), since fetch(blob:) is blocked by CSP connect-src.
+  blob: Blob | null
   text: string | null
   mime: string | null
   error: string | null
   loading: boolean
 }
 
-const idleState = (loading: boolean): State => ({ blobUrl: null, text: null, mime: null, error: null, loading })
+const idleState = (loading: boolean): State => ({ blobUrl: null, blob: null, text: null, mime: null, error: null, loading })
 
 // Authed fetch of a document's bytes with objectURL lifecycle management
 // (extracted from the old file-preview component so every renderer shares it).
@@ -52,7 +55,7 @@ export function useDocumentBlobUrl(
         if (cancelled) return
         if (mode === 'text') {
           const txt = await blob.text()
-          if (!cancelled) setState({ blobUrl: null, text: txt.slice(0, maxTextLength), mime, error: null, loading: false })
+          if (!cancelled) setState({ blobUrl: null, blob: null, text: txt.slice(0, maxTextLength), mime, error: null, loading: false })
         } else {
           // Re-type when the server gave a generic/empty MIME but we know better
           // from the filename — otherwise <video>/<audio> refuse to decode.
@@ -60,11 +63,11 @@ export function useDocumentBlobUrl(
           const typed = needsRetype ? blob.slice(0, blob.size, typeHint) : blob
           createdUrl = URL.createObjectURL(typed)
           if (cancelled) { URL.revokeObjectURL(createdUrl); createdUrl = null; return }
-          setState({ blobUrl: createdUrl, text: null, mime: needsRetype ? typeHint : mime, error: null, loading: false })
+          setState({ blobUrl: createdUrl, blob: typed, text: null, mime: needsRetype ? typeHint : mime, error: null, loading: false })
         }
       })
       .catch((e) => {
-        if (!cancelled) setState({ blobUrl: null, text: null, mime: null, error: String(e instanceof Error ? e.message : e), loading: false })
+        if (!cancelled) setState({ blobUrl: null, blob: null, text: null, mime: null, error: String(e instanceof Error ? e.message : e), loading: false })
       })
 
     return () => {

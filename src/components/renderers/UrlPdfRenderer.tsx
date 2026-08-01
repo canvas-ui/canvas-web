@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { ExternalLink } from 'lucide-react'
+import { Download, ExternalLink } from 'lucide-react'
 import { API_URL } from '@/config/api'
+import { PdfViewer } from './PdfViewer'
 import type { RendererProps } from './types'
 
 // Does a link/tab URL point at a PDF? Extension match plus well-known
@@ -25,22 +26,22 @@ export function isPdfUrl(url: string | undefined | null): boolean {
 // back to an "open externally" notice.
 export function UrlPdfRenderer({ document: doc, className = '' }: RendererProps) {
   const url = String(doc.data?.url ?? doc.data?.uri ?? '')
-  const [state, setState] = useState<{ blobUrl: string | null; failed: boolean; loading: boolean }>({ blobUrl: null, failed: false, loading: true })
+  const [state, setState] = useState<{ blobUrl: string | null; blob: Blob | null; failed: boolean; loading: boolean }>({ blobUrl: null, blob: null, failed: false, loading: true })
   // Render-time reset when the URL changes (no setState-in-effect).
   const [lastUrl, setLastUrl] = useState(url)
   if (url !== lastUrl) {
     setLastUrl(url)
-    setState({ blobUrl: null, failed: false, loading: true })
+    setState({ blobUrl: null, blob: null, failed: false, loading: true })
   }
 
   useEffect(() => {
     let cancelled = false
     let createdUrl: string | null = null
 
-    const toBlobUrl = async (res: Response) => {
+    const toTypedBlob = async (res: Response) => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const blob = await res.blob()
-      return URL.createObjectURL(blob.type ? blob : new Blob([blob], { type: 'application/pdf' }))
+      return blob.type ? blob : new Blob([blob], { type: 'application/pdf' })
     }
 
     const viaProxy = () => {
@@ -51,14 +52,14 @@ export function UrlPdfRenderer({ document: doc, className = '' }: RendererProps)
     }
 
     fetch(url)
-      .then(toBlobUrl)
-      .catch(() => viaProxy().then(toBlobUrl))
-      .then((blobUrl) => {
-        if (cancelled) { URL.revokeObjectURL(blobUrl); return }
-        createdUrl = blobUrl
-        setState({ blobUrl, failed: false, loading: false })
+      .then(toTypedBlob)
+      .catch(() => viaProxy().then(toTypedBlob))
+      .then((blob) => {
+        if (cancelled) return
+        createdUrl = URL.createObjectURL(blob)
+        setState({ blobUrl: createdUrl, blob, failed: false, loading: false })
       })
-      .catch(() => { if (!cancelled) setState({ blobUrl: null, failed: true, loading: false }) })
+      .catch(() => { if (!cancelled) setState({ blobUrl: null, blob: null, failed: true, loading: false }) })
 
     return () => {
       cancelled = true
@@ -66,20 +67,55 @@ export function UrlPdfRenderer({ document: doc, className = '' }: RendererProps)
     }
   }, [url])
 
-  const { blobUrl, failed, loading } = state
+  const { blobUrl, blob, failed, loading } = state
+
+  // Filename for the download: last URL path segment, .pdf-suffixed.
+  const filename = (() => {
+    try {
+      const seg = decodeURIComponent(new URL(url).pathname.split('/').filter(Boolean).pop() ?? '')
+      const base = seg || 'document'
+      return /\.pdf$/i.test(base) ? base : `${base}.pdf`
+    } catch {
+      return 'document.pdf'
+    }
+  })()
+
+  // The bytes are already in memory — save them via a transient anchor.
+  const downloadPdf = () => {
+    if (!blob) return
+    const dlUrl = URL.createObjectURL(blob)
+    const a = window.document.createElement('a')
+    a.href = dlUrl
+    a.download = filename
+    window.document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(dlUrl), 30_000)
+  }
 
   return (
     <div className={`space-y-2 ${className}`}>
-      <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
-        <ExternalLink className="h-3 w-3" /> {url}
-      </a>
+      <div className="flex flex-wrap items-center gap-3">
+        <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+          <ExternalLink className="h-3 w-3" /> {url}
+        </a>
+        {blob && (
+          <button
+            type="button"
+            onClick={downloadPdf}
+            className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <Download className="h-3.5 w-3.5" /> Download
+          </button>
+        )}
+      </div>
       {loading && <p className="text-sm text-muted-foreground">Loading PDF…</p>}
       {failed && (
         <p className="text-sm text-muted-foreground">
           Inline preview unavailable (direct fetch and server proxy both failed) — use the link above.
         </p>
       )}
-      {blobUrl && <iframe src={blobUrl} className="h-[70vh] w-full rounded border" title={url} />}
+      {blobUrl && <PdfViewer blob={blob} blobUrl={blobUrl} filename={filename} className="h-[70vh]" />}
     </div>
   )
 }

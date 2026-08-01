@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Download } from 'lucide-react'
 import { useDocumentBlobUrl, useDocumentStreamSrc } from './useDocumentBlobUrl'
+import { PdfViewer } from './PdfViewer'
 import { useDocumentThumbnail } from './useDocumentThumbnail'
 import { useDocumentContent } from './public-share'
 import { getLocationFilename } from '@/lib/document-display'
@@ -138,13 +139,20 @@ export function VideoRenderer({ workspaceId, document, className = '' }: Rendere
 
 export function PdfRenderer({ workspaceId, document, className = '' }: RendererProps) {
   // Re-type a generic blob to application/pdf so the iframe viewer engages.
-  const { blobUrl, error, loading } = useDocumentBlobUrl(workspaceId, document.id, { typeHint: 'application/pdf' })
+  const { blobUrl, blob, error, loading } = useDocumentBlobUrl(workspaceId, document.id, { typeHint: 'application/pdf' })
   const filename = getLocationFilename(document) || `document-${document.id}`
   return (
     <MediaShell error={error} loading={loading}>
-      {/* Fill the free height of the (definite-height) preview area; min-h keeps
-          it usable when the host isn't height-constrained. */}
-      {blobUrl && <iframe src={blobUrl} className={`w-full h-full min-h-[300px] border rounded ${className}`} title={filename} />}
+      {blobUrl && (
+        <div className={`flex h-full min-h-0 flex-col gap-2 ${className}`}>
+          {/* Native iframe viewer on desktop, pdf.js canvases on mobile (no
+              inline PDF plugin there — a blob: iframe renders blank). */}
+          <PdfViewer blob={blob} blobUrl={blobUrl} filename={filename} className="min-h-0 flex-1" />
+          <div>
+            <DownloadButton workspaceId={workspaceId} document={document} />
+          </div>
+        </div>
+      )}
     </MediaShell>
   )
 }
