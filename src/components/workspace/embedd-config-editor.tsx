@@ -265,14 +265,17 @@ export function EmbeddConfigEditor({
       const result = await testEmbeddBackend(resolveProvider(providerId), model, space)
       const configuredDim = draft.spaces?.[space]?.dim ?? effective.spaces?.[space]?.dim
       // A dim mismatch is the most likely misconfiguration, and it fails at
-      // write time rather than here — so it gets called out, not just reported.
-      const mismatch = configuredDim !== undefined && result.dim !== configuredDim
+      // write time rather than here. The backend just told us the real value,
+      // so fill it in rather than making the user copy a number from a toast.
+      const mismatch = result.dim > 0 && configuredDim !== undefined && result.dim !== configuredDim
+      if (mismatch || (result.dim > 0 && configuredDim === undefined)) {
+        setSpaceField(space, 'dim', String(result.dim))
+      }
       showToast({
-        title: mismatch ? `Backend answered — dim mismatch` : 'Backend answered',
+        title: mismatch ? 'Backend answered — dim corrected' : 'Backend answered',
         description: mismatch
-          ? `Returned ${result.dim}-d but '${space}' is configured for ${configuredDim}-d. Fix dim before saving, or the Lance table will be sized wrong. (${result.latencyMs} ms)`
+          ? `Returned ${result.dim}-d but '${space}' was set to ${configuredDim}-d. Dimensions updated to ${result.dim} — save to apply. (${result.latencyMs} ms)`
           : `${result.dim}-d in ${result.latencyMs} ms`,
-        variant: mismatch ? 'destructive' : undefined,
       })
     } catch (err) {
       // A rejected endpoint comes back as a 400 naming the offending provider;
@@ -382,7 +385,7 @@ export function EmbeddConfigEditor({
                   inheritedValue={running.dim}
                   onChange={raw => setSpaceField(space, 'dim', raw)}
                   disabled={disabled}
-                  hint="Sizes the vector table and cannot be guessed — Test connection reports what the backend really returns."
+                  hint="Sizes the vector table — Test connection asks the backend and fills this in with what it really returns."
                 />
 
                 <OverrideField
