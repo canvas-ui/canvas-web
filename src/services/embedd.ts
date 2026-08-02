@@ -186,6 +186,20 @@ export function stripUnsetKeys(config: EmbeddConfig, touched: Set<string>): Embe
 
 // ── Workspace layer (the primary surface) ───────────────────────────────────
 
+/** Live queue state for one workspace — pending/draining/paused. */
+export interface WorkspaceEmbeddQueue {
+  pending: number
+  draining: boolean
+  paused?: boolean
+  ingestDisabled?: boolean
+}
+
+/** Cheap in-memory readout; null when the workspace has no queue yet. */
+export async function getWorkspaceEmbeddStatus(workspaceId: string): Promise<WorkspaceEmbeddQueue | null> {
+  const res = await api.get<{ payload: { queue: WorkspaceEmbeddQueue | null } }>(`${workspaceEmbedd(workspaceId)}/status`)
+  return res.payload.queue ?? null
+}
+
 export async function getWorkspaceEmbeddConfig(workspaceId: string): Promise<WorkspaceEmbeddConfig> {
   const res = await api.get<{ payload: WorkspaceEmbeddConfig }>(`${workspaceEmbedd(workspaceId)}/config`)
   return res.payload
@@ -284,6 +298,28 @@ export async function saveServerEmbeddDefaults(
  * produces; a mismatch against the configured `dim` is the single most likely
  * misconfiguration, so callers should surface both.
  */
+/**
+ * Ask whether the backend's model is already in the server's local cache —
+ * i.e. whether the next test/embed call will answer straight away or first
+ * download weights (minutes, for a cold CLIP model). `null` = unknowable
+ * (remote providers download nothing; local ones without a cache dir).
+ * Pure filesystem check server-side: no model load, no outbound request.
+ */
+export async function probeEmbeddModelCache(
+  provider: EmbeddProviderSpec,
+  model?: string,
+): Promise<boolean | null> {
+  const spec: EmbeddProviderSpec = { ...provider }
+  delete spec.apiKeySet
+  delete spec.headerNames
+  const res = await api.post<{ payload: { cached: boolean | null } }>(`${API_ROUTES.embedd}/test`, {
+    provider: spec,
+    ...(model ? { model } : {}),
+    probe: true,
+  })
+  return res.payload.cached ?? null
+}
+
 export async function testEmbeddBackend(
   provider: EmbeddProviderSpec,
   model?: string,

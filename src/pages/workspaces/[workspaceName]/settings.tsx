@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { LayerIconPicker } from '@/components/menu/shared/LayerIconPicker'
 import { DEFAULT_WORKSPACE_ICON, getBackendStyle, type LayerStyle } from '@/lib/layer-style'
 import { DefaultFoldersPicker, createDefaultFolders, useFolderSelection } from '@/components/workspaces/DefaultFoldersPicker'
-import { adminReindexTimelines, adminReindexSearch, adminReindexEmbeddings, adminOptimize, adminReindexMime } from '@/services/admin'
+import { adminReindexTimelines, adminReindexSearch, adminOptimize, adminReindexMime } from '@/services/admin'
 import { EmbeddSettingsPanel } from '@/components/workspace/embedd-settings-panel'
 import { HooksPanel } from '@/components/workspace/hooks-panel'
 import { ImapMailboxesPanel } from '@/components/workspace/imap-mailboxes-panel'
@@ -23,7 +23,6 @@ import {
   updateBackend,
   syncBackend,
   cancelBackendSync,
-  setEmbeddPaused,
   getWorkspaceDbStats,
   setWorkspaceSearchTuning,
   getWorkspaceServicesStatus,
@@ -637,59 +636,6 @@ function SearchTuning({ workspaceName, current, weights, onDone }: {
 // in-flight batch — the escape hatch while a big photo mount indexes. Enqueues
 // keep accumulating; nothing is lost, and the durable gap ledger re-drives
 // anything missed after a restart.
-function EmbeddQueueControl({
-  queue,
-  workspaceName,
-  onChanged,
-}: {
-  queue: { pending: number; draining: boolean; paused?: boolean; ingestDisabled?: boolean }
-  workspaceName: string
-  onChanged: () => void
-}) {
-  const { showToast } = useToast()
-  const [busy, setBusy] = useState(false)
-
-  const toggle = async () => {
-    setBusy(true)
-    try {
-      const res = await setEmbeddPaused(!queue.paused, workspaceName)
-      showToast({
-        title: res.paused ? 'Embedding paused' : 'Embedding resumed',
-        description: res.paused
-          ? `${res.pending.toLocaleString()} job(s) held for this workspace — resume any time (a restart also resumes)`
-          : `${res.pending.toLocaleString()} job(s) draining`,
-      })
-      onChanged()
-    } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to toggle embedding queue (admin only)', variant: 'destructive' })
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <span className="flex items-center gap-2">
-      <span>
-        {queue.pending > 0
-          ? <>{queue.pending.toLocaleString()} pending{queue.draining ? ' · running' : ''}{queue.paused ? ' · paused' : ''}</>
-          : (queue.paused ? 'paused' : 'idle')}
-        {queue.ingestDisabled && <span className="ml-1.5 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600" title="CANVAS_EMBEDD_INGEST_DISABLED=true — nothing new is enqueued; existing vectors still serve search">ingest disabled</span>}
-      </span>
-      <button
-        type="button"
-        onClick={toggle}
-        disabled={busy}
-        className="rounded border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
-        title={queue.paused
-          ? 'Resume embedding — the held backlog drains'
-          : 'Pause embedding after the current batch — stops the CPU-heavy model inference; documents keep indexing and stay searchable via full-text'}
-      >
-        {busy ? '…' : queue.paused ? 'Resume' : 'Pause'}
-      </button>
-    </span>
-  )
-}
-
 function DbStatsTab({
   stats,
   isLoading,
@@ -720,7 +666,11 @@ function DbStatsTab({
         </Button>
       </div>
 
-      <ReindexSection workspaceName={workspaceName} onDone={onRefresh} />
+      <ReindexSection
+        workspaceName={workspaceName}
+        vectorSpaces={Object.keys(stats?.semantic?.vectorSpaces || {})}
+        onDone={onRefresh}
+      />
 
       {!stats ? (
         <div className="rounded-md border p-4 text-sm text-muted-foreground">No stats available.</div>
@@ -778,8 +728,9 @@ function DbStatsTab({
                         <StatRow key={`route-${space}`} label={`Embeds → ${space}`} value={<span className="font-mono text-[11px]">{matchers.join(', ')}</span>} />
                       ))
                     : <StatRow label="Text-embeddable (gap default)" value={stats.semantic.embeddableSchemas?.join(', ')} />}
-                  {/* Per-space vector stats (text 384-d, image/CLIP 768-d) — shows
-                      embedded-doc counts so a re-embed's progress is visible. */}
+                  {/* Per-space STORAGE stats — row/doc counts, so a re-embed's
+                      progress is visible. Which model/provider fills each space
+                      (and the queue driving it) lives on the Embedding tab. */}
                   {stats.semantic.vectorSpaces && Object.entries(stats.semantic.vectorSpaces).map(([name, sp]) => (
                     <StatRow
                       key={name}
@@ -789,21 +740,6 @@ function DbStatsTab({
                         : `${(sp.embeddedDocs ?? 0).toLocaleString()} docs · ${(sp.chunkRows ?? 0).toLocaleString()} vectors`}
                     />
                   ))}
-                  {/* Which provider/model actually fills each space — both are
-                      config now, so a remote/GPU model shows up here by name. */}
-                  {stats.embedder?.spaces && Object.entries(stats.embedder.spaces).map(([space, cfg]) => (
-                    <StatRow
-                      key={`model-${space}`}
-                      label={`Model → ${space}`}
-                      value={<span className="font-mono text-[11px]">{cfg.model} <span className="text-muted-foreground">· {cfg.provider} · {cfg.dim}-d</span></span>}
-                    />
-                  ))}
-                  {stats.embedder?.queue && (
-                    <StatRow
-                      label="Embedding queue"
-                      value={<EmbeddQueueControl queue={stats.embedder.queue} workspaceName={workspaceName} onChanged={onRefresh} />}
-                    />
-                  )}
                   <StatRow label="Image relevance floor" value={stats.semantic.imageMaxDistance == null ? 'off' : stats.semantic.imageMaxDistance} mono />
                   <StatRow
                     label="Fusion weights (lexical · text · image)"
@@ -811,6 +747,9 @@ function DbStatsTab({
                     mono
                   />
                   <SearchTuning workspaceName={workspaceName} current={stats.semantic.imageMaxDistance} weights={stats.semantic.searchWeights} onDone={onRefresh} />
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    Models, providers, backfill/re-embed and the embedding queue are on the <strong>Embedding</strong> tab.
+                  </p>
                 </>
               )}
             </section>
@@ -1528,10 +1467,12 @@ function DefaultFoldersSection({ workspaceName }: { workspaceName: string }) {
 }
 
 // ── DB maintenance (admin reindex endpoints) ─────────────────────────────────
-// Grouped per index (Timelines / FTS / Embeddings); every op shows its
-// description inline (tooltips are useless on touch). Destructive variants
-// (rebuild / full re-embed) sit behind a confirm. All idempotent server-side.
-function ReindexSection({ workspaceName, onDone }: { workspaceName: string; onDone: () => void }) {
+// STORAGE-level ops only (bitmaps, FTS, Lance table compaction); every op shows
+// its description inline (tooltips are useless on touch). Destructive variants
+// (rebuild) sit behind a confirm. All idempotent server-side. Embedding-level
+// work — backfill/re-embed, model choice, the queue — lives on the Embedding
+// tab, which has the scoped reindex control.
+function ReindexSection({ workspaceName, vectorSpaces, onDone }: { workspaceName: string; vectorSpaces: string[]; onDone: () => void }) {
   const [busy, setBusy] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
@@ -1567,22 +1508,17 @@ function ReindexSection({ workspaceName, onDone }: { workspaceName: string; onDo
         { key: 'fts-optimize', label: 'Optimize', description: 'Compact fragments + prune old versions of the full-text table.', fn: () => adminOptimize(workspaceName, 'fts') },
       ],
     },
-    {
-      title: 'Text embeddings (384-d)',
-      ops: [
-        { key: 'text-backfill', label: 'Backfill', description: 'Enqueue text docs (notes, emails, text files) without a vector. Async, off-thread.', fn: () => adminReindexEmbeddings(workspaceName, { space: 'text' }) },
-        { key: 'text-reembed', label: 'Re-embed', description: 'Wipe the text vectors and re-embed every text doc. Async; can take a while.', confirm: 'Wipe the TEXT vectors and re-embed every text document?', fn: () => adminReindexEmbeddings(workspaceName, { space: 'text', reindex: true }) },
-        { key: 'text-optimize', label: 'Optimize', description: 'Compact + prune the text vector table and rebuild its ANN index.', fn: () => adminOptimize(workspaceName, 'text') },
-      ],
-    },
-    {
-      title: 'Image embeddings (768-d)',
-      ops: [
-        { key: 'image-backfill', label: 'Backfill', description: 'Enqueue photos without a CLIP vector. Async, off-thread.', fn: () => adminReindexEmbeddings(workspaceName, { space: 'image' }) },
-        { key: 'image-reembed', label: 'Re-embed', description: 'Wipe the image vectors and re-embed every photo. Async; can take a while.', confirm: 'Wipe the IMAGE vectors and re-embed every photo?', fn: () => adminReindexEmbeddings(workspaceName, { space: 'image', reindex: true }) },
-        { key: 'image-optimize', label: 'Optimize', description: 'Compact + prune the image vector table and rebuild its ANN index.', fn: () => adminOptimize(workspaceName, 'image') },
-      ],
-    },
+    // Lance table compaction per LIVE vector space — enumerated from what the
+    // workspace actually runs, never a hardcoded pair with stale dims.
+    ...(vectorSpaces.length > 0 ? [{
+      title: 'Vector tables (LanceDB)',
+      ops: vectorSpaces.map((space): Op => ({
+        key: `${space}-optimize`,
+        label: `Optimize ${space}`,
+        description: `Compact fragments + prune old versions of the '${space}' vector table and rebuild its ANN index.`,
+        fn: () => adminOptimize(workspaceName, space),
+      })),
+    }] : []),
   ]
 
   return (

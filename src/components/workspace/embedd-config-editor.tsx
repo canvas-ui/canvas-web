@@ -6,6 +6,7 @@ import { useToast } from '@/components/ui/toast-container'
 import {
   BUILTIN_PROVIDER_IDS,
   EMBEDD_PROVIDER_TYPES,
+  probeEmbeddModelCache,
   stripUnsetKeys,
   testEmbeddBackend,
   type EmbeddConfig,
@@ -136,6 +137,9 @@ export function EmbeddConfigEditor({
   // field; every other provider omits it so the stored secret survives.
   const [touchedKeys, setTouchedKeys] = useState<Set<string>>(new Set())
   const [testing, setTesting] = useState<string | null>(null)
+  // The tested model was not in the server's cache, so the in-flight test is
+  // dominated by a weights download — label the wait honestly.
+  const [downloading, setDownloading] = useState(false)
   const [newProviderId, setNewProviderId] = useState('')
   const [newSpaceName, setNewSpaceName] = useState('')
 
@@ -262,6 +266,21 @@ export function EmbeddConfigEditor({
     }
     setTesting(space)
     try {
+      // Cheap filesystem probe first: a cold local model means the test call is
+      // really a weights download (minutes for CLIP) — say so instead of
+      // sitting on an indistinct "Testing…".
+      try {
+        const cached = await probeEmbeddModelCache(resolveProvider(providerId), model)
+        if (cached === false) {
+          setDownloading(true)
+          showToast({
+            title: 'Downloading model',
+            description: `'${model ?? 'the configured model'}' is not in the server's cache yet — downloading now. A first test can take a few minutes; the model is then cached for good.`,
+          })
+        }
+      } catch {
+        // Probe is best-effort — an older server without it just tests directly.
+      }
       const result = await testEmbeddBackend(resolveProvider(providerId), model, space)
       const configuredDim = draft.spaces?.[space]?.dim ?? effective.spaces?.[space]?.dim
       // A dim mismatch is the most likely misconfiguration, and it fails at
@@ -287,6 +306,7 @@ export function EmbeddConfigEditor({
       })
     } finally {
       setTesting(null)
+      setDownloading(false)
     }
   }
 
@@ -349,7 +369,7 @@ export function EmbeddConfigEditor({
                   title="Round-trip a real embedding call against this backend and report the dimension it returns"
                 >
                   <Zap className="mr-1.5 h-3.5 w-3.5" />
-                  {testing === space ? 'Testing…' : 'Test connection'}
+                  {testing === space ? (downloading ? 'Downloading model…' : 'Testing…') : 'Test connection'}
                 </Button>
               </div>
 
