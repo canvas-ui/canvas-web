@@ -181,7 +181,7 @@ function ExportModal({ isOpen, onClose, documents, selectedDocuments }: ExportMo
   }
 
   return createPortal(
-    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 max-md:p-2">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-scrim flex items-center justify-center z-50 p-4 max-md:p-2">
       <div className="bg-background border rounded-lg max-w-3xl w-full max-h-[85dvh] overflow-y-auto max-md:h-full max-md:max-h-none max-md:max-w-none">
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
@@ -189,8 +189,8 @@ function ExportModal({ isOpen, onClose, documents, selectedDocuments }: ExportMo
               <h2 className="text-2xl font-bold">Export Documents</h2>
               <p className="text-muted-foreground">
                 Exporting {documentsToExport.length} document{documentsToExport.length !== 1 ? 's' : ''}
-                {copyStatus === 'copied' && <span className="text-green-600 ml-2">✓ Copied to clipboard!</span>}
-                {copyStatus === 'error' && <span className="text-red-600 ml-2">✗ Failed to copy</span>}
+                {copyStatus === 'copied' && <span className="text-success ml-2">✓ Copied to clipboard!</span>}
+                {copyStatus === 'error' && <span className="text-destructive ml-2">✗ Failed to copy</span>}
               </p>
             </div>
             <button onClick={handleClose} className="p-2 hover:bg-muted rounded-sm" title="Close">✕</button>
@@ -274,7 +274,7 @@ function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
   }
 
   return createPortal(
-    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 max-md:p-2">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-scrim flex items-center justify-center z-50 p-4 max-md:p-2">
       <div className="bg-background border rounded-lg max-w-3xl w-full max-h-[85dvh] overflow-y-auto max-md:h-full max-md:max-h-none max-md:max-w-none">
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
@@ -362,7 +362,7 @@ function DocumentActionSheet({ document, open, onClose, onViewDetails, onEdit, o
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-[80] flex flex-col bg-background animate-in slide-in-from-bottom-10 fade-in duration-200"
+      className="fixed inset-0 z-fullscreen flex flex-col bg-background animate-in slide-in-from-bottom-10 fade-in duration-200"
       onClick={onClose}
     >
       <div className="flex shrink-0 items-start gap-3 border-b p-4" onClick={(e) => e.stopPropagation()}>
@@ -487,7 +487,7 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
   return (
     <>
       <TableRow
-        className={`cursor-pointer ${isSelected ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-muted/50'}`}
+        className={`cursor-pointer ${isSelected ? 'bg-info-subtle hover:bg-info-subtle' : 'hover:bg-muted/50'}`}
         onClick={handleDocumentClick}
         onMouseDown={handleMouseDown}
         onContextMenu={handleRightClick}
@@ -497,7 +497,7 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
         <TableCell className="w-10" onClick={(e) => e.stopPropagation()}>
           <input
             type="checkbox"
-            className="h-4 w-4 cursor-pointer accent-blue-600 align-middle"
+            className="h-4 w-4 cursor-pointer accent-primary align-middle"
             checked={!!isSelected}
             onChange={(e) => onSelect?.(document.id, e.target.checked, true)}
           />
@@ -598,7 +598,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
   return (
     <>
       <div
-        className={`border rounded-lg p-4 transition-colors cursor-pointer ${isSelected ? 'bg-blue-50 border-blue-300 ring-1 ring-blue-200' : ''} ${isTabDocument && !isSelected ? 'hover:bg-blue-50 hover:border-blue-200' : !isSelected ? 'hover:bg-accent/50' : ''}`}
+        className={`border rounded-lg p-4 transition-colors cursor-pointer ${isSelected ? 'bg-info-subtle border-info ring-1 ring-info' : ''} ${isTabDocument && !isSelected ? 'hover:bg-info-subtle hover:border-info' : !isSelected ? 'hover:bg-accent/50' : ''}`}
         onClick={handleDocumentClick}
         onMouseDown={handleMouseDown}
         onContextMenu={handleRightClick}
@@ -685,7 +685,7 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
   return (
     <>
       <div
-        className={`group relative mb-3 flex break-inside-avoid flex-col overflow-hidden rounded-lg border transition-shadow cursor-pointer hover:shadow-md ${isSelected ? 'ring-2 ring-blue-400 border-blue-300' : ''}`}
+        className={`group relative mb-3 flex break-inside-avoid flex-col overflow-hidden rounded-lg border transition-shadow cursor-pointer hover:shadow-elevation-2 ${isSelected ? 'ring-2 ring-info border-info' : ''}`}
         onClick={handleClick}
         onContextMenu={handleRightClick}
         draggable
@@ -695,7 +695,7 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
         {/* Selection checkbox — always visible when selected, on hover otherwise */}
         <input
           type="checkbox"
-          className={`absolute left-2 top-2 z-10 h-4 w-4 cursor-pointer accent-blue-600 ${isSelected ? '' : 'opacity-0 group-hover:opacity-100'}`}
+          className={`absolute left-2 top-2 z-10 h-4 w-4 cursor-pointer accent-primary ${isSelected ? '' : 'opacity-0 group-hover:opacity-100'}`}
           checked={isSelected}
           onClick={(e) => e.stopPropagation()}
           onChange={(e) => onSelect?.(document.id, e.target.checked, true)}
@@ -712,7 +712,7 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
           {onOpenToSide && (
             <button
               onClick={(e) => { e.stopPropagation(); onOpenToSide(document) }}
-              className="absolute right-2 top-2 rounded-sm bg-black/40 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
+              className="absolute right-2 top-2 rounded-sm bg-scrim p-1 text-scrim-foreground opacity-0 transition-opacity group-hover:opacity-100"
               title="Open to the side"
             >
               <PanelRight className="h-3.5 w-3.5" />
@@ -1095,8 +1095,8 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <h3 className="font-semibold text-sm text-muted-foreground">Documents</h3>
-            <p className="text-xs text-muted-foreground mt-1 break-all">Context: <span className="font-mono">{contextPath}</span>{activeContextUrl && currentContextUrl && activeContextUrl !== currentContextUrl && (<span className="text-orange-600 ml-2">(not yet active)</span>)}</p>
-            {selectedDocuments.size > 0 && (<p className="text-xs text-blue-600 mt-1">{selectedDocuments.size} document{selectedDocuments.size !== 1 ? 's' : ''} selected</p>)}
+            <p className="text-xs text-muted-foreground mt-1 break-all">Context: <span className="font-mono">{contextPath}</span>{activeContextUrl && currentContextUrl && activeContextUrl !== currentContextUrl && (<span className="text-warning ml-2">(not yet active)</span>)}</p>
+            {selectedDocuments.size > 0 && (<p className="text-xs text-info mt-1">{selectedDocuments.size} document{selectedDocuments.size !== 1 ? 's' : ''} selected</p>)}
           </div>
           <div className="shrink-0 sm:text-right">
             {searchQuery ? (
@@ -1577,7 +1577,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                 <TableHead className="w-10">
                   <input
                     type="checkbox"
-                    className="h-4 w-4 cursor-pointer accent-blue-600 align-middle"
+                    className="h-4 w-4 cursor-pointer accent-primary align-middle"
                     checked={filteredDocuments.length > 0 && selectedDocuments.size === filteredDocuments.length}
                     ref={(el) => { if (el) el.indeterminate = selectedDocuments.size > 0 && selectedDocuments.size < filteredDocuments.length }}
                     onChange={handleSelectAll}
@@ -1617,7 +1617,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
           x={contextMenu.x}
           y={contextMenu.y}
           onClose={() => setContextMenu(null)}
-          className="bg-background border rounded-lg shadow-lg py-1 min-w-[120px]"
+          className="bg-background border rounded-lg shadow-elevation-3 py-1 min-w-[120px]"
         >
             <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('copy', contextMenu.documentIds)}>
               <Copy className="h-3 w-3" />
@@ -1702,7 +1702,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
           x={emptyAreaContextMenu.x}
           y={emptyAreaContextMenu.y}
           onClose={() => setEmptyAreaContextMenu(null)}
-          className="bg-background border rounded-lg shadow-lg py-1 min-w-[120px]"
+          className="bg-background border rounded-lg shadow-elevation-3 py-1 min-w-[120px]"
         >
             {pastedDocumentIds && pastedDocumentIds.length > 0 && (
               <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={handleEmptyAreaPaste}>
@@ -1735,7 +1735,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
       {linkPanelIds && linkTree && createPortal(
         // Dimmed modal — was an undimmed bottom-right float, which collided
         // with the bottom-right toolbox FAB and any open B5Card.
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 max-md:p-2">
+        <div className="fixed inset-0 z-picker flex items-center justify-center bg-scrim p-4 max-md:p-2">
           <LinkToCard
             documentCount={linkPanelIds.length}
             fixedWorkspaceName={workspaceId}
@@ -1751,10 +1751,10 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
         // DocumentSideCard rather than a centered modal. On mobile it becomes
         // an M1/M2-style drawer over a scrim.
         <>
-          <div className="fixed inset-0 z-[59] bg-black/30 animate-fade-in md:hidden" onClick={() => setPickDocsOpen(false)} aria-hidden />
-          <div className="fixed inset-y-0 right-0 z-[60] flex items-stretch py-2 pr-2 max-md:bottom-2 max-md:left-2 max-md:top-2 max-md:py-0 max-md:pr-0 max-md:animate-fade-in">
+          <div className="fixed inset-0 z-picker-scrim bg-scrim animate-fade-in md:hidden" onClick={() => setPickDocsOpen(false)} aria-hidden />
+          <div className="fixed inset-y-0 right-0 z-picker flex items-stretch py-2 pr-2 max-md:bottom-2 max-md:left-2 max-md:top-2 max-md:py-0 max-md:pr-0 max-md:animate-fade-in">
             <PickDocumentsCard
-              sizeClassName="h-full w-[420px] max-w-full max-md:w-full max-md:shadow-elevation-8"
+              sizeClassName="h-full w-[420px] max-w-full max-md:w-full max-md:shadow-elevation-5"
               fixedWorkspaceName={workspaceId}
               onConfirm={async (documentIds) => {
                 await onPasteDocuments(contextPath, documentIds)

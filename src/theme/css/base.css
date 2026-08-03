@@ -1,0 +1,140 @@
+/**
+ * Base defaults.
+ *
+ * Every Tier-2 token gets a value here, on `:root`. Two reasons:
+ *
+ * 1. The app must render correctly before any theme attribute is applied —
+ *    during the first paint, in a Tauri window whose host hasn't called
+ *    `applyTheme` yet, in Storybook, in a test renderer. A missing custom
+ *    property resolves to nothing, not to a sensible default, so an unthemed
+ *    render without these would be unstyled text on a transparent background.
+ * 2. Themes then only declare what they actually change. A new theme is a
+ *    palette, not a 90-line transcription of the type scale.
+ *
+ * Values here mirror the `canvas` light theme.
+ */
+
+:root {
+  /* ── Shape ───────────────────────────────────────────────────────────── */
+  --radius: 0.5rem;
+
+  /* ── Typography ──────────────────────────────────────────────────────── */
+  --font-family-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --font-family-mono: ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+
+  --font-size-2xs: 0.6875rem;
+  --line-height-2xs: 1rem;
+  --font-size-xs: 0.75rem;
+  --line-height-xs: 1rem;
+  --font-size-sm: 0.875rem;
+  --line-height-sm: 1.25rem;
+  --font-size-base: 1rem;
+  --line-height-base: 1.5rem;
+  --font-size-lg: 1.125rem;
+  --line-height-lg: 1.75rem;
+  --font-size-xl: 1.25rem;
+  --line-height-xl: 1.75rem;
+  --font-size-2xl: 1.5rem;
+  --line-height-2xl: 2rem;
+  --font-size-3xl: 1.875rem;
+  --line-height-3xl: 2.25rem;
+  --font-size-4xl: 2.25rem;
+  --line-height-4xl: 2.5rem;
+  --font-size-5xl: 3rem;
+  --line-height-5xl: 1;
+
+  /* ── Motion ──────────────────────────────────────────────────────────── */
+  --motion-scale: 1;
+
+  /* ── Colour fallback (canvas / light) ────────────────────────────────── */
+  --background: var(--p-neutral-0);
+  --foreground: var(--p-neutral-1000);
+  --card: var(--p-neutral-0);
+  --card-foreground: var(--p-neutral-1000);
+  --popover: var(--p-neutral-0);
+  --popover-foreground: var(--p-neutral-1000);
+  --desk: var(--p-neutral-200);
+
+  --primary: var(--p-neutral-1000);
+  --primary-foreground: var(--p-neutral-0);
+  --secondary: var(--p-teal-500);
+  --secondary-foreground: var(--p-neutral-1000);
+  --muted: var(--p-neutral-100);
+  --muted-foreground: var(--p-neutral-600);
+  --accent: var(--p-neutral-100);
+  --accent-foreground: var(--p-neutral-1000);
+
+  --destructive: var(--p-red-600);
+  --destructive-foreground: var(--p-neutral-0);
+  --destructive-subtle: oklch(from var(--p-red-500) 0.96 0.03 h);
+  --success: var(--p-green-600);
+  --success-foreground: var(--p-neutral-0);
+  --success-subtle: oklch(from var(--p-green-500) 0.96 0.03 h);
+  --warning: var(--p-amber-600);
+  --warning-foreground: var(--p-neutral-1000);
+  --warning-subtle: oklch(from var(--p-amber-500) 0.96 0.04 h);
+  --info: var(--p-blue-600);
+  --info-foreground: var(--p-neutral-0);
+  --info-subtle: oklch(from var(--p-blue-500) 0.96 0.03 h);
+
+  --border: var(--p-neutral-200);
+  --input: var(--p-neutral-300);
+  --ring: var(--p-neutral-1000);
+  --scrim: oklch(0 0 0 / 0.32);
+  --scrim-foreground: oklch(1 0 0);
+
+  --shadow-color: var(--p-neutral-1000);
+  --shadow-strength: 0.12;
+}
+
+/**
+ * Dark is the default when the host expresses no preference but the OS does.
+ * Scoped to `:root:not([data-scheme])` so it only ever acts as a fallback —
+ * the instant the provider writes an explicit `data-scheme`, the user's choice
+ * wins and this rule stops matching.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-scheme]) {
+    color-scheme: dark;
+
+    --background: var(--p-neutral-950);
+    --foreground: var(--p-neutral-50);
+    --card: var(--p-neutral-900);
+    --card-foreground: var(--p-neutral-50);
+    --popover: var(--p-neutral-900);
+    --popover-foreground: var(--p-neutral-50);
+    --desk: var(--p-neutral-1000);
+
+    --primary: var(--p-neutral-50);
+    --primary-foreground: var(--p-neutral-950);
+    --secondary: var(--p-teal-400);
+    --secondary-foreground: var(--p-neutral-950);
+    --muted: var(--p-neutral-800);
+    --muted-foreground: var(--p-neutral-400);
+    --accent: var(--p-neutral-800);
+    --accent-foreground: var(--p-neutral-50);
+
+    --destructive: var(--p-red-400);
+    --destructive-foreground: var(--p-neutral-950);
+    --destructive-subtle: oklch(from var(--p-red-500) 0.28 0.07 h);
+    --success: var(--p-green-400);
+    --success-foreground: var(--p-neutral-950);
+    --success-subtle: oklch(from var(--p-green-500) 0.28 0.06 h);
+    --warning: var(--p-amber-400);
+    --warning-foreground: var(--p-neutral-950);
+    --warning-subtle: oklch(from var(--p-amber-500) 0.28 0.06 h);
+    --info: var(--p-blue-400);
+    --info-foreground: var(--p-neutral-950);
+    --info-subtle: oklch(from var(--p-blue-500) 0.28 0.07 h);
+
+    --border: var(--p-neutral-800);
+    --input: var(--p-neutral-700);
+    --ring: var(--p-neutral-400);
+    --scrim: oklch(0 0 0 / 0.6);
+    --scrim-foreground: oklch(1 0 0);
+
+    --shadow-color: oklch(0 0 0);
+    --shadow-strength: 0.5;
+  }
+}

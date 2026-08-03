@@ -33,7 +33,7 @@ function LinkSelectionButton({ count }: { count: number }) {
       onClick={() => window.dispatchEvent(new CustomEvent('workspace:documents:link-selection'))}
       title={`Link ${count} selected document(s) to…`}
       aria-label="Link selection"
-      className="shrink-0 flex items-center justify-center gap-1 h-7 min-w-7 rounded-full bg-blue-600 px-1.5 text-white hover:bg-blue-500 transition-colors"
+      className="shrink-0 flex items-center justify-center gap-1 h-7 min-w-7 rounded-full bg-info px-1.5 text-info-foreground hover:bg-info transition-colors"
     >
       <Link2 className="w-3.5 h-3.5" />
       <span className="text-[11px] font-semibold leading-none">{count}</span>
@@ -278,7 +278,7 @@ export function DefaultCanvas({
               style={{ backgroundColor: canvasInfo.color }}
             />
           )}
-          <LayoutDashboard className="w-4 h-4 shrink-0 text-violet-500" />
+          <LayoutDashboard className="w-4 h-4 shrink-0 text-primary" />
           <div className="flex flex-col min-w-0 flex-1">
             <span className="text-lg font-semibold leading-tight truncate">
               {canvasInfo.label || urlDisplay.split('://')[1] || 'Canvas'}

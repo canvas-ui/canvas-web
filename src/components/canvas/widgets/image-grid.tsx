@@ -25,7 +25,7 @@ export function ImageThumb({ workspaceId, doc, onClick, className = 'aspect-squa
       type="button"
       onClick={onClick}
       title={title}
-      className={`canvas-no-drag group relative block w-full overflow-hidden rounded-lg border bg-muted/40 shadow-sm transition-shadow hover:shadow-md hover:ring-2 hover:ring-primary/30 ${className}`}
+      className={`canvas-no-drag group relative block w-full overflow-hidden rounded-lg border bg-muted/40 shadow-elevation-1 transition-shadow hover:shadow-elevation-2 hover:ring-2 hover:ring-primary/30 ${className}`}
     >
       {loading && <div className="absolute inset-0 animate-pulse bg-muted/60" />}
       {error && <div className="absolute inset-0 flex items-center justify-center p-1 text-[10px] text-destructive">{error}</div>}
@@ -65,15 +65,22 @@ export function ImageLightbox({ workspaceId, docs, index, onClose, onNavigate }:
   // Portal to body — react-grid-layout applies transforms to grid items, which
   // breaks `position: fixed` and traps the overlay inside the widget cell.
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" onClick={onClose}>
-      <button type="button" onClick={onClose} className="canvas-no-drag absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20" title="Close">
+    // A lightbox is always a dark room, whatever the app theme — the image is
+    // the subject and the chrome must recede. Scoping the scheme instead of
+    // hardcoding white keeps the controls on the active theme's palette.
+    <div
+      data-scheme="dark"
+      className="fixed inset-0 z-fullscreen flex items-center justify-center bg-scrim p-4"
+      onClick={onClose}
+    >
+      <button type="button" onClick={onClose} className="canvas-no-drag absolute right-4 top-4 rounded-full bg-foreground/10 p-2 text-foreground hover:bg-foreground/20" title="Close">
         <X className="h-5 w-5" />
       </button>
       {index > 0 && (
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onNavigate(index - 1) }}
-          className="canvas-no-drag absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+          className="canvas-no-drag absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-foreground/10 p-2 text-foreground hover:bg-foreground/20"
           title="Previous"
         >
           <ChevronLeft className="h-6 w-6" />
@@ -83,17 +90,17 @@ export function ImageLightbox({ workspaceId, docs, index, onClose, onNavigate }:
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onNavigate(index + 1) }}
-          className="canvas-no-drag absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+          className="canvas-no-drag absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-foreground/10 p-2 text-foreground hover:bg-foreground/20"
           title="Next"
         >
           <ChevronRight className="h-6 w-6" />
         </button>
       )}
       <figure className="max-h-full max-w-full" onClick={(e) => e.stopPropagation()}>
-        {loading && <div className="text-sm text-white/70">Loading…</div>}
-        {error && <div className="text-sm text-red-400">{error}</div>}
+        {loading && <div className="text-sm text-foreground/70">Loading…</div>}
+        {error && <div className="text-sm text-destructive">{error}</div>}
         {blobUrl && <img src={blobUrl} alt={title} className="max-h-[85vh] max-w-[90vw] rounded object-contain" />}
-        <figcaption className="mt-2 text-center text-xs text-white/70">{title} · {index + 1}/{docs.length}</figcaption>
+        <figcaption className="mt-2 text-center text-xs text-foreground/70">{title} · {index + 1}/{docs.length}</figcaption>
       </figure>
     </div>,
     document.body,

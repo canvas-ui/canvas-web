@@ -1037,8 +1037,8 @@ export default function WorkspaceDetailPage() {
       >
         <span
           className={`w-2 h-2 rounded-full shrink-0 ${
-            workspace.status === 'active' ? 'bg-green-500' :
-            workspace.status === 'error' ? 'bg-red-500' : 'bg-gray-400'
+            workspace.status === 'active' ? 'bg-success' :
+            workspace.status === 'error' ? 'bg-destructive' : 'bg-muted-foreground'
           }`}
           title={workspace.status}
         />
@@ -1066,7 +1066,7 @@ export default function WorkspaceDetailPage() {
             className={cn(
               'flex items-center gap-1.5 px-3 py-1 text-xs border rounded-md transition-colors',
               unfiledOnly
-                ? 'bg-amber-500/15 border-amber-500/40 text-amber-600'
+                ? 'bg-warning/15 border-warning/40 text-warning'
                 : 'hover:bg-accent text-muted-foreground hover:text-foreground',
             )}
             title="Show only documents not filed into any context/directory tree — safe to purge from the backend"
@@ -1135,8 +1135,8 @@ export default function WorkspaceDetailPage() {
 
       {/* Save as canvas dialog */}
       {saveAsCanvasOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-card rounded-lg border shadow-xl p-5 w-80 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim">
+          <div className="bg-card rounded-lg border shadow-elevation-4 p-5 w-80 space-y-4">
             <div>
               <h3 className="text-sm font-semibold">Save view as canvas</h3>
               <p className="text-xs text-muted-foreground mt-0.5">

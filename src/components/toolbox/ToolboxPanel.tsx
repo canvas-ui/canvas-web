@@ -83,7 +83,7 @@ export function ToolboxPanel() {
     <>
       {/* Mobile scrim — same treatment as the AddPanel / M1-M2 drawers. */}
       {isMobile && (
-        <div className="fixed inset-0 z-[54] bg-black/30 animate-fade-in" onClick={closeT1} aria-hidden />
+        <div className="fixed inset-0 z-panel-scrim bg-scrim animate-fade-in" onClick={closeT1} aria-hidden />
       )}
     <div
       style={isMobile ? undefined : { width }}
@@ -92,7 +92,7 @@ export function ToolboxPanel() {
         // Mobile: full drawer over the scrim. Desktop: a resizable card that sits
         // as the right-most flex sibling (same chrome as the + AddPanel).
         isMobile
-          ? 'fixed bottom-2 left-2 right-2 top-2 z-[55] rounded-2xl shadow-elevation-8 animate-fade-in'
+          ? 'fixed bottom-2 left-2 right-2 top-2 z-panel rounded-2xl shadow-elevation-5 animate-fade-in'
           : 'relative shrink-0 rounded-xl shadow-elevation-3',
       )}
     >

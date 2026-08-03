@@ -55,9 +55,9 @@ function nextMode(mode: FeatureMode): FeatureMode {
 // Tri-state sigil control: any (OR) · all (+ gate) · not (! exclude).
 // Mirrors synapsd feature algebra. Click the active mode to clear it.
 const MODE_OPTS: { m: FeatureMode; label: string; on: string }[] = [
-  { m: 'anyOf', label: 'any', on: 'bg-blue-500 text-white' },
-  { m: 'allOf', label: 'all', on: 'bg-emerald-500 text-white' },
-  { m: 'noneOf', label: 'not', on: 'bg-rose-500 text-white' },
+  { m: 'anyOf', label: 'any', on: 'bg-info text-info-foreground' },
+  { m: 'allOf', label: 'all', on: 'bg-success text-success-foreground' },
+  { m: 'noneOf', label: 'not', on: 'bg-destructive text-destructive-foreground' },
 ]
 
 function ModeControl({ mode, onSet }: { mode: FeatureMode; onSet: (m: FeatureMode) => void }) {
@@ -114,9 +114,9 @@ function SchemaTypePicker({
                 'relative flex flex-col items-center justify-center gap-1.5 rounded-lg border p-3 min-h-[4.5rem] transition-colors select-none',
                 mode === 'off'
                   ? 'border-border bg-muted/40 text-foreground hover:bg-muted'
-                  : mode === 'anyOf' ? 'border-blue-500 bg-blue-500/10 text-foreground'
-                  : mode === 'allOf' ? 'border-emerald-500 bg-emerald-500/10 text-foreground'
-                  : 'border-rose-500 bg-rose-500/10 text-foreground',
+                  : mode === 'anyOf' ? 'border-info bg-info/10 text-foreground'
+                  : mode === 'allOf' ? 'border-success bg-success/10 text-foreground'
+                  : 'border-destructive bg-destructive/10 text-foreground',
               )}
             >
               {badge && (
@@ -268,9 +268,9 @@ function FeaturesTab() {
                         rowIndex % 2 === 0 ? 'bg-muted/50' : 'bg-transparent',
                         'hover:bg-muted',
                         mode === 'off' ? 'border-l-transparent'
-                          : mode === 'anyOf' ? 'border-l-blue-500 !bg-blue-500/10'
-                          : mode === 'allOf' ? 'border-l-emerald-500 !bg-emerald-500/10'
-                          : 'border-l-rose-500 !bg-rose-500/10',
+                          : mode === 'anyOf' ? 'border-l-blue-500 !bg-info/10'
+                          : mode === 'allOf' ? 'border-l-emerald-500 !bg-success/10'
+                          : 'border-l-rose-500 !bg-destructive/10',
                       )}
                     >
                       <span
@@ -371,7 +371,7 @@ export function ToolsPanel() {
               type="button"
               onClick={saveFilters}
               disabled={isSaving}
-              className="flex items-center gap-1.5 rounded-md bg-violet-600 px-2.5 py-1 text-xs text-white transition-colors hover:bg-violet-500 disabled:opacity-60"
+              className="flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1 text-xs text-primary-foreground transition-colors hover:bg-primary disabled:opacity-60"
             >
               {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
               Save filters

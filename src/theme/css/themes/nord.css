@@ -1,0 +1,101 @@
+/**
+ * Nord — cool, low-contrast arctic palette.
+ *
+ * Demonstrates the colour axis in isolation: a complete palette swap and a
+ * softer corner radius, with every other token inherited. This is the shape
+ * most themes should take.
+ *
+ * Based on the Nord palette (nordtheme.com), converted to OKLCH.
+ */
+
+[data-theme='nord'] {
+  --radius: 0.625rem;
+}
+
+[data-theme='nord'][data-scheme='light'],
+[data-theme='nord'] [data-scheme='light'] {
+  color-scheme: light;
+
+  --background: oklch(0.976 0.006 251);
+  --foreground: oklch(0.309 0.026 261);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.309 0.026 261);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.309 0.026 261);
+  --desk: oklch(0.929 0.011 253);
+
+  --primary: oklch(0.588 0.056 244);
+  --primary-foreground: oklch(0.984 0.004 248);
+  --secondary: oklch(0.686 0.062 213);
+  --secondary-foreground: oklch(0.229 0.023 261);
+  --muted: oklch(0.929 0.011 253);
+  --muted-foreground: oklch(0.492 0.028 258);
+  --accent: oklch(0.906 0.017 251);
+  --accent-foreground: oklch(0.309 0.026 261);
+
+  --destructive: oklch(0.564 0.114 19);
+  --destructive-foreground: oklch(0.984 0.004 248);
+  --destructive-subtle: oklch(0.945 0.028 19);
+  --success: oklch(0.696 0.086 143);
+  --success-foreground: oklch(0.229 0.023 261);
+  --success-subtle: oklch(0.951 0.028 143);
+  --warning: oklch(0.788 0.093 74);
+  --warning-foreground: oklch(0.229 0.023 261);
+  --warning-subtle: oklch(0.957 0.032 74);
+  --info: oklch(0.638 0.071 235);
+  --info-foreground: oklch(0.984 0.004 248);
+  --info-subtle: oklch(0.947 0.023 235);
+
+  --border: oklch(0.885 0.017 252);
+  --input: oklch(0.83 0.019 252);
+  --ring: oklch(0.588 0.056 244);
+  --scrim: oklch(0.229 0.023 261 / 0.35);
+  --scrim-foreground: oklch(1 0 0);
+
+  --shadow-color: oklch(0.309 0.026 261);
+  --shadow-strength: 0.1;
+}
+
+[data-theme='nord'][data-scheme='dark'],
+[data-theme='nord'] [data-scheme='dark'] {
+  color-scheme: dark;
+
+  --background: oklch(0.279 0.024 261);
+  --foreground: oklch(0.925 0.011 252);
+  --card: oklch(0.322 0.024 259);
+  --card-foreground: oklch(0.925 0.011 252);
+  --popover: oklch(0.322 0.024 259);
+  --popover-foreground: oklch(0.925 0.011 252);
+  --desk: oklch(0.229 0.023 261);
+
+  --primary: oklch(0.755 0.062 224);
+  --primary-foreground: oklch(0.229 0.023 261);
+  --secondary: oklch(0.686 0.062 213);
+  --secondary-foreground: oklch(0.229 0.023 261);
+  --muted: oklch(0.365 0.024 258);
+  --muted-foreground: oklch(0.729 0.019 253);
+  --accent: oklch(0.404 0.025 257);
+  --accent-foreground: oklch(0.925 0.011 252);
+
+  --destructive: oklch(0.629 0.114 19);
+  --destructive-foreground: oklch(0.229 0.023 261);
+  --destructive-subtle: oklch(0.372 0.048 19);
+  --success: oklch(0.755 0.086 143);
+  --success-foreground: oklch(0.229 0.023 261);
+  --success-subtle: oklch(0.372 0.041 143);
+  --warning: oklch(0.826 0.093 74);
+  --warning-foreground: oklch(0.229 0.023 261);
+  --warning-subtle: oklch(0.383 0.044 74);
+  --info: oklch(0.708 0.071 235);
+  --info-foreground: oklch(0.229 0.023 261);
+  --info-subtle: oklch(0.372 0.039 235);
+
+  --border: oklch(0.372 0.024 258);
+  --input: oklch(0.46 0.026 257);
+  --ring: oklch(0.755 0.062 224);
+  --scrim: oklch(0.18 0.02 261 / 0.6);
+  --scrim-foreground: oklch(1 0 0);
+
+  --shadow-color: oklch(0.145 0.018 261);
+  --shadow-strength: 0.45;
+}

@@ -12,7 +12,7 @@ function isFullBleed(pathname: string): boolean {
 
 // The FAB quick-capture surface (home, and the share-target landing that
 // reuses it) has no page chrome of its own — no "sheet of paper" card, no
-// padding — it sits directly on the canvas-desk background.
+// padding — it sits directly on the surface-desk background.
 function isBare(pathname: string): boolean {
   const [section] = pathname.split('/').filter(Boolean)
   return section === 'home' || section === 'share-target'
@@ -21,12 +21,12 @@ function isBare(pathname: string): boolean {
 // Shared mobile "drawer" treatment — same prominence as the M1/M2 menu panel
 // overlay (floating card over a scrim, elevation-8). Spans from left-2 since
 // the M0 rail is hidden by default on small screens.
-// z-[48]/z-[47]: above the open M0 rail (z-[46]) so side card / toolbox
+// z-side/z-side-scrim: above the open M0 rail (z-rail) so side card / toolbox
 // drawers fully cover the menu on mobile.
 const MOBILE_DRAWER =
-  'max-md:fixed max-md:left-2 max-md:right-2 max-md:top-2 max-md:bottom-2 max-md:z-[48] ' +
-  'max-md:py-0 max-md:pr-0 max-md:rounded-2xl max-md:shadow-elevation-8 max-md:animate-fade-in'
-const MOBILE_SCRIM = 'fixed inset-0 z-[47] bg-black/30 animate-fade-in md:hidden'
+  'max-md:fixed max-md:left-2 max-md:right-2 max-md:top-2 max-md:bottom-2 max-md:z-side ' +
+  'max-md:py-0 max-md:pr-0 max-md:rounded-2xl max-md:shadow-elevation-5 max-md:animate-fade-in'
+const MOBILE_SCRIM = 'fixed inset-0 z-side-scrim bg-scrim animate-fade-in md:hidden'
 
 export function ContentArea() {
   const { pathname } = useLocation()
@@ -35,11 +35,11 @@ export function ContentArea() {
   const { entry, close: closeSideView } = useSideView()
 
   return (
-    <div className={cn('relative flex flex-col flex-1 min-w-0', !bare && 'canvas-sheet')}>
-      <div className="flex flex-1 min-h-0 gap-2">
+    <div className={cn('relative flex flex-col flex-1 min-w-0', !bare && 'surface-sheet')}>
+      <div className="flex flex-1 min-h-0 gap-shell">
         {/* id + relative: maximized canvas widgets portal in here and fill
             the content area (full viewport is reserved for public shares). */}
-        <main id="content-area" className={cn('relative flex-1 min-h-0 min-w-0 overflow-auto', !fullBleed && !bare && 'p-6')}>
+        <main id="content-area" className={cn('relative flex-1 min-h-0 min-w-0 overflow-auto', !fullBleed && !bare && 'p-page')}>
           <Outlet />
         </main>
         {/* Side panels sit beside the page on desktop; on mobile there's no

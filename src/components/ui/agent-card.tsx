@@ -34,41 +34,41 @@ export function AgentCard({ agent, onStart, onStop, onEnter }: AgentCardProps) {
   const getStatusIcon = () => {
     switch (agent.status) {
       case 'active':
-        return <Cpu className="h-4 w-4 text-green-600" />
+        return <Cpu className="h-4 w-4 text-success" />
       case 'inactive':
-        return <Cpu className="h-4 w-4 text-yellow-600" />
+        return <Cpu className="h-4 w-4 text-warning" />
       case 'error':
-        return <Cpu className="h-4 w-4 text-red-600" />
+        return <Cpu className="h-4 w-4 text-destructive" />
       default:
-        return <Cpu className="h-4 w-4 text-gray-400" />
+        return <Cpu className="h-4 w-4 text-muted-foreground" />
     }
   }
 
   const getProviderIcon = () => {
     switch (agent.llmProvider) {
       case 'anthropic':
-        return <Brain className="h-4 w-4 text-orange-600" />
+        return <Brain className="h-4 w-4 text-warning" />
       case 'openai':
-        return <Brain className="h-4 w-4 text-green-600" />
+        return <Brain className="h-4 w-4 text-success" />
       case 'ollama':
-        return <Zap className="h-4 w-4 text-blue-600" />
+        return <Zap className="h-4 w-4 text-info" />
       default:
-        return <Brain className="h-4 w-4 text-gray-400" />
+        return <Brain className="h-4 w-4 text-muted-foreground" />
     }
   }
 
   const getStatusColor = () => {
     switch (agent.status) {
       case 'active':
-        return 'text-green-700 bg-green-50 border-green-200'
+        return 'text-success bg-success-subtle border-success'
       case 'inactive':
-        return 'text-yellow-700 bg-yellow-50 border-yellow-200'
+        return 'text-warning bg-warning-subtle border-warning'
       case 'error':
-        return 'text-red-700 bg-red-50 border-red-200'
+        return 'text-destructive bg-destructive-subtle border-destructive'
       case 'available':
-        return 'text-blue-700 bg-blue-50 border-blue-200'
+        return 'text-info bg-info-subtle border-info'
       default:
-        return 'text-gray-700 bg-gray-50 border-gray-200'
+        return 'text-foreground bg-muted border-border'
     }
   }
 
@@ -76,7 +76,7 @@ export function AgentCard({ agent, onStart, onStop, onEnter }: AgentCardProps) {
   const canStop = agent.status === 'active'
 
   return (
-    <div className="border rounded-lg p-4 space-y-4 hover:shadow-md transition-shadow bg-card">
+    <div className="border rounded-lg p-4 space-y-4 hover:shadow-elevation-2 transition-shadow bg-card">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">

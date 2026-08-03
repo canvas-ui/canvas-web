@@ -32,8 +32,8 @@ function tabLabel(pin: PinnedCanvas) {
 //   <md   — a horizontal tab strip would eat scarce viewport height, so it
 //           collapses into a round floating button docked right of the
 //           bottom-left burger toggle (same size/skin/z as MobileMenuToggle:
-//           z-[39] keeps it under every drawer scrim). Tapping it pops a
-//           restore list above; the list card matches the rail card's z-[46].
+//           z-nav keeps it under every drawer scrim). Tapping it pops a
+//           restore list above; the list card matches the rail card's z-rail.
 // Clicking a tab / list row restores its tile.
 function MinimizedTabBar({ pins, onRestore }: { pins: PinnedCanvas[]; onRestore: (id: string) => void }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -55,9 +55,9 @@ function MinimizedTabBar({ pins, onRestore }: { pins: PinnedCanvas[]; onRestore:
               type="button"
               onClick={() => onRestore(pin.id)}
               title={`Restore ${tabLabel(pin)}`}
-              className="flex max-w-[180px] shrink-0 items-center gap-1.5 rounded-t-lg border border-b-0 bg-background px-3 py-1.5 text-xs shadow-sm hover:bg-accent"
+              className="flex max-w-[180px] shrink-0 items-center gap-1.5 rounded-t-lg border border-b-0 bg-background px-3 py-1.5 text-xs shadow-elevation-1 hover:bg-accent"
             >
-              <LayoutDashboard className="h-3.5 w-3.5 shrink-0 text-violet-500" />
+              <LayoutDashboard className="h-3.5 w-3.5 shrink-0 text-primary" />
               <span className="truncate">{tabLabel(pin)}</span>
             </button>
           ))}
@@ -67,8 +67,8 @@ function MinimizedTabBar({ pins, onRestore }: { pins: PinnedCanvas[]; onRestore:
       {mobileOpen && (
         <>
           {/* Transparent click-catcher so a tap outside closes the list. */}
-          <div className="fixed inset-0 z-[45] md:hidden" onClick={() => setMobileOpen(false)} aria-hidden />
-          <div className="fixed bottom-[calc(max(0.5rem,env(safe-area-inset-bottom))+3.5rem)] left-2 z-[46] w-60 max-w-[calc(100vw-1rem)] rounded-xl border bg-card p-1.5 shadow-elevation-8 animate-fade-in md:hidden">
+          <div className="fixed inset-0 z-drawer md:hidden" onClick={() => setMobileOpen(false)} aria-hidden />
+          <div className="fixed bottom-[calc(max(0.5rem,env(safe-area-inset-bottom))+3.5rem)] left-2 z-rail w-60 max-w-[calc(100vw-1rem)] rounded-xl border bg-card p-1.5 shadow-elevation-5 animate-fade-in md:hidden">
             {pins.map((pin) => (
               <button
                 key={pin.id}
@@ -76,7 +76,7 @@ function MinimizedTabBar({ pins, onRestore }: { pins: PinnedCanvas[]; onRestore:
                 onClick={() => onRestore(pin.id)}
                 className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-accent"
               >
-                <LayoutDashboard className="h-4 w-4 shrink-0 text-violet-500" />
+                <LayoutDashboard className="h-4 w-4 shrink-0 text-primary" />
                 <span className="truncate">{tabLabel(pin)}</span>
               </button>
             ))}
@@ -89,10 +89,10 @@ function MinimizedTabBar({ pins, onRestore }: { pins: PinnedCanvas[]; onRestore:
         aria-label={mobileOpen ? 'Close minimized canvases' : `Minimized canvases (${pins.length})`}
         // left-2 (burger) + w-12 + 0.5rem gap → left-16; sizing/skin mirrors
         // MobileMenuToggle so the two read as one docked pair.
-        className="fixed bottom-[max(0.5rem,env(safe-area-inset-bottom))] left-16 z-[39] flex h-12 w-12 items-center justify-center rounded-full bg-zinc-900 text-white shadow-elevation-4 md:hidden"
+        className="fixed bottom-[max(0.5rem,env(safe-area-inset-bottom))] left-16 z-nav flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background shadow-elevation-4 md:hidden"
       >
         <LayoutDashboard className="h-5 w-5" />
-        <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-violet-500 px-1 text-[10px] font-semibold">
+        <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold">
           {pins.length}
         </span>
       </button>

@@ -41,7 +41,7 @@ export function ObjectPropertiesModal({ document, isOpen, onClose, workspaceId, 
       role="dialog"
       aria-modal="true"
       className={cn(
-        'fixed inset-0 z-50 flex items-center justify-center bg-black/50',
+        'fixed inset-0 z-50 flex items-center justify-center bg-scrim',
         fullscreen ? 'p-0' : 'p-4 max-md:p-2',
         shrinkForToolbox && 'md:right-[min(436px,90vw)]',
       )}

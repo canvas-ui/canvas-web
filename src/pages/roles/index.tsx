@@ -19,14 +19,14 @@ import { getCurrentUserFromToken } from "@/services/auth"
 // Status badge component
 function StatusBadge({ status }: { status: Role['status'] }) {
   const variants = {
-    running: { icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-50', label: 'Running' },
-    stopped: { icon: XCircle, color: 'text-gray-600', bg: 'bg-gray-50', label: 'Stopped' },
-    starting: { icon: Clock, color: 'text-blue-600', bg: 'bg-blue-50', label: 'Starting' },
-    stopping: { icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-50', label: 'Stopping' },
-    error: { icon: AlertCircle, color: 'text-red-600', bg: 'bg-red-50', label: 'Error' },
-    created: { icon: Activity, color: 'text-gray-600', bg: 'bg-gray-50', label: 'Created' },
-    configured: { icon: Activity, color: 'text-blue-600', bg: 'bg-blue-50', label: 'Configured' },
-    removed: { icon: XCircle, color: 'text-red-600', bg: 'bg-red-50', label: 'Removed' },
+    running: { icon: CheckCircle, color: 'text-success', bg: 'bg-success-subtle', label: 'Running' },
+    stopped: { icon: XCircle, color: 'text-muted-foreground', bg: 'bg-muted', label: 'Stopped' },
+    starting: { icon: Clock, color: 'text-info', bg: 'bg-info-subtle', label: 'Starting' },
+    stopping: { icon: Clock, color: 'text-warning', bg: 'bg-warning-subtle', label: 'Stopping' },
+    error: { icon: AlertCircle, color: 'text-destructive', bg: 'bg-destructive-subtle', label: 'Error' },
+    created: { icon: Activity, color: 'text-muted-foreground', bg: 'bg-muted', label: 'Created' },
+    configured: { icon: Activity, color: 'text-info', bg: 'bg-info-subtle', label: 'Configured' },
+    removed: { icon: XCircle, color: 'text-destructive', bg: 'bg-destructive-subtle', label: 'Removed' },
   }
 
   const variant = variants[status] || variants.created
@@ -178,7 +178,7 @@ export default function RolesPage() {
           {roles.map((role) => (
             <div
               key={role.id}
-              className="border rounded-lg p-6 space-y-4 hover:shadow-md transition-shadow"
+              className="border rounded-lg p-6 space-y-4 hover:shadow-elevation-2 transition-shadow"
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
@@ -265,17 +265,17 @@ export default function RolesPage() {
 
       {/* Logs Modal */}
       {selectedLogs && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg shadow-lg max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 bg-scrim flex items-center justify-center z-50">
+          <div className="bg-background rounded-lg shadow-elevation-3 max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
             <div className="p-6 border-b">
               <h2 className="text-xl font-bold">{selectedLogs.role.name} - Logs</h2>
               <p className="text-sm text-muted-foreground">{selectedLogs.role.template}</p>
             </div>
 
             <div className="flex-1 overflow-y-auto p-6">
-              <div className="bg-black text-green-400 p-4 rounded font-mono text-xs overflow-x-auto">
+              <div data-scheme="dark" className="bg-background text-success p-4 rounded font-mono text-xs overflow-x-auto">
                 {selectedLogs.logs.length === 0 ? (
-                  <div className="text-gray-500">No logs available</div>
+                  <div className="text-muted-foreground">No logs available</div>
                 ) : (
                   <pre>{selectedLogs.logs.join('\n')}</pre>
                 )}

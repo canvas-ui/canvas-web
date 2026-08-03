@@ -35,7 +35,7 @@ export function LinkCardRenderer({ document: doc, className = '' }: RendererProp
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <span className="truncate font-medium leading-tight">{title}</span>
-            {pinned && <Pin className="h-3 w-3 shrink-0 fill-amber-500 text-amber-500" />}
+            {pinned && <Pin className="h-3 w-3 shrink-0 fill-warning text-warning" />}
           </div>
           <div className="mt-0.5 truncate text-xs text-muted-foreground">{hostOf(url)}</div>
           <div className="mt-1 truncate font-mono text-[11px] text-muted-foreground/70">{url}</div>

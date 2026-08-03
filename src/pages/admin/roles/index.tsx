@@ -24,14 +24,14 @@ import { getCurrentUserFromToken } from "@/services/auth"
 // Status badge component
 function StatusBadge({ status }: { status: Role['status'] }) {
   const variants = {
-    running: { icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-50', label: 'Running' },
-    stopped: { icon: XCircle, color: 'text-gray-600', bg: 'bg-gray-50', label: 'Stopped' },
-    starting: { icon: Clock, color: 'text-blue-600', bg: 'bg-blue-50', label: 'Starting' },
-    stopping: { icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-50', label: 'Stopping' },
-    error: { icon: AlertCircle, color: 'text-red-600', bg: 'bg-red-50', label: 'Error' },
-    created: { icon: Activity, color: 'text-gray-600', bg: 'bg-gray-50', label: 'Created' },
-    configured: { icon: Activity, color: 'text-blue-600', bg: 'bg-blue-50', label: 'Configured' },
-    removed: { icon: XCircle, color: 'text-red-600', bg: 'bg-red-50', label: 'Removed' },
+    running: { icon: CheckCircle, color: 'text-success', bg: 'bg-success-subtle', label: 'Running' },
+    stopped: { icon: XCircle, color: 'text-muted-foreground', bg: 'bg-muted', label: 'Stopped' },
+    starting: { icon: Clock, color: 'text-info', bg: 'bg-info-subtle', label: 'Starting' },
+    stopping: { icon: Clock, color: 'text-warning', bg: 'bg-warning-subtle', label: 'Stopping' },
+    error: { icon: AlertCircle, color: 'text-destructive', bg: 'bg-destructive-subtle', label: 'Error' },
+    created: { icon: Activity, color: 'text-muted-foreground', bg: 'bg-muted', label: 'Created' },
+    configured: { icon: Activity, color: 'text-info', bg: 'bg-info-subtle', label: 'Configured' },
+    removed: { icon: XCircle, color: 'text-destructive', bg: 'bg-destructive-subtle', label: 'Removed' },
   }
 
   const variant = variants[status] || variants.created
@@ -49,7 +49,7 @@ function StatusBadge({ status }: { status: Role['status'] }) {
 function TypeBadge({ type }: { type: 'global' | 'workspace' }) {
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
-      type === 'global' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'
+      type === 'global' ? 'bg-accent text-primary' : 'bg-info-subtle text-info'
     }`}>
       <Server className="w-3 h-3" />
       {type === 'global' ? 'Global' : 'Workspace'}
@@ -455,8 +455,8 @@ export default function AdminRolesPage() {
 
       {/* Create Role Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg shadow-lg max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-scrim flex items-center justify-center z-50">
+          <div className="bg-background rounded-lg shadow-elevation-3 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-bold">Create New Role</h2>
@@ -541,8 +541,8 @@ export default function AdminRolesPage() {
 
       {/* Logs Modal */}
       {isLogsModalOpen && selectedRole && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg shadow-lg max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 bg-scrim flex items-center justify-center z-50">
+          <div className="bg-background rounded-lg shadow-elevation-3 max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
             <div className="p-6 border-b flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold">Role Logs</h2>
@@ -558,9 +558,9 @@ export default function AdminRolesPage() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-6">
-              <div className="bg-black text-green-400 p-4 rounded font-mono text-xs overflow-x-auto">
+              <div data-scheme="dark" className="bg-background text-success p-4 rounded font-mono text-xs overflow-x-auto">
                 {logs.length === 0 ? (
-                  <div className="text-gray-500">No logs available</div>
+                  <div className="text-muted-foreground">No logs available</div>
                 ) : (
                   <pre>{logs.join('\n')}</pre>
                 )}

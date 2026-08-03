@@ -1,8 +1,9 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Key, Share2, Monitor, Sparkles } from 'lucide-react'
+import { Key, Share2, Monitor, Sparkles, Palette } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const settingsLinks = [
+  { path: '/appearance', icon: Palette, label: 'Appearance' },
   { path: '/api-tokens', icon: Key, label: 'API Tokens' },
   { path: '/devices', icon: Monitor, label: 'Devices' },
   { path: '/embedding', icon: Sparkles, label: 'Embedding' },
@@ -16,7 +17,7 @@ export function SettingsMenu() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center px-4 h-12 border-b border-sidebar-border shrink-0">
+      <div className="flex items-center px-4 h-12 border-b border-border shrink-0">
         <span className="text-sm font-semibold">Settings</span>
       </div>
 

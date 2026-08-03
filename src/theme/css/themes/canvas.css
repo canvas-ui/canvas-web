@@ -1,0 +1,114 @@
+/**
+ * Canvas — the default theme.
+ *
+ * Preserves the app's established look: stark black-and-white surfaces with a
+ * teal support accent, sheets of white "paper" floating on a grey desk.
+ *
+ * Also serves as the reference implementation. Every token a theme may set is
+ * present here with a comment, so a new theme can be written by copying this
+ * file and changing values — nothing is inherited implicitly from a base.
+ */
+
+[data-theme='canvas'] {
+  /* Single knob; ./semantic.css derives the whole radius scale from it.
+     Everything else (type scale, motion scale, font families) is inherited
+     from ../base.css — canvas is happy with the defaults. */
+  --radius: 0.5rem;
+}
+
+/* ── Light ─────────────────────────────────────────────────────────────── */
+/* Doubled selector matches both the root (`<html data-theme data-scheme>`)
+   and any nested scope (`<div data-scheme="dark">` inside a light page), so a
+   dark toolbox docked in a light shell needs no special-casing. */
+[data-theme='canvas'][data-scheme='light'],
+[data-theme='canvas'] [data-scheme='light'] {
+  color-scheme: light;
+
+  --background: var(--p-neutral-0);
+  --foreground: var(--p-neutral-1000);
+  --card: var(--p-neutral-0);
+  --card-foreground: var(--p-neutral-1000);
+  --popover: var(--p-neutral-0);
+  --popover-foreground: var(--p-neutral-1000);
+  --desk: var(--p-neutral-200);
+
+  --primary: var(--p-neutral-1000);
+  --primary-foreground: var(--p-neutral-0);
+  --secondary: var(--p-teal-500);
+  --secondary-foreground: var(--p-neutral-1000);
+  --muted: var(--p-neutral-100);
+  --muted-foreground: var(--p-neutral-600);
+  --accent: var(--p-neutral-100);
+  --accent-foreground: var(--p-neutral-1000);
+
+  --destructive: var(--p-red-600);
+  --destructive-foreground: var(--p-neutral-0);
+  --destructive-subtle: oklch(from var(--p-red-500) 0.96 0.03 h);
+  --success: var(--p-green-600);
+  --success-foreground: var(--p-neutral-0);
+  --success-subtle: oklch(from var(--p-green-500) 0.96 0.03 h);
+  --warning: var(--p-amber-600);
+  --warning-foreground: var(--p-neutral-1000);
+  --warning-subtle: oklch(from var(--p-amber-500) 0.96 0.04 h);
+  --info: var(--p-blue-600);
+  --info-foreground: var(--p-neutral-0);
+  --info-subtle: oklch(from var(--p-blue-500) 0.96 0.03 h);
+
+  --border: var(--p-neutral-200);
+  --input: var(--p-neutral-300);
+  --ring: var(--p-neutral-1000);
+  --scrim: oklch(0 0 0 / 0.32);
+  --scrim-foreground: oklch(1 0 0);
+
+  --shadow-color: var(--p-neutral-1000);
+  --shadow-strength: 0.12;
+}
+
+/* ── Dark ──────────────────────────────────────────────────────────────── */
+[data-theme='canvas'][data-scheme='dark'],
+[data-theme='canvas'] [data-scheme='dark'] {
+  color-scheme: dark;
+
+  /* Surfaces get *lighter* as they rise, the inverse of the light scheme —
+     shadow alone cannot convey elevation on a dark background. */
+  --background: var(--p-neutral-950);
+  --foreground: var(--p-neutral-50);
+  --card: var(--p-neutral-900);
+  --card-foreground: var(--p-neutral-50);
+  --popover: var(--p-neutral-900);
+  --popover-foreground: var(--p-neutral-50);
+  --desk: var(--p-neutral-1000);
+
+  --primary: var(--p-neutral-50);
+  --primary-foreground: var(--p-neutral-950);
+  --secondary: var(--p-teal-400);
+  --secondary-foreground: var(--p-neutral-950);
+  --muted: var(--p-neutral-800);
+  --muted-foreground: var(--p-neutral-400);
+  --accent: var(--p-neutral-800);
+  --accent-foreground: var(--p-neutral-50);
+
+  /* Status hues shift lighter and less saturated: a mid-tone that passes
+     contrast on white fails badly on a near-black surface. */
+  --destructive: var(--p-red-400);
+  --destructive-foreground: var(--p-neutral-950);
+  --destructive-subtle: oklch(from var(--p-red-500) 0.28 0.07 h);
+  --success: var(--p-green-400);
+  --success-foreground: var(--p-neutral-950);
+  --success-subtle: oklch(from var(--p-green-500) 0.28 0.06 h);
+  --warning: var(--p-amber-400);
+  --warning-foreground: var(--p-neutral-950);
+  --warning-subtle: oklch(from var(--p-amber-500) 0.28 0.06 h);
+  --info: var(--p-blue-400);
+  --info-foreground: var(--p-neutral-950);
+  --info-subtle: oklch(from var(--p-blue-500) 0.28 0.07 h);
+
+  --border: var(--p-neutral-800);
+  --input: var(--p-neutral-700);
+  --ring: var(--p-neutral-400);
+  --scrim: oklch(0 0 0 / 0.6);
+  --scrim-foreground: oklch(1 0 0);
+
+  --shadow-color: oklch(0 0 0);
+  --shadow-strength: 0.5;
+}

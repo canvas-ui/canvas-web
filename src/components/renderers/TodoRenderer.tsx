@@ -33,7 +33,7 @@ export function TodoRenderer({ document: doc, workspaceId, className = '' }: Ren
           disabled={isPublic || busy}
           aria-pressed={done}
           title={done ? 'Mark not done' : 'Mark done'}
-          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${done ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-input hover:border-emerald-500'} ${isPublic ? 'cursor-default opacity-70' : ''}`}
+          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${done ? 'border-success bg-success text-success-foreground' : 'border-input hover:border-success'} ${isPublic ? 'cursor-default opacity-70' : ''}`}
         >
           {done && <Check className="h-3.5 w-3.5" />}
         </button>

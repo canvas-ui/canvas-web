@@ -429,7 +429,7 @@ export default function ContextsPage() {
               </label>
               <select
                 id="workspace"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+                className="w-full px-3 py-2 border border-border rounded-md shadow-elevation-1 focus:outline-none focus:ring-primary focus:border-primary"
                 value={selectedWorkspaceId}
                 onChange={(e) => setSelectedWorkspaceId(e.target.value)}
                 disabled={isCreating || workspaces.length === 0}
@@ -560,7 +560,7 @@ export default function ContextsPage() {
                     <TableRow key={`${context.userId}-${context.id}`}>
                       <TableCell>
                         {isShared ? (
-                          <div className="flex items-center gap-1 text-blue-600" title={`Shared with you (${accessLevel})`}>
+                          <div className="flex items-center gap-1 text-info" title={`Shared with you (${accessLevel})`}>
                             <Share2 className="h-4 w-4" />
                             <span className="text-xs">Shared</span>
                           </div>

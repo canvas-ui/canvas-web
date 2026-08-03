@@ -41,7 +41,7 @@ export function ContextList() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-4 h-12 border-b border-sidebar-border shrink-0">
+      <div className="flex items-center justify-between px-4 h-12 border-b border-border shrink-0">
         <span className="text-sm font-semibold">Contexts</span>
         <button
           type="button"
@@ -70,7 +70,7 @@ export function ContextList() {
                   key={`${ctx.userId || 'u'}-${ctx.id}`}
                   {...rowProps(index)}
                   className={cn(
-                    'group relative rounded-md py-2.5 pl-3 pr-7 transition-all shadow-sm',
+                    'group relative rounded-md py-2.5 pl-3 pr-7 transition-all shadow-elevation-1',
                     isWorkspaceActive
                       ? 'cursor-pointer hover:shadow ' + (isActive ? 'bg-accent shadow' : 'bg-card hover:bg-accent/50')
                       : 'cursor-not-allowed opacity-50 bg-card',
@@ -113,7 +113,7 @@ export function ContextList() {
                     />
                     <span className="text-sm font-medium truncate flex-1">{ctx.name || ctx.id}</span>
                     {isShared && (
-                      <span className="rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[9px] text-blue-700 shrink-0">
+                      <span className="rounded-full bg-info/10 px-1.5 py-0.5 text-[9px] text-info shrink-0">
                         Shared
                       </span>
                     )}

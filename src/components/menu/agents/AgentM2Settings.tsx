@@ -290,7 +290,7 @@ export function AgentM2Settings() {
       />
 
       {/* Tab bar */}
-      <div className="flex overflow-x-auto border-b border-sidebar-border shrink-0 scrollbar-none">
+      <div className="flex overflow-x-auto border-b border-border shrink-0 scrollbar-none">
         {TABS.map(t => (
           <button
             key={t.id}
@@ -443,7 +443,7 @@ export function AgentM2Settings() {
               </div>
             </div>
             {['Governance', 'Memory Management', 'Subagent / Tool Use'].map(label => (
-              <div key={label} className="border border-dashed border-sidebar-border rounded-md p-3">
+              <div key={label} className="border border-dashed border-border rounded-md p-3">
                 <div className="text-xs font-semibold text-muted-foreground">{label} Model</div>
                 <div className="text-[10px] text-muted-foreground mt-1">Coming soon</div>
               </div>
@@ -460,7 +460,7 @@ export function AgentM2Settings() {
                   <div className="text-xs text-muted-foreground">No skills installed</div>
                 ) : (
                   skills.map(skill => (
-                    <div key={skill.name} className="border border-sidebar-border rounded-md p-2 text-xs">
+                    <div key={skill.name} className="border border-border rounded-md p-2 text-xs">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <div className="font-medium truncate">{skill.name}</div>
@@ -490,7 +490,7 @@ export function AgentM2Settings() {
               </div>
 
               {!isCreate && (
-                <div className="mt-3 space-y-2 rounded-md border border-sidebar-border p-3">
+                <div className="mt-3 space-y-2 rounded-md border border-border p-3">
                   <div>
                     <label className="text-xs font-medium text-muted-foreground">Package Source</label>
                     <Input
@@ -542,7 +542,7 @@ export function AgentM2Settings() {
               <div className="text-xs text-muted-foreground">No MCP servers configured</div>
             ) : (
               (agent?.config?.mcp?.servers || []).map((s, i) => (
-                <div key={i} className="border border-sidebar-border rounded-md p-2 text-xs">
+                <div key={i} className="border border-border rounded-md p-2 text-xs">
                   <div className="font-medium">{s.name}</div>
                   <div className="text-muted-foreground font-mono">{s.command} {(s.args || []).join(' ')}</div>
                 </div>
@@ -553,7 +553,7 @@ export function AgentM2Settings() {
 
         {tab === 'memory' && (
           <div className="p-4">
-            <div className="border border-dashed border-sidebar-border rounded-md p-4 text-center">
+            <div className="border border-dashed border-border rounded-md p-4 text-center">
               <div className="text-xs font-medium text-muted-foreground">Memory Engine</div>
               <div className="text-[10px] text-muted-foreground mt-1">Loop-based memory management. Settings coming soon.</div>
             </div>
@@ -562,7 +562,7 @@ export function AgentM2Settings() {
 
         {tab === 'integrations' && (
           <div className="p-4">
-            <div className="border border-dashed border-sidebar-border rounded-md p-4 text-center">
+            <div className="border border-dashed border-border rounded-md p-4 text-center">
               <div className="text-xs font-medium text-muted-foreground">Integrations</div>
               <div className="text-[10px] text-muted-foreground mt-1">IMAP, chat, SQL, REST API accounts. Coming soon.</div>
             </div>
@@ -571,7 +571,7 @@ export function AgentM2Settings() {
       </div>
 
       {/* Footer actions */}
-      <div className="p-3 border-t border-sidebar-border shrink-0 space-y-2">
+      <div className="p-3 border-t border-border shrink-0 space-y-2">
         <Button
           type="button"
           className="w-full h-8 text-sm"

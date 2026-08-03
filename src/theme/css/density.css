@@ -1,0 +1,69 @@
+/**
+ * Density overrides.
+ *
+ * Separate from ./layout.css because of where it must sit in the cascade.
+ * Every selector here is a single attribute — specificity (0,1,0) — identical
+ * to `:root` and to a theme's `[data-theme='…']` block. At equal specificity
+ * the cascade falls back to source order, so the file that is imported last
+ * wins. Density is the user's explicit choice, so it is imported after the
+ * themes and wins over a theme's own layout preferences.
+ *
+ * (This file exists because getting that order wrong is silent: the tokens
+ * still resolve, they just resolve to the loser's value.)
+ */
+
+[data-density='compact'] {
+  --layout-rail-width: 2.75rem;
+  --layout-menu-panel-width: 16rem;
+  --layout-menu-subpanel-width: 18rem;
+  --layout-toolbox-rail-width: 2.75rem;
+  --layout-toolbox-panel-width: 28rem;
+
+  --control-height-sm: 1.5rem;
+  --control-height-md: 1.875rem;
+  --control-height-lg: 2.25rem;
+  --touch-target-min: 1.875rem;
+
+  --layout-gap-shell: 0.375rem;
+  --layout-pad-page: 1rem;
+  --layout-pad-card: 0.75rem;
+  --layout-row-height: 1.875rem;
+
+  --motion-scale: 0.8;
+}
+
+[data-density='touch'] {
+  --layout-rail-width: 3.5rem;
+  --layout-menu-panel-width: 19rem;
+  --layout-menu-subpanel-width: 22rem;
+  --layout-toolbox-rail-width: 3.5rem;
+  --layout-toolbox-panel-width: 34rem;
+
+  --control-height-sm: 2.25rem;
+  --control-height-md: 2.75rem;
+  --control-height-lg: 3.25rem;
+  --touch-target-min: 2.75rem;
+
+  --layout-gap-shell: 0.625rem;
+  --layout-pad-page: 1.25rem;
+  --layout-pad-card: 1.125rem;
+  --layout-row-height: 2.75rem;
+}
+
+/**
+ * Coarse-pointer floor.
+ *
+ * Applies only when density has NOT been set explicitly (`data-density="auto"`
+ * or absent), so a user who deliberately chose `compact` on a touchscreen
+ * keeps it. Without this, plugging the app into a phone renders desktop-sized
+ * 28px hit targets that are genuinely hard to tap.
+ */
+@media (pointer: coarse) {
+  :root:not([data-density='compact']):not([data-density='comfortable']):not([data-density='touch']) {
+    --control-height-sm: 2.25rem;
+    --control-height-md: 2.75rem;
+    --control-height-lg: 3.25rem;
+    --touch-target-min: 2.75rem;
+    --layout-row-height: 2.75rem;
+  }
+}

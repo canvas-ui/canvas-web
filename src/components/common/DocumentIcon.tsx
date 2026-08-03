@@ -24,6 +24,13 @@ import type { Document } from '@/types/workspace'
 // the otherwise monochrome UI: each abstraction owns a hue, files pick theirs
 // from the mime type. The same hues will later color context/directory path
 // cues in the multi-context layout — keep this map the single source of truth.
+//
+// Hues come from the theme's categorical data palette (--color-data-N), not
+// from semantic roles. A to-do is not "success" and a PDF is not "danger" —
+// they are just different categories, and borrowing a status colour for them
+// made the UI say things it didn't mean. The palette is contrast-tuned per
+// scheme and collapses toward the foreground under the high-contrast theme;
+// see src/theme/css/data-palette.css.
 
 interface IconSpec {
   Icon: LucideIcon
@@ -31,32 +38,55 @@ interface IconSpec {
   chip: string // soft background for the chip variant
 }
 
+// Written out literally rather than built with a template string: Tailwind
+// discovers classes by scanning source text, so an interpolated
+// `text-data-${n}` would compile to nothing at all.
+const DATA_SLOTS = [
+  { color: 'text-data-1', chip: 'bg-data-1/15' },
+  { color: 'text-data-2', chip: 'bg-data-2/15' },
+  { color: 'text-data-3', chip: 'bg-data-3/15' },
+  { color: 'text-data-4', chip: 'bg-data-4/15' },
+  { color: 'text-data-5', chip: 'bg-data-5/15' },
+  { color: 'text-data-6', chip: 'bg-data-6/15' },
+  { color: 'text-data-7', chip: 'bg-data-7/15' },
+  { color: 'text-data-8', chip: 'bg-data-8/15' },
+  { color: 'text-data-9', chip: 'bg-data-9/15' },
+  { color: 'text-data-10', chip: 'bg-data-10/15' },
+  { color: 'text-data-11', chip: 'bg-data-11/15' },
+  { color: 'text-data-12', chip: 'bg-data-12/15' },
+] as const
+
+/** Pair the glyph and chip colours so a slot can never be half-applied. */
+function slot(Icon: LucideIcon, n: number): IconSpec {
+  return { Icon, ...DATA_SLOTS[n - 1] }
+}
+
 const SPECS: Record<string, IconSpec> = {
-  tab: { Icon: Globe, color: 'text-sky-500', chip: 'bg-sky-500/15' },
-  link: { Icon: Globe, color: 'text-sky-500', chip: 'bg-sky-500/15' },
-  email: { Icon: Mail, color: 'text-amber-500', chip: 'bg-amber-500/15' },
-  note: { Icon: StickyNote, color: 'text-yellow-500', chip: 'bg-yellow-500/15' },
-  todo: { Icon: CheckSquare, color: 'text-green-500', chip: 'bg-green-500/15' },
-  message: { Icon: MessageSquare, color: 'text-cyan-500', chip: 'bg-cyan-500/15' },
-  contact: { Icon: User, color: 'text-orange-500', chip: 'bg-orange-500/15' },
-  device: { Icon: Monitor, color: 'text-violet-500', chip: 'bg-violet-500/15' },
-  application: { Icon: Package, color: 'text-purple-500', chip: 'bg-purple-500/15' },
-  dotfile: { Icon: Settings2, color: 'text-lime-600', chip: 'bg-lime-500/15' },
-  document: { Icon: FileText, color: 'text-indigo-500', chip: 'bg-indigo-500/15' },
+  tab: slot(Globe, 7),
+  link: slot(Globe, 7),
+  email: slot(Mail, 3),
+  note: slot(StickyNote, 3),
+  todo: slot(CheckSquare, 5),
+  message: slot(MessageSquare, 6),
+  contact: slot(User, 2),
+  device: slot(Monitor, 10),
+  application: slot(Package, 11),
+  dotfile: slot(Settings2, 4),
+  document: slot(FileText, 9),
 }
 
 const FILE_BY_MIME: Array<{ test: RegExp; spec: IconSpec }> = [
-  { test: /^image\//, spec: { Icon: Image, color: 'text-emerald-500', chip: 'bg-emerald-500/15' } },
-  { test: /^video\//, spec: { Icon: Film, color: 'text-rose-500', chip: 'bg-rose-500/15' } },
-  { test: /^audio\//, spec: { Icon: Music, color: 'text-fuchsia-500', chip: 'bg-fuchsia-500/15' } },
-  { test: /pdf$/, spec: { Icon: FileText, color: 'text-red-500', chip: 'bg-red-500/15' } },
-  { test: /zip|tar|gzip|7z|rar|compressed/, spec: { Icon: FileArchive, color: 'text-stone-500', chip: 'bg-stone-500/15' } },
-  { test: /json|javascript|typescript|xml|html|css|x-sh|python/, spec: { Icon: FileCode, color: 'text-teal-500', chip: 'bg-teal-500/15' } },
-  { test: /^text\//, spec: { Icon: FileText, color: 'text-slate-500', chip: 'bg-slate-500/15' } },
+  { test: /^image\//, spec: slot(Image, 5) },
+  { test: /^video\//, spec: slot(Film, 11) },
+  { test: /^audio\//, spec: slot(Music, 10) },
+  { test: /pdf$/, spec: slot(FileText, 1) },
+  { test: /zip|tar|gzip|7z|rar|compressed/, spec: slot(FileArchive, 12) },
+  { test: /json|javascript|typescript|xml|html|css|x-sh|python/, spec: slot(FileCode, 6) },
+  { test: /^text\//, spec: slot(FileText, 12) },
 ]
 
-const FILE_FALLBACK: IconSpec = { Icon: File, color: 'text-teal-600', chip: 'bg-teal-500/15' }
-const GENERIC: IconSpec = { Icon: File, color: 'text-indigo-500', chip: 'bg-indigo-500/15' }
+const FILE_FALLBACK: IconSpec = slot(File, 6)
+const GENERIC: IconSpec = slot(File, 9)
 
 export function getDocumentIconSpec(doc: Pick<Document, 'schema' | 'metadata'>): IconSpec {
   const kind = (doc.schema || '').split('/').pop() || ''

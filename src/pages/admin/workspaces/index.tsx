@@ -247,7 +247,7 @@ export default function AdminWorkspacesPage() {
           <select
             value={filters.owner}
             onChange={(e) => setFilters(prev => ({ ...prev, owner: e.target.value }))}
-            className="px-3 py-2 border border-gray-300 rounded-md"
+            className="px-3 py-2 border border-border rounded-md"
           >
             <option value="">All Owners</option>
             {uniqueOwners.map(owner => (
@@ -257,7 +257,7 @@ export default function AdminWorkspacesPage() {
           <select
             value={filters.type}
             onChange={(e) => setFilters(prev => ({ ...prev, type: e.target.value }))}
-            className="px-3 py-2 border border-gray-300 rounded-md"
+            className="px-3 py-2 border border-border rounded-md"
           >
             <option value="">All Types</option>
             <option value="workspace">Workspace</option>
@@ -266,7 +266,7 @@ export default function AdminWorkspacesPage() {
           <select
             value={filters.status}
             onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-            className="px-3 py-2 border border-gray-300 rounded-md"
+            className="px-3 py-2 border border-border rounded-md"
           >
             <option value="">All Statuses</option>
             <option value="active">Active</option>
@@ -327,8 +327,8 @@ export default function AdminWorkspacesPage() {
                       <td className="p-3">
                         <span className={`px-2 py-1 rounded-full text-xs ${
                           workspace.type === 'universe'
-                            ? 'bg-purple-100 text-purple-800'
-                            : 'bg-blue-100 text-blue-800'
+                            ? 'bg-accent text-primary'
+                            : 'bg-info-subtle text-info'
                         }`}>
                           {workspace.type}
                         </span>
@@ -336,10 +336,10 @@ export default function AdminWorkspacesPage() {
                       <td className="p-3">
                         <span className={`px-2 py-1 rounded-full text-xs ${
                           workspace.status === 'active'
-                            ? 'bg-green-100 text-green-800'
+                            ? 'bg-success-subtle text-success'
                             : workspace.status === 'inactive'
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : 'bg-red-100 text-red-800'
+                            ? 'bg-warning-subtle text-warning'
+                            : 'bg-destructive-subtle text-destructive'
                         }`}>
                           {workspace.status}
                         </span>
@@ -409,8 +409,8 @@ export default function AdminWorkspacesPage() {
 
       {/* Create Workspace Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+        <div className="fixed inset-0 bg-scrim flex items-center justify-center z-50">
+          <div className="bg-card rounded-lg p-6 w-full max-w-md mx-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">Create New Workspace</h3>
               <Button variant="ghost" size="sm" onClick={closeModal}>
@@ -426,7 +426,7 @@ export default function AdminWorkspacesPage() {
                   value={formData.userId}
                   onChange={(e) => setFormData(prev => ({ ...prev, userId: e.target.value }))}
                   disabled={isCreating || isLoadingUsers}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 border border-border rounded-md"
                   required
                 >
                   <option value="">Select a user...</option>
@@ -488,7 +488,7 @@ export default function AdminWorkspacesPage() {
                   value={formData.type}
                   onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value as 'workspace' | 'universe' }))}
                   disabled={isCreating}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 border border-border rounded-md"
                 >
                   <option value="workspace">Workspace</option>
                   <option value="universe">Universe</option>

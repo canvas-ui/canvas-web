@@ -1,0 +1,56 @@
+/**
+ * Tier 3 — Component tokens.
+ *
+ * The escape valve between "one global radius knob" and "fork the component".
+ * A theme that wants square buttons but round cards, or a 3px focus ring, sets
+ * these; component source never changes.
+ *
+ * Defaults all derive from Tier 2, so a theme that ignores this file entirely
+ * still gets a coherent result — these only matter when a theme wants a
+ * component to diverge from the global rhythm.
+ *
+ * Rule for adding one: only when a component genuinely needs to vary
+ * independently of the semantic scale. Anything that should move in lockstep
+ * with the rest of the UI belongs in Tier 2, not here.
+ */
+
+:root {
+  /* ── Focus ───────────────────────────────────────────────────────────── */
+  /* Focus is an accessibility guarantee, not decoration. It gets its own
+     tokens so a high-contrast theme can thicken the ring globally. */
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --focus-ring-color: var(--ring);
+
+  /* ── Button ──────────────────────────────────────────────────────────── */
+  --btn-radius: var(--radius-md);
+  --btn-height: var(--control-height-md);
+  --btn-padding-x: 1rem;
+  --btn-font-weight: 500;
+  --btn-border-width: 1px;
+
+  /* ── Input ───────────────────────────────────────────────────────────── */
+  --input-radius: var(--radius-md);
+  --input-height: var(--control-height-md);
+  --input-border-width: 1px;
+
+  /* ── Card ────────────────────────────────────────────────────────────── */
+  --card-radius: var(--radius-lg);
+  --card-border-width: 1px;
+  --card-padding: var(--layout-pad-card);
+  --card-shadow: var(--shadow-elevation-1);
+
+  /* ── Sheet — the "page" surfaces float on the desk ───────────────────── */
+  --sheet-radius: var(--radius-xl);
+  --sheet-shadow: var(--shadow-elevation-2);
+
+  /* ── Panel — docked drawers and side panels ──────────────────────────── */
+  --panel-radius: var(--radius-xl);
+  --panel-shadow: var(--shadow-elevation-4);
+  --panel-shadow-overlay: var(--shadow-elevation-5);
+
+  /* ── Row — tree nodes, list items, table rows ────────────────────────── */
+  --row-radius: var(--radius-sm);
+  --row-height: var(--layout-row-height);
+  --row-padding-x: 0.5rem;
+}

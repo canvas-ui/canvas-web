@@ -1,0 +1,39 @@
+/**
+ * Elevation.
+ *
+ * Replaces the old Material-v2 ladder (0,1,2,3,4,6,8,12,16,24 — ten steps, of
+ * which the app only ever used six, inconsistently). This is the Material 3 /
+ * Fluent convention: six levels, 0–5, each with a defined meaning. Picking a
+ * level is now a statement about what the surface *is*, not how dark you want
+ * the shadow.
+ *
+ *   0  flush          flat against its parent, no lift
+ *   1  raised         cards, list rows, form panels resting on the page
+ *   2  sticky         docked panels, toolbars, headers that scroll over content
+ *   3  floating       FABs, inline menus, drag previews
+ *   4  overlay        drawers and side sheets over a scrim
+ *   5  modal          dialogs and mobile full-screen drawers — the top of the stack
+ *
+ * Shadows are built from a themed colour (`--shadow-color`) rather than a
+ * hardcoded black. Dark themes need a near-black *and* a lighter rim to read
+ * as elevated, since a black shadow on a dark surface is invisible.
+ */
+
+@theme inline {
+  --shadow-elevation-0: none;
+  --shadow-elevation-1:
+    0 1px 2px -1px oklch(from var(--shadow-color) l c h / var(--shadow-strength)),
+    0 1px 3px 0 oklch(from var(--shadow-color) l c h / calc(var(--shadow-strength) * 0.7));
+  --shadow-elevation-2:
+    0 2px 4px -2px oklch(from var(--shadow-color) l c h / var(--shadow-strength)),
+    0 4px 6px -1px oklch(from var(--shadow-color) l c h / calc(var(--shadow-strength) * 0.7));
+  --shadow-elevation-3:
+    0 4px 6px -4px oklch(from var(--shadow-color) l c h / var(--shadow-strength)),
+    0 10px 15px -3px oklch(from var(--shadow-color) l c h / calc(var(--shadow-strength) * 0.7));
+  --shadow-elevation-4:
+    0 8px 10px -6px oklch(from var(--shadow-color) l c h / var(--shadow-strength)),
+    0 20px 25px -5px oklch(from var(--shadow-color) l c h / calc(var(--shadow-strength) * 0.7));
+  --shadow-elevation-5:
+    0 16px 20px -8px oklch(from var(--shadow-color) l c h / calc(var(--shadow-strength) * 1.1)),
+    0 32px 48px -12px oklch(from var(--shadow-color) l c h / calc(var(--shadow-strength) * 0.9));
+}

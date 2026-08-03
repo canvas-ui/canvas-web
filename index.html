@@ -7,6 +7,40 @@
     <!-- manifest link injected by vite-plugin-pwa (generated manifest.webmanifest, incl. share_target) -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Canvas | Contextualize your unstructured Universe!</title>
+    <!--
+      Theme boot. Must stay inline and stay here — a blocking script in <head>
+      is the only thing that runs before first paint. Deferred to the React
+      provider, a dark-theme user would get a full white frame on every load.
+
+      Kept dependency-free and duplicated from src/theme/ on purpose: importing
+      a module here would make it async, which defeats the entire point. It
+      only mirrors the storage key and the attribute names; everything else
+      lives in the theme module. Failing open to the defaults is fine — the
+      provider corrects the attributes on mount.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('canvas.ui.theme')
+          var prefs = stored ? JSON.parse(stored) : {}
+          var themes = ['canvas', 'nord', 'contrast', 'terminal']
+          var theme = themes.indexOf(prefs.theme) !== -1 ? prefs.theme : 'canvas'
+          var scheme = prefs.scheme
+          if (scheme !== 'light' && scheme !== 'dark') {
+            scheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+          }
+          var densities = ['auto', 'compact', 'comfortable', 'touch']
+          var density = densities.indexOf(prefs.density) !== -1 ? prefs.density : 'auto'
+          var root = document.documentElement
+          root.dataset.theme = theme
+          root.dataset.scheme = scheme
+          root.dataset.density = density
+        } catch (e) {
+          document.documentElement.dataset.theme = 'canvas'
+          document.documentElement.dataset.density = 'auto'
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

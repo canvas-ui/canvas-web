@@ -22,8 +22,8 @@ type StatusFilter = PendingActionStatus | 'all'
 const STATUS_FILTERS: StatusFilter[] = ['pending', 'approved', 'declined', 'failed', 'expired', 'all']
 
 const STATUS_STYLES: Record<PendingActionStatus, string> = {
-  pending: 'text-amber-600 dark:text-amber-500',
-  approved: 'text-green-600 dark:text-green-500',
+  pending: 'text-warning dark:text-warning',
+  approved: 'text-success dark:text-success',
   declined: 'text-muted-foreground',
   failed: 'text-destructive',
   expired: 'text-muted-foreground line-through',
@@ -78,7 +78,7 @@ function AmendEditor({ action, amend, onAmend }: AmendEditorProps) {
             <span className="font-medium text-muted-foreground">
               {fieldLabel(path)}
               <span className="ml-1.5 font-mono text-[10px] opacity-60">{path}</span>
-              {path in amend && <span className="ml-1.5 text-amber-600 dark:text-amber-500">edited</span>}
+              {path in amend && <span className="ml-1.5 text-warning dark:text-warning">edited</span>}
             </span>
             {long ? (
               <textarea

@@ -14,9 +14,9 @@ import { DEFAULT_WORKSPACE_ICON, type LayerStyle } from '@/lib/layer-style'
 
 function StatusDot({ status }: { status: string }) {
   const color =
-    status === 'active' ? 'bg-green-500' :
-    status === 'error' ? 'bg-red-500' :
-    'bg-gray-400'
+    status === 'active' ? 'bg-success' :
+    status === 'error' ? 'bg-destructive' :
+    'bg-muted-foreground'
 
   return <span className={cn('inline-block w-2 h-2 rounded-full shrink-0', color)} title={status} />
 }
@@ -102,7 +102,7 @@ export function WorkspaceList() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 h-12 border-b border-sidebar-border shrink-0">
+      <div className="flex items-center justify-between px-4 h-12 border-b border-border shrink-0">
         <span className="text-sm font-semibold">Workspaces</span>
         <button
           type="button"
@@ -133,7 +133,7 @@ export function WorkspaceList() {
                   key={ws.id || ws.name}
                   {...rowProps(index)}
                   className={cn(
-                    'group relative rounded-md py-2.5 pl-3 pr-7 transition-all shadow-sm',
+                    'group relative rounded-md py-2.5 pl-3 pr-7 transition-all shadow-elevation-1',
                     isActive
                       ? 'bg-accent shadow cursor-pointer hover:shadow'
                       : isInactive

@@ -47,6 +47,18 @@ export const DEFAULT_CANVAS_ICON = 'ph:squares-four-fill'
 export const DEFAULT_WORKSPACE_ICON = 'ph:stack-fill'
 
 // A small, friendly swatch palette for layer colors.
+//
+// Deliberately literal hex, and deliberately NOT theme tokens: a layer colour
+// is user data. The chosen value is persisted server-side in
+// `metadata.ui.color` and round-trips through `<input type="color">`, which
+// only accepts a literal `#rrggbb`. Swapping these for `var(--…)` would write
+// an unresolvable string into the database and break the picker.
+//
+// The consequence is that layer colours do not follow the theme. That is the
+// correct trade — they are the user's choice, not the designer's. Rendering
+// code compensates for contrast instead: see `onAccentTextClass` in
+// utils/color.ts, which picks a readable glyph colour against whatever the
+// user picked.
 export const LAYER_COLORS = [
   '#ef4444', '#f97316', '#f59e0b', '#eab308',
   '#84cc16', '#22c55e', '#14b8a6', '#06b6d4',

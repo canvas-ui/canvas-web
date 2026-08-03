@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { useToolbox } from '@/components/toolbox/toolbox-context'
 import { useToast } from '@/components/ui/toast-container'
 import { timelineColor } from '@/lib/timeline-meta'
+import { onAccentTextClass } from '@/utils/color'
 import { fetchTimelineHistogram, type TimelineHistogramBucket } from '@/services/workspace'
 import { buildGeoFilters, getTimelineRanges, type TimelineRange } from '@/types/workspace'
 
@@ -361,7 +362,7 @@ function TimelineRail({ quickFilterKey, activeRangeCount, onSelectRanges, histog
                   ? 'bg-primary text-primary-foreground'
                   : row.isNow
                     ? 'bg-primary/10 text-primary hover:bg-primary/20'
-                    : 'bg-card text-foreground hover:bg-muted shadow-sm',
+                    : 'bg-card text-foreground hover:bg-muted shadow-elevation-1',
               )}
             >
               {row.isNow && <Clock className="w-3 h-3 shrink-0" />}
@@ -584,13 +585,13 @@ function TimelineToggle({ label, checked, onChange, color }: TimelineToggleProps
       <div
         className={cn(
           'relative w-10 h-5 rounded-full transition-colors shrink-0',
-          !checked && 'bg-zinc-300 dark:bg-zinc-600',
+          !checked && 'bg-accent dark:bg-muted-foreground',
         )}
         style={checked ? { backgroundColor: color } : undefined}
       >
         <div
           className={cn(
-            'absolute top-[2px] w-4 h-4 rounded-full bg-white shadow transition-transform',
+            'absolute top-[2px] w-4 h-4 rounded-full bg-background shadow-elevation-1 transition-transform',
             checked ? 'translate-x-[22px]' : 'translate-x-[2px]',
           )}
         />
@@ -893,7 +894,7 @@ export function TimelineTab() {
                       style={checked ? { backgroundColor: color, borderColor: color } : undefined}
                     >
                       {checked && (
-                        <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 10" fill="none">
+                        <svg className={cn('w-2.5 h-2.5', onAccentTextClass(color))} viewBox="0 0 10 10" fill="none">
                           <path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                       )}

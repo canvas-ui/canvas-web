@@ -1,0 +1,133 @@
+/**
+ * Motion.
+ *
+ * Durations are expressed by *intent*, not by number, so a theme can make the
+ * whole UI feel faster or calmer with one multiplier instead of auditing every
+ * transition. `--motion-scale` is that multiplier: themes and the density
+ * setting adjust it, and `prefers-reduced-motion` drives it to zero.
+ *
+ * Reduced motion is handled here once, globally, rather than being each
+ * component's problem — a component that opts into a duration token is
+ * automatically compliant.
+ */
+
+@theme inline {
+  /* ── Durations ───────────────────────────────────────────────────────── */
+  --duration-instant: calc(70ms * var(--motion-scale));
+  --duration-fast: calc(120ms * var(--motion-scale));
+  --duration-normal: calc(200ms * var(--motion-scale));
+  --duration-slow: calc(320ms * var(--motion-scale));
+  --duration-deliberate: calc(480ms * var(--motion-scale));
+
+  /* ── Easings ─────────────────────────────────────────────────────────── */
+  /* standard   — the default for anything that starts and ends on screen
+     decelerate — elements entering the viewport (fast in, gentle landing)
+     accelerate — elements leaving (gentle start, fast exit)
+     emphasized — Material 3's signature curve for large, attention-drawing moves
+     spring     — slight overshoot; for direct-manipulation affordances only */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-decelerate: cubic-bezier(0, 0, 0, 1);
+  --ease-accelerate: cubic-bezier(0.3, 0, 1, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ── Keyframe animations ─────────────────────────────────────────────── */
+  --animate-fade-in: fade-in var(--duration-normal) var(--ease-decelerate);
+  --animate-fade-out: fade-out var(--duration-fast) var(--ease-accelerate);
+  --animate-card-in: card-in var(--duration-slow) var(--ease-decelerate);
+  --animate-slide-in-up: slide-in-up var(--duration-slow) var(--ease-decelerate);
+  --animate-slide-in-down: slide-in-down var(--duration-slow) var(--ease-decelerate);
+  --animate-scale-in: scale-in var(--duration-normal) var(--ease-decelerate);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(1rem) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes slide-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-in-down {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/**
+ * Reduced motion.
+ *
+ * Zeroing --motion-scale collapses every duration token, which covers all
+ * token-driven transitions. The explicit overrides below catch the rest:
+ * third-party animations (Radix, CodeMirror, Leaflet) and anything using a
+ * literal duration. Animations are not removed outright — `animation: none`
+ * would break components that rely on `animationend` to unmount — they are
+ * reduced to a single instantaneous frame.
+ *
+ * `.motion-safe-always` is the documented escape hatch for genuinely essential
+ * motion, e.g. a spinner that is the only signal that work is in progress.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root,
+  [data-scheme],
+  [data-theme] {
+    --motion-scale: 0;
+  }
+
+  *:not(.motion-safe-always),
+  *:not(.motion-safe-always)::before,
+  *:not(.motion-safe-always)::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -22,19 +22,19 @@ function mergeLogBuffer(entries: AdminLogEntry[]) {
 function getLogLineColor(entry: AdminLogEntry) {
   switch (entry.levelLabel) {
     case "fatal":
-      return "text-red-300"
+      return "text-destructive"
     case "error":
-      return "text-red-400"
+      return "text-destructive"
     case "warn":
-      return "text-yellow-300"
+      return "text-warning"
     case "info":
-      return "text-sky-300"
+      return "text-info"
     case "debug":
-      return "text-slate-300"
+      return "text-muted-foreground"
     case "trace":
-      return "text-zinc-500"
+      return "text-muted-foreground"
     default:
-      return "text-green-400"
+      return "text-success"
   }
 }
 
@@ -159,7 +159,7 @@ export default function AdminLogsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 text-sm">
-          <Activity className={`w-4 h-4 ${isStreaming ? "text-green-600" : "text-muted-foreground"}`} />
+          <Activity className={`w-4 h-4 ${isStreaming ? "text-success" : "text-muted-foreground"}`} />
           <span className="text-muted-foreground">
             {isPaused ? "Paused" : isStreaming ? "Streaming" : "Disconnected"}
           </span>
@@ -251,12 +251,13 @@ export default function AdminLogsPage() {
       <div className="border rounded-lg overflow-hidden">
         <div
           ref={logContainerRef}
-          className="bg-black text-green-400 font-mono text-xs h-[65vh] overflow-auto p-4"
+          data-scheme="dark"
+          className="bg-background text-success font-mono text-xs h-[65vh] overflow-auto p-4 rounded-md"
         >
           {isLoading ? (
-            <div className="text-gray-500">Loading logs...</div>
+            <div className="text-muted-foreground">Loading logs...</div>
           ) : logs.length === 0 ? (
-            <div className="text-gray-500">No logs available</div>
+            <div className="text-muted-foreground">No logs available</div>
           ) : (
             <div className="whitespace-pre-wrap break-words">
               {logs.map((entry, index) => (

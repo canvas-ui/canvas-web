@@ -1,0 +1,86 @@
+/**
+ * Layout & density.
+ *
+ * This is what lets a theme change *shape*, not just colour. Shell geometry,
+ * control sizing and spacing rhythm are all tokens, so a theme (or the density
+ * setting) can turn a roomy touch layout into a dense desktop one without any
+ * component knowing it happened.
+ *
+ * Density is a first-class axis, independent of theme and colour scheme:
+ *
+ *   compact      information-dense desktop work — the file manager, admin tables
+ *   comfortable  the default; balanced for mouse use
+ *   touch        finger-sized targets for phones, tablets and Tauri on a 2-in-1
+ *
+ * `touch` is not merely "bigger". Hit targets go to 44px (the floor both Apple
+ * HIG and Material accessibility guidance land on), and rails widen enough that
+ * an icon button clears its neighbours by more than a fingertip's slop.
+ */
+
+@theme inline {
+  /* ── Shell geometry ──────────────────────────────────────────────────── */
+  /* Named for role, not for the old m0/m1/t0/t1 shorthand, which required a
+     lookup table to read. No aliases: every call site was migrated. */
+  --spacing-rail: var(--layout-rail-width);
+  --spacing-menu-panel: var(--layout-menu-panel-width);
+  --spacing-menu-subpanel: var(--layout-menu-subpanel-width);
+  --spacing-toolbox-rail: var(--layout-toolbox-rail-width);
+  --spacing-toolbox-panel: var(--layout-toolbox-panel-width);
+
+  /* ── Control sizing ──────────────────────────────────────────────────── */
+  --spacing-control-sm: var(--control-height-sm);
+  --spacing-control: var(--control-height-md);
+  --spacing-control-lg: var(--control-height-lg);
+  /* The minimum any interactive element may be on a touch pointer. */
+  --spacing-touch-target: var(--touch-target-min);
+
+  /* ── Spacing rhythm ──────────────────────────────────────────────────── */
+  --spacing-shell: var(--layout-gap-shell);
+  --spacing-page: var(--layout-pad-page);
+  --spacing-card: var(--layout-pad-card);
+  --spacing-row: var(--layout-row-height);
+
+  /* ── Breakpoints ─────────────────────────────────────────────────────── */
+  /* Named by the device class they describe. The raw numbers stay Tailwind's
+     defaults so the 245 existing `md:`/`max-md:` prefixes keep their meaning. */
+  --breakpoint-sm: 40rem;
+  --breakpoint-md: 48rem;
+  --breakpoint-lg: 64rem;
+  --breakpoint-xl: 80rem;
+  --breakpoint-2xl: 96rem;
+}
+
+/**
+ * Baseline geometry (the `comfortable` density) plus the safe-area plumbing
+ * every surface that touches a screen edge needs. `env(safe-area-inset-*)`
+ * resolves to 0 outside a notched viewport, so these are safe to use
+ * unconditionally — in the browser, as an installed PWA, and in a Tauri window
+ * with a transparent titlebar.
+ *
+ * Themes override these (see ./themes/terminal.css); the explicit density
+ * choice in ./density.css then overrides the theme. That precedence is
+ * enforced purely by import order in ./index.css — read the note there before
+ * moving anything.
+ */
+:root {
+  --layout-rail-width: 3rem;
+  --layout-menu-panel-width: 17.5rem;
+  --layout-menu-subpanel-width: 20rem;
+  --layout-toolbox-rail-width: 3rem;
+  --layout-toolbox-panel-width: 31.25rem;
+
+  --control-height-sm: 1.75rem;
+  --control-height-md: 2.25rem;
+  --control-height-lg: 2.75rem;
+  --touch-target-min: 2.25rem;
+
+  --layout-gap-shell: 0.5rem;
+  --layout-pad-page: 1.5rem;
+  --layout-pad-card: 1rem;
+  --layout-row-height: 2.25rem;
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}

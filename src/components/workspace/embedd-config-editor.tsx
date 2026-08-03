@@ -488,7 +488,7 @@ export function EmbeddConfigEditor({
                     </span>
                   )}
                   {running.apiKeySet && !touchedKeys.has(id) && (
-                    <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600" title="A key is stored. It is never returned, and leaving the field empty keeps it.">
+                    <span className="rounded bg-success/15 px-1.5 py-0.5 text-[10px] font-medium text-success" title="A key is stored. It is never returned, and leaving the field empty keeps it.">
                       key set
                     </span>
                   )}
@@ -541,7 +541,7 @@ export function EmbeddConfigEditor({
                   <div className="flex items-center gap-2">
                     <label className="text-xs font-medium">API key</label>
                     {touchedKeys.has(id) && (
-                      <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600">
+                      <span className="rounded bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning">
                         will be written
                       </span>
                     )}

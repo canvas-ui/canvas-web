@@ -347,7 +347,7 @@ export function WorkspaceM2() {
       />
 
       {/* Tab bar — icon only */}
-      <div className="flex border-b border-sidebar-border shrink-0">
+      <div className="flex border-b border-border shrink-0">
         {TAB_ORDER.map(tab => (
           <button
             key={tab}
@@ -367,7 +367,7 @@ export function WorkspaceM2() {
       </div>
 
       {/* Search box — shared across all tabs */}
-      <div className="px-2 py-1.5 border-b border-sidebar-border shrink-0 shadow-md z-10">
+      <div className="px-2 py-1.5 border-b border-border shrink-0 shadow-elevation-2 z-10">
         <div className="flex items-center gap-1.5 rounded-md border bg-muted/40 px-2 py-1">
           <Search className="w-3 h-3 shrink-0 text-muted-foreground" />
           <input
@@ -477,9 +477,9 @@ const layerTypeMeta = (type: string): { label: string; order: number } =>
 // Per-type row icon (matches the group it sits under).
 function LayerTypeIcon({ type }: { type: string }) {
   if (type === 'canvas')
-    return <LayoutDashboard className="w-3.5 h-3.5 shrink-0 text-violet-500" aria-label="Canvas" />
+    return <LayoutDashboard className="w-3.5 h-3.5 shrink-0 text-primary" aria-label="Canvas" />
   if (type === 'dataset')
-    return <Database className="w-3.5 h-3.5 shrink-0 text-teal-500" aria-label="Dataset" />
+    return <Database className="w-3.5 h-3.5 shrink-0 text-secondary" aria-label="Dataset" />
   return <Layers className="w-3.5 h-3.5 shrink-0 text-muted-foreground/60" aria-label="Layer" />
 }
 
@@ -545,7 +545,7 @@ function LayersList({ layers, isLoading, onSelect, onLock, onUnlock, onRename, o
           {group.items.map(layer => (
         <div
           key={layer.id}
-          className="group flex items-center gap-2 rounded-l-md px-2 py-1.5 text-xs bg-card shadow-sm cursor-pointer hover:bg-accent/40 transition-colors"
+          className="group flex items-center gap-2 rounded-l-md px-2 py-1.5 text-xs bg-card shadow-elevation-1 cursor-pointer hover:bg-accent/40 transition-colors"
           style={{ borderRight: layer.color ? `4px solid ${layer.color}` : '4px solid transparent' }}
           onClick={() => renamingId !== layer.id && onSelect(layer)}
         >
@@ -574,7 +574,7 @@ function LayersList({ layers, isLoading, onSelect, onLock, onUnlock, onRename, o
 
           {/* Lock indicator — always visible when locked, hidden during rename */}
           {layer.locked && renamingId !== layer.id && (
-            <Lock className="w-2.5 h-2.5 shrink-0 text-amber-500 group-hover:hidden" />
+            <Lock className="w-2.5 h-2.5 shrink-0 text-warning group-hover:hidden" />
           )}
 
           {/* Action buttons — visible on hover */}
@@ -584,7 +584,7 @@ function LayersList({ layers, isLoading, onSelect, onLock, onUnlock, onRename, o
                 <button
                   type="button"
                   title="Unlock layer"
-                  className="p-0.5 rounded hover:bg-muted-foreground/10 text-amber-500 hover:text-foreground"
+                  className="p-0.5 rounded hover:bg-muted-foreground/10 text-warning hover:text-foreground"
                   onClick={e => act(e, () => onUnlock(layer))}
                 >
                   <Unlock className="w-3 h-3" />

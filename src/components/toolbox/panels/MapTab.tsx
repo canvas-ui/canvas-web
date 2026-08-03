@@ -16,6 +16,11 @@ import { schemaIcon } from '@/lib/schema-meta'
 import { readDocGeo, pointInGeoSelection } from '@/utils/geo'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 
+// Literal hex, not theme tokens. These are handed to Leaflet, which writes
+// them into SVG presentation attributes (`stroke`, `fill`) and into a raw HTML
+// string for the cluster icon — neither resolves `var()`. Map annotations sit
+// on full-colour tile imagery rather than on a theme surface, so a fixed,
+// high-visibility pair is also the right call independent of the constraint.
 const IN_COLOR = '#8b5cf6'   // violet — document inside the selection
 const OUT_COLOR = '#94a3b8'  // slate — outside (dimmed)
 const SELECT_STYLE: L.PathOptions = { color: IN_COLOR, weight: 2, fillColor: IN_COLOR, fillOpacity: 0.12 }
@@ -302,7 +307,7 @@ export function MapTab() {
         <button
           type="button"
           onClick={() => setMode(mode === 'rect' ? 'idle' : 'rect')}
-          className={cn(drawBtn, mode === 'rect' ? 'border-violet-500 bg-violet-500/10 text-foreground' : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground')}
+          className={cn(drawBtn, mode === 'rect' ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground')}
           title="Drag a rectangle to select an area"
         >
           <Square className="h-3.5 w-3.5" />
@@ -311,7 +316,7 @@ export function MapTab() {
         <button
           type="button"
           onClick={() => setMode(mode === 'polygon' ? 'idle' : 'polygon')}
-          className={cn(drawBtn, mode === 'polygon' ? 'border-violet-500 bg-violet-500/10 text-foreground' : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground')}
+          className={cn(drawBtn, mode === 'polygon' ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground')}
           title="Tap points to enclose an area"
         >
           <Hexagon className="h-3.5 w-3.5" />
@@ -323,7 +328,7 @@ export function MapTab() {
               type="button"
               onClick={finishPolygon}
               disabled={draftCount < 3}
-              className={cn(drawBtn, 'border-violet-500 bg-violet-600 text-white hover:bg-violet-500 disabled:opacity-40 disabled:hover:bg-violet-600')}
+              className={cn(drawBtn, 'border-primary bg-primary text-primary-foreground hover:bg-primary disabled:opacity-40 disabled:hover:bg-primary')}
               title="Close the polygon and filter"
             >
               <Check className="h-3.5 w-3.5" />
@@ -360,8 +365,11 @@ export function MapTab() {
       <div className="relative isolate flex-1 min-h-0">
         <div ref={containerRef} className="absolute inset-0" />
         {geoCount === 0 && (
+          // Not an app-ladder layer, so deliberately not a `z-*` layer token:
+          // this value is relative to Leaflet's own pane z-indexes inside the
+          // `isolate` context above, not to the shell's drawers and modals.
           <div className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center">
-            <div className="rounded-lg border bg-card/95 px-4 py-3 text-center shadow-md">
+            <div className="rounded-lg border bg-card/95 px-4 py-3 text-center shadow-elevation-2">
               <p className="text-sm font-medium text-foreground">No located documents</p>
               <p className="text-xs text-muted-foreground">None of the current results carry location metadata.</p>
             </div>

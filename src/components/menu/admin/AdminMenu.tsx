@@ -19,7 +19,7 @@ export function AdminMenu() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center px-4 h-12 border-b border-sidebar-border shrink-0">
+      <div className="flex items-center px-4 h-12 border-b border-border shrink-0">
         <span className="text-sm font-semibold">Administration</span>
       </div>
 

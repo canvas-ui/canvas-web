@@ -39,7 +39,7 @@ function TodoRow({ doc, workspaceId, readOnly, onChanged }: { doc: Document; wor
         disabled={readOnly || busy}
         aria-pressed={done}
         title={done ? 'Mark not done' : 'Mark done'}
-        className={`canvas-no-drag mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${done ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-input hover:border-emerald-500'} ${readOnly ? 'cursor-default opacity-70' : ''}`}
+        className={`canvas-no-drag mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${done ? 'border-success bg-success text-success-foreground' : 'border-input hover:border-success'} ${readOnly ? 'cursor-default opacity-70' : ''}`}
       >
         {done && <Check className="h-3 w-3" />}
       </button>

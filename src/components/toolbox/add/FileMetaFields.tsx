@@ -2,7 +2,7 @@ import { Label } from '@/components/ui/label'
 import { TagInput } from './TagInput'
 import type { FileFields } from './useFileFields'
 
-const textareaClass = 'flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
+const textareaClass = 'flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-elevation-1 transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
 
 /**
  * Tags + comment for an upload. Shared by the toolbox FileForm and the home

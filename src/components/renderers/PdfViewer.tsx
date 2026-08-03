@@ -67,6 +67,8 @@ function PdfJsPages({ blob, filename }: { blob: Blob; filename: string }) {
         canvas.height = viewport.height
         canvas.style.width = '100%'
         canvas.style.height = 'auto'
+        // Literal white: the PDF page *is* white paper. A themed ground
+        // would show through the page margins and misrepresent the document.
         canvas.className = 'rounded border bg-white'
         canvas.setAttribute('aria-label', `${filename} — page ${i}`)
 
