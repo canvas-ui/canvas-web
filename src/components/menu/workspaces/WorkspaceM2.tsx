@@ -584,7 +584,7 @@ function LayersList({ layers, isLoading, onSelect, onLock, onUnlock, onRename, o
                 <button
                   type="button"
                   title="Unlock layer"
-                  className="p-0.5 rounded hover:bg-muted-foreground/10 text-warning hover:text-foreground"
+                  className="p-0.5 rounded hover:bg-muted-foreground/10 text-warning hover:text-foreground touch-target"
                   onClick={e => act(e, () => onUnlock(layer))}
                 >
                   <Unlock className="w-3 h-3" />
@@ -593,7 +593,7 @@ function LayersList({ layers, isLoading, onSelect, onLock, onUnlock, onRename, o
                 <button
                   type="button"
                   title="Lock layer"
-                  className="p-0.5 rounded hover:bg-muted-foreground/10 text-muted-foreground hover:text-foreground"
+                  className="p-0.5 rounded hover:bg-muted-foreground/10 text-muted-foreground hover:text-foreground touch-target"
                   onClick={e => act(e, () => onLock(layer))}
                 >
                   <Lock className="w-3 h-3" />
@@ -603,7 +603,7 @@ function LayersList({ layers, isLoading, onSelect, onLock, onUnlock, onRename, o
                 <button
                   type="button"
                   title="Rename layer"
-                  className="p-0.5 rounded hover:bg-muted-foreground/10 text-muted-foreground hover:text-foreground"
+                  className="p-0.5 rounded hover:bg-muted-foreground/10 text-muted-foreground hover:text-foreground touch-target"
                   onClick={e => { e.stopPropagation(); setRenamingId(layer.id) }}
                 >
                   <Edit2 className="w-3 h-3" />
@@ -613,7 +613,7 @@ function LayersList({ layers, isLoading, onSelect, onLock, onUnlock, onRename, o
                 <button
                   type="button"
                   title="Destroy layer"
-                  className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                  className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive touch-target"
                   onClick={e => act(e, () => onDestroy(layer))}
                 >
                   <Trash2 className="w-3 h-3" />

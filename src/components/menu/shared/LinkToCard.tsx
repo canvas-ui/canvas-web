@@ -142,7 +142,7 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
   const count = documentCount ?? 1
 
   return (
-    <div className={cn('flex flex-col overflow-hidden rounded-2xl border bg-card shadow-elevation-4', sizeClassName || 'h-[85dvh] max-h-full w-[min(380px,90vw)] max-md:h-full max-md:w-full max-md:shadow-elevation-5')}>
+    <div className={cn('flex flex-col overflow-hidden rounded-2xl border bg-card shadow-elevation-4', sizeClassName || 'h-viewport-card max-h-full w-[min(380px,90vw)] max-md:h-full max-md:w-full max-md:shadow-elevation-5')}>
       <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
         <span className="flex items-center gap-2 text-sm font-medium">
           <Link2 className="h-4 w-4" />
@@ -170,7 +170,7 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
           <div className="flex min-w-0 flex-col overflow-hidden">
             <div className="flex shrink-0 items-center gap-1 border-b px-2 pt-2">
               {!fixedWorkspaceName && (
-                <button type="button" onClick={() => setStep('workspace')} className="mr-1 rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Back to workspaces">
+                <button type="button" onClick={() => setStep('workspace')} className="mr-1 rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground touch-target" aria-label="Back to workspaces">
                   <ChevronRight className="h-4 w-4 rotate-180" />
                 </button>
               )}

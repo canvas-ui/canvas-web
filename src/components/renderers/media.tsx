@@ -123,7 +123,7 @@ export function VideoRenderer({ workspaceId, document, className = '' }: Rendere
             playsInline
             preload="metadata"
             onError={() => setPlayError(true)}
-            className="max-h-[70vh] w-full rounded border"
+            className="max-h-viewport-pane w-full rounded border"
           />
           {playError && (
             <p className="text-xs text-muted-foreground">

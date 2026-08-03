@@ -168,7 +168,7 @@ export function WorkspaceList() {
                         e.stopPropagation()
                         setPicker({ x: Math.min(e.clientX, window.innerWidth - 290), y: Math.min(e.clientY, window.innerHeight - 360), name: ws.name })
                       }}
-                      className="shrink-0 rounded p-0.5 hover:bg-muted-foreground/10"
+                      className="shrink-0 rounded p-0.5 hover:bg-muted-foreground/10 touch-target"
                     >
                       <Icon
                         icon={style.icon || DEFAULT_WORKSPACE_ICON}

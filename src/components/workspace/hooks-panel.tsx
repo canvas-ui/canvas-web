@@ -421,7 +421,7 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
                     <td className="px-2 py-1.5">
                       {run.handlerType !== 'dispatch' && (
                         <Button
-                          size="sm" variant="ghost" className="h-6 w-6 p-0"
+                          size="sm" variant="ghost" className="h-6 w-6 p-0 touch-target"
                           title="Replay this run (reloads the document, re-runs the handler)"
                           disabled={replayingId !== null}
                           onClick={() => replay(run)}
@@ -585,7 +585,7 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-6 w-6 p-0"
+                        className="h-6 w-6 p-0 touch-target"
                         title={enabled ? 'Disable' : 'Enable'}
                         onClick={(e) => { e.stopPropagation(); toggle(file.path) }}
                       >
@@ -595,7 +595,7 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                        className="h-6 w-6 p-0 text-destructive hover:text-destructive touch-target"
                         onClick={(e) => { e.stopPropagation(); remove(file.path) }}
                       >
                         <Trash2 className="h-3 w-3" />
@@ -630,7 +630,7 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
                   </Button>
                 </div>
               </div>
-              <div className={`flex-1 overflow-auto rounded border text-sm ${isMaximized ? '' : 'min-h-[400px] max-h-[60vh]'}`}>
+              <div className={`flex-1 overflow-auto rounded border text-sm ${isMaximized ? '' : 'min-h-[400px] max-h-viewport-pane'}`}>
                 <CodeEditor
                   value={content}
                   path={selected}

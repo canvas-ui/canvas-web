@@ -51,8 +51,8 @@ export function ObjectPropertiesModal({ document, isOpen, onClose, workspaceId, 
         className={cn(
           'flex w-full flex-col border bg-background max-md:h-full max-md:max-w-none',
           fullscreen
-            ? 'h-full max-w-none rounded-none md:rounded-lg md:m-2 md:h-[calc(100dvh-1rem)]'
-            : 'h-[85dvh] max-w-3xl rounded-lg',
+            ? 'h-full max-w-none rounded-none md:rounded-lg md:m-2 md:h-[calc(var(--viewport-h)-1rem)]'
+            : 'h-viewport-card max-w-3xl rounded-lg',
         )}
         onClick={(e) => e.stopPropagation()}
       >

@@ -1,0 +1,54 @@
+/**
+ * Viewport height tokens.
+ *
+ * Two problems solved here.
+ *
+ * 1. `vh` is wrong on mobile. It resolves against the *large* viewport — the
+ *    height with browser chrome collapsed — so a `max-h-[90vh]` dialog is
+ *    taller than what is actually visible while the URL bar is showing. The
+ *    bottom of the dialog, which is where Save and Cancel live, sits off
+ *    screen with no way to reach it. This is the single most common Android
+ *    PWA layout bug and the app had 15 instances of it.
+ *
+ *    `dvh` tracks the *dynamic* viewport, so the element always fits.
+ *
+ * 2. `dvh` needs Chromium 108+ / Safari 15.4+. Canvas ships to Huawei devices
+ *    that may be on an older Chromium fork or on ArkWeb, so it cannot be used
+ *    unguarded. `@supports` is evaluated at parse time, which makes this a
+ *    genuine progressive enhancement: old engines keep `vh` (imperfect but
+ *    functional), new engines get `dvh`.
+ *
+ *    The two-declaration trick (`--x: 100vh; --x: 100dvh;`) does NOT work
+ *    here — a custom property stores any valid token sequence and only fails
+ *    at var() substitution time, by which point the fallback is long gone.
+ *    Same reason ./fallback.css exists.
+ *
+ * The named fractions replace six arbitrary ratios (50/60/65/70/85/90) that
+ * accumulated over time with three statements of intent. Resist adding more:
+ * if a surface needs its own ratio, it usually wants a different layout.
+ */
+
+:root {
+  --viewport-h: 100vh;
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --viewport-h: 100dvh;
+  }
+}
+
+@theme inline {
+  /* Full-bleed surfaces: the app shell, immersive viewers. */
+  --spacing-viewport: var(--viewport-h);
+  /* Dialogs and floating overlays — leaves a gutter so the surface reads as
+     floating rather than pinned to the screen edges. */
+  --spacing-viewport-modal: calc(var(--viewport-h) * 0.9);
+  /* Embedded scrollable content: PDF pages, media, log output, code. */
+  --spacing-viewport-pane: calc(var(--viewport-h) * 0.7);
+  /* Floating cards that take most of the screen but stay clearly detached
+     from it — the B5 capture card, docked pickers, side cards. */
+  --spacing-viewport-card: calc(var(--viewport-h) * 0.85);
+  /* A pane that should occupy roughly half the screen before scrolling. */
+  --spacing-viewport-half: calc(var(--viewport-h) * 0.5);
+}

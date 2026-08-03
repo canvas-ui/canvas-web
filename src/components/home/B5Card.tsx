@@ -93,8 +93,8 @@ export function B5Card({
         : orientation === 'portrait'
           // max-width 100% keeps the B5 aspect card inside the visible cards
           // row on narrow screens (90vw alone ignores the menubar + padding).
-          ? { aspectRatio: '0.707 / 1', height: '85dvh', width: 'auto', maxWidth: 'min(90vw, 100%)', flexShrink: 0 }
-          : { aspectRatio: '1 / 0.707', width: 'min(90vw, 900px)', maxWidth: '100%', height: 'auto', maxHeight: '85dvh', flexShrink: 0 }
+          ? { aspectRatio: '0.707 / 1', height: 'calc(var(--viewport-h) * 0.85)', width: 'auto', maxWidth: 'min(90vw, 100%)', flexShrink: 0 }
+          : { aspectRatio: '1 / 0.707', width: 'min(90vw, 900px)', maxWidth: '100%', height: 'auto', maxHeight: 'calc(var(--viewport-h) * 0.85)', flexShrink: 0 }
 
   const card = (
     <div
@@ -119,7 +119,7 @@ export function B5Card({
             <button
               type="button"
               onClick={() => setOrientation((o) => (o === 'portrait' ? 'landscape' : 'portrait'))}
-              className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground max-md:hidden"
+              className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground max-md:hidden touch-target"
               aria-label="Toggle orientation"
               title="Toggle orientation"
             >
@@ -149,7 +149,7 @@ export function B5Card({
             type="button"
             onClick={onClose}
             disabled={saving}
-            className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
+            className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40 touch-target"
             aria-label="Close"
           >
             <X className="h-4 w-4" />
@@ -168,7 +168,7 @@ export function B5Card({
       fixedWorkspaceName={lockedWorkspaceName}
       saving={saving}
       // fillParent hosts (side card) stretch the picker to the full column
-      // height instead of the free-floating 85dvh card.
+      // height instead of the free-floating viewport-card sized card.
       sizeClassName={fillParent ? 'h-full max-h-full w-[min(380px,90vw)] max-md:h-full max-md:w-full max-md:shadow-elevation-5' : undefined}
     />
   )

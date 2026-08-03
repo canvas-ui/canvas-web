@@ -14,8 +14,8 @@ export function AuthLayout({ children }: AuthLayoutProps) {
   const { serverVersion, isLoading: isLoadingVersion, error: versionError } = useServerVersion()
 
   return (
-    <div className="flex min-h-dvh w-full items-center justify-center p-4 flex-col">
-      <Card className="flex w-[95vw] h-[95dvh] overflow-hidden">
+    <div className="flex min-h-viewport w-full items-center justify-center p-4 flex-col">
+      <Card className="flex w-[95vw] h-viewport-modal overflow-hidden">
         {/* The particle panel is dark by design in every theme — the logo is a
             light-on-dark mark and the particle canvas needs a dark ground.
             `data-scheme="dark"` makes that a scoped theme change rather than
@@ -27,7 +27,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
             <img
               src='/images/logo-wr_128x128.png'
               alt="Canvas Logo"
-              className="mr-2 h-6 w-6"
+              className="mr-2 h-6 w-6 touch-target"
             />
             <span className="text-2xl font-bold text-foreground">Canvas</span>
           </Link>

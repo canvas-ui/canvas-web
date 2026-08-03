@@ -48,7 +48,7 @@ function MinimizedTabBar({ pins, onRestore }: { pins: PinnedCanvas[]; onRestore:
     <>
       <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-40 max-md:hidden">
         {/* pr-28 keeps tabs from sliding under the FAB column (right-6, w-16). */}
-        <div className="pointer-events-auto flex items-end gap-1 overflow-x-auto px-3 pr-28 pb-[env(safe-area-inset-bottom)]">
+        <div className="pointer-events-auto flex items-end gap-1 overflow-x-auto px-3 pr-28 pb-safe-bottom">
           {pins.map((pin) => (
             <button
               key={pin.id}
@@ -68,7 +68,7 @@ function MinimizedTabBar({ pins, onRestore }: { pins: PinnedCanvas[]; onRestore:
         <>
           {/* Transparent click-catcher so a tap outside closes the list. */}
           <div className="fixed inset-0 z-drawer md:hidden" onClick={() => setMobileOpen(false)} aria-hidden />
-          <div className="fixed bottom-[calc(max(0.5rem,env(safe-area-inset-bottom))+3.5rem)] left-2 z-rail w-60 max-w-[calc(100vw-1rem)] rounded-xl border bg-card p-1.5 shadow-elevation-5 animate-fade-in md:hidden">
+          <div className="fixed bottom-rail-stack left-2 z-rail w-60 max-w-[calc(100vw-1rem)] rounded-xl border bg-card p-1.5 shadow-elevation-5 animate-fade-in md:hidden touch-target">
             {pins.map((pin) => (
               <button
                 key={pin.id}
@@ -89,7 +89,7 @@ function MinimizedTabBar({ pins, onRestore }: { pins: PinnedCanvas[]; onRestore:
         aria-label={mobileOpen ? 'Close minimized canvases' : `Minimized canvases (${pins.length})`}
         // left-2 (burger) + w-12 + 0.5rem gap → left-16; sizing/skin mirrors
         // MobileMenuToggle so the two read as one docked pair.
-        className="fixed bottom-[max(0.5rem,env(safe-area-inset-bottom))] left-16 z-nav flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background shadow-elevation-4 md:hidden"
+        className="fixed bottom-rail-inset left-16 z-nav flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background shadow-elevation-4 md:hidden"
       >
         <LayoutDashboard className="h-5 w-5" />
         <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold">

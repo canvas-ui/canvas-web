@@ -28,7 +28,7 @@ export function ToolboxFab() {
         // confirm controls there. The mobile toolbox entry lives in the M0
         // rail (MenuBar) instead.
         'fixed z-50 hidden md:flex h-16 w-16 items-center justify-center rounded-2xl shadow-elevation-4 transition-colors ' +
-        'bottom-[max(1rem,env(safe-area-inset-bottom))] right-6 bg-foreground text-background hover:bg-foreground'
+        'bottom-fab-inset right-6 bg-foreground text-background hover:bg-foreground'
       }
     >
       {/* Brand mark — a "·|" glyph mirroring the canvas icon: the dot sits at the

@@ -17,7 +17,7 @@ export function FormPanel({ title, onClose, children }: {
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground touch-target"
         >
           <X className="h-4 w-4" />
         </button>

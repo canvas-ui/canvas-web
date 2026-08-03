@@ -100,7 +100,7 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose, onCardsO
           // scroll container's scrollbar and drifts out of alignment with the
           // fixed toolbox FAB below it.
           'pointer-events-none fixed right-6 z-40 flex flex-col items-end gap-2',
-          'bottom-[max(1rem,env(safe-area-inset-bottom))] md:bottom-[calc(max(1rem,env(safe-area-inset-bottom))+5rem)]',
+          'bottom-fab-inset md:bottom-[calc(var(--spacing-fab-inset)+5rem)]',
           openCards.length > 0 && 'max-md:hidden',
         )}
       >

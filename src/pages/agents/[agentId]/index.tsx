@@ -538,7 +538,7 @@ export default function AgentDetailPage() {
             </div>
             <ChevronDown className={cn('h-4 w-4 shrink-0 text-muted-foreground transition-transform xl:hidden', showContextInfo && 'rotate-180')} />
           </button>
-          <div className={cn('space-y-4 overflow-y-auto p-4 text-sm max-xl:max-h-[50dvh]', !showContextInfo && 'max-xl:hidden')}>
+          <div className={cn('space-y-4 overflow-y-auto p-4 text-sm max-xl:max-h-viewport-half', !showContextInfo && 'max-xl:hidden')}>
             <div>
               <div className="text-xs uppercase tracking-wide text-muted-foreground">Mode</div>
               <div className="mt-1">{current?.mode || sessions?.mode || 'persistent'}</div>

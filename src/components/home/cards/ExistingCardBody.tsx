@@ -7,7 +7,7 @@ import { useToastHelpers } from '@/hooks/useToastHelpers'
 // Sizing that matches a quick-add B5 card in the home row, including the
 // mobile full-screen treatment B5Card applies below md.
 const CARD_SIZE =
-  'shrink-0 h-[85dvh] w-[min(380px,90vw)] max-md:fixed max-md:inset-2 max-md:z-40 max-md:h-auto max-md:w-auto max-md:shadow-elevation-5'
+  'shrink-0 h-viewport-card w-[min(380px,90vw)] max-md:fixed max-md:inset-2 max-md:z-40 max-md:h-auto max-md:w-auto max-md:shadow-elevation-5'
 
 // Quick-add "internally indexed documents": browse/pick existing documents
 // first (PickDocumentsCard), then pick the destination path(s) (LinkToCard)

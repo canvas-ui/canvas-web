@@ -78,7 +78,7 @@ export function TimelineSortControl({
         type="button"
         onClick={toggleOrder}
         title={value.order === 'asc' ? 'Ascending (oldest first)' : 'Descending (newest first)'}
-        className="flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground hover:bg-accent hover:text-foreground"
+        className="flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground hover:bg-accent hover:text-foreground touch-target"
       >
         {value.order === 'asc'
           ? <ArrowUpWideNarrow className="h-3.5 w-3.5" />

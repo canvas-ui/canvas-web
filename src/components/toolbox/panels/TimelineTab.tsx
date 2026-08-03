@@ -341,7 +341,7 @@ function TimelineRail({ quickFilterKey, activeRangeCount, onSelectRanges, histog
       </div>
 
       {/* Reverse-chronological tag list — Now pinned top, older below */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-1.5 space-y-1">
+      <div className="flex-1 min-h-0 overflow-y-auto p-1.5 space-y-1 touch-target">
         {rows.map(row => {
           const isSelected = selected.has(row.offset)
           const bucket = visibleBuckets[row.offset]
@@ -933,7 +933,7 @@ export function TimelineTab() {
               type="button"
               onClick={handleCreateTimeline}
               disabled={creatingTimeline || !newTimelineName.trim()}
-              className="shrink-0 p-1.5 rounded-md bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+              className="shrink-0 p-1.5 rounded-md bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 touch-target"
               title="Create timeline"
             >
               {creatingTimeline ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}

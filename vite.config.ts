@@ -4,8 +4,29 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+/**
+ * Optional dev proxy to a remote Canvas backend.
+ *
+ * Set VITE_DEV_PROXY_TARGET=https://some-instance.example.com to run this
+ * frontend against a live server. Requests are proxied rather than pointed at
+ * via VITE_API_URL so the browser sees them as same-origin: no CORS
+ * preflights, and cookies/auth headers behave exactly as they do in
+ * production. Socket.io is proxied too, or live updates would silently fail
+ * while REST kept working.
+ *
+ * Dev only — `vite build` never reads this.
+ */
+const proxyTarget = process.env.VITE_DEV_PROXY_TARGET
+const devProxy = proxyTarget
+  ? {
+      '/rest': { target: proxyTarget, changeOrigin: true, secure: true },
+      '/socket.io': { target: proxyTarget, changeOrigin: true, secure: true, ws: true },
+    }
+  : undefined
+
 // https://vitejs.dev/config/
 export default defineConfig({
+  server: { proxy: devProxy },
   plugins: [
     react(),
     // Tailwind v4 runs as a Vite plugin, not a PostCSS pass — there is no

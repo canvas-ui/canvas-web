@@ -83,7 +83,7 @@ export function ImageLightbox({ workspaceId, docs, index, onClose, onNavigate }:
           className="canvas-no-drag absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-foreground/10 p-2 text-foreground hover:bg-foreground/20"
           title="Previous"
         >
-          <ChevronLeft className="h-6 w-6" />
+          <ChevronLeft className="h-6 w-6 touch-target" />
         </button>
       )}
       {index < docs.length - 1 && (
@@ -93,13 +93,13 @@ export function ImageLightbox({ workspaceId, docs, index, onClose, onNavigate }:
           className="canvas-no-drag absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-foreground/10 p-2 text-foreground hover:bg-foreground/20"
           title="Next"
         >
-          <ChevronRight className="h-6 w-6" />
+          <ChevronRight className="h-6 w-6 touch-target" />
         </button>
       )}
       <figure className="max-h-full max-w-full" onClick={(e) => e.stopPropagation()}>
         {loading && <div className="text-sm text-foreground/70">Loading…</div>}
         {error && <div className="text-sm text-destructive">{error}</div>}
-        {blobUrl && <img src={blobUrl} alt={title} className="max-h-[85vh] max-w-[90vw] rounded object-contain" />}
+        {blobUrl && <img src={blobUrl} alt={title} className="max-h-viewport-modal max-w-[90vw] rounded object-contain" />}
         <figcaption className="mt-2 text-center text-xs text-foreground/70">{title} · {index + 1}/{docs.length}</figcaption>
       </figure>
     </div>,
@@ -133,7 +133,7 @@ export function ImageGridToolbar({ workspaceId, state }: {
             type="button"
             onClick={clearSearch}
             title="Clear search"
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground touch-target"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -151,7 +151,7 @@ export function ImageGridToolbar({ workspaceId, state }: {
                 type="button"
                 onClick={() => removeQuery(i)}
                 title={`Remove "${term}"`}
-                className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+                className="rounded p-0.5 text-muted-foreground hover:text-foreground touch-target"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -173,7 +173,7 @@ export function ImageGridToolbar({ workspaceId, state }: {
           onClick={() => setPage(Math.max(1, page - 1))}
           disabled={page <= 1}
           title="Previous page"
-          className="flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground hover:bg-accent disabled:opacity-40"
+          className="flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground hover:bg-accent disabled:opacity-40 touch-target"
         >
           <ChevronLeft className="h-3.5 w-3.5" />
         </button>
@@ -183,7 +183,7 @@ export function ImageGridToolbar({ workspaceId, state }: {
           onClick={() => setPage(Math.min(totalPages, page + 1))}
           disabled={page >= totalPages}
           title="Next page"
-          className="flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground hover:bg-accent disabled:opacity-40"
+          className="flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground hover:bg-accent disabled:opacity-40 touch-target"
         >
           <ChevronRight className="h-3.5 w-3.5" />
         </button>

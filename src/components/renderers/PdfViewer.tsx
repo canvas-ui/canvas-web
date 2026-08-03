@@ -115,7 +115,7 @@ export function PdfViewer({ blob, blobUrl, filename, className = '' }: PdfViewer
     )
   }
   return (
-    <div className={`max-h-[70vh] overflow-y-auto ${className}`}>
+    <div className={`max-h-viewport-pane overflow-y-auto ${className}`}>
       <PdfJsPages blob={blob} filename={filename} />
     </div>
   )

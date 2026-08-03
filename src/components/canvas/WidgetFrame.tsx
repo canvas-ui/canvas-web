@@ -45,7 +45,7 @@ export function WidgetFrame({
           <button
             type="button"
             onClick={onFill}
-            className="canvas-no-drag shrink-0 p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent"
+            className="canvas-no-drag shrink-0 p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent touch-target"
             title="Fill canvas"
           >
             <Expand className="w-3.5 h-3.5" />
@@ -54,7 +54,7 @@ export function WidgetFrame({
         <button
           type="button"
           onClick={() => setMaximized((v) => !v)}
-          className="canvas-no-drag shrink-0 p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent"
+          className="canvas-no-drag shrink-0 p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent touch-target"
           title={maximized ? 'Restore' : 'Full screen'}
         >
           {maximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
@@ -63,7 +63,7 @@ export function WidgetFrame({
           <button
             type="button"
             onClick={onRemove}
-            className="canvas-no-drag shrink-0 p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            className="canvas-no-drag shrink-0 p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 touch-target"
             title="Remove widget"
           >
             <X className="w-3.5 h-3.5" />

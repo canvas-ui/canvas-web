@@ -223,7 +223,7 @@ export function WorkspaceM2Form() {
                 type="button"
                 onClick={() => loadShares()}
                 disabled={isLoadingShares}
-                className="flex h-7 w-7 items-center justify-center rounded hover:bg-accent/50 text-muted-foreground hover:text-foreground disabled:opacity-50"
+                className="flex h-7 w-7 items-center justify-center rounded hover:bg-accent/50 text-muted-foreground hover:text-foreground disabled:opacity-50 touch-target"
                 title="Refresh shares"
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${isLoadingShares ? 'animate-spin' : ''}`} />

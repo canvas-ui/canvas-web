@@ -106,7 +106,7 @@ export function MobileMenuToggle() {
       aria-label={state.m0Open ? 'Close menu' : 'Open menu'}
       // w-12 matches the rail card's width exactly, so toggle and rail read
       // as one aligned column when the rail is open.
-      className="fixed bottom-[max(0.5rem,env(safe-area-inset-bottom))] left-2 z-nav flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background shadow-elevation-4 md:hidden"
+      className="fixed bottom-rail-inset left-2 z-nav flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background shadow-elevation-4 md:hidden"
     >
       {state.m0Open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
     </button>
@@ -160,7 +160,7 @@ export function MenuBar() {
           // Mobile: hidden by default; while open it floats as a slim rail
           // card anchored above the bottom-left toggle button.
           state.m0Open
-            ? 'max-md:fixed max-md:left-2 max-md:top-2 max-md:bottom-[calc(max(0.5rem,env(safe-area-inset-bottom))+3.5rem)] max-md:z-rail max-md:h-auto max-md:rounded-xl max-md:bg-card max-md:shadow-elevation-5 max-md:animate-fade-in'
+            ? 'max-md:fixed max-md:left-2 max-md:top-2 max-md:bottom-rail-stack max-md:z-rail max-md:h-auto max-md:rounded-xl max-md:bg-card max-md:shadow-elevation-5 max-md:animate-fade-in'
             : 'max-md:hidden',
         )}
       >
@@ -232,7 +232,7 @@ export function MenuBar() {
                 onClick={() => navigate('/home')}
                 className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-accent/50 transition-colors"
               >
-                <Avatar className="h-7 w-7">
+                <Avatar className="h-7 w-7 touch-target">
                   <AvatarFallback className="text-[10px] bg-muted">
                     {state.user?.email ? getUserInitials(state.user.email) : 'U'}
                   </AvatarFallback>

@@ -195,7 +195,7 @@ export function ContextM2Form() {
             </div>
             <div>
               <label className="text-xs font-medium text-muted-foreground">Tree</label>
-              <div className="mt-1 flex rounded-md border border-input p-0.5 bg-background">
+              <div className="mt-1 flex rounded-md border border-input p-0.5 bg-background touch-target">
                 <button
                   type="button"
                   onClick={() => setNewTreeType('context')}
