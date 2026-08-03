@@ -252,7 +252,7 @@ export default function AdminLogsPage() {
         <div
           ref={logContainerRef}
           data-scheme="dark"
-          className="bg-background text-success font-mono text-xs h-[65vh] overflow-auto p-4 rounded-md"
+          className="bg-background text-success font-mono text-xs h-viewport-pane overflow-auto p-4 rounded-md"
         >
           {isLoading ? (
             <div className="text-muted-foreground">Loading logs...</div>

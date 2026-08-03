@@ -20,6 +20,7 @@
 @import './primitives.css';
 @import './base.css';
 @import './layout.css';
+@import './viewport.css';
 @import './components.css';
 
 /* 2. Themes. Imported AFTER the defaults so a theme can override component and
@@ -36,6 +37,10 @@
       must beat a theme's built-in geometry. */
 @import './density.css';
 
+/* 3b. Viewport-driven adjustments — layered on whatever theme + density
+       settled on, so it must follow both. */
+@import './responsive.css';
+
 /* 4. Derived layers. These read the values settled above; nothing here is
       overridable by a theme, so relative order among them doesn't matter. */
 @import './semantic.css';
@@ -44,6 +49,12 @@
 @import './motion.css';
 @import './layers.css';
 @import './utilities.css';
+
+/* 5. sRGB fallback for engines without OKLCH (Chromium < 111, ArkWeb). Last,
+      so its redefinitions win inside the `@supports not (...)` block that
+      supporting browsers skip entirely. Generated — see
+      scripts/generate-color-fallbacks.mjs. */
+@import './fallback.css';
 
 /**
  * `dark:` variant.

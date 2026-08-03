@@ -140,7 +140,7 @@ export function ToolboxPanel() {
             <button
               type="button"
               onClick={toggleWide}
-              className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground touch-target"
               aria-label={isWide ? 'Shrink toolbox' : 'Expand toolbox'}
               title={isWide ? 'Shrink toolbox' : 'Expand to half screen'}
             >
@@ -150,7 +150,7 @@ export function ToolboxPanel() {
           <button
             type="button"
             onClick={closeT1}
-            className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground touch-target"
             aria-label="Close toolbox"
           >
             <X className="h-4 w-4" />

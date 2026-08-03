@@ -484,7 +484,7 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
                   value={row.value}
                   onChange={(e) => setField('conditions', form.conditions.map((c, j) => (j === i ? { ...c, value: e.target.value } : c)))}
                 />
-                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setField('conditions', form.conditions.filter((_, j) => j !== i))}>
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 touch-target" onClick={() => setField('conditions', form.conditions.filter((_, j) => j !== i))}>
                   <X className="h-3.5 w-3.5" />
                 </Button>
               </div>
@@ -572,7 +572,7 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
                       {outputControls('output')}
                     </div>
                   )}
-                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setField('actions', form.actions.filter((_, j) => j !== i))}>
+                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0 touch-target" onClick={() => setField('actions', form.actions.filter((_, j) => j !== i))}>
                     <X className="h-3.5 w-3.5" />
                   </Button>
                 </div>
@@ -623,7 +623,7 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
                 </label>
                 <div className="flex items-center shrink-0">
                   <Button
-                    size="sm" variant="ghost" className="h-7 w-7 p-0"
+                    size="sm" variant="ghost" className="h-7 w-7 p-0 touch-target"
                     title="Backfill: apply this rule to existing documents (dry-run first)"
                     disabled={backfillingId !== null}
                     onClick={() => backfillRule(rule.id)}
@@ -631,14 +631,14 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
                     <PlayCircle className={`h-3.5 w-3.5 ${backfillingId === rule.id ? 'animate-pulse' : ''}`} />
                   </Button>
                   <Button
-                    size="sm" variant="ghost" className="h-7 w-7 p-0"
+                    size="sm" variant="ghost" className="h-7 w-7 p-0 touch-target"
                     title={editable ? 'Edit rule' : 'This rule uses advanced matchers — edit it as JSON'}
                     disabled={!editable}
                     onClick={() => { const parsed = parseRule(rule); if (parsed) setForm(parsed) }}
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => deleteRule(rule.id)}>
+                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive touch-target" onClick={() => deleteRule(rule.id)}>
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>

@@ -456,7 +456,7 @@ export default function AdminRolesPage() {
       {/* Create Role Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-scrim flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg shadow-elevation-3 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-background rounded-lg shadow-elevation-3 max-w-lg w-full mx-4 max-h-viewport-modal overflow-y-auto">
             <div className="p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-bold">Create New Role</h2>
@@ -542,7 +542,7 @@ export default function AdminRolesPage() {
       {/* Logs Modal */}
       {isLogsModalOpen && selectedRole && (
         <div className="fixed inset-0 bg-scrim flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg shadow-elevation-3 max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
+          <div className="bg-background rounded-lg shadow-elevation-3 max-w-4xl w-full mx-4 max-h-viewport-modal flex flex-col">
             <div className="p-6 border-b flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold">Role Logs</h2>

@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/generate-color-fallbacks.mjs && tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:fallbacks": "node scripts/generate-color-fallbacks.mjs"
   },
   "dependencies": {
     "@codemirror/lang-javascript": "^6.2.5",

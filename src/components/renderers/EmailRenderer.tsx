@@ -208,10 +208,10 @@ export function EmailRenderer({ workspaceId, document: doc, className = '' }: Re
           // Literal white, not a token: this is the email's own canvas, and
           // real-world HTML mail assumes a white ground (dark text, no
           // background set). Theming it would make most messages unreadable.
-          ? <iframe src={htmlUrl} sandbox="" title={String(data.subject ?? 'email')} className="min-h-[50vh] w-full rounded border bg-white" />
+          ? <iframe src={htmlUrl} sandbox="" title={String(data.subject ?? 'email')} className="min-h-viewport-half w-full rounded border bg-white" />
           : <p className="text-sm text-muted-foreground">Rendering...</p>
       ) : (
-        <pre className="whitespace-pre-wrap rounded bg-muted p-3 text-sm max-h-[60vh] overflow-auto">{bodyText || '(empty body)'}</pre>
+        <pre className="whitespace-pre-wrap rounded bg-muted p-3 text-sm max-h-viewport-pane overflow-auto">{bodyText || '(empty body)'}</pre>
       )}
       {/* Attachments */}
       {visibleAttachments.length > 0 && (

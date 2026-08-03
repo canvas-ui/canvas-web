@@ -1,0 +1,36 @@
+/**
+ * Viewport-driven adjustments.
+ *
+ * Layered after themes and density because it modifies whatever those two
+ * settled on, rather than expressing a preference of its own. A theme picks a
+ * type scale; this narrows it when there is no room for it.
+ *
+ * Kept deliberately small. Most responsive behaviour belongs in component
+ * markup (`md:` variants), where it is visible next to the thing it affects.
+ * Only changes that must apply uniformly across every screen live here.
+ */
+
+/**
+ * Compact display type below 30rem (480px).
+ *
+ * The scale is tuned for desktop, where a 30px page title reads as a heading.
+ * On a 360px-wide phone the same title eats most of the line and pushes real
+ * content below the fold — the workspace list spent its first screen on the
+ * word "Workspaces". Body sizes (base and below) are untouched: shrinking
+ * those would hurt legibility, which is the opposite of the goal.
+ *
+ * Applied at the token level rather than by editing 13 call sites, so every
+ * heading in the app moves together and new ones inherit the behaviour.
+ */
+@media (max-width: 29.999rem) {
+  :root {
+    --font-size-2xl: 1.25rem;
+    --line-height-2xl: 1.625rem;
+    --font-size-3xl: 1.5rem;
+    --line-height-3xl: 1.875rem;
+    --font-size-4xl: 1.75rem;
+    --line-height-4xl: 2.125rem;
+    --font-size-5xl: 2rem;
+    --line-height-5xl: 2.375rem;
+  }
+}

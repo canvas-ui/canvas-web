@@ -8,7 +8,7 @@ export function PlaintextRenderer({ workspaceId, document, className = '' }: Ren
   if (error) return <p className="text-sm text-destructive">{error}</p>
   if (loading || text == null) return <p className="text-sm text-muted-foreground">Loading...</p>
   return (
-    <pre className={`bg-muted p-3 rounded text-xs overflow-auto max-h-[70vh] whitespace-pre-wrap ${className}`}>{text}</pre>
+    <pre className={`bg-muted p-3 rounded text-xs overflow-auto max-h-viewport-pane whitespace-pre-wrap ${className}`}>{text}</pre>
   )
 }
 
@@ -32,7 +32,7 @@ export function MarkdownRenderer({ workspaceId, document, className = '' }: Rend
   if (error) return <p className="text-sm text-destructive">{error}</p>
   if (loading || text == null) return <p className="text-sm text-muted-foreground">Loading...</p>
   return (
-    <div className={`rounded-md border border-input bg-transparent overflow-auto max-h-[70vh] ${className}`}>
+    <div className={`rounded-md border border-input bg-transparent overflow-auto max-h-viewport-pane ${className}`}>
       <LazyNoteViewer content={text} />
     </div>
   )

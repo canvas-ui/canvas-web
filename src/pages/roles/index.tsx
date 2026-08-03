@@ -266,7 +266,7 @@ export default function RolesPage() {
       {/* Logs Modal */}
       {selectedLogs && (
         <div className="fixed inset-0 bg-scrim flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg shadow-elevation-3 max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
+          <div className="bg-background rounded-lg shadow-elevation-3 max-w-4xl w-full mx-4 max-h-viewport-modal flex flex-col">
             <div className="p-6 border-b">
               <h2 className="text-xl font-bold">{selectedLogs.role.name} - Logs</h2>
               <p className="text-sm text-muted-foreground">{selectedLogs.role.template}</p>

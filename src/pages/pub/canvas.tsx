@@ -244,7 +244,7 @@ export default function PublicCanvasPage() {
                   className="mt-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent text-primary"
                   style={payload.canvas.color ? { borderLeft: `4px solid ${payload.canvas.color}` } : undefined}
                 >
-                  <LayoutDashboard className="h-6 w-6" />
+                  <LayoutDashboard className="h-6 w-6 touch-target" />
                 </div>
                 <div className="min-w-0">
                   <div className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -276,7 +276,7 @@ export default function PublicCanvasPage() {
             </section>
 
             {hasWidgets && (
-              <section id="content-area" className="rounded-2xl border overflow-hidden flex flex-col w-full h-[70vh] min-h-[420px]">
+              <section id="content-area" className="rounded-2xl border overflow-hidden flex flex-col w-full h-viewport-pane min-h-[420px]">
                 <CanvasGrid
                   key={JSON.stringify(canvasUi)}
                   workspaceId={payload.workspace.name}

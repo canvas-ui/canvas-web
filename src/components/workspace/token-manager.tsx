@@ -314,7 +314,7 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
 
       {isLoading ? (
         <div className="text-center py-4">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto"></div>
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto touch-target"></div>
           <p className="text-sm text-muted-foreground mt-2">Loading tokens...</p>
         </div>
       ) : tokens.length === 0 ? (

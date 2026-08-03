@@ -39,7 +39,17 @@ export function ContentArea() {
       <div className="flex flex-1 min-h-0 gap-shell">
         {/* id + relative: maximized canvas widgets portal in here and fill
             the content area (full viewport is reserved for public shares). */}
-        <main id="content-area" className={cn('relative flex-1 min-h-0 min-w-0 overflow-auto', !fullBleed && !bare && 'p-page')}>
+        {/* max-md:pb-rail-stack reserves the strip the mobile menu toggle
+            floats in (it is `position: fixed`, so it is outside flow and would
+            otherwise sit on top of the last row of any list). `rail-stack` is
+            the same token the toggle anchors to, so the two cannot drift. */}
+        <main
+          id="content-area"
+          className={cn(
+            'relative flex-1 min-h-0 min-w-0 overflow-auto',
+            !fullBleed && !bare && 'p-page max-md:pb-rail-stack',
+          )}
+        >
           <Outlet />
         </main>
         {/* Side panels sit beside the page on desktop; on mobile there's no

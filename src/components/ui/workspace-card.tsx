@@ -80,14 +80,18 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onD
     <>
       <Card className={`relative ${borderColorClass}`} style={borderStyle}>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>{workspace.label || workspace.name}</CardTitle>
+        {/* Wraps on narrow screens: four icon buttons plus a title do not fit
+            360px, and without `min-w-0` the title block refused to shrink, so
+            the action group was pushed off the card and clipped — the Delete
+            and Edit buttons were unreachable on a phone. */}
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0 flex-1 basis-40">
+            <CardTitle className="truncate">{workspace.label || workspace.name}</CardTitle>
             <CardDescription>
               {isShared ? `Shared from ${sharedFrom}` : (workspace.description || '')}
             </CardDescription>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             {!isActive ? (
               <Button
                 variant="outline"

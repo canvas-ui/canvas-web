@@ -33,7 +33,7 @@ function LinkSelectionButton({ count }: { count: number }) {
       onClick={() => window.dispatchEvent(new CustomEvent('workspace:documents:link-selection'))}
       title={`Link ${count} selected document(s) to…`}
       aria-label="Link selection"
-      className="shrink-0 flex items-center justify-center gap-1 h-7 min-w-7 rounded-full bg-info px-1.5 text-info-foreground hover:bg-info transition-colors"
+      className="shrink-0 flex items-center justify-center gap-1 h-7 min-w-7 rounded-full bg-info px-1.5 text-info-foreground hover:bg-info transition-colors touch-target"
     >
       <Link2 className="w-3.5 h-3.5" />
       <span className="text-[11px] font-semibold leading-none">{count}</span>

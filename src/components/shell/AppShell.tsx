@@ -17,9 +17,9 @@ export function AppShell() {
         <ToolboxProvider>
           <SideViewProvider>
             <DocumentModalProvider>
-            {/* h-dvh (not h-screen) so the shell tracks the real visible height
+            {/* h-viewport (not h-screen) so the shell tracks the real visible height
                 when mobile browser chrome expands/collapses */}
-            <div className="flex h-dvh w-full overflow-hidden surface-desk gap-shell p-shell">
+            <div className="flex h-viewport w-full overflow-hidden surface-desk gap-shell p-shell">
               <MenuBar />
               <MenuPanelArea />
               {/* Toolbox now docks inside ContentArea as a card, shrinking main content */}

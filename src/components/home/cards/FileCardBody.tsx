@@ -86,7 +86,7 @@ export function FileCardBody({ onClose, initialData }: { onClose: () => void; in
             dragOver ? 'border-primary bg-primary/5' : 'border-input hover:bg-muted/40',
           )}
         >
-          <Upload className="h-6 w-6 text-muted-foreground" />
+          <Upload className="h-6 w-6 text-muted-foreground touch-target" />
           <p className="text-sm">Drag &amp; drop files here</p>
           <p className="text-xs text-muted-foreground">or click to browse</p>
           <input

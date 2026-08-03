@@ -104,7 +104,7 @@ export function FileForm({ capture = false }: { capture?: boolean } = {}) {
           dragOver ? 'border-primary bg-primary/5' : 'border-input hover:bg-muted/40',
         )}
       >
-        <Upload className="h-6 w-6 text-muted-foreground" />
+        <Upload className="h-6 w-6 text-muted-foreground touch-target" />
         <p className="text-sm">{capture ? 'Take a photo or video' : 'Drag & drop files here'}</p>
         <p className="text-xs text-muted-foreground">{capture ? 'click to open the camera' : 'or click to browse'}</p>
         <input

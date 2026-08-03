@@ -40,6 +40,22 @@
   --spacing-card: var(--layout-pad-card);
   --spacing-row: var(--layout-row-height);
 
+  /* ── Safe-area anchors ───────────────────────────────────────────────── */
+  /* Floating chrome has to clear the home indicator / gesture bar *and* keep a
+     minimum gutter of its own — `max()` of the two, not a sum, or the control
+     drifts far up the screen on a notched device.
+     These exist as tokens because the app had nine hand-written variants of
+     this expression, most of them missing the `0px` fallback on `env()`, which
+     makes the whole declaration invalid on engines without safe-area support. */
+  --spacing-safe-bottom: var(--safe-bottom);
+  --spacing-safe-top: var(--safe-top);
+  /* Right-hand FAB stack. */
+  --spacing-fab-inset: max(1rem, var(--safe-bottom));
+  /* Left-hand rail toggle, which sits tighter into the corner. */
+  --spacing-rail-inset: max(0.5rem, var(--safe-bottom));
+  /* A control stacked directly above the rail toggle (toggle is 3rem + gap). */
+  --spacing-rail-stack: calc(max(0.5rem, var(--safe-bottom)) + 3.5rem);
+
   /* ── Breakpoints ─────────────────────────────────────────────────────── */
   /* Named by the device class they describe. The raw numbers stay Tailwind's
      defaults so the 245 existing `md:`/`max-md:` prefixes keep their meaning. */

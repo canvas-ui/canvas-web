@@ -323,7 +323,7 @@ export function AgentM2Sessions() {
                           setEditingSessionId(session.id)
                           setEditingName(session.name || formatSessionTitle(session))
                         }}
-                        className="flex h-7 w-7 items-center justify-center rounded hover:bg-muted-foreground/10 text-muted-foreground"
+                        className="flex h-7 w-7 items-center justify-center rounded hover:bg-muted-foreground/10 text-muted-foreground touch-target"
                         title="Rename"
                       >
                         <Edit3 className="h-3.5 w-3.5" />
@@ -335,7 +335,7 @@ export function AgentM2Sessions() {
                             e.stopPropagation()
                             handleDelete(session)
                           }}
-                          className="flex h-7 w-7 items-center justify-center rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                          className="flex h-7 w-7 items-center justify-center rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive touch-target"
                           title="Delete session"
                         >
                           <Trash2 className="h-3.5 w-3.5" />

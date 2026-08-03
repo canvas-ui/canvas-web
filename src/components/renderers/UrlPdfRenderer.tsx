@@ -115,7 +115,7 @@ export function UrlPdfRenderer({ document: doc, className = '' }: RendererProps)
           Inline preview unavailable (direct fetch and server proxy both failed) — use the link above.
         </p>
       )}
-      {blobUrl && <PdfViewer blob={blob} blobUrl={blobUrl} filename={filename} className="h-[70vh]" />}
+      {blobUrl && <PdfViewer blob={blob} blobUrl={blobUrl} filename={filename} className="h-viewport-pane" />}
     </div>
   )
 }

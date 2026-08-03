@@ -182,7 +182,7 @@ function ExportModal({ isOpen, onClose, documents, selectedDocuments }: ExportMo
 
   return createPortal(
     <div role="dialog" aria-modal="true" className="fixed inset-0 bg-scrim flex items-center justify-center z-50 p-4 max-md:p-2">
-      <div className="bg-background border rounded-lg max-w-3xl w-full max-h-[85dvh] overflow-y-auto max-md:h-full max-md:max-h-none max-md:max-w-none">
+      <div className="bg-background border rounded-lg max-w-3xl w-full max-h-viewport-card overflow-y-auto max-md:h-full max-md:max-h-none max-md:max-w-none">
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
@@ -275,7 +275,7 @@ function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
 
   return createPortal(
     <div role="dialog" aria-modal="true" className="fixed inset-0 bg-scrim flex items-center justify-center z-50 p-4 max-md:p-2">
-      <div className="bg-background border rounded-lg max-w-3xl w-full max-h-[85dvh] overflow-y-auto max-md:h-full max-md:max-h-none max-md:max-w-none">
+      <div className="bg-background border rounded-lg max-w-3xl w-full max-h-viewport-card overflow-y-auto max-md:h-full max-md:max-h-none max-md:max-w-none">
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
@@ -381,7 +381,7 @@ function DocumentActionSheet({ document, open, onClose, onViewDetails, onEdit, o
 
       <div
         className="shrink-0 space-y-2 px-4 pt-2"
-        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.25rem)' }}
+        style={{ paddingBottom: 'calc(var(--safe-bottom) + 1.25rem)' }}
         onClick={(e) => e.stopPropagation()}
       >
         <button onClick={run(onViewDetails)} className={actionClass}>
@@ -1243,24 +1243,29 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
 
         {/* Pagination Controls */}
         {onPageChange && totalCount > pageSize && (
-          <div className="flex items-center justify-between mt-3 pt-3 border-t">
+          // Wraps rather than overflowing: on a 360px screen this row is far
+          // wider than the viewport, and it used to push the paging buttons
+          // off the right edge with no way to scroll to them.
+          <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-3 border-t">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <span>Show:</span>
               <select
                 value={pageSize}
                 onChange={(e) => onPageSizeChange?.(Number(e.target.value))}
-                className="px-2 py-1 border rounded text-sm"
+                className="h-control-sm rounded-(--input-radius) border-(length:--input-border-width) border-input bg-background px-2 text-sm focus-ring"
               >
                 <option value={25}>25</option>
                 <option value={50}>50</option>
                 <option value={100}>100</option>
                 <option value={200}>200</option>
               </select>
-              <span>per page</span>
+              <span className="max-sm:sr-only">per page</span>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 max-sm:w-full max-sm:justify-center">
+              {/* Redundant with "Page N of M" beside the arrows, so it is the
+                  first thing to go when space is tight. */}
+              <span className="text-sm text-muted-foreground max-md:hidden">
                 Showing {Math.min((currentPage - 1) * pageSize + 1, totalCount)} - {Math.min(currentPage * pageSize, totalCount)} of {totalCount}
               </span>
 
@@ -1270,7 +1275,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                   size="sm"
                   onClick={() => onPageChange(1)}
                   disabled={currentPage === 1}
-                  className="p-1"
+                  className="p-1 touch-target"
                 >
                   <ChevronsLeft className="h-4 w-4" />
                 </Button>
@@ -1279,7 +1284,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                   size="sm"
                   onClick={() => onPageChange(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className="p-1"
+                  className="p-1 touch-target"
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
@@ -1293,7 +1298,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                   size="sm"
                   onClick={() => onPageChange(currentPage + 1)}
                   disabled={currentPage >= Math.ceil(totalCount / pageSize)}
-                  className="p-1"
+                  className="p-1 touch-target"
                 >
                   <ChevronRight className="h-4 w-4" />
                 </Button>
@@ -1302,7 +1307,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                   size="sm"
                   onClick={() => onPageChange(Math.ceil(totalCount / pageSize))}
                   disabled={currentPage >= Math.ceil(totalCount / pageSize)}
-                  className="p-1"
+                  className="p-1 touch-target"
                 >
                   <ChevronsRight className="h-4 w-4" />
                 </Button>
@@ -1320,7 +1325,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
               </div>
             )}
             {allowViewToggle && (
-              <div className="flex items-center rounded-md border p-0.5">
+              <div className="flex items-center rounded-md border p-0.5 touch-target">
                 {([
                   ['table', TableIcon, 'Table view'],
                   ['tile', LayoutGrid, 'Tile view'],

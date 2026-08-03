@@ -1,6 +1,7 @@
 import { createContext, useContext, useReducer, useCallback, useEffect, useRef, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { getCurrentUserFromToken } from '@/services/auth'
+import { MOBILE_BREAKPOINT } from '@/hooks/use-mobile'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -201,9 +202,12 @@ function useMenuUrlSync(_state: MenuState, dispatch: React.Dispatch<MenuAction>)
       return
     }
     const { section, entityId, m2View } = sectionFromPath(location.pathname)
-    // Read the breakpoint at dispatch time (not via useIsMobile, whose first
-    // render is always `false`) so a mobile deep link never opens the drawer.
-    const mobile = window.matchMedia('(max-width: 767px)').matches
+    // Read the breakpoint at dispatch time rather than from a hook: this runs
+    // inside an effect that must produce one dispatch per navigation, so it
+    // needs the value imperatively, not as reactive state. (useIsMobile is now
+    // correct on first render, but subscribing here would re-dispatch on every
+    // resize across the breakpoint, which is not what SYNC_FROM_URL means.)
+    const mobile = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`).matches
     dispatch({ type: 'SYNC_FROM_URL', section, entityId, m2View, mobile })
   }, [location.pathname, dispatch])
 

@@ -565,7 +565,7 @@ function CardNode({
           return onOpenPicker ? (
             <button
               type="button"
-              className="shrink-0 rounded p-0.5 -m-0.5 hover:bg-muted-foreground/10"
+              className="shrink-0 rounded p-0.5 -m-0.5 hover:bg-muted-foreground/10 touch-target"
               title="Change icon"
               onClick={e => { e.stopPropagation(); onOpenPicker(e, path, node) }}
             >
