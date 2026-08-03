@@ -74,16 +74,16 @@ export function MenuPanelArea() {
       {/* Mobile: the drawer floats over the content, so dim it and let a tap
           outside close the menu (the URL sync also closes it on navigation). */}
       {mobileOverlay && (
-        <div className="fixed inset-0 z-40 bg-black/30 animate-fade-in" onClick={closeM1} aria-hidden />
+        <div className="fixed inset-0 z-40 bg-scrim animate-fade-in" onClick={closeM1} aria-hidden />
       )}
       <div
         style={state.m1Open && !mobileOverlay ? { width } : undefined}
         className={cn(
-          'flex-shrink-0 overflow-hidden bg-sidebar',
+          'flex-shrink-0 overflow-hidden bg-card',
           !isDragging && !mobileOverlay && 'transition-[width] duration-200 ease-out',
           state.m1Open ? 'rounded-xl shadow-elevation-2' : 'w-0',
           mobileOverlay
-            ? 'fixed bottom-2 left-16 right-2 top-2 z-40 shadow-elevation-8 animate-fade-in'
+            ? 'fixed bottom-2 left-16 right-2 top-2 z-40 shadow-elevation-5 animate-fade-in'
             : 'relative',
         )}
       >
@@ -99,7 +99,7 @@ export function MenuPanelArea() {
         {/* M2 layer — slides over M1 */}
         <div
           className={cn(
-            'absolute inset-0 z-10 bg-sidebar flex flex-col transition-transform duration-200 ease-out',
+            'absolute inset-0 z-10 bg-card flex flex-col transition-transform duration-200 ease-out',
             state.m2Open ? 'translate-x-0' : 'translate-x-full',
           )}
         >

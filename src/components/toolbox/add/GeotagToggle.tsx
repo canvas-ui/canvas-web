@@ -47,19 +47,19 @@ export function GeotagToggle({ geotag: g, idPrefix = 'geotag' }: { geotag: Geota
         <span className="flex items-center gap-2 text-sm text-foreground">
           {g.busy
             ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
-            : <MapPin className={cn('h-4 w-4 shrink-0', g.enabled ? 'text-blue-500' : 'text-muted-foreground')} />}
+            : <MapPin className={cn('h-4 w-4 shrink-0', g.enabled ? 'text-info' : 'text-muted-foreground')} />}
           Geotag
         </span>
-        <div className={cn('relative h-5 w-10 shrink-0 rounded-full transition-colors', g.enabled ? 'bg-blue-500' : 'bg-zinc-300')}>
+        <div className={cn('relative h-5 w-10 shrink-0 rounded-full transition-colors', g.enabled ? 'bg-info' : 'bg-muted-foreground/30')}>
           <div
             className={cn(
-              'absolute top-[2px] h-4 w-4 rounded-full bg-white shadow transition-transform',
+              'absolute top-[2px] h-4 w-4 rounded-full bg-background shadow-elevation-1 transition-transform',
               g.enabled ? 'translate-x-[22px]' : 'translate-x-[2px]',
             )}
           />
         </div>
       </div>
-      <p id={`${idPrefix}-hint`} className={cn('text-xs', problem ? 'text-amber-600' : 'text-muted-foreground')}>
+      <p id={`${idPrefix}-hint`} className={cn('text-xs', problem ? 'text-warning' : 'text-muted-foreground')}>
         {hint(g)}
       </p>
     </div>

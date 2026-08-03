@@ -107,7 +107,7 @@ function linkify(value: string) {
   return parts.map((part, index) => (
     isHttpUrl(part)
       ? (
-        <a key={`${part}-${index}`} href={part} target="_blank" rel="noreferrer" className="underline decoration-neutral-300 underline-offset-2 hover:text-violet-700">
+        <a key={`${part}-${index}`} href={part} target="_blank" rel="noreferrer" className="underline decoration-muted-foreground underline-offset-2 hover:text-primary">
           {part}
         </a>
       )
@@ -208,20 +208,20 @@ export default function PublicCanvasPage() {
 
   if (isLoading && !payload) {
     return (
-      <main className="min-h-screen bg-neutral-100 flex items-center justify-center p-6">
-        <div className="text-sm text-neutral-500">Loading canvas...</div>
+      <main className="min-h-screen bg-muted flex items-center justify-center p-6">
+        <div className="text-sm text-muted-foreground">Loading canvas...</div>
       </main>
     )
   }
 
   if (error || !payload) {
     return (
-      <main className="min-h-screen bg-neutral-100 flex items-center justify-center p-6">
-        <Card className="max-w-md bg-white">
+      <main className="min-h-screen bg-muted flex items-center justify-center p-6">
+        <Card className="max-w-md bg-card">
           <CardHeader>
             <CardTitle>Canvas unavailable</CardTitle>
           </CardHeader>
-          <CardContent className="text-sm text-neutral-600">
+          <CardContent className="text-sm text-muted-foreground">
             {error || 'This public canvas does not exist.'}
           </CardContent>
         </Card>
@@ -234,34 +234,34 @@ export default function PublicCanvasPage() {
 
   return (
     <PublicShareContext.Provider value={code}>
-    <main className="min-h-screen bg-neutral-100 p-4 text-neutral-950 md:p-10">
+    <main className="min-h-screen bg-muted p-4 text-foreground md:p-10">
       <div className="mx-auto max-w-6xl">
-        <Card className="bg-white shadow-xl">
+        <Card className="bg-card shadow-elevation-3">
           <CardHeader className="border-b">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div className="flex min-w-0 gap-4">
                 <div
-                  className="mt-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-50 text-violet-600"
+                  className="mt-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent text-primary"
                   style={payload.canvas.color ? { borderLeft: `4px solid ${payload.canvas.color}` } : undefined}
                 >
                   <LayoutDashboard className="h-6 w-6" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs uppercase tracking-wide text-neutral-500">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
                     {payload.workspace.label || payload.workspace.name}
                   </div>
                   <CardTitle className="mt-1 truncate text-3xl md:text-5xl">
                     {payload.canvas.label || payload.canvas.name || 'Canvas'}
                   </CardTitle>
                   {payload.canvas.description && (
-                    <p className="mt-3 max-w-3xl text-base text-neutral-600">
+                    <p className="mt-3 max-w-3xl text-base text-muted-foreground">
                       {payload.canvas.description}
                     </p>
                   )}
                 </div>
               </div>
-              <div className="flex shrink-0 items-center gap-2 rounded-full border px-3 py-1 text-xs text-neutral-600">
-                {isLive ? <Wifi className="h-3.5 w-3.5 text-green-600" /> : <WifiOff className="h-3.5 w-3.5 text-neutral-400" />}
+              <div className="flex shrink-0 items-center gap-2 rounded-full border px-3 py-1 text-xs text-muted-foreground">
+                {isLive ? <Wifi className="h-3.5 w-3.5 text-success" /> : <WifiOff className="h-3.5 w-3.5 text-muted-foreground" />}
                 {isLive ? 'Live' : 'Offline'}
               </div>
             </div>
@@ -299,7 +299,7 @@ export default function PublicCanvasPage() {
                 <div className="flex flex-col gap-2 md:flex-row md:items-center">
                   <form onSubmit={submitSearch} className="flex min-w-0 items-center gap-2">
                     <div className="relative min-w-0">
-                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                       <input
                         type="search"
                         value={searchQuery}
@@ -311,21 +311,21 @@ export default function PublicCanvasPage() {
                         <button
                           type="button"
                           onClick={clearSearch}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                           aria-label="Clear search"
                         >
                           <X className="h-4 w-4" />
                         </button>
                       )}
                     </div>
-                    <button type="submit" className="rounded-md border px-3 py-1.5 text-xs hover:bg-neutral-50">
+                    <button type="submit" className="rounded-md border px-3 py-1.5 text-xs hover:bg-muted">
                       Search
                     </button>
                   </form>
                   <button
                     type="button"
                     onClick={load}
-                    className="inline-flex items-center justify-center gap-2 rounded-md border px-3 py-1.5 text-xs hover:bg-neutral-50"
+                    className="inline-flex items-center justify-center gap-2 rounded-md border px-3 py-1.5 text-xs hover:bg-muted"
                   >
                     <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
                     Refresh
@@ -333,13 +333,13 @@ export default function PublicCanvasPage() {
                 </div>
               </div>
               {searchQuery.trim() && (
-                <div className="border-b bg-neutral-50 px-4 py-2 text-xs text-neutral-600">
+                <div className="border-b bg-muted px-4 py-2 text-xs text-muted-foreground">
                   Local search: <span className="font-mono">"{searchQuery.trim()}"</span>
                 </div>
               )}
               <div className="divide-y">
                 {filteredDocuments.length === 0 ? (
-                  <div className="p-8 text-center text-sm text-neutral-500">
+                  <div className="p-8 text-center text-sm text-muted-foreground">
                     {searchQuery.trim() ? 'No loaded documents match your search.' : 'No documents yet.'}
                   </div>
                 ) : filteredDocuments.map((document) => {
@@ -354,31 +354,31 @@ export default function PublicCanvasPage() {
                         <div className="min-w-0">
                           <h3 className="truncate font-medium">
                             {openUrl ? (
-                              <a href={openUrl} target="_blank" rel="noreferrer" className="hover:text-violet-700 hover:underline">
+                              <a href={openUrl} target="_blank" rel="noreferrer" className="hover:text-primary hover:underline">
                                 {display.title}
                               </a>
                             ) : display.title}
                           </h3>
-                          <div className="mt-1 font-mono text-xs text-neutral-500">{display.schemaLabel}</div>
+                          <div className="mt-1 font-mono text-xs text-muted-foreground">{display.schemaLabel}</div>
                         </div>
                         <div className="flex shrink-0 items-center gap-3">
                           {isFile && (
                             <a
                               href={publicDocumentContentUrl(code, document.id, true)}
                               download={display.title}
-                              className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-50 hover:text-neutral-950"
+                              className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
                             >
                               <Download className="h-3.5 w-3.5" />
                               Download
                             </a>
                           )}
-                          <time className="text-xs text-neutral-500">
+                          <time className="text-xs text-muted-foreground">
                             {formatDate(document.updatedAt || document.createdAt)}
                           </time>
                         </div>
                       </div>
                       {display.preview && (
-                        <p className="mt-3 line-clamp-3 text-sm leading-6 text-neutral-700">
+                        <p className="mt-3 line-clamp-3 text-sm leading-6 text-foreground">
                           {linkify(display.preview)}
                         </p>
                       )}
@@ -388,7 +388,7 @@ export default function PublicCanvasPage() {
                             src={fileUrl || undefined}
                             alt={display.title}
                             loading="lazy"
-                            className="max-h-64 max-w-full rounded border bg-neutral-50 object-contain transition-opacity hover:opacity-90"
+                            className="max-h-64 max-w-full rounded border bg-muted object-contain transition-opacity hover:opacity-90"
                           />
                         </a>
                       )}
@@ -408,8 +408,8 @@ export default function PublicCanvasPage() {
 
 function Stat({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="rounded-xl border bg-neutral-50 p-4">
-      <div className="text-xs uppercase tracking-wide text-neutral-500">{label}</div>
+    <div className="rounded-xl border bg-muted p-4">
+      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className={`mt-2 truncate text-lg font-semibold ${mono ? 'font-mono text-sm' : ''}`}>
         {value || '-'}
       </div>

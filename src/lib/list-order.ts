@@ -150,8 +150,8 @@ export function useListReorder(onDrop: (from: number, to: number) => void) {
   // gap renders on the final row's bottom edge.
   const insertLineClass = (index: number, length: number): string | false => {
     if (insertIndex === null || draggingIndex === null) return false
-    if (insertIndex === index) return 'shadow-[0_-3px_0_0_hsl(var(--primary))]'
-    if (insertIndex === length && index === length - 1) return 'shadow-[0_3px_0_0_hsl(var(--primary))]'
+    if (insertIndex === index) return 'shadow-[0_-3px_0_0_var(--color-primary)]'
+    if (insertIndex === length && index === length - 1) return 'shadow-[0_3px_0_0_var(--color-primary)]'
     return false
   }
 

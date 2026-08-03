@@ -94,7 +94,7 @@ function NavItem({ path, icon, label }: NavItemProps) {
 
 // Mobile-only entry point for the M0 rail — a small fixed toggle in the
 // bottom-left corner (the bottom-right belongs to the quick-add stack).
-// z-[39] keeps it *below* every drawer scrim (z-40+), so while any overlay
+// z-nav keeps it *below* every drawer scrim (z-40+), so while any overlay
 // is open the toggle is dimmed and a tap there hits the scrim instead —
 // no floating chrome ever covers a panel's bottom controls.
 export function MobileMenuToggle() {
@@ -106,7 +106,7 @@ export function MobileMenuToggle() {
       aria-label={state.m0Open ? 'Close menu' : 'Open menu'}
       // w-12 matches the rail card's width exactly, so toggle and rail read
       // as one aligned column when the rail is open.
-      className="fixed bottom-[max(0.5rem,env(safe-area-inset-bottom))] left-2 z-[39] flex h-12 w-12 items-center justify-center rounded-full bg-zinc-900 text-white shadow-elevation-4 md:hidden"
+      className="fixed bottom-[max(0.5rem,env(safe-area-inset-bottom))] left-2 z-nav flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background shadow-elevation-4 md:hidden"
     >
       {state.m0Open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
     </button>
@@ -149,18 +149,18 @@ export function MenuBar() {
     <TooltipProvider delayDuration={200}>
       {/* Mobile: dim the content behind the open rail (tap to close), same
           treatment as the M1/M2 drawer. */}
-      {/* z-[38]: above content, below the M1/M2 drawer (z-40) and the rail
-          toggle (z-[39]) — only the content section dims, not other menus. */}
+      {/* z-nav-scrim: above content, below the M1/M2 drawer (z-40) and the rail
+          toggle (z-nav) — only the content section dims, not other menus. */}
       {state.m0Open && (
-        <div className="fixed inset-0 z-[38] bg-black/30 animate-fade-in md:hidden" onClick={closeM0} aria-hidden />
+        <div className="fixed inset-0 z-nav-scrim bg-scrim animate-fade-in md:hidden" onClick={closeM0} aria-hidden />
       )}
       <div
         className={cn(
-          'flex flex-col items-center w-[var(--m0-width)] h-full bg-transparent shrink-0',
+          'flex flex-col items-center w-rail h-full bg-transparent shrink-0',
           // Mobile: hidden by default; while open it floats as a slim rail
           // card anchored above the bottom-left toggle button.
           state.m0Open
-            ? 'max-md:fixed max-md:left-2 max-md:top-2 max-md:bottom-[calc(max(0.5rem,env(safe-area-inset-bottom))+3.5rem)] max-md:z-[46] max-md:h-auto max-md:rounded-xl max-md:bg-card max-md:shadow-elevation-8 max-md:animate-fade-in'
+            ? 'max-md:fixed max-md:left-2 max-md:top-2 max-md:bottom-[calc(max(0.5rem,env(safe-area-inset-bottom))+3.5rem)] max-md:z-rail max-md:h-auto max-md:rounded-xl max-md:bg-card max-md:shadow-elevation-5 max-md:animate-fade-in'
             : 'max-md:hidden',
         )}
       >
@@ -186,7 +186,7 @@ export function MenuBar() {
           {/* Admin section */}
           {isAdmin && (
             <>
-              <div className="w-6 h-px bg-sidebar-border my-2" />
+              <div className="w-6 h-px bg-border my-2" />
               <NavItem path="/admin/users" icon={<Users className="w-5 h-5" />} label="All Users" />
               <NavItem path="/admin/logs" icon={<FileText className="w-5 h-5" />} label="Server Logs" />
               <NavItem path="/admin/workspaces" icon={<FolderOpen className="w-5 h-5" />} label="All Workspaces" />
@@ -198,7 +198,7 @@ export function MenuBar() {
 
         {/* Bottom section */}
         <div className="flex flex-col items-center gap-1 py-2 shrink-0">
-          <div className="w-6 h-px bg-sidebar-border mb-2" />
+          <div className="w-6 h-px bg-border mb-2" />
 
           {/* Mobile only — the toolbox FAB is hidden below md, so the rail
               carries the toolbox entry point instead */}

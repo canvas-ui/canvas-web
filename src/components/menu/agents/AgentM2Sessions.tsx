@@ -188,7 +188,7 @@ export function AgentM2Sessions() {
         }
       />
 
-      <div className="border-b border-sidebar-border px-4 py-3">
+      <div className="border-b border-border px-4 py-3">
         <div className="text-sm font-semibold">Sessions</div>
         <div className="mt-1 text-xs text-muted-foreground">
           {sessions?.mode === 'incognito' ? 'Incognito mode' : sessions?.mode === 'experimental' ? 'Experimental mode' : 'Persistent history'}

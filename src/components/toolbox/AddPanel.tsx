@@ -76,7 +76,7 @@ export function AddPanel() {
     <>
       {/* Mobile scrim — same treatment as the M1/M2 menu drawer */}
       {isMobile && (
-        <div className="fixed inset-0 z-[54] bg-black/30 animate-fade-in" onClick={closeAdd} aria-hidden />
+        <div className="fixed inset-0 z-panel-scrim bg-scrim animate-fade-in" onClick={closeAdd} aria-hidden />
       )}
     <div
       style={isMobile ? undefined : { width }}
@@ -87,7 +87,7 @@ export function AddPanel() {
         // bottom controls). Desktop: a resizable flex sibling that shrinks
         // the main content.
         isMobile
-          ? 'fixed bottom-2 left-2 right-2 top-2 z-[55] shadow-elevation-8 animate-fade-in'
+          ? 'fixed bottom-2 left-2 right-2 top-2 z-panel shadow-elevation-5 animate-fade-in'
           : 'relative shrink-0 shadow-elevation-3',
       )}
     >

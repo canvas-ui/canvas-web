@@ -55,13 +55,13 @@ export function StreamingChatMessageComponent({
   const getConnectionIcon = () => {
     switch (connectionStatus) {
       case 'websocket':
-        return <span title="WebSocket"><Wifi className="h-3 w-3 text-green-500" /></span>;
+        return <span title="WebSocket"><Wifi className="h-3 w-3 text-success" /></span>;
       case 'sse':
-        return <span title="Server-Sent Events"><Radio className="h-3 w-3 text-blue-500" /></span>;
+        return <span title="Server-Sent Events"><Radio className="h-3 w-3 text-info" /></span>;
       case 'rest':
-        return <span title="REST API"><Cpu className="h-3 w-3 text-yellow-500" /></span>;
+        return <span title="REST API"><Cpu className="h-3 w-3 text-warning" /></span>;
       default:
-        return <span title="Disconnected"><WifiOff className="h-3 w-3 text-red-500" /></span>;
+        return <span title="Disconnected"><WifiOff className="h-3 w-3 text-destructive" /></span>;
     }
   };
 
@@ -74,7 +74,7 @@ export function StreamingChatMessageComponent({
           message.role === 'user'
             ? 'bg-primary text-primary-foreground'
             : 'bg-muted'
-        } ${isStreaming && !message.isComplete ? 'border-2 border-blue-300' : ''}`}
+        } ${isStreaming && !message.isComplete ? 'border-2 border-info' : ''}`}
       >
         <AgentAssistantExtras
           reasoning={message.role === 'assistant' ? message.metadata?.reasoning?.trim() : undefined}
@@ -93,7 +93,7 @@ export function StreamingChatMessageComponent({
           <div className="flex items-center gap-2">
             <span>{new Date(message.timestamp).toLocaleTimeString()}</span>
             {isStreaming && !message.isComplete && (
-              <span className="text-blue-400">• streaming...</span>
+              <span className="text-info">• streaming...</span>
             )}
           </div>
           {message.role === 'assistant' && getConnectionIcon()}

@@ -92,6 +92,11 @@ export const visibleAccentColor = (color?: string | null): string | undefined =>
 // Tailwind text class for an icon rendered ON an accent-colored surface
 // (e.g. the drag-strip handle): dark glyph on light strips, light glyph on
 // dark ones, muted on the neutral fallback.
+//
+// Absolute black/white here is correct and deliberately not tokenised: the
+// backdrop is a user-chosen arbitrary colour, not a theme surface, so the
+// only thing that guarantees contrast is picking against that colour's own
+// luminance. A theme token would be computed against the wrong background.
 export const onAccentTextClass = (accent?: string): string => {
   if (!accent) return 'text-muted-foreground/70';
   const lum = relativeLuminance(accent);

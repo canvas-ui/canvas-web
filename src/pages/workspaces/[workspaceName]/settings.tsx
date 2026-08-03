@@ -1259,12 +1259,12 @@ export default function WorkspaceSettingsPage() {
                       )}
                       <span>watch: {cfg.watch ? 'true' : 'false'}</span>
                       {device?.name && <span title={device.id}>device: {device.name}</span>}
-                      {cfg.readOnly === true && <span className="rounded bg-amber-500/15 px-1.5 py-0.5 font-medium text-amber-600">read-only</span>}
+                      {cfg.readOnly === true && <span className="rounded bg-warning/15 px-1.5 py-0.5 font-medium text-warning">read-only</span>}
                       {backend.lastSyncAt && <span>last scan: {new Date(backend.lastSyncAt).toLocaleString()}</span>}
                     </div>
                     {backend.lastError && <p className="mt-2 text-xs text-destructive">{backend.lastError}</p>}
                     {cfg.readOnly === true && (
-                      <p className="mt-1 text-[11px] text-amber-600">
+                      <p className="mt-1 text-[11px] text-warning">
                         Read-only: the web UI / REST API never deletes bytes on this backend — Destroy degrades to a reference drop.
                         Recommended when the folder is exported elsewhere (e.g. via Samba).
                       </p>
@@ -1349,7 +1349,7 @@ export default function WorkspaceSettingsPage() {
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <Icon icon="ph:lightning-fill" width={16} height={16} color="#f59e0b" className="shrink-0" />
+                  <Icon icon="ph:lightning-fill" width={16} height={16} className="shrink-0 text-warning" />
                   <h2 className="text-sm font-semibold">Stored Cache</h2>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">

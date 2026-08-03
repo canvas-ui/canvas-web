@@ -36,22 +36,22 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onD
   // Near-white workspace colors would vanish against the card background —
   // fall back to the neutral border in that case.
   const accent = visibleAccentColor(workspace.color);
-  const borderColorClass = accent ? '' : 'border-slate-300'; // Default border color
+  const borderColorClass = accent ? '' : 'border-border'; // Default border color
   const borderStyle = accent ? { borderLeftColor: accent, borderLeftWidth: '4px' } : { borderLeftWidth: '4px' };
 
   const getStatusColor = () => {
     switch (workspace.status) {
       case 'active':
-        return 'bg-green-500';
+        return 'bg-success';
       case 'inactive':
       case 'available':
-        return 'bg-gray-400';
+        return 'bg-muted-foreground';
       case 'error':
-        return 'bg-red-500';
+        return 'bg-destructive';
       case 'not_found':
-        return 'bg-gray-500';
+        return 'bg-muted-foreground';
       default:
-        return 'bg-gray-300';
+        return 'bg-accent';
     }
   };
 
@@ -189,7 +189,7 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onD
             </span>
           )}
           {isShared && (
-            <span className="ml-2 rounded-full bg-blue-500/10 px-2 py-1 text-xs text-blue-700">
+            <span className="ml-2 rounded-full bg-info/10 px-2 py-1 text-xs text-info">
               Shared
             </span>
           )}

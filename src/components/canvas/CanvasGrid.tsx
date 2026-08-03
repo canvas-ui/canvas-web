@@ -382,7 +382,7 @@ export function CanvasGrid({
             Add widget
           </button>
           {menuOpen && (
-            <div className="absolute left-0 top-full mt-1 z-20 w-48 rounded-md border bg-popover shadow-md py-1">
+            <div className="absolute left-0 top-full mt-1 z-20 w-48 rounded-md border bg-popover shadow-elevation-2 py-1">
               {listWidgets().map((def) => (
                 <button
                   key={def.type}
@@ -407,7 +407,7 @@ export function CanvasGrid({
           className={cn(
             'flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md transition-colors disabled:opacity-50',
             isDirty
-              ? 'bg-violet-600 text-white hover:bg-violet-500'
+              ? 'bg-primary text-primary-foreground hover:bg-primary'
               : 'border hover:bg-accent',
           )}
         >

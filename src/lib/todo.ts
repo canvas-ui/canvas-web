@@ -19,8 +19,8 @@ export function todoData(doc: Document): TodoData {
 // Badge styling per status (Tailwind classes, theme-aware via muted tokens).
 export const TODO_STATUS_STYLE: Record<TodoStatus, string> = {
   pending: 'bg-muted text-muted-foreground',
-  'in-progress': 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
-  completed: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+  'in-progress': 'bg-info/15 text-info dark:text-info',
+  completed: 'bg-success/15 text-success dark:text-success',
   cancelled: 'bg-muted text-muted-foreground line-through',
 }
 

@@ -7,7 +7,24 @@ Context URL structure: contextID@workspaceID://context-url, for example work-nb@
 This repository is only the web frontend with no backend code.
 All interaction with the backend is done via REST API endpoints and websocket connections.
 
-We will use the default black-and-white shadcn/ui theme
+## Theming
+
+The UI is fully tokenised — see `src/theme/README.md`. Rules:
+
+- NEVER write a hardcoded palette colour (`bg-zinc-900`, `text-blue-600`) or a
+  raw hex in a component. Use semantic tokens (`bg-card`, `text-muted-foreground`,
+  `bg-success`/`text-success-foreground`) so every theme keeps working.
+- Categorical colour (document types, chart series) uses the data palette
+  (`text-data-1` … `-12`), not status roles.
+- Elevation is `shadow-elevation-0` … `-5`. Tailwind's `shadow-md`/`shadow-lg`
+  are unthemed and render black-on-black in dark schemes.
+- Stacking uses named layers (`z-drawer`, `z-panel`, `z-toast`), never `z-[47]`.
+- Sizing that should follow density uses `h-control`, `p-page`, `gap-shell`.
+- Components must work at all three densities and in both colour schemes, and
+  must be free of router/fetch coupling where they're meant to be reusable —
+  the same components are consumed by the Tauri shell.
+
+`canvas` is the default theme and keeps the original black-and-white shadcn look.
 
 Main page should be based on the Authentication example: https://ui.shadcn.com/examples/authentication
 
@@ -19,8 +36,8 @@ Tree element should allow dragging and dropping to reorder the tree
 ## Frontend
 
 - Vite
-- React
-- Tailwind CSS
+- React 19
+- Tailwind CSS v4 (CSS-first `@theme`; there is no tailwind.config.js)
 - shadcn/ui (https://ui.shadcn.com/)
 - socket.io
 

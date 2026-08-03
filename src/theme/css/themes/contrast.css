@@ -1,0 +1,120 @@
+/**
+ * High Contrast — accessibility theme.
+ *
+ * Targets WCAG AAA (7:1) for body text and 4.5:1 for large text and UI
+ * boundaries, well above the AA floor the default themes hold.
+ *
+ * Demonstrates the component-token axis: this theme changes the *construction*
+ * of components, not just their colour. Corners go square, shadows are removed
+ * entirely, borders and focus rings thicken. That matters because elevation
+ * conveyed only by a soft shadow is invisible to a low-vision user — the
+ * information has to move into a hard border instead.
+ */
+
+[data-theme='contrast'] {
+  --radius: 0;
+
+  /* Shadows carry no information here; borders do the work. */
+  --shadow-strength: 0;
+
+  --focus-ring-width: 3px;
+  --focus-ring-offset: 2px;
+
+  --btn-border-width: 2px;
+  --btn-font-weight: 600;
+  --input-border-width: 2px;
+  --card-border-width: 2px;
+
+  --card-shadow: none;
+  --sheet-shadow: none;
+  --panel-shadow: none;
+  --panel-shadow-overlay: none;
+}
+
+[data-theme='contrast'][data-scheme='light'],
+[data-theme='contrast'] [data-scheme='light'] {
+  color-scheme: light;
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0 0 0);
+  --desk: oklch(0.88 0 0);
+
+  --primary: oklch(0 0 0);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.32 0.11 250);
+  --secondary-foreground: oklch(1 0 0);
+  --muted: oklch(0.94 0 0);
+  /* Deliberately dark for a "muted" role — 7:1 on white. Muted must still be
+     legible; it signals hierarchy, not that the text is optional. */
+  --muted-foreground: oklch(0.36 0 0);
+  --accent: oklch(0.9 0 0);
+  --accent-foreground: oklch(0 0 0);
+
+  --destructive: oklch(0.42 0.2 27);
+  --destructive-foreground: oklch(1 0 0);
+  --destructive-subtle: oklch(0.94 0.03 27);
+  --success: oklch(0.4 0.12 150);
+  --success-foreground: oklch(1 0 0);
+  --success-subtle: oklch(0.94 0.03 150);
+  --warning: oklch(0.44 0.11 70);
+  --warning-foreground: oklch(1 0 0);
+  --warning-subtle: oklch(0.94 0.04 70);
+  --info: oklch(0.4 0.16 258);
+  --info-foreground: oklch(1 0 0);
+  --info-subtle: oklch(0.94 0.03 258);
+
+  --border: oklch(0.22 0 0);
+  --input: oklch(0.22 0 0);
+  --ring: oklch(0.32 0.16 258);
+  --scrim: oklch(0 0 0 / 0.7);
+  --scrim-foreground: oklch(1 0 0);
+
+  --shadow-color: oklch(0 0 0);
+}
+
+[data-theme='contrast'][data-scheme='dark'],
+[data-theme='contrast'] [data-scheme='dark'] {
+  color-scheme: dark;
+
+  --background: oklch(0 0 0);
+  --foreground: oklch(1 0 0);
+  --card: oklch(0.08 0 0);
+  --card-foreground: oklch(1 0 0);
+  --popover: oklch(0.08 0 0);
+  --popover-foreground: oklch(1 0 0);
+  --desk: oklch(0.14 0 0);
+
+  --primary: oklch(1 0 0);
+  --primary-foreground: oklch(0 0 0);
+  --secondary: oklch(0.82 0.13 200);
+  --secondary-foreground: oklch(0 0 0);
+  --muted: oklch(0.18 0 0);
+  --muted-foreground: oklch(0.82 0 0);
+  --accent: oklch(0.24 0 0);
+  --accent-foreground: oklch(1 0 0);
+
+  --destructive: oklch(0.75 0.16 25);
+  --destructive-foreground: oklch(0 0 0);
+  --destructive-subtle: oklch(0.24 0.07 25);
+  --success: oklch(0.85 0.2 148);
+  --success-foreground: oklch(0 0 0);
+  --success-subtle: oklch(0.24 0.06 148);
+  --warning: oklch(0.88 0.17 90);
+  --warning-foreground: oklch(0 0 0);
+  --warning-subtle: oklch(0.26 0.06 90);
+  --info: oklch(0.82 0.13 235);
+  --info-foreground: oklch(0 0 0);
+  --info-subtle: oklch(0.24 0.07 235);
+
+  --border: oklch(0.85 0 0);
+  --input: oklch(0.85 0 0);
+  --ring: oklch(0.9 0.16 100);
+  --scrim: oklch(0 0 0 / 0.8);
+  --scrim-foreground: oklch(1 0 0);
+
+  --shadow-color: oklch(0 0 0);
+}

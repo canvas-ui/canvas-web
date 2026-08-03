@@ -414,7 +414,7 @@ export function BackendsTab({ document, workspaceId, onChanged }: TabProps) {
                 <span className="truncate font-mono text-xs text-muted-foreground" title={loc.url}>{key || loc.url}</span>
               </span>
               <span className="flex shrink-0 items-center gap-2">
-                <span className={`rounded px-1.5 py-0.5 text-[10px] uppercase ${loc.deletable ? 'bg-muted text-muted-foreground' : 'bg-amber-500/15 text-amber-600'}`}>
+                <span className={`rounded px-1.5 py-0.5 text-[10px] uppercase ${loc.deletable ? 'bg-muted text-muted-foreground' : 'bg-warning/15 text-warning'}`}>
                   {loc.deletable ? loc.kind : 'read-only'}
                 </span>
                 <button

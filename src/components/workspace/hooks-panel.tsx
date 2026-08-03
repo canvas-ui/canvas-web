@@ -277,7 +277,7 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
             >
               <Inbox className="mr-1 h-3.5 w-3.5" /> Pending
               {pendingCount > 0 && (
-                <span className="ml-1.5 rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
+                <span className="ml-1.5 rounded-full bg-warning/20 px-1.5 py-0.5 text-[10px] font-semibold text-warning dark:text-warning">
                   {pendingCount}
                 </span>
               )}
@@ -406,7 +406,7 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
                       <span className={
                         run.status === 'error' ? 'text-destructive font-medium'
                           : run.status === 'skipped' ? 'text-muted-foreground'
-                            : 'text-green-600 dark:text-green-500'
+                            : 'text-success dark:text-success'
                       }>
                         {run.status}
                       </span>

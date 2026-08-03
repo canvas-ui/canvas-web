@@ -9,10 +9,10 @@ import { useNavigate } from 'react-router-dom'
 
 function StatusDot({ status }: { status: string }) {
   const color =
-    status === 'active' ? 'bg-green-500' :
-    status === 'error' ? 'bg-red-500' :
-    status === 'starting' || status === 'stopping' ? 'bg-yellow-500' :
-    'bg-gray-400'
+    status === 'active' ? 'bg-success' :
+    status === 'error' ? 'bg-destructive' :
+    status === 'starting' || status === 'stopping' ? 'bg-warning' :
+    'bg-muted-foreground'
 
   return <span className={cn('inline-block w-2 h-2 rounded-full shrink-0', color)} title={status} />
 }
@@ -61,7 +61,7 @@ export function AgentList() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 h-12 border-b border-sidebar-border shrink-0">
+      <div className="flex items-center justify-between px-4 h-12 border-b border-border shrink-0">
         <span className="text-sm font-semibold">Agents</span>
         <button
           type="button"
@@ -88,7 +88,7 @@ export function AgentList() {
                 <div
                   key={agent.id}
                   className={cn(
-                    'group relative rounded-md px-3 py-2.5 cursor-pointer transition-all shadow-sm hover:shadow',
+                    'group relative rounded-md px-3 py-2.5 cursor-pointer transition-all shadow-elevation-1 hover:shadow',
                     isActive ? 'bg-accent shadow' : 'bg-card hover:bg-accent/50',
                   )}
                   style={{ borderRight: `6px solid ${agent.color || 'transparent'}`, borderRadius: agent.color ? '6px 0 0 6px' : undefined }}

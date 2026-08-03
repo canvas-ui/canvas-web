@@ -95,7 +95,7 @@ export function LayerIconPicker({ x, y, current, onChange, onClose }: LayerIconP
       <div className="fixed inset-0 z-40" onClick={onClose} />
       <div
         ref={panelRef}
-        className="fixed z-50 w-[270px] max-w-[90vw] rounded-md border bg-popover p-2 shadow-xl"
+        className="fixed z-50 w-[270px] max-w-[90vw] rounded-md border bg-popover p-2 shadow-elevation-4"
         style={{ left: pos.x, top: pos.y }}
       >
         <div className="flex items-center justify-between px-1 pb-1.5">
@@ -115,7 +115,7 @@ export function LayerIconPicker({ x, y, current, onChange, onClose }: LayerIconP
               onClick={() => onChange({ color: c })}
               className={cn(
                 'w-5 h-5 rounded-full border transition-transform hover:scale-110',
-                current.color === c ? 'ring-2 ring-offset-1 ring-foreground' : 'border-black/10',
+                current.color === c ? 'ring-2 ring-offset-1 ring-foreground' : 'border-border',
               )}
               style={{ backgroundColor: c }}
             />
@@ -135,7 +135,7 @@ export function LayerIconPicker({ x, y, current, onChange, onClose }: LayerIconP
           <label
             title="Custom color"
             className={cn(
-              'relative w-5 h-5 rounded-full border border-black/10 cursor-pointer hover:scale-110 transition-transform overflow-hidden',
+              'relative w-5 h-5 rounded-full border border-border cursor-pointer hover:scale-110 transition-transform overflow-hidden',
               current.color && !LAYER_COLORS.includes(current.color) && 'ring-2 ring-offset-1 ring-foreground',
             )}
             style={{
@@ -146,6 +146,8 @@ export function LayerIconPicker({ x, y, current, onChange, onClose }: LayerIconP
           >
             <input
               type="color"
+              // Literal hex required: `<input type="color">` rejects any
+              // value that isn't `#rrggbb`, including `var(--…)`.
               value={current.color ?? '#3b82f6'}
               onChange={(e) => onChange({ color: e.target.value })}
               className="absolute inset-0 opacity-0 cursor-pointer"

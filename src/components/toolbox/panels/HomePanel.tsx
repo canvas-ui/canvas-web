@@ -8,8 +8,8 @@ export function HomePanel() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-4 h-12 bg-zinc-900 shrink-0">
-        <span className="text-sm font-medium text-zinc-100">Home</span>
+      <div className="flex items-center justify-between px-4 h-12 bg-foreground shrink-0">
+        <span className="text-sm font-medium text-background">Home</span>
       </div>
 
       {/* Clock widget placeholder */}

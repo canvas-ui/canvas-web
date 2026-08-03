@@ -170,7 +170,7 @@ function CtxMenu({
       x={x}
       y={y}
       onClose={onClose}
-      className="min-w-[11rem] rounded-md border bg-popover p-1 shadow-lg"
+      className="min-w-[11rem] rounded-md border bg-popover p-1 shadow-elevation-3"
     >
         {/* Show layer content — workspace tree only */}
         {onShowContent && item(<Eye className="w-3 h-3" />, 'Show layer content', async () => {
@@ -239,7 +239,7 @@ function CtxMenu({
             className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-accent rounded-sm text-left"
             onClick={() => { onStartInlineCreate(path, true); onClose() }}
           >
-            <LayoutDashboard className="w-3 h-3 text-violet-500" />
+            <LayoutDashboard className="w-3 h-3 text-primary" />
             New canvas here
           </button>
         )}
@@ -403,7 +403,7 @@ function InlineCreateInput({ onConfirm, onCancel, placeholder = 'folder name…'
   }
 
   return (
-    <div className="flex min-h-10 items-center gap-2 rounded-md px-3 py-2 bg-card ring-1 ring-primary/50 shadow-lg text-sm font-medium">
+    <div className="flex min-h-10 items-center gap-2 rounded-md px-3 py-2 bg-card ring-1 ring-primary/50 shadow-elevation-3 text-sm font-medium">
       <ChevronRight className="w-4 h-4 opacity-0 shrink-0" />
       <input
         ref={inputRef}
@@ -521,17 +521,17 @@ function CardNode({
       <div
         className={cn(
           'group relative flex min-h-10 items-center gap-2 rounded-md px-3 py-2 cursor-pointer transition-all select-none overflow-hidden',
-          'shadow-lg hover:shadow-xl text-sm',
+          'shadow-elevation-3 hover:shadow-elevation-4 text-sm',
           'before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1.5 before:transition-colors',
-          isSource && 'ring-1 ring-blue-500/40 bg-blue-500/10 before:bg-blue-500',
-          isTarget && !isSource && 'ring-1 ring-amber-500/40 bg-amber-500/10 before:bg-amber-500',
+          isSource && 'ring-1 ring-info/40 bg-info/10 before:bg-info',
+          isTarget && !isSource && 'ring-1 ring-warning/40 bg-warning/10 before:bg-warning',
           !isSource && !isTarget && isSelected && !node.locked && 'bg-primary/[0.08] hover:bg-primary/[0.12] before:bg-primary',
-          !isSource && !isTarget && isSelected && node.locked && 'bg-amber-500/15 hover:bg-amber-500/20 before:bg-primary',
+          !isSource && !isTarget && isSelected && node.locked && 'bg-warning/15 hover:bg-warning/20 before:bg-primary',
           !isSource && !isTarget && !isSelected && isPending && 'bg-primary/[0.03] before:bg-transparent',
           !isSource && !isTarget && !isSelected && !isPending && !node.locked && 'bg-card hover:bg-primary/[0.04] before:bg-transparent',
-          !isSource && !isTarget && !isSelected && node.locked && 'bg-amber-500/15 hover:bg-amber-500/20 before:bg-amber-500',
-          dragOverPath === path && !readOnly && !isCopyDrag && 'ring-2 ring-blue-400 bg-blue-50/50',
-          dragOverPath === path && !readOnly && isCopyDrag && 'ring-2 ring-emerald-500 bg-emerald-50/50',
+          !isSource && !isTarget && !isSelected && node.locked && 'bg-warning/15 hover:bg-warning/20 before:bg-warning',
+          dragOverPath === path && !readOnly && !isCopyDrag && 'ring-2 ring-info bg-info-subtle/50',
+          dragOverPath === path && !readOnly && isCopyDrag && 'ring-2 ring-success bg-success-subtle/50',
         )}
         style={{ borderRight: style.color ? `4px solid ${style.color}` : '4px solid transparent' }}
         draggable={!readOnly}
@@ -559,7 +559,7 @@ function CardNode({
               width={16}
               height={16}
               color={style.color || undefined}
-              className={cn('shrink-0', !style.color && (isCanvas ? 'text-violet-500' : 'text-muted-foreground'))}
+              className={cn('shrink-0', !style.color && (isCanvas ? 'text-primary' : 'text-muted-foreground'))}
             />
           )
           return onOpenPicker ? (
@@ -1007,7 +1007,7 @@ export function MenuTreeView({
             className={cn(
               'px-2 py-0.5 rounded-full border transition-colors select-none',
               copyModeSticky
-                ? 'border-emerald-500 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                ? 'border-success bg-success/15 text-success dark:text-success'
                 : 'border-border text-muted-foreground hover:bg-muted',
             )}
           >
@@ -1036,10 +1036,10 @@ export function MenuTreeView({
       <div
         className={cn(
           'group relative flex min-h-10 items-center gap-2 rounded-md px-3 py-2 cursor-pointer transition-all select-none',
-          'shadow-lg hover:shadow-xl text-sm',
+          'shadow-elevation-3 hover:shadow-elevation-4 text-sm',
           selectedPath === '/' && !contentPath ? 'bg-primary/[0.06]' : 'bg-card hover:bg-primary/[0.04]',
-          dragOverPath === '/' && !readOnly && !isCopyDrag && 'ring-2 ring-blue-400 bg-blue-50/50',
-          dragOverPath === '/' && !readOnly && isCopyDrag && 'ring-2 ring-emerald-500 bg-emerald-50/50',
+          dragOverPath === '/' && !readOnly && !isCopyDrag && 'ring-2 ring-info bg-info-subtle/50',
+          dragOverPath === '/' && !readOnly && isCopyDrag && 'ring-2 ring-success bg-success-subtle/50',
         )}
         style={{ borderRight: '4px solid transparent' }}
         onClick={() => onSelect('/')}

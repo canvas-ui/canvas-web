@@ -168,7 +168,7 @@ export default function LoginPage() {
                 onChange={handleInputChange}
               />
               {errors.email && (
-                <p className="text-sm text-red-500">{errors.email}</p>
+                <p className="text-sm text-destructive">{errors.email}</p>
               )}
             </div>
 
@@ -183,7 +183,7 @@ export default function LoginPage() {
                 onChange={handleInputChange}
               />
               {errors.password && (
-                <p className="text-sm text-red-500">{errors.password}</p>
+                <p className="text-sm text-destructive">{errors.password}</p>
               )}
             </div>
 

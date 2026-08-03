@@ -125,7 +125,7 @@ export function PickDocumentsCard({ onClose, onConfirm, fixedWorkspaceName, savi
   }
 
   return (
-    <div className={cn('flex flex-col overflow-hidden rounded-2xl border bg-card shadow-elevation-4', sizeClassName || 'h-[85dvh] max-h-full w-[min(420px,90vw)] max-md:h-full max-md:w-full max-md:shadow-elevation-8')}>
+    <div className={cn('flex flex-col overflow-hidden rounded-2xl border bg-card shadow-elevation-4', sizeClassName || 'h-[85dvh] max-h-full w-[min(420px,90vw)] max-md:h-full max-md:w-full max-md:shadow-elevation-5')}>
       <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
         <span className="flex items-center gap-2 text-sm font-medium">
           <FileSearch className="h-4 w-4" />
@@ -191,7 +191,7 @@ export function PickDocumentsCard({ onClose, onConfirm, fixedWorkspaceName, savi
                   <>
                     <div
                       className={cn(
-                        'group relative flex min-h-10 items-center gap-2 rounded-md px-3 py-2 cursor-pointer transition-all select-none text-sm shadow-sm hover:shadow',
+                        'group relative flex min-h-10 items-center gap-2 rounded-md px-3 py-2 cursor-pointer transition-all select-none text-sm shadow-elevation-1 hover:shadow',
                         'before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1.5 before:transition-colors',
                         browsePath === '/'
                           ? 'bg-primary/[0.08] hover:bg-primary/[0.12] before:bg-primary'

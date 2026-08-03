@@ -99,14 +99,14 @@ export function PinnedCanvasTile({ pin, onUnpin, onMinimize, onDropPin }: {
 
   return (
     // Height comes from the grid row (stretched to the bottom of the view).
-    // Filled: fixed to the viewport above the rail (z-[46]) and the mobile
-    // drawers (z-[48]). Nothing in the shell transforms, so `fixed` resolves
+    // Filled: fixed to the viewport above the rail (z-rail) and the mobile
+    // drawers (z-side). Nothing in the shell transforms, so `fixed` resolves
     // against the viewport rather than the content area.
     <section
       {...dragProps}
       className={
         isFilled
-          ? 'fixed inset-0 z-[60] flex flex-col bg-background'
+          ? 'fixed inset-0 z-picker flex flex-col bg-background'
           : `flex flex-col rounded-lg border bg-background overflow-hidden min-h-0 min-w-0 ${
               dropSide ? 'ring-2 ring-primary/60' : ''
             }`
@@ -124,7 +124,7 @@ export function PinnedCanvasTile({ pin, onUnpin, onMinimize, onDropPin }: {
       >
         {canDrag && <GripVertical className="w-3.5 h-3.5 shrink-0 text-muted-foreground/60" aria-hidden />}
         {color && <div className="w-1 h-5 rounded-full shrink-0" style={{ backgroundColor: color }} />}
-        <LayoutDashboard className="w-4 h-4 shrink-0 text-violet-500" />
+        <LayoutDashboard className="w-4 h-4 shrink-0 text-primary" />
         <div className="flex flex-col min-w-0 flex-1">
           <span className="text-sm font-semibold leading-tight truncate">{label}</span>
           <span className="text-[11px] text-muted-foreground truncate leading-tight font-mono">

@@ -32,14 +32,14 @@ export function ContextMenuShell({ x, y, onClose, className, children }: {
   return createPortal(
     <>
       <div
-        className="fixed inset-0 z-[70]"
+        className="fixed inset-0 z-menu-scrim"
         onClick={onClose}
         onContextMenu={(e) => { e.preventDefault(); onClose() }}
       />
       <div
         ref={menuRef}
         style={{ left: pos.x, top: pos.y }}
-        className={cn('fixed z-[75] max-h-[90vh] overflow-y-auto', className)}
+        className={cn('fixed z-menu max-h-[90vh] overflow-y-auto', className)}
       >
         {children}
       </div>

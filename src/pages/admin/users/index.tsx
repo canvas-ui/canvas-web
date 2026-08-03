@@ -369,7 +369,7 @@ export default function AdminUsersPage() {
           <select
             value={filters.status}
             onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-            className="px-3 py-2 border border-gray-300 rounded-md"
+            className="px-3 py-2 border border-border rounded-md"
           >
             <option value="">All Statuses</option>
             <option value="active">Active</option>
@@ -380,7 +380,7 @@ export default function AdminUsersPage() {
           <select
             value={filters.userType}
             onChange={(e) => setFilters(prev => ({ ...prev, userType: e.target.value }))}
-            className="px-3 py-2 border border-gray-300 rounded-md"
+            className="px-3 py-2 border border-border rounded-md"
           >
             <option value="">All Types</option>
             <option value="user">User</option>
@@ -430,8 +430,8 @@ export default function AdminUsersPage() {
                       <td className="p-3">
                         <span className={`px-2 py-1 rounded-full text-xs ${
                           user.userType === 'admin'
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-blue-100 text-blue-800'
+                            ? 'bg-destructive-subtle text-destructive'
+                            : 'bg-info-subtle text-info'
                         }`}>
                           {user.userType}
                         </span>
@@ -439,12 +439,12 @@ export default function AdminUsersPage() {
                       <td className="p-3">
                         <span className={`px-2 py-1 rounded-full text-xs ${
                           user.status === 'active'
-                            ? 'bg-green-100 text-green-800'
+                            ? 'bg-success-subtle text-success'
                             : user.status === 'inactive'
-                            ? 'bg-yellow-100 text-yellow-800'
+                            ? 'bg-warning-subtle text-warning'
                             : user.status === 'pending'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-red-100 text-red-800'
+                            ? 'bg-info-subtle text-info'
+                            : 'bg-destructive-subtle text-destructive'
                         }`}>
                           {user.status}
                         </span>
@@ -491,8 +491,8 @@ export default function AdminUsersPage() {
 
       {/* Create/Edit User Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+        <div className="fixed inset-0 bg-scrim flex items-center justify-center z-50">
+          <div className="bg-card rounded-lg p-6 w-full max-w-md mx-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">
                 {editingUser ? 'Edit User' : 'Create New User'}
@@ -559,7 +559,7 @@ export default function AdminUsersPage() {
                   value={formData.userType}
                   onChange={(e) => setFormData(prev => ({ ...prev, userType: e.target.value as 'user' | 'admin' }))}
                   disabled={isCreating}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 border border-border rounded-md"
                 >
                   <option value="user">User</option>
                   <option value="admin">Admin</option>
@@ -573,7 +573,7 @@ export default function AdminUsersPage() {
                   value={formData.status}
                   onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as 'active' | 'inactive' | 'pending' | 'deleted' }))}
                   disabled={isCreating}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 border border-border rounded-md"
                 >
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>

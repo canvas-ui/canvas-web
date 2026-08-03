@@ -101,7 +101,7 @@ function EmbeddQueueStatus({
             : (queue.paused ? 'paused' : 'idle')}
         </span>
         {queue.ingestDisabled && (
-          <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600" title="CANVAS_EMBEDD_INGEST_DISABLED=true — nothing new is enqueued; existing vectors still serve search">
+          <span className="rounded bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning" title="CANVAS_EMBEDD_INGEST_DISABLED=true — nothing new is enqueued; existing vectors still serve search">
             ingest disabled
           </span>
         )}
@@ -281,10 +281,10 @@ function ReindexControl({
       </div>
 
       {highlight.length > 0 && (
-        <div className="mb-3 flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-xs">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+        <div className="mb-3 flex items-start gap-2 rounded-md border border-warning/40 bg-warning/5 p-3 text-xs">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
           <div>
-            <p className="font-medium text-amber-700">
+            <p className="font-medium text-warning">
               {highlight.join(', ')} now {highlight.length === 1 ? 'points' : 'point'} at a new, empty table
             </p>
             <p className="mt-0.5 text-muted-foreground">
@@ -325,7 +325,7 @@ function ReindexControl({
         <span>
           Re-embed documents already embedded
           {reindex && scope.trim() && (
-            <span className="mt-1 block text-[11px] text-amber-600">
+            <span className="mt-1 block text-[11px] text-warning">
               Heads up: combined with a scope this clears the WHOLE space, not just the scoped subtree — a partial
               clear is not expressible in the bitmap ledger. Scoped runs are for incrementally <em>filling</em> a new
               model; leave this off unless you mean to redo everything.
@@ -341,7 +341,7 @@ function ReindexControl({
       </div>
 
       {picking && createPortal(
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 max-md:p-2">
+        <div className="fixed inset-0 z-picker flex items-center justify-center bg-scrim p-4 max-md:p-2">
           <LinkToCard
             fixedWorkspaceName={workspaceName}
             multiple={false}

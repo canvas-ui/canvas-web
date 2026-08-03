@@ -247,7 +247,7 @@ export function WorkspaceM2Form() {
                             {new Date(share.createdAt).toLocaleString()}
                           </div>
                         </div>
-                        <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] ${share.locked ? 'text-green-700 bg-green-50 border-green-200' : 'text-amber-700 bg-amber-50 border-amber-200'}`}>
+                        <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] ${share.locked ? 'text-success bg-success-subtle border-success' : 'text-warning bg-warning-subtle border-warning'}`}>
                           {share.locked ? 'Locked' : 'Unlocked'}
                         </span>
                       </div>

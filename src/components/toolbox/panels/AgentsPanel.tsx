@@ -9,10 +9,10 @@ import { startAgent, stopAgent } from '@/services/agent'
 
 function StatusDot({ status }: { status: string }) {
   const color =
-    status === 'active' ? 'bg-green-500' :
-    status === 'error' ? 'bg-red-500' :
-    status === 'starting' || status === 'stopping' ? 'bg-yellow-500' :
-    'bg-zinc-400'
+    status === 'active' ? 'bg-success' :
+    status === 'error' ? 'bg-destructive' :
+    status === 'starting' || status === 'stopping' ? 'bg-warning' :
+    'bg-muted-foreground'
   return <span className={cn('inline-block w-2 h-2 rounded-full shrink-0', color)} title={status} />
 }
 

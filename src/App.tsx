@@ -12,6 +12,7 @@ import ContextsPage from './pages/contexts'
 import ContextDetailPage from './pages/contexts/[contextId]'
 import ApiTokensPage from './pages/api-tokens'
 import DevicesPage from './pages/devices'
+import AppearancePage from './pages/appearance'
 import EmbeddingDefaultsPage from './pages/embedding'
 import SharedViewerPage from './pages/shared'
 import PublicCanvasPage from './pages/pub/canvas'
@@ -33,6 +34,7 @@ import { ToastContainer, useToast } from './components/ui/toast-container'
 import { NotificationsProvider } from './components/notifications/notifications-context'
 import { CanvasPinsProvider } from './components/home/pins-context'
 import { setGlobalErrorHandler } from './lib/error-handler'
+import { ThemeProvider } from './theme'
 
 function AppContent() {
   const { showToast } = useToast()
@@ -77,6 +79,7 @@ function AppContent() {
           <Route path="agents/:agentId/settings" element={<AgentDetailPage />} />
           <Route path="roles" element={<RolesPage />} />
           <Route path="remotes" element={<RemotesPage />} />
+          <Route path="appearance" element={<AppearancePage />} />
           <Route path="api-tokens" element={<ApiTokensPage />} />
           <Route path="devices" element={<DevicesPage />} />
           <Route path="embedding" element={<EmbeddingDefaultsPage />} />
@@ -101,9 +104,14 @@ function AppContent() {
 
 function App() {
   return (
-    <ToastContainer>
-      <AppContent />
-    </ToastContainer>
+    // ThemeProvider is outermost: it owns the data-* attributes on <html> that
+    // every other component's styling resolves against, including toasts and
+    // dialogs that portal outside the router.
+    <ThemeProvider>
+      <ToastContainer>
+        <AppContent />
+      </ToastContainer>
+    </ThemeProvider>
   )
 }
 

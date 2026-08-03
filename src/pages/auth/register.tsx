@@ -203,10 +203,10 @@ export default function RegisterPage() {
             value={formData.name}
             onChange={handleChange}
             disabled={isLoading}
-            className={errors.name ? "border-red-500" : ""}
+            className={errors.name ? "border-destructive" : ""}
           />
           {errors.name && (
-            <p className="text-sm text-red-500">{errors.name}</p>
+            <p className="text-sm text-destructive">{errors.name}</p>
           )}
           <p className="text-xs text-muted-foreground">
             3-39 characters, lowercase letters, numbers, underscores, and hyphens only
@@ -221,10 +221,10 @@ export default function RegisterPage() {
             value={formData.email}
             onChange={handleChange}
             disabled={isLoading}
-            className={errors.email ? "border-red-500" : ""}
+            className={errors.email ? "border-destructive" : ""}
           />
           {errors.email && (
-            <p className="text-sm text-red-500">{errors.email}</p>
+            <p className="text-sm text-destructive">{errors.email}</p>
           )}
         </div>
         <div className="space-y-2">
@@ -236,38 +236,38 @@ export default function RegisterPage() {
             value={formData.password}
             onChange={handleChange}
             disabled={isLoading}
-            className={errors.password ? "border-red-500" : ""}
+            className={errors.password ? "border-destructive" : ""}
           />
           {errors.password && (
-            <p className="text-sm text-red-500">{errors.password}</p>
+            <p className="text-sm text-destructive">{errors.password}</p>
           )}
           {policy && passwordChecks && (
             <ul className="text-xs list-disc pl-4 space-y-1">
-              <li className={passwordChecks.minLength ? 'text-green-600' : 'text-muted-foreground'}>
+              <li className={passwordChecks.minLength ? 'text-success' : 'text-muted-foreground'}>
                 At least {policy.minLength} characters
               </li>
               {policy.requireUppercase && (
-                <li className={passwordChecks.uppercase ? 'text-green-600' : 'text-muted-foreground'}>
+                <li className={passwordChecks.uppercase ? 'text-success' : 'text-muted-foreground'}>
                   At least one uppercase letter
                 </li>
               )}
               {policy.requireLowercase && (
-                <li className={passwordChecks.lowercase ? 'text-green-600' : 'text-muted-foreground'}>
+                <li className={passwordChecks.lowercase ? 'text-success' : 'text-muted-foreground'}>
                   At least one lowercase letter
                 </li>
               )}
               {policy.requireNumbers && (
-                <li className={passwordChecks.number ? 'text-green-600' : 'text-muted-foreground'}>
+                <li className={passwordChecks.number ? 'text-success' : 'text-muted-foreground'}>
                   At least one number
                 </li>
               )}
               {policy.requireSpecialChars && (
-                <li className={passwordChecks.special ? 'text-green-600' : 'text-muted-foreground'}>
+                <li className={passwordChecks.special ? 'text-success' : 'text-muted-foreground'}>
                   At least one special character
                 </li>
               )}
               {policy.maxLength && (
-                <li className={passwordChecks.maxLength ? 'text-green-600' : 'text-muted-foreground'}>
+                <li className={passwordChecks.maxLength ? 'text-success' : 'text-muted-foreground'}>
                   No more than {policy.maxLength} characters
                 </li>
               )}

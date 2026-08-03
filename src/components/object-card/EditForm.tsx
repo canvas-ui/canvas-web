@@ -158,7 +158,7 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
           onChange={(e) => setComment(e.target.value)}
           rows={3}
           placeholder="Add context you can't infer from the content — e.g. “sofa from the cozmo bar in Košice”"
-          className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-elevation-1 transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
         />
       </div>
 

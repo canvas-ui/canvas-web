@@ -5,6 +5,7 @@ import { json } from '@codemirror/lang-json'
 import { StreamLanguage } from '@codemirror/language'
 import { shell } from '@codemirror/legacy-modes/mode/shell'
 import type { Extension } from '@codemirror/state'
+import { useTheme } from '@/theme'
 
 interface CodeEditorProps {
   value: string
@@ -31,11 +32,18 @@ function languageFor(path?: string): Extension[] {
 }
 
 // Syntax-highlighted editor for workspace hooks/scripts/rules. Language is
-// picked from the file extension; theme follows the app's dark class.
+// picked from the file extension; the editor theme follows the app's scheme.
+//
+// CodeMirror renders its own DOM with its own baked-in themes, so it can't
+// inherit our tokens — it has to be told 'light' or 'dark' explicitly. Reading
+// that from the theme context (rather than sniffing the DOM, as this did) also
+// makes it reactive: previously the value was computed once at mount against a
+// `.dark` class that the app never actually set, so the editor was permanently
+// light even in a dark scheme.
 export function CodeEditor({ value, onChange, path, className = '' }: CodeEditorProps) {
   const extensions = useMemo(() => languageFor(path), [path])
-  const isDark = typeof document !== 'undefined'
-    && document.documentElement.classList.contains('dark')
+  const { resolvedScheme } = useTheme()
+  const isDark = resolvedScheme === 'dark'
 
   return (
     <CodeMirror

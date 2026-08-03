@@ -129,7 +129,7 @@ export function ContextM2Detail() {
       />
 
       {/* URL editor */}
-      <div className="p-3 border-b border-sidebar-border shrink-0">
+      <div className="p-3 border-b border-border shrink-0">
         <div className="text-[10px] text-muted-foreground mb-1.5 font-medium uppercase tracking-wide">Context URL</div>
         <div className="flex gap-2">
           <Input
@@ -137,7 +137,7 @@ export function ContextM2Detail() {
             onChange={e => setUrl(e.target.value)}
             className={cn(
               'text-xs h-7 font-mono transition-colors',
-              isDirtyUrl && 'border-amber-500/60 bg-amber-500/10',
+              isDirtyUrl && 'border-warning/60 bg-warning/10',
             )}
             placeholder="workspace://path"
             title={isDirtyUrl ? 'Not applied yet — press Set' : undefined}

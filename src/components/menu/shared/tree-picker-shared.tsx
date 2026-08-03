@@ -84,7 +84,7 @@ export function InlineCreateRow({ onConfirm, onCancel, busy }: {
 }) {
   const [name, setName] = useState('')
   return (
-    <div className="flex min-h-10 items-center gap-2 rounded-md bg-card px-3 py-2 text-sm shadow-sm">
+    <div className="flex min-h-10 items-center gap-2 rounded-md bg-card px-3 py-2 text-sm shadow-elevation-1">
       <CornerDownRight className="h-4 w-4 shrink-0 text-muted-foreground" />
       <input
         type="text"
@@ -146,7 +146,7 @@ export function LinkNode({
     <div>
       <div
         className={cn(
-          'group relative flex min-h-10 items-center gap-2 rounded-md px-3 py-2 cursor-pointer transition-all select-none text-sm shadow-sm hover:shadow',
+          'group relative flex min-h-10 items-center gap-2 rounded-md px-3 py-2 cursor-pointer transition-all select-none text-sm shadow-elevation-1 hover:shadow',
           'before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1.5 before:transition-colors',
           isSelected
             ? 'bg-primary/[0.08] hover:bg-primary/[0.12] before:bg-primary'
@@ -169,7 +169,7 @@ export function LinkNode({
           width={16}
           height={16}
           color={visibleAccentColor(style.color)}
-          className={cn('shrink-0', !visibleAccentColor(style.color) && (isCanvas ? 'text-violet-500' : 'text-muted-foreground'))}
+          className={cn('shrink-0', !visibleAccentColor(style.color) && (isCanvas ? 'text-primary' : 'text-muted-foreground'))}
         />
 
         <span className="flex-1 truncate font-medium" title={node.description || undefined}>
@@ -235,7 +235,7 @@ export function WorkspaceListStep({
         <div
           key={ws.id || ws.name}
           onClick={() => onPick(ws.name)}
-          className="group relative flex cursor-pointer items-center gap-2 rounded-md bg-card px-3 py-2.5 shadow-sm transition-all hover:bg-accent/50 hover:shadow"
+          className="group relative flex cursor-pointer items-center gap-2 rounded-md bg-card px-3 py-2.5 shadow-elevation-1 transition-all hover:bg-accent/50 hover:shadow"
           style={{ borderRight: `6px solid ${accent || 'transparent'}`, borderRadius: accent ? '6px 0 0 6px' : undefined }}
         >
           <Icon icon={ws.icon || DEFAULT_WORKSPACE_ICON} width={18} height={18} color={accent} className={cn('shrink-0', !accent && 'text-muted-foreground')} />

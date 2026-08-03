@@ -69,7 +69,7 @@ export function TagInput({ tags, onChange, placeholder = 'Add tag, press Enter',
           className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
         />
         {matches.length > 0 && (
-          <div className="absolute left-0 top-full z-50 mt-1 max-h-48 w-56 overflow-auto rounded-md border bg-popover p-1 text-sm shadow-md">
+          <div className="absolute left-0 top-full z-50 mt-1 max-h-48 w-56 overflow-auto rounded-md border bg-popover p-1 text-sm shadow-elevation-2">
             {matches.map((s) => (
               <button
                 key={s}

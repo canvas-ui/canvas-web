@@ -1,0 +1,112 @@
+/**
+ * Stacking layers.
+ *
+ * Replaces 39 hand-picked `z-[NN]` literals whose ordering lived only in
+ * scattered comments. Each layer now has a name that states its role, so
+ * "does this sit above the toolbox?" is answered by reading the class, not by
+ * comparing integers across six files.
+ *
+ * The numeric values are deliberately unchanged from what they replace. The
+ * shell embeds third parties with their own stacking (Leaflet panes reach
+ * 700+, Radix portals default to 50), and several sibling layers rely on DOM
+ * order as the tiebreak. Renumbering to a tidy 10-step scale would have been
+ * cosmetic and would risk silent regressions in overlap cases that are hard to
+ * exercise in review. The names are the deliverable; the integers are history.
+ *
+ * Ordering, bottom to top:
+ *   raised/sticky      in-component layering inside a scroll container
+ *   nav                persistent chrome — mobile rail toggle, quick-add FAB
+ *   drawer             M1/M2 menu panel over its scrim
+ *   rail               mobile M0 rail card, pinned canvas tiles
+ *   side               document side card drawer over its scrim
+ *   dialog             Radix portals — dialogs, tooltips, popovers, selects
+ *   card               B5 quick-capture card internals
+ *   panel              toolbox / add panel mobile drawer over its scrim
+ *   picker             docked document pickers, which open from a panel
+ *   menu               context menus, which can be raised from a picker
+ *   fullscreen         immersive document viewer
+ *   toast              always on top; must survive every other layer
+ */
+
+@theme {
+  --z-layer-raised: 10;
+  --z-layer-sticky: 20;
+  --z-layer-nav-scrim: 38;
+  --z-layer-nav: 39;
+  --z-layer-drawer: 40;
+  --z-layer-rail: 46;
+  --z-layer-side-scrim: 47;
+  --z-layer-side: 48;
+  --z-layer-dialog: 50;
+  --z-layer-card: 52;
+  --z-layer-card-overlay: 53;
+  --z-layer-panel-scrim: 54;
+  --z-layer-panel: 55;
+  --z-layer-picker-scrim: 59;
+  --z-layer-picker: 60;
+  --z-layer-menu-scrim: 70;
+  --z-layer-menu: 75;
+  --z-layer-fullscreen: 80;
+  --z-layer-toast: 100;
+}
+
+/* Explicit utilities rather than a functional `z-*` rule: overriding core's
+   `z-*` namespace would shadow `z-10`/`z-50`, which third-party components
+   (Radix, Leaflet) still emit. */
+@utility z-raised {
+  z-index: var(--z-layer-raised);
+}
+@utility z-sticky {
+  z-index: var(--z-layer-sticky);
+}
+@utility z-nav-scrim {
+  z-index: var(--z-layer-nav-scrim);
+}
+@utility z-nav {
+  z-index: var(--z-layer-nav);
+}
+@utility z-drawer {
+  z-index: var(--z-layer-drawer);
+}
+@utility z-rail {
+  z-index: var(--z-layer-rail);
+}
+@utility z-side-scrim {
+  z-index: var(--z-layer-side-scrim);
+}
+@utility z-side {
+  z-index: var(--z-layer-side);
+}
+@utility z-dialog {
+  z-index: var(--z-layer-dialog);
+}
+@utility z-card {
+  z-index: var(--z-layer-card);
+}
+@utility z-card-overlay {
+  z-index: var(--z-layer-card-overlay);
+}
+@utility z-panel-scrim {
+  z-index: var(--z-layer-panel-scrim);
+}
+@utility z-panel {
+  z-index: var(--z-layer-panel);
+}
+@utility z-picker-scrim {
+  z-index: var(--z-layer-picker-scrim);
+}
+@utility z-picker {
+  z-index: var(--z-layer-picker);
+}
+@utility z-menu-scrim {
+  z-index: var(--z-layer-menu-scrim);
+}
+@utility z-menu {
+  z-index: var(--z-layer-menu);
+}
+@utility z-fullscreen {
+  z-index: var(--z-layer-fullscreen);
+}
+@utility z-toast {
+  z-index: var(--z-layer-toast);
+}

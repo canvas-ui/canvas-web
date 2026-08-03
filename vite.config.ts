@@ -1,12 +1,17 @@
 import path from "path"
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
     react(),
+    // Tailwind v4 runs as a Vite plugin, not a PostCSS pass — there is no
+    // tailwind.config.js. Design tokens are declared in CSS under
+    // src/theme/css/, which is what makes them swappable at runtime.
+    tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
