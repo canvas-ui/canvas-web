@@ -222,6 +222,9 @@ export interface Document {
     contentType: string
     contentEncoding: string
     size?: number
+    // The document's own name, set by a rename through any surface. Distinct
+    // from what each location calls the bytes — see getLocationFilename().
+    filename?: string
     // tag/<name> entries — see components/toolbox/add/tags.ts's tagsToFeatures
     features?: string[]
     geo?: DocumentGeo

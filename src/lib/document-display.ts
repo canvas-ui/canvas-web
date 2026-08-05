@@ -35,31 +35,62 @@ function getTabTitle(url: string): string {
   }
 }
 
-// Filename for a blob doc. `stored://` locations are content-addressed (the
-// URL's path is a hash, not a name), so the human filename lives on
-// locations[0].metadata.filename instead — set at upload time (see
-// services/blobs.ts callers). Fall back to the URL basename for location
-// schemes where the path IS the name (e.g. file:// from `ws add`).
 export function isImageFile(document: Document): boolean {
   if (document.schema !== FILE_SCHEMA) return false
   return String(document.metadata?.contentType || '').startsWith('image/')
 }
 
-export function getLocationFilename(document: Document): string {
-  const location = document.locations?.[0]
-  if (!location) return ''
-
-  const metaFilename = String(location.metadata?.filename || '').trim()
-  if (metaFilename) return metaFilename
-
-  const url = location.url
-  if (!url) return ''
+// Basename of a location URL, for schemes where the path IS a name (file://
+// from `ws add`, https://, smb://). A `stored://` key is a content hash, so it
+// never yields one.
+function nameBearingBasename(url?: string): string {
+  if (!url || /^stored:\/\//i.test(url)) return ''
   const afterScheme = url.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')
   const slash = afterScheme.indexOf('/')
   const key = slash >= 0 ? afterScheme.slice(slash + 1) : afterScheme
   const base = key.split('/').filter(Boolean).pop()
   if (!base) return ''
   try { return decodeURIComponent(base) } catch { return base }
+}
+
+/**
+ * The name to display for a document.
+ *
+ * The same bytes may be called something different at every location, and
+ * `locations` is append-ordered and rebuilt per backend scan — so position must
+ * never decide: reading locations[0] made a file rename itself to a content
+ * hash as soon as a mirror was added ahead of it. Order:
+ *
+ *   1. the document's own name (`metadata.filename`) — set by a rename;
+ *   2. `data.filename` — the same idea for JSON abstractions;
+ *   3. the name on the canvas-owned copy (`stored://workspace:*`);
+ *   4. any location name, by a STABLE sort (url), never array order;
+ *   5. the URL basename, for name-bearing schemes only.
+ *
+ * Mirrors `displayFilename()` in the server's webdav/vfs-shared.js — keep them
+ * in step.
+ */
+export function getLocationFilename(document: Document): string {
+  const own = String(document.metadata?.filename || '').trim()
+  if (own) return own
+
+  const dataName = String((document.data as { filename?: unknown })?.filename || '').trim()
+  if (dataName) return dataName
+
+  const locations = (document.locations || []).filter(Boolean)
+  const owned = locations.find(location => /^stored:\/\/workspace:/i.test(location.url || ''))
+  const ownedName = String(owned?.metadata?.filename || '').trim()
+  if (ownedName) return ownedName
+
+  const stable = [...locations].sort((a, b) => String(a.url || '').localeCompare(String(b.url || '')))
+  const named = stable.find(location => String(location.metadata?.filename || '').trim())
+  if (named) return String(named.metadata?.filename || '').trim()
+
+  for (const location of stable) {
+    const base = nameBearingBasename(location.url)
+    if (base) return base
+  }
+  return ''
 }
 
 export function getDocumentDisplayInfo(document: Document): {
