@@ -16,6 +16,8 @@ interface Session {
   isActive: boolean
 }
 
+type WorkspaceLayout = 'full' | 'home'
+
 interface Workspace {
   id: string
   name: string
@@ -32,6 +34,12 @@ interface Workspace {
   icon?: string | null
   order?: number | null
   label?: string
+  /**
+   * On-disk folder structure, fixed at creation:
+   *  'full' — runtime dirs visible at the workspace root, user drive in home/
+   *  'home' — the root IS the user's roaming drive, internals in .workspace/
+   */
+  layout?: WorkspaceLayout
   acl: {
     tokens: {
       [tokenHash: string]: {

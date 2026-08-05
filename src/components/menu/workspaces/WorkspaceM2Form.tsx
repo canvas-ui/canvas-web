@@ -17,6 +17,7 @@ import {
 } from '@/services/workspace'
 import type { WorkspacePublicCanvasShare } from '@/services/workspace'
 import { DefaultFoldersPicker, createDefaultFolders, useFolderSelection } from '@/components/workspaces/DefaultFoldersPicker'
+import { WorkspaceLayoutPicker } from '@/components/workspaces/WorkspaceLayoutPicker'
 
 export function WorkspaceM2Form() {
   const { state, closeM2 } = useMenu()
@@ -35,6 +36,7 @@ export function WorkspaceM2Form() {
   const [isLoadingShares, setIsLoadingShares] = useState(false)
   const [revokingCode, setRevokingCode] = useState<string | null>(null)
   const folderPick = useFolderSelection()
+  const [layout, setLayout] = useState<WorkspaceLayout>('full')
 
   const loadShares = async (workspaceId = entityId) => {
     if (!workspaceId) return
@@ -74,7 +76,7 @@ export function WorkspaceM2Form() {
     if (!name.trim()) return
     setIsSaving(true)
     try {
-      const ws = await createWorkspace({ name: name.trim(), label: label.trim() || name.trim(), description: description.trim() || undefined, color })
+      const ws = await createWorkspace({ name: name.trim(), label: label.trim() || name.trim(), description: description.trim() || undefined, color, layout })
       window.dispatchEvent(new CustomEvent('workspaces:refresh'))
       if (folderPick.selected.size > 0) {
         try {
@@ -192,6 +194,19 @@ export function WorkspaceM2Form() {
               </Button>
             </div>
           </div>
+          {isCreate && (
+            <div className="rounded-md border p-3">
+              <div className="text-xs font-medium">Folder structure</div>
+              <p className="mb-2 mt-0.5 text-[11px] text-muted-foreground">How the workspace directory is laid out on disk. Fixed once created.</p>
+              <WorkspaceLayoutPicker
+                value={layout}
+                onChange={setLayout}
+                disabled={isSaving}
+                idPrefix="m2-workspace-layout"
+                compact
+              />
+            </div>
+          )}
           {isCreate && (
             <div className="rounded-md border p-3">
               <div className="text-xs font-medium">Default folders <span className="font-normal text-muted-foreground">(optional)</span></div>

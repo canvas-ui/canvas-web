@@ -21,6 +21,7 @@ import {
   removeWorkspace,
 } from "@/services/workspace"
 import { DefaultFoldersPicker, createDefaultFolders, useFolderSelection } from '@/components/workspaces/DefaultFoldersPicker'
+import { WorkspaceLayoutPicker } from '@/components/workspaces/WorkspaceLayoutPicker'
 import { sortByOrder, moveItem, persistSequentialOrder, useListReorder } from '@/lib/list-order'
 
 
@@ -37,6 +38,7 @@ export default function WorkspacesPage() {
   const [newWorkspaceColor, setNewWorkspaceColor] = useState(generateNiceRandomHexColor())
   const [newWorkspaceIcon, setNewWorkspaceIcon] = useState<string | null>(null)
   const [newWorkspaceLabel, setNewWorkspaceLabel] = useState("")
+  const [newWorkspaceLayout, setNewWorkspaceLayout] = useState<WorkspaceLayout>('full')
   const [createPickerPos, setCreatePickerPos] = useState<{ x: number; y: number } | null>(null)
   const [editPickerPos, setEditPickerPos] = useState<{ x: number; y: number } | null>(null)
   const [isCreating, setIsCreating] = useState(false)
@@ -112,6 +114,7 @@ export default function WorkspacesPage() {
         color: newWorkspaceColor,
         icon: newWorkspaceIcon,
         label: newWorkspaceLabel || newWorkspaceName,
+        layout: newWorkspaceLayout,
       })
       // The service now returns the new workspace object directly
       setWorkspaces(prev => [...prev, newWorkspace as Workspace])
@@ -407,6 +410,16 @@ export default function WorkspacesPage() {
               onClose={() => setCreatePickerPos(null)}
             />
           )}
+          <div className="rounded-lg border p-3">
+            <p className="text-sm font-medium">Folder structure</p>
+            <p className="mb-3 mt-0.5 text-xs text-muted-foreground">How the workspace directory is laid out on disk. Fixed once created.</p>
+            <WorkspaceLayoutPicker
+              value={newWorkspaceLayout}
+              onChange={setNewWorkspaceLayout}
+              disabled={isCreating}
+              idPrefix="create-workspace-layout"
+            />
+          </div>
           <div className="rounded-lg border p-3">
             <p className="text-sm font-medium">Default folders <span className="font-normal text-muted-foreground">(optional)</span></p>
             <p className="mb-3 mt-0.5 text-xs text-muted-foreground">Ticked folders are created right after the workspace, with matching icons and colors.</p>

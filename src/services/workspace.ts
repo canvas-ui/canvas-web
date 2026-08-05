@@ -117,6 +117,8 @@ interface CreateWorkspacePayload {
     order?: number;
     label?: string;
     type?: string; // This aligns with optional 'type' in global Workspace
+    // Folder structure, fixed at creation. Omitted => server default ('full').
+    layout?: WorkspaceLayout;
 }
 export async function createWorkspace(payload: CreateWorkspacePayload): Promise<Workspace> {
   try {
