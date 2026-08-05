@@ -10,6 +10,7 @@ import { DefaultFoldersPicker, createDefaultFolders, useFolderSelection } from '
 import { adminReindexTimelines, adminReindexSearch, adminOptimize, adminReindexMime } from '@/services/admin'
 import { EmbeddSettingsPanel } from '@/components/workspace/embedd-settings-panel'
 import { HooksPanel } from '@/components/workspace/hooks-panel'
+import { TrashPanel } from '@/components/workspace/trash-panel'
 import { ImapMailboxesPanel } from '@/components/workspace/imap-mailboxes-panel'
 import { TokenManager } from '@/components/workspace/token-manager'
 import { useToast } from '@/components/ui/toast-container'
@@ -53,8 +54,8 @@ import {
   type WorkspaceDevice,
 } from '@/services/devices'
 
-type SettingsTab = 'general' | 'data' | 'db' | 'embedding' | 'devices' | 'services' | 'shares' | 'hooks'
-const SETTINGS_TABS: readonly SettingsTab[] = ['general', 'data', 'db', 'embedding', 'devices', 'services', 'shares', 'hooks']
+type SettingsTab = 'general' | 'data' | 'db' | 'embedding' | 'devices' | 'services' | 'shares' | 'hooks' | 'trash'
+const SETTINGS_TABS: readonly SettingsTab[] = ['general', 'data', 'db', 'embedding', 'devices', 'services', 'shares', 'hooks', 'trash']
 type ServiceId = 'dotfiles' | 'git' | 'home' | 'webdav' | 'imap' | 'imapSync'
 
 const DATA_BACKEND_LABELS: Record<string, { title: string; description: string }> = {
@@ -1096,6 +1097,7 @@ export default function WorkspaceSettingsPage() {
           ['services', 'Services'],
           ['shares', 'Shares / ACL'],
           ['hooks', 'Hooks'],
+          ['trash', 'Trash'],
         ].map(([id, title]) => (
           <button
             key={id}
@@ -1373,6 +1375,10 @@ export default function WorkspaceSettingsPage() {
           onRefresh={() => loadDbStats()}
           workspaceName={workspaceName!}
         />
+      )}
+
+      {activeTab === 'trash' && workspaceName && (
+        <TrashPanel workspaceName={workspaceName} />
       )}
 
       {activeTab === 'embedding' && workspaceId && (

@@ -635,7 +635,7 @@ export default function WorkspaceDetailPage() {
   const handleRemoveDocument = async (documentId: number) => {
     if (!workspace) return;
     try {
-      await removeWorkspaceDocuments(workspace.name, [documentId], selectedPath, [], selectedTreeName, selectedTreeType);
+      await removeWorkspaceDocuments(workspace.name, [documentId], selectedPath, [], selectedTreeName, selectedTreeType, { trashIfOrphaned: true });
       invalidateDocumentCache(workspace.name, selectedTreeName, selectedPath);
       setDocuments(prev => prev.filter(doc => doc.id !== documentId));
       setDocumentsTotalCount(prev => Math.max(0, prev - 1));
@@ -661,7 +661,7 @@ export default function WorkspaceDetailPage() {
   const handleRemoveDocuments = async (documentIds: number[]) => {
     if (!workspace) return;
     try {
-      await removeWorkspaceDocuments(workspace.name, documentIds, selectedPath, [], selectedTreeName, selectedTreeType);
+      await removeWorkspaceDocuments(workspace.name, documentIds, selectedPath, [], selectedTreeName, selectedTreeType, { trashIfOrphaned: true });
       invalidateDocumentCache(workspace.name, selectedTreeName, selectedPath);
       setDocuments(prev => prev.filter(doc => !documentIds.includes(doc.id)));
       setDocumentsTotalCount(prev => Math.max(0, prev - documentIds.length));

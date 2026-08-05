@@ -1,6 +1,6 @@
 import { API_ROUTES, API_URL } from '@/config/api';
 import { api } from '@/lib/api';
-import type { TreeNode, TimelineInfo, TimelineQueryInterval, TimelineQueryOptions } from '@/types/workspace';
+import type { Document as CanvasDocument, TreeNode, TimelineInfo, TimelineQueryInterval, TimelineQueryOptions } from '@/types/workspace';
 // GLOBAL Workspace type from src/types/api.d.ts will be used.
 // No local Workspace interface should be defined here.
 
@@ -225,6 +225,17 @@ export function invalidateWorkspaceTreeCache(workspaceId?: string, treeName?: st
   workspaceTreeInflight.delete(key)
 }
 
+// Where a filesystem-style delete parks orphaned documents. It has its own UI
+// (Settings → Trash) and its own semantics; showing it as an ordinary folder in
+// the tree would be a second door into it that bypasses both.
+export const TRASH_PATH_NAME = '.trash'
+
+function withoutTrashNode(node: TreeNode | null | undefined): TreeNode | null {
+  if (!node) return null
+  if (!Array.isArray(node.children)) return node
+  return { ...node, children: node.children.filter(child => child?.name !== TRASH_PATH_NAME) }
+}
+
 export async function getCachedWorkspaceTreeByName(
   workspaceId: string,
   treeName: string,
@@ -240,8 +251,12 @@ export async function getCachedWorkspaceTreeByName(
 
   const request = getWorkspaceTreeByName(workspaceId, treeName)
     .then((response) => {
-      workspaceTreeCache.set(key, response)
-      return response
+      // Prune at the root only: `.trash` is a top-level path of the default
+      // directory tree, and a user folder called `.trash` deeper in the tree is
+      // theirs to see.
+      const pruned = { ...response, payload: withoutTrashNode(response.payload) as TreeNode }
+      workspaceTreeCache.set(key, pruned)
+      return pruned
     })
     .finally(() => {
       workspaceTreeInflight.delete(key)
@@ -612,17 +627,28 @@ function normalizeDocumentIds(documentIds: readonly (string | number)[]): number
   return ids
 }
 
+/**
+ * Detach documents from a path.
+ *
+ * `trashIfOrphaned` applies the same rule the mounts use: if this removes a
+ * document's LAST placement it goes to the trash instead of becoming reachable
+ * only through the whole-workspace list. Pass it for a user-initiated remove;
+ * leave it off for the source half of a move (the document is already filed at
+ * the destination, so it is not orphaned anyway).
+ */
 export async function removeWorkspaceDocuments(
   workspaceId: string,
   documentIds: readonly (string | number)[],
   contextSpec: string = '/',
   featureArray: string[] = [],
   treeName = DEFAULT_WORKSPACE_TREE_NAME,
-  treeType: 'context' | 'directory' = 'context'
+  treeType: 'context' | 'directory' = 'context',
+  options: { trashIfOrphaned?: boolean } = {}
 ): Promise<boolean> {
   const params = new URLSearchParams()
   appendWorkspaceContext(params, contextSpec, treeName, treeType)
   appendAllOf(params, featureArray)
+  if (options.trashIfOrphaned) params.append('trashIfOrphaned', 'true')
   const ids = normalizeDocumentIds(documentIds)
   await api.delete(`${API_ROUTES.workspaces}/${workspaceId}/documents/remove?${params.toString()}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -1412,4 +1438,47 @@ export async function setWorkspaceSearchTuning(
     tuning,
   )
   return res.payload
+}
+
+
+// ── Trash ───────────────────────────────────────────────────────────────────
+// See docs/data-representation.md. Listing is a plain read; restore re-files a
+// document where it was; emptying is the one hard delete.
+
+export interface TrashedDocument extends CanvasDocument {
+  trashed?: {
+    trashedAt: string
+    placements: Array<{ tree: string; treeId: string; type: string; paths: string[] }>
+  } | null
+}
+
+export async function listTrash(workspaceId: string): Promise<TrashedDocument[]> {
+  const response = await api.get<{ payload: TrashedDocument[] }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/trash`
+  )
+  return Array.isArray(response.payload) ? response.payload : []
+}
+
+export async function restoreFromTrash(
+  workspaceId: string,
+  documentIds: readonly (string | number)[]
+): Promise<{ restored: number[]; failed: Array<{ id: number; error: string }> }> {
+  const response = await api.post<{ payload: { restored: number[]; failed: Array<{ id: number; error: string }> } }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/trash/restore`,
+    { documentIds: normalizeDocumentIds(documentIds) }
+  )
+  return response.payload
+}
+
+export async function emptyTrash(
+  workspaceId: string,
+  documentIds?: readonly (string | number)[]
+): Promise<{ destroyed: number[]; failed: unknown[] }> {
+  const response = await api.delete<{ payload: { destroyed: number[]; failed: unknown[] } }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/trash`,
+    documentIds?.length
+      ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ documentIds: normalizeDocumentIds(documentIds) }) }
+      : {}
+  )
+  return response.payload
 }
