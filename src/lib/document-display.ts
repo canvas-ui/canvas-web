@@ -1,8 +1,8 @@
 import type { Document } from '@/types/workspace'
 
-const EMAIL_SCHEMA = 'data/abstraction/email'
-const TAB_SCHEMA = 'data/abstraction/tab'
-export const FILE_SCHEMA = 'data/abstraction/file'
+const EMAIL_SCHEMA = 'data/schema/message/email'
+const TAB_SCHEMA = 'data/schema/tab'
+export const FILE_SCHEMA = 'data/schema/file'
 
 type DisplayIcon = 'file' | 'globe' | 'mail'
 

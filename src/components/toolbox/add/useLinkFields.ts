@@ -4,7 +4,7 @@ import { submitDocuments, type AddTarget } from './useAddTarget'
 
 // Links are stored as tabs for now (schema unification pending a larger
 // refactor — Link/Tab share the same shape). Editable fields: url + title.
-const TAB_SCHEMA = 'data/abstraction/tab'
+const TAB_SCHEMA = 'data/schema/tab'
 const TAB_SCHEMA_VERSION = '2.0'
 
 function isValidUrl(value: string): boolean {

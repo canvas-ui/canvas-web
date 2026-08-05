@@ -152,13 +152,13 @@ export function parseFeatureFilters(features: string[]): {
 
   features.forEach(feature => {
     switch (feature) {
-      case 'data/abstraction/tab':
+      case 'data/schema/tab':
         result.tabs = true;
         break;
-      case 'data/abstraction/note':
+      case 'data/schema/note':
         result.notes = true;
         break;
-      case 'data/abstraction/todo':
+      case 'data/schema/task':
         result.todo = true;
         break;
       default:
@@ -182,9 +182,9 @@ export function featureFiltersToArray(filters: {
 }): string[] {
   const features: string[] = [];
 
-  if (filters.tabs) features.push('data/abstraction/tab');
-  if (filters.notes) features.push('data/abstraction/note');
-  if (filters.todo) features.push('data/abstraction/todo');
+  if (filters.tabs) features.push('data/schema/tab');
+  if (filters.notes) features.push('data/schema/note');
+  if (filters.todo) features.push('data/schema/task');
 
   features.push(...filters.customBitmaps);
 

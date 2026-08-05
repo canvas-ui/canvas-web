@@ -25,7 +25,7 @@ const PREFIX_LABELS: Record<string, string> = {
 // Virtual dataset: unstamped documents, always included unless deselected.
 const DEFAULT_DATASET_KEY = 'data/dataset/default'
 
-// Document-type (`data/abstraction/*`) schemas get a prominent, icon-led picker
+// Document-type (`data/schema/*`) schemas get a prominent, icon-led picker
 // at the top of the Features tab — they are the filter users reach for most.
 // The icon + label registry (SCHEMA_META / schemaMeta) is shared with the map
 // filter, so a note reads the same everywhere (see @/lib/schema-meta).
@@ -35,7 +35,7 @@ function groupBitmaps(keys: string[]): Map<string, string[]> {
   for (const key of keys) {
     // Backend-source tags and MIME-type tags each get their own group — they
     // answer a different question ("where does it live" / "what kind of file")
-    // than the data/abstraction/* schema tags.
+    // than the data/schema/* schema tags.
     const prefix = key.startsWith('data/backend/') ? 'data/backend'
       : key.startsWith('data/mime/') ? 'data/mime'
       : key.startsWith('data/dataset/') ? 'data/dataset'

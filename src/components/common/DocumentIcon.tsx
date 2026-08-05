@@ -66,7 +66,7 @@ const SPECS: Record<string, IconSpec> = {
   link: slot(Globe, 7),
   email: slot(Mail, 3),
   note: slot(StickyNote, 3),
-  todo: slot(CheckSquare, 5),
+  task: slot(CheckSquare, 5),
   message: slot(MessageSquare, 6),
   contact: slot(User, 2),
   device: slot(Monitor, 10),

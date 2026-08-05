@@ -8,7 +8,7 @@ import { TODO_STATUS_LABELS } from '@/components/toolbox/add/useTodoFields'
 import { todoData, TODO_STATUS_STYLE, isOverdue, formatDue, setTodoStatus } from '@/lib/todo'
 import { useDocumentActivation } from '../useDocumentActivation'
 
-const TODO_FEATURE = 'data/abstraction/todo'
+const TODO_FEATURE = 'data/schema/task'
 
 function TodoRow({ doc, workspaceId, readOnly, onChanged }: { doc: Document; workspaceId: string; readOnly: boolean; onChanged: () => void }) {
   const t = todoData(doc)

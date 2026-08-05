@@ -24,6 +24,7 @@ import {
 } from '@/services/workspace'
 import type { TreeNode } from '@/types/workspace'
 import { getContext, patchContext } from '@/services/context'
+import { ABSTRACTION_PREFIX } from '@/lib/schema-meta'
 import { parseWorkspacePathFromUrl } from '@/utils/url-params'
 
 // ─── Public types ─────────────────────────────────────────────────────────────
@@ -486,7 +487,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
 
   const setFeatureToggle = useCallback((key: string, on: boolean) => {
     const { filters } = stateRef.current
-    const isAbstraction = key.startsWith('data/abstraction/')
+    const isAbstraction = key.startsWith(ABSTRACTION_PREFIX)
     const allOf = isAbstraction
       ? filters.features.allOf.filter(k => k !== key)
       : on

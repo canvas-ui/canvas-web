@@ -62,8 +62,8 @@ export function AddPanel() {
   let HeaderIcon: typeof StickyNote
 
   if (isEditMode) {
-    headerLabel = editDocument!.schema === 'data/abstraction/note' ? 'Edit Note' : 'Edit Link'
-    HeaderIcon = editDocument!.schema === 'data/abstraction/note' ? StickyNote : LinkIcon
+    headerLabel = editDocument!.schema === 'data/schema/note' ? 'Edit Note' : 'Edit Link'
+    HeaderIcon = editDocument!.schema === 'data/schema/note' ? StickyNote : LinkIcon
   } else if (addKind) {
     headerLabel = TITLES[addKind].label
     HeaderIcon = TITLES[addKind].icon
@@ -114,8 +114,8 @@ export function AddPanel() {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {isEditMode && editDocument!.schema === 'data/abstraction/note' && <EditNoteForm />}
-        {isEditMode && editDocument!.schema === 'data/abstraction/link' && <EditLinkForm />}
+        {isEditMode && editDocument!.schema === 'data/schema/note' && <EditNoteForm />}
+        {isEditMode && editDocument!.schema === 'data/schema/link' && <EditLinkForm />}
         {/* Shared insertion menu — same entries/order as the home quick-add */}
         {!isEditMode && isPicker && <InsertMenu onSelect={openAdd} />}
         {!isEditMode && addKind === 'note' && <NoteForm />}

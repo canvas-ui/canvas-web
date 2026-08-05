@@ -3,7 +3,7 @@ import { tagsToFeatures } from './tags'
 import { submitDocuments, type AddTarget } from './useAddTarget'
 import { useGeotag } from '@/hooks/useGeotag'
 
-const NOTE_SCHEMA = 'data/abstraction/note'
+const NOTE_SCHEMA = 'data/schema/note'
 const NOTE_SCHEMA_VERSION = '2.0'
 
 // Field state + doc-building + submit for the note abstraction, shared by

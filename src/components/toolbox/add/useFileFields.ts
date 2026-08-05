@@ -3,7 +3,7 @@ import { tagsToFeatures } from './tags'
 import { useTagSuggestions } from './useTagSuggestions'
 import type { BlobUploadResult } from '@/services/blobs'
 
-const FILE_SCHEMA = 'data/abstraction/file'
+const FILE_SCHEMA = 'data/schema/file'
 const FILE_SCHEMA_VERSION = '3.0'
 
 export interface FileFields {

@@ -9,12 +9,12 @@ export interface RendererProps {
   className?: string
 }
 
-export const NOTE_SCHEMA = 'data/abstraction/note'
-export const LINK_SCHEMA = 'data/abstraction/link'
-export const TAB_SCHEMA = 'data/abstraction/tab'
-export const FILE_SCHEMA = 'data/abstraction/file'
-export const EMAIL_SCHEMA = 'data/abstraction/email'
-export const TODO_SCHEMA = 'data/abstraction/todo'
+export const NOTE_SCHEMA = 'data/schema/note'
+export const LINK_SCHEMA = 'data/schema/link'
+export const TAB_SCHEMA = 'data/schema/tab'
+export const FILE_SCHEMA = 'data/schema/file'
+export const EMAIL_SCHEMA = 'data/schema/message/email'
+export const TODO_SCHEMA = 'data/schema/task'
 
 export type MimeKind = 'image' | 'audio' | 'video' | 'pdf' | 'text' | 'markdown' | 'binary'
 

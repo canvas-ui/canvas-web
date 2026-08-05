@@ -43,7 +43,7 @@ interface PublicCanvasPayload {
   } | Document[]
 }
 
-const FILE_SCHEMA = 'data/abstraction/file'
+const FILE_SCHEMA = 'data/schema/file'
 
 function getFileUrl(document: Document) {
   return String(document.locations?.[0]?.url || '').trim()
@@ -89,7 +89,7 @@ function isHttpUrl(value: string) {
 }
 
 function getDocumentLink(document: Document, display: ReturnType<typeof getDocumentDisplayInfo>) {
-  if (document.schema === 'data/abstraction/tab') {
+  if (document.schema === 'data/schema/tab') {
     const url = String(document.data?.url || '').trim()
     return isHttpUrl(url) ? url : null
   }

@@ -296,7 +296,7 @@ function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
                 value={jsonInput}
                 onChange={(e) => setJsonInput(e.target.value)}
                 className="w-full h-64 p-3 border rounded-lg font-mono text-sm"
-                placeholder='[{"schema": "data/abstraction/tab", "schemaVersion": "2.0", "data": {...}, "metadata": {...}}]'
+                placeholder='[{"schema": "data/schema/tab", "schemaVersion": "2.0", "data": {...}, "metadata": {...}}]'
                 disabled={isImporting}
                 autoFocus
               />
@@ -310,7 +310,7 @@ function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
 
             <div className="text-xs text-muted-foreground">
               <p><strong>Format:</strong> Each document must have "schema", "schemaVersion", "data", and "metadata" fields.</p>
-              <p><strong>Example schemas:</strong> "data/abstraction/tab", "data/abstraction/file", etc.</p>
+              <p><strong>Example schemas:</strong> "data/schema/tab", "data/schema/file", etc.</p>
             </div>
           </div>
 
@@ -428,7 +428,7 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
   const isPublicShare = usePublicShareCode() != null
   const isEditable = isEditableSchema(document.schema)
 
-  const isTabDocument = document.schema === 'data/abstraction/tab'
+  const isTabDocument = document.schema === 'data/schema/tab'
   const tabUrl = isTabDocument ? document.data.url : null
   const display = getDocumentDisplayInfo(document)
 
@@ -555,7 +555,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
   const [detailEdit, setDetailEdit] = useState(false)
   const [actionSheet, setActionSheet] = useState(false)
   const isPublicShare = usePublicShareCode() != null
-  const isTabDocument = document.schema === 'data/abstraction/tab'
+  const isTabDocument = document.schema === 'data/schema/tab'
   const isEditable = isEditableSchema(document.schema)
   const tabUrl = isTabDocument ? document.data.url : null
   const display = getDocumentDisplayInfo(document)
@@ -659,7 +659,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
 }
 
 function isImageDocument(document: Document): boolean {
-  return document.schema === 'data/abstraction/file'
+  return document.schema === 'data/schema/file'
     && String(document.metadata?.contentType || '').startsWith('image/')
 }
 
@@ -668,7 +668,7 @@ function isImageDocument(document: Document): boolean {
 // behavior. Sized for a responsive auto-fill grid, so it reads on mobile too.
 function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSide, onRightClick, onDragStart }: DocumentRowProps) {
   const [showDetailModal, setShowDetailModal] = useState(false)
-  const isTabDocument = document.schema === 'data/abstraction/tab'
+  const isTabDocument = document.schema === 'data/schema/tab'
   const tabUrl = isTabDocument ? document.data.url : null
   const isImage = isImageDocument(document)
   const display = getDocumentDisplayInfo(document)
@@ -993,7 +993,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
       case 'open-url':
         if (documentIds.length === 1) {
           const document = documents.find(doc => doc.id === documentIds[0]);
-          if (document && document.schema === 'data/abstraction/tab' && document.data.url) {
+          if (document && document.schema === 'data/schema/tab' && document.data.url) {
             window.open(document.data.url, '_blank', 'noopener,noreferrer');
           }
         }
@@ -1649,7 +1649,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                 </button>
                 {(() => {
                   const document = documents.find(doc => doc.id === contextMenu.documentIds[0]);
-                  const isEditable = document?.schema === 'data/abstraction/note' || document?.schema === 'data/abstraction/link';
+                  const isEditable = document?.schema === 'data/schema/note' || document?.schema === 'data/schema/link';
                   return isEditable ? (
                     <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('edit', contextMenu.documentIds)}>
                       <Pencil className="h-3 w-3" />
@@ -1659,7 +1659,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                 })()}
                 {(() => {
                   const document = documents.find(doc => doc.id === contextMenu.documentIds[0]);
-                  const isTabDocument = document?.schema === 'data/abstraction/tab';
+                  const isTabDocument = document?.schema === 'data/schema/tab';
                   return isTabDocument && document?.data.url ? (
                     <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('open-url', contextMenu.documentIds)}>
                       <ExternalLink className="h-3 w-3" />

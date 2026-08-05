@@ -4,7 +4,7 @@ import type { Document } from '@/types/workspace'
 import { DEFAULT_TIMELINE_SORT, type TimelineSort } from './sort-control'
 import { useCanvasQueries } from './useCanvasQueries'
 
-const FILE_SCHEMA = 'data/abstraction/file'
+const FILE_SCHEMA = 'data/schema/file'
 
 export function isImageDoc(doc: Document): boolean {
   return doc.schema === FILE_SCHEMA && String(doc.metadata?.contentType || '').startsWith('image/')
