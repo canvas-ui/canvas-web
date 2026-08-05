@@ -55,9 +55,13 @@ export const DENSITY_OPTIONS: readonly { id: Density; name: string; description:
   { id: 'touch', name: 'Touch', description: 'Large targets for finger input' },
 ] as const
 
+// Light is the default scheme, not 'system': Canvas is a document surface and
+// its light theme is the designed-for-first one. Users who want dark (or want
+// to follow the OS) opt in via appearance settings — that choice is stored and
+// wins over this default from then on.
 export const DEFAULT_PREFERENCES: ThemePreferences = {
   theme: 'canvas',
-  scheme: 'system',
+  scheme: 'light',
   density: 'auto',
 }
 

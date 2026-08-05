@@ -15,6 +15,10 @@ function getAppName(): string {
 
 interface RequestOptions extends RequestInit {
   skipAuth?: boolean
+  // Internal: don't try to autostart an offline workspace for this request.
+  // Set on the replayed request (so a workspace that refuses to come up can't
+  // loop) and on the /start call itself.
+  skipWorkspaceAutostart?: boolean
   // Make an authenticated request, but on auth failure (missing/invalid token
   // or a 401) reject WITHOUT redirecting to /login or touching global auth
   // state. For optional/background fetches whose failure must never hijack
@@ -53,8 +57,60 @@ function isValidTokenFormat(token: string): boolean {
   return jwtRegex.test(token);
 }
 
+// --- Offline workspaces -----------------------------------------------------
+// Workspaces stay stopped until something actually reads from them. Any query
+// against an offline workspace starts it and is then replayed, so pinned
+// canvases and paths resolve without the user first hunting for a Start
+// button. Only reads/writes *inside* a workspace wake it — fetching the
+// workspace record itself (GET /workspaces/:id, the list) does not.
+
+const workspaceStarts = new Map<string, Promise<void>>();
+
+// The workspace ref of a request that operates inside a workspace, or null.
+// Requires a segment after the ref, which is what excludes the plain
+// GET /workspaces/:id detail fetch, plus /start and /stop themselves.
+function workspaceRefForRequest(endpoint: string): string | null {
+  const path = endpoint.startsWith('http')
+    ? new URL(endpoint).pathname
+    : endpoint.split('?')[0];
+  if (path.includes('/admin/')) return null;
+  const match = path.match(/\/workspaces\/([^/?#]+)\/([^/?#]+)/);
+  if (!match) return null;
+  if (match[2] === 'start' || match[2] === 'stop') return null;
+  return decodeURIComponent(match[1]);
+}
+
+// The server answers this with a 409 carrying code WORKSPACE_NOT_ACTIVE from
+// every route (see ResponseObject.workspaceNotActive). The message check is a
+// fallback for servers older than that normalization, which reported the same
+// condition as a 400, a 404 or a 500 depending on which route caught it.
+function isWorkspaceOfflineError(code: string | undefined, message: string): boolean {
+  return code === 'WORKSPACE_NOT_ACTIVE' || /workspace (is )?not active/i.test(message);
+}
+
+// Concurrent queries against the same sleeping workspace share one /start.
+function startWorkspaceForRequest(ref: string): Promise<void> {
+  const pending = workspaceStarts.get(ref);
+  if (pending) return pending;
+
+  const started = fetchWithDefaults(`${API_URL}/workspaces/${encodeURIComponent(ref)}/start`, {
+    method: 'POST',
+    skipWorkspaceAutostart: true,
+  })
+    .then(() => {
+      // Let the workspace list and any open workspace view repaint their
+      // status without polling.
+      window.dispatchEvent(new CustomEvent('workspace:autostarted', { detail: { workspace: ref } }));
+      window.dispatchEvent(new CustomEvent('workspaces:refresh'));
+    })
+    .finally(() => { workspaceStarts.delete(ref); });
+
+  workspaceStarts.set(ref, started);
+  return started;
+}
+
 async function fetchWithDefaults(endpoint: string, options: RequestOptions = {}): Promise<Response> {
-  const { skipAuth = false, noAuthRedirect = false, headers = {}, body, ...rest } = options;
+  const { skipAuth = false, noAuthRedirect = false, skipWorkspaceAutostart = false, headers = {}, body, ...rest } = options;
 
   // Don't make requests if we're already redirecting. Opt-out callers are
   // decoupled from the global redirect state and may still proceed.
@@ -140,22 +196,34 @@ async function fetchWithDefaults(endpoint: string, options: RequestOptions = {})
         throw new Error('Authentication required');
       }
 
-      // For other errors, try to get error message from response
+      // For other errors, try to get error message from response. Parsed
+      // before anything is thrown — a throw inside the parse try/catch would
+      // be swallowed by its own catch and re-reported as bare status text.
+      let errorData: { message?: string; error?: string; code?: string } | null = null;
       try {
-        const errorData = await response.json();
+        errorData = await response.json();
         console.error('API Error response:', errorData);
+      } catch {
+        // Non-JSON error body; fall back to the status text below.
+      }
 
-        // Extract the most detailed error message available
-        const errorMessage = errorData.message || errorData.error || response.statusText || 'Request failed';
-        const error = new Error(errorMessage);
-        handleApiError(error, `${rest.method || 'GET'} ${endpoint}`);
-        throw error;
-              } catch (jsonError) {
-          // If we can't parse the error as JSON, just use the status text
-          const error = new Error(response.statusText || 'Request failed');
-          handleApiError(error, `${rest.method || 'GET'} ${endpoint}`);
-          throw error;
+      // Extract the most detailed error message available
+      const errorMessage = errorData?.message || errorData?.error || response.statusText || 'Request failed';
+
+      // The workspace this query targets is asleep: start it and replay.
+      if (!skipWorkspaceAutostart && isWorkspaceOfflineError(errorData?.code, errorMessage)) {
+        const ref = workspaceRefForRequest(endpoint);
+        if (ref) {
+          const ok = await startWorkspaceForRequest(ref).then(() => true, () => false);
+          if (ok) {
+            return fetchWithDefaults(endpoint, { ...options, skipWorkspaceAutostart: true });
+          }
         }
+      }
+
+      const error = new Error(errorMessage);
+      handleApiError(error, `${rest.method || 'GET'} ${endpoint}`);
+      throw error;
     }
 
     // Reset redirecting flag on successful response

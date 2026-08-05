@@ -299,15 +299,10 @@ export default function WorkspaceDetailPage() {
           ws = response.payload as Workspace;
         }
         setWorkspace(ws);
-
-        if (ws.status !== 'active') {
-          try {
-            const started = await startWorkspace(ws.name);
-            setWorkspace(started);
-          } catch {
-            // non-fatal: workspace may start later
-          }
-        }
+        // An offline workspace is NOT started here — opening the view is not
+        // the same as using it. The document/tree queries this page issues will
+        // wake it through the API layer, and the status pill catches up via the
+        // workspace:autostarted event below.
       } catch (err) {
         const message = err instanceof Error ? err.message : `Failed to fetch workspace ${workspaceName}`;
         showToast({ title: 'Error', description: message, variant: 'destructive' });
@@ -319,6 +314,23 @@ export default function WorkspaceDetailPage() {
 
     fetchWorkspace();
   }, [workspaceName]);
+
+  // A query woke this workspace up (see src/lib/api.ts): reflect it in the
+  // status pill, which otherwise keeps showing the stale 'inactive' it was
+  // loaded with.
+  useEffect(() => {
+    const onAutostarted = (event: Event) => {
+      const ref = (event as CustomEvent<{ workspace: string }>).detail?.workspace;
+      if (!ref) return;
+      setWorkspace(prev => (
+        prev && (ref === prev.name || ref === prev.id) && prev.status !== 'active'
+          ? { ...prev, status: 'active' }
+          : prev
+      ));
+    };
+    window.addEventListener('workspace:autostarted', onAutostarted);
+    return () => window.removeEventListener('workspace:autostarted', onAutostarted);
+  }, []);
 
   // Fetch documents when path, tree, pagination, or workspace status changes.
   // A monotonic sequence guards against out-of-order responses: during a reembed

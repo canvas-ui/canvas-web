@@ -25,9 +25,13 @@
           var prefs = stored ? JSON.parse(stored) : {}
           var themes = ['canvas', 'nord', 'contrast', 'terminal']
           var theme = themes.indexOf(prefs.theme) !== -1 ? prefs.theme : 'canvas'
+          // Default is light (see DEFAULT_PREFERENCES); the OS preference is
+          // only consulted when the user explicitly picked 'system'.
           var scheme = prefs.scheme
-          if (scheme !== 'light' && scheme !== 'dark') {
+          if (scheme === 'system') {
             scheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+          } else if (scheme !== 'light' && scheme !== 'dark') {
+            scheme = 'light'
           }
           var densities = ['auto', 'compact', 'comfortable', 'touch']
           var density = densities.indexOf(prefs.density) !== -1 ? prefs.density : 'auto'
@@ -37,6 +41,7 @@
           root.dataset.density = density
         } catch (e) {
           document.documentElement.dataset.theme = 'canvas'
+          document.documentElement.dataset.scheme = 'light'
           document.documentElement.dataset.density = 'auto'
         }
       })()
