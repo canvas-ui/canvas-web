@@ -18,6 +18,7 @@ import {
 import type { WorkspacePublicCanvasShare } from '@/services/workspace'
 import { DefaultFoldersPicker, createDefaultFolders, useFolderSelection } from '@/components/workspaces/DefaultFoldersPicker'
 import { WorkspaceLayoutPicker } from '@/components/workspaces/WorkspaceLayoutPicker'
+import { useDefaultWorkspaceLayout } from '@/hooks/useDefaultWorkspaceLayout'
 
 export function WorkspaceM2Form() {
   const { state, closeM2 } = useMenu()
@@ -36,7 +37,7 @@ export function WorkspaceM2Form() {
   const [isLoadingShares, setIsLoadingShares] = useState(false)
   const [revokingCode, setRevokingCode] = useState<string | null>(null)
   const folderPick = useFolderSelection()
-  const [layout, setLayout] = useState<WorkspaceLayout>('full')
+  const [layout, setLayout] = useDefaultWorkspaceLayout()
 
   const loadShares = async (workspaceId = entityId) => {
     if (!workspaceId) return

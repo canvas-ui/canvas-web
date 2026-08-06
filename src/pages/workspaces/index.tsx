@@ -22,6 +22,7 @@ import {
 } from "@/services/workspace"
 import { DefaultFoldersPicker, createDefaultFolders, useFolderSelection } from '@/components/workspaces/DefaultFoldersPicker'
 import { WorkspaceLayoutPicker } from '@/components/workspaces/WorkspaceLayoutPicker'
+import { useDefaultWorkspaceLayout } from '@/hooks/useDefaultWorkspaceLayout'
 import { sortByOrder, moveItem, persistSequentialOrder, useListReorder } from '@/lib/list-order'
 
 
@@ -38,7 +39,7 @@ export default function WorkspacesPage() {
   const [newWorkspaceColor, setNewWorkspaceColor] = useState(generateNiceRandomHexColor())
   const [newWorkspaceIcon, setNewWorkspaceIcon] = useState<string | null>(null)
   const [newWorkspaceLabel, setNewWorkspaceLabel] = useState("")
-  const [newWorkspaceLayout, setNewWorkspaceLayout] = useState<WorkspaceLayout>('full')
+  const [newWorkspaceLayout, setNewWorkspaceLayout] = useDefaultWorkspaceLayout()
   const [createPickerPos, setCreatePickerPos] = useState<{ x: number; y: number } | null>(null)
   const [editPickerPos, setEditPickerPos] = useState<{ x: number; y: number } | null>(null)
   const [isCreating, setIsCreating] = useState(false)
