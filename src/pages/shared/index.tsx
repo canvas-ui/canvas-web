@@ -4,6 +4,7 @@ import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast-container'
+import { SourceLink } from '@/components/common/source-link'
 
 export default function SharedViewerPage() {
   const location = useLocation()
@@ -104,6 +105,7 @@ export default function SharedViewerPage() {
           </div>
         </div>
       )}
+      <SourceLink className="mt-8" />
     </div>
   )
 }

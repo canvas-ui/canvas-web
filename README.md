@@ -79,9 +79,20 @@ VITE_API_URL=http://your-server:8001
 | `CANVAS_API_HOST` | `0.0.0.0` | 
 | `CANVAS_API_PROTOCOL` | `http` |
 
-## License
+## Licence
 
-Licensed under AGPL-3.0-or-later. See main project LICENSE file.
+Copyright (C) 2025-2026 Jozef Melich. Canvas Web UI is dual-licensed:
+
+- **[AGPL-3.0-or-later](LICENSE)**, free for everyone. Run it, modify it, build
+  on it. If you distribute a modified version, or expose one to users over a
+  network, they are entitled to your changes (AGPL section 13).
+- **[Commercial licence](COMMERCIAL.md)**, the same code without the copyleft
+  obligations, for hosted products and proprietary distribution. Issued by
+  Augmentd s.r.o., lic@augmentd.eu.
+
+Same software either way. There is no cut-down community edition. See
+[NOTICE](NOTICE) for the full position, and [CONTRIBUTING.md](CONTRIBUTING.md)
+before opening a pull request.
 
 ---
 This project is funded by [Augmentd Labs](https://augmentd.eu/en/labs)

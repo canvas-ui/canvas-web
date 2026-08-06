@@ -9,6 +9,7 @@ import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CanvasGrid } from '@/components/canvas/CanvasGrid'
 import { PublicShareContext, publicDocumentContentUrl as buildPublicContentUrl } from '@/components/renderers/public-share'
+import { SourceLink } from '@/components/common/source-link'
 import type { Document, TreeNode } from '@/types/workspace'
 
 interface PublicCanvasPayload {
@@ -216,7 +217,7 @@ export default function PublicCanvasPage() {
 
   if (error || !payload) {
     return (
-      <main className="min-h-screen bg-muted flex items-center justify-center p-6">
+      <main className="min-h-screen bg-muted flex flex-col items-center justify-center p-6">
         <Card className="max-w-md bg-card">
           <CardHeader>
             <CardTitle>Canvas unavailable</CardTitle>
@@ -225,6 +226,7 @@ export default function PublicCanvasPage() {
             {error || 'This public canvas does not exist.'}
           </CardContent>
         </Card>
+        <SourceLink className="mt-6 text-center" />
       </main>
     )
   }
@@ -400,6 +402,7 @@ export default function PublicCanvasPage() {
             )}
           </CardContent>
         </Card>
+        <SourceLink className="mt-6 text-center" />
       </div>
     </main>
     </PublicShareContext.Provider>
