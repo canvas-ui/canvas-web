@@ -131,6 +131,22 @@ export async function createWorkspace(payload: CreateWorkspacePayload): Promise<
   }
 }
 
+// Pull a workspace from another canvas-server using a workspace share token.
+// The server resolves the token remotely, exports the workspace there,
+// downloads the archive and imports it as a local workspace.
+export async function importWorkspaceFromRemote(url: string, token: string): Promise<Workspace> {
+  try {
+    const response = await api.post<{ payload: Workspace; message: string; status: string; statusCode: number }>(
+      `${API_ROUTES.workspaces}/import`,
+      { url, token }
+    );
+    return response.payload;
+  } catch (error) {
+    console.error('Failed to import workspace from remote:', error);
+    throw error;
+  }
+}
+
 export async function startWorkspace(id: string): Promise<Workspace> {
   try {
     const response = await api.post<{ payload: Workspace; message: string; status: string; statusCode: number }>(`${API_ROUTES.workspaces}/${id}/start`);

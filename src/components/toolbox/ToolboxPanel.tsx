@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { SlidersHorizontal, Brain, Bell, X, Maximize2, Minimize2, type LucideIcon } from 'lucide-react'
+import { LayoutGrid, SlidersHorizontal, Brain, Bell, X, Maximize2, Minimize2, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useToolbox, type T1View } from './toolbox-context'
@@ -8,8 +8,10 @@ import { ToolsPanel } from './panels/ToolsPanel'
 import { AgentsPanel } from './panels/AgentsPanel'
 import { NotificationsPanel } from './panels/NotificationsPanel'
 import { AgentChatPanel } from './panels/AgentChatPanel'
+import { AppsPanel } from './panels/AppsPanel'
 
 const TABS: Array<{ view: Exclude<T1View, null>; icon: LucideIcon; label: string }> = [
+  { view: 'apps', icon: LayoutGrid, label: 'Apps' },
   { view: 'tools', icon: SlidersHorizontal, label: 'Filters' },
   { view: 'agents', icon: Brain, label: 'Agents' },
   { view: 'notifications', icon: Bell, label: 'Notifications' },
@@ -160,6 +162,7 @@ export function ToolboxPanel() {
 
       <div className="relative flex min-h-0 flex-1 flex-col">
         {t1View === 'home' && <HomePanel />}
+        {t1View === 'apps' && <AppsPanel />}
         {t1View === 'tools' && <ToolsPanel />}
         {t1View === 'agents' && <AgentsPanel />}
         {t1View === 'notifications' && <NotificationsPanel />}

@@ -29,7 +29,7 @@ import { parseWorkspacePathFromUrl } from '@/utils/url-params'
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
-export type T1View = 'home' | 'tools' | 'agents' | 'notifications' | null
+export type T1View = 'home' | 'apps' | 'tools' | 'agents' | 'notifications' | null
 export type ToolsTab = 'features' | 'timeline' | 'map'
 // Maps directly to synapsd feature sigil algebra: anyOf (OR), allOf (+ gate), noneOf (! exclude).
 export type FeatureMode = 'off' | 'anyOf' | 'allOf' | 'noneOf'

@@ -17,6 +17,7 @@ import { useSocket } from "@/hooks/useSocket"
 import {
   listWorkspaces,
   createWorkspace,
+  importWorkspaceFromRemote,
   startWorkspace,
   stopWorkspace,
   updateWorkspace,
@@ -48,6 +49,7 @@ export default function WorkspacesPage() {
   const [showCreate, setShowCreate] = useCreatePanel();
   const folderPick = useFolderSelection();
   const [showShared, setShowShared] = useState(false);
+  const [showRemote, setShowRemote] = useState(false);
   const [editingWorkspace, setEditingWorkspace] = useState<Workspace | null>(null)
   const { showToast } = useToast()
   const navigate = useNavigate()
@@ -335,6 +337,9 @@ export default function WorkspacesPage() {
             <Button variant="outline" onClick={() => setShowShared(o => !o)} className="max-sm:hidden">
               Open Shared…
             </Button>
+            <Button variant="outline" onClick={() => setShowRemote(o => !o)} className="max-sm:hidden">
+              Add Remote…
+            </Button>
             {!showCreate && (
               <Button onClick={() => setShowCreate(true)} className="max-sm:h-9 max-sm:w-9 max-sm:p-0" aria-label="Create workspace" title="Create workspace">
                 <Plus className="h-4 w-4 sm:mr-2" />
@@ -442,6 +447,18 @@ export default function WorkspacesPage() {
 
       {/* Open Shared Resource — behind the header toggle */}
       {showShared && <OpenSharedResource />}
+
+      {/* Add Remote Workspace — pulls a copy from another canvas-server */}
+      {showRemote && (
+        <AddRemoteWorkspace
+          onImported={(ws) => {
+            setWorkspaces(prev => prev.some(w => w.id === ws.id) ? prev : [...prev, ws])
+            window.dispatchEvent(new CustomEvent('workspaces:refresh'))
+            setShowRemote(false)
+          }}
+          onClose={() => setShowRemote(false)}
+        />
+      )}
 
       {/* Your Workspaces Section */}
       <div className="space-y-4">
@@ -589,6 +606,75 @@ export default function WorkspacesPage() {
         </div>
       )}
     </div>
+  )
+}
+
+// Pull a workspace from another canvas-server using a workspace share token.
+// The server does the heavy lifting (token-info, remote export, download,
+// local import); we only collect {url, token} and show the outcome.
+function AddRemoteWorkspace({ onImported, onClose }: { onImported: (ws: Workspace) => void; onClose: () => void }) {
+  const { showToast } = useToast()
+  const [url, setUrl] = useState('')
+  const [token, setToken] = useState('')
+  const [isImporting, setIsImporting] = useState(false)
+
+  const handleImport = async (e: React.FormEvent) => {
+    e.preventDefault()
+    let base: string
+    try {
+      base = new URL(url.trim()).origin
+    } catch {
+      showToast({ title: 'Error', description: 'Invalid server URL', variant: 'destructive' })
+      return
+    }
+    if (!token.trim().startsWith('canvas-')) {
+      showToast({ title: 'Error', description: 'Invalid access token (expected canvas-...)', variant: 'destructive' })
+      return
+    }
+
+    setIsImporting(true)
+    try {
+      const ws = await importWorkspaceFromRemote(base, token.trim())
+      showToast({
+        title: 'Success',
+        description: `Workspace '${ws.label || ws.name}' imported from ${base}.`
+      })
+      onImported(ws as Workspace)
+    } catch (err) {
+      const errorObj = err as any
+      const message = errorObj?.message || errorObj?.payload?.message || 'Failed to import remote workspace'
+      showToast({ title: 'Error', description: message, variant: 'destructive' })
+    } finally {
+      setIsImporting(false)
+    }
+  }
+
+  return (
+    <FormPanel title="Add Remote Workspace" onClose={onClose}>
+      <form onSubmit={handleImport} className="space-y-3">
+        <div className="grid gap-2 md:grid-cols-3">
+          <Input
+            placeholder="Server URL (e.g., https://my.canvas-server.tld)"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            disabled={isImporting}
+          />
+          <Input
+            placeholder="Workspace share token (canvas-...)"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            disabled={isImporting}
+          />
+          <Button type="submit" disabled={isImporting || !url.trim() || !token.trim()}>
+            {isImporting ? 'Importing…' : 'Import Workspace'}
+          </Button>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Pulls a full copy of the shared workspace from the remote canvas-server into this one.
+          The source workspace must be stopped on the remote side; large workspaces can take a while.
+        </p>
+      </form>
+    </FormPanel>
   )
 }
 
