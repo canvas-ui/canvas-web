@@ -109,9 +109,10 @@ export function MobileMenuToggle() {
       type="button"
       onClick={toggleM0}
       aria-label={state.m0Open ? 'Close menu' : 'Open menu'}
-      // w-12 matches the rail card's width exactly, so toggle and rail read
-      // as one aligned column when the rail is open.
-      className="fixed bottom-rail-inset left-2 z-nav flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background shadow-elevation-4 md:hidden"
+      // Sized by the rail-width token (not a fixed w-12) so toggle and rail
+      // read as one aligned column at every density - compact/touch change
+      // the rail width and a hardcoded 3rem toggle drifts off-center.
+      className="fixed bottom-rail-inset left-2 z-nav flex h-rail w-rail items-center justify-center rounded-full bg-foreground text-background shadow-elevation-4 md:hidden"
     >
       {state.m0Open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
     </button>

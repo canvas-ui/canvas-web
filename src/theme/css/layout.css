@@ -53,8 +53,9 @@
   --spacing-fab-inset: max(1rem, var(--safe-bottom));
   /* Left-hand rail toggle, which sits tighter into the corner. */
   --spacing-rail-inset: max(0.5rem, var(--safe-bottom));
-  /* A control stacked directly above the rail toggle (toggle is 3rem + gap). */
-  --spacing-rail-stack: calc(max(0.5rem, var(--safe-bottom)) + 3.5rem);
+  /* A control stacked directly above the rail toggle (toggle is rail-width
+     sized so it stays column-aligned with the M0 card across densities). */
+  --spacing-rail-stack: calc(max(0.5rem, var(--safe-bottom)) + var(--layout-rail-width) + 0.5rem);
 
   /* ── Breakpoints ─────────────────────────────────────────────────────── */
   /* Named by the device class they describe. The raw numbers stay Tailwind's
