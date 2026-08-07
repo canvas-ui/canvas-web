@@ -83,7 +83,10 @@ export function MenuPanelArea() {
           !isDragging && !mobileOverlay && 'transition-[width] duration-200 ease-out',
           state.m1Open ? 'rounded-xl shadow-elevation-2' : 'w-0',
           mobileOverlay
-            ? 'fixed bottom-2 left-16 right-2 top-2 z-40 shadow-elevation-5 animate-fade-in'
+            // Left offset is derived, not hardcoded: the rail is 2.75/3/3.5rem
+            // depending on density, so a fixed `left-16` closed the gap to zero
+            // at comfortable density. inset + rail + gap.
+            ? 'fixed bottom-2 left-[calc(0.5rem+var(--spacing-rail)+0.5rem)] right-2 top-2 z-40 shadow-elevation-5 animate-fade-in'
             : 'relative',
         )}
       >

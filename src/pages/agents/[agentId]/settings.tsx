@@ -1,10 +1,10 @@
+import { useIsMobile } from '@/hooks/use-mobile'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/common/page-header'
-import { SettingsSectionTabs } from '@/components/common/settings-section-tabs'
 import { useToast } from '@/components/ui/toast-container'
 import { useMenu } from '@/components/shell/menu-context'
 import { generateNiceRandomHexColor } from '@/utils/color'
@@ -74,7 +74,8 @@ export default function AgentSettingsPage() {
   const { agentId, tab } = useParams<{ agentId: string; tab?: string }>()
   const navigate = useNavigate()
   const { showToast } = useToast()
-  const { selectEntity } = useMenu()
+  const { selectEntity, openM2Drawer } = useMenu()
+  const isMobile = useIsMobile()
 
   const activeTab: AgentSettingsTab = resolveAgentSettingsTab(tab)
   useEffect(() => {
@@ -286,16 +287,15 @@ export default function AgentSettingsPage() {
       <div className="mx-auto max-w-5xl p-6 pb-12 max-md:px-4 max-md:pb-rail-stack">
         <PageHeader
           compact
-          className="mb-4 border-b pb-4"
+          className="mb-6 border-b pb-4"
           title={`${section.label} - ${agent.label || agent.name}`}
           description={section.description}
           backTo={`/agents/${routeAgentId}`}
-        />
-        <SettingsSectionTabs
-          className="mb-6"
-          sections={AGENT_SETTINGS_SECTIONS}
-          activeId={activeTab}
-          hrefFor={id => `/agents/${routeAgentId}/settings/${id}`}
+        // Mobile has no room for the M2 panel beside the content, so Back
+        // reopens it at the section list rather than leaving settings — the
+        // step the tab strip used to stand in for. On desktop M2 is already
+        // visible, so Back means "leave settings".
+          onBack={isMobile ? () => openM2Drawer('agents', 'settings', agent.id) : undefined}
         />
 
         <form onSubmit={handleSave} className="space-y-6">

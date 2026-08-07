@@ -1,10 +1,10 @@
+import { useIsMobile } from '@/hooks/use-mobile'
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { RefreshCw, Trash2, Unlink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/common/page-header'
-import { SettingsSectionTabs } from '@/components/common/settings-section-tabs'
 import { MenuTreeView } from '@/components/menu/shared/MenuTreeView'
 import { useToast } from '@/components/ui/toast-container'
 import { useMenu } from '@/components/shell/menu-context'
@@ -48,7 +48,8 @@ export default function ContextSettingsPage() {
   const ownerId = searchParams.get('ownerId') || undefined
   const navigate = useNavigate()
   const { showToast } = useToast()
-  const { selectEntity } = useMenu()
+  const { selectEntity, openM2Drawer } = useMenu()
+  const isMobile = useIsMobile()
 
   const activeTab: ContextSettingsTab = resolveContextSettingsTab(tab)
   // The ownerId qualifier has to survive the tab normalization, or a shared
@@ -236,16 +237,15 @@ export default function ContextSettingsPage() {
       <div className="mx-auto max-w-3xl p-6 pb-12 max-md:px-4 max-md:pb-rail-stack">
         <PageHeader
           compact
-          className="mb-4 border-b pb-4"
+          className="mb-6 border-b pb-4"
           title={`${section.label} - ${context.name || context.id}`}
           description={section.description}
           backTo={backPath}
-        />
-        <SettingsSectionTabs
-          className="mb-6"
-          sections={CONTEXT_SETTINGS_SECTIONS}
-          activeId={activeTab}
-          hrefFor={id => `/contexts/${contextId}/settings/${id}${qs}`}
+        // Mobile has no room for the M2 panel beside the content, so Back
+        // reopens it at the section list rather than leaving settings — the
+        // step the tab strip used to stand in for. On desktop M2 is already
+        // visible, so Back means "leave settings".
+          onBack={isMobile ? () => openM2Drawer('contexts', 'settings', context.id) : undefined}
         />
 
         {activeTab === 'general' && (

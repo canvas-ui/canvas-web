@@ -25,8 +25,9 @@ export function AgentM2Settings() {
   }, [entityId])
 
   // Read from the pathname — this renders inside the shell layout route, which
-  // carries no :tab param of its own.
-  const activeTab = resolveAgentSettingsTab(location.pathname.split('/').filter(Boolean)[3])
+  // carries no :tab param of its own. Null until a section is actually open.
+  const segments = location.pathname.split('/').filter(Boolean)
+  const activeTab = segments[2] === 'settings' ? resolveAgentSettingsTab(segments[3]) : null
   const routeAgentId = encodeURIComponent(agent?.name || entityId || '')
 
   const items: M2NavItem[] = useMemo(

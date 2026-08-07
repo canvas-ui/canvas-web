@@ -1,3 +1,4 @@
+import { useIsMobile } from '@/hooks/use-mobile'
 import { useEffect, useState } from 'react'
 import { Plus, Settings, Link2, GripVertical } from 'lucide-react'
 import { Icon } from '@iconify/react'
@@ -13,6 +14,7 @@ import { useNavigate } from 'react-router-dom'
 
 export function ContextList() {
   const { state, selectEntity, openM2, closeM2 } = useMenu()
+  const isMobile = useIsMobile()
   const { contexts, isLoading } = useContextListData(state.activeSection === 'contexts')
   const { showToast } = useToast()
   const navigate = useNavigate()
@@ -139,7 +141,9 @@ export function ContextList() {
                       onClick={(e) => {
                         e.stopPropagation()
                         selectEntity(ctx.id)
-                        navigate(`/contexts/${ctx.id}/settings/general`)
+                        // See WorkspaceList — the list is its own step on mobile.
+                        if (isMobile) { openM2('settings', ctx.id) }
+                        else { navigate(`/contexts/${ctx.id}/settings/general`) }
                       }}
                       className="reveal-on-hover shrink-0 mt-0.5"
                       title="Settings"

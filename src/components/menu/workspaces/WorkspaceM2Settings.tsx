@@ -36,7 +36,10 @@ export function WorkspaceM2Settings() {
   // The tab lives in the URL, not in component state: the settings page owns
   // it and M2 only mirrors it. Read from the pathname rather than useParams —
   // this renders inside the shell layout route, which has no :tab param.
-  const activeTab = resolveWorkspaceSettingsTab(location.pathname.split('/').filter(Boolean)[3])
+  // Null while the list is open WITHOUT a section chosen (the mobile step),
+  // so nothing is highlighted before the user has picked anything.
+  const segments = location.pathname.split('/').filter(Boolean)
+  const activeTab = segments[2] === 'settings' ? resolveWorkspaceSettingsTab(segments[3]) : null
 
   const items: M2NavItem[] = useMemo(
     () => WORKSPACE_SETTINGS_SECTIONS.map(({ id, label: sectionLabel, description, icon: SectionIcon }) => ({

@@ -1,3 +1,5 @@
+import { useMenu } from '@/components/shell/menu-context'
+import { useIsMobile } from '@/hooks/use-mobile'
 import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Copy, Database, ExternalLink, FolderPlus, HardDrive, RefreshCw, Server, Square, Trash2, Unlink, Activity, Monitor, Link2, Check, X as XIcon, Pencil } from 'lucide-react'
@@ -9,7 +11,6 @@ import { DEFAULT_WORKSPACE_ICON, getBackendStyle, type LayerStyle } from '@/lib/
 import { DefaultFoldersPicker, createDefaultFolders, useFolderSelection } from '@/components/workspaces/DefaultFoldersPicker'
 import { adminReindexTimelines, adminReindexSearch, adminOptimize, adminReindexMime } from '@/services/admin'
 import { PageHeader } from '@/components/common/page-header'
-import { SettingsSectionTabs } from '@/components/common/settings-section-tabs'
 import { WORKSPACE_SETTINGS_SECTIONS, resolveWorkspaceSettingsTab, type WorkspaceSettingsTab } from '@/lib/settings-sections'
 import { EmbeddSettingsPanel } from '@/components/workspace/embedd-settings-panel'
 import { HooksPanel } from '@/components/workspace/hooks-panel'
@@ -770,6 +771,8 @@ export default function WorkspaceSettingsPage() {
   // segments normalize to /settings/general below.
   // Bare, invalid and retired tab segments (embedding, trash) normalize to the
   // section that now owns them.
+  const isMobile = useIsMobile()
+  const { openM2Drawer } = useMenu()
   const activeTab: SettingsTab = resolveWorkspaceSettingsTab(tab)
   useEffect(() => {
     if (tab !== activeTab) navigate(`/workspaces/${workspaceName}/settings/${activeTab}`, { replace: true })
@@ -1085,16 +1088,15 @@ export default function WorkspaceSettingsPage() {
           never grows a tab strip. */}
       <PageHeader
         compact
-        className="mb-4 border-b pb-4"
+        className="mb-6 border-b pb-4"
         title={`${section.label} - ${workspace.label || workspace.name}`}
         description={activeTab === 'general' ? workspace.rootPath : section.description}
         backTo={`/workspaces/${workspaceName}`}
-      />
-      <SettingsSectionTabs
-        className="mb-6"
-        sections={WORKSPACE_SETTINGS_SECTIONS}
-        activeId={activeTab}
-        hrefFor={id => `/workspaces/${workspaceName}/settings/${id}`}
+        // Mobile has no room for the M2 panel beside the content, so Back
+        // reopens it at the section list rather than leaving settings — the
+        // step the tab strip used to stand in for. On desktop M2 is already
+        // visible, so Back means "leave settings".
+        onBack={isMobile ? () => openM2Drawer('workspaces', 'settings', workspaceName ?? null) : undefined}
       />
 
       {activeTab === 'general' && (

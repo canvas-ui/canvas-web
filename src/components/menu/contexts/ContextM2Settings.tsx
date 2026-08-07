@@ -26,8 +26,9 @@ export function ContextM2Settings() {
   }, [entityId])
 
   // Read from the pathname — this renders inside the shell layout route, which
-  // carries no :tab param of its own.
-  const activeTab = resolveContextSettingsTab(location.pathname.split('/').filter(Boolean)[3])
+  // carries no :tab param of its own. Null until a section is actually open.
+  const segments = location.pathname.split('/').filter(Boolean)
+  const activeTab = segments[2] === 'settings' ? resolveContextSettingsTab(segments[3]) : null
   const backPath = entityId ? `/contexts/${entityId}` : null
 
   const items: M2NavItem[] = useMemo(

@@ -1,3 +1,4 @@
+import { useIsMobile } from '@/hooks/use-mobile'
 import { useEffect, useRef, useState } from 'react'
 import { Plus, Play, Square, Settings, GripVertical } from 'lucide-react'
 import { Icon } from '@iconify/react'
@@ -23,6 +24,7 @@ function StatusDot({ status }: { status: string }) {
 
 export function WorkspaceList() {
   const { state, selectEntity, openM2, closeM2 } = useMenu()
+  const isMobile = useIsMobile()
   const { workspaces, isLoading } = useWorkspaceListData(state.activeSection === 'workspaces')
   const { showToast } = useToast()
   const navigate = useNavigate()
@@ -220,7 +222,11 @@ export function WorkspaceList() {
                         onClick={(e) => {
                           e.stopPropagation()
                           selectEntity(ws.name)
-                          navigate(`/workspaces/${ws.name}/settings/general`)
+                          // Mobile gets the section list as its own step (the
+                          // drawer closes on navigation, so jumping straight to
+                          // a section would strand the user in one pane).
+                          if (isMobile) { openM2('settings', ws.name) }
+                          else { navigate(`/workspaces/${ws.name}/settings/general`) }
                         }}
                         className="flex items-center justify-center w-6 h-6 rounded hover:bg-muted-foreground/10 text-muted-foreground transition-colors"
                         title="Settings"

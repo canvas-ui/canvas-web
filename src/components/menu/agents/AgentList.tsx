@@ -1,3 +1,4 @@
+import { useIsMobile } from '@/hooks/use-mobile'
 import { useState } from 'react'
 import { Plus, Play, Square, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -19,6 +20,7 @@ function StatusDot({ status }: { status: string }) {
 
 export function AgentList() {
   const { state, selectEntity, openM2, closeM2 } = useMenu()
+  const isMobile = useIsMobile()
   const { agents, isLoading, refresh } = useAgentListData(state.activeSection === 'agents')
   const { showToast } = useToast()
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
@@ -136,7 +138,9 @@ export function AgentList() {
                         onClick={(e) => {
                           e.stopPropagation()
                           selectEntity(agent.id)
-                          navigate(`/agents/${encodeURIComponent(agent.name || agent.id)}/settings/identity`)
+                          // See WorkspaceList — the list is its own step on mobile.
+                          if (isMobile) { openM2('settings', agent.id) }
+                          else { navigate(`/agents/${encodeURIComponent(agent.name || agent.id)}/settings/identity`) }
                         }}
                         className="flex items-center justify-center w-6 h-6 rounded hover:bg-muted-foreground/10 text-muted-foreground transition-colors"
                         title="Settings"

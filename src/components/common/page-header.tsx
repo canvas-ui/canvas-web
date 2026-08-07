@@ -12,6 +12,7 @@ export function PageHeader({
   description,
   actions,
   backTo,
+  onBack,
   className,
   compact,
 }: {
@@ -21,6 +22,9 @@ export function PageHeader({
   // Renders a back arrow left of the title. Detail/settings views use it to
   // return to their parent; list views leave it off.
   backTo?: string
+  /** Takes precedence over `backTo` — for a back step that is not a route
+      change, e.g. reopening the menu panel the section was chosen from. */
+  onBack?: () => void
   className?: string
   // Detail views (settings panes) sit inside a scroll container that already
   // has padding, so they drop the bottom rule and heavy type scale.
@@ -41,10 +45,10 @@ export function PageHeader({
           description into a 60px column — one word per line. On `sm` and up the
           natural order is title, actions, close. */}
       <div className="flex min-w-0 flex-1 items-start gap-3">
-        {backTo && (
+        {(onBack || backTo) && (
           <button
             type="button"
-            onClick={() => navigate(backTo)}
+            onClick={() => (onBack ? onBack() : navigate(backTo!))}
             aria-label="Back"
             title="Back"
             className="mt-1 shrink-0 text-muted-foreground transition-colors hover:text-foreground touch-target"
