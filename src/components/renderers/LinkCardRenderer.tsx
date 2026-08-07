@@ -40,7 +40,7 @@ export function LinkCardRenderer({ document: doc, className = '' }: RendererProp
           <div className="mt-0.5 truncate text-xs text-muted-foreground">{hostOf(url)}</div>
           <div className="mt-1 truncate font-mono text-[11px] text-muted-foreground/70">{url}</div>
         </div>
-        <ExternalLink className="mt-1 h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+        <ExternalLink className="mt-1 h-4 w-4 shrink-0 text-muted-foreground reveal-on-hover" />
       </a>
       {timestamp && (
         <p className="text-xs text-muted-foreground">Saved {new Date(timestamp).toLocaleString()}</p>

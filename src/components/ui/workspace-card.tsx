@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./card";
 import { Button } from "./button";
-import { Play, Square, DoorOpen, Trash2, Edit } from "lucide-react";
+import { Play, Square, DoorOpen, Trash2, Edit, Settings } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,10 +21,11 @@ interface WorkspaceCardProps {
   onStop: (name: string) => void;
   onEnter: (name: string) => void;
   onEdit?: (workspace: Workspace) => void;
+  onSettings?: (workspace: Workspace) => void;
   onDestroy?: (workspace: Workspace) => void;
 }
 
-export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onDestroy }: WorkspaceCardProps) {
+export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onSettings, onDestroy }: WorkspaceCardProps) {
   const [isDestroyDialogOpen, setIsDestroyDialogOpen] = useState(false);
   const isActive = workspace.status === 'active';
   const isUniverse = workspace.type === 'universe' || workspace.name === 'universe';
@@ -91,7 +92,7 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onD
               {isShared ? `Shared from ${sharedFrom}` : (workspace.description || '')}
             </CardDescription>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto">
             {!isActive ? (
               <Button
                 variant="outline"
@@ -122,6 +123,22 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onD
                 disabled={isError || isNotFound}
               >
                 <DoorOpen className="h-4 w-4" />
+              </Button>
+            )}
+
+            {/* Settings — the full surface (backends, database, devices,
+                services, shares, hooks). Available on every workspace,
+                including universe, which has all the same settings. */}
+            {onSettings && (
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => onSettings(workspace)}
+                title="Workspace settings"
+                aria-label="Workspace settings"
+                disabled={isNotFound}
+              >
+                <Settings className="h-4 w-4" />
               </Button>
             )}
 

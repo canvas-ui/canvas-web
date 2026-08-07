@@ -482,7 +482,7 @@ export default function WorkspacesPage() {
                     {...handleProps(index)}
                     title="Drag to reorder"
                     aria-label="Drag to reorder"
-                    className={`flex w-5 shrink-0 cursor-grab items-center justify-center rounded-l-lg active:cursor-grabbing ${accent ? '' : 'bg-muted'}`}
+                    className={`hidden w-5 shrink-0 cursor-grab items-center justify-center rounded-l-lg active:cursor-grabbing md:flex ${accent ? '' : 'bg-muted'}`}
                     style={accent ? { backgroundColor: accent } : undefined}
                   >
                     <GripVertical className={`h-4 w-4 ${onAccentTextClass(accent)}`} />
@@ -494,6 +494,7 @@ export default function WorkspacesPage() {
                       onStop={handleStopWorkspace}
                       onEnter={handleEnterWorkspace}
                       onEdit={handleEditWorkspace}
+                      onSettings={(w) => navigate(`/workspaces/${w.name}/settings/general`)}
                       onDestroy={handleDestroyWorkspace}
                     />
                   </div>

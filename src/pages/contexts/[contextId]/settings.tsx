@@ -4,6 +4,7 @@ import { RefreshCw, Trash2, Unlink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/common/page-header'
+import { SettingsSectionTabs } from '@/components/common/settings-section-tabs'
 import { MenuTreeView } from '@/components/menu/shared/MenuTreeView'
 import { useToast } from '@/components/ui/toast-container'
 import { useMenu } from '@/components/shell/menu-context'
@@ -232,13 +233,19 @@ export default function ContextSettingsPage() {
 
   return (
     <div className="h-full min-h-0 overflow-y-auto">
-      <div className="mx-auto max-w-3xl p-6 pb-12">
+      <div className="mx-auto max-w-3xl p-6 pb-12 max-md:px-4 max-md:pb-rail-stack">
         <PageHeader
           compact
-          className="mb-6 border-b pb-4"
+          className="mb-4 border-b pb-4"
           title={`${section.label} - ${context.name || context.id}`}
           description={section.description}
           backTo={backPath}
+        />
+        <SettingsSectionTabs
+          className="mb-6"
+          sections={CONTEXT_SETTINGS_SECTIONS}
+          activeId={activeTab}
+          hrefFor={id => `/contexts/${contextId}/settings/${id}${qs}`}
         />
 
         {activeTab === 'general' && (

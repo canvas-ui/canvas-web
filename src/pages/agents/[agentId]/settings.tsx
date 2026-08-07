@@ -4,6 +4,7 @@ import { Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/common/page-header'
+import { SettingsSectionTabs } from '@/components/common/settings-section-tabs'
 import { useToast } from '@/components/ui/toast-container'
 import { useMenu } from '@/components/shell/menu-context'
 import { generateNiceRandomHexColor } from '@/utils/color'
@@ -282,13 +283,19 @@ export default function AgentSettingsPage() {
 
   return (
     <div className="h-full min-h-0 overflow-y-auto">
-      <div className="mx-auto max-w-5xl p-6 pb-12">
+      <div className="mx-auto max-w-5xl p-6 pb-12 max-md:px-4 max-md:pb-rail-stack">
         <PageHeader
           compact
-          className="mb-6 border-b pb-4"
+          className="mb-4 border-b pb-4"
           title={`${section.label} - ${agent.label || agent.name}`}
           description={section.description}
           backTo={`/agents/${routeAgentId}`}
+        />
+        <SettingsSectionTabs
+          className="mb-6"
+          sections={AGENT_SETTINGS_SECTIONS}
+          activeId={activeTab}
+          hrefFor={id => `/agents/${routeAgentId}/settings/${id}`}
         />
 
         <form onSubmit={handleSave} className="space-y-6">

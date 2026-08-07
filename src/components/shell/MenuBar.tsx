@@ -39,6 +39,7 @@ function MenuItem({ section, icon, label, disabled }: MenuItemProps) {
         <button
           type="button"
           disabled={disabled}
+          aria-label={label}
           onClick={() => !disabled && section && toggleSection(section)}
           className={cn(
             'relative flex items-center justify-center w-10 h-10 rounded-lg transition-colors',
@@ -79,6 +80,7 @@ function NavItem({ path, icon, label, section = 'admin' }: NavItemProps) {
       <TooltipTrigger asChild>
         <button
           type="button"
+          aria-label={label}
           onClick={() => {
             setSection(section)
             navigate(path)
@@ -171,10 +173,11 @@ export function MenuBar() {
         <div className="flex items-center justify-center h-12 w-full shrink-0">
           <button
             type="button"
+            aria-label="Canvas home"
             onClick={() => navigate('/home')}
             className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-accent/50 transition-colors"
           >
-            <img src="/images/logo-br_128x128.png" alt="Canvas" className="w-6 h-6" />
+            <img src="/images/logo-br_128x128.png" alt="" className="w-6 h-6" />
           </button>
         </div>
 
@@ -233,6 +236,7 @@ export function MenuBar() {
             <TooltipTrigger asChild>
               <button
                 type="button"
+                aria-label={state.user?.email ? `Profile — ${state.user.email}` : 'Profile'}
                 onClick={() => navigate('/home')}
                 className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-accent/50 transition-colors"
               >
@@ -252,6 +256,7 @@ export function MenuBar() {
             <TooltipTrigger asChild>
               <button
                 type="button"
+                aria-label="Log out"
                 onClick={handleLogout}
                 className="flex items-center justify-center w-10 h-10 rounded-lg text-destructive hover:bg-destructive/10 transition-colors"
               >

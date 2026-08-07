@@ -60,6 +60,11 @@ const PROVIDER_SHAPE: Record<string, {
   apiKey?: string
   cacheDir?: string
   note?: string
+  /** OpenAI-compatible servers disagree on how images are sent. */
+  imageInput?: boolean
+  timeoutMs?: boolean
+  /** Extra headers (proxy auth, tenant routing). Write-only, like the key. */
+  headers?: boolean
   /** Where this backend runs, for the collapsed row. */
   where: (spec: EmbeddProviderSpec) => string
 }> = {
@@ -71,6 +76,9 @@ const PROVIDER_SHAPE: Record<string, {
       hint: 'OpenAI-compatible embeddings endpoint. A trailing /v1 is optional — both http://host:8000 and http://host:8000/v1 work. Use this type for anything fronting Ollama with an OpenAI-compatible API.',
     },
     apiKey: 'Sent as `Authorization: Bearer …`. Leave empty for servers that do not check it.',
+    imageInput: true,
+    timeoutMs: true,
+    headers: true,
     where: spec => (spec.baseUrl as string) || 'no endpoint set',
   },
   ollama: {
@@ -96,7 +104,19 @@ const PROVIDER_SHAPE: Record<string, {
 }
 
 /** Keys a row hides for the selected type, so a leftover can be pointed at. */
-const ALL_CONNECTION_KEYS = ['baseUrl', 'host', 'apiKey', 'cacheDir'] as const
+const ALL_CONNECTION_KEYS = ['baseUrl', 'host', 'apiKey', 'cacheDir', 'imageInput', 'timeoutMs'] as const
+
+/**
+ * How an OpenAI-compatible server wants images. There is no blessed spelling,
+ * so the wire shape is configured rather than guessed — and a server that does
+ * neither belongs on the local `clip` backend instead.
+ */
+const IMAGE_INPUT_MODES: { value: string; label: string; hint: string }[] = [
+  { value: 'data-uri', label: 'data-uri (default)', hint: 'Images ride in the ordinary `input` array as data URIs — infinity, TEI-style servers.' },
+  { value: 'messages', label: 'messages', hint: 'vLLM\'s multimodal shape: one request per image, wrapped in a chat message.' },
+]
+
+const DEFAULT_TIMEOUT_MS = 120000
 
 /**
  * The server fetches this URL, so it must be absolute — a bare path like `/v1`
@@ -222,6 +242,123 @@ function FlagToggle({
       {label}
       <InheritanceBadge overridden={overridden} />
     </label>
+  )
+}
+
+/**
+ * Custom request headers — proxy auth, tenant routing. Write-only like the API
+ * key: a GET returns only the NAMES, so the whole set has to be re-entered to
+ * change any of it. The server replaces the stored set wholesale when the field
+ * is present, which is exactly why that has to be said out loud here.
+ */
+function HeadersEditor({
+  storedNames,
+  value,
+  disabled,
+  onChange,
+}: {
+  storedNames?: string[]
+  value?: Record<string, string>
+  disabled?: boolean
+  onChange: (next: Record<string, string> | undefined) => void
+}) {
+  const editing = value !== undefined
+  // Rows live here, not in the config object: a half-typed row has no name yet,
+  // and a nameless key cannot be represented in the object being edited.
+  const [rows, setRows] = useState<[string, string][]>([])
+
+  const commit = (next: [string, string][]) => {
+    setRows(next)
+    onChange(Object.fromEntries(next.filter(([name]) => name.trim() !== '')))
+  }
+
+  const start = () => {
+    setRows([['', '']])
+    onChange({})
+  }
+
+  const cancel = () => {
+    setRows([])
+    onChange(undefined)
+  }
+
+  return (
+    <div className="mt-3 space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="text-xs font-medium">Custom headers</label>
+        {editing
+          ? (
+            <>
+              <span className="rounded bg-warning-subtle px-1.5 py-0.5 text-[10px] font-medium text-warning">
+                will replace stored
+              </span>
+              {!disabled && (
+                <button type="button" onClick={cancel} className="text-[10px] text-muted-foreground underline hover:text-foreground">
+                  cancel
+                </button>
+              )}
+            </>
+          )
+          : <InheritanceBadge overridden={false} source={storedNames?.join(', ')} />}
+      </div>
+
+      {!editing && (
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-[11px] text-muted-foreground">
+            {storedNames?.length
+              ? <>Stored: <span className="font-mono">{storedNames.join(', ')}</span> (values are never sent back)</>
+              : 'None set.'}
+          </p>
+          {!disabled && (
+            <Button type="button" size="sm" variant="ghost" onClick={start}>
+              {storedNames?.length ? 'Replace headers' : 'Add headers'}
+            </Button>
+          )}
+        </div>
+      )}
+
+      {editing && (
+        <>
+          <p className="text-[11px] text-muted-foreground">
+            Saving replaces every stored header, so re-enter the ones you want to keep.
+          </p>
+          {rows.map(([name, headerValue], i) => (
+            <div key={i} className="flex gap-2">
+              <Input
+                value={name}
+                disabled={disabled}
+                placeholder="X-Tenant"
+                className="h-8 font-mono text-sm"
+                onChange={e => commit(rows.map((r, j) => (j === i ? [e.target.value, r[1]] : r)))}
+              />
+              <Input
+                value={headerValue}
+                disabled={disabled}
+                placeholder="value"
+                className="h-8 font-mono text-sm"
+                onChange={e => commit(rows.map((r, j) => (j === i ? [r[0], e.target.value] : r)))}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={disabled}
+                aria-label={`Remove header ${name || i + 1}`}
+                onClick={() => commit(rows.filter((_, j) => j !== i))}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ))}
+          {!disabled && (
+            <Button type="button" size="sm" variant="ghost" onClick={() => commit([...rows, ['', '']])}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              Add header
+            </Button>
+          )}
+        </>
+      )}
+    </div>
   )
 }
 
@@ -357,7 +494,27 @@ export function EmbeddConfigEditor({
     setDraft(prev => {
       const providers = { ...(prev.providers || {}) }
       const current: EmbeddProviderSpec = { ...(providers[id] || {}) }
-      if (raw === '') { delete current[key] } else { current[key] = raw }
+      if (raw === '') {
+        delete current[key]
+      } else if (key === 'timeoutMs') {
+        const n = Number(raw)
+        // Leave a half-typed number alone rather than coercing it to NaN.
+        if (Number.isNaN(n)) { return prev }
+        current[key] = n
+      } else {
+        current[key] = raw
+      }
+      if (Object.keys(current).length === 0) { delete providers[id] } else { providers[id] = current }
+      return { ...prev, providers }
+    })
+  }
+
+  /** Same as setProviderField, for options that are not strings. */
+  const setProviderValue = (id: string, key: string, value: unknown) => {
+    setDraft(prev => {
+      const providers = { ...(prev.providers || {}) }
+      const current: EmbeddProviderSpec = { ...(providers[id] || {}) }
+      if (value === undefined) { delete current[key] } else { current[key] = value }
       if (Object.keys(current).length === 0) { delete providers[id] } else { providers[id] = current }
       return { ...prev, providers }
     })
@@ -559,7 +716,7 @@ export function EmbeddConfigEditor({
                       the left edge, with no badge competing for the eye. */}
                   <span className={cn('absolute inset-y-0 left-0 w-[3px]', RAIL[state])} aria-hidden />
 
-                  <div className="flex items-start gap-3 py-3 pl-4 pr-3">
+                  <div className="flex flex-col gap-2 py-3 pl-4 pr-3 sm:flex-row sm:items-start sm:gap-3">
                     <div className="min-w-0 flex-1">
                       {/* The chain: space → model → backend → table. */}
                       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -590,7 +747,7 @@ export function EmbeddConfigEditor({
                       )}
                     </div>
 
-                    <div className="flex shrink-0 items-center gap-1">
+                    <div className="flex shrink-0 items-center gap-1 max-sm:justify-end">
                       {needsFill && onFill && (
                         <Button type="button" size="sm" variant="outline" onClick={() => onFill(space)}>
                           Fill
@@ -684,13 +841,13 @@ export function EmbeddConfigEditor({
         )}
 
         {!disabled && (
-          <div className="mt-2 flex items-center gap-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             <Input
               value={newSpaceName}
               onChange={e => setNewSpaceName(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSpace() } }}
               placeholder="new space name (e.g. audio)"
-              className="h-8 max-w-xs text-sm"
+              className="h-8 w-full max-w-xs text-sm sm:w-auto"
             />
             <Button type="button" size="sm" variant="ghost" onClick={addSpace}>
               <Plus className="mr-1.5 h-3.5 w-3.5" />
@@ -736,7 +893,7 @@ export function EmbeddConfigEditor({
 
             return (
               <div key={id}>
-                <div className="flex items-start gap-3 px-4 py-3">
+                <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                       <span className="font-mono text-sm font-semibold">{id}</span>
@@ -757,7 +914,7 @@ export function EmbeddConfigEditor({
                     )}
                   </div>
 
-                  <div className="flex shrink-0 items-center gap-1">
+                  <div className="flex shrink-0 items-center gap-1 max-sm:justify-end">
                     {declaredHere && !isBuiltin && !disabled && (
                       <Button type="button" size="sm" variant="ghost" onClick={() => removeProvider(id)} title="Remove this override">
                         <Trash2 className="h-3.5 w-3.5" />
@@ -814,6 +971,41 @@ export function EmbeddConfigEditor({
                         />
                       )}
 
+                      {shape?.imageInput && (
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <label className="text-xs font-medium">Image input shape</label>
+                            <InheritanceBadge overridden={override.imageInput !== undefined} source={running.imageInput as string | undefined} />
+                          </div>
+                          <select
+                            className={selectClass}
+                            disabled={disabled}
+                            value={(override.imageInput as string) ?? ''}
+                            onChange={e => setProviderField(id, 'imageInput', e.target.value)}
+                          >
+                            <option value="">
+                              {running.imageInput ? `inherited — ${running.imageInput}` : 'inherited — data-uri'}
+                            </option>
+                            {IMAGE_INPUT_MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                          </select>
+                          <p className="text-[11px] text-muted-foreground">
+                            {IMAGE_INPUT_MODES.find(m => m.value === (override.imageInput ?? running.imageInput ?? 'data-uri'))?.hint}
+                          </p>
+                        </div>
+                      )}
+
+                      {shape?.timeoutMs && (
+                        <OverrideField
+                          label="Request timeout (ms)"
+                          type="number"
+                          value={override.timeoutMs as number | undefined}
+                          inheritedValue={(running.timeoutMs as number | undefined) ?? DEFAULT_TIMEOUT_MS}
+                          onChange={raw => setProviderField(id, 'timeoutMs', raw)}
+                          disabled={disabled}
+                          hint="How long to wait for a batch before giving up. Raise it for a slow or cold GPU host."
+                        />
+                      )}
+
                       {shape?.apiKey && (
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
@@ -840,6 +1032,15 @@ export function EmbeddConfigEditor({
                         </div>
                       )}
                     </div>
+
+                    {shape?.headers && (
+                      <HeadersEditor
+                        disabled={disabled}
+                        storedNames={running.headerNames}
+                        value={override.headers as Record<string, string> | undefined}
+                        onChange={next => setProviderValue(id, 'headers', next)}
+                      />
+                    )}
 
                     {/* A value left behind by an earlier type. It is inert — the
                         server only reads the field its type uses — but saying so
@@ -873,13 +1074,13 @@ export function EmbeddConfigEditor({
         </div>
 
         {!disabled && (
-          <div className="mt-2 flex items-center gap-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             <Input
               value={newProviderId}
               onChange={e => setNewProviderId(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addProvider() } }}
               placeholder="new backend name (e.g. gpu)"
-              className="h-8 max-w-xs text-sm"
+              className="h-8 w-full max-w-xs text-sm sm:w-auto"
             />
             <Button type="button" size="sm" variant="ghost" onClick={addProvider}>
               <Plus className="mr-1.5 h-3.5 w-3.5" />

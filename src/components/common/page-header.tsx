@@ -31,12 +31,12 @@ export function PageHeader({
   return (
     <div
       className={cn(
-        'flex flex-wrap items-start justify-between gap-3',
+        'flex items-start justify-between gap-3',
         !compact && 'border-b pb-4',
         className,
       )}
     >
-      <div className="flex min-w-0 items-start gap-3">
+      <div className="flex min-w-0 flex-1 items-start gap-3">
         {backTo && (
           <button
             type="button"
@@ -53,7 +53,7 @@ export function PageHeader({
             {title}
           </h1>
           {description && (
-            <p className={cn('text-muted-foreground', compact ? 'mt-1 text-xs' : 'mt-2')}>
+            <p className={cn('break-words text-muted-foreground', compact ? 'mt-1 text-xs' : 'mt-2')}>
               {description}
             </p>
           )}

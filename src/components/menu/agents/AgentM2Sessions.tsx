@@ -315,7 +315,7 @@ export function AgentM2Sessions() {
                     </div>
 
                     {!isEditing && (
-                      <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                      <div className="flex items-center gap-0.5 reveal-on-hover">
                       <button
                         type="button"
                         onClick={(e) => {

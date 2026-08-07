@@ -128,7 +128,7 @@ export function ContextList() {
                           selectEntity(ctx.id)
                           openM2('detail', ctx.id)
                         }}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5"
+                        className="reveal-on-hover shrink-0 mt-0.5"
                         title="Switch context URL"
                       >
                         <Link2 className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground" />
@@ -141,7 +141,7 @@ export function ContextList() {
                         selectEntity(ctx.id)
                         navigate(`/contexts/${ctx.id}/settings/general`)
                       }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5"
+                      className="reveal-on-hover shrink-0 mt-0.5"
                       title="Settings"
                     >
                       <Settings className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground" />

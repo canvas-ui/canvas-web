@@ -695,7 +695,7 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
         {/* Selection checkbox — always visible when selected, on hover otherwise */}
         <input
           type="checkbox"
-          className={`absolute left-2 top-2 z-10 h-4 w-4 cursor-pointer accent-primary ${isSelected ? '' : 'opacity-0 group-hover:opacity-100'}`}
+          className={`absolute left-2 top-2 z-10 h-4 w-4 cursor-pointer accent-primary ${isSelected ? '' : 'reveal-on-hover'}`}
           checked={isSelected}
           onClick={(e) => e.stopPropagation()}
           onChange={(e) => onSelect?.(document.id, e.target.checked, true)}
@@ -712,7 +712,7 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
           {onOpenToSide && (
             <button
               onClick={(e) => { e.stopPropagation(); onOpenToSide(document) }}
-              className="absolute right-2 top-2 rounded-sm bg-scrim p-1 text-scrim-foreground opacity-0 transition-opacity group-hover:opacity-100"
+              className="absolute right-2 top-2 rounded-sm bg-scrim p-1 text-scrim-foreground reveal-on-hover"
               title="Open to the side"
             >
               <PanelRight className="h-3.5 w-3.5" />

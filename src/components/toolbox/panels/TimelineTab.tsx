@@ -906,7 +906,7 @@ export function TimelineTab() {
                       type="button"
                       disabled={deletingTimeline === name}
                       onClick={(e) => { e.stopPropagation(); handleDeleteTimeline(name) }}
-                      className="shrink-0 p-1 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50 opacity-0 group-hover:opacity-100"
+                      className="shrink-0 p-1 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50 reveal-on-hover"
                       title={`Delete timeline "${name}"`}
                     >
                       {deletingTimeline === name

@@ -290,7 +290,7 @@ function FeaturesTab() {
                           type="button"
                           disabled={deleting === key}
                           onClick={(e) => { e.stopPropagation(); handleDelete(key) }}
-                          className="shrink-0 p-1 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50 opacity-0 group-hover:opacity-100"
+                          className="shrink-0 p-1 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50 reveal-on-hover"
                           title={isNamedDataset
                             ? `Drop dataset "${key.slice('data/dataset/'.length)}" — DELETES its documents`
                             : `Delete bitmap "${key}" from database`}

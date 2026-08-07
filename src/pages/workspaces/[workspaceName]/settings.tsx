@@ -9,6 +9,7 @@ import { DEFAULT_WORKSPACE_ICON, getBackendStyle, type LayerStyle } from '@/lib/
 import { DefaultFoldersPicker, createDefaultFolders, useFolderSelection } from '@/components/workspaces/DefaultFoldersPicker'
 import { adminReindexTimelines, adminReindexSearch, adminOptimize, adminReindexMime } from '@/services/admin'
 import { PageHeader } from '@/components/common/page-header'
+import { SettingsSectionTabs } from '@/components/common/settings-section-tabs'
 import { WORKSPACE_SETTINGS_SECTIONS, resolveWorkspaceSettingsTab, type WorkspaceSettingsTab } from '@/lib/settings-sections'
 import { EmbeddSettingsPanel } from '@/components/workspace/embedd-settings-panel'
 import { HooksPanel } from '@/components/workspace/hooks-panel'
@@ -614,10 +615,12 @@ function SearchTuning({ workspaceName, current, weights, onDone }: {
       </div>
       <div className="space-y-1.5">
         <label className="text-xs text-muted-foreground">Hybrid fusion weights (0 disables a signal)</label>
-        <div className="flex items-center gap-3">
+        {/* Three labelled numbers side by side overflowed a phone card, clipping
+            the last one. Stack the label over the field and let them wrap. */}
+        <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
           {([['lexical', wFts, setWFts], ['text semantic', wDense, setWDense], ['image', wImage, setWImage]] as const).map(([label, v, set]) => (
-            <div key={label} className="flex items-center gap-1.5">
-              <span className="text-[11px] text-muted-foreground">{label}</span>
+            <div key={label} className="space-y-1">
+              <span className="block text-[11px] text-muted-foreground">{label}</span>
               <Input value={v} onChange={(e) => set(e.target.value)} className="h-8 w-16 font-mono text-xs" inputMode="decimal" />
             </div>
           ))}
@@ -1077,15 +1080,21 @@ export default function WorkspaceSettingsPage() {
 
   return (
     <div className="h-full min-h-0 overflow-y-auto">
-      <div className="mx-auto max-w-5xl p-6 pb-12">
+      <div className="mx-auto max-w-5xl p-6 pb-12 max-md:px-4 max-md:pb-rail-stack">
       {/* One section at a time — the section list lives in M2, so this page
           never grows a tab strip. */}
       <PageHeader
         compact
-        className="mb-6 border-b pb-4"
+        className="mb-4 border-b pb-4"
         title={`${section.label} - ${workspace.label || workspace.name}`}
         description={activeTab === 'general' ? workspace.rootPath : section.description}
         backTo={`/workspaces/${workspaceName}`}
+      />
+      <SettingsSectionTabs
+        className="mb-6"
+        sections={WORKSPACE_SETTINGS_SECTIONS}
+        activeId={activeTab}
+        hrefFor={id => `/workspaces/${workspaceName}/settings/${id}`}
       />
 
       {activeTab === 'general' && (

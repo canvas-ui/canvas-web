@@ -131,3 +131,30 @@
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
+
+/* ── Progressive disclosure that survives touch ─────────────────────────── */
+
+/* Row actions that fade in on hover. Keyed on POINTER CAPABILITY, not viewport
+   width: a touch device has no hover state at all, so a control that only
+   appears on :hover is simply unreachable there — while a narrow window with a
+   mouse should still get the quiet treatment. Pair with `group` on the row.
+
+   Replaces the hand-rolled `opacity-0 group-hover:opacity-100`, which was
+   invisible on every phone and tablet. */
+@utility reveal-on-hover {
+  transition: opacity var(--duration-fast) var(--ease-standard);
+
+  @media (hover: hover) and (pointer: fine) {
+    opacity: 0;
+
+    .group:hover &,
+    .group:focus-within & {
+      opacity: 1;
+    }
+  }
+
+  /* Keyboard users on a pointer device still need to see what they focused. */
+  &:focus-visible {
+    opacity: 1;
+  }
+}

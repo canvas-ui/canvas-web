@@ -583,7 +583,7 @@ function LayersList({ layers, isLoading, onSelect, onLock, onUnlock, onRename, o
 
           {/* Action buttons — visible on hover */}
           {renamingId !== layer.id && (
-            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
+            <div className="flex items-center gap-0.5 reveal-on-hover">
               {layer.locked ? (
                 <button
                   type="button"
