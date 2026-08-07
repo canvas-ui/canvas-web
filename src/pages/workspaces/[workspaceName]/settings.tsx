@@ -731,8 +731,8 @@ function DbStatsTab({
                       ))
                     : <StatRow label="Text-embeddable (gap default)" value={stats.semantic.embeddableSchemas?.join(', ')} />}
                   {/* Per-space STORAGE stats — row/doc counts, so a re-embed's
-                      progress is visible. Which model/provider fills each space
-                      (and the queue driving it) lives on the Embedding tab. */}
+                      progress is visible. Which model/backend fills each space
+                      (and the queue driving it) is in Embeddings, above. */}
                   {stats.semantic.vectorSpaces && Object.entries(stats.semantic.vectorSpaces).map(([name, sp]) => (
                     <StatRow
                       key={name}
@@ -749,9 +749,6 @@ function DbStatsTab({
                     mono
                   />
                   <SearchTuning workspaceName={workspaceName} current={stats.semantic.imageMaxDistance} weights={stats.semantic.searchWeights} onDone={onRefresh} />
-                  <p className="mt-2 text-[11px] text-muted-foreground">
-                    Models, providers, backfill/re-embed and the embedding queue are on the <strong>Embedding</strong> tab.
-                  </p>
                 </>
               )}
             </section>
@@ -1362,24 +1359,26 @@ export default function WorkspaceSettingsPage() {
       )}
 
       {activeTab === 'db' && (
-        <div className="space-y-6">
+        <div className="space-y-8">
+          {/* Embeddings lead: this is the part people come here to change.
+              Index maintenance and raw counts are the rarer, mechanical half. */}
+          {workspaceId && (
+            <section className="space-y-3">
+              <div>
+                <h2 className="text-sm font-semibold">Embeddings</h2>
+                <p className="text-xs text-muted-foreground">
+                  Which model turns this workspace's content into vectors, and where those vectors live.
+                </p>
+              </div>
+              <EmbeddSettingsPanel workspaceId={workspaceId} workspaceName={workspaceName!} />
+            </section>
+          )}
           <DbStatsTab
             stats={dbStats}
             isLoading={isLoadingDbStats}
             onRefresh={() => loadDbStats()}
             workspaceName={workspaceName!}
           />
-          {/* Embeddings are an index of the same data the stats above describe,
-              so they belong to the database section rather than a tab of their own. */}
-          {workspaceId && (
-            <section className="space-y-3">
-              <div>
-                <h2 className="text-sm font-semibold">Embeddings</h2>
-                <p className="text-xs text-muted-foreground">Vector index used for semantic search.</p>
-              </div>
-              <EmbeddSettingsPanel workspaceId={workspaceId} workspaceName={workspaceName!} />
-            </section>
-          )}
         </div>
       )}
 

@@ -119,7 +119,7 @@ function SectionHead({ title, hint }: { title: string; hint: string }) {
   return (
     <div className="mb-2">
       <h3 className={cn('text-[11px] text-muted-foreground', KEY_LABEL)}>{title}</h3>
-      <p className="mt-1 max-w-prose text-xs text-muted-foreground">{hint}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
     </div>
   )
 }
@@ -241,13 +241,14 @@ function RowToggle({ open, onClick, label }: { open: boolean; onClick: () => voi
   )
 }
 
-type SpaceState = 'live' | 'needs-fill' | 'unresolved' | 'inherited'
+type SpaceState = 'configured' | 'needs-fill' | 'unresolved' | 'unset'
 
 const RAIL: Record<SpaceState, string> = {
-  live: 'bg-success',
+  configured: 'bg-success',
   'needs-fill': 'bg-warning',
   unresolved: 'bg-destructive',
-  inherited: 'bg-border',
+  // Genuinely nothing to embed with — the only state that is not "working".
+  unset: 'bg-muted-foreground/30',
 }
 
 export function EmbeddConfigEditor({
@@ -548,9 +549,9 @@ export function EmbeddConfigEditor({
                 ? 'unresolved'
                 : needsFill
                   ? 'needs-fill'
-                  : resolved?.table
-                    ? 'live'
-                    : 'inherited'
+                  : model
+                    ? 'configured'
+                    : 'unset'
 
               return (
                 <div key={space} className="relative">
@@ -575,9 +576,9 @@ export function EmbeddConfigEditor({
                         {chunk && <span className="text-xs text-muted-foreground">chunked</span>}
                       </div>
 
-                      {resolved?.table && (
-                        <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground" title="Vector table currently backing this space">
-                          └─ {resolved.table}
+                      {resolvedSpaces && model && (
+                        <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground" title="Vector table backing this space">
+                          └─ {resolved?.table ?? <span className="not-italic">not created yet</span>}
                         </p>
                       )}
 
@@ -611,7 +612,7 @@ export function EmbeddConfigEditor({
                   </div>
 
                   {open && (
-                    <div className="border-t bg-muted/20 py-4 pl-4 pr-3">
+                    <div className="border-t bg-muted/40 py-4 pl-4 pr-3">
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
@@ -767,7 +768,7 @@ export function EmbeddConfigEditor({
                 </div>
 
                 {open && (
-                  <div className="border-t bg-muted/20 px-4 py-4">
+                  <div className="border-t bg-muted/40 px-4 py-4">
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
@@ -890,7 +891,15 @@ export function EmbeddConfigEditor({
 
       {!disabled && (
         <div className="flex flex-wrap items-center gap-3 border-t pt-4">
-          <Button type="button" size="sm" onClick={submit} disabled={saving || !dirty || urlProblems.length > 0}>
+          {/* Quiet until there is something to save — a filled primary button
+              that can never be pressed reads as broken. */}
+          <Button
+            type="button"
+            size="sm"
+            variant={dirty ? 'default' : 'outline'}
+            onClick={submit}
+            disabled={saving || !dirty || urlProblems.length > 0}
+          >
             {saving ? 'Saving…' : saveLabel}
           </Button>
           <Button
