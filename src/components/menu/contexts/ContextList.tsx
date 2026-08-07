@@ -12,7 +12,7 @@ import { useToast } from '@/components/ui/toast-container'
 import { useNavigate } from 'react-router-dom'
 
 export function ContextList() {
-  const { state, selectEntity, openM2 } = useMenu()
+  const { state, selectEntity, openM2, closeM2 } = useMenu()
   const { contexts, isLoading } = useContextListData(state.activeSection === 'contexts')
   const { showToast } = useToast()
   const navigate = useNavigate()
@@ -43,9 +43,12 @@ export function ContextList() {
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-4 h-12 border-b border-border shrink-0">
         <span className="text-sm font-semibold">Contexts</span>
+        {/* Creation is a content-area job — see WorkspaceList. */}
         <button
           type="button"
-          onClick={() => openM2('form', null)}
+          onClick={() => { closeM2(); navigate('/contexts?create=1') }}
+          title="Create context"
+          aria-label="Create context"
           className="flex items-center justify-center w-6 h-6 rounded-full bg-foreground text-background hover:opacity-80 transition-opacity"
         >
           <Plus className="w-3.5 h-3.5" />
@@ -136,7 +139,7 @@ export function ContextList() {
                       onClick={(e) => {
                         e.stopPropagation()
                         selectEntity(ctx.id)
-                        openM2('form', ctx.id)
+                        navigate(`/contexts/${ctx.id}/settings/general`)
                       }}
                       className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5"
                       title="Settings"

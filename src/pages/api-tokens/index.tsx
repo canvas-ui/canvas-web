@@ -1,3 +1,4 @@
+import { PageHeader } from '@/components/common/page-header'
 import { useEffect, useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -160,11 +161,10 @@ export default function ApiTokensPage() {
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="border-b pb-4">
-        <h1 className="text-3xl font-bold tracking-tight">API Tokens</h1>
-        <p className="text-muted-foreground mt-2">Create and manage API tokens for programmatic access</p>
-      </div>
+      <PageHeader
+        title="API Tokens"
+        description="Create and manage API tokens for programmatic access"
+      />
 
       {/* Generate New Token Section */}
       <div className="space-y-4">

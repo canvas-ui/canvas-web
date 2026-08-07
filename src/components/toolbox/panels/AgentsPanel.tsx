@@ -5,6 +5,7 @@ import { useToolbox } from '../toolbox-context'
 import { useAgentListData } from '@/hooks/useAgentListData'
 import { useMenu } from '@/components/shell/menu-context'
 import { useToast } from '@/components/ui/toast-container'
+import { useNavigate } from 'react-router-dom'
 import { startAgent, stopAgent } from '@/services/agent'
 
 function StatusDot({ status }: { status: string }) {
@@ -18,7 +19,8 @@ function StatusDot({ status }: { status: string }) {
 
 export function AgentsPanel() {
   const { openAgentT2 } = useToolbox()
-  const { setSection, openM2 } = useMenu()
+  const { setSection } = useMenu()
+  const navigate = useNavigate()
   const { agents, isLoading, refresh } = useAgentListData(true)
   const { showToast } = useToast()
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
@@ -67,7 +69,7 @@ export function AgentsPanel() {
             <span className="text-xs">No agents yet</span>
             <button
               type="button"
-              onClick={() => { setSection('agents'); openM2('form', null) }}
+              onClick={() => { setSection('agents'); navigate('/agents?create=1') }}
               className="text-xs text-primary hover:underline"
             >
               Create an agent

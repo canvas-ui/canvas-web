@@ -8,12 +8,14 @@ import { M2Header } from '@/components/menu/shared/M2Header'
 import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style'
 import { MenuTreeView } from '@/components/menu/shared/MenuTreeView'
 import { useMenu } from '@/components/shell/menu-context'
+import { useNavigate } from 'react-router-dom'
 import { getContext, updateContextUrl, getContextTree } from '@/services/context'
 import { useTreeOperations } from '@/hooks/useTreeOperations'
 import type { TreeNode } from '@/types/workspace'
 
 export function ContextM2Detail() {
-  const { state, closeM2, openM2, closeM1, closeM0 } = useMenu()
+  const { state, closeM2, closeM1, closeM0 } = useMenu()
+  const navigate = useNavigate()
   const entityId = state.selectedEntityId
   const { showToast } = useToast()
 
@@ -119,7 +121,7 @@ export function ContextM2Detail() {
         action={
           <button
             type="button"
-            onClick={() => openM2('form', entityId)}
+            onClick={() => entityId && navigate(`/contexts/${entityId}/settings/general`)}
             className="flex items-center justify-center w-8 h-8 rounded hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors"
             title="Settings"
           >

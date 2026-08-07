@@ -1,3 +1,4 @@
+import { PageHeader } from '@/components/common/page-header'
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { api } from '@/lib/api'
@@ -71,7 +72,7 @@ export default function SharedViewerPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Shared Resource Viewer</h1>
+      <PageHeader title="Shared Resource Viewer" description="Open a resource someone shared with you." />
       <div className="grid gap-2 md:grid-cols-3">
         <Input value={resourceUrl} onChange={(e) => setResourceUrl(e.target.value)} placeholder="Full pub URL" />
         <Input value={token} onChange={(e) => setToken(e.target.value)} placeholder="Access token (canvas-...)" />

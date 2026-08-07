@@ -1,3 +1,4 @@
+import { PageHeader } from '@/components/common/page-header'
 import { useEffect, useState } from "react"
 import { Icon } from "@iconify/react"
 import { generateNiceRandomHexColor, visibleAccentColor, onAccentTextClass } from "@/utils/color"
@@ -8,9 +9,10 @@ import { FormPanel } from '@/components/common/form-panel';
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/toast-container"
-import { Plus, X, GripVertical } from "lucide-react"
+import { Plus, GripVertical } from "lucide-react"
 import { WorkspaceCard } from "@/components/ui/workspace-card"
 import { useNavigate } from "react-router-dom"
+import { useCreatePanel } from "@/hooks/use-create-panel"
 import { useSocket } from "@/hooks/useSocket"
 import {
   listWorkspaces,
@@ -43,7 +45,7 @@ export default function WorkspacesPage() {
   const [createPickerPos, setCreatePickerPos] = useState<{ x: number; y: number } | null>(null)
   const [editPickerPos, setEditPickerPos] = useState<{ x: number; y: number } | null>(null)
   const [isCreating, setIsCreating] = useState(false)
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCreate, setShowCreate] = useCreatePanel();
   const folderPick = useFolderSelection();
   const [showShared, setShowShared] = useState(false);
   const [editingWorkspace, setEditingWorkspace] = useState<Workspace | null>(null)
@@ -324,27 +326,24 @@ export default function WorkspacesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Page Header — list first; creation lives behind the button */}
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Workspaces</h1>
-          <p className="text-muted-foreground mt-2">Divide your Universe into self-contained workspaces</p>
-        </div>
-        <div className="flex shrink-0 gap-2">
-          <Button variant="outline" onClick={() => setShowShared(o => !o)} className="max-sm:hidden">
-            Open Shared…
-          </Button>
-          {!showCreate && (
-            <Button onClick={() => setShowCreate(true)} className="max-sm:h-9 max-sm:w-9 max-sm:p-0" aria-label="Create workspace" title="Create workspace">
-              <Plus className="h-4 w-4 sm:mr-2" />
-              <span className="max-sm:hidden">Create Workspace</span>
+      {/* List first; creation lives behind the button */}
+      <PageHeader
+        title="Workspaces"
+        description="Divide your Universe into self-contained workspaces"
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setShowShared(o => !o)} className="max-sm:hidden">
+              Open Shared…
             </Button>
-          )}
-          <Button variant="outline" size="icon" onClick={() => navigate('/home')} aria-label="Close" title="Close">
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+            {!showCreate && (
+              <Button onClick={() => setShowCreate(true)} className="max-sm:h-9 max-sm:w-9 max-sm:p-0" aria-label="Create workspace" title="Create workspace">
+                <Plus className="h-4 w-4 sm:mr-2" />
+                <span className="max-sm:hidden">Create Workspace</span>
+              </Button>
+            )}
+          </>
+        }
+      />
 
       {/* Create New Workspace Section */}
       {showCreate && (

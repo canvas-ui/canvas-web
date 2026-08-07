@@ -104,9 +104,13 @@ export function WorkspaceList() {
       {/* Header */}
       <div className="flex items-center justify-between px-4 h-12 border-b border-border shrink-0">
         <span className="text-sm font-semibold">Workspaces</span>
+        {/* Creation is a content-area job — the M2 drawer is too narrow for
+            the layout picker and default folders. */}
         <button
           type="button"
-          onClick={() => openM2('form', null)}
+          onClick={() => { closeM2(); navigate('/workspaces?create=1') }}
+          title="Create workspace"
+          aria-label="Create workspace"
           className="flex items-center justify-center w-6 h-6 rounded-full bg-foreground text-background hover:opacity-80 transition-opacity"
         >
           <Plus className="w-3.5 h-3.5" />
@@ -216,8 +220,7 @@ export function WorkspaceList() {
                         onClick={(e) => {
                           e.stopPropagation()
                           selectEntity(ws.name)
-                          closeM2()
-                          navigate(`/workspaces/${ws.name}/settings`)
+                          navigate(`/workspaces/${ws.name}/settings/general`)
                         }}
                         className="flex items-center justify-center w-6 h-6 rounded hover:bg-muted-foreground/10 text-muted-foreground transition-colors"
                         title="Settings"

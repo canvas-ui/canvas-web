@@ -11,10 +11,16 @@ import {
   XCircle,
   AlertCircle,
   Clock,
-  FileText
+  FileText,
+  Plus
 } from "lucide-react"
-import { roleService, Role } from "@/services/role"
+import { roleService, Role, RoleTemplate } from "@/services/role"
 import { getCurrentUserFromToken } from "@/services/auth"
+import { FormPanel } from "@/components/common/form-panel"
+import { PageHeader } from "@/components/common/page-header"
+import { Input } from "@/components/ui/input"
+import { useCreatePanel } from "@/hooks/use-create-panel"
+import { listWorkspaces } from "@/services/workspace"
 
 // Status badge component
 function StatusBadge({ status }: { status: Role['status'] }) {
@@ -45,6 +51,13 @@ export default function RolesPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedLogs, setSelectedLogs] = useState<{role: Role, logs: string[]} | null>(null)
+  const [showCreate, setShowCreate] = useCreatePanel()
+  const [templates, setTemplates] = useState<RoleTemplate[]>([])
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  const [newRoleTemplate, setNewRoleTemplate] = useState("")
+  const [newRoleName, setNewRoleName] = useState("")
+  const [newRoleWorkspaceId, setNewRoleWorkspaceId] = useState("")
+  const [isCreating, setIsCreating] = useState(false)
 
   const { showToast } = useToast()
   const currentUser = getCurrentUserFromToken()
@@ -73,6 +86,52 @@ export default function RolesPage() {
       setIsLoading(false)
     }
   }, [currentUser?.id])
+
+  // Templates and workspaces are only needed by the creation form, so they
+  // load with it rather than on every visit to the list.
+  useEffect(() => {
+    if (!showCreate) return
+    roleService.listTemplates()
+      .then(all => {
+        const workspaceTemplates = all.filter(t => t.type === 'workspace')
+        setTemplates(workspaceTemplates)
+        setNewRoleTemplate(prev => prev || workspaceTemplates[0]?.id || "")
+      })
+      .catch(() => setTemplates([]))
+    listWorkspaces()
+      .then(all => {
+        setWorkspaces(all)
+        setNewRoleWorkspaceId(prev => prev || all[0]?.id || "")
+      })
+      .catch(() => setWorkspaces([]))
+  }, [showCreate])
+
+  const handleCreateRole = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newRoleTemplate || !newRoleName.trim() || !newRoleWorkspaceId) return
+    setIsCreating(true)
+    try {
+      const role = await roleService.createRole({
+        template: newRoleTemplate,
+        name: newRoleName.trim(),
+        type: 'workspace',
+        userId: currentUser?.id,
+        workspaceId: newRoleWorkspaceId,
+      })
+      setNewRoleName("")
+      setShowCreate(false)
+      await fetchRoles()
+      showToast({ title: 'Created', description: `Role "${role.name}" created` })
+    } catch (err) {
+      showToast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to create role',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsCreating(false)
+    }
+  }
 
   const handleStartRole = async (role: Role) => {
     try {
@@ -144,19 +203,79 @@ export default function RolesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex items-center justify-between border-b pb-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">My Roles</h1>
-          <p className="text-muted-foreground mt-2">
-            Manage your workspace roles and services
-          </p>
-        </div>
-        <Button onClick={fetchRoles} variant="outline">
-          <RotateCw className="w-4 h-4 mr-2" />
-          Refresh
-        </Button>
-      </div>
+      <PageHeader
+        title="My Roles"
+        description="Manage your workspace roles and services"
+        actions={
+          <>
+            {!showCreate && (
+              <Button onClick={() => setShowCreate(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create Role
+              </Button>
+            )}
+            <Button onClick={fetchRoles} variant="outline">
+              <RotateCw className="mr-2 h-4 w-4" />
+              Refresh
+            </Button>
+          </>
+        }
+      />
+
+      {showCreate && (
+        <FormPanel title="Create New Role" onClose={() => setShowCreate(false)}>
+          <form onSubmit={handleCreateRole} className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label htmlFor="role-template" className="mb-1 block text-sm font-medium">Template</label>
+                <select
+                  id="role-template"
+                  className="w-full rounded-md border border-border bg-background px-3 py-2"
+                  value={newRoleTemplate}
+                  onChange={(e) => setNewRoleTemplate(e.target.value)}
+                  disabled={isCreating || templates.length === 0}
+                >
+                  {templates.length === 0 && <option value="">No workspace templates available</option>}
+                  {templates.map(template => (
+                    <option key={template.id} value={template.id}>
+                      {template.name} - {template.description}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="role-name" className="mb-1 block text-sm font-medium">Role Name</label>
+                <Input
+                  id="role-name"
+                  value={newRoleName}
+                  onChange={(e) => setNewRoleName(e.target.value)}
+                  placeholder="e.g., canvas-sshd"
+                  disabled={isCreating}
+                />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="role-workspace" className="mb-1 block text-sm font-medium">Workspace</label>
+              <select
+                id="role-workspace"
+                className="w-full rounded-md border border-border bg-background px-3 py-2"
+                value={newRoleWorkspaceId}
+                onChange={(e) => setNewRoleWorkspaceId(e.target.value)}
+                disabled={isCreating || workspaces.length === 0}
+              >
+                {workspaces.length === 0 && <option value="">No workspaces available. Create one first.</option>}
+                {workspaces.map(ws => (
+                  <option key={ws.id} value={ws.id}>{ws.label || ws.name}</option>
+                ))}
+              </select>
+            </div>
+            <Button type="submit" disabled={isCreating || !newRoleTemplate || !newRoleName.trim() || !newRoleWorkspaceId}>
+              <Plus className="mr-2 h-4 w-4" />
+              {isCreating ? 'Creating…' : 'Create Role'}
+            </Button>
+          </form>
+        </FormPanel>
+      )}
 
       {/* Roles Grid */}
       {isLoading ? (

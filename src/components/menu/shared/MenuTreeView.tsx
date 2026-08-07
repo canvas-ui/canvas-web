@@ -40,7 +40,9 @@ export interface MenuTreeViewProps {
   onShowContent?: (path: string, layerId?: string) => void
   onOpenToSide?: (path: string, treeName: string) => void
   onInsertPath?: (path: string, autoCreateLayers?: boolean) => Promise<boolean>
-  onCreateCanvas?: (path: string) => Promise<boolean>
+  // Canvases are created through the content-area form (it carries the view
+  // capture and needs the room); the tree only points at the parent path.
+  onNewCanvas?: (parentPath: string) => void
   onRemovePath?: (path: string, recursive?: boolean, purge?: boolean, destroy?: boolean) => Promise<boolean>
   onRenamePath?: (fromPath: string, newName: string) => Promise<boolean>
   onMovePath?: (from: string, to: string, recursive?: boolean, sourceTreeName?: string, targetTreeName?: string) => Promise<boolean>
@@ -110,9 +112,9 @@ interface CtxMenuProps {
   sourceLayer: LayerRef | null
   targetLayers: Map<string, string>
   clipboard: Clip | null
-  onStartInlineCreate: (parentPath: string, isCanvas?: boolean) => void
+  onStartInlineCreate: (parentPath: string) => void
   onChangeIcon?: () => void
-  hasCreateCanvas?: boolean
+  onNewCanvas?: (parentPath: string) => void
   onShareCanvas?: MenuTreeViewProps['onShareCanvas']
   onRemove?: MenuTreeViewProps['onRemovePath']
   onRename?: MenuTreeViewProps['onRenamePath']
@@ -134,7 +136,7 @@ interface CtxMenuProps {
 function CtxMenu({
   x, y, node, path, isBackendsTree, onClose, onShowContent, onOpenToSide,
   sourceLayer, targetLayers, clipboard,
-  onStartInlineCreate, onChangeIcon, hasCreateCanvas, onShareCanvas, onRemove, onRename,
+  onStartInlineCreate, onChangeIcon, onNewCanvas, onShareCanvas, onRemove, onRename,
   onLock, onUnlock, onDestroy, onMerge, onSubtract, onResyncBackend,
   onRenameBackendFolder, onDeleteBackendFolder,
   onCopy, onCut, onPaste,
@@ -208,7 +210,7 @@ function CtxMenu({
           <button
             type="button"
             className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-accent rounded-sm text-left"
-            onClick={() => { onStartInlineCreate(path, false); onClose() }}
+            onClick={() => { onStartInlineCreate(path); onClose() }}
           >
             <Plus className="w-3 h-3" />
             New folder here
@@ -231,16 +233,16 @@ function CtxMenu({
           }, true,
         )}
 
-        {/* New canvas — inline, workspace trees only; never inside the
-            backends tree (server rejects it anyway) */}
-        {hasCreateCanvas && !isBackendsTree && (
+        {/* New canvas — opens the create form in the content area. Workspace
+            trees only; never inside the backends tree (server rejects it anyway) */}
+        {onNewCanvas && !isBackendsTree && (
           <button
             type="button"
             className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-accent rounded-sm text-left"
-            onClick={() => { onStartInlineCreate(path, true); onClose() }}
+            onClick={() => { onNewCanvas(path); onClose() }}
           >
             <LayoutDashboard className="w-3 h-3 text-primary" />
-            New canvas here
+            New canvas here…
           </button>
         )}
 
@@ -445,7 +447,6 @@ interface CardNodeProps {
   clipboard: Clip | null
   searchQuery: string
   inlineCreateParent: string | null
-  inlineCreateIsCanvas: boolean
   onSelect: (path: string) => void
   onShowContent?: (path: string) => void
   onCtrl: (path: string, id: string) => void
@@ -469,7 +470,7 @@ interface CardNodeProps {
 function CardNode({
   node, parentPath, depth, isLast, selectedPath, pendingPath, contentPath, readOnly,
   sourceLayer, targetLayers, clipboard, searchQuery,
-  inlineCreateParent, inlineCreateIsCanvas,
+  inlineCreateParent,
   onSelect, onShowContent, onCtrl, onCtxMenu,
   onConfirmCreate, onCancelCreate, onOpenPicker, styleOverrides,
   dragOverPath, isCopyDrag, onDragStart, onDragEnter, onDragOver, onDragLeave, onDragEnd, onDrop,
@@ -605,7 +606,6 @@ function CardNode({
             <InlineCreateInput
               onConfirm={name => onConfirmCreate(path, name)}
               onCancel={onCancelCreate}
-              placeholder={inlineCreateIsCanvas ? 'canvas name…' : undefined}
             />
           )}
           {node.children?.map((child, index) => (
@@ -624,7 +624,6 @@ function CardNode({
               clipboard={clipboard}
               searchQuery={searchQuery}
               inlineCreateParent={inlineCreateParent}
-              inlineCreateIsCanvas={inlineCreateIsCanvas}
               onSelect={onSelect}
               onShowContent={onShowContent}
               onCtrl={onCtrl}
@@ -655,7 +654,7 @@ function CardNode({
 export function MenuTreeView({
   root, treeName = 'context', isBackendsTree = false, selectedPath, pendingPath, onSelect, isLoading = false, readOnly = false,
   rootLabel, contentPath, onShowContent, onOpenToSide,
-  onInsertPath, onCreateCanvas, onShareCanvas, onRemovePath, onRenamePath, onMovePath, onCopyPath,
+  onInsertPath, onNewCanvas, onShareCanvas, onRemovePath, onRenamePath, onMovePath, onCopyPath,
   pastedDocumentIds, onPasteDocuments,
   onLockLayer, onUnlockLayer, onDestroyLayer, onMergeLayer, onSubtractLayer,
   onResyncBackend,
@@ -690,7 +689,6 @@ export function MenuTreeView({
     setStyleOverrides(kept ? new Map([[kept.path, kept.style]]) : new Map())
   }
   const [inlineCreateParent, setInlineCreateParent] = useState<string | null>(null)
-  const [inlineCreateIsCanvas, setInlineCreateIsCanvas] = useState(false)
 
   // ── Drag-and-drop state ───────────────────────────────────────────────────
   const [dragOverPath, setDragOverPath] = useState<string | null>(null)
@@ -922,14 +920,10 @@ export function MenuTreeView({
   }, [clipboard, handlePaste, readOnly, selectedPath, treeName])
 
   const handleConfirmCreate = useCallback(async (parentPath: string, name: string) => {
-    const isCanvas = inlineCreateIsCanvas
     setInlineCreateParent(null)
-    setInlineCreateIsCanvas(false)
     const full = parentPath === '/' ? `/${name}` : `${parentPath}/${name}`
     try {
-      if (isCanvas) {
-        if (onCreateCanvas && await onCreateCanvas(full)) onSelect(full)
-      } else if (fileBackendTarget(parentPath, isBackendsTree) && onCreateBackendFolder) {
+      if (fileBackendTarget(parentPath, isBackendsTree) && onCreateBackendFolder) {
         // Under a writable file backend: create a real fs directory, not a tree layer.
         if (await onCreateBackendFolder(parentPath, name)) onSelect(full)
       } else {
@@ -938,11 +932,10 @@ export function MenuTreeView({
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err))
     }
-  }, [onInsertPath, onCreateCanvas, onCreateBackendFolder, onSelect, inlineCreateIsCanvas, isBackendsTree])
+  }, [onInsertPath, onCreateBackendFolder, onSelect, isBackendsTree])
 
   const handleCancelCreate = useCallback(() => {
     setInlineCreateParent(null)
-    setInlineCreateIsCanvas(false)
   }, [])
 
   // Delete/Backspace removes the selected layer. Scoped to the tree container
@@ -980,7 +973,7 @@ export function MenuTreeView({
   const cardProps = {
     selectedPath, pendingPath, contentPath, readOnly,
     sourceLayer, targetLayers, clipboard, searchQuery: q,
-    inlineCreateParent, inlineCreateIsCanvas,
+    inlineCreateParent,
     onSelect, onShowContent, onCtrl: handleCtrl, onCtxMenu: openCtxMenu,
     onConfirmCreate: handleConfirmCreate, onCancelCreate: handleCancelCreate,
     onOpenPicker: onUpdateNode ? openPicker : undefined,
@@ -1081,7 +1074,6 @@ export function MenuTreeView({
           <InlineCreateInput
             onConfirm={name => handleConfirmCreate('/', name)}
             onCancel={handleCancelCreate}
-            placeholder={inlineCreateIsCanvas ? 'canvas name…' : undefined}
           />
         )}
         {root.children?.map((child, index) => (
@@ -1112,9 +1104,9 @@ export function MenuTreeView({
           sourceLayer={sourceLayer}
           targetLayers={targetLayers}
           clipboard={clipboard}
-          onStartInlineCreate={(path, isCanvas = false) => { setInlineCreateParent(path); setInlineCreateIsCanvas(isCanvas) }}
+          onStartInlineCreate={(path) => setInlineCreateParent(path)}
           onChangeIcon={onUpdateNode ? () => openPicker({ clientX: ctxMenu.x, clientY: ctxMenu.y, stopPropagation: () => {} } as React.MouseEvent, ctxMenu.path, ctxMenu.node) : undefined}
-          hasCreateCanvas={!!onCreateCanvas}
+          onNewCanvas={onNewCanvas}
           onShareCanvas={onShareCanvas}
           onRemove={!readOnly ? onRemovePath : undefined}
           onRename={!readOnly ? onRenamePath : undefined}

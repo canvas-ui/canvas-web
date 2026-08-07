@@ -1,5 +1,6 @@
+import { PageHeader } from '@/components/common/page-header'
 import { useCallback, useEffect, useState } from 'react'
-import { RefreshCw, ShieldAlert, Server } from 'lucide-react'
+import { RefreshCw, ShieldAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast-container'
@@ -68,21 +69,18 @@ export default function AdminEmbeddingPage() {
 
   return (
     <div className="mx-auto max-w-4xl p-6">
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Server className="h-5 w-5 text-muted-foreground" />
-          <div>
-            <h1 className="text-lg font-semibold">Server embedding defaults</h1>
-            <p className="text-xs text-muted-foreground">
-              The base every user inherits, before their own defaults and before a workspace's own config.
-            </p>
-          </div>
-        </div>
-        <Button type="button" size="sm" variant="outline" onClick={refresh} disabled={loading}>
-          <RefreshCw className="mr-2 h-3.5 w-3.5" />
-          Refresh
-        </Button>
-      </div>
+      <PageHeader
+        compact
+        className="mb-6"
+        title="Server embedding defaults"
+        description="The base every user inherits, before their own defaults and before a workspace's own config."
+        actions={
+          <Button type="button" size="sm" variant="outline" onClick={refresh} disabled={loading}>
+            <RefreshCw className="mr-2 h-3.5 w-3.5" />
+            Refresh
+          </Button>
+        }
+      />
 
       {!isAdmin && (
         <div className="mb-4 flex items-start gap-2 rounded-md border p-3 text-xs">

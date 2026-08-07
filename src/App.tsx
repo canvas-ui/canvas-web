@@ -5,6 +5,7 @@ import RegisterPage from './pages/auth/register'
 import WorkspacesPage from './pages/workspaces'
 import WorkspaceDetailPage from './pages/workspaces/[workspaceName]'
 import HomePage from './pages/home'
+import DeskPage from './pages/desk'
 import ShareTargetPage from './pages/share-target'
 import { ProtectedRoute } from './components/auth/protected-route'
 import { PublicRoute } from './components/auth/public-route'
@@ -25,6 +26,7 @@ import AdminUsersPage from './pages/admin/users'
 import AdminEmbeddingPage from './pages/admin/embedding'
 import AgentsPage from './pages/agents'
 import AgentDetailPage from './pages/agents/[agentId]'
+import AgentSettingsPage from './pages/agents/[agentId]/settings'
 import WorkspaceSettingsPage from './pages/workspaces/[workspaceName]/settings'
 import ContextSettingsPage from './pages/contexts/[contextId]/settings'
 import RolesPage from './pages/roles'
@@ -60,7 +62,8 @@ function AppContent() {
 
         {/* Dashboard layout for authenticated routes */}
         <Route path="/" element={<ProtectedRoute><NotificationsProvider><CanvasPinsProvider><AppShell /></CanvasPinsProvider></NotificationsProvider></ProtectedRoute>}>
-          <Route index element={<Navigate to="/workspaces" replace />} />
+          {/* The empty desk. Closing any content section lands here. */}
+          <Route index element={<DeskPage />} />
           <Route path="home" element={<HomePage />} />
           <Route path="share-target" element={<ShareTargetPage />} />
           <Route path="workspaces" element={<WorkspacesPage />} />
@@ -73,10 +76,12 @@ function AppContent() {
           <Route path="contexts" element={<ContextsPage />} />
           <Route path="contexts/:contextId" element={<ContextDetailPage />} />
           <Route path="contexts/:contextId/settings" element={<ContextSettingsPage />} />
+          <Route path="contexts/:contextId/settings/:tab" element={<ContextSettingsPage />} />
           <Route path="agents" element={<AgentsPage />} />
           <Route path="agents/:agentId" element={<AgentDetailPage />} />
           <Route path="agents/:agentId/:sessionId" element={<AgentDetailPage />} />
-          <Route path="agents/:agentId/settings" element={<AgentDetailPage />} />
+          <Route path="agents/:agentId/settings" element={<AgentSettingsPage />} />
+          <Route path="agents/:agentId/settings/:tab" element={<AgentSettingsPage />} />
           <Route path="roles" element={<RolesPage />} />
           <Route path="remotes" element={<RemotesPage />} />
           <Route path="appearance" element={<AppearancePage />} />

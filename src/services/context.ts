@@ -241,6 +241,22 @@ export async function getSharedContextDocuments(
 }
 
 // Context sharing functions
+export interface ContextShare {
+  userEmail: string;
+  accessLevel?: string;
+  description?: string;
+  sharedAt?: string;
+}
+
+// Owner-only: the server rejects this for contexts shared *with* you, so
+// callers should treat a failure as "no shares to show" rather than an error.
+export async function listContextShares(contextId: string): Promise<ContextShare[]> {
+  const response = await api.get<ApiPayload<ContextShare[]>>(
+    `${API_ROUTES.contexts}/${contextId}/shares`
+  );
+  return Array.isArray(response?.payload) ? response.payload : [];
+}
+
 export async function grantContextAccess(contextId: string, sharedWithUserId: string, accessLevel: string): Promise<{ message: string }> {
   try {
     const response = await api.post<ApiPayload<UnknownRecord>>(

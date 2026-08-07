@@ -1,3 +1,4 @@
+import { PageHeader } from '@/components/common/page-header'
 import { useEffect, useState } from 'react'
 import { Monitor, RefreshCw, Pencil, Check, X as XIcon, Link2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -150,18 +151,17 @@ export default function DevicesPage() {
   return (
     <div className="h-full min-h-0 overflow-y-auto">
       <div className="mx-auto max-w-3xl p-6 pb-12 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold">Devices</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              All devices registered to your account. Link them to individual workspaces in Workspace &rsaquo; Settings &rsaquo; Devices.
-            </p>
-          </div>
-          <Button type="button" variant="outline" size="sm" onClick={load} disabled={isLoading}>
-            <RefreshCw className={`mr-2 h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-        </div>
+        <PageHeader
+          compact
+          title="Devices"
+          description="All devices registered to your account. Link them to individual workspaces in Workspace &rsaquo; Settings &rsaquo; Devices."
+          actions={
+            <Button type="button" variant="outline" size="sm" onClick={load} disabled={isLoading}>
+              <RefreshCw className={`mr-2 h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          }
+        />
 
         {isLoading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">

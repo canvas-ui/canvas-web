@@ -4,10 +4,10 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import { useMenu } from './menu-context'
 import { ContextList } from '@/components/menu/contexts/ContextList'
 import { ContextM2Detail } from '@/components/menu/contexts/ContextM2Detail'
-import { ContextM2Form } from '@/components/menu/contexts/ContextM2Form'
+import { ContextM2Settings } from '@/components/menu/contexts/ContextM2Settings'
 import { WorkspaceList } from '@/components/menu/workspaces/WorkspaceList'
 import { WorkspaceM2 } from '@/components/menu/workspaces/WorkspaceM2'
-import { WorkspaceM2Form } from '@/components/menu/workspaces/WorkspaceM2Form'
+import { WorkspaceM2Settings } from '@/components/menu/workspaces/WorkspaceM2Settings'
 import { AgentList } from '@/components/menu/agents/AgentList'
 import { AgentM2Sessions } from '@/components/menu/agents/AgentM2Sessions'
 import { AgentM2Settings } from '@/components/menu/agents/AgentM2Settings'
@@ -23,16 +23,16 @@ function M2Content() {
   const { activeSection, m2View } = state
 
   if (activeSection === 'contexts') {
+    if (m2View === 'settings') return <ContextM2Settings />
     if (m2View === 'detail') return <ContextM2Detail />
-    if (m2View === 'form') return <ContextM2Form />
   }
   if (activeSection === 'workspaces') {
+    if (m2View === 'settings') return <WorkspaceM2Settings />
     if (m2View === 'detail') return <WorkspaceM2 />
-    if (m2View === 'form') return <WorkspaceM2Form />
   }
   if (activeSection === 'agents') {
+    if (m2View === 'settings') return <AgentM2Settings />
     if (m2View === 'detail') return <AgentM2Sessions />
-    if (m2View === 'form' || m2View === 'settings') return <AgentM2Settings />
   }
   return null
 }

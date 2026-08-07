@@ -1,3 +1,4 @@
+import { PageHeader } from '@/components/common/page-header'
 import { useEffect, useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -351,11 +352,7 @@ export default function AdminUsersPage() {
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="border-b pb-4">
-        <h1 className="text-3xl font-bold tracking-tight">User Management</h1>
-        <p className="text-muted-foreground mt-2">Manage user accounts and permissions</p>
-      </div>
+      <PageHeader title="User Management" description="Manage user accounts and permissions" />
 
       {/* Filters and Actions */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">

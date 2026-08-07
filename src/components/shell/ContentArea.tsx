@@ -13,9 +13,11 @@ function isFullBleed(pathname: string): boolean {
 // The FAB quick-capture surface (home, and the share-target landing that
 // reuses it) has no page chrome of its own — no "sheet of paper" card, no
 // padding — it sits directly on the surface-desk background.
+// Also covers the empty desk at `/` — with every section closed there is no
+// page to frame, so the surface shows through.
 function isBare(pathname: string): boolean {
   const [section] = pathname.split('/').filter(Boolean)
-  return section === 'home' || section === 'share-target'
+  return !section || section === 'home' || section === 'share-target'
 }
 
 // Shared mobile "drawer" treatment — same prominence as the M1/M2 menu panel

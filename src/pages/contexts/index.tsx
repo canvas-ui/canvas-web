@@ -1,10 +1,12 @@
+import { PageHeader } from '@/components/common/page-header'
 import { useEffect, useState, useCallback, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
+import { useCreatePanel } from "@/hooks/use-create-panel"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/toast-container"
 import { FormPanel } from "@/components/common/form-panel"
-import { Plus, Trash, DoorOpen, Edit, Share2, X } from "lucide-react"
+import { Plus, Trash, DoorOpen, Edit, Share2 } from "lucide-react"
 import {
   Table,
   TableBody,
@@ -66,12 +68,14 @@ export default function ContextsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [newContextId, setNewContextId] = useState("")
+  const [newContextName, setNewContextName] = useState("")
+  const [newContextTreeType, setNewContextTreeType] = useState<'context' | 'directory'>('context')
   const [newContextUrl, setNewContextUrl] = useState("/")
   const [newContextDescription, setNewContextDescription] = useState("")
   const [newContextBaseUrl, setNewContextBaseUrl] = useState("/")
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>("")
   const [isCreating, setIsCreating] = useState(false)
-  const [showCreate, setShowCreate] = useState(false)
+  const [showCreate, setShowCreate] = useCreatePanel()
   const [editingContext, setEditingContext] = useState<ContextEntry | null>(null)
   const [deletingContextId, setDeletingContextId] = useState<string | null>(null)
   const { showToast } = useToast()
@@ -251,14 +255,17 @@ export default function ContextsPage() {
     try {
       const newContextPayload = {
         id: newContextId,
+        name: newContextName.trim() || undefined,
         url: newContextUrl,
         description: newContextDescription || undefined,
         workspaceId: selectedWorkspaceId,
-        baseUrl: newContextBaseUrl || undefined
+        baseUrl: newContextBaseUrl || undefined,
+        treeType: newContextTreeType,
       };
       // Create the context - the socket event will add it to the state
       const newContext = await createContext(newContextPayload);
       setNewContextId("");
+      setNewContextName("");
       setNewContextUrl("/");
       setNewContextDescription("");
       setNewContextBaseUrl("/");
@@ -399,24 +406,17 @@ export default function ContextsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Page Header — list first; creation lives behind the button */}
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Contexts</h1>
-          <p className="text-muted-foreground mt-2">Create and manage contexts in your workspaces. View contexts shared with you.</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {!showCreate && (
-            <Button onClick={() => setShowCreate(true)} className="max-sm:h-9 max-sm:w-9 max-sm:p-0" aria-label="Create context" title="Create context">
-              <Plus className="h-4 w-4 sm:mr-2" />
-              <span className="max-sm:hidden">Create Context</span>
-            </Button>
-          )}
-          <Button variant="outline" size="icon" onClick={() => navigate('/home')} aria-label="Close" title="Close">
-            <X className="h-4 w-4" />
+      {/* List first; creation lives behind the button */}
+      <PageHeader
+        title="Contexts"
+        description="Create and manage contexts in your workspaces. View contexts shared with you."
+        actions={!showCreate && (
+          <Button onClick={() => setShowCreate(true)} className="max-sm:h-9 max-sm:w-9 max-sm:p-0" aria-label="Create context" title="Create context">
+            <Plus className="h-4 w-4 sm:mr-2" />
+            <span className="max-sm:hidden">Create Context</span>
           </Button>
-        </div>
-      </div>
+        )}
+      />
 
       {/* Create New Context Section */}
       {showCreate && (
@@ -493,6 +493,36 @@ export default function ContextsPage() {
                 placeholder="Description"
                 disabled={isCreating}
               />
+            </div>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label htmlFor="contextName" className="block text-sm font-medium mb-1">
+                Name (Optional)
+              </label>
+              <Input
+                id="contextName"
+                value={newContextName}
+                onChange={(e) => setNewContextName(e.target.value)}
+                placeholder="My Context"
+                disabled={isCreating}
+              />
+            </div>
+            <div>
+              <label htmlFor="treeType" className="block text-sm font-medium mb-1">
+                Tree
+              </label>
+              <select
+                id="treeType"
+                className="w-full px-3 py-2 border border-border rounded-md shadow-elevation-1 focus:outline-none focus:ring-primary focus:border-primary"
+                value={newContextTreeType}
+                onChange={(e) => setNewContextTreeType(e.target.value as 'context' | 'directory')}
+                disabled={isCreating}
+              >
+                <option value="context">Context tree</option>
+                <option value="directory">Directory tree</option>
+              </select>
+              <p className="mt-1 text-xs text-muted-foreground">Which workspace tree this context navigates.</p>
             </div>
           </div>
           <Button

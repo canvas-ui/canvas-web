@@ -65,9 +65,12 @@ interface NavItemProps {
   path: string
   icon: React.ReactNode
   label: string
+  // Which M1 panel to leave open behind the page. Admin pages keep the admin
+  // list up; standalone pages (Roles) open no panel at all.
+  section?: MenuSection
 }
 
-function NavItem({ path, icon, label }: NavItemProps) {
+function NavItem({ path, icon, label, section = 'admin' }: NavItemProps) {
   const navigate = useNavigate()
   const { setSection } = useMenu()
 
@@ -77,7 +80,7 @@ function NavItem({ path, icon, label }: NavItemProps) {
         <button
           type="button"
           onClick={() => {
-            setSection('admin')
+            setSection(section)
             navigate(path)
           }}
           className="flex items-center justify-center w-10 h-10 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
@@ -181,7 +184,8 @@ export function MenuBar() {
           <MenuItem section="contexts" icon={<Layers3 className="w-5 h-5" />} label="Contexts" />
           <MenuItem section="workspaces" icon={<LayoutGrid className="w-5 h-5" />} label="Workspaces" />
           <MenuItem section="agents" icon={<Brain className="w-5 h-5" />} label="Agents" />
-          <MenuItem section="roles" icon={<Shield className="w-5 h-5" />} label="Roles" disabled />
+          {/* Roles have no M1 list of their own — the page is the surface. */}
+          <NavItem path="/roles" section={null} icon={<Shield className="w-5 h-5" />} label="Roles" />
 
           {/* Admin section */}
           {isAdmin && (

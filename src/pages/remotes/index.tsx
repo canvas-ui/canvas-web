@@ -1,11 +1,8 @@
+import { PageHeader } from '@/components/common/page-header'
 export default function RemotesPage() {
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="border-b pb-4">
-        <h1 className="text-3xl font-bold tracking-tight">Remotes</h1>
-        <p className="text-muted-foreground mt-2">Connect to remote Canvas instances</p>
-      </div>
+      <PageHeader title="Remotes" description="Connect to remote Canvas instances" />
 
       {/* Coming Soon Section */}
       <div className="flex flex-col items-center justify-center py-12 space-y-4">

@@ -1,5 +1,6 @@
+import { PageHeader } from '@/components/common/page-header'
 import { useCallback, useEffect, useState } from 'react'
-import { Brain, RefreshCw } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast-container'
 import { EmbeddConfigEditor } from '@/components/workspace/embedd-config-editor'
@@ -59,21 +60,18 @@ export default function EmbeddingDefaultsPage() {
 
   return (
     <div className="mx-auto max-w-4xl p-6">
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Brain className="h-5 w-5 text-muted-foreground" />
-          <div>
-            <h1 className="text-lg font-semibold">Embedding defaults</h1>
-            <p className="text-xs text-muted-foreground">
-              What new workspaces inherit. A workspace can override any of it, and its own setting always wins.
-            </p>
-          </div>
-        </div>
-        <Button type="button" size="sm" variant="outline" onClick={refresh} disabled={loading}>
-          <RefreshCw className="mr-2 h-3.5 w-3.5" />
-          Refresh
-        </Button>
-      </div>
+      <PageHeader
+        compact
+        className="mb-6"
+        title="Embedding defaults"
+        description="What new workspaces inherit. A workspace can override any of it, and its own setting always wins."
+        actions={
+          <Button type="button" size="sm" variant="outline" onClick={refresh} disabled={loading}>
+            <RefreshCw className="mr-2 h-3.5 w-3.5" />
+            Refresh
+          </Button>
+        }
+      />
 
       {loading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">

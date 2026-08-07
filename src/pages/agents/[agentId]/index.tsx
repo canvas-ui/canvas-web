@@ -5,6 +5,7 @@ import StreamingChatMessageComponent from '@/components/agent/StreamingChatMessa
 import { useAgentSessions } from '@/components/agent/agent-session-context'
 import { useMenu } from '@/components/shell/menu-context'
 import { Button } from '@/components/ui/button'
+import { CloseSectionButton } from '@/components/common/page-header'
 import { useToast } from '@/components/ui/toast-container'
 import { useAgentChat } from '@/hooks/useAgentChat'
 import { cn } from '@/lib/utils'
@@ -278,7 +279,7 @@ export default function AgentDetailPage() {
   const location = useLocation()
   const navigate = useNavigate()
   const { showToast } = useToast()
-  const { selectEntity, openM2 } = useMenu()
+  const { selectEntity } = useMenu()
   const [agent, setAgent] = useState<Agent | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isStarting, setIsStarting] = useState(false)
@@ -501,12 +502,13 @@ export default function AgentDetailPage() {
             variant="outline"
             onClick={() => {
               selectEntity(agent.id)
-              openM2('settings', agent.id)
+              navigate(`/agents/${encodeURIComponent(agent.name || agent.id)}/settings/identity`)
             }}
           >
             <Settings className="mr-2 h-4 w-4" />
             Settings
           </Button>
+          <CloseSectionButton className="h-9 w-9" />
         </div>
       </div>
 

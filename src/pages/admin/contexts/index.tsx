@@ -1,3 +1,4 @@
+import { PageHeader } from '@/components/common/page-header'
 import { useEffect } from "react"
 import { getCurrentUserFromToken } from "@/services/auth"
 
@@ -21,11 +22,7 @@ export default function AdminContextsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="border-b pb-4">
-        <h1 className="text-3xl font-bold tracking-tight">All Contexts</h1>
-        <p className="text-muted-foreground mt-2">Manage all contexts across all users</p>
-      </div>
+      <PageHeader title="All Contexts" description="Manage all contexts across all users" />
 
       {/* Coming Soon Section */}
       <div className="flex flex-col items-center justify-center py-12 space-y-4">

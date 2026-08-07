@@ -6,7 +6,10 @@ import { MOBILE_BREAKPOINT } from '@/hooks/use-mobile'
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type MenuSection = 'contexts' | 'workspaces' | 'agents' | 'roles' | 'admin' | 'settings' | null
-export type M2View = 'detail' | 'form' | 'chat' | 'settings' | null
+// 'detail' is the entity's own M2 surface (tree, sessions, URL editor);
+// 'settings' is the settings section list. Creation has no M2 view — it
+// happens in the content area.
+export type M2View = 'detail' | 'settings' | null
 
 export interface MenuState {
   activeSection: MenuSection
@@ -177,10 +180,12 @@ function sectionFromPath(pathname: string): { section: MenuSection; entityId: st
   const third = segments[2] || null
 
   if (first === 'contexts') {
-    return { section: 'contexts', entityId: second, m2View: third === 'settings' ? 'form' : second ? 'detail' : null }
+    // Settings put the section list in M2 and one section in the content area.
+    return { section: 'contexts', entityId: second, m2View: third === 'settings' ? 'settings' : second ? 'detail' : null }
   }
   if (first === 'workspaces') {
-    return { section: 'workspaces', entityId: second, m2View: third === 'settings' ? null : second ? 'detail' : null }
+    // Settings put the section list in M2 and one section in the content area.
+    return { section: 'workspaces', entityId: second, m2View: third === 'settings' ? 'settings' : second ? 'detail' : null }
   }
   if (first === 'agents') {
     return { section: 'agents', entityId: second, m2View: third === 'settings' ? 'settings' : second ? 'detail' : null }

@@ -1,3 +1,4 @@
+import { PageHeader } from '@/components/common/page-header'
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Activity, Pause, Play, RotateCw, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -151,20 +152,18 @@ export default function AdminLogsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between border-b pb-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Server Logs</h1>
-          <p className="text-muted-foreground mt-2">
-            Live tail for the unified canvas-server logger
-          </p>
-        </div>
+      <PageHeader
+        title="Server Logs"
+        description="Live tail for the unified canvas-server logger"
+        actions={
         <div className="flex items-center gap-2 text-sm">
           <Activity className={`w-4 h-4 ${isStreaming ? "text-success" : "text-muted-foreground"}`} />
           <span className="text-muted-foreground">
             {isPaused ? "Paused" : isStreaming ? "Streaming" : "Disconnected"}
           </span>
         </div>
-      </div>
+        }
+      />
 
       <div className="grid gap-4 md:grid-cols-[140px_180px_1fr_auto]">
         <div>

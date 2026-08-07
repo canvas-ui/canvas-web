@@ -18,7 +18,7 @@ function StatusDot({ status }: { status: string }) {
 }
 
 export function AgentList() {
-  const { state, selectEntity, openM2 } = useMenu()
+  const { state, selectEntity, openM2, closeM2 } = useMenu()
   const { agents, isLoading, refresh } = useAgentListData(state.activeSection === 'agents')
   const { showToast } = useToast()
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
@@ -63,9 +63,12 @@ export function AgentList() {
       {/* Header */}
       <div className="flex items-center justify-between px-4 h-12 border-b border-border shrink-0">
         <span className="text-sm font-semibold">Agents</span>
+        {/* Creation is a content-area job — see WorkspaceList. */}
         <button
           type="button"
-          onClick={() => openM2('form', null)}
+          onClick={() => { closeM2(); navigate('/agents?create=1') }}
+          title="Create agent"
+          aria-label="Create agent"
           className="flex items-center justify-center w-6 h-6 rounded-full bg-foreground text-background hover:opacity-80 transition-opacity"
         >
           <Plus className="w-3.5 h-3.5" />
@@ -133,7 +136,7 @@ export function AgentList() {
                         onClick={(e) => {
                           e.stopPropagation()
                           selectEntity(agent.id)
-                          openM2('settings', agent.id)
+                          navigate(`/agents/${encodeURIComponent(agent.name || agent.id)}/settings/identity`)
                         }}
                         className="flex items-center justify-center w-6 h-6 rounded hover:bg-muted-foreground/10 text-muted-foreground transition-colors"
                         title="Settings"

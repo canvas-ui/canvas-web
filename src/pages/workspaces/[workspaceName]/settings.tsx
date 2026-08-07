@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Copy, Database, ExternalLink, FolderPlus, HardDrive, RefreshCw, Server, Square, Trash2, Unlink, Activity, Monitor, Link2, Check, X as XIcon, Pencil } from 'lucide-react'
+import { Copy, Database, ExternalLink, FolderPlus, HardDrive, RefreshCw, Server, Square, Trash2, Unlink, Activity, Monitor, Link2, Check, X as XIcon, Pencil } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,6 +8,8 @@ import { LayerIconPicker } from '@/components/menu/shared/LayerIconPicker'
 import { DEFAULT_WORKSPACE_ICON, getBackendStyle, type LayerStyle } from '@/lib/layer-style'
 import { DefaultFoldersPicker, createDefaultFolders, useFolderSelection } from '@/components/workspaces/DefaultFoldersPicker'
 import { adminReindexTimelines, adminReindexSearch, adminOptimize, adminReindexMime } from '@/services/admin'
+import { PageHeader } from '@/components/common/page-header'
+import { WORKSPACE_SETTINGS_SECTIONS, resolveWorkspaceSettingsTab, type WorkspaceSettingsTab } from '@/lib/settings-sections'
 import { EmbeddSettingsPanel } from '@/components/workspace/embedd-settings-panel'
 import { HooksPanel } from '@/components/workspace/hooks-panel'
 import { TrashPanel } from '@/components/workspace/trash-panel'
@@ -54,8 +56,7 @@ import {
   type WorkspaceDevice,
 } from '@/services/devices'
 
-type SettingsTab = 'general' | 'data' | 'db' | 'embedding' | 'devices' | 'services' | 'shares' | 'hooks' | 'trash'
-const SETTINGS_TABS: readonly SettingsTab[] = ['general', 'data', 'db', 'embedding', 'devices', 'services', 'shares', 'hooks', 'trash']
+type SettingsTab = WorkspaceSettingsTab
 type ServiceId = 'dotfiles' | 'git' | 'home' | 'webdav' | 'imap' | 'imapSync'
 
 const DATA_BACKEND_LABELS: Record<string, { title: string; description: string }> = {
@@ -767,11 +768,12 @@ export default function WorkspaceSettingsPage() {
   const { showToast } = useToast()
   // Tab is URL-driven (/workspaces/:name/settings/:tab); bare or invalid tab
   // segments normalize to /settings/general below.
-  const activeTab: SettingsTab = SETTINGS_TABS.includes(tab as SettingsTab) ? (tab as SettingsTab) : 'general'
+  // Bare, invalid and retired tab segments (embedding, trash) normalize to the
+  // section that now owns them.
+  const activeTab: SettingsTab = resolveWorkspaceSettingsTab(tab)
   useEffect(() => {
     if (tab !== activeTab) navigate(`/workspaces/${workspaceName}/settings/${activeTab}`, { replace: true })
   }, [tab, activeTab, workspaceName, navigate])
-  const setActiveTab = (next: SettingsTab) => navigate(`/workspaces/${workspaceName}/settings/${next}`)
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -1071,44 +1073,23 @@ export default function WorkspaceSettingsPage() {
     }
   }
 
+  const section = WORKSPACE_SETTINGS_SECTIONS.find(sec => sec.id === activeTab)!
+
   if (isLoading) return <div className="p-6 text-sm text-muted-foreground">Loading...</div>
   if (!workspace) return <div className="p-6 text-sm text-muted-foreground">Workspace not found</div>
 
   return (
     <div className="h-full min-h-0 overflow-y-auto">
       <div className="mx-auto max-w-5xl p-6 pb-12">
-      <div className="mb-5 flex items-center gap-3">
-        <button type="button" onClick={() => navigate(`/workspaces/${workspaceName}`)} className="text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-5 w-5" />
-        </button>
-        <div>
-          <h1 className="text-xl font-semibold">Settings - {workspace.label || workspace.name}</h1>
-          <p className="text-xs text-muted-foreground">{workspace.rootPath}</p>
-        </div>
-      </div>
-
-      <div className="mb-6 flex gap-2 border-b">
-        {[
-          ['general', 'General'],
-          ['data', 'Data Backends'],
-          ['db', 'Database'],
-          ['embedding', 'Embedding'],
-          ['devices', 'Devices'],
-          ['services', 'Services'],
-          ['shares', 'Shares / ACL'],
-          ['hooks', 'Hooks'],
-          ['trash', 'Trash'],
-        ].map(([id, title]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setActiveTab(id as SettingsTab)}
-            className={`px-3 py-2 text-sm font-medium ${activeTab === id ? 'border-b-2 border-primary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-          >
-            {title}
-          </button>
-        ))}
-      </div>
+      {/* One section at a time — the section list lives in M2, so this page
+          never grows a tab strip. */}
+      <PageHeader
+        compact
+        className="mb-6 border-b pb-4"
+        title={`${section.label} - ${workspace.label || workspace.name}`}
+        description={activeTab === 'general' ? workspace.rootPath : section.description}
+        backTo={`/workspaces/${workspaceName}`}
+      />
 
       {activeTab === 'general' && (
         <div className="space-y-6">
@@ -1365,24 +1346,41 @@ export default function WorkspaceSettingsPage() {
             </div>
           </section>
           <AddLocalFolderForm workspaceId={workspaceId} onAdded={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />
+
+          {/* Trash is where deleted documents are held before they are purged
+              from these same backends — it reads as one story with them. */}
+          {workspaceName && (
+            <section className="space-y-3 pt-2">
+              <div>
+                <h2 className="text-sm font-semibold">Trash</h2>
+                <p className="text-xs text-muted-foreground">Deleted documents, still recoverable until purged.</p>
+              </div>
+              <TrashPanel workspaceName={workspaceName} />
+            </section>
+          )}
         </div>
       )}
 
       {activeTab === 'db' && (
-        <DbStatsTab
-          stats={dbStats}
-          isLoading={isLoadingDbStats}
-          onRefresh={() => loadDbStats()}
-          workspaceName={workspaceName!}
-        />
-      )}
-
-      {activeTab === 'trash' && workspaceName && (
-        <TrashPanel workspaceName={workspaceName} />
-      )}
-
-      {activeTab === 'embedding' && workspaceId && (
-        <EmbeddSettingsPanel workspaceId={workspaceId} workspaceName={workspaceName!} />
+        <div className="space-y-6">
+          <DbStatsTab
+            stats={dbStats}
+            isLoading={isLoadingDbStats}
+            onRefresh={() => loadDbStats()}
+            workspaceName={workspaceName!}
+          />
+          {/* Embeddings are an index of the same data the stats above describe,
+              so they belong to the database section rather than a tab of their own. */}
+          {workspaceId && (
+            <section className="space-y-3">
+              <div>
+                <h2 className="text-sm font-semibold">Embeddings</h2>
+                <p className="text-xs text-muted-foreground">Vector index used for semantic search.</p>
+              </div>
+              <EmbeddSettingsPanel workspaceId={workspaceId} workspaceName={workspaceName!} />
+            </section>
+          )}
+        </div>
       )}
 
       {activeTab === 'devices' && (

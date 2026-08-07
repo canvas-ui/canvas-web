@@ -1,11 +1,13 @@
+import { PageHeader } from '@/components/common/page-header'
 import { useEffect, useState } from "react"
 import { FormPanel } from '@/components/common/form-panel'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/toast-container"
-import { Plus, X } from "lucide-react"
+import { Plus } from "lucide-react"
 import { AgentCard } from "@/components/ui/agent-card"
 import { useNavigate } from "react-router-dom"
+import { useCreatePanel } from "@/hooks/use-create-panel"
 import { useSocket } from "@/hooks/useSocket"
 import { generateNiceRandomHexColor } from "@/utils/color"
 import { useSocketSubscription } from "@/hooks/useSocketSubscription"
@@ -46,7 +48,7 @@ export default function AgentsPage() {
   })
   const [newAgentSystemPrompt, setNewAgentSystemPrompt] = useState("")
   const [isCreating, setIsCreating] = useState(false)
-  const [showCreate, setShowCreate] = useState(false)
+  const [showCreate, setShowCreate] = useCreatePanel()
   const { showToast } = useToast()
   const navigate = useNavigate()
   const socket = useSocket()
@@ -304,24 +306,17 @@ export default function AgentsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Page Header — list first; creation lives behind the button */}
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">AI Agents</h1>
-          <p className="text-muted-foreground mt-2">Create and manage your AI agents with multiple LLM providers</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {!showCreate && (
-            <Button onClick={() => setShowCreate(true)} className="max-sm:h-9 max-sm:w-9 max-sm:p-0" aria-label="Create agent" title="Create agent">
-              <Plus className="h-4 w-4 sm:mr-2" />
-              <span className="max-sm:hidden">Create Agent</span>
-            </Button>
-          )}
-          <Button variant="outline" size="icon" onClick={() => navigate('/home')} aria-label="Close" title="Close">
-            <X className="h-4 w-4" />
+      {/* List first; creation lives behind the button */}
+      <PageHeader
+        title="AI Agents"
+        description="Create and manage your AI agents with multiple LLM providers"
+        actions={!showCreate && (
+          <Button onClick={() => setShowCreate(true)} className="max-sm:h-9 max-sm:w-9 max-sm:p-0" aria-label="Create agent" title="Create agent">
+            <Plus className="h-4 w-4 sm:mr-2" />
+            <span className="max-sm:hidden">Create Agent</span>
           </Button>
-        </div>
-      </div>
+        )}
+      />
 
       {/* Create New Agent Section */}
       {showCreate && (

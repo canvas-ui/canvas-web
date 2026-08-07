@@ -1,3 +1,4 @@
+import { PageHeader } from '@/components/common/page-header'
 import { useEffect, useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -285,19 +286,16 @@ export default function AdminRolesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex items-center justify-between border-b pb-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Role Management</h1>
-          <p className="text-muted-foreground mt-2">
-            Manage global and workspace roles for Canvas services
-          </p>
-        </div>
-        <Button onClick={openCreateModal} className="gap-2">
-          <Plus className="w-4 h-4" />
-          Create Role
-        </Button>
-      </div>
+      <PageHeader
+        title="Role Management"
+        description="Manage global and workspace roles for Canvas services"
+        actions={
+          <Button onClick={openCreateModal} className="gap-2">
+            <Plus className="w-4 h-4" />
+            Create Role
+          </Button>
+        }
+      />
 
       {/* Filters */}
       <div className="flex gap-4 items-end">

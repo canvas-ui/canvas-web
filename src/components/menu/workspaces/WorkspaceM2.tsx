@@ -333,10 +333,8 @@ export function WorkspaceM2() {
             </button>
             <button
               type="button"
-              onClick={() => {
-                closeM2()
-                navigate(`/workspaces/${wsName}/settings`)
-              }}
+              // M2 stays open — the URL sync swaps it to the settings section list.
+              onClick={() => navigate(`/workspaces/${wsName}/settings/general`)}
               className="flex items-center justify-center w-8 h-8 rounded hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors"
               title="Settings"
             >
@@ -420,6 +418,12 @@ export function WorkspaceM2() {
             onShowContent={activeTab === 'context' ? handleShowContent : undefined}
             onOpenToSide={handleOpenToSide}
             onShareCanvas={handleShareCanvas}
+            onNewCanvas={wsName && activeTab !== 'backends' ? (parentPath) => {
+              // Select the parent path and ask the content area to open the
+              // create form there — canvases capture the current view, so the
+              // form has to live where that view is.
+              navigate(`${buildWorkspaceUrl(wsName, parentPath, activeTab)}?createCanvas=1`)
+            } : undefined}
             isLoading={isLoadingTree}
             rootLabel={wsName ?? undefined}
             searchQuery={searchQuery}

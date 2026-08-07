@@ -1,3 +1,4 @@
+import { CloseSectionButton } from '@/components/common/page-header';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useToast } from '@/components/ui/toast-container';
@@ -440,6 +441,7 @@ export default function ContextDetailPage() {
           <Filter className="w-3 h-3" />
           Filter
         </button>
+        <CloseSectionButton />
       </div>
       <DefaultCanvas
         urlType={urlType}

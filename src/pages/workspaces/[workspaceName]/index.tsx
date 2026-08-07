@@ -8,6 +8,9 @@ import { api } from '@/lib/api';
 import { API_ROUTES } from '@/config/api';
 import { useToast } from '@/components/ui/toast-container';
 import { useMenu } from '@/components/shell/menu-context';
+import { Button } from '@/components/ui/button';
+import { FormPanel } from '@/components/common/form-panel';
+import { CloseSectionButton } from '@/components/common/page-header';
 import { DefaultCanvas } from '@/components/canvas/DefaultCanvas';
 import type { CanvasInfo } from '@/components/canvas/DefaultCanvas';
 import { CanvasGrid } from '@/components/canvas/CanvasGrid';
@@ -125,7 +128,11 @@ export default function WorkspaceDetailPage() {
 
   const [clipboard, setClipboard] = useState<WorkspaceClipboard | null>(null);
 
-  const [saveAsCanvasOpen, setSaveAsCanvasOpen] = useState(false);
+  // Canvas creation is a content-area form, not a tree input or a modal: the
+  // parent path comes either from the tree ("New canvas here…", which lands
+  // with ?createCanvas=1) or from the current view ("Save view as canvas",
+  // which pre-arms the view capture).
+  const [createCanvas, setCreateCanvas] = useState<{ parentPath: string; captureView: boolean } | null>(null);
   const [saveAsCanvasName, setSaveAsCanvasName] = useState('');
   const [saveAsCanvasLoading, setSaveAsCanvasLoading] = useState(false);
   const [shareCanvasLoading, setShareCanvasLoading] = useState(false);
@@ -498,6 +505,19 @@ export default function WorkspaceDetailPage() {
     setDocScope('path');
   }, [selectedPath, selectedTreeName, selectedLayerId]);
 
+  // The M2 tree's "New canvas here…" navigates to the parent path with this
+  // flag; consume it so a reload or back-navigation does not reopen the form.
+  const wantsCreateCanvas = searchParams.get('createCanvas') === '1';
+  useEffect(() => {
+    if (!wantsCreateCanvas) return;
+    openCreateCanvas(selectedPath, false);
+    const params = new URLSearchParams(location.search);
+    params.delete('createCanvas');
+    const nextSearch = params.toString();
+    navigate(`${location.pathname}${nextSearch ? `?${nextSearch}` : ''}`, { replace: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantsCreateCanvas, selectedPath]);
+
   // Reflect a query stack into the URL (?q=a&q=b) so it is shareable/back-navigable.
   const syncQueriesToUrl = useCallback((queries: string[]) => {
     const params = new URLSearchParams(location.search);
@@ -799,19 +819,22 @@ export default function WorkspaceDetailPage() {
     }
   };
 
-  const handleSaveAsCanvas = () => {
-    const defaultName = selectedPath === '/' ? 'canvas' : (selectedPath.split('/').pop() || 'canvas');
+  const openCreateCanvas = (parentPath: string, captureView: boolean) => {
+    const defaultName = parentPath === '/' ? 'canvas' : (parentPath.split('/').pop() || 'canvas');
     setSaveAsCanvasName(defaultName);
-    setSaveAsCanvasOpen(true);
+    setCreateCanvas({ parentPath, captureView });
   };
 
+  const handleSaveAsCanvas = () => openCreateCanvas(selectedPath, true);
+
   const handleConfirmSaveAsCanvas = async () => {
-    if (!workspaceName || !saveAsCanvasName.trim()) return;
+    if (!workspaceName || !createCanvas || !saveAsCanvasName.trim()) return;
     setSaveAsCanvasLoading(true);
     try {
       const name = saveAsCanvasName.trim();
-      const path = selectedPath === '/' ? `/${name}` : `${selectedPath}/${name}`;
-      await createWorkspaceCanvas(workspaceName, path, selectedTreeName, {
+      const parentPath = createCanvas.parentPath;
+      const path = parentPath === '/' ? `/${name}` : `${parentPath}/${name}`;
+      await createWorkspaceCanvas(workspaceName, path, selectedTreeName, createCanvas.captureView ? {
         metadata: { toolbox: toolboxState.filters },
         querySpec: {
           features: toolboxState.filters.features,
@@ -821,8 +844,8 @@ export default function WorkspaceDetailPage() {
           query: currentSearchQuery || undefined,
           sort: toolboxState.filters.sort?.sortBy ? toolboxState.filters.sort : null,
         },
-      });
-      setSaveAsCanvasOpen(false);
+      } : {});
+      setCreateCanvas(null);
       // Refresh the local tree before navigating so the new node resolves as a
       // canvas — otherwise the page renders generic context/directory controls
       // until the async tree:refresh lands.
@@ -1110,7 +1133,60 @@ export default function WorkspaceDetailPage() {
             {isStartingWorkspace ? 'Starting…' : 'Start'}
           </button>
         )}
+        <CloseSectionButton />
       </div>
+
+      {createCanvas && (
+        <div className="shrink-0 px-2 pt-2">
+          <FormPanel title="New canvas" onClose={() => setCreateCanvas(null)}>
+            <form
+              onSubmit={(e) => { e.preventDefault(); handleConfirmSaveAsCanvas(); }}
+              className="space-y-4"
+            >
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label htmlFor="canvas-name" className="mb-1 block text-sm font-medium">Name</label>
+                  <input
+                    id="canvas-name"
+                    className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                    placeholder="Canvas name…"
+                    value={saveAsCanvasName}
+                    onChange={e => setSaveAsCanvasName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Escape') setCreateCanvas(null); }}
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <span className="mb-1 block text-sm font-medium">Parent path</span>
+                  <div className="flex h-10 items-center rounded-md bg-muted px-3 font-mono text-sm text-muted-foreground">
+                    {createCanvas.parentPath === '/' ? '/' : createCanvas.parentPath}
+                  </div>
+                </div>
+              </div>
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={createCanvas.captureView}
+                  onChange={e => setCreateCanvas({ ...createCanvas, captureView: e.target.checked })}
+                />
+                <span>
+                  Capture the current view
+                  <span className="block text-xs text-muted-foreground">
+                    Freezes the active filters, search and sort into the canvas.
+                  </span>
+                </span>
+              </label>
+              <div className="flex gap-2">
+                <Button type="submit" disabled={!saveAsCanvasName.trim() || saveAsCanvasLoading}>
+                  {saveAsCanvasLoading ? 'Creating…' : 'Create canvas'}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setCreateCanvas(null)}>Cancel</Button>
+              </div>
+            </form>
+          </FormPanel>
+        </div>
+      )}
 
       {/* Canvas — dual-pane is pure local focus; the left pane stays URL-bound,
           the right is self-contained, so switching focus never refetches. */}
@@ -1145,47 +1221,6 @@ export default function WorkspaceDetailPage() {
         )}
       </div>
 
-      {/* Save as canvas dialog */}
-      {saveAsCanvasOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim">
-          <div className="bg-card rounded-lg border shadow-elevation-4 p-5 w-80 space-y-4">
-            <div>
-              <h3 className="text-sm font-semibold">Save view as canvas</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Creates a canvas under <span className="font-mono">{selectedPath === '/' ? '/' : selectedPath}</span>
-              </p>
-            </div>
-            <input
-              className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-              placeholder="Canvas name…"
-              value={saveAsCanvasName}
-              onChange={e => setSaveAsCanvasName(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') handleConfirmSaveAsCanvas();
-                if (e.key === 'Escape') setSaveAsCanvasOpen(false);
-              }}
-              autoFocus
-            />
-            <div className="flex gap-2 justify-end">
-              <button
-                type="button"
-                onClick={() => setSaveAsCanvasOpen(false)}
-                className="px-3 py-1.5 text-xs border rounded-md hover:bg-accent"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmSaveAsCanvas}
-                disabled={!saveAsCanvasName.trim() || saveAsCanvasLoading}
-                className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
-              >
-                {saveAsCanvasLoading ? 'Creating…' : 'Create canvas'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

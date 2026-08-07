@@ -16,7 +16,6 @@ import {
   insertWorkspacePath, removeWorkspacePath, moveWorkspacePath, copyWorkspacePath,
   mergeWorkspaceLayer, subtractWorkspaceLayer,
   lockWorkspaceLayer, unlockWorkspaceLayer, destroyWorkspaceLayer,
-  createWorkspaceCanvas,
   updateWorkspacePath,
   syncBackend,
   listBackends,
@@ -205,18 +204,6 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     return true
   }, [workspaceId, refresh])
 
-  const onCreateCanvas = useCallback(async (path: string): Promise<boolean> => {
-    if (!workspaceId) return false
-    try {
-      await createWorkspaceCanvas(workspaceId, path, wsTree)
-      refresh()
-      return true
-    } catch (err) {
-      alert(err instanceof Error ? err.message : String(err))
-      return false
-    }
-  }, [workspaceId, wsTree, refresh])
-
   return {
     onInsertPath, onRemovePath, onRenamePath, onMovePath, onCopyPath,
     onUpdateNode,
@@ -224,7 +211,6 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     onLockLayer: workspaceId ? onLockLayer : undefined,
     onUnlockLayer: workspaceId ? onUnlockLayer : undefined,
     onDestroyLayer: workspaceId && !isDirectoryTree ? onDestroyLayer : undefined,
-    onCreateCanvas: workspaceId ? onCreateCanvas : undefined,
     onResyncBackend: workspaceId ? onResyncBackend : undefined,
     onCreateBackendFolder: workspaceId ? onCreateBackendFolder : undefined,
     onRenameBackendFolder: workspaceId ? onRenameBackendFolder : undefined,
