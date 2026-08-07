@@ -186,7 +186,7 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h3 className="text-lg font-medium">Workspace Sharing Tokens</h3>
         <Button
           onClick={() => setShowNewTokenForm(!showNewTokenForm)}

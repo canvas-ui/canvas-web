@@ -411,8 +411,8 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p className="min-w-0 text-sm text-muted-foreground">
           Rules run automatically when items arrive — no code needed. Each rule is stored in{' '}
           <span className="font-mono">rules.json</span> and can be fine-tuned there.
         </p>

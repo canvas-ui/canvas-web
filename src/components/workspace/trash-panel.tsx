@@ -118,7 +118,7 @@ export function TrashPanel({ workspaceName }: { workspaceName: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div>
           <h2 className="text-sm font-medium">Trash</h2>
           <p className="text-xs text-muted-foreground mt-1 max-w-2xl">
@@ -127,7 +127,7 @@ export function TrashPanel({ workspaceName }: { workspaceName: string }) {
             from the index and from canvas-owned storage, never from external backends.
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex shrink-0 items-center gap-2 max-sm:flex-wrap">
           <Button variant="outline" size="sm" onClick={() => load()} disabled={isLoading}>
             <RefreshCw className={`mr-2 h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh

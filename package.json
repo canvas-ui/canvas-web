@@ -10,7 +10,8 @@
     "build": "node scripts/generate-color-fallbacks.mjs && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "build:fallbacks": "node scripts/generate-color-fallbacks.mjs"
+    "build:fallbacks": "node scripts/generate-color-fallbacks.mjs",
+    "shots": "node scripts/screenshot.mjs"
   },
   "dependencies": {
     "@codemirror/lang-javascript": "^6.2.5",

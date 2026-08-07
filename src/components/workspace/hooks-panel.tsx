@@ -258,8 +258,8 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h3 className="text-lg font-medium">Automation</h3>
           <p className="text-sm text-muted-foreground">
             Rules are simple click-to-build automations (Outlook-style). Hooks are their
@@ -267,8 +267,8 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
             commits to the workspace git repo.
           </p>
         </div>
-        <div className="flex gap-2">
-          <div className="flex rounded-md border">
+        <div className="flex shrink-0 gap-2 max-sm:-mx-1 max-sm:overflow-x-auto max-sm:px-1 max-sm:pb-1 scrollbar-none">
+          <div className="flex shrink-0 rounded-md border">
             <Button
               size="sm"
               variant={section === 'pending' ? 'secondary' : 'ghost'}
@@ -615,7 +615,7 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
         >
           {selected ? (
             <>
-              <div className="flex items-center justify-between mb-2">
+              <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <span className="font-mono text-sm truncate">{selected}{isDirty ? ' •' : ''}</span>
                 <div className="flex items-center gap-1">
                   <Button size="sm" onClick={save} disabled={isSaving || !isDirty}>
@@ -651,7 +651,9 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
         <GitBranch className="h-3.5 w-3.5 shrink-0" />
         <span>
           Everything here lives in the workspace git repo — clone it with{' '}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono select-all">
+          {/* A clone URL has no spaces to wrap on, so on a phone it pushed the
+              panel wider than the screen. break-all keeps it inside the card. */}
+          <code className="break-all rounded bg-muted px-1 py-0.5 font-mono select-all">
             git clone {gitUrl.replace('://', '://canvas@')}
           </code>{' '}
           (password: a canvas API token; the <span className="font-mono">canvas@</span> username

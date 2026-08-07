@@ -31,11 +31,15 @@ export function PageHeader({
   return (
     <div
       className={cn(
-        'flex items-start justify-between gap-3',
+        'flex flex-wrap items-start gap-x-3 gap-y-2',
         !compact && 'border-b pb-4',
         className,
       )}
     >
+      {/* Row order on a phone: title (+ close) first, actions on their own
+          line. Letting a two-button cluster share the title row squeezed the
+          description into a 60px column — one word per line. On `sm` and up the
+          natural order is title, actions, close. */}
       <div className="flex min-w-0 flex-1 items-start gap-3">
         {backTo && (
           <button
@@ -59,18 +63,22 @@ export function PageHeader({
           )}
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
-        {actions}
-        <button
-          type="button"
-          onClick={() => navigate('/')}
-          aria-label="Close"
-          title="Close"
-          className="flex h-9 w-9 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground touch-target"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
+
+      <button
+        type="button"
+        onClick={() => navigate('/')}
+        aria-label="Close"
+        title="Close"
+        className="order-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground touch-target"
+      >
+        <X className="h-4 w-4" />
+      </button>
+
+      {actions && (
+        <div className="order-3 flex w-full items-center gap-2 max-sm:flex-wrap sm:order-1 sm:w-auto">
+          {actions}
+        </div>
+      )}
     </div>
   )
 }

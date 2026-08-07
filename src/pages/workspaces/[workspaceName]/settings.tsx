@@ -663,7 +663,7 @@ function DbStatsTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-muted-foreground">Live snapshot from synapsd. Click refresh for updated counts.</p>
         <Button type="button" variant="outline" size="sm" onClick={onRefresh} disabled={isLoading}>
           <RefreshCw className="mr-2 h-3.5 w-3.5" />
@@ -1156,7 +1156,7 @@ export default function WorkspaceSettingsPage() {
       {activeTab === 'shares' && (
         <div className="space-y-4">
           <section className="space-y-3 rounded-lg border p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-sm font-semibold">Public Canvas Shares</h2>
                 <p className="text-xs text-muted-foreground">Active public canvas links for this workspace.</p>
@@ -1172,7 +1172,7 @@ export default function WorkspaceSettingsPage() {
               const url = `${window.location.origin}${share.url}`
               return (
                 <div key={share.code} className="rounded-md border p-3">
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                     <div className="min-w-0">
                       <div className="truncate font-mono text-sm">{share.path}</div>
                       <div className="mt-1 text-xs text-muted-foreground">{share.treeName} / {share.treeType} - created {new Date(share.createdAt).toLocaleString()}</div>
@@ -1229,7 +1229,7 @@ export default function WorkspaceSettingsPage() {
             const style = getBackendStyle(backend)
             return (
               <section key={backendId} className="rounded-lg border p-4">
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <Icon icon={style.icon} width={16} height={16} color={style.color} className="shrink-0" />
@@ -1259,7 +1259,9 @@ export default function WorkspaceSettingsPage() {
                       </p>
                     )}
                   </div>
-                  <div className="flex shrink-0 items-center gap-3">
+                  {/* Two toggles and up to two buttons — on a phone they wrap
+                      onto their own lines rather than crushing the title. */}
+                  <div className="flex shrink-0 items-center gap-3 max-sm:w-full max-sm:flex-wrap">
                     {backend.driver === 'file' && canToggle && (
                       <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                         watch
@@ -1335,7 +1337,7 @@ export default function WorkspaceSettingsPage() {
               backend: local copies of remote resources + derived artifacts
               (thumbnails). Rendered as its own control, not a backend row. */}
           <section className="rounded-lg border p-4">
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <Icon icon="ph:lightning-fill" width={16} height={16} className="shrink-0 text-warning" />
@@ -1346,7 +1348,7 @@ export default function WorkspaceSettingsPage() {
                   Regenerable — safe to clear.
                 </p>
               </div>
-              <div className="flex shrink-0 items-center gap-3">
+              <div className="flex shrink-0 items-center gap-3 max-sm:w-full max-sm:flex-wrap">
                 <ClearThumbnailsButton workspaceId={workspaceId} />
               </div>
             </div>
@@ -1356,11 +1358,7 @@ export default function WorkspaceSettingsPage() {
           {/* Trash is where deleted documents are held before they are purged
               from these same backends — it reads as one story with them. */}
           {workspaceName && (
-            <section className="space-y-3 pt-2">
-              <div>
-                <h2 className="text-sm font-semibold">Trash</h2>
-                <p className="text-xs text-muted-foreground">Deleted documents, still recoverable until purged.</p>
-              </div>
+            <section className="border-t pt-4">
               <TrashPanel workspaceName={workspaceName} />
             </section>
           )}
