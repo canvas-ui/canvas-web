@@ -10,7 +10,8 @@ import { useToast } from '@/components/ui/toast-container';
 import { useMenu } from '@/components/shell/menu-context';
 import { Button } from '@/components/ui/button';
 import { FormPanel } from '@/components/common/form-panel';
-import { CloseSectionButton } from '@/components/common/page-header';
+import { CloseSectionButton, SectionBackButton } from '@/components/common/page-header';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { DefaultCanvas } from '@/components/canvas/DefaultCanvas';
 import type { CanvasInfo } from '@/components/canvas/DefaultCanvas';
 import { CanvasGrid } from '@/components/canvas/CanvasGrid';
@@ -192,6 +193,7 @@ export default function WorkspaceDetailPage() {
   const [focusedPane, setFocusedPane] = useState<FocusedPane>('left');
   const [leftSelection, setLeftSelection] = useState<number[]>([]);
   const { openM2Drawer } = useMenu();
+  const isMobile = useIsMobile();
   const [rightSelection, setRightSelection] = useState<number[]>([]);
   const selectedNode = useMemo(() => {
     if (!tree || selectedPath === '/' || isLayerView) return null;
@@ -1070,6 +1072,14 @@ export default function WorkspaceDetailPage() {
           ? { borderBottom: `3px solid ${visibleAccentColor(workspace.color)}` }
           : { borderBottomWidth: 3 }}
       >
+        {/* Same gesture as a settings page: reopen the tree panel on mobile
+            (it closed on navigation), step up to the list on desktop. */}
+        <SectionBackButton
+          title={isMobile ? 'Back to workspace tree' : 'Back to workspaces'}
+          onBack={() => (isMobile
+            ? openM2Drawer('workspaces', 'detail', workspace.name)
+            : navigate('/workspaces'))}
+        />
         <span
           className={`w-2 h-2 rounded-full shrink-0 ${
             workspace.status === 'active' ? 'bg-success' :

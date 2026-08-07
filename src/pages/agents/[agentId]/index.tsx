@@ -5,7 +5,8 @@ import StreamingChatMessageComponent from '@/components/agent/StreamingChatMessa
 import { useAgentSessions } from '@/components/agent/agent-session-context'
 import { useMenu } from '@/components/shell/menu-context'
 import { Button } from '@/components/ui/button'
-import { CloseSectionButton } from '@/components/common/page-header'
+import { CloseSectionButton, SectionBackButton } from '@/components/common/page-header'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { useToast } from '@/components/ui/toast-container'
 import { useAgentChat } from '@/hooks/useAgentChat'
 import { cn } from '@/lib/utils'
@@ -279,7 +280,8 @@ export default function AgentDetailPage() {
   const location = useLocation()
   const navigate = useNavigate()
   const { showToast } = useToast()
-  const { selectEntity } = useMenu()
+  const { selectEntity, openM2Drawer } = useMenu()
+  const isMobile = useIsMobile()
   const [agent, setAgent] = useState<Agent | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isStarting, setIsStarting] = useState(false)
@@ -472,6 +474,13 @@ export default function AgentDetailPage() {
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-3">
+            {/* Same gesture as a settings page — see the workspace view. */}
+            <SectionBackButton
+              title={isMobile ? 'Back to agent sessions' : 'Back to agents'}
+              onBack={() => (isMobile
+                ? openM2Drawer('agents', 'detail', agent.id)
+                : navigate('/agents'))}
+            />
             <span
               className="h-3 w-3 shrink-0 rounded-full"
               style={{ backgroundColor: agent.color || '#9ca3af' }}

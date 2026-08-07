@@ -106,3 +106,38 @@ export function CloseSectionButton({ className }: { className?: string }) {
     </button>
   )
 }
+
+/**
+ * Back control for the detail views whose header is a custom status bar
+ * (workspace, context, agent) rather than a PageHeader.
+ *
+ * Same meaning as the arrow on a settings page, so the gesture is the same
+ * wherever you are: on mobile it reopens the menu panel this view was reached
+ * from, because that panel is an overlay that closed on navigation; on desktop
+ * the panel is already beside the content, so it steps up to the list instead.
+ * The caller supplies both, since only it knows its own section.
+ */
+export function SectionBackButton({
+  onBack,
+  title = 'Back',
+  className,
+}: {
+  onBack: () => void
+  title?: string
+  className?: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onBack}
+      aria-label={title}
+      title={title}
+      className={cn(
+        'flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground touch-target',
+        className,
+      )}
+    >
+      <ArrowLeft className="h-4 w-4" />
+    </button>
+  )
+}

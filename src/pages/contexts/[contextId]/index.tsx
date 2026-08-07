@@ -1,4 +1,4 @@
-import { CloseSectionButton } from '@/components/common/page-header';
+import { CloseSectionButton, SectionBackButton } from '@/components/common/page-header';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useToast } from '@/components/ui/toast-container';
@@ -415,6 +415,13 @@ export default function ContextDetailPage() {
         className="flex h-12 items-center gap-2 border-b px-4 shrink-0"
         style={accent ? { borderBottom: `3px solid ${accent}` } : { borderBottomWidth: 3 }}
       >
+        {/* Same gesture as a settings page — see the workspace view. */}
+        <SectionBackButton
+          title={isMobile ? 'Back to context menu' : 'Back to contexts'}
+          onBack={() => (isMobile
+            ? openM2Drawer('contexts', 'detail', context.id)
+            : navigate('/contexts'))}
+        />
         <Icon
           icon={context.icon || DEFAULT_WORKSPACE_ICON}
           width={16}
