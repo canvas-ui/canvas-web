@@ -1,32 +1,33 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, Check, Loader2, Plus, Search, X } from 'lucide-react'
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, Check, CheckCircle2, Circle, Eye, EyeOff, Loader2, Plus, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAppletTarget, type AppletTarget } from './applet-target'
 import { submitDocuments, describeTarget } from '../add/useAddTarget'
 import { updateWorkspaceDocument } from '@/services/workspace'
-import { NOTE_SCHEMA } from '@/components/renderers/types'
+import { TODO_SCHEMA } from '@/components/renderers/types'
+import { buildTodoData, todayEndOfDayLocal, type TodoStatus, TODO_STATUS_LABELS } from '../add/useTodoFields'
 import type { Document } from '@/types/workspace'
 import type { AppletProps } from './registry'
 import {
   APPLET_AUTOSAVE_MS, GrowingTextarea, ItemActions, LinkDocOverlay, formatCreated, useAppletDocs,
 } from './shared'
 
-const NOTE_SCHEMA_VERSION = '2.0'
+const TODO_SCHEMA_VERSION = '2.1'
 
-// The Notes applet: every note visible in the bound target, stacked in one
-// editable document view - as close to a notepad as the data model allows.
-// Title and body write back through the normal document update path (debounced
-// + flushed on blur); search scrolls to the match and Enter selects it in the
-// body like a desktop editor's find.
+// Done = anything the user no longer acts on.
+const DONE_STATUSES: ReadonlySet<string> = new Set(['completed', 'cancelled'])
 
-interface NoteMatch {
-  docId: number
-  offset: number // offset into content (title-only matches use offset -1)
+function formatDue(iso?: string): string | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
-// One note in the stack. Owns its edit drafts and autosave lifecycle so a slow
-// save on one note never blocks typing in another.
-function NoteItem({
+// One todo in the stack - the Notes item plus a status checkbox; the body is
+// the todo's description. Title/description autosave like a note, the
+// checkbox writes through immediately.
+function TodoItem({
   doc,
   updateWorkspace,
   registerEl,
@@ -34,6 +35,7 @@ function NoteItem({
   highlighted,
   onLinkTo,
   onDelete,
+  onStatusSaved,
 }: {
   doc: Document
   updateWorkspace: string | null
@@ -42,23 +44,22 @@ function NoteItem({
   highlighted: boolean
   onLinkTo: () => void
   onDelete: () => void
+  onStatusSaved: (id: number, status: TodoStatus) => void
 }) {
   const [title, setTitle] = useState(String(doc.data?.title ?? ''))
-  const [content, setContent] = useState(String(doc.data?.content ?? ''))
-  const [status, setStatus] = useState<'idle' | 'dirty' | 'saving' | 'saved' | 'error'>('idle')
-  // Baseline = last persisted values; dirty is a comparison, not a flag that
-  // can drift out of sync with what actually saved.
-  const baseline = useRef({ title: String(doc.data?.title ?? ''), content: String(doc.data?.content ?? '') })
+  const [description, setDescription] = useState(String(doc.data?.description ?? ''))
+  const [itemStatus, setItemStatus] = useState<TodoStatus>((doc.data?.status as TodoStatus) || 'pending')
+  const [saveState, setSaveState] = useState<'idle' | 'dirty' | 'saving' | 'saved' | 'error'>('idle')
+  const baseline = useRef({ title: String(doc.data?.title ?? ''), description: String(doc.data?.description ?? '') })
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saveSeq = useRef(0)
 
-  const save = useCallback(async (nextTitle: string, nextContent: string) => {
+  const persist = useCallback(async (next: { title: string; description: string; status: TodoStatus }) => {
     if (!updateWorkspace) return
-    if (nextTitle === baseline.current.title && nextContent === baseline.current.content) return
-    // An emptied body would fail schema-side; keep the last non-empty save.
-    if (!nextContent.trim()) return
+    // A todo without a title fails schema-side; keep the last titled save.
+    if (!next.title.trim()) return
     const seq = ++saveSeq.current
-    setStatus('saving')
+    setSaveState('saving')
     try {
       await updateWorkspaceDocument(updateWorkspace, {
         id: doc.id,
@@ -66,32 +67,45 @@ function NoteItem({
         schemaVersion: doc.schemaVersion,
         data: {
           ...(doc.data || {}),
-          ...(nextTitle.trim() ? { title: nextTitle.trim() } : { title: undefined }),
-          content: nextContent,
+          title: next.title.trim(),
+          ...(next.description.trim() ? { description: next.description.trim() } : { description: undefined }),
+          status: next.status,
+          completed: next.status === 'completed',
         },
         metadata: doc.metadata,
       })
       if (seq !== saveSeq.current) return
-      baseline.current = { title: nextTitle, content: nextContent }
-      setStatus('saved')
-      setTimeout(() => setStatus((s) => (s === 'saved' ? 'idle' : s)), 1500)
+      baseline.current = { title: next.title, description: next.description }
+      setSaveState('saved')
+      setTimeout(() => setSaveState((s) => (s === 'saved' ? 'idle' : s)), 1500)
     } catch {
-      if (seq === saveSeq.current) setStatus('error')
+      if (seq === saveSeq.current) setSaveState('error')
     }
   }, [doc.id, doc.schema, doc.schemaVersion, doc.data, doc.metadata, updateWorkspace])
 
-  const scheduleSave = useCallback((nextTitle: string, nextContent: string) => {
-    setStatus('dirty')
+  const scheduleSave = useCallback((nextTitle: string, nextDescription: string) => {
+    if (nextTitle === baseline.current.title && nextDescription === baseline.current.description) return
+    setSaveState('dirty')
     if (timer.current) clearTimeout(timer.current)
-    timer.current = setTimeout(() => save(nextTitle, nextContent), APPLET_AUTOSAVE_MS)
-  }, [save])
+    timer.current = setTimeout(() => persist({ title: nextTitle, description: nextDescription, status: itemStatus }), APPLET_AUTOSAVE_MS)
+  }, [persist, itemStatus])
 
   const flush = useCallback(() => {
     if (timer.current) { clearTimeout(timer.current); timer.current = null }
-    save(title, content)
-  }, [save, title, content])
+    persist({ title, description, status: itemStatus })
+  }, [persist, title, description, itemStatus])
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
+
+  const toggleDone = useCallback(async () => {
+    const next: TodoStatus = itemStatus === 'completed' ? 'pending' : 'completed'
+    setItemStatus(next)
+    await persist({ title, description, status: next })
+    onStatusSaved(doc.id, next)
+  }, [itemStatus, persist, title, description, doc.id, onStatusSaved])
+
+  const done = DONE_STATUSES.has(itemStatus)
+  const due = formatDue(doc.data?.dueDate as string | undefined)
 
   return (
     <div
@@ -101,59 +115,77 @@ function NoteItem({
         highlighted && 'bg-primary/5',
       )}
     >
-      {/* Muted meta line - date is immutable, id aids cross-referencing. */}
       <div className="mb-1 flex items-baseline justify-between gap-2">
         <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
           {formatCreated(doc.createdAt)} · #{doc.id}
+          {due && <span> · due {due}</span>}
+          {itemStatus !== 'pending' && <span> · {TODO_STATUS_LABELS[itemStatus] ?? itemStatus}</span>}
         </span>
         <span className="flex items-center gap-1 text-[10px] text-muted-foreground/70">
-          {status === 'saving' && <Loader2 className="inline h-3 w-3 animate-spin" />}
-          {status === 'saved' && <Check className="inline h-3 w-3 text-success" />}
-          {status === 'dirty' && '·'}
-          {status === 'error' && <span className="text-destructive">save failed</span>}
+          {saveState === 'saving' && <Loader2 className="inline h-3 w-3 animate-spin" />}
+          {saveState === 'saved' && <Check className="inline h-3 w-3 text-success" />}
+          {saveState === 'dirty' && '·'}
+          {saveState === 'error' && <span className="text-destructive">save failed</span>}
           <ItemActions onLinkTo={onLinkTo} onDelete={onDelete} />
         </span>
       </div>
-      <input
-        value={title}
-        onChange={(e) => { setTitle(e.target.value); scheduleSave(e.target.value, content) }}
-        onBlur={flush}
-        placeholder="Untitled"
-        spellCheck={false}
-        className="mb-1 w-full border-0 bg-transparent p-0 text-sm font-semibold text-foreground outline-none placeholder:text-muted-foreground/50"
-      />
-      <GrowingTextarea
-        value={content}
-        onChange={(v) => { setContent(v); scheduleSave(title, v) }}
-        onBlur={flush}
-        innerRef={(el) => registerBody(doc.id, el)}
-      />
+      <div className="flex items-start gap-2">
+        <button
+          type="button"
+          onClick={toggleDone}
+          className="mt-0.5 shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+          aria-label={done ? 'Mark as pending' : 'Mark as completed'}
+          title={done ? 'Mark as pending' : 'Mark as completed'}
+        >
+          {done ? <CheckCircle2 className="h-4 w-4 text-success" /> : <Circle className="h-4 w-4" />}
+        </button>
+        <div className="min-w-0 flex-1">
+          <input
+            value={title}
+            onChange={(e) => { setTitle(e.target.value); scheduleSave(e.target.value, description) }}
+            onBlur={flush}
+            placeholder="Untitled"
+            spellCheck={false}
+            className={cn(
+              'mb-1 w-full border-0 bg-transparent p-0 text-sm font-semibold outline-none placeholder:text-muted-foreground/50',
+              done ? 'text-muted-foreground line-through' : 'text-foreground',
+            )}
+          />
+          <GrowingTextarea
+            value={description}
+            onChange={(v) => { setDescription(v); scheduleSave(title, v) }}
+            onBlur={flush}
+            placeholder="Description…"
+            innerRef={(el) => registerBody(doc.id, el)}
+          />
+        </div>
+      </div>
     </div>
   )
 }
 
-// Inline creation - a blank note pinned above the list, saved into the bound
-// target like the toolbox NoteForm.
-function DraftNote({ target, onCreated, onCancel }: { target: AppletTarget; onCreated: () => void; onCancel: () => void }) {
+// Inline creation - due defaults to end of today, matching every other todo
+// add surface.
+function DraftTodo({ target, onCreated, onCancel }: { target: AppletTarget; onCreated: () => void; onCancel: () => void }) {
   const [title, setTitle] = useState('')
-  const [content, setContent] = useState('')
+  const [description, setDescription] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const create = async () => {
-    if (!content.trim() || !target || saving) return
+    if (!title.trim() || !target || saving) return
     setSaving(true)
     setError(null)
     try {
       await submitDocuments(target, [{
-        schema: NOTE_SCHEMA,
-        schemaVersion: NOTE_SCHEMA_VERSION,
-        data: { ...(title.trim() ? { title: title.trim() } : {}), content },
+        schema: TODO_SCHEMA,
+        schemaVersion: TODO_SCHEMA_VERSION,
+        data: buildTodoData({ title, description, status: 'pending', priority: '', due: todayEndOfDayLocal() }),
         metadata: { features: [] },
       }])
       onCreated()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create note')
+      setError(err instanceof Error ? err.message : 'Failed to create todo')
       setSaving(false)
     }
   }
@@ -161,7 +193,7 @@ function DraftNote({ target, onCreated, onCancel }: { target: AppletTarget; onCr
   return (
     <div className="border-t border-border/60 bg-muted/30 px-4 py-3">
       <div className="mb-1 flex items-baseline justify-between">
-        <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">New note</span>
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">New todo · due today</span>
         <button type="button" onClick={onCancel} className="text-muted-foreground hover:text-foreground" aria-label="Discard draft">
           <X className="h-3 w-3" />
         </button>
@@ -169,41 +201,42 @@ function DraftNote({ target, onCreated, onCancel }: { target: AppletTarget; onCr
       <input
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        placeholder="Untitled"
+        placeholder="What needs doing?"
         autoFocus
         spellCheck={false}
         className="mb-1 w-full border-0 bg-transparent p-0 text-sm font-semibold text-foreground outline-none placeholder:text-muted-foreground/50"
       />
-      <GrowingTextarea value={content} onChange={setContent} placeholder="Write your note…" />
+      <GrowingTextarea value={description} onChange={setDescription} placeholder="Description (optional)…" />
       {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
       <div className="mt-2 flex justify-end">
         <button
           type="button"
           onClick={create}
-          disabled={!content.trim() || saving}
+          disabled={!title.trim() || saving}
           className="rounded-md bg-primary px-2.5 py-1 text-xs text-primary-foreground disabled:opacity-50"
         >
-          {saving ? 'Saving…' : 'Save note'}
+          {saving ? 'Saving…' : 'Save todo'}
         </button>
       </div>
     </div>
   )
 }
 
-export function NotesApplet({ autoAdd = false }: AppletProps) {
+export function TodosApplet({ autoAdd = false }: AppletProps) {
   const target = useAppletTarget()
-  const { docs, loading, error, scope, reload, removeDoc } = useAppletDocs(target, NOTE_SCHEMA)
+  const { docs, setDocs, loading, error, scope, reload, removeDoc } = useAppletDocs(target, TODO_SCHEMA)
 
   const [query, setQuery] = useState('')
   const [matchIdx, setMatchIdx] = useState(0)
   const [order, setOrder] = useState<'desc' | 'asc'>('desc')
+  const [showDone, setShowDone] = useState(false)
   const [adding, setAdding] = useState(autoAdd)
   const [linkDocId, setLinkDocId] = useState<number | null>(null)
 
-  const noteEls = useRef(new Map<number, HTMLDivElement>())
+  const itemEls = useRef(new Map<number, HTMLDivElement>())
   const bodyEls = useRef(new Map<number, HTMLTextAreaElement>())
   const registerEl = useCallback((id: number, el: HTMLDivElement | null) => {
-    if (el) noteEls.current.set(id, el); else noteEls.current.delete(id)
+    if (el) itemEls.current.set(id, el); else itemEls.current.delete(id)
   }, [])
   const registerBody = useCallback((id: number, el: HTMLTextAreaElement | null) => {
     if (el) bodyEls.current.set(id, el); else bodyEls.current.delete(id)
@@ -211,29 +244,40 @@ export function NotesApplet({ autoAdd = false }: AppletProps) {
 
   const handleDelete = useCallback(async (doc: Document) => {
     const label = doc.data?.title ? `"${doc.data.title}"` : `#${doc.id}`
-    if (!window.confirm(`Delete note ${label}?\n\nIt is removed from this path and moves to the workspace trash if nothing else links it.`)) return
+    if (!window.confirm(`Delete todo ${label}?\n\nIt is removed from this path and moves to the workspace trash if nothing else links it.`)) return
     try { await removeDoc(doc.id) } catch { /* toast handled globally */ }
   }, [removeDoc])
 
+  // Keep the doc list's copy of a status in sync after a checkbox write, so
+  // the done filter reacts without a reload.
+  const handleStatusSaved = useCallback((id: number, status: TodoStatus) => {
+    setDocs(prev => prev.map(d => d.id === id
+      ? { ...d, data: { ...(d.data || {}), status, completed: status === 'completed' } }
+      : d))
+  }, [setDocs])
+
   const sorted = useMemo(() => {
-    const list = [...docs]
+    const list = showDone ? [...docs] : docs.filter(d => !DONE_STATUSES.has(String(d.data?.status ?? 'pending')))
     list.sort((a, b) => {
       const d = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
       return order === 'asc' ? d : -d
     })
     return list
-  }, [docs, order])
+  }, [docs, order, showDone])
 
-  // Full-text matches across the loaded notes, in display order. Typing
-  // scrolls to the current match; Enter selects it in the body (find-style).
-  const matches = useMemo<NoteMatch[]>(() => {
+  const hiddenDone = useMemo(
+    () => docs.filter(d => DONE_STATUSES.has(String(d.data?.status ?? 'pending'))).length,
+    [docs],
+  )
+
+  const matches = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return []
-    const out: NoteMatch[] = []
+    if (!q) return [] as { docId: number; offset: number }[]
+    const out: { docId: number; offset: number }[] = []
     for (const doc of sorted) {
-      const content = String(doc.data?.content ?? '')
+      const description = String(doc.data?.description ?? '')
       const title = String(doc.data?.title ?? '')
-      const at = content.toLowerCase().indexOf(q)
+      const at = description.toLowerCase().indexOf(q)
       if (at >= 0) out.push({ docId: doc.id, offset: at })
       else if (title.toLowerCase().includes(q)) out.push({ docId: doc.id, offset: -1 })
     }
@@ -246,11 +290,9 @@ export function NotesApplet({ autoAdd = false }: AppletProps) {
 
   useEffect(() => {
     if (!currentMatch) return
-    noteEls.current.get(currentMatch.docId)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    itemEls.current.get(currentMatch.docId)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
   }, [currentMatch])
 
-  // Enter: advance + select the match text inside the note body, so the caret
-  // lands exactly where the hit is.
   const confirmMatch = useCallback((advance: boolean) => {
     if (!matches.length) return
     const idx = advance ? (matchIdx + 1) % matches.length : matchIdx
@@ -261,7 +303,7 @@ export function NotesApplet({ autoAdd = false }: AppletProps) {
       body.focus()
       body.setSelectionRange(m.offset, m.offset + query.trim().length)
     }
-    noteEls.current.get(m.docId)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    itemEls.current.get(m.docId)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
   }, [matches, matchIdx, query])
 
   if (!target) {
@@ -274,7 +316,6 @@ export function NotesApplet({ autoAdd = false }: AppletProps) {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Controls: search / sort / add. */}
       <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -282,7 +323,7 @@ export function NotesApplet({ autoAdd = false }: AppletProps) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confirmMatch(true) } }}
-            placeholder="Search notes…"
+            placeholder="Search todos…"
             spellCheck={false}
             className="w-full rounded-md border border-input bg-transparent py-1 pl-7 pr-14 text-xs outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
           />
@@ -292,6 +333,20 @@ export function NotesApplet({ autoAdd = false }: AppletProps) {
             </span>
           )}
         </div>
+        <button
+          type="button"
+          onClick={() => setShowDone((v) => !v)}
+          className={cn(
+            'rounded-md border p-1.5 transition-colors',
+            showDone
+              ? 'border-foreground text-foreground'
+              : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground',
+          )}
+          title={showDone ? 'Hide done items' : `Show done items${hiddenDone ? ` (${hiddenDone})` : ''}`}
+          aria-label={showDone ? 'Hide done items' : 'Show done items'}
+        >
+          {showDone ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+        </button>
         <button
           type="button"
           onClick={() => setOrder((o) => (o === 'desc' ? 'asc' : 'desc'))}
@@ -305,16 +360,16 @@ export function NotesApplet({ autoAdd = false }: AppletProps) {
           type="button"
           onClick={() => setAdding(true)}
           className="flex items-center gap-1 rounded-md bg-primary px-2 py-1.5 text-xs text-primary-foreground"
-          title="Add a note"
+          title="Add a todo"
         >
           <Plus className="h-3.5 w-3.5" />
-          Note
+          Todo
         </button>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {adding && (
-          <DraftNote
+          <DraftTodo
             target={target}
             onCreated={() => { setAdding(false); reload() }}
             onCancel={() => setAdding(false)}
@@ -329,12 +384,14 @@ export function NotesApplet({ autoAdd = false }: AppletProps) {
         {error && <p className="px-4 py-6 text-center text-sm text-destructive">{error}</p>}
         {!loading && !error && !sorted.length && !adding && (
           <p className="px-4 py-10 text-center text-sm text-muted-foreground">
-            No notes here yet - add the first one.
+            {hiddenDone
+              ? `Nothing pending - ${hiddenDone} done item${hiddenDone > 1 ? 's' : ''} hidden.`
+              : 'No todos here yet - add the first one.'}
           </p>
         )}
 
         {sorted.map((doc) => (
-          <NoteItem
+          <TodoItem
             key={doc.id}
             doc={doc}
             updateWorkspace={scope?.workspaceName ?? null}
@@ -343,6 +400,7 @@ export function NotesApplet({ autoAdd = false }: AppletProps) {
             highlighted={currentMatch?.docId === doc.id}
             onLinkTo={() => setLinkDocId(doc.id)}
             onDelete={() => handleDelete(doc)}
+            onStatusSaved={handleStatusSaved}
           />
         ))}
       </div>

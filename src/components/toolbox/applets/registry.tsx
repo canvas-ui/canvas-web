@@ -1,18 +1,26 @@
 import type { ComponentType } from 'react'
-import { StickyNote, type LucideIcon } from 'lucide-react'
+import { ListTodo, StickyNote, type LucideIcon } from 'lucide-react'
 import { NotesApplet } from './NotesApplet'
+import { TodosApplet } from './TodosApplet'
 
-// Applets are small self-contained apps hosted by the toolbox Apps tab (and
-// eventually the tauri desktop shell - keep them portable: no page-level
-// assumptions, all data access through services + the toolbox context).
+// Applets are small self-contained apps hosted by the toolbox Apps tab, the
+// standalone /apps/<id> route, and eventually the tauri desktop shell - keep
+// them portable: no page-level assumptions, all data access through services
+// and the applet-target context.
 //
 // Modes:
-// - context: the applet is tied to the focused context (a workspace path or a
-//   context) - everything it reads is pre-filtered by that context.
+// - context: the applet is tied to a focused context (a workspace path or a
+//   context) - everything it reads is pre-filtered by that binding.
 // - global: context-free (a clock, a music player, a chat window).
 // An applet declares which modes it supports; the Apps tab lists it under the
 // matching sub-tab(s).
 export type AppletMode = 'context' | 'global'
+
+// Props every applet component accepts. autoAdd opens the inline creation
+// draft on mount - the standalone host maps ?add=1 onto it.
+export interface AppletProps {
+  autoAdd?: boolean
+}
 
 export interface AppletDescriptor {
   id: string
@@ -21,7 +29,7 @@ export interface AppletDescriptor {
   modes: AppletMode[]
   // One-liner for the launcher tile.
   description: string
-  Component: ComponentType
+  Component: ComponentType<AppletProps>
 }
 
 export const APPLETS: AppletDescriptor[] = [
@@ -32,6 +40,14 @@ export const APPLETS: AppletDescriptor[] = [
     modes: ['context'],
     description: 'All notes in the current context, editable in place',
     Component: NotesApplet,
+  },
+  {
+    id: 'todo',
+    label: 'Todos',
+    icon: ListTodo,
+    modes: ['context'],
+    description: 'Todos in the current context, done items hidden by default',
+    Component: TodosApplet,
   },
 ]
 

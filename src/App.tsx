@@ -31,6 +31,8 @@ import WorkspaceSettingsPage from './pages/workspaces/[workspaceName]/settings'
 import ContextSettingsPage from './pages/contexts/[contextId]/settings'
 import RolesPage from './pages/roles'
 import RemotesPage from './pages/remotes'
+import AppletHostPage from './pages/apps'
+import QuickAddPage from './pages/apps/add'
 import { AppShell } from './components/shell/AppShell'
 import { ToastContainer, useToast } from './components/ui/toast-container'
 import { NotificationsProvider } from './components/notifications/notifications-context'
@@ -60,12 +62,19 @@ function AppContent() {
         <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
         <Route path="/pub/c/:code" element={<PublicCanvasPage />} />
 
+        {/* Standalone applet host - chrome-free, one PWA-shortcut click away.
+            /apps/add/:kind is more specific and matches inside the shell below. */}
+        <Route path="/apps/:appletId" element={<ProtectedRoute><AppletHostPage /></ProtectedRoute>} />
+
         {/* Dashboard layout for authenticated routes */}
         <Route path="/" element={<ProtectedRoute><NotificationsProvider><CanvasPinsProvider><AppShell /></CanvasPinsProvider></NotificationsProvider></ProtectedRoute>}>
           {/* The empty desk. Closing any content section lands here. */}
           <Route index element={<DeskPage />} />
           <Route path="home" element={<HomePage />} />
           <Route path="share-target" element={<ShareTargetPage />} />
+          {/* Quick-add shortcut landing - the B5 card flow inside the shell,
+              same hosting as share-target. */}
+          <Route path="apps/add/:kind" element={<QuickAddPage />} />
           <Route path="workspaces" element={<WorkspacesPage />} />
           <Route path="workspaces/:workspaceName" element={<WorkspaceDetailPage />} />
           <Route path="workspaces/:workspaceName/settings" element={<WorkspaceSettingsPage />} />

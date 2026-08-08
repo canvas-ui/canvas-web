@@ -145,7 +145,7 @@ export default function WorkspaceDetailPage() {
   const [serverSearchQueries, setServerSearchQueries] = useState<string[]>(urlSearchQueries);
   const [ignoredSavedSearchPath, setIgnoredSavedSearchPath] = useState<string | null>(null);
 
-  const { state: toolboxState, saveFilters, toggleView, setSort, setAccentColor, setMapDocuments } = useToolbox();
+  const { state: toolboxState, saveFilters, toggleView, setSort, setAccentColor, setMapDocuments, hasActiveFilters } = useToolbox();
   const tbAllOf = toolboxState.filters.features.allOf;
   const tbAnyOf = toolboxState.filters.features.anyOf;
   const tbNoneOf = toolboxState.filters.features.noneOf;
@@ -1126,13 +1126,18 @@ export default function WorkspaceDetailPage() {
             onClick={() => toggleView('tools')}
             className={cn(
               'flex items-center gap-1.5 px-3 py-1 text-xs border rounded-md transition-colors',
-              toolboxState.t1Open && toolboxState.t1View === 'tools'
-                ? 'bg-accent text-foreground'
-                : 'hover:bg-accent text-muted-foreground hover:text-foreground',
+              // Filters narrow every tree read - keep the button colored while
+              // any are active so an empty folder is explainable at a glance.
+              hasActiveFilters
+                ? 'border-info bg-info text-info-foreground hover:bg-info/90'
+                : toolboxState.t1Open && toolboxState.t1View === 'tools'
+                  ? 'bg-accent text-foreground'
+                  : 'hover:bg-accent text-muted-foreground hover:text-foreground',
             )}
+            title={hasActiveFilters ? 'Toolbox filters are active and narrow this view' : 'Open the toolbox filters'}
           >
             <Filter className="w-3 h-3" />
-            Filter
+            Filter{hasActiveFilters ? ' on' : ''}
           </button>
         ) : (
           <button

@@ -72,7 +72,7 @@ export default function ContextDetailPage() {
     return stack.length ? stack : (legacy ? [legacy] : []);
   }, [location.search]);
   const { showToast } = useToast();
-  const { state: toolboxState, saveFilters, setAccentColor, setMapDocuments, toggleView } = useToolbox();
+  const { state: toolboxState, saveFilters, setAccentColor, setMapDocuments, toggleView, hasActiveFilters } = useToolbox();
   const { openM2Drawer } = useMenu();
   const isMobile = useIsMobile();
   const tbAllOf = toolboxState.filters.features.allOf;
@@ -440,13 +440,18 @@ export default function ContextDetailPage() {
           onClick={() => toggleView('tools')}
           className={cn(
             'flex shrink-0 items-center gap-1.5 px-3 py-1 text-xs border rounded-md transition-colors',
-            toolboxState.t1Open && toolboxState.t1View === 'tools'
-              ? 'bg-accent text-foreground'
-              : 'hover:bg-accent text-muted-foreground hover:text-foreground',
+            // Filters narrow every read - keep the button colored while any
+            // are active so an empty context is explainable at a glance.
+            hasActiveFilters
+              ? 'border-info bg-info text-info-foreground hover:bg-info/90'
+              : toolboxState.t1Open && toolboxState.t1View === 'tools'
+                ? 'bg-accent text-foreground'
+                : 'hover:bg-accent text-muted-foreground hover:text-foreground',
           )}
+          title={hasActiveFilters ? 'Toolbox filters are active and narrow this view' : 'Open the toolbox filters'}
         >
           <Filter className="w-3 h-3" />
-          Filter
+          Filter{hasActiveFilters ? ' on' : ''}
         </button>
         <CloseSectionButton />
       </div>
