@@ -12,7 +12,7 @@ import { DefaultFoldersPicker, createDefaultFolders, useFolderSelection } from '
 import { adminReindexTimelines, adminReindexSearch, adminOptimize, adminReindexMime } from '@/services/admin'
 import { PageHeader } from '@/components/common/page-header'
 import { WORKSPACE_SETTINGS_SECTIONS, resolveWorkspaceSettingsTab, type WorkspaceSettingsTab } from '@/lib/settings-sections'
-import { EmbeddSettingsPanel } from '@/components/workspace/embedd-settings-panel'
+import { InferdSettingsPanel } from '@/components/workspace/inferd-settings-panel'
 import { HooksPanel } from '@/components/workspace/hooks-panel'
 import { TrashPanel } from '@/components/workspace/trash-panel'
 import { ImapMailboxesPanel } from '@/components/workspace/imap-mailboxes-panel'
@@ -636,7 +636,7 @@ function SearchTuning({ workspaceName, current, weights, onDone }: {
   )
 }
 
-// This workspace's embedd queue readout + pause/resume. Each workspace owns its
+// This workspace's inferd queue readout + pause/resume. Each workspace owns its
 // own queue, so the pending count is genuinely this workspace's work and pausing
 // leaves the others draining. Pausing quiets the CPU-heavy inference after the
 // in-flight batch — the escape hatch while a big photo mount indexes. Enqueues
@@ -725,15 +725,15 @@ function DbStatsTab({
               <StatRow label="Enabled" value={String(stats.semantic.enabled)} />
               {stats.semantic.enabled && (
                 <>
-                  {/* What actually embeds where — from the embedd router rules
+                  {/* What actually embeds where — from the inferd router rules
                       (server-wide, read-only for now): notes/emails + text-file
                       blobs → text; image/* → image. Falls back to synapsd's gap
-                      default only if the embedd routing isn't available. */}
-                  {stats.embedder?.routing
-                    ? Object.entries(stats.embedder.routing).map(([space, matchers]) => (
+                      default only if the inferd routing isn't available. */}
+                  {stats.inferder?.routing
+                    ? Object.entries(stats.inferder.routing).map(([space, matchers]) => (
                         <StatRow key={`route-${space}`} label={`Embeds → ${space}`} value={<span className="font-mono text-[11px]">{matchers.join(', ')}</span>} />
                       ))
-                    : <StatRow label="Text-embeddable (gap default)" value={stats.semantic.embeddableSchemas?.join(', ')} />}
+                    : <StatRow label="Text-inferdable (gap default)" value={stats.semantic.inferdableSchemas?.join(', ')} />}
                   {/* Per-space STORAGE stats — row/doc counts, so a re-embed's
                       progress is visible. Which model/backend fills each space
                       (and the queue driving it) is in Embeddings, above. */}
@@ -1379,7 +1379,7 @@ export default function WorkspaceSettingsPage() {
                   Which model turns this workspace's content into vectors, and where those vectors live.
                 </p>
               </div>
-              <EmbeddSettingsPanel workspaceId={workspaceId} workspaceName={workspaceName!} />
+              <InferdSettingsPanel workspaceId={workspaceId} workspaceName={workspaceName!} />
             </section>
           )}
           <DbStatsTab

@@ -228,6 +228,9 @@ export interface Document {
     // tag/<name> entries — see components/toolbox/add/tags.ts's tagsToFeatures
     features?: string[]
     geo?: DocumentGeo
+    // GENERATED description (captioner output; `comment` stays human-authored).
+    // Auto-folded into FTS + embedded as its own text-space chunk server-side.
+    summary?: string
   }
   locations?: Array<{ url: string; metadata?: Record<string, any> }>
   indexOptions: {

@@ -3,13 +3,13 @@ import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast-container'
-import { EmbeddConfigEditor } from '@/components/workspace/embedd-config-editor'
+import { InferdConfigEditor } from '@/components/workspace/inferd-config-editor'
 import {
-  getUserEmbeddConfig,
-  saveUserEmbeddConfig,
-  type EmbeddConfig,
-  type UserEmbeddConfig,
-} from '@/services/embedd'
+  getUserInferdConfig,
+  saveUserInferdConfig,
+  type InferdConfig,
+  type UserInferdConfig,
+} from '@/services/inferd'
 
 /**
  * Per-user embedding defaults — the layer NEW workspaces inherit.
@@ -21,7 +21,7 @@ import {
  */
 export default function EmbeddingDefaultsPage() {
   const { showToast } = useToast()
-  const [config, setConfig] = useState<UserEmbeddConfig | null>(null)
+  const [config, setConfig] = useState<UserInferdConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -29,7 +29,7 @@ export default function EmbeddingDefaultsPage() {
   // State is only touched from the async callbacks, never synchronously — the
   // mount effect below would otherwise trigger a cascading render.
   const load = useCallback(() => (
-    getUserEmbeddConfig()
+    getUserInferdConfig()
       .then(next => { setConfig(next); setError(null) })
       .catch(err => setError(err instanceof Error ? err.message : 'Failed to load embedding defaults'))
       .finally(() => setLoading(false))
@@ -39,10 +39,10 @@ export default function EmbeddingDefaultsPage() {
 
   const refresh = () => { setLoading(true); void load() }
 
-  const save = async (next: EmbeddConfig) => {
+  const save = async (next: InferdConfig) => {
     setSaving(true)
     try {
-      const result = await saveUserEmbeddConfig(next)
+      const result = await saveUserInferdConfig(next)
       showToast({
         title: 'Defaults saved',
         description: result.restartRequired
@@ -87,7 +87,7 @@ export default function EmbeddingDefaultsPage() {
           <Button type="button" size="sm" variant="outline" onClick={refresh}>Retry</Button>
         </div>
       ) : (
-        <EmbeddConfigEditor
+        <InferdConfigEditor
           key={JSON.stringify(config.user)}
           value={config.user || {}}
           effective={config.effective || {}}

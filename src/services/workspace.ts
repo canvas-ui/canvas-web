@@ -1397,20 +1397,20 @@ export interface WorkspaceDbStats {
     model?: string
     dim?: number
     cacheDir?: string
-    embeddableSchemas?: string[]
+    inferdableSchemas?: string[]
     imageMaxDistance?: number | null
     searchWeights?: { fts?: number; dense?: number; image?: number }
     vector?: { ready: boolean; rowCount?: number; error?: string } | Record<string, unknown>
     vectorSpaces?: Record<string, { ready: boolean; dim?: number; chunkRows?: number; embeddedDocs?: number; error?: string }>
-    embedder?: Record<string, unknown>
+    inferder?: Record<string, unknown>
     queue?: { pending: number; draining: boolean } | null
   }
-  embedder?: {
+  inferder?: {
     // THIS workspace's queue — each workspace owns one, so the backlog shown is
     // its own work rather than a server-wide total.
     queue?: { pending: number; draining: boolean; paused?: boolean; ingestDisabled?: boolean } | null
     // Actual embed routing per space (schema ids / `mime <pattern>`), from the
-    // embedd router rules — what really embeds where, not just the gap default.
+    // inferd router rules — what really embeds where, not just the gap default.
     routing?: Record<string, string[]>
     // Provider/model filling each space. Both are config now, so the UI reports
     // what is actually running instead of implying the old hardcoded pair.
@@ -1422,13 +1422,13 @@ export interface WorkspaceDbStats {
 // batch — the CPU-heavy inference goes quiet — and resume drains it; a server
 // restart also clears the pause. Queues are per-workspace: pass a workspaceId to
 // pause just that one, omit it to pause every workspace.
-export async function setEmbeddPaused(
+export async function setInferdPaused(
   paused: boolean,
   workspaceId?: string,
 ): Promise<{ paused: boolean; pending: number; workspace?: string }> {
   const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ''
   const res = await api.post<{ payload: { paused: boolean; pending: number; workspace?: string } }>(
-    `${API_ROUTES.admin.embedd}/${paused ? 'pause' : 'resume'}${query}`,
+    `${API_ROUTES.admin.inferd}/${paused ? 'pause' : 'resume'}${query}`,
   )
   return res.payload
 }

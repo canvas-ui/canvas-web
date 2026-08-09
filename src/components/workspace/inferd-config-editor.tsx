@@ -6,15 +6,15 @@ import { cn } from '@/lib/utils'
 import { useToast } from '@/components/ui/toast-container'
 import {
   BUILTIN_PROVIDER_IDS,
-  EMBEDD_PROVIDER_TYPES,
-  probeEmbeddModelCache,
+  INFERD_PROVIDER_TYPES,
+  probeInferdModelCache,
   stripUnsetKeys,
-  testEmbeddBackend,
-  type EmbeddConfig,
-  type EmbeddProviderSpec,
-  type EmbeddSpaceSpec,
+  testInferdBackend,
+  type InferdConfig,
+  type InferdProviderSpec,
+  type InferdSpaceSpec,
   type ResolvedSpace,
-} from '@/services/embedd'
+} from '@/services/inferd'
 
 /**
  * Editor for one layer of the embedding config.
@@ -66,7 +66,7 @@ const PROVIDER_SHAPE: Record<string, {
   /** Extra headers (proxy auth, tenant routing). Write-only, like the key. */
   headers?: boolean
   /** Where this backend runs, for the collapsed row. */
-  where: (spec: EmbeddProviderSpec) => string
+  where: (spec: InferdProviderSpec) => string
 }> = {
   openai: {
     url: {
@@ -388,7 +388,7 @@ const RAIL: Record<SpaceState, string> = {
   unset: 'bg-muted-foreground/30',
 }
 
-export function EmbeddConfigEditor({
+export function InferdConfigEditor({
   value,
   effective,
   inherited,
@@ -401,9 +401,9 @@ export function EmbeddConfigEditor({
   saveLabel = 'Save',
   onSave,
 }: {
-  value: EmbeddConfig
-  effective: EmbeddConfig
-  inherited: EmbeddConfig
+  value: InferdConfig
+  effective: InferdConfig
+  inherited: InferdConfig
   /** Workspace layer only: which vector table each space is currently bound to. */
   resolvedSpaces?: Record<string, ResolvedSpace>
   /** Server-reported reason the stored config stopped resolving. */
@@ -415,10 +415,10 @@ export function EmbeddConfigEditor({
   saving?: boolean
   disabled?: boolean
   saveLabel?: string
-  onSave: (config: EmbeddConfig) => Promise<void> | void
+  onSave: (config: InferdConfig) => Promise<void> | void
 }) {
   const { showToast } = useToast()
-  const [draft, setDraft] = useState<EmbeddConfig>(() => structuredClone(value))
+  const [draft, setDraft] = useState<InferdConfig>(() => structuredClone(value))
   // Provider ids whose API key was actually typed into. Only these send the
   // field; every other provider omits it so the stored secret survives.
   const [touchedKeys, setTouchedKeys] = useState<Set<string>>(new Set())
@@ -450,10 +450,10 @@ export function EmbeddConfigEditor({
     return [...ids].sort()
   }, [effective.providers, draft.providers])
 
-  const setSpaceField = (space: string, key: keyof EmbeddSpaceSpec, raw: string) => {
+  const setSpaceField = (space: string, key: keyof InferdSpaceSpec, raw: string) => {
     setDraft(prev => {
       const spaces = { ...(prev.spaces || {}) }
-      const current: EmbeddSpaceSpec = { ...(spaces[space] || {}) }
+      const current: InferdSpaceSpec = { ...(spaces[space] || {}) }
       if (raw === '') {
         delete current[key]
       } else if (key === 'dim' || key === 'maxLength' || key === 'dimensions') {
@@ -472,7 +472,7 @@ export function EmbeddConfigEditor({
   const setSpaceFlag = (space: string, key: 'chunk' | 'annIndex', next: boolean | undefined) => {
     setDraft(prev => {
       const spaces = { ...(prev.spaces || {}) }
-      const current: EmbeddSpaceSpec = { ...(spaces[space] || {}) }
+      const current: InferdSpaceSpec = { ...(spaces[space] || {}) }
       if (next === undefined) { delete current[key] } else { current[key] = next }
       if (Object.keys(current).length === 0) { delete spaces[space] } else { spaces[space] = current }
       return { ...prev, spaces }
@@ -493,7 +493,7 @@ export function EmbeddConfigEditor({
     }
     setDraft(prev => {
       const providers = { ...(prev.providers || {}) }
-      const current: EmbeddProviderSpec = { ...(providers[id] || {}) }
+      const current: InferdProviderSpec = { ...(providers[id] || {}) }
       if (raw === '') {
         delete current[key]
       } else if (key === 'timeoutMs') {
@@ -513,7 +513,7 @@ export function EmbeddConfigEditor({
   const setProviderValue = (id: string, key: string, value: unknown) => {
     setDraft(prev => {
       const providers = { ...(prev.providers || {}) }
-      const current: EmbeddProviderSpec = { ...(providers[id] || {}) }
+      const current: InferdProviderSpec = { ...(providers[id] || {}) }
       if (value === undefined) { delete current[key] } else { current[key] = value }
       if (Object.keys(current).length === 0) { delete providers[id] } else { providers[id] = current }
       return { ...prev, providers }
@@ -563,7 +563,7 @@ export function EmbeddConfigEditor({
    * over what currently runs, so testing an edit exercises the edited values
    * without needing them saved first.
    */
-  const resolveProvider = (id: string): EmbeddProviderSpec => ({
+  const resolveProvider = (id: string): InferdProviderSpec => ({
     ...(effective.providers?.[id] || {}),
     ...(draft.providers?.[id] || {}),
   })
@@ -588,7 +588,7 @@ export function EmbeddConfigEditor({
       // really a weights download (minutes for CLIP) — say so instead of
       // sitting on an indistinct "Testing…".
       try {
-        const cached = await probeEmbeddModelCache(spec, model)
+        const cached = await probeInferdModelCache(spec, model)
         if (cached === false) {
           setDownloading(true)
           showToast({
@@ -599,7 +599,7 @@ export function EmbeddConfigEditor({
       } catch {
         // Probe is best-effort — an older server without it just tests directly.
       }
-      const result = await testEmbeddBackend(spec, model, space)
+      const result = await testInferdBackend(spec, model, space)
       const configuredDim = draft.spaces?.[space]?.dim ?? effective.spaces?.[space]?.dim
       // A dim mismatch is the most likely misconfiguration, and it fails at
       // write time rather than here. The backend just told us the real value,
@@ -939,7 +939,7 @@ export function EmbeddConfigEditor({
                           onChange={e => setProviderField(id, 'type', e.target.value)}
                         >
                           <option value="">{running.type ? `inherited — ${running.type}` : 'inherited'}</option>
-                          {EMBEDD_PROVIDER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                          {INFERD_PROVIDER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
                         {shape?.note && <p className="text-[11px] text-muted-foreground">{shape.note}</p>}
                       </div>
@@ -1123,4 +1123,4 @@ export function EmbeddConfigEditor({
   )
 }
 
-export default EmbeddConfigEditor
+export default InferdConfigEditor

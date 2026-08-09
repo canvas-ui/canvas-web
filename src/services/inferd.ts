@@ -6,10 +6,10 @@ import { API_ROUTES } from '@/config/api'
  *
  * Config resolves in layers, lowest precedence first:
  *
- *   built-in  ←  server embedd.json  ←  user default  ←  WORKSPACE (wins)
+ *   built-in  ←  server inferd.json  ←  user default  ←  WORKSPACE (wins)
  *
  * The workspace layer lives in that workspace's own `workspace.json`
- * (`services.embedd`), so it travels with a tar'd workspace rather than being
+ * (`services.inferd`), so it travels with a tar'd workspace rather than being
  * pinned to the server that happened to create it.
  *
  * Switching a model is non-destructive by construction: a new model embeds into
@@ -24,14 +24,14 @@ import { API_ROUTES } from '@/config/api'
  */
 
 /** Provider implementations the server knows how to build. */
-export const EMBEDD_PROVIDER_TYPES = ['onnx', 'ollama', 'clip', 'openai'] as const
-export type EmbeddProviderType = (typeof EMBEDD_PROVIDER_TYPES)[number]
+export const INFERD_PROVIDER_TYPES = ['onnx', 'ollama', 'clip', 'openai'] as const
+export type InferdProviderType = (typeof INFERD_PROVIDER_TYPES)[number]
 
 /** Provider ids that exist without being declared, and can only be merged over. */
 export const BUILTIN_PROVIDER_IDS = ['onnx', 'ollama', 'clip'] as const
 
-export interface EmbeddProviderSpec {
-  type?: EmbeddProviderType
+export interface InferdProviderSpec {
+  type?: InferdProviderType
   /** OpenAI-compatible endpoint (`openai` type). Fetched BY THE SERVER. */
   baseUrl?: string
   /** Ollama host (`ollama` type). */
@@ -47,7 +47,7 @@ export interface EmbeddProviderSpec {
 }
 
 /** Which provider+model fills one modality. `dim` sizes the Lance table. */
-export interface EmbeddSpaceSpec {
+export interface InferdSpaceSpec {
   provider?: string
   model?: string
   dim?: number
@@ -57,18 +57,31 @@ export interface EmbeddSpaceSpec {
   annIndex?: boolean
 }
 
-export interface EmbeddRule {
+export interface InferdRule {
   space: string
   match?: Record<string, unknown>
 }
 
-export interface EmbeddConfig {
-  providers?: Record<string, EmbeddProviderSpec>
-  spaces?: Record<string, EmbeddSpaceSpec>
+export interface InferdConfig {
+  providers?: Record<string, InferdProviderSpec>
+  spaces?: Record<string, InferdSpaceSpec>
   /** Routing. Structural — a layer that declares rules replaces them wholesale. */
-  rules?: EmbeddRule[]
+  rules?: InferdRule[]
+  /**
+   * Per-modality summary generation (the "describe" capability): captions for
+   * images first, audio/text later. Validated + persisted server-side; the
+   * captioner loop that consumes it ships with the qwen-vl provider work.
+   * Merges key-wise per modality across config layers.
+   */
+  summarize?: Record<string, InferdSummarizeSpec>
   /** Server defaults only: host allowlist for the SSRF endpoint guard. */
   allowHosts?: string[]
+}
+
+export interface InferdSummarizeSpec {
+  enabled?: boolean
+  provider?: string
+  model?: string
 }
 
 /** A space as actually resolved, including the Lance table it is bound to. */
@@ -81,21 +94,21 @@ export interface ResolvedSpace {
   annIndex?: boolean
 }
 
-export interface WorkspaceEmbeddConfig {
+export interface WorkspaceInferdConfig {
   /** This workspace's own overrides — what round-trips back on a PUT. */
-  workspace: EmbeddConfig
+  workspace: InferdConfig
   /** What it actually embeds with once the layers resolve. */
-  effective: EmbeddConfig
+  effective: InferdConfig
   /** What it falls back to, so fields can be marked inherited. */
-  inherited: EmbeddConfig
+  inherited: InferdConfig
   spaces: Record<string, ResolvedSpace>
   /** Set when the stored config no longer resolves and defaults stand in. */
   invalid?: string
 }
 
-export interface WorkspaceEmbeddSaveResult {
-  workspace: EmbeddConfig
-  effective: EmbeddConfig
+export interface WorkspaceInferdSaveResult {
+  workspace: InferdConfig
+  effective: InferdConfig
   spaces: Record<string, ResolvedSpace>
   /** Spaces whose model/dim changed — their new table is EMPTY until refilled. */
   movedSpaces: string[]
@@ -105,7 +118,7 @@ export interface WorkspaceEmbeddSaveResult {
   applied: boolean
 }
 
-export interface EmbeddReindexResult {
+export interface InferdReindexResult {
   enqueued: number
   spaces: Record<string, number>
   scope?: string
@@ -128,30 +141,30 @@ export interface VectorTableList {
   error?: string
 }
 
-export interface UserEmbeddConfig {
-  effective: EmbeddConfig
+export interface UserInferdConfig {
+  effective: InferdConfig
   /** Just this user's overrides. */
-  user: EmbeddConfig
-  serverDefaults: EmbeddConfig
+  user: InferdConfig
+  serverDefaults: InferdConfig
   invalid?: string
 }
 
-export interface UserEmbeddSaveResult {
-  user: EmbeddConfig
-  effective: EmbeddConfig
+export interface UserInferdSaveResult {
+  user: InferdConfig
+  effective: InferdConfig
   /** Workspaces sitting on this layer. */
   workspaces: string[]
   /** Space configs latch at workspace start, so running ones keep their tables. */
   restartRequired: boolean
 }
 
-export interface ServerEmbeddDefaults {
-  serverDefaults: EmbeddConfig
+export interface ServerInferdDefaults {
+  serverDefaults: InferdConfig
   configPath: string
   allowHosts: string[]
 }
 
-export interface EmbeddTestResult {
+export interface InferdTestResult {
   ok: boolean
   /** Round-tripped from a real embedding call — compare against the configured dim. */
   dim: number
@@ -159,8 +172,8 @@ export interface EmbeddTestResult {
   modality: string
 }
 
-const workspaceEmbedd = (workspaceId: string) =>
-  `${API_ROUTES.workspaces}/${encodeURIComponent(workspaceId)}/embedd`
+const workspaceInferd = (workspaceId: string) =>
+  `${API_ROUTES.workspaces}/${encodeURIComponent(workspaceId)}/inferd`
 
 /**
  * Drop `apiKey` for every provider whose key the form did not touch.
@@ -169,10 +182,10 @@ const workspaceEmbedd = (workspaceId: string) =>
  * an empty string means "blank it". A form that always sends the field would
  * silently destroy a secret it was never allowed to read.
  */
-export function stripUnsetKeys(config: EmbeddConfig, touched: Set<string>): EmbeddConfig {
-  const providers: Record<string, EmbeddProviderSpec> = {}
+export function stripUnsetKeys(config: InferdConfig, touched: Set<string>): InferdConfig {
+  const providers: Record<string, InferdProviderSpec> = {}
   for (const [id, spec] of Object.entries(config.providers || {})) {
-    const clean: EmbeddProviderSpec = { ...spec }
+    const clean: InferdProviderSpec = { ...spec }
     // apiKeySet/headerNames are GET-only echoes; never send them back.
     delete clean.apiKeySet
     delete clean.headerNames
@@ -187,7 +200,7 @@ export function stripUnsetKeys(config: EmbeddConfig, touched: Set<string>): Embe
 // ── Workspace layer (the primary surface) ───────────────────────────────────
 
 /** Live queue state for one workspace — pending/draining/paused. */
-export interface WorkspaceEmbeddQueue {
+export interface WorkspaceInferdQueue {
   pending: number
   draining: boolean
   paused?: boolean
@@ -195,13 +208,13 @@ export interface WorkspaceEmbeddQueue {
 }
 
 /** Cheap in-memory readout; null when the workspace has no queue yet. */
-export async function getWorkspaceEmbeddStatus(workspaceId: string): Promise<WorkspaceEmbeddQueue | null> {
-  const res = await api.get<{ payload: { queue: WorkspaceEmbeddQueue | null } }>(`${workspaceEmbedd(workspaceId)}/status`)
+export async function getWorkspaceInferdStatus(workspaceId: string): Promise<WorkspaceInferdQueue | null> {
+  const res = await api.get<{ payload: { queue: WorkspaceInferdQueue | null } }>(`${workspaceInferd(workspaceId)}/status`)
   return res.payload.queue ?? null
 }
 
-export async function getWorkspaceEmbeddConfig(workspaceId: string): Promise<WorkspaceEmbeddConfig> {
-  const res = await api.get<{ payload: WorkspaceEmbeddConfig }>(`${workspaceEmbedd(workspaceId)}/config`)
+export async function getWorkspaceInferdConfig(workspaceId: string): Promise<WorkspaceInferdConfig> {
+  const res = await api.get<{ payload: WorkspaceInferdConfig }>(`${workspaceInferd(workspaceId)}/config`)
   return res.payload
 }
 
@@ -211,11 +224,11 @@ export async function getWorkspaceEmbeddConfig(workspaceId: string): Promise<Wor
  * non-empty list means those spaces now point at an empty table and dense
  * search is thin until `reindexWorkspaceEmbeddings` refills them.
  */
-export async function saveWorkspaceEmbeddConfig(
+export async function saveWorkspaceInferdConfig(
   workspaceId: string,
-  config: EmbeddConfig,
-): Promise<WorkspaceEmbeddSaveResult> {
-  const res = await api.put<{ payload: WorkspaceEmbeddSaveResult }>(`${workspaceEmbedd(workspaceId)}/config`, config)
+  config: InferdConfig,
+): Promise<WorkspaceInferdSaveResult> {
+  const res = await api.put<{ payload: WorkspaceInferdSaveResult }>(`${workspaceInferd(workspaceId)}/config`, config)
   return res.payload
 }
 
@@ -231,18 +244,18 @@ export async function saveWorkspaceEmbeddConfig(
 export async function reindexWorkspaceEmbeddings(
   workspaceId: string,
   options: { space?: string; reindex?: boolean; scope?: string } = {},
-): Promise<EmbeddReindexResult> {
+): Promise<InferdReindexResult> {
   const body: Record<string, unknown> = {}
   // The route declares additionalProperties:false, so only send what is set.
   if (options.space) { body.space = options.space }
   if (options.reindex !== undefined) { body.reindex = options.reindex }
   if (options.scope) { body.scope = options.scope }
-  const res = await api.post<{ payload: EmbeddReindexResult }>(`${workspaceEmbedd(workspaceId)}/reindex`, body)
+  const res = await api.post<{ payload: InferdReindexResult }>(`${workspaceInferd(workspaceId)}/reindex`, body)
   return res.payload
 }
 
 export async function listWorkspaceVectorTables(workspaceId: string): Promise<VectorTableList> {
-  const res = await api.get<{ payload: VectorTableList }>(`${workspaceEmbedd(workspaceId)}/vector-tables`)
+  const res = await api.get<{ payload: VectorTableList }>(`${workspaceInferd(workspaceId)}/vector-tables`)
   return res.payload
 }
 
@@ -254,37 +267,37 @@ export async function dropWorkspaceVectorTable(
   table: string,
 ): Promise<{ dropped: boolean; name?: string; error?: string }> {
   const res = await api.delete<{ payload: { dropped: boolean; name?: string; error?: string } }>(
-    `${workspaceEmbedd(workspaceId)}/vector-tables/${encodeURIComponent(table)}`,
+    `${workspaceInferd(workspaceId)}/vector-tables/${encodeURIComponent(table)}`,
   )
   return res.payload
 }
 
 // ── User layer (defaults new workspaces inherit) ────────────────────────────
 
-export async function getUserEmbeddConfig(): Promise<UserEmbeddConfig> {
-  const res = await api.get<{ payload: UserEmbeddConfig }>(`${API_ROUTES.embedd}/config`)
+export async function getUserInferdConfig(): Promise<UserInferdConfig> {
+  const res = await api.get<{ payload: UserInferdConfig }>(`${API_ROUTES.inferd}/config`)
   return res.payload
 }
 
-export async function saveUserEmbeddConfig(config: EmbeddConfig): Promise<UserEmbeddSaveResult> {
-  const res = await api.put<{ payload: UserEmbeddSaveResult }>(`${API_ROUTES.embedd}/config`, config)
+export async function saveUserInferdConfig(config: InferdConfig): Promise<UserInferdSaveResult> {
+  const res = await api.put<{ payload: UserInferdSaveResult }>(`${API_ROUTES.inferd}/config`, config)
   return res.payload
 }
 
 // ── Server layer (admin) ────────────────────────────────────────────────────
 
 /** Readable by any authenticated user — the UI shows what you inherit. */
-export async function getServerEmbeddDefaults(): Promise<ServerEmbeddDefaults> {
-  const res = await api.get<{ payload: ServerEmbeddDefaults }>(`${API_ROUTES.embedd}/defaults`)
+export async function getServerInferdDefaults(): Promise<ServerInferdDefaults> {
+  const res = await api.get<{ payload: ServerInferdDefaults }>(`${API_ROUTES.inferd}/defaults`)
   return res.payload
 }
 
 /** Admin-only; a non-admin gets 403. */
-export async function saveServerEmbeddDefaults(
-  config: EmbeddConfig,
-): Promise<{ serverDefaults: EmbeddConfig; configPath: string; restartRequired: boolean }> {
-  const res = await api.put<{ payload: { serverDefaults: EmbeddConfig; configPath: string; restartRequired: boolean } }>(
-    `${API_ROUTES.embedd}/defaults`,
+export async function saveServerInferdDefaults(
+  config: InferdConfig,
+): Promise<{ serverDefaults: InferdConfig; configPath: string; restartRequired: boolean }> {
+  const res = await api.put<{ payload: { serverDefaults: InferdConfig; configPath: string; restartRequired: boolean } }>(
+    `${API_ROUTES.inferd}/defaults`,
     config,
   )
   return res.payload
@@ -305,14 +318,14 @@ export async function saveServerEmbeddDefaults(
  * (remote providers download nothing; local ones without a cache dir).
  * Pure filesystem check server-side: no model load, no outbound request.
  */
-export async function probeEmbeddModelCache(
-  provider: EmbeddProviderSpec,
+export async function probeInferdModelCache(
+  provider: InferdProviderSpec,
   model?: string,
 ): Promise<boolean | null> {
-  const spec: EmbeddProviderSpec = { ...provider }
+  const spec: InferdProviderSpec = { ...provider }
   delete spec.apiKeySet
   delete spec.headerNames
-  const res = await api.post<{ payload: { cached: boolean | null } }>(`${API_ROUTES.embedd}/test`, {
+  const res = await api.post<{ payload: { cached: boolean | null } }>(`${API_ROUTES.inferd}/test`, {
     provider: spec,
     ...(model ? { model } : {}),
     probe: true,
@@ -320,15 +333,15 @@ export async function probeEmbeddModelCache(
   return res.payload.cached ?? null
 }
 
-export async function testEmbeddBackend(
-  provider: EmbeddProviderSpec,
+export async function testInferdBackend(
+  provider: InferdProviderSpec,
   model?: string,
   modality = 'text',
-): Promise<EmbeddTestResult> {
-  const spec: EmbeddProviderSpec = { ...provider }
+): Promise<InferdTestResult> {
+  const spec: InferdProviderSpec = { ...provider }
   delete spec.apiKeySet
   delete spec.headerNames
-  const res = await api.post<{ payload: EmbeddTestResult }>(`${API_ROUTES.embedd}/test`, {
+  const res = await api.post<{ payload: InferdTestResult }>(`${API_ROUTES.inferd}/test`, {
     provider: spec,
     ...(model ? { model } : {}),
     modality,

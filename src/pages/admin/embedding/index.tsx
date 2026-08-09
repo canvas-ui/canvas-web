@@ -4,14 +4,14 @@ import { RefreshCw, ShieldAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast-container'
-import { EmbeddConfigEditor } from '@/components/workspace/embedd-config-editor'
+import { InferdConfigEditor } from '@/components/workspace/inferd-config-editor'
 import { getCurrentUserFromToken } from '@/services/auth'
 import {
-  getServerEmbeddDefaults,
-  saveServerEmbeddDefaults,
-  type EmbeddConfig,
-  type ServerEmbeddDefaults,
-} from '@/services/embedd'
+  getServerInferdDefaults,
+  saveServerInferdDefaults,
+  type InferdConfig,
+  type ServerInferdDefaults,
+} from '@/services/inferd'
 
 /**
  * Server-wide embedding defaults — the bottom configurable layer, which every
@@ -25,7 +25,7 @@ import {
  */
 export default function AdminEmbeddingPage() {
   const { showToast } = useToast()
-  const [defaults, setDefaults] = useState<ServerEmbeddDefaults | null>(null)
+  const [defaults, setDefaults] = useState<ServerInferdDefaults | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -36,7 +36,7 @@ export default function AdminEmbeddingPage() {
   // State is only touched from the async callbacks, never synchronously — the
   // mount effect below would otherwise trigger a cascading render.
   const load = useCallback(() => (
-    getServerEmbeddDefaults()
+    getServerInferdDefaults()
       .then(result => {
         setDefaults(result)
         setAllowHosts((result.allowHosts || []).join(', '))
@@ -50,11 +50,11 @@ export default function AdminEmbeddingPage() {
 
   const refresh = () => { setLoading(true); void load() }
 
-  const save = async (next: EmbeddConfig) => {
+  const save = async (next: InferdConfig) => {
     setSaving(true)
     try {
       const hosts = allowHosts.split(',').map(h => h.trim()).filter(Boolean)
-      const result = await saveServerEmbeddDefaults({ ...next, ...(hosts.length ? { allowHosts: hosts } : {}) })
+      const result = await saveServerInferdDefaults({ ...next, ...(hosts.length ? { allowHosts: hosts } : {}) })
       showToast({
         title: 'Server defaults saved',
         description: `Written to ${result.configPath}. Every user inherits these, so running workspaces keep their current tables until restarted.`,
@@ -126,7 +126,7 @@ export default function AdminEmbeddingPage() {
             />
           </section>
 
-          <EmbeddConfigEditor
+          <InferdConfigEditor
             key={JSON.stringify(defaults.serverDefaults)}
             value={defaults.serverDefaults || {}}
             // Nothing resolves below this layer over the API, so what is stored

@@ -6,20 +6,20 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/ui/toast-container'
 import { LinkToCard } from '@/components/menu/shared/LinkToCard'
-import { EmbeddConfigEditor } from './embedd-config-editor'
+import { InferdConfigEditor } from './inferd-config-editor'
 import {
   dropWorkspaceVectorTable,
-  getWorkspaceEmbeddConfig,
-  getWorkspaceEmbeddStatus,
+  getWorkspaceInferdConfig,
+  getWorkspaceInferdStatus,
   listWorkspaceVectorTables,
   reindexWorkspaceEmbeddings,
-  saveWorkspaceEmbeddConfig,
-  type EmbeddConfig,
+  saveWorkspaceInferdConfig,
+  type InferdConfig,
   type VectorTable,
-  type WorkspaceEmbeddConfig,
-  type WorkspaceEmbeddQueue,
-} from '@/services/embedd'
-import { setEmbeddPaused } from '@/services/workspace'
+  type WorkspaceInferdConfig,
+  type WorkspaceInferdQueue,
+} from '@/services/inferd'
+import { setInferdPaused } from '@/services/workspace'
 
 /**
  * Workspace → Settings → Database → Embeddings.
@@ -87,11 +87,11 @@ function PipelineStatus({
   onRefresh: () => void
 }) {
   const { showToast } = useToast()
-  const [queue, setQueue] = useState<WorkspaceEmbeddQueue | null>(null)
+  const [queue, setQueue] = useState<WorkspaceInferdQueue | null>(null)
   const [busy, setBusy] = useState(false)
 
   const poll = useCallback(() => (
-    getWorkspaceEmbeddStatus(workspaceId).then(setQueue).catch(() => { /* transient — keep the last readout */ })
+    getWorkspaceInferdStatus(workspaceId).then(setQueue).catch(() => { /* transient — keep the last readout */ })
   ), [workspaceId])
 
   useEffect(() => {
@@ -109,7 +109,7 @@ function PipelineStatus({
     if (!queue) { return }
     setBusy(true)
     try {
-      const res = await setEmbeddPaused(!queue.paused, workspaceName)
+      const res = await setInferdPaused(!queue.paused, workspaceName)
       showToast({
         title: res.paused ? 'Embedding paused' : 'Embedding resumed',
         description: res.paused
@@ -385,7 +385,119 @@ function AdvancedFill({
   )
 }
 
-export function EmbeddSettingsPanel({
+/**
+ * Summary generation (the inferd "describe" capability): per-modality
+ * provider/model picks that write the validated `summarize` config block.
+ * Generated summaries land in `metadata.summary` — auto-folded into FTS and
+ * embedded as their own text-space chunk, so a captioned photo is searchable
+ * by its description. Image ships first (qwen-vl); audio/text are declared in
+ * the config shape but not yet consumed.
+ */
+function SummarizeControls({
+  config,
+  saving,
+  onSave,
+}: {
+  config: WorkspaceInferdConfig
+  saving: boolean
+  onSave: (next: InferdConfig) => Promise<void>
+}) {
+  const workspace = config.workspace || {}
+  const effective = config.effective || {}
+  const providerIds = Object.keys(effective.providers || {})
+  const [draft, setDraft] = useState<Record<string, { enabled: boolean; provider: string; model: string }>>(() => {
+    const src = { ...(effective.summarize || {}), ...(workspace.summarize || {}) }
+    const init: Record<string, { enabled: boolean; provider: string; model: string }> = {}
+    for (const modality of ['image', 'audio', 'text']) {
+      const spec = src[modality] || {}
+      init[modality] = { enabled: spec.enabled === true, provider: spec.provider || '', model: spec.model || '' }
+    }
+    return init
+  })
+  const [dirty, setDirty] = useState(false)
+
+  const setField = (modality: string, patch: Partial<{ enabled: boolean; provider: string; model: string }>) => {
+    setDraft(d => ({ ...d, [modality]: { ...d[modality], ...patch } }))
+    setDirty(true)
+  }
+
+  const save = async () => {
+    const summarize: NonNullable<InferdConfig['summarize']> = {}
+    for (const [modality, spec] of Object.entries(draft)) {
+      if (!spec.enabled && !spec.provider && !spec.model) continue
+      summarize[modality] = {
+        enabled: spec.enabled,
+        ...(spec.provider ? { provider: spec.provider } : {}),
+        ...(spec.model ? { model: spec.model } : {}),
+      }
+    }
+    await onSave({ ...workspace, summarize })
+    setDirty(false)
+  }
+
+  const MODALITIES: Array<{ key: string; label: string; ready: boolean; hint: string }> = [
+    { key: 'image', label: 'Images', ready: true, hint: 'Vision model captions each photo (e.g. qwen-vl via an ollama provider).' },
+    { key: 'audio', label: 'Audio', ready: false, hint: 'Planned — transcription/description of audio blobs.' },
+    { key: 'text', label: 'Text', ready: false, hint: 'Planned — abstracts for long documents.' },
+  ]
+
+  return (
+    <Fold
+      title="Summaries"
+      hint="Generate descriptions for indexed media (metadata.summary) — searchable via full-text and dense search"
+    >
+      <div className="space-y-3">
+        {MODALITIES.map(({ key, label, ready, hint }) => {
+          const spec = draft[key]
+          const disabled = !ready || saving
+          return (
+            <div key={key} className={cn('flex flex-wrap items-center gap-2', !ready && 'opacity-50')}>
+              <label className="flex w-28 items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={spec.enabled}
+                  disabled={disabled}
+                  onChange={e => setField(key, { enabled: e.target.checked })}
+                />
+                {label}
+              </label>
+              <select
+                className={selectClass}
+                value={spec.provider}
+                disabled={disabled}
+                onChange={e => setField(key, { provider: e.target.value })}
+              >
+                <option value="">provider…</option>
+                {providerIds.map(id => (
+                  <option key={id} value={id}>{id}</option>
+                ))}
+              </select>
+              <Input
+                className="h-8 w-48"
+                placeholder="model (e.g. qwen2.5vl)"
+                value={spec.model}
+                disabled={disabled}
+                onChange={e => setField(key, { model: e.target.value })}
+              />
+              <span className="text-xs text-muted-foreground">{hint}</span>
+            </div>
+          )
+        })}
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-muted-foreground">
+            Summaries are machine-generated and kept separate from your comments; enabling a modality needs a
+            provider and model. Generation starts once the capability ships — the config is honored end-to-end.
+          </p>
+          <Button size="sm" onClick={() => void save()} disabled={saving || !dirty}>
+            Save summaries
+          </Button>
+        </div>
+      </div>
+    </Fold>
+  )
+}
+
+export function InferdSettingsPanel({
   workspaceId,
   workspaceName,
 }: {
@@ -393,7 +505,7 @@ export function EmbeddSettingsPanel({
   workspaceName: string
 }) {
   const { showToast } = useToast()
-  const [config, setConfig] = useState<WorkspaceEmbeddConfig | null>(null)
+  const [config, setConfig] = useState<WorkspaceInferdConfig | null>(null)
   const [tables, setTables] = useState<VectorTable[]>([])
   const [tablesError, setTablesError] = useState<string | undefined>()
   const [loading, setLoading] = useState(true)
@@ -407,7 +519,7 @@ export function EmbeddSettingsPanel({
   // Both loaders touch state only from their async callbacks, never
   // synchronously — the mount effect below would otherwise cascade renders.
   const load = useCallback(() => (
-    getWorkspaceEmbeddConfig(workspaceId)
+    getWorkspaceInferdConfig(workspaceId)
       .then(cfg => { setConfig(cfg); setLoadError(null) })
       .catch(err => setLoadError(err instanceof Error ? err.message : 'Failed to load the embedding config'))
       .finally(() => setLoading(false))
@@ -423,10 +535,10 @@ export function EmbeddSettingsPanel({
 
   const refresh = () => { setLoading(true); void load(); void loadTables(); setQueueRefresh(n => n + 1) }
 
-  const save = async (next: EmbeddConfig) => {
+  const save = async (next: InferdConfig) => {
     setSaving(true)
     try {
-      const result = await saveWorkspaceEmbeddConfig(workspaceId, next)
+      const result = await saveWorkspaceInferdConfig(workspaceId, next)
       setMovedSpaces(result.movedSpaces || [])
       if (result.movedSpaces?.length) {
         showToast({
@@ -508,7 +620,7 @@ export function EmbeddSettingsPanel({
         onRefresh={refresh}
       />
 
-      <EmbeddConfigEditor
+      <InferdConfigEditor
         // Remount on reload so the draft restarts from freshly-saved server state
         // instead of holding stale overrides.
         key={JSON.stringify(config.workspace)}
@@ -525,6 +637,14 @@ export function EmbeddSettingsPanel({
       />
 
       <div className="space-y-3">
+        <SummarizeControls
+          // Remount on config reload so the draft resets from saved state.
+          key={`summarize:${JSON.stringify(config.workspace?.summarize || {})}`}
+          config={config}
+          saving={saving}
+          onSave={save}
+        />
+
         <AdvancedFill
           workspaceId={workspaceId}
           workspaceName={workspaceName}
@@ -549,4 +669,4 @@ export function EmbeddSettingsPanel({
   )
 }
 
-export default EmbeddSettingsPanel
+export default InferdSettingsPanel
