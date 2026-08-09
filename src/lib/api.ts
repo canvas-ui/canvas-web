@@ -1,5 +1,15 @@
+import { CanvasApiClient, CanvasError, isNetworkError } from '@augmentd-labs/canvas-api-client'
+import { isWorkspaceNotActive } from '@augmentd-labs/canvas-protocol'
 import { API_URL } from '@/config/api'
 import { handleApiError } from './error-handler'
+
+// JSON transport comes from the shared workspace client in envelope mode
+// (unwrap: false): api.get/post/... keep returning whole envelopes because
+// the service layer still reads .status/.payload itself (~164 sites; they
+// migrate to unwrapped semantics service-by-service). Web-only policy stays
+// here: the redirect guard, token-format gate, 401 → /login, and the
+// workspace autostart-and-replay. stream() keeps a raw fetch path — it needs
+// the untouched Response body.
 
 // Keep track of redirects to prevent loops
 let isRedirecting = false;
@@ -39,8 +49,7 @@ function redirectToLogin(clearToken: boolean): void {
 
 // Get the authorization token from localStorage
 function getAuthToken(): string | null {
-  const token = localStorage.getItem('authToken');
-  return token;
+  return localStorage.getItem('authToken');
 }
 
 // Validate that a token is either a valid JWT or API token
@@ -56,6 +65,76 @@ function isValidTokenFormat(token: string): boolean {
   const jwtRegex = /^[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*$/;
   return jwtRegex.test(token);
 }
+
+// Auth gate shared by the JSON and stream paths. Throws (and optionally
+// redirects) exactly like the historical fetchWithDefaults preamble.
+function ensureAuthReady(skipAuth: boolean, noAuthRedirect: boolean): void {
+  if (isRedirecting && !skipAuth && !noAuthRedirect) {
+    throw new Error('Authentication required');
+  }
+  if (skipAuth) return;
+
+  const authToken = getAuthToken();
+  if (!authToken) {
+    console.warn('Attempting authenticated request without token');
+    if (!noAuthRedirect) redirectToLogin(false);
+    throw new Error('Authentication required');
+  }
+  if (!isValidTokenFormat(authToken)) {
+    console.warn('Invalid token format detected, clearing');
+    if (noAuthRedirect) {
+      throw new Error('Invalid authentication token format');
+    }
+    redirectToLogin(true);
+    throw new Error('Invalid authentication token format');
+  }
+}
+
+function handle401(noAuthRedirect: boolean): never {
+  if (!noAuthRedirect && !isRedirecting) {
+    console.error('Authentication failed, redirecting to login');
+    redirectToLogin(true);
+  }
+  throw new Error('Authentication required');
+}
+
+// --- Shared client ----------------------------------------------------------
+
+// API_ROUTES entries are absolute URLs under API_URL; the client joins
+// baseUrl + apiBase + path, so with apiBase '' the paths below are simply the
+// endpoint with the API_URL prefix stripped.
+function toClientPath(endpoint: string): string {
+  if (endpoint.startsWith(API_URL)) return endpoint.slice(API_URL.length);
+  if (endpoint.startsWith('http')) {
+    throw new Error(`api.* endpoints must live under API_URL (${API_URL}); got ${endpoint}`);
+  }
+  return endpoint;
+}
+
+const webFetch: typeof fetch = (input, init = {}) => {
+  console.log(`API Request: ${init.method || 'GET'} ${input}`);
+  // Always include credentials for cookie support (historical behavior).
+  return fetch(input, { ...init, credentials: 'include' }).then((response) => {
+    console.log(`API Response: ${input}`, { status: response.status, ok: response.ok });
+    return response;
+  });
+}
+
+function buildClient(authed: boolean): CanvasApiClient {
+  return new CanvasApiClient({
+    baseUrl: API_URL,
+    apiBase: '',
+    getToken: authed ? getAuthToken : () => null,
+    appName: getAppName(),
+    // The web app never had a client-side request timeout; keep it that way.
+    timeout: 0,
+    unwrap: false,
+    fetch: webFetch,
+  });
+}
+
+const authedClient = buildClient(true);
+const anonClient = buildClient(false);
 
 // --- Offline workspaces -----------------------------------------------------
 // Workspaces stay stopped until something actually reads from them. Any query
@@ -80,21 +159,12 @@ function workspaceRefForRequest(endpoint: string): string | null {
   return decodeURIComponent(match[1]);
 }
 
-// The server answers this with a 409 carrying code WORKSPACE_NOT_ACTIVE from
-// every route (see ResponseObject.workspaceNotActive). The message check is a
-// fallback for servers older than that normalization, which reported the same
-// condition as a 400, a 404 or a 500 depending on which route caught it.
-function isWorkspaceOfflineError(code: string | undefined, message: string): boolean {
-  return code === 'WORKSPACE_NOT_ACTIVE' || /workspace (is )?not active/i.test(message);
-}
-
 // Concurrent queries against the same sleeping workspace share one /start.
 function startWorkspaceForRequest(ref: string): Promise<void> {
   const pending = workspaceStarts.get(ref);
   if (pending) return pending;
 
-  const started = fetchWithDefaults(`${API_URL}/workspaces/${encodeURIComponent(ref)}/start`, {
-    method: 'POST',
+  const started = requestJson<void>('POST', `${API_URL}/workspaces/${encodeURIComponent(ref)}/start`, undefined, {
     skipWorkspaceAutostart: true,
   })
     .then(() => {
@@ -109,139 +179,57 @@ function startWorkspaceForRequest(ref: string): Promise<void> {
   return started;
 }
 
-async function fetchWithDefaults(endpoint: string, options: RequestOptions = {}): Promise<Response> {
-  const { skipAuth = false, noAuthRedirect = false, skipWorkspaceAutostart = false, headers = {}, body, ...rest } = options;
+async function requestJson<T>(
+  method: string,
+  endpoint: string,
+  data: unknown,
+  options: RequestOptions = {},
+): Promise<T> {
+  const { skipAuth = false, noAuthRedirect = false, skipWorkspaceAutostart = false, headers, signal, body } = options;
 
-  // Don't make requests if we're already redirecting. Opt-out callers are
-  // decoupled from the global redirect state and may still proceed.
-  if (isRedirecting && !skipAuth && !noAuthRedirect) {
-    throw new Error('Authentication required');
-  }
+  ensureAuthReady(skipAuth, noAuthRedirect);
 
-  // Get auth token if available and not explicitly skipped
-  const authToken = !skipAuth ? getAuthToken() : null;
-
-  // For authenticated requests, verify we have a valid token
-  if (!skipAuth && !authToken) {
-    console.warn('Attempting authenticated request without token');
-    if (!noAuthRedirect) redirectToLogin(false);
-    throw new Error('Authentication required');
-  }
-
-  // Validate token format for authenticated requests
-  if (!skipAuth && authToken && !isValidTokenFormat(authToken)) {
-    console.warn('Invalid token format detected, clearing');
-    if (noAuthRedirect) {
-      throw new Error('Invalid authentication token format');
-    }
-    redirectToLogin(true);
-    throw new Error('Invalid authentication token format');
-  }
-
-  // Merge default headers with provided headers
-  const defaultHeaders: HeadersInit = {
-    'X-App-Name': getAppName(),
-    ...(authToken && { 'Authorization': `Bearer ${authToken}` }),
-    ...headers,
-  };
-
-  let requestBody = body;
-
-  // If Content-Type is application/json and body is undefined, ensure body is at least null or an empty string for some servers.
-  // However, Fastify specifically complains about empty body with this content-type.
-  // The best approach is to ensure Content-Type is only set when a JSON body *exists*.
-
-  // Log request for debugging
-  // Enhanced logging for body to avoid printing large objects
-  let loggedBody: any = requestBody;
-  if (typeof requestBody === 'string' && requestBody.length > 200) {
-    loggedBody = requestBody.substring(0, 200) + '...[TRUNCATED]';
-  } else if (typeof requestBody === 'object' && requestBody !== null) {
-    loggedBody = '[OBJECT]'; // Avoid logging potentially large objects
-  }
-
-  console.log(`API Request: ${rest.method || 'GET'} ${endpoint}`, {
-    headers: { ...defaultHeaders, Authorization: authToken ? 'Bearer [REDACTED]' : undefined },
-    body: loggedBody
-  });
-
-  // Construct the full URL if a relative path is provided
-  const url = endpoint.startsWith('http') ? endpoint : `${API_URL}${endpoint}`;
-
+  const client = skipAuth ? anonClient : authedClient;
   try {
-    const response = await fetch(url, {
-      credentials: 'include', // Always include credentials for cookie support
-      headers: defaultHeaders,
-      body: requestBody,
-      ...rest,
+    const out = await client.request(method, toClientPath(endpoint), {
+      data: data !== undefined ? data : body ?? undefined,
+      headers: headers as Record<string, string> | undefined,
+      signal: signal ?? undefined,
     });
-
-    // Log response status for debugging
-    console.log(`API Response: ${endpoint}`, {
-      status: response.status,
-      ok: response.ok
-    });
-
-    if (!response.ok) {
-      // Handle 401 Unauthorized specifically
-      if (response.status === 401 && !skipAuth && !isRedirecting) {
-        // Opt-out callers reject without clearing the token or navigating away,
-        // so a caught optional fetch can't sign the user out or bounce them.
-        if (noAuthRedirect) {
-          throw new Error('Authentication required');
-        }
-
-        console.error('Authentication failed, redirecting to login');
-        redirectToLogin(true);
-        throw new Error('Authentication required');
+    // Reset redirecting flag on successful response
+    isRedirecting = false;
+    // 204 / empty bodies resolved to null in the client; callers expect undefined.
+    return (out === null ? undefined : out) as T;
+  } catch (error) {
+    if (error instanceof CanvasError) {
+      if (error.statusCode === 401 && !skipAuth) {
+        handle401(noAuthRedirect);
       }
-
-      // For other errors, try to get error message from response. Parsed
-      // before anything is thrown — a throw inside the parse try/catch would
-      // be swallowed by its own catch and re-reported as bare status text.
-      let errorData: { message?: string; error?: string; code?: string } | null = null;
-      try {
-        errorData = await response.json();
-        console.error('API Error response:', errorData);
-      } catch {
-        // Non-JSON error body; fall back to the status text below.
-      }
-
-      // Extract the most detailed error message available
-      const errorMessage = errorData?.message || errorData?.error || response.statusText || 'Request failed';
 
       // The workspace this query targets is asleep: start it and replay.
-      if (!skipWorkspaceAutostart && isWorkspaceOfflineError(errorData?.code, errorMessage)) {
+      // (The message fallback inside isWorkspaceNotActive covers servers
+      // older than the WORKSPACE_NOT_ACTIVE code normalization.)
+      if (!skipWorkspaceAutostart && isWorkspaceNotActive(error)) {
         const ref = workspaceRefForRequest(endpoint);
         if (ref) {
           const ok = await startWorkspaceForRequest(ref).then(() => true, () => false);
           if (ok) {
-            return fetchWithDefaults(endpoint, { ...options, skipWorkspaceAutostart: true });
+            return requestJson<T>(method, endpoint, data, { ...options, skipWorkspaceAutostart: true });
           }
         }
       }
 
-      const error = new Error(errorMessage);
-      handleApiError(error, `${rest.method || 'GET'} ${endpoint}`);
-      throw error;
+      if (isNetworkError(error) || /fetch failed|failed to fetch/i.test(error.message)) {
+        console.error(`API Error: CORS error or network failure for ${endpoint}`);
+        const networkError = new Error('Network error: The server might be unavailable or CORS might be misconfigured. Please check your connection and try again.');
+        handleApiError(networkError, `${method} ${endpoint}`);
+        throw networkError;
+      }
     }
 
-    // Reset redirecting flag on successful response
-    isRedirecting = false;
-    return response;
-  } catch (error) {
-    // Check if this is a CORS error
-    if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-      console.error(`API Error: CORS error or network failure for ${endpoint}`);
-      const networkError = new Error(`Network error: The server might be unavailable or CORS might be misconfigured. Please check your connection and try again.`);
-      handleApiError(networkError, `${rest.method || 'GET'} ${endpoint}`);
-      throw networkError;
-    }
-
-    // Log network errors
     console.error(`API Error: ${endpoint}`, error);
     if (error instanceof Error) {
-      handleApiError(error, `${rest.method || 'GET'} ${endpoint}`);
+      handleApiError(error, `${method} ${endpoint}`);
     }
     throw error;
   }
@@ -250,124 +238,23 @@ async function fetchWithDefaults(endpoint: string, options: RequestOptions = {})
 // Helper methods for common HTTP methods
 export const api = {
   async get<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-    const response = await fetchWithDefaults(endpoint, {
-      method: 'GET',
-      ...options,
-    });
-    if (response.status === 204 || response.headers.get('content-length') === '0') {
-        return Promise.resolve(undefined as T);
-    }
-    return response.json();
+    return requestJson<T>('GET', endpoint, undefined, options);
   },
 
   async post<T>(endpoint: string, data?: unknown, options: RequestOptions = {}): Promise<T> {
-    let bodyContent: RequestInit['body'];
-    const currentHeaders: Record<string, string> = { ...options.headers } as Record<string, string>;
-
-    if (data !== undefined) {
-      if (typeof data === 'object' && data !== null && !(data instanceof FormData) && !(data instanceof URLSearchParams) && !(data instanceof Blob)) {
-        bodyContent = JSON.stringify(data);
-        if (!currentHeaders['Content-Type']) {
-            currentHeaders['Content-Type'] = 'application/json';
-        }
-      } else {
-        bodyContent = data as BodyInit;
-      }
-    }
-
-    const response = await fetchWithDefaults(endpoint, {
-      method: 'POST',
-      ...options,
-      headers: currentHeaders,
-      body: bodyContent,
-    });
-
-    if (response.status === 204 || response.headers.get('content-length') === '0') {
-        return Promise.resolve(undefined as T);
-    }
-
-    // Parse the response
-    const jsonResponse = await response.json();
-
-    // Log the raw response for debugging
-    console.log('API response data:', jsonResponse);
-
-    return jsonResponse;
+    return requestJson<T>('POST', endpoint, data, options);
   },
 
   async put<T>(endpoint: string, data?: unknown, options: RequestOptions = {}): Promise<T> {
-    let bodyContent: RequestInit['body'];
-    const currentHeaders: Record<string, string> = { ...options.headers } as Record<string, string>;
-
-    if (data !== undefined) {
-      if (typeof data === 'object' && data !== null && !(data instanceof FormData) && !(data instanceof URLSearchParams) && !(data instanceof Blob)) {
-        bodyContent = JSON.stringify(data);
-        if (!currentHeaders['Content-Type']) {
-            currentHeaders['Content-Type'] = 'application/json';
-        }
-      } else {
-        bodyContent = data as BodyInit;
-      }
-    }
-
-    const response = await fetchWithDefaults(endpoint, {
-      method: 'PUT',
-      ...options,
-      headers: currentHeaders,
-      body: bodyContent,
-    });
-    if (response.status === 204 || response.headers.get('content-length') === '0') {
-        return Promise.resolve(undefined as T);
-    }
-    return response.json();
+    return requestJson<T>('PUT', endpoint, data, options);
   },
 
   async patch<T>(endpoint: string, data?: unknown, options: RequestOptions = {}): Promise<T> {
-    let bodyContent: RequestInit['body'];
-    const currentHeaders: Record<string, string> = { ...options.headers } as Record<string, string>;
-
-    if (data !== undefined) {
-      if (typeof data === 'object' && data !== null && !(data instanceof FormData) && !(data instanceof URLSearchParams) && !(data instanceof Blob)) {
-        bodyContent = JSON.stringify(data);
-        if (!currentHeaders['Content-Type']) {
-            currentHeaders['Content-Type'] = 'application/json';
-        }
-      } else {
-        bodyContent = data as BodyInit;
-      }
-    }
-
-    const response = await fetchWithDefaults(endpoint, {
-      method: 'PATCH',
-      ...options,
-      headers: currentHeaders,
-      body: bodyContent,
-    });
-    if (response.status === 204 || response.headers.get('content-length') === '0') {
-        return Promise.resolve(undefined as T);
-    }
-    return response.json();
+    return requestJson<T>('PATCH', endpoint, data, options);
   },
 
   async delete<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-    const currentHeaders: Record<string, string> = { ...options.headers } as Record<string, string>;
-
-    // If Content-Type was 'application/json' and there's no body,
-    // it's problematic. Remove it to prevent the server error.
-    // User can still explicitly set a Content-Type in options.headers if needed.
-    if (currentHeaders['Content-Type'] === 'application/json' && !options.body) {
-        delete currentHeaders['Content-Type'];
-    }
-
-    const response = await fetchWithDefaults(endpoint, {
-      method: 'DELETE',
-      ...options,
-      headers: currentHeaders,
-    });
-    if (response.status === 204 || response.headers.get('content-length') === '0') {
-        return Promise.resolve(undefined as T);
-    }
-    return response.json();
+    return requestJson<T>('DELETE', endpoint, undefined, options);
   },
 
   // Helper function to set auth token after login
@@ -402,7 +289,9 @@ export const api = {
     return !!token && isValidTokenFormat(token);
   },
 
-  // Streaming API method for real-time data
+  // Streaming API method for real-time data. Needs the raw Response body, so
+  // it stays on plain fetch — with the same auth gate, headers, credentials,
+  // 401 handling and workspace autostart as the JSON path.
   async stream(
     endpoint: string,
     data?: unknown,
@@ -412,34 +301,68 @@ export const api = {
       onError?: (error: Error) => void;
       onComplete?: () => void;
       signal?: AbortSignal;
+      // Internal: set on the replayed request after a workspace autostart.
+      skipWorkspaceAutostart?: boolean;
     } = {}
   ): Promise<void> {
-    const { onOpen, onChunk, onError, onComplete, signal } = options;
+    const { onOpen, onChunk, onError, onComplete, signal, skipWorkspaceAutostart = false } = options;
 
     try {
+      ensureAuthReady(false, false);
+      const authToken = getAuthToken();
+
       let bodyContent: RequestInit['body'];
-      const currentHeaders: Record<string, string> = {};
+      const headers: Record<string, string> = {
+        'X-App-Name': getAppName(),
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      };
 
       if (data !== undefined) {
         if (typeof data === 'object' && data !== null && !(data instanceof FormData) && !(data instanceof URLSearchParams) && !(data instanceof Blob)) {
           bodyContent = JSON.stringify(data);
-          currentHeaders['Content-Type'] = 'application/json';
+          headers['Content-Type'] = 'application/json';
         } else {
           bodyContent = data as BodyInit;
         }
       }
 
-      const response = await fetchWithDefaults(endpoint, {
+      const url = endpoint.startsWith('http') ? endpoint : `${API_URL}${endpoint}`;
+      const response = await fetch(url, {
         method: 'POST',
-        headers: currentHeaders,
+        credentials: 'include',
+        headers,
         body: bodyContent,
         signal,
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        if (response.status === 401) {
+          handle401(false);
+        }
+
+        let errorData: { message?: string; error?: string; code?: string } | null = null;
+        try {
+          errorData = await response.json();
+        } catch {
+          // Non-JSON error body; fall back to the status text below.
+        }
+        const errorMessage = errorData?.message || errorData?.error || response.statusText || 'Request failed';
+
+        // The workspace this stream targets is asleep: start it and replay.
+        if (!skipWorkspaceAutostart && isWorkspaceNotActive({ code: errorData?.code, message: errorMessage })) {
+          const ref = workspaceRefForRequest(endpoint);
+          if (ref) {
+            const ok = await startWorkspaceForRequest(ref).then(() => true, () => false);
+            if (ok) {
+              return api.stream(endpoint, data, { ...options, skipWorkspaceAutostart: true });
+            }
+          }
+        }
+
+        throw new Error(`HTTP ${response.status}: ${errorMessage}`);
       }
 
+      isRedirecting = false;
       onOpen?.();
 
       // Check if the response body exists and supports streaming
