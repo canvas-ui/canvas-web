@@ -11,6 +11,14 @@ function getAuthToken(): string | null {
   return token;
 }
 
+/** The `{ status, payload }` envelope an RPC ack carries — see request(). */
+interface SocketAck {
+  status?: 'success' | 'error'
+  code?: string
+  message?: string
+  payload?: unknown
+}
+
 class SocketService {
   private socket: Socket | null = null
   private connected: boolean = false
@@ -250,6 +258,48 @@ class SocketService {
     set.delete(callback)
     if (set.size === 0) this.handlers.delete(event)
     this.detach(event, callback)
+  }
+
+  /**
+   * Request/response over the socket: emit with an ack callback and resolve the
+   * server's `{ status, payload }` envelope, rejecting on `status: 'error'`.
+   *
+   * Every other channel here is push-only fan-out — this exists for query
+   * sessions, which are connection-scoped mutable server state (a stateless
+   * REST call cannot hold the resolved operand bitmaps). Never queues: an RPC
+   * against a dead socket must fail fast so the caller can fall back to its
+   * stateless path rather than silently hanging.
+   */
+  request<T = unknown>(event: string, payload?: unknown, timeoutMs = 10000): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      if (!this.socket || !this.connected) {
+        reject(new Error('Socket not connected'))
+        return
+      }
+      let settled = false
+      const timer = setTimeout(() => {
+        if (settled) return
+        settled = true
+        reject(new Error(`Socket request timed out: ${event}`))
+      }, timeoutMs)
+
+      try {
+        this.socket.emit(event, payload ?? {}, (response: SocketAck) => {
+          if (settled) return
+          settled = true
+          clearTimeout(timer)
+          if (response?.status === 'error') {
+            reject(new Error(response.message || `${event} failed`))
+          } else {
+            resolve((response?.payload ?? response) as T)
+          }
+        })
+      } catch (error) {
+        settled = true
+        clearTimeout(timer)
+        reject(error instanceof Error ? error : new Error(String(error)))
+      }
+    })
   }
 
   // Emit event to server

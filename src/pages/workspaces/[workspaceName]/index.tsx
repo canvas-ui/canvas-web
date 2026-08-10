@@ -47,6 +47,8 @@ import { sanitizeUrlPath, buildWorkspaceUrl, parseWorkspacePathFromUrl } from '@
 import { docInGeoSelection } from '@/utils/geo';
 import { useToolbox } from '@/components/toolbox/toolbox-context';
 import { useCanvasPins } from '@/components/home/pins-context';
+import { useQuerySession } from '@/hooks/useQuerySession';
+import type { SessionSpec } from '@/services/session';
 import { cn } from '@/lib/utils';
 import socketService from '@/lib/socket';
 
@@ -261,17 +263,6 @@ export default function WorkspaceDetailPage() {
     return () => setAccentColor(null);
   }, [workspaceAccent, setAccentColor]);
 
-  // Publish the current result set to the toolbox map (it plots geo-tagged docs
-  // as pins) and refine the content area by any drawn area — client-side, over
-  // the already-fetched set, so navigating the map never triggers a re-fetch.
-  const geoSelection = toolboxState.geoSelection;
-  useEffect(() => { setMapDocuments(documents, workspace?.name ?? null); }, [documents, workspace?.name, setMapDocuments]);
-  useEffect(() => () => setMapDocuments([]), [setMapDocuments]);
-  const shownDocuments = useMemo(
-    () => (geoSelection ? documents.filter((d) => docInGeoSelection(d, geoSelection)) : documents),
-    [documents, geoSelection],
-  );
-
   // Live canvas filter preview: while the toolbox filters are dirty on a canvas,
   // feed the widgets from a client-driven fetch (applyCanvasSpec:false) so every
   // filter edit — including loosening/removing one — reloads the canvas in real
@@ -349,6 +340,107 @@ export default function WorkspaceDetailPage() {
     return () => window.removeEventListener('workspace:autostarted', onAutostarted);
   }, []);
 
+  // ── Live query session ─────────────────────────────────────────────────────
+  // The lens feed is a STREAM, and answering a stream with a stateless refetch
+  // per frame swaps the whole list every tick. Instead the server holds the
+  // candidate set: the structural scope below is one cue, the feed's id-set is
+  // another (replaced per frame via setCue), and the client gets
+  // {added, removed} — so only genuinely new documents are ever fetched and the
+  // rendered cards keep their identity.
+  //
+  // Deliberately narrow: only the plain document list, only while the feed is
+  // running. Layer views and backend "unfiled only" have their own read paths
+  // and fall back to the refetch path below, which still keeps previous results
+  // and stable keys. So does a STACKED query (?q=car&q=red): that is chained
+  // AND-narrowing across separate searches, and a session ranks by one match.
+  const lensLive = (tbLensIds?.length ?? 0) > 0;
+  const sessionEligible = lensLive
+    && !isLayerView
+    && !(unfiledOnly && backendTarget)
+    && serverSearchQueries.length <= 1;
+
+  const sessionSpecs = useMemo(() => {
+    const scope: SessionSpec = {
+      features: { allOf: tbAllOf, anyOf: tbAnyOf, noneOf: tbNoneOf },
+      filters: tbScopeFilters,
+    };
+    // Whole-workspace scope drops the path bucket entirely (backend mirrors
+    // live in their own tree and are otherwise invisible from a context path).
+    if (docScope !== 'workspace') {
+      if (treeTypeForName(selectedTreeName) === 'directory') {
+        // Tree-qualified: 'directory' and 'backends' are distinct trees.
+        scope.directory = { tree: selectedTreeName, path: selectedPath } as unknown as SessionSpec['directory'];
+      } else {
+        // The default context tree, addressed through the ctx: path grammar —
+        // the same resolution every other Workspace read uses.
+        scope.context = selectedPath;
+      }
+    }
+    return [{ label: 'scope', spec: scope }];
+  // tbFiltersKeyNoLens encodes every tb* array above; the lens id-set is a
+  // separate cue on purpose (changing it must not reopen the session).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tbFiltersKeyNoLens, selectedPath, selectedTreeName, docScope]);
+
+  const {
+    documents: sessionDocuments,
+    count: sessionCount,
+    ready: sessionReady,
+    setCue: setSessionCue,
+    resync: resyncSession,
+    rank: rankSession,
+  } = useQuerySession({
+    workspaceRef: workspaceName,
+    specs: sessionSpecs,
+    // debounce so an ingest burst converges into one delta instead of a storm.
+    opts: useMemo(() => ({ mode: 'live' as const, debounceMs: 150 }), []),
+    enabled: sessionEligible,
+  });
+
+  // The session is an optimization: until it is open the ordinary fetch path
+  // owns the list, so a server without session support just keeps working.
+  const sessionActive = sessionEligible && sessionReady;
+  const sessionActiveRef = useRef(false);
+  useEffect(() => { sessionActiveRef.current = sessionActive; }, [sessionActive]);
+
+  // The search box drives the RANKING stage, not a cue. Cues (path, geo, the
+  // frame's kNN survivors) build the candidate set; the text picks out what
+  // matters inside it — including documents whose only match is a comment or a
+  // generated summary, both of which synapsd always folds into FTS. The match
+  // sticks: every later delta re-ranks against the new candidate set, so the
+  // query keeps applying as the camera moves.
+  const sessionQuery = serverSearchQueries.length === 1 ? serverSearchQueries[0].trim() : '';
+  useEffect(() => {
+    if (!sessionReady) return;
+    void rankSession(
+      sessionQuery ? { text: sessionQuery } : null,
+      { limit: pageSize, offset: (currentPage - 1) * pageSize },
+    ).catch(() => {});
+  }, [sessionReady, sessionQuery, pageSize, currentPage, rankSession]);
+
+  // Each frame REPLACES the cue — a patch would union every id the feed ever saw.
+  const tbLensIdsKey = (tbLensIds ?? []).join(',');
+  useEffect(() => {
+    if (!sessionReady) return;
+    void setSessionCue('lens', { ids: tbLensIds ?? [] }).catch(() => {});
+  }, [sessionReady, tbLensIdsKey, setSessionCue, tbLensIds]);
+
+  // The one list every consumer below reads: session-driven while the feed is
+  // live, fetched otherwise.
+  const listedDocuments = sessionActive ? sessionDocuments : documents;
+  const listedTotalCount = sessionActive ? sessionCount : documentsTotalCount;
+
+  // Publish the current result set to the toolbox map (it plots geo-tagged docs
+  // as pins) and refine the content area by any drawn area — client-side, over
+  // the already-fetched set, so navigating the map never triggers a re-fetch.
+  const geoSelection = toolboxState.geoSelection;
+  useEffect(() => { setMapDocuments(listedDocuments, workspace?.name ?? null); }, [listedDocuments, workspace?.name, setMapDocuments]);
+  useEffect(() => () => setMapDocuments([]), [setMapDocuments]);
+  const shownDocuments = useMemo(
+    () => (geoSelection ? listedDocuments.filter((d) => docInGeoSelection(d, geoSelection)) : listedDocuments),
+    [listedDocuments, geoSelection],
+  );
+
   // Fetch documents when path, tree, pagination, or workspace status changes.
   // A monotonic sequence guards against out-of-order responses: during a reembed
   // (or any socket storm) many overlapping fetches are in flight, and on a slow
@@ -361,6 +453,10 @@ export default function WorkspaceDetailPage() {
   const fetchIdentityRef = useRef('');
   const fetchDocuments = useCallback(async (opts?: { silent?: boolean }) => {
     if (!workspaceName) return;
+    // While a session drives the list, a refetch would be both redundant and
+    // wrong: it re-fetches every document to answer a question the deltas
+    // already answered incrementally.
+    if (sessionActiveRef.current) return;
     const seq = ++fetchSeqRef.current;
     const effectiveScope = unfiledOnly && backendTarget ? `${docScope}:unfiled` : docScope;
     const lensActive = (tbLensIds?.length ?? 0) > 0;
@@ -506,6 +602,12 @@ export default function WorkspaceDetailPage() {
         // isn't showing, so clearing only the current pane would leave those
         // paths stale until reload.
         if (workspaceName) invalidateWorkspaceDocumentCache(workspaceName);
+        // A session usually learns about a write on its own (precise key-touch
+        // invalidation → a delta). It cannot when a cue has no keys to
+        // invalidate — a scope cue over a tree path that did not exist yet
+        // consulted no bitmap, so documents arriving there push nothing. This
+        // resync closes that gap and costs one bitmap read, no document loads.
+        if (sessionActiveRef.current) { void resyncSession(); return; }
         fetchDocuments({ silent: true });
       }, 200);
     };
@@ -527,7 +629,7 @@ export default function WorkspaceDetailPage() {
       offConnect?.();
       events.forEach(ev => socketService.off(ev, refresh));
     };
-  }, [workspaceName, workspace?.id, workspace?.name, selectedTreeName, selectedPath, fetchDocuments]);
+  }, [workspaceName, workspace?.id, workspace?.name, selectedTreeName, selectedPath, fetchDocuments, resyncSession]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -1031,7 +1133,7 @@ export default function WorkspaceDetailPage() {
       workspaceId={workspace.name}
       documents={shownDocuments}
       isLoading={isLoadingDocuments}
-      totalCount={documentsTotalCount}
+      totalCount={listedTotalCount}
       currentPage={currentPage}
       pageSize={pageSize}
       onPageChange={setCurrentPage}
