@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RotateCcw, Trash2, RefreshCw } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import { useToast } from '@/components/ui/toast-container'
+import { useToast } from '@/components/ui/toast-context'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { emptyTrash, listTrash, restoreFromTrash, type TrashedDocument } from '@/services/workspace'
 

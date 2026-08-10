@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { ExternalLink } from 'lucide-react'
 import { M2Header } from '@/components/menu/shared/M2Header'
 import { M2SettingsNav, type M2NavItem } from '@/components/menu/shared/M2SettingsNav'
-import { useMenu } from '@/components/shell/menu-context'
+import { useMenu } from '@/components/shell/menu-context-data'
 import { AGENT_SETTINGS_SECTIONS, resolveAgentSettingsTab } from '@/lib/settings-sections'
 import { getAgent, type Agent } from '@/services/agent'
 

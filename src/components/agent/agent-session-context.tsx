@@ -1,7 +1,5 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import {
-  type AgentSession,
-  type AgentSessionList,
   type AgentSessionMutationResult,
   createAgentSession,
   deleteAgentSession,
@@ -10,46 +8,20 @@ import {
   renameAgentSession,
   selectAgentSession,
 } from '@/services/agent'
-
-type SessionMode = 'persistent' | 'experimental' | 'incognito'
-
-interface AgentSessionState {
-  current: AgentSession | null
-  sessions: AgentSessionList | null
-  isLoading: boolean
-  error: string | null
-}
-
-interface AgentSessionContextValue {
-  getState: (agentId: string) => AgentSessionState
-  refresh: (agentId: string) => Promise<void>
-  create: (agentId: string, data: { mode: SessionMode; name?: string }) => Promise<AgentSessionMutationResult>
-  select: (agentId: string, data: { mode: SessionMode; sessionId?: string }) => Promise<AgentSessionMutationResult>
-  rename: (agentId: string, sessionId: string, name: string) => Promise<AgentSessionMutationResult>
-  remove: (agentId: string, sessionId: string) => Promise<AgentSessionMutationResult>
-}
-
-const defaultState: AgentSessionState = {
-  current: null,
-  sessions: null,
-  isLoading: false,
-  error: null,
-}
-
-const AgentSessionContext = createContext<AgentSessionContextValue | null>(null)
+import { AgentSessionContext, defaultAgentSessionState, type AgentSessionContextValue, type AgentSessionState, type SessionMode } from './agent-session-context-data'
 
 function normalizeError(error: unknown) {
   return error instanceof Error ? error.message : 'Session request failed'
 }
 
 export function AgentSessionProvider({ children }: { children: ReactNode }) {
-  const [states, setStates] = useState<Record<string, AgentSessionState>>({})
+  const [states, setStates] = useState<Record<string, ReturnType<AgentSessionContextValue['getState']>>>({})
 
   const setState = useCallback((agentId: string, next: Partial<AgentSessionState>) => {
     setStates((prev) => ({
       ...prev,
       [agentId]: {
-        ...(prev[agentId] || defaultState),
+        ...(prev[agentId] || defaultAgentSessionState),
         ...next,
       },
     }))
@@ -121,7 +93,7 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
   }, [applyMutation, setState])
 
   const value = useMemo<AgentSessionContextValue>(() => ({
-    getState: (agentId: string) => states[agentId] || defaultState,
+    getState: (agentId: string) => states[agentId] || defaultAgentSessionState,
     refresh,
     create,
     select,
@@ -130,49 +102,4 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
   }), [states, refresh, create, select, rename, remove])
 
   return <AgentSessionContext.Provider value={value}>{children}</AgentSessionContext.Provider>
-}
-
-export function useAgentSessions(agentId: string) {
-  const context = useContext(AgentSessionContext)
-  if (!context) {
-    throw new Error('useAgentSessions must be used within an AgentSessionProvider')
-  }
-
-  const {
-    getState,
-    refresh: refreshSession,
-    create: createSession,
-    select: selectSession,
-    rename: renameSession,
-    remove: removeSession,
-  } = context
-
-  const state = getState(agentId)
-
-  const refresh = useCallback(() => refreshSession(agentId), [refreshSession, agentId])
-  const create = useCallback(
-    (data: { mode: SessionMode; name?: string }) => createSession(agentId, data),
-    [createSession, agentId],
-  )
-  const select = useCallback(
-    (data: { mode: SessionMode; sessionId?: string }) => selectSession(agentId, data),
-    [selectSession, agentId],
-  )
-  const rename = useCallback(
-    (sessionId: string, name: string) => renameSession(agentId, sessionId, name),
-    [renameSession, agentId],
-  )
-  const remove = useCallback(
-    (sessionId: string) => removeSession(agentId, sessionId),
-    [removeSession, agentId],
-  )
-
-  return useMemo(() => ({
-    ...state,
-    refresh,
-    create,
-    select,
-    rename,
-    remove,
-  }), [state, refresh, create, select, rename, remove])
 }

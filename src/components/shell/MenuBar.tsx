@@ -15,12 +15,12 @@ import {
   X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useMenu, type MenuSection } from './menu-context'
+import { useMenu, type MenuSection } from './menu-context-data'
 import { useToolbox } from '@/components/toolbox/toolbox-context'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { api } from '@/lib/api'
-import { useToast } from '@/components/ui/toast-container'
+import { useToast } from '@/components/ui/toast-context'
 
 interface MenuItemProps {
   section: MenuSection

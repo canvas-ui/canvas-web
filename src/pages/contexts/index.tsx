@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom"
 import { useCreatePanel } from "@/hooks/use-create-panel"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { useToast } from "@/components/ui/toast-container"
+import { useToast } from "@/components/ui/toast-context"
 import { FormPanel } from "@/components/common/form-panel"
 import { Plus, Trash, DoorOpen, Edit, Share2 } from "lucide-react"
 import {
@@ -15,8 +15,8 @@ import {
   TableHeader,
   TableRow,
   SortableTableHead,
-  useSortableData,
 } from "@/components/ui/table"
+import { useSortableData } from "@/components/ui/use-sortable-data"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,7 +43,7 @@ interface ContextEntry {
   path: string | null;
   pathArray: string[];
   workspaceId: string;
-  acl: Record<string, any>;
+  acl: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
   locked: boolean;
@@ -58,7 +58,31 @@ interface ContextEntry {
   type?: string; // 'shared' for shared contexts
   isShared?: boolean; // True if this is a shared context
   ownerEmail?: string; // Email of the context owner
-  sharedVia?: string | any; // Access level or share metadata
+  sharedVia?: string | { accessLevel?: string }; // Access level or share metadata
+}
+
+type ApiError = {
+  message?: string;
+  error?: string;
+  payload?: {
+    message?: string;
+    error?: string;
+  };
+  statusText?: string;
+};
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error) return error.message;
+  if (typeof error !== 'object' || error === null) return fallback;
+
+  const { message, error: errorText, payload, statusText } = error as ApiError;
+  return message || errorText || payload?.message || payload?.error || statusText || fallback;
+}
+
+function isContextEntry(data: unknown): data is ContextEntry {
+  return typeof data === 'object' && data !== null
+    && typeof (data as { id?: unknown }).id === 'string'
+    && typeof (data as { userId?: unknown }).userId === 'string';
 }
 
 export default function ContextsPage() {
@@ -126,18 +150,7 @@ export default function ContextsPage() {
       // Extract the most detailed error message available
       let errorMessage = 'Failed to fetch data';
 
-      if (err instanceof Error) {
-        errorMessage = err.message;
-      } else if (typeof err === 'object' && err !== null) {
-        const errorObj = err as any;
-        // Try to extract from various possible error structures
-        errorMessage = errorObj.message ||
-                     errorObj.error ||
-                     errorObj.payload?.message ||
-                     errorObj.payload?.error ||
-                     errorObj.statusText ||
-                     'Failed to fetch data';
-      }
+      errorMessage = getErrorMessage(err, errorMessage);
 
       setError(errorMessage);
       showToast({
@@ -148,10 +161,10 @@ export default function ContextsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedWorkspaceId]);
+  }, [selectedWorkspaceId, showToast]);
 
   useEffect(() => {
-    fetchData();
+    void Promise.resolve().then(fetchData);
   }, [fetchData]);
 
 
@@ -196,9 +209,9 @@ export default function ContextsPage() {
         (ctx && ctx.id === data.id && ctx.userId === data.userId) ? { ...ctx, ...data } : ctx
       ))
     }
-    const handleContextDeleted = (data: { contextId: string }) => {
+    const handleContextDeleted = (data: { contextId?: string; id?: string }) => {
       console.log('Received context deletion:', data);
-      const contextId = (data as any)?.contextId ?? (data as any)?.id
+      const contextId = data?.contextId ?? data?.id
       if (!contextId) {
         console.error('Invalid context deletion data received:', data);
         return;
@@ -220,16 +233,22 @@ export default function ContextsPage() {
     }
 
     // Support both dot & colon notations (server has been inconsistent)
-    const contextEventMap: Array<[string, Function]> = [
-      ['context:created', handleContextCreated],
-      ['context.created', handleContextCreated],
-      ['context:updated', handleContextUpdated],
-      ['context.updated', handleContextUpdated],
-      ['context:deleted', handleContextDeleted],
-      ['context.deleted', handleContextDeleted],
-      ['context:url:changed', handleContextUrlChanged],
-      ['context.url.set', handleContextUrlChanged],
-      ['context:url:set', handleContextUrlChanged],
+    const handleCreated = (data: unknown) => { if (isContextEntry(data)) handleContextCreated(data) }
+    const handleUpdated = (data: unknown) => { if (isContextEntry(data)) handleContextUpdated(data) }
+    const handleDeleted = (data: unknown) => {
+      if (typeof data === 'object' && data !== null) handleContextDeleted(data as { contextId?: string; id?: string })
+    }
+    const handleUrlChanged = (data: unknown) => { if (isContextEntry(data)) handleContextUrlChanged(data) }
+    const contextEventMap: Array<[string, (data: unknown) => void]> = [
+      ['context:created', handleCreated],
+      ['context.created', handleCreated],
+      ['context:updated', handleUpdated],
+      ['context.updated', handleUpdated],
+      ['context:deleted', handleDeleted],
+      ['context.deleted', handleDeleted],
+      ['context:url:changed', handleUrlChanged],
+      ['context.url.set', handleUrlChanged],
+      ['context:url:set', handleUrlChanged],
     ]
     contextEventMap.forEach(([event, handler]) => socketService.on(event, handler))
 
@@ -327,18 +346,7 @@ export default function ContextsPage() {
       // Extract the most detailed error message available
       let errorMessage = 'Failed to delete context';
 
-      if (err instanceof Error) {
-        errorMessage = err.message;
-      } else if (typeof err === 'object' && err !== null) {
-        const errorObj = err as any;
-        // Try to extract from various possible error structures
-        errorMessage = errorObj.message ||
-                     errorObj.error ||
-                     errorObj.payload?.message ||
-                     errorObj.payload?.error ||
-                     errorObj.statusText ||
-                     'Failed to delete context';
-      }
+      errorMessage = getErrorMessage(err, errorMessage);
 
       showToast({
         title: 'Error',

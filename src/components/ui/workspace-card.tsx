@@ -25,14 +25,17 @@ interface WorkspaceCardProps {
   onDestroy?: (workspace: Workspace) => void;
 }
 
+type SharedWorkspace = Workspace & { isShared?: boolean; ownerEmail?: string }
+
 export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onSettings, onDestroy }: WorkspaceCardProps) {
   const [isDestroyDialogOpen, setIsDestroyDialogOpen] = useState(false);
   const isActive = workspace.status === 'active';
   const isUniverse = workspace.type === 'universe' || workspace.name === 'universe';
   const isError = workspace.status === 'error';
   const isNotFound = workspace.status === 'not_found';
-  const isShared = (workspace as any).isShared === true || workspace.type === 'shared';
-  const sharedFrom = (workspace as any).ownerEmail || workspace.owner;
+  const sharedWorkspace = workspace as SharedWorkspace
+  const isShared = sharedWorkspace.isShared === true || workspace.type === 'shared';
+  const sharedFrom = sharedWorkspace.ownerEmail || workspace.owner;
 
   // Near-white workspace colors would vanish against the card background —
   // fall back to the neutral border in that case.

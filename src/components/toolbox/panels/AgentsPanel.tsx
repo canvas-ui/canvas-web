@@ -3,10 +3,10 @@ import { Brain, Play, Square } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToolbox } from '../toolbox-context'
 import { useAgentListData } from '@/hooks/useAgentListData'
-import { useMenu } from '@/components/shell/menu-context'
-import { useToast } from '@/components/ui/toast-container'
+import { useMenu } from '@/components/shell/menu-context-data'
+import { useToast } from '@/components/ui/toast-context'
 import { useNavigate } from 'react-router-dom'
-import { startAgent, stopAgent } from '@/services/agent'
+import { startAgent, stopAgent, type Agent } from '@/services/agent'
 
 function StatusDot({ status }: { status: string }) {
   const color =
@@ -25,10 +25,14 @@ export function AgentsPanel() {
   const { showToast } = useToast()
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
 
-  const setBusy = (id: string, on: boolean) =>
-    setBusyIds(prev => { const s = new Set(prev); on ? s.add(id) : s.delete(id); return s })
+  const setBusy = (id: string, on: boolean) => setBusyIds(prev => {
+    const next = new Set(prev)
+    if (on) next.add(id)
+    else next.delete(id)
+    return next
+  })
 
-  const handleStart = async (e: React.MouseEvent, agent: any) => {
+  const handleStart = async (e: React.MouseEvent, agent: Agent) => {
     e.stopPropagation()
     setBusy(agent.id, true)
     try {
@@ -41,7 +45,7 @@ export function AgentsPanel() {
     }
   }
 
-  const handleStop = async (e: React.MouseEvent, agent: any) => {
+  const handleStop = async (e: React.MouseEvent, agent: Agent) => {
     e.stopPropagation()
     setBusy(agent.id, true)
     try {

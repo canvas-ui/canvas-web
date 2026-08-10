@@ -672,7 +672,6 @@ export function MenuTreeView({
   // Live style preview keyed by path; persistence is debounced. Cleared on
   // every tree refetch (root identity change) so server data takes over.
   const [styleOverrides, setStyleOverrides] = useState<Map<string, LayerStyle>>(new Map())
-  const [prevRoot, setPrevRoot] = useState(root)
   const persistTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   // Latest merged style for the open picker session. Survives the
   // styleOverrides reset below — the debounced persist triggers a refetch
@@ -681,13 +680,15 @@ export function MenuTreeView({
   const pickerStyleRef = useRef<{ path: string; style: LayerStyle } | null>(null)
 
   // Drop optimistic style overrides once fresh server data arrives (root
-  // identity changes on refetch). Reset-on-prop-change happens during render.
-  // Keep the open picker session's style so its preview doesn't flicker back.
-  if (root !== prevRoot) {
-    setPrevRoot(root)
-    const kept = pickerStyleRef.current
-    setStyleOverrides(kept ? new Map([[kept.path, kept.style]]) : new Map())
-  }
+  // identity changes on refetch). Keep the open picker session's style so its
+  // preview doesn't flicker back.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const kept = pickerStyleRef.current
+      setStyleOverrides(kept ? new Map([[kept.path, kept.style]]) : new Map())
+    })
+    return () => clearTimeout(timer)
+  }, [root])
   const [inlineCreateParent, setInlineCreateParent] = useState<string | null>(null)
 
   // ── Drag-and-drop state ───────────────────────────────────────────────────

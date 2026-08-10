@@ -9,7 +9,8 @@ import {
 import { getLocationFilename } from '@/lib/document-display'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { usePublicShareCode } from '@/components/renderers/public-share'
-import { DocumentEditForm, isEditableSchema } from './EditForm'
+import { DocumentEditForm } from './EditForm'
+import { isEditableSchema } from './editable-schema'
 import type { Document } from '@/types/workspace'
 
 interface TabProps {

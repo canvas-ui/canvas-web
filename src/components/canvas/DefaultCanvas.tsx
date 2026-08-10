@@ -170,7 +170,7 @@ interface DefaultCanvasProps {
   onCopyDocuments?: (documentIds: number[]) => void
   onCutDocuments?: (documentIds: number[]) => void
   onPasteDocuments?: (path: string, documentIds: number[], options?: DocumentPasteOptions) => Promise<boolean>
-  onImportDocuments?: (documents: any[], contextPath: string) => Promise<boolean>
+  onImportDocuments?: (documents: Record<string, unknown>[], contextPath: string) => Promise<boolean>
   onSelectionChange?: (documentIds: number[]) => void
   pastedDocumentIds?: number[]
   onPurgeDocuments?: () => void
@@ -411,7 +411,7 @@ export function DefaultCanvas({
           onCopyDocuments={onCopyDocuments}
           onCutDocuments={onCutDocuments}
           onPasteDocuments={onPasteDocuments}
-          onImportDocuments={onImportDocuments}
+          onImportDocuments={onImportDocuments as ((documents: unknown[], contextPath: string) => Promise<boolean>) | undefined}
           onSelectionChange={onSelectionChange}
           pastedDocumentIds={pastedDocumentIds}
           onPurgeDocuments={onPurgeDocuments}

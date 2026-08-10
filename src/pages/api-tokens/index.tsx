@@ -1,10 +1,10 @@
 import { PageHeader } from '@/components/common/page-header'
-import { useEffect, useState, useRef } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { API_ROUTES } from "@/config/api"
 import { api } from "@/lib/api"
-import { useToast } from "@/components/ui/toast-container"
+import { useToast } from "@/components/ui/toast-context"
 import { Plus, Trash, Copy, Check } from "lucide-react"
 
 interface ApiToken {
@@ -41,11 +41,7 @@ export default function ApiTokensPage() {
   const { showToast } = useToast()
   const tokenDisplayRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    fetchTokens()
-  }, [])
-
-  const fetchTokens = async () => {
+  const fetchTokens = useCallback(async () => {
     try {
       setIsLoading(true)
       const data = await api.get<ApiResponse<ApiToken[] | { tokens: ApiToken[] }>>(API_ROUTES.tokens)
@@ -68,7 +64,11 @@ export default function ApiTokensPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [showToast])
+
+  useEffect(() => {
+    void Promise.resolve().then(fetchTokens)
+  }, [fetchTokens])
 
   const handleGenerateToken = async () => {
     if (!newTokenName.trim() || isCreating) {
@@ -150,7 +150,7 @@ export default function ApiTokensPage() {
         description: 'Token copied to clipboard'
       })
       setTimeout(() => setCopiedToken(false), 2000)
-    } catch (err) {
+    } catch {
       showToast({
         title: 'Error',
         description: 'Failed to copy token to clipboard',

@@ -2,7 +2,7 @@ import { PageHeader } from '@/components/common/page-header'
 import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useToast } from '@/components/ui/toast-container'
+import { useToast } from '@/components/ui/toast-context'
 import { InferdConfigEditor } from '@/components/workspace/inferd-config-editor'
 import {
   getUserInferdConfig,

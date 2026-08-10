@@ -4,7 +4,7 @@ import { ChevronDown, FolderSearch, RefreshCw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { useToast } from '@/components/ui/toast-container'
+import { useToast } from '@/components/ui/toast-context'
 import { LinkToCard } from '@/components/menu/shared/LinkToCard'
 import { InferdConfigEditor } from './inferd-config-editor'
 import {

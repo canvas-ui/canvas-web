@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToolbox } from '@/components/toolbox/toolbox-context'
-import { useToast } from '@/components/ui/toast-container'
+import { useToast } from '@/components/ui/toast-context'
 import { timelineColor } from '@/lib/timeline-meta'
 import { onAccentTextClass } from '@/utils/color'
 import { fetchTimelineHistogram, type TimelineHistogramBucket } from '@/services/workspace'

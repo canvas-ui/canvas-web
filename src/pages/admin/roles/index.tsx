@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useToast } from "@/components/ui/toast-container"
+import { useToast } from "@/components/ui/toast-context"
 import {
   Play,
   Square,
@@ -62,7 +62,6 @@ export default function AdminRolesPage() {
   const [roles, setRoles] = useState<Role[]>([])
   const [templates, setTemplates] = useState<RoleTemplate[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedRole, setSelectedRole] = useState<Role | null>(null)
   const [isLogsModalOpen, setIsLogsModalOpen] = useState(false)
@@ -84,18 +83,9 @@ export default function AdminRolesPage() {
   const currentUser = getCurrentUserFromToken()
   const isCurrentUserAdmin = currentUser?.userType === 'admin'
 
-  useEffect(() => {
-    if (!isCurrentUserAdmin) {
-      setError('Access denied. Admin privileges required.')
-      setIsLoading(false)
-      return
-    }
-    fetchRoles()
-    fetchTemplates()
-  }, [isCurrentUserAdmin])
-
   const fetchRoles = useCallback(async () => {
     try {
+      await Promise.resolve()
       setIsLoading(true)
       const { type, status } = filters
       const fetchedRoles = await roleService.listRoles({
@@ -103,14 +93,17 @@ export default function AdminRolesPage() {
         status: status || undefined
       })
       setRoles(fetchedRoles)
-      setError(null)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch roles'
-      setError(message)
+      showToast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive'
+      })
     } finally {
       setIsLoading(false)
     }
-  }, [filters])
+  }, [filters, showToast])
 
   const fetchTemplates = useCallback(async () => {
     try {
@@ -120,6 +113,14 @@ export default function AdminRolesPage() {
       console.error('Failed to fetch templates:', err)
     }
   }, [])
+
+  useEffect(() => {
+    if (!isCurrentUserAdmin) {
+      return
+    }
+    void Promise.resolve().then(fetchRoles)
+    void Promise.resolve().then(fetchTemplates)
+  }, [fetchRoles, fetchTemplates, isCurrentUserAdmin])
 
   const handleCreateRole = async () => {
     if (!formData.template || !formData.name) {
@@ -272,14 +273,6 @@ export default function AdminRolesPage() {
     return (
       <div className="text-center space-y-4">
         <div className="text-destructive">Access denied. Admin privileges required.</div>
-      </div>
-    )
-  }
-
-  if (error && !isCurrentUserAdmin) {
-    return (
-      <div className="text-center space-y-4">
-        <div className="text-destructive">{error}</div>
       </div>
     )
   }

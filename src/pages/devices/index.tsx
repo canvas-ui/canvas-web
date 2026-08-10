@@ -1,9 +1,9 @@
 import { PageHeader } from '@/components/common/page-header'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Monitor, RefreshCw, Pencil, Check, X as XIcon, Link2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useToast } from '@/components/ui/toast-container'
+import { useToast } from '@/components/ui/toast-context'
 import {
   listDevices,
   updateDevice,
@@ -132,7 +132,7 @@ export default function DevicesPage() {
   const [isLoading, setIsLoading] = useState(true)
   const { showToast } = useToast()
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setIsLoading(true)
     try {
       setDevices(await listDevices())
@@ -141,9 +141,11 @@ export default function DevicesPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [showToast])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    void Promise.resolve().then(load)
+  }, [load])
 
   const handleUpdated = (updated: Device) =>
     setDevices(prev => prev.map(d => d.deviceId === updated.deviceId ? updated : d))

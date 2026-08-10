@@ -42,31 +42,35 @@ export function useContextListData(enabled: boolean) {
     const offConnect = socketService.on('connect', subscribe)
     subscribe()
 
-    const handleCreated = (data: any) => {
-      if (!data?.id || !data?.userId) return
+    const handleCreated = (data: unknown) => {
+      const context = data as Context
+      if (!context?.id || !context.userId) return
       setContexts(prev => {
-        if (prev.some(c => c.id === data.id && c.userId === data.userId)) return prev
-        return [...prev, data]
+        if (prev.some(c => c.id === context.id && c.userId === context.userId)) return prev
+        return [...prev, context]
       })
     }
 
-    const handleUpdated = (data: any) => {
-      if (!data?.id || !data?.userId) return
+    const handleUpdated = (data: unknown) => {
+      const context = data as Partial<Context>
+      if (!context?.id || !context.userId) return
       setContexts(prev => prev.map(c =>
-        (c.id === data.id && c.userId === data.userId) ? { ...c, ...data } : c
+        (c.id === context.id && c.userId === context.userId) ? { ...c, ...context } : c
       ))
     }
 
-    const handleDeleted = (data: any) => {
-      const id = data?.contextId ?? data?.id
+    const handleDeleted = (data: unknown) => {
+      const event = data as { contextId?: string; id?: string }
+      const id = event?.contextId ?? event?.id
       if (!id) return
       setContexts(prev => prev.filter(c => c.id !== id))
     }
 
-    const handleUrlChanged = (data: any) => {
-      if (!data?.id || !data?.userId) return
+    const handleUrlChanged = (data: unknown) => {
+      const context = data as Partial<Context>
+      if (!context?.id || !context.userId) return
       setContexts(prev => prev.map(c =>
-        (c.id === data.id && c.userId === data.userId) ? { ...c, ...data } : c
+        (c.id === context.id && c.userId === context.userId) ? { ...c, ...context } : c
       ))
     }
 
@@ -75,7 +79,7 @@ export function useContextListData(enabled: boolean) {
       fetch()
     }
 
-    const events: Array<[string, Function]> = [
+    const events: Array<[string, (data: unknown) => void]> = [
       ['context:created', handleCreated],
       ['context.created', handleCreated],
       ['context:updated', handleUpdated],
@@ -95,7 +99,7 @@ export function useContextListData(enabled: boolean) {
       offConnect?.()
       events.forEach(([e, h]) => socketService.off(e, h))
     }
-  }, [enabled])
+  }, [enabled, fetch])
 
   // Window event fallback
   useEffect(() => {

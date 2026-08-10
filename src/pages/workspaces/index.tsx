@@ -8,7 +8,7 @@ import { useSocketSubscription } from "@/hooks/useSocketSubscription"
 import { FormPanel } from '@/components/common/form-panel';
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { useToast } from "@/components/ui/toast-container"
+import { useToast } from "@/components/ui/toast-context"
 import { Plus, GripVertical } from "lucide-react"
 import { WorkspaceCard } from "@/components/ui/workspace-card"
 import { useNavigate } from "react-router-dom"
@@ -23,7 +23,8 @@ import {
   updateWorkspace,
   removeWorkspace,
 } from "@/services/workspace"
-import { DefaultFoldersPicker, createDefaultFolders, useFolderSelection } from '@/components/workspaces/DefaultFoldersPicker'
+import { DefaultFoldersPicker } from '@/components/workspaces/DefaultFoldersPicker'
+import { createDefaultFolders, useFolderSelection } from '@/components/workspaces/default-folders'
 import { WorkspaceLayoutPicker } from '@/components/workspaces/WorkspaceLayoutPicker'
 import { useDefaultWorkspaceLayout } from '@/hooks/useDefaultWorkspaceLayout'
 import { sortByOrder, moveItem, persistSequentialOrder, useListReorder } from '@/lib/list-order'
@@ -32,6 +33,23 @@ import { sortByOrder, moveItem, persistSequentialOrder, useListReorder } from '@
 // Using global Workspace interface from types/api.d.ts
 // Specific status type based on linter feedback for WorkspaceCard compatibility
 type WorkspaceStatus = 'error' | 'available' | 'not_found' | 'active' | 'inactive' | 'removed' | 'destroyed';
+type ApiError = {
+  message?: string
+  error?: string
+  payload?: { message?: string; error?: string }
+  statusText?: string
+}
+
+function errorMessageFrom(error: unknown, fallback: string) {
+  if (error instanceof Error) return error.message
+  if (typeof error !== 'object' || error === null) return fallback
+  const { message, error: nestedError, payload, statusText } = error as ApiError
+  return message || nestedError || payload?.message || payload?.error || statusText || fallback
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
 
 export default function WorkspacesPage() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
@@ -57,12 +75,18 @@ export default function WorkspacesPage() {
 
   // WebSocket live updates
   useSocketSubscription(socket, 'workspace', {
-    'workspace:status:changed': (data: { workspaceId: string; status: WorkspaceStatus }) =>
-      setWorkspaces(prev => prev.map(ws => ws.id === data.workspaceId ? { ...ws, status: data.status } : ws)),
-    'workspace:created': (data: { workspace: Workspace }) =>
-      setWorkspaces(prev => [...prev, data.workspace as unknown as Workspace]),
-    'workspace:deleted': (data: { workspaceId: string }) =>
+    'workspace:status:changed': (...[data]: unknown[]) => {
+      if (!isRecord(data) || typeof data.workspaceId !== 'string' || typeof data.status !== 'string') return
+      setWorkspaces(prev => prev.map(ws => ws.id === data.workspaceId ? { ...ws, status: data.status as WorkspaceStatus } : ws))
+    },
+    'workspace:created': (...[data]: unknown[]) => {
+      if (!isRecord(data) || !isRecord(data.workspace) || typeof data.workspace.id !== 'string') return
+      setWorkspaces(prev => [...prev, data.workspace as Workspace])
+    },
+    'workspace:deleted': (...[data]: unknown[]) => {
+      if (!isRecord(data) || typeof data.workspaceId !== 'string') return
       setWorkspaces(prev => prev.filter(ws => ws.id !== data.workspaceId))
+    }
   })
 
   useEffect(() => {
@@ -79,18 +103,7 @@ export default function WorkspacesPage() {
         // Extract the most detailed error message available
         let errorMessage = 'Failed to fetch workspaces';
 
-        if (err instanceof Error) {
-          errorMessage = err.message;
-        } else if (typeof err === 'object' && err !== null) {
-          const errorObj = err as any;
-          // Try to extract from various possible error structures
-          errorMessage = errorObj.message ||
-                       errorObj.error ||
-                       errorObj.payload?.message ||
-                       errorObj.payload?.error ||
-                       errorObj.statusText ||
-                       'Failed to fetch workspaces';
-        }
+        errorMessage = errorMessageFrom(err, errorMessage)
 
         setError(errorMessage)
         showToast({
@@ -105,7 +118,7 @@ export default function WorkspacesPage() {
     loadWorkspaces()
 
 
-  }, [socket])
+  }, [socket, showToast])
 
   const handleCreateWorkspace = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -152,18 +165,7 @@ export default function WorkspacesPage() {
       // Extract the most detailed error message available
       let errorMessage = 'Failed to create workspace';
 
-      if (err instanceof Error) {
-        errorMessage = err.message;
-      } else if (typeof err === 'object' && err !== null) {
-        const errorObj = err as any;
-        // Try to extract from various possible error structures
-        errorMessage = errorObj.message ||
-                     errorObj.error ||
-                     errorObj.payload?.message ||
-                     errorObj.payload?.error ||
-                     errorObj.statusText ||
-                     'Failed to create workspace';
-      }
+      errorMessage = errorMessageFrom(err, errorMessage)
 
       showToast({
         title: 'Error',
@@ -251,18 +253,7 @@ export default function WorkspacesPage() {
       // Extract the most detailed error message available
       let errorMessage = 'Failed to start workspace';
 
-      if (err instanceof Error) {
-        errorMessage = err.message;
-      } else if (typeof err === 'object' && err !== null) {
-        const errorObj = err as any;
-        // Try to extract from various possible error structures
-        errorMessage = errorObj.message ||
-                     errorObj.error ||
-                     errorObj.payload?.message ||
-                     errorObj.payload?.error ||
-                     errorObj.statusText ||
-                     'Failed to start workspace';
-      }
+      errorMessage = errorMessageFrom(err, errorMessage)
 
       showToast({
         title: 'Error',
@@ -288,18 +279,7 @@ export default function WorkspacesPage() {
       // Extract the most detailed error message available
       let errorMessage = 'Failed to stop workspace';
 
-      if (err instanceof Error) {
-        errorMessage = err.message;
-      } else if (typeof err === 'object' && err !== null) {
-        const errorObj = err as any;
-        // Try to extract from various possible error structures
-        errorMessage = errorObj.message ||
-                     errorObj.error ||
-                     errorObj.payload?.message ||
-                     errorObj.payload?.error ||
-                     errorObj.statusText ||
-                     'Failed to stop workspace';
-      }
+      errorMessage = errorMessageFrom(err, errorMessage)
 
       showToast({
         title: 'Error',
@@ -641,8 +621,7 @@ function AddRemoteWorkspace({ onImported, onClose }: { onImported: (ws: Workspac
       })
       onImported(ws as Workspace)
     } catch (err) {
-      const errorObj = err as any
-      const message = errorObj?.message || errorObj?.payload?.message || 'Failed to import remote workspace'
+      const message = errorMessageFrom(err, 'Failed to import remote workspace')
       showToast({ title: 'Error', description: message, variant: 'destructive' })
     } finally {
       setIsImporting(false)

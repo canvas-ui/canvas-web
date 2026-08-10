@@ -6,7 +6,7 @@ import { buildWorkspaceUrl, parseWorkspacePathFromUrl } from '@/utils/url-params
 import { M2Header } from '@/components/menu/shared/M2Header'
 import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style'
 import { MenuTreeView } from '@/components/menu/shared/MenuTreeView'
-import { useMenu } from '@/components/shell/menu-context'
+import { useMenu } from '@/components/shell/menu-context-data'
 import { getWorkspace, getCachedWorkspaceTreeByName, invalidateWorkspaceTreeCache, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer, pasteDocumentsToWorkspacePath, createPublicCanvasShare, listBackends, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
 import type { Layer } from '@/services/workspace'
 import { useTreeOperations } from '@/hooks/useTreeOperations'
@@ -74,12 +74,6 @@ export function WorkspaceM2() {
     window.addEventListener('documents:clipboard', handler as EventListener)
     return () => window.removeEventListener('documents:clipboard', handler as EventListener)
   }, [])
-
-  // Keep selectedPath in sync with the URL — handles external navigation (back/forward,
-  // direct links, workspace-detail navigation) where setSelectedPath is never called.
-  useEffect(() => {
-    setSelectedPath(urlPath)
-  }, [urlPath])
 
   const loadTree = useCallback(async (name: string, tab: TreeDataTab, force = false) => {
     const setLoading = tab === 'context' ? setIsLoadingContext : tab === 'directory' ? setIsLoadingDirectory : setIsLoadingBackends
@@ -213,7 +207,9 @@ export function WorkspaceM2() {
 
     // Live resync badge: toggle the spinner on the backend's mirror node; when
     // a scan finishes, refresh the trees once so final counts/paths settle.
-    const onResync = (payload: { workspaceId?: string; treePath?: string | null; resyncing?: boolean }) => {
+    const onResync = (event: unknown) => {
+      if (!event || typeof event !== 'object') return
+      const payload = event as { workspaceId?: string; treePath?: string | null; resyncing?: boolean }
       if (payload?.workspaceId && wsId && payload.workspaceId !== wsId) return
       const treePath = payload?.treePath
       if (!treePath) return
@@ -242,9 +238,12 @@ export function WorkspaceM2() {
     // pathname-only derivation would kick us back to the context tree.
     const layerId = new URLSearchParams(location.search).get('layerId')
     const tab: TreeTab = tabForTree(tree, layerId)
-    setActiveTab(tab)
-    setSelectedPath(path)
-    setContentPath(path !== '/' ? path : null)
+    const timer = setTimeout(() => {
+      setActiveTab(tab)
+      setSelectedPath(path)
+      setContentPath(path !== '/' ? path : null)
+    })
+    return () => clearTimeout(timer)
   }, [location.pathname, location.search])
 
   const ops = useTreeOperations({

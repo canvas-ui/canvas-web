@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2, Save, X, Braces, PlayCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useToast } from '@/components/ui/toast-container'
+import { useToast } from '@/components/ui/toast-context'
 import { getRules, saveRules, backfillHook, type HookRule, type HookRuleAction } from '@/services/hooks'
 import { listScripts } from '@/services/scripts'
 
@@ -338,7 +338,9 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
     }
   }, [workspaceId])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    void Promise.resolve().then(load)
+  }, [load])
   useEffect(() => {
     listScripts(workspaceId).then((files) => setScripts(files.map((f) => f.path))).catch(() => setScripts([]))
   }, [workspaceId])

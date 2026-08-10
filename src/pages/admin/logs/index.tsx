@@ -4,7 +4,7 @@ import { Activity, Pause, Play, RotateCw, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useToast } from "@/components/ui/toast-container"
+import { useToast } from "@/components/ui/toast-context"
 import { adminService, type AdminLogEntry, type AdminLogFilters } from "@/services/admin"
 import { getCurrentUserFromToken } from "@/services/auth"
 
@@ -55,6 +55,7 @@ export default function AdminLogsPage() {
 
   const loadSnapshot = useCallback(async (nextFilters: AdminLogFilters) => {
     try {
+      await Promise.resolve()
       setIsLoading(true)
       const snapshot = await adminService.logs.getLogs(nextFilters)
       setLogs(mergeLogBuffer(snapshot))
@@ -74,31 +75,29 @@ export default function AdminLogsPage() {
 
   useEffect(() => {
     if (!isCurrentUserAdmin) {
-      setIsLoading(false)
-      setError("Access denied. Admin privileges required.")
       return
     }
 
-    loadSnapshot(filters)
+    void Promise.resolve().then(() => loadSnapshot(filters))
   }, [filters, isCurrentUserAdmin, loadSnapshot])
 
   useEffect(() => {
     if (!isCurrentUserAdmin || isPaused) {
-      setIsStreaming(false)
       return
     }
 
     const controller = new AbortController()
-    setIsStreaming(true)
-
-    void adminService.logs.streamLogs(filters, {
-      signal: controller.signal,
-      onEntry: (entry) => {
-        setLogs((current) => mergeLogBuffer([...current, entry]))
-      },
-      onError: (streamError) => {
-        setError(streamError.message)
-      },
+    void Promise.resolve().then(() => {
+      setIsStreaming(true)
+      return adminService.logs.streamLogs(filters, {
+        signal: controller.signal,
+        onEntry: (entry) => {
+          setLogs((current) => mergeLogBuffer([...current, entry]))
+        },
+        onError: (streamError) => {
+          setError(streamError.message)
+        },
+      })
     }).catch((streamError) => {
       const message = streamError instanceof Error ? streamError.message : "Log stream stopped"
       setError(message)

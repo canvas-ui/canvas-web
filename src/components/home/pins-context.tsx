@@ -1,32 +1,10 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { getWebuiConfig, putWebuiConfig, type PinnedCanvas, type WebuiConfig } from '@/services/user-config'
-
-// A canvas address, without the pin identity. What the caller knows.
-export interface CanvasAddress {
-  workspaceName: string
-  treeName: string
-  path: string
-  layerId?: string
-  label?: string
-}
-
-interface PinsValue {
-  pins: PinnedCanvas[]
-  isLoading: boolean
-  isPinned: (address: CanvasAddress) => boolean
-  pin: (address: CanvasAddress) => Promise<void>
-  unpin: (id: string) => Promise<void>
-  /** Reorder: move pin `id` before `beforeId` (null = to the end). */
-  movePin: (id: string, beforeId: string | null) => Promise<void>
-}
-
-const PinsContext = createContext<PinsValue | null>(null)
+import { PinsContext, addressKey, type CanvasAddress } from './pins-context-data'
 
 // Canvases are addressed by workspace + tree + path; a pin is unique on those
 // three. layerId is not the key: it is absent on older pins and the address is
 // what the home page actually resolves against the live tree.
-const addressKey = (a: CanvasAddress | PinnedCanvas) => `${a.workspaceName}\0${a.treeName}\0${a.path}`
-
 export function CanvasPinsProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<WebuiConfig | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -91,10 +69,4 @@ export function CanvasPinsProvider({ children }: { children: ReactNode }) {
   )
 
   return <PinsContext.Provider value={value}>{children}</PinsContext.Provider>
-}
-
-export function useCanvasPins(): PinsValue {
-  const ctx = useContext(PinsContext)
-  if (!ctx) throw new Error('useCanvasPins must be used within a CanvasPinsProvider')
-  return ctx
 }

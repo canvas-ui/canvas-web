@@ -10,7 +10,7 @@ import { useDocumentActivation } from '../useDocumentActivation'
 
 const TODO_FEATURE = 'data/schema/task'
 
-function TodoRow({ doc, workspaceId, readOnly, onChanged }: { doc: Document; workspaceId: string; readOnly: boolean; onChanged: () => void }) {
+export function TodoRow({ doc, workspaceId, readOnly, onChanged }: { doc: Document; workspaceId: string; readOnly: boolean; onChanged: () => void }) {
   const t = todoData(doc)
   const [busy, setBusy] = useState(false)
   const done = t.status === 'completed'
@@ -63,7 +63,7 @@ function TodoRow({ doc, workspaceId, readOnly, onChanged }: { doc: Document; wor
 
 // Task list over the canvas' context — every todo document, soonest due first
 // (the 'tasks' timeline; undated tasks trail). Checkboxes toggle completion.
-function TodosWidget({ config, canvas }: WidgetProps) {
+export function TodosWidget({ config, canvas }: WidgetProps) {
   const pageSize = typeof config.pageSize === 'number' ? config.pageSize : 50
   const [todos, setTodos] = useState<Document[]>([])
   const [isLoading, setIsLoading] = useState(true)

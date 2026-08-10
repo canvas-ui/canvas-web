@@ -5,12 +5,22 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AuthLayout } from "@/components/auth/auth-layout"
 import { registerUser, getAuthConfig } from "@/services/auth"
-import { useToast } from "@/components/ui/toast-container"
+import { useToast } from "@/components/ui/toast-context"
 
 interface FormData {
   name: string
   email: string
   password: string
+}
+
+type RegistrationResponse = Awaited<ReturnType<typeof registerUser>>
+type PasswordPolicy = {
+  minLength: number
+  requireUppercase: boolean
+  requireLowercase: boolean
+  requireNumbers: boolean
+  requireSpecialChars: boolean
+  maxLength: number
 }
 
 export default function RegisterPage() {
@@ -25,7 +35,7 @@ export default function RegisterPage() {
   })
   const [registrationComplete, setRegistrationComplete] = React.useState<boolean>(false)
   const [requireEmailVerification, setRequireEmailVerification] = React.useState<boolean>(false)
-  const [policy, setPolicy] = React.useState<{ minLength: number; requireUppercase: boolean; requireLowercase: boolean; requireNumbers: boolean; requireSpecialChars: boolean; maxLength: number } | null>(null)
+  const [policy, setPolicy] = React.useState<PasswordPolicy | null>(null)
 
   React.useEffect(() => {
     (async () => {
@@ -35,7 +45,8 @@ export default function RegisterPage() {
         navigate('/login', { replace: true })
         return
       }
-      if (local?.passwordPolicy) setPolicy(local.passwordPolicy)
+      const passwordPolicy = (local as { passwordPolicy?: PasswordPolicy } | undefined)?.passwordPolicy
+      if (passwordPolicy) setPolicy(passwordPolicy)
       setRequireEmailVerification(!!local?.requireEmailVerification)
     })()
   }, [navigate])
@@ -131,7 +142,7 @@ export default function RegisterPage() {
     }
     setIsLoading(true)
     try {
-      const response: any = await registerUser(formData.name, formData.email, formData.password)
+      const response: RegistrationResponse = await registerUser(formData.name, formData.email, formData.password)
       console.log('Registration successful:', response)
 
       showToast({
@@ -144,9 +155,9 @@ export default function RegisterPage() {
       setRegistrationComplete(true)
       setFormData({ name: "", email: "", password: "" }) // Clear form
       setErrors({})
-    } catch (error: any) {
+    } catch (error) {
       console.error('Registration failed:', error)
-      const msg = error?.message || 'Registration failed'
+      const msg = error instanceof Error ? error.message : 'Registration failed'
       // Prefer to attach the message to password if it mentions password
       if (msg.toLowerCase().includes('password')) {
         setErrors({ ...errors, password: msg })

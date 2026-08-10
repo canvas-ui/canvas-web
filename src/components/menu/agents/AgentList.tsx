@@ -2,10 +2,10 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import { useState } from 'react'
 import { Plus, Play, Square, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useMenu } from '@/components/shell/menu-context'
+import { useMenu } from '@/components/shell/menu-context-data'
 import { useAgentListData } from '@/hooks/useAgentListData'
-import { startAgent, stopAgent } from '@/services/agent'
-import { useToast } from '@/components/ui/toast-container'
+import { startAgent, stopAgent, type Agent } from '@/services/agent'
+import { useToast } from '@/components/ui/toast-context'
 import { useNavigate } from 'react-router-dom'
 
 function StatusDot({ status }: { status: string }) {
@@ -26,13 +26,13 @@ export function AgentList() {
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
   const navigate = useNavigate()
 
-  const handleSelect = (agent: any) => {
+  const handleSelect = (agent: Agent) => {
     selectEntity(agent.id)
     openM2('detail', agent.id)
     navigate(`/agents/${encodeURIComponent(agent.name || agent.id)}`)
   }
 
-  const handleStart = async (e: React.MouseEvent, agent: any) => {
+  const handleStart = async (e: React.MouseEvent, agent: Agent) => {
     e.stopPropagation()
     setBusyIds(prev => new Set(prev).add(agent.id))
     try {
@@ -46,7 +46,7 @@ export function AgentList() {
     }
   }
 
-  const handleStop = async (e: React.MouseEvent, agent: any) => {
+  const handleStop = async (e: React.MouseEvent, agent: Agent) => {
     e.stopPropagation()
     setBusyIds(prev => new Set(prev).add(agent.id))
     try {

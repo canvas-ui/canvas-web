@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDownWideNarrow, ArrowUpNarrowWide, Check, Loader2, Plus, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useAppletTarget, type AppletTarget } from './applet-target'
+import type { AppletTarget } from './applet-target'
+import { useAppletTarget } from './use-applet-target'
 import { submitDocuments, describeTarget } from '../add/useAddTarget'
 import { updateWorkspaceDocument } from '@/services/workspace'
 import { NOTE_SCHEMA } from '@/components/renderers/types'
 import type { Document } from '@/types/workspace'
 import type { AppletProps } from './registry'
-import {
-  APPLET_AUTOSAVE_MS, GrowingTextarea, ItemActions, LinkDocOverlay, formatCreated, useAppletDocs,
-} from './shared'
+import { APPLET_AUTOSAVE_MS, GrowingTextarea, ItemActions, LinkDocOverlay } from './shared'
+import { formatCreated, useAppletDocs } from './applet-utils'
 
 const NOTE_SCHEMA_VERSION = '2.0'
 
@@ -240,8 +240,6 @@ export function NotesApplet({ autoAdd = false }: AppletProps) {
     return out
   }, [query, sorted])
 
-  useEffect(() => { setMatchIdx(0) }, [query])
-
   const currentMatch = matches.length ? matches[Math.min(matchIdx, matches.length - 1)] : null
 
   useEffect(() => {
@@ -280,7 +278,7 @@ export function NotesApplet({ autoAdd = false }: AppletProps) {
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => { setQuery(e.target.value); setMatchIdx(0) }}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confirmMatch(true) } }}
             placeholder="Search notes…"
             spellCheck={false}

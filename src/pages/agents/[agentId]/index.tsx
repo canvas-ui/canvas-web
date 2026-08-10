@@ -2,12 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Bot, ChevronDown, Cpu, Image as ImageIcon, MessageCircle, Play, Settings, Square, X } from 'lucide-react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import StreamingChatMessageComponent from '@/components/agent/StreamingChatMessage'
-import { useAgentSessions } from '@/components/agent/agent-session-context'
-import { useMenu } from '@/components/shell/menu-context'
+import { useAgentSessions } from '@/components/agent/agent-session-context-data'
+import { useMenu } from '@/components/shell/menu-context-data'
 import { Button } from '@/components/ui/button'
 import { CloseSectionButton, SectionBackButton } from '@/components/common/page-header'
 import { useIsMobile } from '@/hooks/use-mobile'
-import { useToast } from '@/components/ui/toast-container'
+import { useToast } from '@/components/ui/toast-context'
 import { useAgentChat } from '@/hooks/useAgentChat'
 import { cn } from '@/lib/utils'
 import { type Agent, type AgentImageContent, type ChatMessage, getAgent, getAgentStatus, startAgent, stopAgent } from '@/services/agent'
@@ -126,7 +126,7 @@ function AgentConversation({
         navigate(`/agents/${encodeURIComponent(routeAgentId)}/${encodeURIComponent(sessionResult.current.sessionId)}`, { replace: true })
       }
       await sendMessage(message, {
-        images: pendingImages.map(({ id: _id, ...image }) => image),
+        images: pendingImages.map(({ type, data, mimeType, name }) => ({ type, data, mimeType, name })),
       })
       setPendingImages([])
     } catch (chatError) {

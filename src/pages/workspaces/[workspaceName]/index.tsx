@@ -6,8 +6,8 @@ import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style';
 import { visibleAccentColor } from '@/utils/color';
 import { api } from '@/lib/api';
 import { API_ROUTES } from '@/config/api';
-import { useToast } from '@/components/ui/toast-container';
-import { useMenu } from '@/components/shell/menu-context';
+import { useToast } from '@/components/ui/toast-context';
+import { useMenu } from '@/components/shell/menu-context-data';
 import { Button } from '@/components/ui/button';
 import { FormPanel } from '@/components/common/form-panel';
 import { CloseSectionButton, SectionBackButton } from '@/components/common/page-header';
@@ -46,7 +46,7 @@ import { Document, TreeNode, buildDatetimeFilters, buildGeoFilters, buildLensFil
 import { sanitizeUrlPath, buildWorkspaceUrl, parseWorkspacePathFromUrl } from '@/utils/url-params';
 import { docInGeoSelection } from '@/utils/geo';
 import { useToolbox } from '@/components/toolbox/toolbox-context';
-import { useCanvasPins } from '@/components/home/pins-context';
+import { useCanvasPins } from '@/components/home/pins-context-data';
 import { useQuerySession } from '@/hooks/useQuerySession';
 import type { SessionSpec } from '@/services/session';
 import { useQueryDebug, type QueryDebugData } from '@/lib/query-debug';
@@ -132,7 +132,9 @@ export default function WorkspaceDetailPage() {
   const [queryDebugData, setQueryDebugData] = useState<QueryDebugData | null>(null);
   // Turning the toggle off must drop stale numbers immediately, not leave the
   // last query's distances hanging around until the next search.
-  useEffect(() => { if (!queryDebug) setQueryDebugData(null); }, [queryDebug]);
+  useEffect(() => {
+    if (!queryDebug) queueMicrotask(() => setQueryDebugData(null));
+  }, [queryDebug]);
   // 'path' scopes to the selected tree path; 'workspace' lists every document.
   const [docScope, setDocScope] = useState<'path' | 'workspace'>('path');
   const [isStartingWorkspace, setIsStartingWorkspace] = useState(false);
@@ -198,7 +200,9 @@ export default function WorkspaceDetailPage() {
   // safe-to-purge candidates on the backend).
   const backendTarget = isBackendsPath ? backendAddressFromTreePath(selectedPath, wsBackends) : null;
   const [unfiledOnly, setUnfiledOnly] = useState(false);
-  useEffect(() => { setUnfiledOnly(false); }, [selectedTreeName, selectedPath]);
+  useEffect(() => {
+    queueMicrotask(() => setUnfiledOnly(false));
+  }, [selectedTreeName, selectedPath]);
 
   const isLayerView = searchParams.get('layer') === '1';
   const selectedLayerId = searchParams.get('layerId') || null;
@@ -329,7 +333,7 @@ export default function WorkspaceDetailPage() {
     };
 
     fetchWorkspace();
-  }, [workspaceName]);
+  }, [workspaceName, showToast]);
 
   // A query woke this workspace up (see src/lib/api.ts): reflect it in the
   // status pill, which otherwise keeps showing the stale 'inactive' it was
@@ -575,7 +579,7 @@ export default function WorkspaceDetailPage() {
   }, [workspaceName, selectedPath, selectedTreeName, selectedLayerId, isLayerView, currentPage, pageSize, workspace?.status, serverSearchQueries, tbFiltersKey, docScope, unfiledOnly, queryDebug]);
 
   useEffect(() => {
-    fetchDocuments();
+    void Promise.resolve().then(() => fetchDocuments());
   }, [fetchDocuments]);
 
   useEffect(() => {
@@ -653,16 +657,18 @@ export default function WorkspaceDetailPage() {
       offConnect?.();
       events.forEach(ev => socketService.off(ev, refresh));
     };
-  }, [workspaceName, workspace?.id, workspace?.name, selectedTreeName, selectedPath, fetchDocuments, resyncSession]);
+  }, [workspaceName, workspace, workspace?.id, workspace?.name, selectedTreeName, selectedPath, fetchDocuments, resyncSession]);
 
   useEffect(() => {
-    setCurrentPage(1);
-    setIgnoredSavedSearchPath(null);
+    queueMicrotask(() => {
+      setCurrentPage(1);
+      setIgnoredSavedSearchPath(null);
+    });
   }, [selectedPath, selectedTreeName, selectedLayerId, docScope]);
 
   // Leaving whole-workspace scope is implicit when the user navigates to a path.
   useEffect(() => {
-    setDocScope('path');
+    queueMicrotask(() => setDocScope('path'));
   }, [selectedPath, selectedTreeName, selectedLayerId]);
 
   // The M2 tree's "New canvas here…" navigates to the parent path with this
@@ -670,7 +676,7 @@ export default function WorkspaceDetailPage() {
   const wantsCreateCanvas = searchParams.get('createCanvas') === '1';
   useEffect(() => {
     if (!wantsCreateCanvas) return;
-    openCreateCanvas(selectedPath, false);
+    queueMicrotask(() => openCreateCanvas(selectedPath, false));
     const params = new URLSearchParams(location.search);
     params.delete('createCanvas');
     const nextSearch = params.toString();
@@ -690,20 +696,22 @@ export default function WorkspaceDetailPage() {
 
   const urlQueriesKey = urlSearchQueries.join('␟');
   useEffect(() => {
-    setServerSearchQueries(urlSearchQueries);
-    setCurrentPage(1);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlQueriesKey]);
+    queueMicrotask(() => {
+      setServerSearchQueries(urlSearchQueries);
+      setCurrentPage(1);
+    });
+  }, [urlQueriesKey, urlSearchQueries]);
 
   useEffect(() => {
     if (urlSearchQueries.length > 0 || selectedNodeType !== 'canvas' || ignoredSavedSearchPath === selectedPath) return;
-    setServerSearchQueries(savedCanvasSearchQuery ? [savedCanvasSearchQuery] : []);
-    setCurrentPage(1);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlQueriesKey, selectedNodeType, savedCanvasSearchQuery, selectedPath, ignoredSavedSearchPath]);
+    queueMicrotask(() => {
+      setServerSearchQueries(savedCanvasSearchQuery ? [savedCanvasSearchQuery] : []);
+      setCurrentPage(1);
+    });
+  }, [urlQueriesKey, urlSearchQueries.length, selectedNodeType, savedCanvasSearchQuery, selectedPath, ignoredSavedSearchPath]);
 
   // Append a query to the stack (refine). Empty input is ignored; duplicates skipped.
-  const handleBackendSearch = useCallback((query: string) => {
+  const handleBackendSearch = (query: string) => {
     const trimmed = query.trim();
     if (!trimmed) return;
     setIgnoredSavedSearchPath(null);
@@ -714,10 +722,10 @@ export default function WorkspaceDetailPage() {
       setCurrentPage(1);
       return next;
     });
-  }, [syncQueriesToUrl]);
+  };
 
   // Remove one query chip (or clear all when index < 0).
-  const handleRemoveBackendQuery = useCallback((index: number) => {
+  const handleRemoveBackendQuery = (index: number) => {
     setServerSearchQueries((prev) => {
       const next = index < 0 ? [] : prev.filter((_, i) => i !== index);
       if (next.length === 0) { setIgnoredSavedSearchPath(selectedPath); }
@@ -725,7 +733,7 @@ export default function WorkspaceDetailPage() {
       setCurrentPage(1);
       return next;
     });
-  }, [syncQueriesToUrl, selectedPath]);
+  };
 
   const currentSearchQuery = serverSearchQueries.join(' ').trim();
   const canSaveChanges = Boolean(toolboxState.activeContextType)
@@ -735,7 +743,10 @@ export default function WorkspaceDetailPage() {
   // refresh only when the backend tells us tree metadata changed.
   useEffect(() => {
     let cancelled = false;
-    if (!workspaceName) { setTree(null); return; }
+    if (!workspaceName) {
+      queueMicrotask(() => setTree(null));
+      return;
+    }
 
     const loadTree = (force = false) => {
       if (force) invalidateWorkspaceTreeCache(workspaceName, selectedTreeName);
@@ -785,7 +796,7 @@ export default function WorkspaceDetailPage() {
   useEffect(() => {
     let cancelled = false;
     if (!workspaceName || selectedNodeType !== 'canvas' || isLayerView) {
-      setPublicCanvasShare(null);
+      queueMicrotask(() => setPublicCanvasShare(null));
       return;
     }
 
@@ -948,7 +959,7 @@ export default function WorkspaceDetailPage() {
     }
   };
 
-  const handleImportDocuments = async (docs: any[], contextPath: string): Promise<boolean> => {
+  const handleImportDocuments = async (docs: Parameters<typeof importDocumentsToWorkspacePath>[2], contextPath: string): Promise<boolean> => {
     if (!workspaceName) return false;
     try {
       const ids = await importDocumentsToWorkspacePath(workspaceName, contextPath, docs, selectedTreeName, selectedTreeType);
@@ -979,11 +990,11 @@ export default function WorkspaceDetailPage() {
     }
   };
 
-  const openCreateCanvas = (parentPath: string, captureView: boolean) => {
+  function openCreateCanvas(parentPath: string, captureView: boolean) {
     const defaultName = parentPath === '/' ? 'canvas' : (parentPath.split('/').pop() || 'canvas');
     setSaveAsCanvasName(defaultName);
     setCreateCanvas({ parentPath, captureView });
-  };
+  }
 
   const handleSaveAsCanvas = () => openCreateCanvas(selectedPath, true);
 
@@ -1498,7 +1509,7 @@ function SideWorkspaceCanvas({
   }, [workspaceName, pane.treeName]);
 
   useEffect(() => {
-    fetchPaneDocuments();
+    void Promise.resolve().then(fetchPaneDocuments);
   }, [fetchPaneDocuments]);
 
   useEffect(() => {
@@ -1545,7 +1556,7 @@ function SideWorkspaceCanvas({
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to paste documents', variant: 'destructive' });
       return false;
     }
-  }, [workspaceName, pane.treeName, treeType, fetchPaneDocuments, showToast, clipboard]);
+  }, [workspaceName, pane.treeName, treeType, fetchPaneDocuments, showToast, clipboard, setClipboard]);
 
   // Remove / delete / destroy, scoped to this pane's own path + tree.
   const refreshPane = useCallback(() => {

@@ -5,8 +5,8 @@ import { Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/common/page-header'
-import { useToast } from '@/components/ui/toast-container'
-import { useMenu } from '@/components/shell/menu-context'
+import { useToast } from '@/components/ui/toast-context'
+import { useMenu } from '@/components/shell/menu-context-data'
 import { generateNiceRandomHexColor } from '@/utils/color'
 import {
   AGENT_SETTINGS_SECTIONS,

@@ -2,6 +2,46 @@ import { api } from '@/lib/api';
 import { API_URL } from '@/config/api';
 import { AnthropicConnector, WebSocketStreamingService, StreamMessage } from './streaming';
 
+type UnknownRecord = Record<string, unknown>;
+type AgentContentBlock = {
+  type?: unknown;
+  text?: unknown;
+  thinking?: unknown;
+  reasoning?: unknown;
+};
+export interface AgentSessionMessage {
+  role?: unknown;
+  content?: unknown;
+  errorMessage?: unknown;
+  metadata?: { reasoning?: unknown; toolCalls?: unknown };
+  api?: unknown;
+  provider?: unknown;
+  model?: unknown;
+  stopReason?: unknown;
+  timestamp?: unknown;
+  responseId?: unknown;
+  usage?: unknown;
+}
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null;
+}
+
+function isAgentSessionMessage(value: unknown): value is AgentSessionMessage {
+  return isRecord(value);
+}
+
+function isChatSessionMessage(
+  message: AgentSessionMessage
+): message is AgentSessionMessage & { role: 'user' | 'assistant'; timestamp?: string | number } {
+  return (message.role === 'user' || message.role === 'assistant')
+    && (message.timestamp === undefined || typeof message.timestamp === 'string' || typeof message.timestamp === 'number');
+}
+
+function asAgentContentBlocks(value: unknown): AgentContentBlock[] {
+  return Array.isArray(value) ? value.filter(isRecord) : [];
+}
+
 export interface AgentMessage {
   id: string;
   agentId: string;
@@ -49,7 +89,7 @@ export interface AgentResponseUsage {
   cost?: AgentResponseUsageCost;
 }
 
-export interface AgentResponseMetadata {
+export interface AgentResponseMetadata extends Record<string, unknown> {
   api?: string;
   provider?: string;
   model?: string;
@@ -57,7 +97,7 @@ export interface AgentResponseMetadata {
   timestamp?: string | number;
   responseId?: string;
   usage?: AgentResponseUsage;
-  toolCalls?: any[];
+  toolCalls?: unknown[];
   reasoning?: string;
 }
 
@@ -178,7 +218,7 @@ export interface MCPTool {
   description: string;
   inputSchema: {
     type: string;
-    properties: Record<string, any>;
+    properties: Record<string, unknown>;
     required?: string[];
   };
   server: string;
@@ -191,7 +231,7 @@ export interface AgentMemory {
   agentId: string;
   type: 'conversation' | 'context' | 'instruction';
   content: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
   timestamp?: string;
@@ -207,33 +247,32 @@ export interface ChatMessage {
   metadata?: AgentResponseMetadata;
 }
 
-function extractAgentMessageText(message: any): string {
-  if (!message) return '';
+function extractAgentMessageText(message: unknown): string {
+  if (!isAgentSessionMessage(message)) return '';
   if (typeof message.errorMessage === 'string' && message.errorMessage.trim()) {
     return message.errorMessage.trim();
   }
   const content = message.content;
   if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return '';
-  const text = content
-    .filter((block: any) => block?.type === 'text' && typeof block.text === 'string')
-    .map((block: any) => block.text)
+  const text = asAgentContentBlocks(content)
+    .filter((block) => block.type === 'text' && typeof block.text === 'string')
+    .map((block) => block.text)
     .join('\n');
   return text || '';
 }
 
-export function extractAgentMessageReasoning(message: any): string {
+export function extractAgentMessageReasoning(message: unknown): string {
+  if (!isAgentSessionMessage(message)) return '';
   if (!message) return '';
-  if (typeof message?.metadata?.reasoning === 'string' && message.metadata.reasoning.trim()) {
+  if (typeof message.metadata?.reasoning === 'string' && message.metadata.reasoning.trim()) {
     return message.metadata.reasoning.trim();
   }
-  if (!Array.isArray(message.content)) return '';
-  return message.content
-    .filter((block: any) => block?.type === 'thinking' || block?.type === 'reasoning')
-    .map((block: any) => {
-      if (typeof block?.thinking === 'string') return block.thinking;
-      if (typeof block?.reasoning === 'string') return block.reasoning;
-      if (typeof block?.text === 'string') return block.text;
+  return asAgentContentBlocks(message.content)
+    .filter((block) => block.type === 'thinking' || block.type === 'reasoning')
+    .map((block) => {
+      if (typeof block.thinking === 'string') return block.thinking;
+      if (typeof block.reasoning === 'string') return block.reasoning;
+      if (typeof block.text === 'string') return block.text;
       return '';
     })
     .filter(Boolean)
@@ -241,19 +280,20 @@ export function extractAgentMessageReasoning(message: any): string {
     .trim();
 }
 
-export function extractAgentMessageMetadata(message: any): AgentResponseMetadata | undefined {
+export function extractAgentMessageMetadata(message: unknown): AgentResponseMetadata | undefined {
+  if (!isAgentSessionMessage(message)) return undefined;
   if (!message) return undefined;
 
   const reasoning = extractAgentMessageReasoning(message);
   const metadata: AgentResponseMetadata = {
-    ...(message.api ? { api: message.api } : {}),
-    ...(message.provider ? { provider: message.provider } : {}),
-    ...(message.model ? { model: message.model } : {}),
-    ...(message.stopReason ? { stopReason: message.stopReason } : {}),
-    ...(message.timestamp !== undefined ? { timestamp: message.timestamp } : {}),
-    ...(message.responseId ? { responseId: message.responseId } : {}),
-    ...(message.usage ? { usage: message.usage } : {}),
-    ...(message.metadata?.toolCalls ? { toolCalls: message.metadata.toolCalls } : {}),
+    ...(typeof message.api === 'string' ? { api: message.api } : {}),
+    ...(typeof message.provider === 'string' ? { provider: message.provider } : {}),
+    ...(typeof message.model === 'string' ? { model: message.model } : {}),
+    ...(typeof message.stopReason === 'string' ? { stopReason: message.stopReason } : {}),
+    ...(typeof message.timestamp === 'string' || typeof message.timestamp === 'number' ? { timestamp: message.timestamp } : {}),
+    ...(typeof message.responseId === 'string' ? { responseId: message.responseId } : {}),
+    ...(isRecord(message.usage) ? { usage: message.usage as AgentResponseUsage } : {}),
+    ...(Array.isArray(message.metadata?.toolCalls) ? { toolCalls: message.metadata.toolCalls } : {}),
     ...(reasoning ? { reasoning } : {}),
   };
 
@@ -269,10 +309,11 @@ function normalizeMessageTimestamp(timestamp: string | number | undefined): stri
   return new Date().toISOString();
 }
 
-export function convertAgentSessionMessages(messages: any[] = []): ChatMessage[] {
+export function convertAgentSessionMessages(messages: unknown[] = []): ChatMessage[] {
   return messages
-    .filter((message: any) => message?.role === 'user' || message?.role === 'assistant')
-    .map((message: any) => ({
+    .filter(isAgentSessionMessage)
+    .filter(isChatSessionMessage)
+    .map((message) => ({
       role: message.role,
       content: extractAgentMessageText(message),
       timestamp: normalizeMessageTimestamp(message.timestamp),
@@ -283,21 +324,23 @@ export function convertAgentSessionMessages(messages: any[] = []): ChatMessage[]
     .filter((message) => message.content || message.metadata?.reasoning);
 }
 
-function normalizeAgentSessionPayload(payload: any): AgentSession {
+function normalizeAgentSessionPayload(payload: unknown): AgentSession {
+  const session = isRecord(payload) ? payload : {};
   return {
-    mode: payload?.mode,
-    sessionId: payload?.sessionId,
-    sessionFile: payload?.sessionFile,
-    thinkingLevel: payload?.thinkingLevel,
-    model: payload?.model,
-    messages: convertAgentSessionMessages(payload?.messages || []),
+    mode: session.mode === 'persistent' || session.mode === 'experimental' || session.mode === 'incognito' ? session.mode : undefined,
+    sessionId: typeof session.sessionId === 'string' ? session.sessionId : undefined,
+    sessionFile: typeof session.sessionFile === 'string' ? session.sessionFile : undefined,
+    thinkingLevel: typeof session.thinkingLevel === 'string' ? session.thinkingLevel : undefined,
+    model: isRecord(session.model) ? session.model as AgentSession['model'] : undefined,
+    messages: Array.isArray(session.messages) ? convertAgentSessionMessages(session.messages) : [],
   };
 }
 
-function normalizeAgentSessionMutationResult(payload: any): AgentSessionMutationResult {
+function normalizeAgentSessionMutationResult(payload: unknown): AgentSessionMutationResult {
+  const result = isRecord(payload) ? payload : {};
   return {
-    current: normalizeAgentSessionPayload(payload?.current),
-    sessions: payload?.sessions,
+    current: normalizeAgentSessionPayload(result.current),
+    sessions: result.sessions as AgentSessionList,
   };
 }
 
@@ -626,7 +669,7 @@ export async function getAgent(agentId: string): Promise<Agent> {
 }
 
 export async function getAgentSession(agentId: string): Promise<AgentSession> {
-  const response = await api.get<{ payload: any }>(`${API_URL}/agents/${agentId}/session`);
+  const response = await api.get<{ payload: unknown }>(`${API_URL}/agents/${agentId}/session`);
   return normalizeAgentSessionPayload(response.payload);
 }
 
@@ -775,10 +818,10 @@ export async function getAgentMCPTools(agentId: string): Promise<MCPTool[]> {
 export async function callMCPTool(
   agentId: string,
   toolName: string,
-  arguments_: Record<string, any>,
+  arguments_: Record<string, unknown>,
   source?: string
-): Promise<any> {
-  const response = await api.post<{ payload: any }>(`${API_URL}/agents/${agentId}/mcp/tools/${toolName}`, {
+): Promise<unknown> {
+  const response = await api.post<{ payload: unknown }>(`${API_URL}/agents/${agentId}/mcp/tools/${toolName}`, {
     arguments: arguments_,
     source
   });
@@ -796,8 +839,8 @@ export async function chatWithAgentStream(
   message: string,
   options: {
     onStart?: () => void;
-    onMessage?: (content: any, isComplete: any, metadata: any) => void;
-    onError?: (error: any) => void;
+    onMessage?: (content: string, isComplete: boolean, metadata: AgentResponseMetadata & { reasoningDelta?: string }) => void;
+    onError?: (error: Error) => void;
     onComplete?: () => void;
     context?: ChatMessage[];
     mcpContext?: boolean;
@@ -832,24 +875,25 @@ export async function chatWithAgentStream(
           const payload = line.slice(6).trim();
           if (payload === '[DONE]') continue;
           try {
-            const data = JSON.parse(payload);
+            const data: unknown = JSON.parse(payload);
+            if (!isRecord(data)) continue;
             if (!onMessage) continue;
             if (data.type === 'chunk') {
-              onMessage(data.delta || '', false, data.metadata || {});
+              onMessage(typeof data.delta === 'string' ? data.delta : '', false, isRecord(data.metadata) ? data.metadata : {});
             } else if (data.type === 'thinking') {
-              onMessage('', false, { ...(data.metadata || {}), reasoningDelta: data.delta || '' });
+              onMessage('', false, { ...(isRecord(data.metadata) ? data.metadata : {}), reasoningDelta: typeof data.delta === 'string' ? data.delta : '' });
             } else if (data.type === 'complete') {
               const finalMessage = Array.isArray(data.messages)
-                ? [...data.messages].reverse().find((msg: any) => msg?.role === 'assistant')
+                ? [...data.messages].reverse().find((msg) => isAgentSessionMessage(msg) && msg.role === 'assistant')
                 : null;
               // Pass empty string for content — the streaming buffer already has the full accumulated text.
               // Re-appending the final text here would double the message.
               onMessage('', true, {
-                ...(data.metadata || {}),
+                ...(isRecord(data.metadata) ? data.metadata : {}),
                 ...(extractAgentMessageMetadata(finalMessage) || {}),
               });
             } else if (data.type === 'error' && onError) {
-              onError(new Error(data.error || 'Prompt stream failed'));
+              onError(new Error(typeof data.error === 'string' ? data.error : 'Prompt stream failed'));
             }
           } catch {
             // ignore malformed partial event payloads
@@ -869,8 +913,8 @@ export async function chatWithAgentFallback(
   agentId: string,
   options: {
     message: string;
-    onMessage?: (content: any, isComplete: any, metadata: any) => void;
-    onError?: (error: any) => void;
+    onMessage?: (content: string, isComplete: boolean, metadata: AgentResponseMetadata) => void;
+    onError?: (error: Error) => void;
     onComplete?: () => void;
     context?: ChatMessage[];
     mcpContext?: boolean;
@@ -878,13 +922,13 @@ export async function chatWithAgentFallback(
     temperature?: number;
     images?: AgentImageContent[];
   }
-): Promise<{ content: string; metadata?: any }> {
+): Promise<{ content: string; metadata?: AgentResponseMetadata }> {
   const { message, onMessage, onError, onComplete, context, mcpContext, maxTokens, temperature, images } = options;
 
   try {
     const response = await api.post<{
       payload: {
-        messages: any[];
+        messages: unknown[];
       }
     }>(`${API_URL}/agents/${agentId}/prompt`, {
       message,
@@ -896,7 +940,7 @@ export async function chatWithAgentFallback(
     });
 
     const finalMessage = Array.isArray(response.payload.messages)
-      ? [...response.payload.messages].reverse().find((msg: any) => msg?.role === 'assistant')
+      ? [...response.payload.messages].reverse().find((msg) => isAgentSessionMessage(msg) && msg.role === 'assistant')
       : null;
     const result = {
       content: extractAgentMessageText(finalMessage),
@@ -904,7 +948,7 @@ export async function chatWithAgentFallback(
     };
 
     if (onMessage) {
-      onMessage(result.content, true, result.metadata);
+      onMessage(result.content, true, result.metadata ?? {});
     }
     if (onComplete) {
       onComplete();
@@ -913,7 +957,7 @@ export async function chatWithAgentFallback(
     return result;
   } catch (error) {
     if (onError) {
-      onError(error);
+      onError(error instanceof Error ? error : new Error(String(error)));
     }
     throw error;
   }

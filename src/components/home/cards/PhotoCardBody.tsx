@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Camera, File as FileIcon, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { uploadWorkspaceBlob } from '@/services/blobs'
@@ -13,19 +13,16 @@ import { B5Card, type B5SaveTarget } from '../B5Card'
 export function PhotoCardBody({ onClose }: { onClose: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   // Target workspace comes from the Save/Link-to picker, so suggestions fall
   // back to the toolbox's active workspace (null on home → freeform).
   const { state } = useToolbox()
   const meta = useFileFields(state.activeWorkspaceName)
 
-  useEffect(() => {
-    if (!file) { setPreviewUrl(null); return }
-    const url = URL.createObjectURL(file)
-    setPreviewUrl(url)
-    return () => URL.revokeObjectURL(url)
-  }, [file])
+  const previewUrl = useMemo(() => file && URL.createObjectURL(file), [file])
+  useEffect(() => () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
+  }, [previewUrl])
 
   const save = async (target: B5SaveTarget) => {
     if (!file) return []

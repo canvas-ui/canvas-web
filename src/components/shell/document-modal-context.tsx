@@ -1,20 +1,12 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { ObjectPropertiesModal } from '@/components/object-card/ObjectPropertiesModal'
 import type { Document } from '@/types/workspace'
+import { DocumentModalContext } from './document-modal-context-data'
 
 interface Entry {
   document: Document
   workspaceId: string
 }
-
-interface DocumentModalContextValue {
-  // Open the shared document details modal for any document (e.g. a map pin).
-  open: (document: Document, workspaceId: string) => void
-  close: () => void
-}
-
-const DocumentModalContext = createContext<DocumentModalContextValue | null>(null)
-
 // Global host for the ONE shared document details modal. Components anywhere
 // under the shell (map pins, widgets, …) call `useDocumentModal().open(doc, ws)`
 // instead of mounting their own ObjectPropertiesModal. Mirrors SideViewProvider.
@@ -35,11 +27,4 @@ export function DocumentModalProvider({ children }: { children: ReactNode }) {
       />
     </DocumentModalContext.Provider>
   )
-}
-
-// No-op fallback (not throwing) so consumers outside the shell just do nothing.
-const noop: DocumentModalContextValue = { open: () => {}, close: () => {} }
-
-export function useDocumentModal(): DocumentModalContextValue {
-  return useContext(DocumentModalContext) ?? noop
 }

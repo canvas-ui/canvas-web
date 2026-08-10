@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useToast } from '@/components/ui/toast-container';
+import { useToast } from '@/components/ui/toast-context';
 import {
   listBackends,
   addBackend,
@@ -83,7 +83,9 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
     }
   }, [workspaceId, showToast]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void Promise.resolve().then(load);
+  }, [load]);
 
   // Discover the account's server-side folder list. For an existing account
   // this runs automatically on select; for a new one it needs credentials

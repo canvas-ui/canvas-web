@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Edit3, Infinity, Plus, Settings, Trash2 } from 'lucide-react'
+import { Edit3, Infinity as InfinityIcon, Plus, Settings, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { useAgentSessions } from '@/components/agent/agent-session-context'
+import { useAgentSessions } from '@/components/agent/agent-session-context-data'
 import { M2Header } from '@/components/menu/shared/M2Header'
-import { useMenu } from '@/components/shell/menu-context'
+import { useMenu } from '@/components/shell/menu-context-data'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useToast } from '@/components/ui/toast-container'
+import { useToast } from '@/components/ui/toast-context'
 import { getAgent, type Agent, type AgentSessionMutationResult, type AgentSessionSummary } from '@/services/agent'
 
 function formatSessionTitle(session: AgentSessionSummary) {
@@ -208,7 +208,7 @@ export function AgentM2Sessions() {
             New
           </Button>
           <Button size="sm" variant={sessions?.mode === 'experimental' ? 'default' : 'outline'} onClick={handleExperimental} disabled={isLoading}>
-            <Infinity className="mr-1 h-3.5 w-3.5" />
+            <InfinityIcon className="mr-1 h-3.5 w-3.5" />
             Experimental
           </Button>
           <Button size="sm" variant={sessions?.mode === 'incognito' ? 'default' : 'outline'} onClick={handleIncognito} disabled={isLoading}>

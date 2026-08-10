@@ -1,11 +1,26 @@
 import { PageHeader } from '@/components/common/page-header'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useToast } from '@/components/ui/toast-container'
+import { useToast } from '@/components/ui/toast-context'
 import { SourceLink } from '@/components/common/source-link'
+
+type SharedDocument = { id?: string | number; schema?: string }
+type SharedResponse = {
+  payload?: unknown
+  data?: unknown
+}
+
+function documentsFromResponse(response: SharedResponse): SharedDocument[] {
+  const payload = response.payload
+  if (Array.isArray(payload)) return payload as SharedDocument[]
+  if (payload && typeof payload === 'object' && Array.isArray((payload as { data?: unknown }).data)) {
+    return (payload as { data: SharedDocument[] }).data
+  }
+  return Array.isArray(response.data) ? response.data as SharedDocument[] : []
+}
 
 export default function SharedViewerPage() {
   const location = useLocation()
@@ -31,8 +46,8 @@ export default function SharedViewerPage() {
 
   const [resourceUrl, setResourceUrl] = useState(initialUrl)
   const [token, setToken] = useState(initialToken)
-  const [meta, setMeta] = useState<any>(null)
-  const [documents, setDocuments] = useState<any[]>([])
+  const [meta, setMeta] = useState<unknown>(null)
+  const [documents, setDocuments] = useState<SharedDocument[]>([])
   const [isLoading, setIsLoading] = useState(false)
 
   const kind = useMemo(() => {
@@ -44,20 +59,18 @@ export default function SharedViewerPage() {
     } catch { return 'unknown' }
   }, [resourceUrl])
 
-  const authHeaders = () => ({ Authorization: `Bearer ${token.trim()}` })
-
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!resourceUrl || !token) return
     setIsLoading(true)
     try {
       const normalized = normalizeResourceUrl(resourceUrl)
+      const headers = { Authorization: `Bearer ${token.trim()}` }
       // Fetch meta
-      const metaResp = await api.get<any>(normalized, { skipAuth: true, headers: authHeaders() })
+      const metaResp = await api.get<SharedResponse>(normalized, { skipAuth: true, headers })
       setMeta(metaResp.payload || metaResp)
       // Fetch documents
-      const docsResp = await api.get<any>(`${normalized}/documents`, { skipAuth: true, headers: authHeaders() })
-      const list = (docsResp.payload && Array.isArray(docsResp.payload.data)) ? docsResp.payload.data : (Array.isArray(docsResp.payload) ? docsResp.payload : docsResp.data || [])
-      setDocuments(Array.isArray(list) ? list : [])
+      const docsResp = await api.get<SharedResponse>(`${normalized}/documents`, { skipAuth: true, headers })
+      setDocuments(documentsFromResponse(docsResp))
     } catch (err) {
       const hint = resourceUrl.includes('/rest/v2/workspaces/') ? 'Ensure the URL uses /rest/v2/pub/workspaces/<workspace-id> and the token matches that workspace.' : resourceUrl.includes('/rest/v2/contexts/') ? 'Ensure the URL uses /rest/v2/pub/contexts/<context-id>.' : undefined
       showToast({ title: 'Error', description: `${err instanceof Error ? err.message : 'Failed to load shared resource'}${hint ? ` — ${hint}` : ''}`, variant: 'destructive' })
@@ -66,9 +79,11 @@ export default function SharedViewerPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [resourceUrl, showToast, token])
 
-  useEffect(() => { if (resourceUrl && token) load() }, [])
+  useEffect(() => {
+    if (resourceUrl && token) void Promise.resolve().then(load)
+  }, [load, resourceUrl, token])
 
   return (
     <div className="space-y-4">

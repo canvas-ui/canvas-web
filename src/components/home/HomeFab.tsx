@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { InsertMenu, type InsertKind } from '@/components/common/insert-menu'
+import { InsertMenu } from '@/components/common/insert-menu'
+import type { InsertKind } from '@/components/common/insert-menu-utils'
 import { type QuickAddKind, type QuickAddInitialData } from './quick-add-types'
 import { NoteCardBody } from './cards/NoteCardBody'
 import { LinkCardBody } from './cards/LinkCardBody'
@@ -45,7 +46,9 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose, onCardsO
   // parent re-render can never re-fire the effect with the same value.
   const hasOpenCards = openCards.length > 0
   const onCardsOpenChangeRef = useRef(onCardsOpenChange)
-  onCardsOpenChangeRef.current = onCardsOpenChange
+  useEffect(() => {
+    onCardsOpenChangeRef.current = onCardsOpenChange
+  }, [onCardsOpenChange])
   useEffect(() => {
     onCardsOpenChangeRef.current?.(hasOpenCards)
   }, [hasOpenCards])

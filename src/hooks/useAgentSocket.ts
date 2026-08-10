@@ -18,7 +18,7 @@ export interface StreamingChatChunk {
   type: string;       // Backend uses type field
   content: string;
   delta: string;      // Backend includes delta field
-  messages?: any[];
+  messages?: unknown[];
 }
 
 export interface StreamingChatRequest {
@@ -35,13 +35,13 @@ export interface StreamingChatError {
   agentId: string;
   messageId?: string; // Updated to match backend
   error: string;
-  details?: any;
+  details?: unknown;
 }
 
 export interface UseAgentSocketOptions {
   agentId?: string;
   onMessage?: (chunk: StreamingChatChunk) => void;
-  onComplete?: (agentId: string, messageId: string, messages?: any[]) => void;
+  onComplete?: (agentId: string, messageId: string, messages?: unknown[]) => void;
   onError?: (error: StreamingChatError) => void;
 }
 
@@ -120,7 +120,7 @@ export function useAgentSocket(options: UseAgentSocketOptions = {}) {
     });
 
     // Backend sends different completion event
-    socketInstance.on('agent:chat:complete', (data: { agentId: string; messageId: string; messages?: any[] }) => {
+    socketInstance.on('agent:chat:complete', (data: { agentId: string; messageId: string; messages?: unknown[] }) => {
       console.log('Chat stream complete:', data);
       if (optionsRef.current.onComplete) {
         optionsRef.current.onComplete(data.agentId, data.messageId, data.messages);
@@ -190,12 +190,7 @@ export function useAgentSocket(options: UseAgentSocketOptions = {}) {
 
   // Auto-connect effect
   useEffect(() => {
-    if (!options.agentId) {
-      disconnect();
-      return;
-    }
-
-    connect();
+    queueMicrotask(options.agentId ? connect : disconnect);
 
     return () => {
       disconnect();

@@ -33,22 +33,17 @@ export function StreamingChatMessageComponent({
       }, 20); // Adjust typing speed
 
       return () => clearInterval(typewriter);
-    } else {
-      setDisplayedContent(message.content);
     }
   }, [message.content, isStreaming, message.isComplete]);
 
   // Cursor blinking effect
   useEffect(() => {
     if (isStreaming && !message.isComplete) {
-      setShowCursor(true);
       const blinkInterval = setInterval(() => {
         setShowCursor(prev => !prev);
       }, 500);
 
       return () => clearInterval(blinkInterval);
-    } else {
-      setShowCursor(false);
     }
   }, [isStreaming, message.isComplete]);
 
@@ -82,9 +77,9 @@ export function StreamingChatMessageComponent({
           isStreaming={isStreaming && !message.isComplete}
         />
         <div className="whitespace-pre-wrap text-sm">
-          {displayedContent}
+          {isStreaming && !message.isComplete ? displayedContent : message.content}
           {isStreaming && !message.isComplete && (
-            <span className={`inline-block w-2 ${showCursor ? 'bg-current' : 'bg-transparent'}`}>
+            <span className={`inline-block w-2 ${showCursor ? 'bg-transparent' : 'bg-current'}`}>
               |
             </span>
           )}
