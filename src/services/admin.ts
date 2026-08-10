@@ -289,14 +289,6 @@ export function adminReindexSearch(workspaceName: string, rebuild = false): Prom
   return postReindex(workspaceName, `reindex-search${rebuild ? '?rebuild=true' : ''}`)
 }
 
-/** Embedding reconcile; reindex=true wipes the space(s) for a full re-embed (async drain). */
-export function adminReindexEmbeddings(workspaceName: string, opts: { space?: string; reindex?: boolean } = {}): Promise<ReindexResult> {
-  const body: Record<string, unknown> = {}
-  if (opts.space) body.space = opts.space
-  if (opts.reindex) body.reindex = true
-  return postReindex(workspaceName, 'reindex-embeddings', body)
-}
-
 /** Compact + prune a Lance table and rebuild its ANN index. space: 'fts'|'text'|'image'; omit = all. */
 export function adminOptimize(workspaceName: string, space?: string): Promise<ReindexResult> {
   return postReindex(workspaceName, 'optimize', space ? { space } : {})

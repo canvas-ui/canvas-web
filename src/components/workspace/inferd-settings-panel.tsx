@@ -153,7 +153,7 @@ function PipelineStatus({
         {queue?.ingestDisabled && (
           <span
             className="rounded bg-warning-subtle px-1.5 py-0.5 text-[10px] font-medium text-warning"
-            title="CANVAS_EMBEDD_INGEST_DISABLED=true — nothing new is enqueued; existing vectors still serve search"
+            title="CANVAS_INFERD_INGEST_DISABLED=true — nothing new is enqueued; existing vectors still serve search"
           >
             ingest disabled
           </span>
@@ -298,7 +298,7 @@ function AdvancedFill({
       if (result.ingestDisabled) {
         showToast({
           title: 'Ingest disabled',
-          description: 'CANVAS_EMBEDD_INGEST_DISABLED=true — nothing was enqueued. Existing vectors still serve search.',
+          description: 'CANVAS_INFERD_INGEST_DISABLED=true — nothing was enqueued. Existing vectors still serve search.',
           variant: 'destructive',
         })
       } else {
@@ -571,7 +571,7 @@ export function InferdSettingsPanel({
       if (result.ingestDisabled) {
         showToast({
           title: 'Ingest disabled',
-          description: 'CANVAS_EMBEDD_INGEST_DISABLED=true — nothing was enqueued. Existing vectors still serve search.',
+          description: 'CANVAS_INFERD_INGEST_DISABLED=true — nothing was enqueued. Existing vectors still serve search.',
           variant: 'destructive',
         })
         return

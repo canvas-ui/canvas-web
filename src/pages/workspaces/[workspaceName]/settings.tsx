@@ -792,11 +792,11 @@ function DbStatsTab({
                       (server-wide, read-only for now): notes/emails + text-file
                       blobs → text; image/* → image. Falls back to synapsd's gap
                       default only if the inferd routing isn't available. */}
-                  {stats.inferder?.routing
-                    ? Object.entries(stats.inferder.routing).map(([space, matchers]) => (
+                  {stats.inferd?.routing
+                    ? Object.entries(stats.inferd.routing).map(([space, matchers]) => (
                         <StatRow key={`route-${space}`} label={`Embeds → ${space}`} value={<span className="font-mono text-[11px]">{matchers.join(', ')}</span>} />
                       ))
-                    : <StatRow label="Text-inferdable (gap default)" value={stats.semantic.inferdableSchemas?.join(', ')} />}
+                    : <StatRow label="Text-embeddable (gap default)" value={stats.semantic.embeddableSchemas?.join(', ')} />}
                   {/* Per-space STORAGE stats — row/doc counts, so a re-embed's
                       progress is visible. Which model/backend fills each space
                       (and the queue driving it) is in Embeddings, above. */}

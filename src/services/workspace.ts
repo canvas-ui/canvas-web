@@ -1410,17 +1410,16 @@ export interface WorkspaceDbStats {
     model?: string
     dim?: number
     cacheDir?: string
-    inferdableSchemas?: string[]
+    embeddableSchemas?: string[]
     imageMaxDistance?: number | null
     imageFloorMode?: 'relative' | 'absolute'
     imageRelativeMargin?: number
     searchWeights?: { fts?: number; dense?: number; image?: number }
     vector?: { ready: boolean; rowCount?: number; error?: string } | Record<string, unknown>
     vectorSpaces?: Record<string, { ready: boolean; dim?: number; chunkRows?: number; embeddedDocs?: number; error?: string }>
-    inferder?: Record<string, unknown>
     queue?: { pending: number; draining: boolean } | null
   }
-  inferder?: {
+  inferd?: {
     // THIS workspace's queue — each workspace owns one, so the backlog shown is
     // its own work rather than a server-wide total.
     queue?: { pending: number; draining: boolean; paused?: boolean; ingestDisabled?: boolean } | null
