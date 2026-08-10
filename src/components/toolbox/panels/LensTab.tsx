@@ -44,6 +44,14 @@ export function LensTab() {
   const [gpsOn, setGpsOn] = useState(lens.gps !== null)
   const [radiusM, setRadiusM] = useState(lens.gps?.radiusM ?? 100)
   const [gpsError, setGpsError] = useState<string | null>(null)
+  // Bumping this re-runs the watch effect → a fresh watchPosition call, which
+  // re-opens the permission dialog when the browser still allows prompting
+  // (on Android, DISMISSING the dialog leaves state 'prompt' — retryable;
+  // an explicit block leaves 'denied' — only site settings can undo that).
+  const [gpsAttempt, setGpsAttempt] = useState(0)
+  // Best-effort permission state (Safari/iOS has no permissions.query → stays
+  // 'prompt' and the retry button simply remains available).
+  const [gpsPermission, setGpsPermission] = useState<'prompt' | 'granted' | 'denied'>('prompt')
   const watchRef = useRef<number | null>(null)
   const radiusRef = useRef(radiusM)
   useEffect(() => { radiusRef.current = radiusM }, [radiusM])
@@ -51,7 +59,19 @@ export function LensTab() {
   const gpsSupported = 'geolocation' in navigator && window.isSecureContext
 
   useEffect(() => {
+    if (!navigator.permissions?.query) return
+    let status: PermissionStatus | null = null
+    navigator.permissions.query({ name: 'geolocation' }).then((st) => {
+      status = st
+      setGpsPermission(st.state === 'granted' ? 'granted' : st.state === 'denied' ? 'denied' : 'prompt')
+      st.onchange = () => setGpsPermission(st.state === 'granted' ? 'granted' : st.state === 'denied' ? 'denied' : 'prompt')
+    }).catch(() => {})
+    return () => { if (status) status.onchange = null }
+  }, [])
+
+  useEffect(() => {
     if (!gpsOn || !gpsSupported) return
+    void gpsAttempt // effect dep: a retry re-invokes watchPosition (re-prompts)
     const id = navigator.geolocation.watchPosition(
       (pos) => {
         const lat = round4(pos.coords.latitude)
@@ -64,12 +84,18 @@ export function LensTab() {
     )
     watchRef.current = id
     return () => { navigator.geolocation.clearWatch(id); watchRef.current = null }
-  }, [gpsOn, gpsSupported, setLensGps])
+  }, [gpsOn, gpsSupported, gpsAttempt, setLensGps])
 
   const toggleGps = (on: boolean) => {
     setGpsOn(on)
     setGpsError(null)
     if (!on) setLensGps(null)
+  }
+
+  const retryGps = () => {
+    setGpsError(null)
+    setGpsOn(true)
+    setGpsAttempt((n) => n + 1)
   }
 
   const changeRadius = (m: number) => {
@@ -179,9 +205,18 @@ export function LensTab() {
         <p className="text-xs text-muted-foreground">
           {!gpsSupported
             ? 'Needs a secure context (https or localhost) with location access.'
-            : gpsError
-              ? <span className="text-destructive">{gpsError}</span>
-              : lens.gps
+            : gpsPermission === 'denied'
+              ? <span className="text-destructive">Location is blocked for this site — allow it in your browser/app settings, then retry.</span>
+              : gpsError
+                ? (
+                  <span className="text-destructive">
+                    {gpsError}{' '}
+                    <button type="button" onClick={retryGps} className="underline hover:text-foreground">
+                      Request again
+                    </button>
+                  </span>
+                )
+                : lens.gps
                 ? `Showing documents within ${radiusM >= 1000 ? `${radiusM / 1000} km` : `${radiusM} m`} of ${lens.gps.lat}, ${lens.gps.lon}.`
                 : gpsOn ? 'Waiting for a position fix…' : 'Resurface documents geotagged near your current position.'}
         </p>

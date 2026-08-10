@@ -32,6 +32,7 @@ import ContextSettingsPage from './pages/contexts/[contextId]/settings'
 import RolesPage from './pages/roles'
 import RemotesPage from './pages/remotes'
 import AppletHostPage from './pages/apps'
+import { UpdateBanner } from './components/common/update-banner'
 import QuickAddPage from './pages/apps/add'
 import { AppShell } from './components/shell/AppShell'
 import { ToastContainer, useToast } from './components/ui/toast-container'
@@ -56,6 +57,7 @@ function AppContent() {
 
   return (
     <BrowserRouter>
+      <UpdateBanner />
       <Routes>
         {/* Authentication routes */}
         <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />

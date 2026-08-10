@@ -6,7 +6,12 @@ declare let self: ServiceWorkerGlobalScope
 cleanupOutdatedCaches()
 precacheAndRoute(self.__WB_MANIFEST)
 
-self.skipWaiting()
+// No unconditional skipWaiting: the new SW WAITS until the user accepts the
+// update (UpdateBanner → applyUpdate → SKIP_WAITING message), so a running
+// page never has its precache swapped out from under its lazy chunks.
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') void self.skipWaiting()
+})
 self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim())
 })

@@ -34,7 +34,7 @@ export default defineConfig({
     // src/theme/css/, which is what makes them swappable at runtime.
     tailwindcss(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       injectRegister: 'auto',
       // injectManifest (not generateSW): the share_target POST must be intercepted
       // by a handwritten fetch handler (src/sw.ts) — auth is Bearer-header-only
