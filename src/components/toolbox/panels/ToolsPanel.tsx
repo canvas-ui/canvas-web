@@ -328,6 +328,7 @@ export function ToolsPanel() {
     { id: 'features', label: 'Features' },
     { id: 'timeline', label: 'Timeline' },
     { id: 'map', label: 'Map' },
+    { id: 'lens', label: 'Lens' },
   ]
 
   return (
