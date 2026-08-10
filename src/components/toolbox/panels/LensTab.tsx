@@ -115,6 +115,9 @@ export function LensTab() {
 
   const loopRef = useRef({ running: false, workspaceName: '', maxDistance: NaN })
   const historyRef = useRef<number[][]>([])
+  // Last committed smoothed set — a stable scene must not dispatch identical
+  // filter state every tick (each dispatch re-renders every toolbox consumer).
+  const committedRef = useRef<number[] | null>(null)
   const timerRef = useRef<number | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const tickRef = useRef<() => Promise<void>>(async () => {})
@@ -146,7 +149,11 @@ export function LensTab() {
           ? res.ids
           : union.filter((id) => history.filter((f) => f.includes(id)).length >= 2)
         setLastCount(smoothed.length)
-        setLensIds(smoothed)
+        const prev = committedRef.current
+        if (!prev || prev.length !== smoothed.length || prev.some((id, i) => id !== smoothed[i])) {
+          committedRef.current = smoothed
+          setLensIds(smoothed)
+        }
       } catch (err) {
         if ((err as Error)?.name !== 'AbortError') setFeedError((err as Error)?.message || 'search failed')
       }
@@ -174,6 +181,7 @@ export function LensTab() {
     stop()
     setSource(null)
     setLastCount(null)
+    committedRef.current = null
     setLensIds(null)
   }, [stop, setLensIds])
 

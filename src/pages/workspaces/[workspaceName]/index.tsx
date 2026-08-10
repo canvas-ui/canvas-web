@@ -158,6 +158,9 @@ export default function WorkspaceDetailPage() {
   const tbScopeFilters = [...tbDatetimeFilters, ...tbGeoFilters, ...tbLensFilters];
   const tbSort = toolboxState.filters.sort ?? DEFAULT_TOOLBOX_SORT;
   const tbFiltersKey = JSON.stringify({ a: tbAllOf, b: tbAnyOf, c: tbNoneOf, d: tbScopeFilters, i: tbLensIds, s: tbSort });
+  // Same key WITHOUT the live lens id-set: when only that part changed, the
+  // refetch is a live-feed tick — update in place, never blink the list.
+  const tbFiltersKeyNoLens = JSON.stringify({ a: tbAllOf, b: tbAnyOf, c: tbNoneOf, d: tbScopeFilters, s: tbSort });
 
   // Path from the URL. Derive it by parsing location.pathname with the shared
   // decoder (parseWorkspacePathFromUrl safely decodes each segment) rather than
@@ -353,20 +356,31 @@ export default function WorkspaceDetailPage() {
   // current one and clobber the list with unrelated documents. Only the latest
   // fetch is allowed to write state.
   const fetchSeqRef = useRef(0);
+  // Everything that identifies the fetch EXCEPT the live lens id-set. When two
+  // consecutive fetches share this identity, the trigger was a lens tick.
+  const fetchIdentityRef = useRef('');
   const fetchDocuments = useCallback(async (opts?: { silent?: boolean }) => {
     if (!workspaceName) return;
     const seq = ++fetchSeqRef.current;
     const effectiveScope = unfiledOnly && backendTarget ? `${docScope}:unfiled` : docScope;
+    const lensActive = (tbLensIds?.length ?? 0) > 0;
+    const identity = documentKey(workspaceName, selectedTreeName, selectedPath, currentPage, pageSize, serverSearchQueries.join('␟'), tbFiltersKeyNoLens, (isLayerView && selectedLayerId) ? selectedLayerId : '', effectiveScope);
+    const lensTickOnly = lensActive && identity === fetchIdentityRef.current;
+    fetchIdentityRef.current = identity;
     const cacheKey = documentKey(workspaceName, selectedTreeName, selectedPath, currentPage, pageSize, serverSearchQueries.join('␟'), tbFiltersKey, (isLayerView && selectedLayerId) ? selectedLayerId : '', effectiveScope);
-    const cached = documentCache.get(cacheKey);
+    // Live-feed ticks bypass the cache: every frame is a fresh id-set, so
+    // caching would balloon the map with single-use entries.
+    const cached = lensActive ? undefined : documentCache.get(cacheKey);
     if (cached) {
       setDocuments(cached.documents);
       setDocumentsTotalCount(cached.totalCount);
       return;
     }
-    // Background refreshes (socket events, post-mutation reconcile) update the
-    // list in place. Skipping the loading spinner keeps the list from blinking.
-    if (!opts?.silent) setIsLoadingDocuments(true);
+    // Background refreshes (socket events, post-mutation reconcile) and live
+    // lens ticks update the list in place. Skipping the loading spinner keeps
+    // the previous results rendered — no blink.
+    const silent = opts?.silent ?? lensTickOnly;
+    if (!silent) setIsLoadingDocuments(true);
     try {
       let response;
       if (unfiledOnly && backendTarget) {
@@ -413,9 +427,20 @@ export default function WorkspaceDetailPage() {
       const nextTotalCount = response.totalCount || response.count || 0;
       // Cache is keyed by the exact query/scope, so store regardless of order —
       // but only the latest fetch may paint the live list.
-      documentCache.set(cacheKey, { documents: nextDocuments, totalCount: nextTotalCount });
+      if (!lensActive) documentCache.set(cacheKey, { documents: nextDocuments, totalCount: nextTotalCount });
       if (seq !== fetchSeqRef.current) return;
-      setDocuments(nextDocuments);
+      if (lensTickOnly) {
+        // Stable scene: identical id sequence → return prev, React bails out
+        // and nothing re-renders. (Only safe on lens ticks — a background
+        // refresh with the same ids may carry updated CONTENT.)
+        setDocuments(prev =>
+          prev.length === nextDocuments.length && prev.every((d, i) => d.id === nextDocuments[i].id)
+            ? prev
+            : nextDocuments,
+        );
+      } else {
+        setDocuments(nextDocuments);
+      }
       setDocumentsTotalCount(nextTotalCount);
     } catch (err) {
       if (seq !== fetchSeqRef.current) return;
@@ -424,7 +449,7 @@ export default function WorkspaceDetailPage() {
       setDocuments([]);
       setDocumentsTotalCount(0);
     } finally {
-      if (!opts?.silent && seq === fetchSeqRef.current) setIsLoadingDocuments(false);
+      if (!silent && seq === fetchSeqRef.current) setIsLoadingDocuments(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceName, selectedPath, selectedTreeName, selectedLayerId, isLayerView, currentPage, pageSize, workspace?.status, serverSearchQueries, tbFiltersKey, docScope, unfiledOnly]);
