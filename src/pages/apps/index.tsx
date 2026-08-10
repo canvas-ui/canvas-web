@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { APPLETS } from '@/components/toolbox/applets/registry'
 import { AppletTargetProvider, type AppletTarget } from '@/components/toolbox/applets/applet-target'
 import { listWorkspaces, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
+import { DocumentModalProvider } from '@/components/shell/document-modal-context'
 import { listContexts } from '@/services/context'
 
 const DEFAULT_WORKSPACE = 'universe'
@@ -76,6 +77,7 @@ export default function AppletHostPage() {
   const bindMode: 'path' | 'context' = contextId ? 'context' : 'path'
 
   return (
+    <DocumentModalProvider>
     <div className="flex h-viewport flex-col surface-desk p-shell gap-shell">
       {/* Header: identity + binding. Two binding modes: a workspace path
           (default /) or a context - the applet shows only what the binding
@@ -161,5 +163,6 @@ export default function AppletHostPage() {
         )}
       </div>
     </div>
+    </DocumentModalProvider>
   )
 }

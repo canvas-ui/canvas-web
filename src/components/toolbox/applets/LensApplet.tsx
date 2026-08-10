@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Camera, CircleStop, Focus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAppletTarget } from './applet-target'
+import { useDocumentModal } from '@/components/shell/document-modal-context'
 import { DocumentIcon } from '@/components/common/DocumentIcon'
 import { useDocumentThumbnail } from '@/components/renderers/useDocumentThumbnail'
 import { getDocumentDisplayInfo, isImageFile } from '@/lib/document-display'
@@ -30,12 +31,16 @@ const selectClass =
 const inputClass =
   'h-8 rounded-md border border-input bg-transparent px-2 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring'
 
-function LensHit({ workspaceRef, doc, distance }: { workspaceRef: string; doc: Document; distance?: number }) {
+function LensHit({ workspaceRef, doc, distance, onOpen }: { workspaceRef: string; doc: Document; distance?: number; onOpen: (doc: Document) => void }) {
   const isImage = isImageFile(doc)
   const { blobUrl } = useDocumentThumbnail(workspaceRef, doc.id, 256, { enabled: isImage })
   const info = getDocumentDisplayInfo(doc)
   return (
-    <div className="rounded-lg border border-border bg-card overflow-hidden flex flex-col">
+    <button
+      type="button"
+      onClick={() => onOpen(doc)}
+      title={`Open ${info.title}`}
+      className="rounded-lg border border-border bg-card overflow-hidden flex flex-col text-left cursor-pointer transition-colors hover:border-foreground/30 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
       <div className="aspect-square bg-muted/40 flex items-center justify-center overflow-hidden">
         {isImage && blobUrl ? (
           <img src={blobUrl} alt={info.title} className="h-full w-full object-cover" />
@@ -50,12 +55,13 @@ function LensHit({ workspaceRef, doc, distance }: { workspaceRef: string; doc: D
           {distance != null ? ` · d=${distance.toFixed(3)}` : ''}
         </div>
       </div>
-    </div>
+    </button>
   )
 }
 
 export function LensApplet() {
   const target = useAppletTarget()
+  const documentModal = useDocumentModal()
   const { videoRef, active, error: cameraError, start, stop, captureFrame } = useWebcam()
   const [rateMs, setRateMs] = useState<number>(1000)
   const [text, setText] = useState('')
@@ -229,7 +235,7 @@ export function LensApplet() {
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {hits.map((h) => (
-            <LensHit key={h.doc.id} workspaceRef={workspaceRef} doc={h.doc} distance={h.distance} />
+            <LensHit key={h.doc.id} workspaceRef={workspaceRef} doc={h.doc} distance={h.distance} onOpen={(doc) => documentModal.open(doc, workspaceRef)} />
           ))}
         </div>
       )}
