@@ -21,6 +21,8 @@ export interface LensSearchOptions {
   minDistance?: number
   /** Attach per-hit cosine distances (floor calibration). */
   debug?: boolean
+  /** Return matching ids only (skips document hydration server-side). */
+  idsOnly?: boolean
   contextPath?: string | null
   signal?: AbortSignal
 }
@@ -32,13 +34,15 @@ export interface LensDistance {
 
 export interface LensSearchResult {
   documents: Document[]
+  /** Populated instead of documents when idsOnly was requested. */
+  ids: number[]
   count: number
   totalCount: number
   distances: LensDistance[] | null
 }
 
 interface LensResponse {
-  payload?: Document[]
+  payload?: Document[] | number[]
   count?: number
   totalCount?: number
   debug?: {
@@ -66,6 +70,7 @@ export async function searchByImage(
   if (opts.maxDistance != null && Number.isFinite(opts.maxDistance)) body.maxDistance = opts.maxDistance
   if (opts.minDistance != null && Number.isFinite(opts.minDistance)) body.minDistance = opts.minDistance
   if (opts.debug) body.debug = true
+  if (opts.idsOnly) body.idsOnly = true
   if (opts.contextPath) body.context = opts.contextPath
 
   const res = await api.post<LensResponse>(
@@ -73,10 +78,13 @@ export async function searchByImage(
     body,
     opts.signal ? { signal: opts.signal } : undefined,
   )
+  const payload = res.payload ?? []
+  const idsOnly = opts.idsOnly === true
   return {
-    documents: res.payload ?? [],
-    count: res.count ?? res.payload?.length ?? 0,
-    totalCount: res.totalCount ?? res.payload?.length ?? 0,
+    documents: idsOnly ? [] : (payload as Document[]),
+    ids: idsOnly ? (payload as number[]) : (payload as Document[]).map((d) => d.id),
+    count: res.count ?? payload.length,
+    totalCount: res.totalCount ?? payload.length,
     distances: res.debug?.distances ?? res.debug?.imageDistances ?? null,
   }
 }

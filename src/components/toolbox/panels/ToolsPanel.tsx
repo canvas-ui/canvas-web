@@ -6,6 +6,7 @@ import { useToolbox, type ToolsTab, type FeatureMode } from '@/components/toolbo
 import { useToast } from '@/components/ui/toast-container'
 import { SCHEMA_META, ABSTRACTION_PREFIX, schemaMeta } from '@/lib/schema-meta'
 import { MapTab } from './MapTab'
+import { LensTab } from './LensTab'
 import { TimelineTab } from './TimelineTab'
 
 // ─── Features tab ─────────────────────────────────────────────────────────────
@@ -385,6 +386,7 @@ export function ToolsPanel() {
         {toolsTab === 'features' && <FeaturesTab />}
         {toolsTab === 'timeline' && <TimelineTab />}
         {toolsTab === 'map' && <MapTab />}
+      {toolsTab === 'lens' && <LensTab />}
       </div>
     </div>
   )

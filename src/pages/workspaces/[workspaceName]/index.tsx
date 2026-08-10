@@ -42,7 +42,7 @@ import {
   backendAddressFromTreePath,
   type Backend,
 } from '@/services/workspace';
-import { Document, TreeNode, buildDatetimeFilters, buildGeoFilters, DEFAULT_TOOLBOX_SORT } from '@/types/workspace';
+import { Document, TreeNode, buildDatetimeFilters, buildGeoFilters, buildLensFilters, DEFAULT_TOOLBOX_SORT } from '@/types/workspace';
 import { sanitizeUrlPath, buildWorkspaceUrl, parseWorkspacePathFromUrl } from '@/utils/url-params';
 import { docInGeoSelection } from '@/utils/geo';
 import { useToolbox } from '@/components/toolbox/toolbox-context';
@@ -151,9 +151,13 @@ export default function WorkspaceDetailPage() {
   const tbNoneOf = toolboxState.filters.features.noneOf;
   const tbDatetimeFilters = buildDatetimeFilters(toolboxState.filters.timeline);
   const tbGeoFilters = buildGeoFilters(toolboxState.filters.geo);
-  const tbScopeFilters = [...tbDatetimeFilters, ...tbGeoFilters];
+  // Lens refine: GPS → a geo:near scope token; camera/desktop → a literal ids
+  // constraint. Both live-feed ephemera, both fold into the fetch key.
+  const tbLensFilters = buildLensFilters(toolboxState.filters.lens);
+  const tbLensIds = toolboxState.filters.lens.ids;
+  const tbScopeFilters = [...tbDatetimeFilters, ...tbGeoFilters, ...tbLensFilters];
   const tbSort = toolboxState.filters.sort ?? DEFAULT_TOOLBOX_SORT;
-  const tbFiltersKey = JSON.stringify({ a: tbAllOf, b: tbAnyOf, c: tbNoneOf, d: tbScopeFilters, s: tbSort });
+  const tbFiltersKey = JSON.stringify({ a: tbAllOf, b: tbAnyOf, c: tbNoneOf, d: tbScopeFilters, i: tbLensIds, s: tbSort });
 
   // Path from the URL. Derive it by parsing location.pathname with the shared
   // decoder (parseWorkspacePathFromUrl safely decodes each segment) rather than
@@ -283,6 +287,7 @@ export default function WorkspaceDetailPage() {
       anyOf: tbAnyOf,
       noneOf: tbNoneOf,
       filters: tbScopeFilters,
+      ids: tbLensIds,
       queries: [...serverSearchQueries, ...(opts?.queries ?? []), ...(opts?.q ? [opts.q] : [])],
       applyCanvasSpec: false,
     });
@@ -381,6 +386,7 @@ export default function WorkspaceDetailPage() {
           anyOf: tbAnyOf,
           noneOf: tbNoneOf,
           filters: tbScopeFilters,
+          ids: tbLensIds,
           sortBy: tbSort.sortBy || undefined,
           order: tbSort.order,
         });
@@ -395,6 +401,7 @@ export default function WorkspaceDetailPage() {
           anyOf: tbAnyOf,
           noneOf: tbNoneOf,
           filters: tbScopeFilters,
+          ids: tbLensIds,
           sortBy: tbSort.sortBy || undefined,
           order: tbSort.order,
           // Whole-workspace scope lists every doc in the DB, including backend

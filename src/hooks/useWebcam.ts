@@ -9,8 +9,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
  * getUserMedia is secure-context-only: on LAN-over-http `start()` reports a
  * clear error instead of throwing (same gotcha useGeotag documents).
  */
-export function useWebcam() {
+export function useWebcam(opts: { onEnded?: () => void } = {}) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  // Latest onEnded without re-creating callbacks per render.
+  const onEndedRef = useRef(opts.onEnded)
+  useEffect(() => { onEndedRef.current = opts.onEnded })
   const streamRef = useRef<MediaStream | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const [active, setActive] = useState(false)
@@ -22,6 +25,18 @@ export function useWebcam() {
     if (videoRef.current) videoRef.current.srcObject = null
     setActive(false)
   }, [])
+
+  const adopt = useCallback(async (stream: MediaStream) => {
+    streamRef.current = stream
+    // The user can end a screen share from the browser's own UI — mirror that
+    // into our state so the loop shuts down instead of capturing black frames.
+    stream.getVideoTracks().forEach((t) => { t.onended = () => { stop(); onEndedRef.current?.() } })
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream
+      await videoRef.current.play().catch(() => {})
+    }
+    setActive(true)
+  }, [stop])
 
   const start = useCallback(async () => {
     setError(null)
@@ -38,12 +53,7 @@ export function useWebcam() {
         video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false,
       })
-      streamRef.current = stream
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        await videoRef.current.play().catch(() => {})
-      }
-      setActive(true)
+      await adopt(stream)
       return true
     } catch (err) {
       const name = (err as DOMException)?.name
@@ -57,7 +67,33 @@ export function useWebcam() {
       setActive(false)
       return false
     }
-  }, [])
+  }, [adopt])
+
+  /** Same pipeline, screen instead of camera (desktop-recording refine). */
+  const startScreen = useCallback(async () => {
+    setError(null)
+    if (!window.isSecureContext) {
+      setError('Screen capture needs a secure context (https or localhost).')
+      return false
+    }
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      setError('Screen capture API not available in this browser.')
+      return false
+    }
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      })
+      await adopt(stream)
+      return true
+    } catch (err) {
+      const name = (err as DOMException)?.name
+      setError(name === 'NotAllowedError' ? 'Screen capture cancelled.' : `Screen capture failed: ${(err as Error)?.message || name || 'unknown error'}`)
+      setActive(false)
+      return false
+    }
+  }, [adopt])
 
   /** Current frame as a JPEG data URI, longest edge capped at `maxDim`. */
   const captureFrame = useCallback((maxDim = 640, quality = 0.72): string | null => {
@@ -78,5 +114,5 @@ export function useWebcam() {
 
   useEffect(() => stop, [stop])
 
-  return { videoRef, active, error, start, stop, captureFrame }
+  return { videoRef, active, error, start, startScreen, stop, captureFrame }
 }

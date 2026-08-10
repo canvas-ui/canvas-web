@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useLocation } from 'react-router-dom'
-import type { ToolboxFilters, ToolboxTimelineFilters, ToolboxGeoFilters, GeoBBox, GeoSelection, ToolboxSort, Document as WorkspaceDocument } from '@/types/workspace'
+import type { ToolboxFilters, ToolboxTimelineFilters, ToolboxGeoFilters, ToolboxLensFilters, GeoBBox, GeoSelection, ToolboxSort, Document as WorkspaceDocument } from '@/types/workspace'
 import { DEFAULT_TOOLBOX_FILTERS, DEFAULT_TOOLBOX_SORT, buildDatetimeFilters, buildGeoFilters } from '@/types/workspace'
 import {
   DEFAULT_WORKSPACE_TREE_NAME,
@@ -30,7 +30,7 @@ import { parseWorkspacePathFromUrl } from '@/utils/url-params'
 // ─── Public types ─────────────────────────────────────────────────────────────
 
 export type T1View = 'home' | 'apps' | 'tools' | 'agents' | 'notifications' | null
-export type ToolsTab = 'features' | 'timeline' | 'map'
+export type ToolsTab = 'features' | 'timeline' | 'map' | 'lens'
 // Maps directly to synapsd feature sigil algebra: anyOf (OR), allOf (+ gate), noneOf (! exclude).
 export type FeatureMode = 'off' | 'anyOf' | 'allOf' | 'noneOf'
 export type ActiveContextType = 'canvas' | 'context' | null
@@ -118,8 +118,15 @@ type ToolboxAction =
 
 // ─── Reducer ──────────────────────────────────────────────────────────────────
 
+// Lens refine state is LIVE-FEED ephemera (device fix, camera kNN survivors) —
+// it must never mark a view dirty nor be persisted into session storage or a
+// canvas/context querySpec. Strip it before any compare/persist.
+function stripEphemeral(filters: ToolboxFilters): ToolboxFilters {
+  return { ...filters, lens: DEFAULT_TOOLBOX_FILTERS.lens }
+}
+
 function isDirtyCheck(filters: ToolboxFilters, savedFilters: ToolboxFilters | null): boolean {
-  return JSON.stringify(filters) !== JSON.stringify(savedFilters ?? DEFAULT_TOOLBOX_FILTERS)
+  return JSON.stringify(stripEphemeral(filters)) !== JSON.stringify(stripEphemeral(savedFilters ?? DEFAULT_TOOLBOX_FILTERS))
 }
 
 const initialState: ToolboxState = {
@@ -243,6 +250,7 @@ function loadSessionFilters(): ToolboxFilters | null {
       features: { ...DEFAULT_TOOLBOX_FILTERS.features, ...(parsed.features ?? {}) },
       timeline: { ...DEFAULT_TOOLBOX_FILTERS.timeline, ...(parsed.timeline ?? {}) },
       geo: { ...DEFAULT_TOOLBOX_FILTERS.geo, ...(parsed.geo ?? {}) },
+      lens: DEFAULT_TOOLBOX_FILTERS.lens, // ephemeral — never restored
       sort: { ...DEFAULT_TOOLBOX_SORT, ...(parsed.sort ?? {}) },
     }
   } catch {
@@ -252,7 +260,7 @@ function loadSessionFilters(): ToolboxFilters | null {
 
 function saveSessionFilters(filters: ToolboxFilters) {
   try {
-    localStorage.setItem(SESSION_KEY, JSON.stringify(filters))
+    localStorage.setItem(SESSION_KEY, JSON.stringify(stripEphemeral(filters)))
   } catch {
     // ignore
   }
@@ -282,6 +290,7 @@ function extractToolboxFilters(metadata: Record<string, unknown> | undefined): T
         selectedTimelines: (t.timeline as ToolboxTimelineFilters)?.selectedTimelines ?? [],
       },
       geo: { bbox: (t.geo as ToolboxGeoFilters)?.bbox ?? null },
+      lens: DEFAULT_TOOLBOX_FILTERS.lens, // ephemeral — never persisted
       sort: {
         sortBy: (t.sort as ToolboxSort)?.sortBy ?? DEFAULT_TOOLBOX_SORT.sortBy,
         order: (t.sort as ToolboxSort)?.order === 'asc' ? 'asc' : 'desc',
@@ -323,6 +332,9 @@ interface ToolboxContextValue {
   hasActiveFilters: boolean
   setTimelineFilter: (update: Partial<ToolboxTimelineFilters>) => void
   setGeoBBox: (bbox: GeoBBox | null) => void
+  // Lens refine (ephemeral, live feeds): GPS fix + camera/desktop kNN ids.
+  setLensGps: (gps: ToolboxLensFilters['gps']) => void
+  setLensIds: (ids: number[] | null) => void
   // Map filter (client-side): the drawn area, and the result set the page
   // publishes for the Map tab to plot.
   setGeoSelection: (selection: GeoSelection | null) => void
@@ -544,6 +556,18 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
+  // Lens refine (ephemeral): a throttled GPS fix (→ geo:near) and/or the
+  // smoothed kNN survivors of a camera/desktop frame loop (→ ids constraint).
+  const setLensGps = useCallback((gps: ToolboxLensFilters['gps']) => {
+    const { filters } = stateRef.current
+    dispatch({ type: 'SET_FILTERS', filters: { ...filters, lens: { ...filters.lens, gps } } })
+  }, [])
+
+  const setLensIds = useCallback((ids: number[] | null) => {
+    const { filters } = stateRef.current
+    dispatch({ type: 'SET_FILTERS', filters: { ...filters, lens: { ...filters.lens, ids } } })
+  }, [])
+
   // Map filter (ephemeral, client-side): set/clear the drawn area, and publish
   // the current result set for the Map tab to plot as pins.
   const setGeoSelection = useCallback((selection: GeoSelection | null) => {
@@ -564,7 +588,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
         const node = findTreeNode(tree.payload, activeContextPath)
         const searchQuery = new URLSearchParams(location.search).get('q') || new URLSearchParams(location.search).get('search') || ''
         await updateWorkspacePath(activeWorkspaceName, activeContextPath, {
-          metadata: { ...(node?.metadata || {}), toolbox: filters },
+          metadata: { ...(node?.metadata || {}), toolbox: stripEphemeral(filters) },
           querySpec: {
             features: filters.features,
             // Persist the timeline scope into the server-enforced querySpec (same
@@ -586,7 +610,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
         await patchContext(activeContextId, {
           // metadata.toolbox = UI state (reconstructs the toolbox + dirty check);
           // features/filters = the SERVER-ENFORCED binding bound clients inherit.
-          metadata: { ...existingMeta, toolbox: filters, toolboxSearchQuery: searchQuery.trim() || undefined },
+          metadata: { ...existingMeta, toolbox: stripEphemeral(filters), toolboxSearchQuery: searchQuery.trim() || undefined },
           features: filters.features,
           filters: [...buildDatetimeFilters(filters.timeline), ...buildGeoFilters(filters.geo)],
         })
@@ -664,15 +688,15 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const { features: f, timeline: tl, geo } = state.filters
+  const { features: f, timeline: tl, geo, lens } = state.filters
   const hasActiveFilters =
     f.allOf.length > 0 || f.anyOf.length > 0 || f.noneOf.length > 0 ||
     tl.quickFilter !== null || (tl.selectedTimelines?.length ?? 0) > 0 ||
-    geo.bbox !== null
+    geo.bbox !== null || lens.gps !== null || lens.ids !== null
 
   return (
     <ToolboxCtx.Provider
-      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, closeAdd, openEdit, setToolsTab, setAccentColor, setFilters, setFeatureToggle, setFeatureMode, clearFilters, hasActiveFilters, setTimelineFilter, setGeoBBox, setGeoSelection, setMapDocuments, setSort, saveFilters, deleteBitmap, deleteDataset, createTimeline, deleteTimeline, refreshTimelines }}
+      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, closeAdd, openEdit, setToolsTab, setAccentColor, setFilters, setFeatureToggle, setFeatureMode, clearFilters, hasActiveFilters, setTimelineFilter, setGeoBBox, setLensGps, setLensIds, setGeoSelection, setMapDocuments, setSort, saveFilters, deleteBitmap, deleteDataset, createTimeline, deleteTimeline, refreshTimelines }}
     >
       {children}
     </ToolboxCtx.Provider>

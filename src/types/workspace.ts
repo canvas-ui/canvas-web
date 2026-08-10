@@ -81,10 +81,21 @@ export type GeoSelection =
   | { kind: 'rect'; bbox: GeoBBox }
   | { kind: 'polygon'; points: Array<{ lat: number; lon: number }> }
 
+// Lens refine — LIVE feeds narrowing the view. Ephemeral by design: gps is a
+// throttled device fix (→ `geo:near` token), ids are the smoothed kNN
+// survivors of a camera/desktop frame loop (→ `?ids=` constraint). Neither is
+// persisted into canvas/context querySpecs — a saved view must not replay a
+// long-gone camera frame or yesterday's position.
+export interface ToolboxLensFilters {
+  gps: { lat: number; lon: number; radiusM: number } | null
+  ids: number[] | null
+}
+
 export interface ToolboxFilters {
   features: ToolboxFeatureFilters
   timeline: ToolboxTimelineFilters
   geo: ToolboxGeoFilters
+  lens: ToolboxLensFilters
   sort: ToolboxSort
 }
 
@@ -103,6 +114,7 @@ export const DEFAULT_TOOLBOX_FILTERS: ToolboxFilters = {
     selectedTimelines: [],
   },
   geo: { bbox: null },
+  lens: { gps: null, ids: null },
   sort: { ...DEFAULT_TOOLBOX_SORT },
 }
 
@@ -115,6 +127,18 @@ export function buildGeoFilters(geo: ToolboxGeoFilters): string[] {
   const b = geo.bbox
   if (!b) return []
   return [`geo:bbox:${b.minLat},${b.minLon},${b.maxLat},${b.maxLon}`]
+}
+
+/**
+ * Convert the toolbox lens GPS refine → a SynapsD `geo:near` filter token.
+ * Grammar: `geo:near:<lat>,<lon>,<radius>m` (synapsd filters.js). The fix is
+ * committed rounded/throttled by the Lens tab, so this stays referentially
+ * stable between real position changes.
+ */
+export function buildLensFilters(lens: ToolboxLensFilters): string[] {
+  if (!lens.gps) return []
+  const { lat, lon, radiusM } = lens.gps
+  return [`geo:near:${lat},${lon},${Math.max(1, Math.round(radiusM))}m`]
 }
 
 /**
