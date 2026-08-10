@@ -8,6 +8,7 @@ import { useDocumentThumbnail } from '@/components/renderers/useDocumentThumbnai
 import { getDocumentDisplayInfo, isImageFile } from '@/lib/document-display'
 import { useWebcam } from '@/hooks/useWebcam'
 import { searchByImage } from '@/services/lens'
+import { LENS_RATES, DEFAULT_LENS_RATE_MS } from '../lens-rates'
 import type { Document } from '@/types/workspace'
 
 // The Lens applet: point a camera at something, the documents related to it
@@ -17,12 +18,6 @@ import type { Document } from '@/types/workspace'
 // smoothing over the last few responses → result grid. Optional text switches
 // the server to fused mode so notes surface next to photos. The applet binding
 // scopes the search: bound to a path, only documents under it can match.
-
-const RATES = [
-  { label: '2 fps', ms: 500 },
-  { label: '1 fps', ms: 1000 },
-  { label: '0.5 fps', ms: 2000 },
-] as const
 
 const SMOOTH_WINDOW = 3 // majority vote over the last N frames kills flicker
 
@@ -63,7 +58,7 @@ export function LensApplet() {
   const target = useAppletTarget()
   const documentModal = useDocumentModal()
   const { videoRef, active, error: cameraError, start, stop, captureFrame } = useWebcam()
-  const [rateMs, setRateMs] = useState<number>(1000)
+  const [rateMs, setRateMs] = useState<number>(DEFAULT_LENS_RATE_MS)
   const [text, setText] = useState('')
   const [maxDistance, setMaxDistance] = useState('')
   const [running, setRunning] = useState(false)
@@ -76,7 +71,7 @@ export function LensApplet() {
 
   // Loop state lives in refs: the chained-timeout tick must always read the
   // CURRENT knob values without re-creating the loop on every keystroke.
-  const loopRef = useRef({ running: false, workspaceRef: '', boundPath: null as string | null, text: '', maxDistance: NaN, rateMs: 1000 })
+  const loopRef = useRef({ running: false, workspaceRef: '', boundPath: null as string | null, text: '', maxDistance: NaN, rateMs: DEFAULT_LENS_RATE_MS })
   const historyRef = useRef<number[][]>([])
   const docsRef = useRef(new Map<number, { doc: Document; distance?: number }>())
   const timerRef = useRef<number | null>(null)
@@ -112,10 +107,10 @@ export function LensApplet() {
   const tick = useCallback(async () => {
     const s = loopRef.current
     if (!s.running) return
+    const t0 = performance.now()
     const frame = captureFrame()
     if (frame && s.workspaceRef) {
       abortRef.current = new AbortController()
-      const t0 = performance.now()
       try {
         const res = await searchByImage(s.workspaceRef, frame, {
           q: s.text || undefined,
@@ -139,7 +134,11 @@ export function LensApplet() {
       }
     }
     if (loopRef.current.running) {
-      timerRef.current = window.setTimeout(() => void tickRef.current(), loopRef.current.rateMs)
+      // Charge frame-capture + request time against the interval so the
+      // selected rate is the actual rate; at 15–30 fps this degrades to
+      // back-to-back (never overlapping) requests, capped by search latency.
+      const delay = Math.max(0, loopRef.current.rateMs - (performance.now() - t0))
+      timerRef.current = window.setTimeout(() => void tickRef.current(), delay)
     }
   }, [captureFrame, applySmoothing])
 
@@ -177,8 +176,13 @@ export function LensApplet() {
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto p-3">
       <div className="flex shrink-0 flex-wrap items-center gap-2">
-        <select className={selectClass} value={rateMs} onChange={(e) => setRateMs(Number(e.target.value))}>
-          {RATES.map((r) => (
+        <select
+          className={selectClass}
+          value={rateMs}
+          onChange={(e) => setRateMs(Number(e.target.value))}
+          title="Frame rate. High rates (10–30 fps) are experimental — the loop never overlaps requests, so the effective rate is capped by search latency."
+        >
+          {LENS_RATES.map((r) => (
             <option key={r.ms} value={r.ms}>{r.label}</option>
           ))}
         </select>

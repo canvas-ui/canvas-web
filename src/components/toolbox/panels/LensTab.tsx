@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { useToolbox } from '../toolbox-context'
 import { useWebcam } from '@/hooks/useWebcam'
 import { searchByImage } from '@/services/lens'
+import { LENS_RATES, DEFAULT_LENS_RATE_MS } from '../lens-rates'
 
 // The Lens filter tab: LIVE feeds refining the current view, sitting beside
 // Features / Timeline / Map.
@@ -11,7 +12,7 @@ import { searchByImage } from '@/services/lens'
 //  - GPS refine: a watched device fix → `geo:near:<lat>,<lon>,<radius>m`
 //    filter token. The fix is rounded (4dp ≈ 11 m) and only re-committed when
 //    it actually moves, so GPS jitter never causes refetch storms.
-//  - Camera / Desktop refine: frames at ~1 FPS → search-by-image (idsOnly,
+//  - Camera / Desktop refine: frames at a selectable rate → search-by-image (idsOnly,
 //    frames are ephemeral) → majority-vote smoothing → the survivors become an
 //    `ids` constraint ANDed into the listing.
 //
@@ -27,7 +28,6 @@ const RADII = [
 ] as const
 
 const SMOOTH_WINDOW = 3
-const FRAME_MS = 1000
 const KNN_LIMIT = 32
 
 const selectClass = 'h-7 rounded-md border border-input bg-transparent px-1.5 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring'
@@ -109,11 +109,12 @@ export function LensTab() {
   const feedEndedRef = useRef<() => void>(() => {})
   const { videoRef, error: mediaError, start, startScreen, stop, captureFrame } = useWebcam({ onEnded: () => feedEndedRef.current() })
   const [source, setSource] = useState<'camera' | 'screen' | null>(null)
+  const [rateMs, setRateMs] = useState<number>(DEFAULT_LENS_RATE_MS)
   const [maxDistance, setMaxDistance] = useState('')
   const [feedError, setFeedError] = useState<string | null>(null)
   const [lastCount, setLastCount] = useState<number | null>(null)
 
-  const loopRef = useRef({ running: false, workspaceName: '', maxDistance: NaN })
+  const loopRef = useRef({ running: false, workspaceName: '', maxDistance: NaN, rateMs: DEFAULT_LENS_RATE_MS })
   const historyRef = useRef<number[][]>([])
   // Last committed smoothed set — a stable scene must not dispatch identical
   // filter state every tick (each dispatch re-renders every toolbox consumer).
@@ -125,11 +126,13 @@ export function LensTab() {
   useEffect(() => {
     loopRef.current.workspaceName = workspaceName ?? ''
     loopRef.current.maxDistance = maxDistance === '' ? NaN : Number(maxDistance)
-  }, [workspaceName, maxDistance])
+    loopRef.current.rateMs = rateMs
+  }, [workspaceName, maxDistance, rateMs])
 
   const tick = useCallback(async () => {
     const s = loopRef.current
     if (!s.running) return
+    const t0 = performance.now()
     const frame = captureFrame()
     if (frame && s.workspaceName) {
       abortRef.current = new AbortController()
@@ -159,7 +162,11 @@ export function LensTab() {
       }
     }
     if (loopRef.current.running) {
-      timerRef.current = window.setTimeout(() => void tickRef.current(), FRAME_MS)
+      // Aim for the selected rate by charging the request latency against the
+      // interval; at high fps this degrades to back-to-back (never overlapping)
+      // requests, so the server sees at most one in-flight search per feed.
+      const delay = Math.max(0, loopRef.current.rateMs - (performance.now() - t0))
+      timerRef.current = window.setTimeout(() => void tickRef.current(), delay)
     }
   }, [captureFrame, setLensIds])
 
@@ -261,6 +268,15 @@ export function LensTab() {
               </button>
             </>
           )}
+          <select
+            className={selectClass}
+            value={rateMs}
+            onChange={(e) => setRateMs(Number(e.target.value))}
+            disabled={!workspaceName}
+            title="Frame rate. High rates (10–30 fps) are experimental — the loop never overlaps requests, so the effective rate is capped by search latency."
+          >
+            {LENS_RATES.map((r) => <option key={r.ms} value={r.ms}>{r.label}</option>)}
+          </select>
           <input
             className={cn(inputClass, 'w-24')}
             placeholder="max dist"
