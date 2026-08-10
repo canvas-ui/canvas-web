@@ -1,8 +1,9 @@
 /// <reference lib="webworker" />
-import { precacheAndRoute } from 'workbox-precaching'
+import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching'
 
 declare let self: ServiceWorkerGlobalScope
 
+cleanupOutdatedCaches()
 precacheAndRoute(self.__WB_MANIFEST)
 
 self.skipWaiting()
