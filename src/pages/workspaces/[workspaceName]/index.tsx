@@ -49,6 +49,8 @@ import { useToolbox } from '@/components/toolbox/toolbox-context';
 import { useCanvasPins } from '@/components/home/pins-context';
 import { useQuerySession } from '@/hooks/useQuerySession';
 import type { SessionSpec } from '@/services/session';
+import { useQueryDebug, type QueryDebugData } from '@/lib/query-debug';
+import { QueryDebugPanel } from '@/components/common/query-debug-panel';
 import { cn } from '@/lib/utils';
 import socketService from '@/lib/socket';
 
@@ -125,6 +127,12 @@ export default function WorkspaceDetailPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
   const [documentsTotalCount, setDocumentsTotalCount] = useState(0);
+  // Search metadata for relevance-floor calibration (Settings → Database).
+  const queryDebug = useQueryDebug();
+  const [queryDebugData, setQueryDebugData] = useState<QueryDebugData | null>(null);
+  // Turning the toggle off must drop stale numbers immediately, not leave the
+  // last query's distances hanging around until the next search.
+  useEffect(() => { if (!queryDebug) setQueryDebugData(null); }, [queryDebug]);
   // 'path' scopes to the selected tree path; 'workspace' lists every document.
   const [docScope, setDocScope] = useState<'path' | 'workspace'>('path');
   const [isStartingWorkspace, setIsStartingWorkspace] = useState(false);
@@ -466,7 +474,10 @@ export default function WorkspaceDetailPage() {
     const cacheKey = documentKey(workspaceName, selectedTreeName, selectedPath, currentPage, pageSize, serverSearchQueries.join('␟'), tbFiltersKey, (isLayerView && selectedLayerId) ? selectedLayerId : '', effectiveScope);
     // Live-feed ticks bypass the cache: every frame is a fresh id-set, so
     // caching would balloon the map with single-use entries.
-    const cached = lensActive ? undefined : documentCache.get(cacheKey);
+    // Debug reads bypass the cache too: a cache hit skips the request entirely,
+    // so the distances would never arrive and the panel would stay empty right
+    // after switching the toggle on.
+    const cached = (lensActive || queryDebug) ? undefined : documentCache.get(cacheKey);
     if (cached) {
       setDocuments(cached.documents);
       setDocumentsTotalCount(cached.totalCount);
@@ -517,6 +528,9 @@ export default function WorkspaceDetailPage() {
           // Whole-workspace scope lists every doc in the DB, including backend
           // mirrors (they live in their own tree now — no opt-in flag needed).
           scope: docScope,
+          // Only meaningful with a text query — the server attaches image kNN
+          // distances for the query (the LAST one of a refine stack).
+          debug: queryDebug && serverSearchQueries.length > 0,
         });
       }
       const nextDocuments = (response.payload as Document[]) || [];
@@ -525,6 +539,13 @@ export default function WorkspaceDetailPage() {
       // but only the latest fetch may paint the live list.
       if (!lensActive) documentCache.set(cacheKey, { documents: nextDocuments, totalCount: nextTotalCount });
       if (seq !== fetchSeqRef.current) return;
+      // Calibration data rides beside the payload; it is absent unless the
+      // toggle is on AND the search had a text query.
+      const dbg = (response as { debug?: { distances?: Array<{ id: number; distance: number }>; imageDistances?: Array<{ id: number; distance: number }> } }).debug;
+      const distances = dbg?.imageDistances ?? dbg?.distances ?? null;
+      setQueryDebugData(distances
+        ? { query: serverSearchQueries[serverSearchQueries.length - 1] ?? '', distances }
+        : null);
       if (lensTickOnly) {
         // Stable scene: identical id sequence → return prev, React bails out
         // and nothing re-renders. (Only safe on lens ticks — a background
@@ -548,7 +569,7 @@ export default function WorkspaceDetailPage() {
       if (!silent && seq === fetchSeqRef.current) setIsLoadingDocuments(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceName, selectedPath, selectedTreeName, selectedLayerId, isLayerView, currentPage, pageSize, workspace?.status, serverSearchQueries, tbFiltersKey, docScope, unfiledOnly]);
+  }, [workspaceName, selectedPath, selectedTreeName, selectedLayerId, isLayerView, currentPage, pageSize, workspace?.status, serverSearchQueries, tbFiltersKey, docScope, unfiledOnly, queryDebug]);
 
   useEffect(() => {
     fetchDocuments();
@@ -1178,6 +1199,9 @@ export default function WorkspaceDetailPage() {
       isSavingChanges={toolboxState.isSaving}
       onSaveChanges={saveFilters}
     >
+      {queryDebug && queryDebugData && (
+        <QueryDebugPanel data={queryDebugData} className="mb-3" />
+      )}
       {showCanvasGrid && selectedNode && (
         <CanvasGrid
           workspaceId={workspace.name}

@@ -294,8 +294,8 @@ export async function getWorkspaceDocuments(
   id: string,
   contextSpec: string = '/',
   featureArray: string[] = [],
-  options: { limit?: number; offset?: number; page?: number; treeName?: string; treeType?: string; q?: string; queries?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[]; ids?: number[] | null; scope?: 'path' | 'workspace'; sortBy?: string; order?: 'asc' | 'desc'; applyCanvasSpec?: boolean } = {}
-): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }> {
+  options: { limit?: number; offset?: number; page?: number; treeName?: string; treeType?: string; q?: string; queries?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[]; ids?: number[] | null; scope?: 'path' | 'workspace'; sortBy?: string; order?: 'asc' | 'desc'; applyCanvasSpec?: boolean; debug?: boolean } = {}
+): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string; debug?: { distances?: Array<{ id: number; distance: number }>; imageDistances?: Array<{ id: number; distance: number }> } }> {
   try {
     const params = new URLSearchParams();
     const wholeWorkspace = options.scope === 'workspace'
@@ -317,6 +317,9 @@ export async function getWorkspaceDocuments(
     // Timeline sort: server sorts the candidate set by the named timeline
     // (crud:created/crud:updated/content/…) then paginates. Default (no sortBy)
     // is id-desc ≈ newest-first.
+    // Calibration aid: asks the server to attach raw (unfloored) image kNN
+    // distances so the relevance floor can be picked from real numbers.
+    if (options.debug) params.append('debug', 'true');
     if (options.sortBy) params.append('sortBy', options.sortBy);
     if (options.order) params.append('order', options.order);
     appendQueries(params, options.queries, options.q);
@@ -324,7 +327,7 @@ export async function getWorkspaceDocuments(
     const queryString = params.toString();
     const url = `${API_ROUTES.workspaces}/${id}/documents${queryString ? '?' + queryString : ''}`;
 
-    return await api.get<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }>(url);
+    return await api.get<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string; debug?: { distances?: Array<{ id: number; distance: number }>; imageDistances?: Array<{ id: number; distance: number }> } }>(url);
   } catch (error) {
     console.error(`Failed to get workspace documents ${id}:`, error);
     throw error;
@@ -379,7 +382,7 @@ export async function getWorkspaceLayerDocuments(
     if (options.order) params.append('order', options.order);
     const queryString = params.toString();
     const url = `${API_ROUTES.workspaces}/${id}/trees/${encodeURIComponent(treeName)}/layers/${encodeURIComponent(layerId)}/documents${queryString ? '?' + queryString : ''}`;
-    return await api.get<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }>(url);
+    return await api.get<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string; debug?: { distances?: Array<{ id: number; distance: number }>; imageDistances?: Array<{ id: number; distance: number }> } }>(url);
   } catch (error) {
     console.error(`Failed to get workspace layer documents ${id}/${treeName}/${layerId}:`, error);
     throw error;

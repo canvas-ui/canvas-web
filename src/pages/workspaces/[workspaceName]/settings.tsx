@@ -18,6 +18,7 @@ import { TrashPanel } from '@/components/workspace/trash-panel'
 import { ImapMailboxesPanel } from '@/components/workspace/imap-mailboxes-panel'
 import { TokenManager } from '@/components/workspace/token-manager'
 import { useToast } from '@/components/ui/toast-container'
+import { isQueryDebugEnabled, setQueryDebugEnabled } from '@/lib/query-debug'
 import { generateNiceRandomHexColor, visibleAccentColor } from '@/utils/color'
 import {
   disableWorkspaceService,
@@ -589,6 +590,7 @@ function SearchTuning({ workspaceName, current, weights, onDone }: {
   const [wImage, setWImage] = useState<string>(weights?.image == null ? '2' : String(weights.image))
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [debugQueries, setDebugQueries] = useState(isQueryDebugEnabled)
   const save = async () => {
     setSaving(true)
     setMessage(null)
@@ -631,6 +633,21 @@ function SearchTuning({ workspaceName, current, weights, onDone }: {
       <div className="flex items-center gap-2">
         <Button size="sm" variant="outline" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
         {message && <span className="text-xs text-muted-foreground">{message}</span>}
+      </div>
+      <div className="space-y-1.5 border-t border-border pt-3">
+        <label className="flex items-center gap-2 text-xs">
+          <input
+            type="checkbox"
+            checked={debugQueries}
+            onChange={(e) => { setQueryDebugEnabled(e.target.checked); setDebugQueries(e.target.checked) }}
+          />
+          <span>Debug query</span>
+        </label>
+        <p className="text-[11px] text-muted-foreground">
+          Attaches the raw (unfloored) image distances to each search and shows them above the
+          document list — the numbers this floor should be picked from. Local to this browser;
+          costs a little extra work per query, so leave it off day to day.
+        </p>
       </div>
     </div>
   )
