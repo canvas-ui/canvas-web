@@ -529,8 +529,11 @@ export default function WorkspaceDetailPage() {
           // mirrors (they live in their own tree now — no opt-in flag needed).
           scope: docScope,
           // Only meaningful with a text query — the server attaches image kNN
-          // distances for the query (the LAST one of a refine stack).
+          // distances for the query (the LAST one of a refine stack). Ask for a
+          // deep window: the nearest 25 of ANY query cluster tightly, so a short
+          // list shows no boundary and invites a floor picked from noise.
           debug: queryDebug && serverSearchQueries.length > 0,
+          debugLimit: 200,
         });
       }
       const nextDocuments = (response.payload as Document[]) || [];

@@ -22,16 +22,29 @@ export function QueryDebugPanel({ data, className }: { data: QueryDebugData; cla
 
   const { rows, gapIndex, span } = useMemo(() => {
     const sorted = [...data.distances].sort((a, b) => a.distance - b.distance)
-    // Largest jump between neighbours = the most likely match/noise boundary.
+    const gaps: number[] = []
+    for (let i = 1; i < sorted.length; i++) { gaps.push(sorted[i].distance - sorted[i - 1].distance) }
+
+    // The largest jump is only a BOUNDARY if it stands out against the typical
+    // spacing. In a tight cluster every gap is noise, and marking the biggest
+    // one invites a floor picked from nothing — the failure this panel exists
+    // to prevent. Require it to be several times the median spacing.
+    const median = gaps.length
+      ? [...gaps].sort((a, b) => a - b)[Math.floor(gaps.length / 2)]
+      : 0
     let gapIndex = -1
     let biggest = 0
-    for (let i = 1; i < sorted.length; i++) {
-      const gap = sorted[i].distance - sorted[i - 1].distance
-      if (gap > biggest) { biggest = gap; gapIndex = i }
+    for (let i = 0; i < gaps.length; i++) {
+      if (gaps[i] > biggest) { biggest = gaps[i]; gapIndex = i + 1 }
     }
+    const significant = gapIndex > 0 && biggest >= Math.max(median * 4, 1e-6)
     const first = sorted[0]?.distance ?? 0
     const last = sorted[sorted.length - 1]?.distance ?? 0
-    return { rows: sorted, gapIndex, span: { first, last, biggest } }
+    return {
+      rows: sorted,
+      gapIndex: significant ? gapIndex : -1,
+      span: { first, last, biggest, median },
+    }
   }, [data.distances])
 
   if (rows.length === 0) {
@@ -65,8 +78,13 @@ export function QueryDebugPanel({ data, className }: { data: QueryDebugData; cla
             Best-first cosine distance (0 = identical). Scroll to where the photos stop being
             relevant and set the image relevance floor just above that value in
             Settings → Database → Search tuning.
-            {suggested !== null && (
-              <> Biggest gap is at <span className="font-mono">{suggested.toFixed(4)}</span> (Δ{span.biggest.toFixed(4)}) — a likely boundary.</>
+            {suggested !== null ? (
+              <> A jump at <span className="font-mono">{suggested.toFixed(4)}</span> (Δ{span.biggest.toFixed(4)}, vs typical Δ{span.median.toFixed(4)}) stands out — a likely boundary.</>
+            ) : (
+              <> <span className="text-amber-600 dark:text-amber-500">No boundary in this window</span> — the
+              distances step evenly (typical Δ{span.median.toFixed(4)}), so there is nothing here to
+              set a floor from. Relevance probably ends further down the list than this window
+              reaches, or the model is not separating this query at all.</>
             )}
           </p>
 
@@ -96,9 +114,10 @@ export function QueryDebugPanel({ data, className }: { data: QueryDebugData; cla
           </div>
 
           <p className="text-[11px] text-muted-foreground">
-            Range {span.first.toFixed(4)} – {span.last.toFixed(4)}. A narrow range means the model
-            barely separates this query from everything else, so no floor will help much — that is a
-            model/prompt problem, not a tuning one.
+            Range {span.first.toFixed(4)} – {span.last.toFixed(4)} (spread {(span.last - span.first).toFixed(4)})
+            over {rows.length} rows. Absolute values shift with the model and are not comparable
+            across models — after a re-embed every floor has to be picked again. A spread this
+            narrow relative to the range means ranking is doing the work, not distance.
           </p>
         </div>
       )}

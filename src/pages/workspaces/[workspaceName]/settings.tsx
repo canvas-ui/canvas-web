@@ -578,13 +578,17 @@ function StatRow({ label, value, mono = false }: { label: string; value: React.R
 // - Fusion weights: how much each signal counts in hybrid ranking (RRF).
 //   fts = lexical (filenames/content), dense = text semantics, image = photo
 //   matches. Equal fts/image treats a matching photo like a matching document.
-function SearchTuning({ workspaceName, current, weights, onDone }: {
+function SearchTuning({ workspaceName, current, weights, floorMode: initialFloorMode, relativeMargin, onDone }: {
   workspaceName: string
   current: number | null | undefined
   weights: { fts?: number; dense?: number; image?: number } | undefined
+  floorMode: 'relative' | 'absolute' | undefined
+  relativeMargin: number | undefined
   onDone: () => void
 }) {
   const [value, setValue] = useState<string>(current == null ? '' : String(current))
+  const [floorMode, setFloorMode] = useState<'relative' | 'absolute'>(initialFloorMode ?? 'relative')
+  const [margin, setMargin] = useState<string>(relativeMargin == null ? '0.035' : String(relativeMargin))
   const [wFts, setWFts] = useState<string>(weights?.fts == null ? '2' : String(weights.fts))
   const [wDense, setWDense] = useState<string>(weights?.dense == null ? '1' : String(weights.dense))
   const [wImage, setWImage] = useState<string>(weights?.image == null ? '2' : String(weights.image))
@@ -600,7 +604,16 @@ function SearchTuning({ workspaceName, current, weights, onDone }: {
       if (imageMaxDistance !== null && !Number.isFinite(imageMaxDistance)) { setMessage('Enter a number (e.g. 0.95) or leave empty'); return }
       const parsedWeights = { fts: Number(wFts), dense: Number(wDense), image: Number(wImage) }
       if (Object.values(parsedWeights).some((v) => !Number.isFinite(v) || v < 0)) { setMessage('Weights must be numbers ≥ 0'); return }
-      await setWorkspaceSearchTuning(workspaceName, { imageMaxDistance, searchWeights: parsedWeights })
+      const parsedMargin = Number(margin.trim())
+      if (floorMode === 'relative' && (!Number.isFinite(parsedMargin) || parsedMargin <= 0)) {
+        setMessage('Window width must be a positive number (e.g. 0.035)'); return
+      }
+      await setWorkspaceSearchTuning(workspaceName, {
+        imageMaxDistance,
+        imageFloorMode: floorMode,
+        ...(floorMode === 'relative' ? { imageRelativeMargin: parsedMargin } : {}),
+        searchWeights: parsedWeights,
+      })
       setMessage('Saved')
       onDone()
     } catch (err) {
@@ -612,9 +625,42 @@ function SearchTuning({ workspaceName, current, weights, onDone }: {
   return (
     <div className="mt-3 space-y-3">
       <div className="space-y-1.5">
-        <label className="text-xs text-muted-foreground">Image relevance floor (cosine distance, 0–2; blank = off)</label>
+        <label className="text-xs text-muted-foreground">How photo relevance is decided</label>
+        <select
+          value={floorMode}
+          onChange={(e) => setFloorMode(e.target.value as 'relative' | 'absolute')}
+          className="h-8 rounded-md border border-input bg-transparent px-2 text-xs"
+        >
+          <option value="relative">Relative to the best match (recommended)</option>
+          <option value="absolute">Absolute distance cutoff</option>
+        </select>
+        <p className="text-[11px] text-muted-foreground">
+          Photo-vs-text distances shift with every query and every model, so one fixed cutoff
+          travels badly — a value tuned for one model keeps everything (or nothing) on the next.
+          Relative anchors on the best match for THIS query and survives a re-embed.
+        </p>
+      </div>
+      {floorMode === 'relative' && (
+        <div className="space-y-1.5">
+          <label className="text-xs text-muted-foreground">Window width (distance from the best match)</label>
+          <Input value={margin} onChange={(e) => setMargin(e.target.value)} placeholder="0.035" className="h-8 w-28 font-mono text-xs" inputMode="decimal" />
+          <p className="text-[11px] text-muted-foreground">
+            Wider keeps photos that match your query only partly — which is what a photo matching
+            TWO things (a snowy window) looks like, since it sits further from each one than a pure
+            example does. Too wide and everything gets in.
+          </p>
+        </div>
+      )}
+      <div className="space-y-1.5">
+        <label className="text-xs text-muted-foreground">
+          {floorMode === 'relative' ? 'Hard ceiling (cosine distance, 0–2; blank = off)' : 'Image relevance floor (cosine distance, 0–2; blank = off)'}
+        </label>
         <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="0.95" className="h-8 w-28 font-mono text-xs" inputMode="decimal" />
-        <p className="text-[11px] text-muted-foreground">Lower = stricter (fewer, more-relevant photos); raise if relevant photos are missing.</p>
+        <p className="text-[11px] text-muted-foreground">
+          {floorMode === 'relative'
+            ? 'Nothing beyond this counts as a match however close it is to the best one. This is what lets a search of something you have no photos of come back empty — without it, a relative window always returns its nearest photo.'
+            : 'Lower = stricter (fewer, more-relevant photos); raise if relevant photos are missing.'}
+        </p>
       </div>
       <div className="space-y-1.5">
         <label className="text-xs text-muted-foreground">Hybrid fusion weights (0 disables a signal)</label>
@@ -763,13 +809,14 @@ function DbStatsTab({
                         : `${(sp.embeddedDocs ?? 0).toLocaleString()} docs · ${(sp.chunkRows ?? 0).toLocaleString()} vectors`}
                     />
                   ))}
-                  <StatRow label="Image relevance floor" value={stats.semantic.imageMaxDistance == null ? 'off' : stats.semantic.imageMaxDistance} mono />
+                  <StatRow label="Photo relevance" value={stats.semantic.imageFloorMode === 'absolute' ? 'absolute cutoff' : `relative ±${stats.semantic.imageRelativeMargin ?? 0.035}`} mono />
+                  <StatRow label={stats.semantic.imageFloorMode === 'absolute' ? 'Image relevance floor' : 'Hard ceiling'} value={stats.semantic.imageMaxDistance == null ? 'off' : stats.semantic.imageMaxDistance} mono />
                   <StatRow
                     label="Fusion weights (lexical · text · image)"
                     value={`${stats.semantic.searchWeights?.fts ?? 2} · ${stats.semantic.searchWeights?.dense ?? 1} · ${stats.semantic.searchWeights?.image ?? 2}`}
                     mono
                   />
-                  <SearchTuning workspaceName={workspaceName} current={stats.semantic.imageMaxDistance} weights={stats.semantic.searchWeights} onDone={onRefresh} />
+                  <SearchTuning workspaceName={workspaceName} current={stats.semantic.imageMaxDistance} weights={stats.semantic.searchWeights} floorMode={stats.semantic.imageFloorMode} relativeMargin={stats.semantic.imageRelativeMargin} onDone={onRefresh} />
                 </>
               )}
             </section>

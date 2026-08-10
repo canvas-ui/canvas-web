@@ -294,7 +294,7 @@ export async function getWorkspaceDocuments(
   id: string,
   contextSpec: string = '/',
   featureArray: string[] = [],
-  options: { limit?: number; offset?: number; page?: number; treeName?: string; treeType?: string; q?: string; queries?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[]; ids?: number[] | null; scope?: 'path' | 'workspace'; sortBy?: string; order?: 'asc' | 'desc'; applyCanvasSpec?: boolean; debug?: boolean } = {}
+  options: { limit?: number; offset?: number; page?: number; treeName?: string; treeType?: string; q?: string; queries?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[]; ids?: number[] | null; scope?: 'path' | 'workspace'; sortBy?: string; order?: 'asc' | 'desc'; applyCanvasSpec?: boolean; debug?: boolean; debugLimit?: number } = {}
 ): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string; debug?: { distances?: Array<{ id: number; distance: number }>; imageDistances?: Array<{ id: number; distance: number }> } }> {
   try {
     const params = new URLSearchParams();
@@ -320,6 +320,7 @@ export async function getWorkspaceDocuments(
     // Calibration aid: asks the server to attach raw (unfloored) image kNN
     // distances so the relevance floor can be picked from real numbers.
     if (options.debug) params.append('debug', 'true');
+    if (options.debug && options.debugLimit) params.append('debugLimit', String(options.debugLimit));
     if (options.sortBy) params.append('sortBy', options.sortBy);
     if (options.order) params.append('order', options.order);
     appendQueries(params, options.queries, options.q);
@@ -1411,6 +1412,8 @@ export interface WorkspaceDbStats {
     cacheDir?: string
     inferdableSchemas?: string[]
     imageMaxDistance?: number | null
+    imageFloorMode?: 'relative' | 'absolute'
+    imageRelativeMargin?: number
     searchWeights?: { fts?: number; dense?: number; image?: number }
     vector?: { ready: boolean; rowCount?: number; error?: string } | Record<string, unknown>
     vectorSpaces?: Record<string, { ready: boolean; dim?: number; chunkRows?: number; embeddedDocs?: number; error?: string }>
@@ -1459,9 +1462,9 @@ export interface SearchWeights {
 /** Live-tune search knobs (image relevance floor + hybrid fusion weights). Persisted + applied without restart. */
 export async function setWorkspaceSearchTuning(
   workspaceId: string,
-  tuning: { imageMaxDistance?: number | null; searchWeights?: SearchWeights },
-): Promise<{ semantic: { imageMaxDistance?: number | null; searchWeights?: SearchWeights } }> {
-  const res = await api.put<{ payload: { semantic: { imageMaxDistance?: number | null; searchWeights?: SearchWeights } } }>(
+  tuning: { imageMaxDistance?: number | null; imageFloorMode?: 'relative' | 'absolute'; imageRelativeMargin?: number; searchWeights?: SearchWeights },
+): Promise<{ semantic: { imageMaxDistance?: number | null; imageFloorMode?: 'relative' | 'absolute'; imageRelativeMargin?: number; searchWeights?: SearchWeights } }> {
+  const res = await api.put<{ payload: { semantic: { imageMaxDistance?: number | null; imageFloorMode?: 'relative' | 'absolute'; imageRelativeMargin?: number; searchWeights?: SearchWeights } } }>(
     `${API_ROUTES.workspaces}/${workspaceId}/db/tuning`,
     tuning,
   )
