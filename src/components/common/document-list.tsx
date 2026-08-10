@@ -2,7 +2,7 @@ import { Document, TreeNode } from '@/types/workspace'
 import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, Table as TableIcon } from 'lucide-react'
 import { LinkToCard, type LinkToTarget } from '@/components/menu/shared/LinkToCard'
 import { PickDocumentsCard } from '@/components/menu/shared/PickDocumentsCard'
-import { useSideView } from '@/components/shell/side-view-context-data'
+import { useSideView } from '@/components/shell/side-view-context'
 import { useState, useCallback, useMemo, useEffect, useRef, useDeferredValue } from 'react'
 import { createPortal } from 'react-dom'
 import Fuse from 'fuse.js'
@@ -14,13 +14,13 @@ import {
   TableHeader,
   TableRow,
   SortableTableHead,
+  useSortableData,
 } from '@/components/ui/table'
-import { useSortableData } from '@/components/ui/use-sortable-data'
 import { Button } from '@/components/ui/button'
 import { ContextMenuShell } from '@/components/common/context-menu-shell'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { ObjectPropertiesModal } from '@/components/object-card/ObjectPropertiesModal'
-import { isEditableSchema } from '@/components/object-card/editable-schema'
+import { isEditableSchema } from '@/components/object-card/EditForm'
 import { usePublicShareCode } from '@/components/renderers/public-share'
 import { useDocumentThumbnail } from '@/components/renderers/useDocumentThumbnail'
 import { DocumentIcon } from '@/components/common/DocumentIcon'
@@ -43,7 +43,7 @@ interface DocumentListProps {
   onCopyDocuments?: (documentIds: number[]) => void
   onCutDocuments?: (documentIds: number[]) => void
   onPasteDocuments?: (path: string, documentIds: number[], options?: DocumentPasteOptions) => Promise<boolean>
-  onImportDocuments?: (documents: unknown[], contextPath: string) => Promise<boolean>
+  onImportDocuments?: (documents: any[], contextPath: string) => Promise<boolean>
   onSelectionChange?: (documentIds: number[]) => void
   pastedDocumentIds?: number[]
   viewMode?: 'card' | 'table' | 'tile'
@@ -127,7 +127,7 @@ interface ExportModalProps {
 interface ImportModalProps {
   isOpen: boolean
   onClose: () => void
-  onImport: (documents: unknown[]) => Promise<boolean>
+  onImport: (documents: any[]) => Promise<boolean>
 }
 
 function ExportModal({ isOpen, onClose, documents, selectedDocuments }: ExportModalProps) {
@@ -158,8 +158,8 @@ function ExportModal({ isOpen, onClose, documents, selectedDocuments }: ExportMo
       await navigator.clipboard.writeText(jsonString)
       setCopyStatus('copied')
       setTimeout(() => setCopyStatus('idle'), 2000)
-    } catch (error) {
-      console.error('Failed to copy to clipboard:', error)
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err)
       setCopyStatus('error')
       setTimeout(() => setCopyStatus('idle'), 2000)
     }
@@ -260,7 +260,7 @@ function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
       } else {
         setError('Failed to import documents')
       }
-    } catch {
+    } catch (err) {
       setError('Invalid JSON format')
     } finally {
       setIsImporting(false)
@@ -429,7 +429,7 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
   const isEditable = isEditableSchema(document.schema)
 
   const isTabDocument = document.schema === 'data/schema/tab'
-  const tabUrl = isTabDocument && typeof document.data.url === 'string' ? document.data.url : null
+  const tabUrl = isTabDocument ? document.data.url : null
   const display = getDocumentDisplayInfo(document)
 
   const handleDragStart = (e: React.DragEvent) => {
@@ -557,7 +557,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
   const isPublicShare = usePublicShareCode() != null
   const isTabDocument = document.schema === 'data/schema/tab'
   const isEditable = isEditableSchema(document.schema)
-  const tabUrl = isTabDocument && typeof document.data.url === 'string' ? document.data.url : null
+  const tabUrl = isTabDocument ? document.data.url : null
   const display = getDocumentDisplayInfo(document)
 
   const handleDragStart = (e: React.DragEvent) => {
@@ -669,7 +669,7 @@ function isImageDocument(document: Document): boolean {
 function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSide, onRightClick, onDragStart }: DocumentRowProps) {
   const [showDetailModal, setShowDetailModal] = useState(false)
   const isTabDocument = document.schema === 'data/schema/tab'
-  const tabUrl = isTabDocument && typeof document.data.url === 'string' ? document.data.url : null
+  const tabUrl = isTabDocument ? document.data.url : null
   const isImage = isImageDocument(document)
   const display = getDocumentDisplayInfo(document)
   // 768px render keeps the larger (300px column, retina) photo tiles crisp.
@@ -794,8 +794,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
 
   // Clear selection when context path changes
   useEffect(() => {
-    const reset = setTimeout(() => setSelectedDocuments(new Set()), 0)
-    return () => clearTimeout(reset)
+    setSelectedDocuments(new Set())
   }, [contextPath])
 
   // Content-header "Link selection" button (DefaultCanvas) — selection + the
@@ -982,18 +981,9 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
       case 'copy': onCopyDocuments?.(documentIds); break
       case 'cut': onCutDocuments?.(documentIds); break
       case 'link-to': setLinkPanelIds(documentIds); setContextMenu(null); return
-      case 'remove':
-        if (documentIds.length === 1) onRemoveDocument?.(documentIds[0])
-        else onRemoveDocuments?.(documentIds)
-        break
-      case 'delete':
-        if (documentIds.length === 1) onDeleteDocument?.(documentIds[0])
-        else onDeleteDocuments?.(documentIds)
-        break
-      case 'destroy':
-        if (documentIds.length === 1) onDestroyDocument?.(documentIds[0])
-        else onDestroyDocuments?.(documentIds)
-        break
+      case 'remove': documentIds.length === 1 ? onRemoveDocument?.(documentIds[0]) : onRemoveDocuments?.(documentIds); break
+      case 'delete': documentIds.length === 1 ? onDeleteDocument?.(documentIds[0]) : onDeleteDocuments?.(documentIds); break
+      case 'destroy': documentIds.length === 1 ? onDestroyDocument?.(documentIds[0]) : onDestroyDocuments?.(documentIds); break
       case 'view-details':
         if (documentIds.length === 1) {
           const doc = documents.find(d => d.id === documentIds[0]);
@@ -1003,11 +993,8 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
       case 'open-url':
         if (documentIds.length === 1) {
           const document = documents.find(doc => doc.id === documentIds[0]);
-          const url = document && document.schema === 'data/schema/tab' && typeof document.data.url === 'string'
-            ? document.data.url
-            : null
-          if (url) {
-            window.open(url, '_blank', 'noopener,noreferrer');
+          if (document && document.schema === 'data/schema/tab' && document.data.url) {
+            window.open(document.data.url, '_blank', 'noopener,noreferrer');
           }
         }
         break;
@@ -1040,7 +1027,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     }
     setContextMenu(null)
     setSelectedDocuments(new Set())
-  }, [onCopyDocuments, onCutDocuments, onRemoveDocument, onRemoveDocuments, onDeleteDocument, onDeleteDocuments, onDestroyDocument, onDestroyDocuments, documents])
+  }, [onCopyDocuments, onCutDocuments, onRemoveDocument, onRemoveDocuments, onDeleteDocument, onDeleteDocuments, onDestroyDocument, onDestroyDocuments, documents, workspaceId])
 
   const handleEmptyAreaRightClick = useCallback((event: React.MouseEvent) => {
     // Right-clicks inside a portaled dialog bubble here via the React tree —
@@ -1076,7 +1063,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     }
   }, [selectedDocuments.size, filteredDocuments])
 
-  const handleImport = useCallback(async (importedDocuments: unknown[]) => {
+  const handleImport = useCallback(async (importedDocuments: any[]) => {
     if (!onImportDocuments) return false
     try {
       return await onImportDocuments(importedDocuments, contextPath)

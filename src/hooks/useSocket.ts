@@ -43,7 +43,7 @@ export function useSocket() {
       console.error('WebSocket error:', error);
     });
 
-    queueMicrotask(() => setSocket(socketInstance));
+    setSocket(socketInstance);
 
     return () => {
       socketInstance.close();

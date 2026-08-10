@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/common/page-header'
 import { MenuTreeView } from '@/components/menu/shared/MenuTreeView'
-import { useToast } from '@/components/ui/toast-context'
-import { useMenu } from '@/components/shell/menu-context-data'
+import { useToast } from '@/components/ui/toast-container'
+import { useMenu } from '@/components/shell/menu-context'
 import { cn } from '@/lib/utils'
 import {
   CONTEXT_SETTINGS_SECTIONS,

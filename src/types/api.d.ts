@@ -29,7 +29,7 @@ interface Workspace {
   status: 'available' | 'not_found' | 'error' | 'active' | 'inactive' | 'removed' | 'destroyed'
   type?: string
   isShared?: boolean
-  sharedVia?: unknown
+  sharedVia?: any
   color?: string
   icon?: string | null
   order?: number | null
@@ -76,11 +76,11 @@ interface Context {
   order?: number | null
   ownerEmail?: string
   locked?: boolean
-  serverContextArray?: unknown[]
-  clientContextArray?: unknown[]
-  contextBitmapArray?: unknown[]
-  featureBitmapArray?: unknown[]
-  filterArray?: unknown[]
+  serverContextArray?: any[]
+  clientContextArray?: any[]
+  contextBitmapArray?: any[]
+  featureBitmapArray?: any[]
+  filterArray?: any[]
   pendingUrl?: string | null
 }
 
@@ -92,7 +92,7 @@ interface ApiToken {
   expiresAt: string
 }
 
-interface ApiResponse<T = unknown> {
+interface ApiResponse<T = any> {
   status: string
   statusCode: number
   message: string

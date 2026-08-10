@@ -27,11 +27,6 @@ export function findTreeNodeByPath(root: TreeNode | null, path: string): TreeNod
 }
 
 type WorkspaceTreeResponse = { payload: TreeNode; status: string; statusCode: number; message: string }
-export interface WorkspaceTree {
-  id: string
-  name: string
-  type: string
-}
 
 const workspaceTreeCache = new Map<string, WorkspaceTreeResponse>()
 const workspaceTreeInflight = new Map<string, Promise<WorkspaceTreeResponse>>()
@@ -193,9 +188,9 @@ export async function removeWorkspace(id: string): Promise<Workspace> {
 
 
 // List all trees for a workspace
-export async function listWorkspaceTrees(workspaceId: string): Promise<WorkspaceTree[]> {
+export async function listWorkspaceTrees(workspaceId: string): Promise<any[]> {
   try {
-    const res = await api.get<{ payload: WorkspaceTree[] }>(`${API_ROUTES.workspaces}/${workspaceId}/trees`);
+    const res = await api.get<{ payload: any[] }>(`${API_ROUTES.workspaces}/${workspaceId}/trees`);
     return res.payload || [];
   } catch (error) {
     console.error(`Failed to list workspace trees ${workspaceId}:`, error);
@@ -490,8 +485,8 @@ export interface WorkspacePublicCanvasShare {
   } | null
 }
 
-export async function listWorkspaceShares(workspaceId: string): Promise<{ publicCanvasShares: WorkspacePublicCanvasShare[]; emailShares: unknown[] }> {
-  const response = await api.get<{ payload: { publicCanvasShares?: WorkspacePublicCanvasShare[]; emailShares?: unknown[] } }>(
+export async function listWorkspaceShares(workspaceId: string): Promise<{ publicCanvasShares: WorkspacePublicCanvasShare[]; emailShares: any[] }> {
+  const response = await api.get<{ payload: { publicCanvasShares?: WorkspacePublicCanvasShare[]; emailShares?: any[] } }>(
     `${API_ROUTES.workspaces}/${workspaceId}/shares`
   )
   return {
@@ -639,13 +634,13 @@ export async function destroyWorkspaceLayer(workspaceId: string, layerId: string
   return true
 }
 
-export async function mergeWorkspaceLayer(workspaceId: string, layerId: string, targetLayers: string[], treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<unknown> {
-  const res = await api.post<{ payload: unknown }>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers/merge`, { layerId, targetLayers })
+export async function mergeWorkspaceLayer(workspaceId: string, layerId: string, targetLayers: string[], treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<any> {
+  const res = await api.post<{ payload: any }>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers/merge`, { layerId, targetLayers })
   return res.payload
 }
 
-export async function subtractWorkspaceLayer(workspaceId: string, layerId: string, targetLayers: string[], treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<unknown> {
-  const res = await api.post<{ payload: unknown }>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers/subtract`, { layerId, targetLayers })
+export async function subtractWorkspaceLayer(workspaceId: string, layerId: string, targetLayers: string[], treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<any> {
+  const res = await api.post<{ payload: any }>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers/subtract`, { layerId, targetLayers })
   return res.payload
 }
 
@@ -717,7 +712,7 @@ export interface DestroyResult {
 
 export async function updateWorkspaceDocument(
   workspaceId: string,
-  document: { id: number; schema: string; schemaVersion: string; data?: Record<string, unknown>; metadata?: Record<string, unknown>; comment?: string }
+  document: { id: number; schema: string; schemaVersion: string; data?: Record<string, any>; metadata?: Record<string, any>; comment?: string }
 ): Promise<boolean> {
   await api.put<{ payload: unknown }>(
     `${API_ROUTES.workspaces}/${workspaceId}/documents`,
@@ -875,7 +870,6 @@ export async function purgeWorkspaceDocuments(
   _options: Record<string, never> = {},
   treeName: string = DEFAULT_WORKSPACE_TREE_NAME
 ): Promise<{ requested: number; deleted: number }> {
-  void _options
   const params = new URLSearchParams()
   // Send the tree NAME only (no treeType): the server resolves the type from the
   // name, which also works for virtual directory trees. Omitting treeName here was

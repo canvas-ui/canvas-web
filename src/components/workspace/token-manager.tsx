@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useToast } from '@/components/ui/toast-context';
+import { useToast } from '@/components/ui/toast-container';
 import { Plus, Copy, Trash2, Eye, EyeOff, Check } from 'lucide-react';
 import { api } from '@/lib/api';
 
@@ -17,15 +17,12 @@ interface TokenManagerProps {
   workspaceId: string;
 }
 
-const TOKEN_PERMISSIONS = ['read', 'write', 'admin'] as const;
-type TokenPermission = typeof TOKEN_PERMISSIONS[number];
-
 export function TokenManager({ workspaceId }: TokenManagerProps) {
   const [tokens, setTokens] = useState<Token[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [newTokenDescription, setNewTokenDescription] = useState('');
-  const [newTokenPermissions, setNewTokenPermissions] = useState<TokenPermission[]>(['read']);
+  const [newTokenPermissions, setNewTokenPermissions] = useState<('read' | 'write' | 'admin')[]>(['read']);
   const [newTokenExpiry, setNewTokenExpiry] = useState('');
   const [neverExpires, setNeverExpires] = useState(true);
   const [showNewTokenForm, setShowNewTokenForm] = useState(false);
@@ -34,7 +31,12 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
   const [copiedNewToken, setCopiedNewToken] = useState(false);
   const { showToast } = useToast();
 
-  const loadTokens = useCallback(async () => {
+  // Load existing tokens
+  useEffect(() => {
+    loadTokens();
+  }, [workspaceId]);
+
+  const loadTokens = async () => {
     try {
       setIsLoading(true);
       const response = await api.get<{ payload: Array<Token & { tokenHash?: string }> }>(`/workspaces/${workspaceId}/tokens`);
@@ -42,7 +44,7 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
         ...token,
         hash: token.hash || token.tokenHash || '',
       })).filter(token => token.hash));
-    } catch {
+    } catch (error) {
       showToast({
         title: 'Error',
         description: 'Failed to load workspace tokens',
@@ -51,12 +53,7 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [workspaceId, showToast]);
-
-  // Load existing tokens.
-  useEffect(() => {
-    void Promise.resolve().then(loadTokens);
-  }, [loadTokens]);
+  };
 
   const createToken = async () => {
     if (!newTokenDescription.trim()) {
@@ -108,7 +105,7 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
         description: 'Workspace sharing token created successfully',
         variant: 'default'
       });
-    } catch {
+    } catch (error) {
       showToast({
         title: 'Error',
         description: 'Failed to create token',
@@ -127,7 +124,7 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
         description: 'Token revoked successfully'
       });
       await loadTokens();
-    } catch {
+    } catch (error) {
       showToast({
         title: 'Error',
         description: 'Failed to revoke token',
@@ -160,7 +157,7 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
         title: 'Copied',
         description: 'Token hash copied to clipboard'
       });
-    } catch {
+    } catch (error) {
       showToast({
         title: 'Error',
         description: 'Failed to copy to clipboard',
@@ -178,7 +175,7 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
         description: 'Token copied to clipboard'
       });
       setTimeout(() => setCopiedNewToken(false), 2000);
-    } catch {
+    } catch (error) {
       showToast({
         title: 'Error',
         description: 'Failed to copy token to clipboard',
@@ -212,14 +209,14 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
           <div>
             <label className="text-sm font-medium mb-2 block">Permissions</label>
             <div className="flex gap-2 flex-wrap">
-              {TOKEN_PERMISSIONS.map((permission) => (
+              {['read', 'write', 'admin'].map((permission) => (
                 <label key={permission} className="flex items-center gap-2">
                   <input
                     type="checkbox"
-                    checked={newTokenPermissions.includes(permission)}
+                    checked={newTokenPermissions.includes(permission as any)}
                     onChange={(e) => {
                       if (e.target.checked) {
-                        setNewTokenPermissions([...newTokenPermissions, permission]);
+                        setNewTokenPermissions([...newTokenPermissions, permission as any]);
                       } else {
                         setNewTokenPermissions(newTokenPermissions.filter(p => p !== permission));
                       }
@@ -391,18 +388,16 @@ function WorkspaceEmailShares({ workspaceId }: { workspaceId: string }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [shares, setShares] = useState<Array<{ userEmail: string; permissions: string[]; description?: string; grantedAt?: string }>>([])
 
-  const loadShares = useCallback(async () => {
+  const loadShares = async () => {
     try {
       const res = await api.get<{ payload: typeof shares | { emailShares?: typeof shares } }>(`/workspaces/${workspaceId}/shares`)
       setShares(Array.isArray(res.payload) ? res.payload : res.payload?.emailShares || [])
-    } catch {
+    } catch (e) {
       // silent
     }
-  }, [workspaceId])
+  }
 
-  useEffect(() => {
-    void Promise.resolve().then(loadShares)
-  }, [loadShares])
+  useEffect(() => { loadShares() }, [workspaceId])
 
   const addShare = async () => {
     if (!email.trim()) return
@@ -436,11 +431,11 @@ function WorkspaceEmailShares({ workspaceId }: { workspaceId: string }) {
       <div className="flex gap-2 flex-wrap items-center">
         <Input placeholder="user@local.server" value={email} onChange={(e) => setEmail(e.target.value)} className="max-w-xs" />
         <div className="flex gap-2">
-          {TOKEN_PERMISSIONS.map(p => (
+          {['read','write','admin'].map(p => (
             <label key={p} className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={permissions.includes(p)} onChange={(e) => {
-                if (e.target.checked) setPermissions([...permissions, p])
-                else setPermissions(permissions.filter(x => x !== p))
+              <input type="checkbox" checked={permissions.includes(p as any)} onChange={(e) => {
+                if (e.target.checked) setPermissions([...permissions, p as any])
+                else setPermissions(permissions.filter(x => x !== (p as any)))
               }} />
               {p}
             </label>

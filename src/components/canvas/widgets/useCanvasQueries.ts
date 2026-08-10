@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useState } from 'react'
 import type { WidgetCanvasContext } from '../widget-types'
 
 // The canvas-level search stack, shared by every data widget (gallery, mosaic,
@@ -12,10 +12,7 @@ import type { WidgetCanvasContext } from '../widget-types'
 export function useCanvasQueries(canvas: WidgetCanvasContext, onChange?: () => void) {
   const shared = typeof canvas.setCanvasQueries === 'function'
   const [local, setLocal] = useState<string[]>(canvas.canvasQueries ?? [])
-  const queries = useMemo(
-    () => (shared ? (canvas.canvasQueries ?? []) : local),
-    [shared, canvas.canvasQueries, local],
-  )
+  const queries = shared ? (canvas.canvasQueries ?? []) : local
 
   const setQueries = useCallback((next: string[]) => {
     if (shared) canvas.setCanvasQueries!(next)

@@ -1,7 +1,7 @@
 import { ChevronLeft, X } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import { cn } from '@/lib/utils'
-import { useMenu } from '@/components/shell/menu-context-data'
+import { useMenu } from '@/components/shell/menu-context'
 import { visibleAccentColor } from '@/utils/color'
 
 interface M2HeaderProps {

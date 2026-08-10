@@ -1,7 +1,7 @@
 import { CloseSectionButton, SectionBackButton } from '@/components/common/page-header';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { useToast } from '@/components/ui/toast-context';
+import { useToast } from '@/components/ui/toast-container';
 import {
   getContext,
   getContextDocuments,
@@ -15,7 +15,7 @@ import { DefaultCanvas } from '@/components/canvas/DefaultCanvas';
 import { Document as WorkspaceDocument, buildDatetimeFilters, buildGeoFilters } from '@/types/workspace';
 import { docInGeoSelection } from '@/utils/geo';
 import { useToolbox } from '@/components/toolbox/toolbox-context';
-import { useMenu } from '@/components/shell/menu-context-data';
+import { useMenu } from '@/components/shell/menu-context';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Icon } from '@iconify/react';
 import { Filter } from 'lucide-react';
@@ -41,7 +41,7 @@ interface ContextData {
   pathArray: string[];
   workspaceId: string;
   workspaceName: string;
-  acl: Record<string, unknown>;
+  acl: Record<string, any>;
   createdAt: string;
   updatedAt: string;
   locked: boolean;
@@ -56,22 +56,6 @@ interface ContextData {
   name?: string | null;
   color?: string | null;
   icon?: string | null;
-}
-
-type ContextResponse = ContextData & {
-  workspace?: string | { id?: string; name?: string };
-  acl?: Record<string, unknown>;
-};
-type ContextDocumentsResponse = WorkspaceDocument[] & { totalCount?: number; count?: number };
-type ContextSocketEvent = {
-  id?: string;
-  contextId?: string;
-  url?: string;
-  context?: ContextSocketEvent;
-};
-
-function toContextSocketEvent(data: unknown): ContextSocketEvent {
-  return typeof data === 'object' && data !== null ? data as ContextSocketEvent : {};
 }
 
 export default function ContextDetailPage() {
@@ -130,9 +114,8 @@ export default function ContextDetailPage() {
         { limit: pageSize, page: currentPage, queries: serverSearchQueries.length ? serverSearchQueries : undefined, anyOf: tbAnyOf, noneOf: tbNoneOf, applyContextSpec: false },
         ownerId,
       );
-      const result = data as ContextDocumentsResponse;
-      setDocuments(result);
-      setDocumentsTotalCount(result.totalCount || result.count || result.length);
+      setDocuments(data as any[]);
+      setDocumentsTotalCount((data as any).totalCount || (data as any).count || (data as any[]).length);
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to fetch documents', variant: 'destructive' });
       setDocuments([]);
@@ -147,15 +130,15 @@ export default function ContextDetailPage() {
     if (!contextId) return;
     setIsLoading(true);
     try {
-      const fetched = (isSharedContext ? await getContext(contextId, ownerId) : await getContext(contextId)) as ContextResponse | null;
+      const fetched = isSharedContext ? await getContext(contextId, ownerId) : await getContext(contextId);
       if (!fetched) throw new Error('No context data received.');
 
       const workspaceId =
-        fetched.workspaceId ||
-        (typeof fetched.workspace === 'string' ? fetched.workspace : fetched.workspace?.id) || '';
+        (fetched as any).workspaceId ||
+        (typeof (fetched as any).workspace === 'string' ? (fetched as any).workspace : (fetched as any).workspace?.id) || '';
       const workspaceName =
-        fetched.workspaceName ||
-        (typeof fetched.workspace === 'string' ? fetched.workspace : fetched.workspace?.name) || '';
+        (fetched as any).workspaceName ||
+        (typeof (fetched as any).workspace === 'string' ? (fetched as any).workspace : (fetched as any).workspace?.name) || '';
 
       setContext({
         id: fetched.id,
@@ -166,7 +149,7 @@ export default function ContextDetailPage() {
         pathArray: fetched.pathArray || [],
         workspaceId,
         workspaceName,
-        acl: fetched.acl || {},
+        acl: (fetched as any).acl || {},
         createdAt: fetched.createdAt,
         updatedAt: fetched.updatedAt,
         locked: fetched.locked || false,
@@ -177,7 +160,7 @@ export default function ContextDetailPage() {
         filterArray: fetched.filterArray || [],
         pendingUrl: fetched.pendingUrl || null,
         description: fetched.description || null,
-        metadata: fetched.metadata || {},
+        metadata: (fetched as any).metadata || {},
         name: fetched.name ?? null,
         color: fetched.color ?? null,
         icon: fetched.icon ?? null,
@@ -190,11 +173,9 @@ export default function ContextDetailPage() {
       showToast({ title: 'Error', description: message, variant: 'destructive' });
     }
     setIsLoading(false);
-  }, [contextId, ownerId, isSharedContext, showToast]);
+  }, [contextId, ownerId, isSharedContext]);
 
-  useEffect(() => {
-    void Promise.resolve().then(fetchContextDetails);
-  }, [fetchContextDetails]);
+  useEffect(() => { fetchContextDetails(); }, [fetchContextDetails]);
 
   // Publish the context accent to the toolbox so its top-bar bottom border
   // matches the content being filtered. Cleared on unmount (→ black).
@@ -214,32 +195,18 @@ export default function ContextDetailPage() {
     () => (geoSelection ? documents.filter((d) => docInGeoSelection(d, geoSelection)) : documents),
     [documents, geoSelection],
   );
-  useEffect(() => {
-    if (context) void Promise.resolve().then(fetchDocuments);
-  }, [context, fetchDocuments]);
+  useEffect(() => { if (context) fetchDocuments(); }, [context?.id, fetchDocuments]);
   useEffect(() => {
     const onRefresh = () => fetchDocuments();
     window.addEventListener('workspace:documents:refresh', onRefresh);
     return () => window.removeEventListener('workspace:documents:refresh', onRefresh);
   }, [fetchDocuments]);
-  useEffect(() => {
-    queueMicrotask(() => {
-      setCurrentPage(1);
-      setIgnoreSavedSearch(false);
-    });
-  }, [contextId]);
-  useEffect(() => {
-    queueMicrotask(() => {
-      setServerSearchQueries(urlSearchQueries);
-      setCurrentPage(1);
-    });
-  }, [urlSearchQueries]);
+  useEffect(() => { setCurrentPage(1); setIgnoreSavedSearch(false); }, [contextId]);
+  useEffect(() => { setServerSearchQueries(urlSearchQueries); setCurrentPage(1); }, [urlSearchQueries]);
   useEffect(() => {
     if (urlSearchQueries.length || ignoreSavedSearch) return;
-    queueMicrotask(() => {
-      setServerSearchQueries(savedContextSearchQuery ? [savedContextSearchQuery] : []);
-      setCurrentPage(1);
-    });
+    setServerSearchQueries(savedContextSearchQuery ? [savedContextSearchQuery] : []);
+    setCurrentPage(1);
   }, [urlSearchQueries, ignoreSavedSearch, savedContextSearchQuery]);
 
   const syncQueriesToUrl = useCallback((queries: string[]) => {
@@ -286,43 +253,39 @@ export default function ContextDetailPage() {
     subscribe();
 
     const recentEvents = new Map<string, number>();
-    const shouldProcess = (type: string, data: unknown): boolean => {
-      const event = toContextSocketEvent(data);
+    const shouldProcess = (type: string, data: any): boolean => {
       const now = Date.now();
-      const key = `${type}:${event.id || event.contextId || contextId}`;
+      const key = `${type}:${data?.id || data?.contextId || contextId}`;
       if ((recentEvents.get(key) || 0) + 1000 > now) return false;
       recentEvents.set(key, now);
       return true;
     };
 
-    const onContextUpdate = (data: unknown) => {
-      const event = toContextSocketEvent(data);
-      const ctx = event.context || event;
+    const onContextUpdate = (data: any) => {
+      const ctx = data?.context || data;
       if (ctx?.id !== contextId && ctx?.contextId !== contextId) return;
       if (!shouldProcess('ctx:updated', ctx)) return;
       setContext(prev => prev ? { ...prev, ...ctx } as ContextData : null);
       if (ctx.url) fetchDocuments();
     };
 
-    const onUrlChanged = (data: unknown) => {
-      const event = toContextSocketEvent(data);
-      const id = event.id || event.contextId || event.context?.id;
-      const url = event.url || event.context?.url;
+    const onUrlChanged = (data: any) => {
+      const id = data?.id || data?.contextId || data?.context?.id;
+      const url = data?.url || data?.context?.url;
       if (id !== contextId || typeof url !== 'string') return;
       if (!shouldProcess('ctx:url', data)) return;
       setContext(prev => prev ? { ...prev, url } : null);
       fetchDocuments();
     };
 
-    const onDocumentChanged = (data: unknown) => {
-      const event = toContextSocketEvent(data);
-      const id = event.contextId || event.id || event.context?.id;
+    const onDocumentChanged = (data: any) => {
+      const id = data?.contextId || data?.id || data?.context?.id;
       if (id !== contextId) return;
       if (!shouldProcess('doc:changed', data)) return;
       fetchDocuments();
     };
 
-    const events: [string, (d: unknown) => void][] = [
+    const events: [string, (d: any) => void][] = [
       ['context.updated', onContextUpdate], ['context:updated', onContextUpdate],
       ['context.url.set', onUrlChanged], ['context:url:set', onUrlChanged],
       ['document.inserted', onDocumentChanged], ['document.updated', onDocumentChanged],
@@ -407,7 +370,7 @@ export default function ContextDetailPage() {
     }
   };
 
-  const handleImportDocuments = async (docs: Parameters<typeof importDocumentsToContext>[2], contextPath: string): Promise<boolean> => {
+  const handleImportDocuments = async (docs: any[], contextPath: string): Promise<boolean> => {
     if (!context) return false;
     try {
       const success = await importDocumentsToContext(context.workspaceId, contextPath, docs);

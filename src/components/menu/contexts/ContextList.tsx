@@ -1,18 +1,16 @@
 import { useIsMobile } from '@/hooks/use-mobile'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Plus, Settings, Link2, GripVertical } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import { visibleAccentColor, onAccentTextClass } from '@/utils/color'
 import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style'
 import { cn } from '@/lib/utils'
-import { useMenu } from '@/components/shell/menu-context-data'
+import { useMenu } from '@/components/shell/menu-context'
 import { useContextListData } from '@/hooks/useContextListData'
 import { updateContext } from '@/services/context'
 import { moveItem, persistSequentialOrder, useListReorder } from '@/lib/list-order'
-import { useToast } from '@/components/ui/toast-context'
+import { useToast } from '@/components/ui/toast-container'
 import { useNavigate } from 'react-router-dom'
-
-type ContextWithSharing = Context & { isShared?: boolean }
 
 export function ContextList() {
   const { state, selectEntity, openM2, closeM2 } = useMenu()
@@ -25,20 +23,20 @@ export function ContextList() {
   // their unordered sort-last position).
   const [optimisticOrder, setOptimisticOrder] = useState<Context[] | null>(null)
   const orderedContexts = optimisticOrder ?? contexts
-  const isSharedCtx = (ctx: ContextWithSharing) => ctx.isShared === true
+  useEffect(() => { setOptimisticOrder(null) }, [contexts])
+  const isSharedCtx = (ctx: Context & Record<string, any>) => ctx.isShared === true || ctx.type === 'shared'
   const { rowProps, handleProps, draggingIndex, insertLineClass } = useListReorder((from, to) => {
     const next = moveItem(orderedContexts, from, to)
     setOptimisticOrder(next)
     persistSequentialOrder(next, (ctx, order) =>
       isSharedCtx(ctx) ? Promise.resolve() : updateContext(ctx.id, { order }))
       .then(({ failed }) => {
-        setOptimisticOrder(null)
         window.dispatchEvent(new CustomEvent('contexts:refresh'))
         if (failed) showToast({ title: 'Partial reorder', description: `${failed} context(s) could not be reordered`, variant: 'destructive' })
       })
   })
 
-  const handleSelect = (ctx: Context) => {
+  const handleSelect = (ctx: Context & Record<string, any>) => {
     selectEntity(ctx.id)
     navigate(`/contexts/${ctx.id}`)
   }

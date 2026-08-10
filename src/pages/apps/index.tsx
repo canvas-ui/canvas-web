@@ -46,6 +46,9 @@ export default function AppletHostPage() {
     listContexts().then(setContexts).catch(() => setContexts([]))
   }, [])
 
+  const [pathDraft, setPathDraft] = useState(path)
+  useEffect(() => { setPathDraft(path) }, [path])
+
   const setParams = (updates: Record<string, string | null>) => {
     const next = new URLSearchParams(searchParams)
     // A binding change consumes the one-shot add flag.
@@ -115,9 +118,9 @@ export default function AppletHostPage() {
               {workspaces.map(w => <option key={w.id} value={w.name}>{w.label || w.name}</option>)}
             </select>
             <input
-              key={path}
-              defaultValue={path}
-              onBlur={(e) => { const p = e.currentTarget.value.trim() || '/'; if (p !== path) setParams({ path: p }) }}
+              value={pathDraft}
+              onChange={(e) => setPathDraft(e.target.value)}
+              onBlur={() => { const p = pathDraft.trim() || '/'; if (p !== path) setParams({ path: p }) }}
               onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
               spellCheck={false}
               placeholder="/"

@@ -43,7 +43,7 @@ function tileSpan(doc: Document, index: number): { cols: number; rows: number } 
 // A justified, varied-cell photo wall over the canvas' context — the visually
 // prominent counterpart to the uniform Gallery. Shares search / timeline sort /
 // pagination / lightbox with it.
-export function MosaicWidget({ config, canvas }: WidgetProps) {
+function MosaicWidget({ config, canvas }: WidgetProps) {
   const pageSize = typeof config.pageSize === 'number' ? config.pageSize : 60
   const state = useCanvasImages(canvas, pageSize)
   const [lightbox, setLightbox] = useState<number | null>(null)

@@ -1,12 +1,18 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import { socketService } from '@/lib/socket'
-import { useToast } from '@/components/ui/toast-context'
+import { useToast } from '@/components/ui/toast-container'
 import { listNotifications, clearNotifications, type AppNotification } from '@/services/notifications'
-import { NotificationsContext } from './notifications-context-data'
 
 // In-app notifications: seeds from the REST buffer, then appends live ws
 // 'notification' events (messaging canvas adapter). Each live arrival also
 // pops a toast; the full list feeds the toolbox Home panel.
+
+interface NotificationsContextType {
+  notifications: AppNotification[]
+  clear: () => Promise<void>
+}
+
+const NotificationsContext = createContext<NotificationsContextType | null>(null)
 
 export function NotificationsProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
@@ -38,4 +44,9 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       {children}
     </NotificationsContext.Provider>
   )
+}
+
+// Null-safe: pub/share pages render without the provider.
+export function useNotificationsOptional(): NotificationsContextType | null {
+  return useContext(NotificationsContext)
 }

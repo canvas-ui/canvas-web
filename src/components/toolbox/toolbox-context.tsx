@@ -1,5 +1,6 @@
 import {
   createContext,
+  useContext,
   useReducer,
   useCallback,
   useEffect,
@@ -311,7 +312,7 @@ function findTreeNode(root: TreeNode, path: string): TreeNode | null {
 
 // ─── Context value ────────────────────────────────────────────────────────────
 
-export interface ToolboxContextValue {
+interface ToolboxContextValue {
   state: ToolboxState
   setView: (view: T1View) => void
   toggleView: (view: T1View) => void
@@ -347,17 +348,27 @@ export interface ToolboxContextValue {
   refreshTimelines: () => void
 }
 
-export const ToolboxCtx = createContext<ToolboxContextValue | null>(null)
-export { useToolbox, useToolboxOptional } from './toolbox-hooks'
+const ToolboxCtx = createContext<ToolboxContextValue | null>(null)
+
+export function useToolbox(): ToolboxContextValue {
+  const ctx = useContext(ToolboxCtx)
+  if (!ctx) throw new Error('useToolbox must be used within a ToolboxProvider')
+  return ctx
+}
+
+// For components that also render outside the app shell (public shares):
+// null instead of throwing when no provider is mounted.
+export function useToolboxOptional(): ToolboxContextValue | null {
+  return useContext(ToolboxCtx)
+}
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
-function createToolboxProvider() {
-  return function ToolboxProvider({ children }: { children: ReactNode }) {
+export function ToolboxProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(toolboxReducer, initialState)
   const location = useLocation()
   const stateRef = useRef(state)
-  useEffect(() => { stateRef.current = state }, [state])
+  stateRef.current = state
 
   // ── URL → navigation state ────────────────────────────────────────────────
 
@@ -690,7 +701,4 @@ function createToolboxProvider() {
       {children}
     </ToolboxCtx.Provider>
   )
-  }
 }
-
-export const ToolboxProvider = createToolboxProvider()

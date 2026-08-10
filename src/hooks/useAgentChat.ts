@@ -12,24 +12,9 @@ import {
   convertToStreamingMessages,
   ChatMessage,
   AgentImageContent,
-  AgentResponseMetadata,
   extractAgentMessageMetadata,
   getAgentSession,
 } from '@/services/agent';
-
-type AgentSessionMessage = {
-  role?: unknown;
-  content?: unknown;
-  errorMessage?: unknown;
-  metadata?: { reasoning?: unknown; toolCalls?: unknown };
-  api?: unknown;
-  provider?: unknown;
-  model?: unknown;
-  stopReason?: unknown;
-  timestamp?: unknown;
-  responseId?: unknown;
-  usage?: unknown;
-};
 
 export interface UseAgentChatOptions {
   agentId: string;
@@ -51,20 +36,17 @@ export interface ChatState {
   error: string | null;
 }
 
-function extractMessageText(message: unknown): string {
-  if (!message || typeof message !== 'object') return '';
-  const { errorMessage, content } = message as Record<string, unknown>;
-  if (typeof errorMessage === 'string' && errorMessage.trim()) {
-    return errorMessage.trim();
+function extractMessageText(message: any): string {
+  if (!message) return '';
+  if (typeof message.errorMessage === 'string' && message.errorMessage.trim()) {
+    return message.errorMessage.trim();
   }
+  const content = message.content;
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return '';
   const text = content
-    .filter((block): block is { type: string; text: string } =>
-      typeof block === 'object' && block !== null
-      && (block as Record<string, unknown>).type === 'text'
-      && typeof (block as Record<string, unknown>).text === 'string')
-    .map(block => block.text)
+    .filter((block: any) => block?.type === 'text' && typeof block.text === 'string')
+    .map((block: any) => block.text)
     .join('\n');
   return text || '';
 }
@@ -74,17 +56,9 @@ function appendReasoning(currentReasoning: string | undefined, delta: string | u
   return nextReasoning || undefined;
 }
 
-function isAgentSessionMessage(value: unknown): value is AgentSessionMessage {
-  return typeof value === 'object' && value !== null;
-}
-
-function sanitizeStreamingMetadata(
-  metadata: (AgentResponseMetadata & { reasoningDelta?: string }) | undefined,
-  reasoning: string | undefined
-): AgentResponseMetadata | undefined {
+function sanitizeStreamingMetadata(metadata: Record<string, any> | undefined, reasoning: string | undefined) {
   if (!metadata && !reasoning) return undefined;
-  const { reasoningDelta, ...rest } = metadata || {};
-  void reasoningDelta;
+  const { reasoningDelta: _reasoningDelta, ...rest } = metadata || {};
   return {
     ...rest,
     ...(reasoning ? { reasoning } : {}),
@@ -117,7 +91,7 @@ export function useAgentChat(options: UseAgentChatOptions) {
     let cancelled = false;
 
     if (!agentId || !loadHistory) {
-      queueMicrotask(() => setMessages(convertToStreamingMessages(initialMessages)));
+      setMessages(convertToStreamingMessages(initialMessages));
       return;
     }
 
@@ -135,7 +109,7 @@ export function useAgentChat(options: UseAgentChatOptions) {
     return () => {
       cancelled = true;
     };
-  }, [agentId, loadHistory, historyKey, initialMessages]);
+  }, [agentId, loadHistory, historyKey]);
 
   // Refs for managing state
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -151,9 +125,11 @@ export function useAgentChat(options: UseAgentChatOptions) {
 
   // Update connection status based on WebSocket state
   useEffect(() => {
-    queueMicrotask(() => setConnectionStatus(status =>
-      enableWebSocket && isConnected ? 'websocket' : status === 'websocket' ? 'disconnected' : status
-    ));
+    if (enableWebSocket && isConnected) {
+      setConnectionStatus('websocket');
+    } else if (connectionStatus === 'websocket') {
+      setConnectionStatus('disconnected');
+    }
   }, [isConnected, enableWebSocket]);
 
   function handleWebSocketMessage(chunk: StreamingChatChunk) {
@@ -216,11 +192,10 @@ export function useAgentChat(options: UseAgentChatOptions) {
     }
   }
 
-  function handleWebSocketComplete(_agentId: string, messageId: string, messages?: unknown[]) {
+  function handleWebSocketComplete(_agentId: string, messageId: string, messages?: any[]) {
     if (messageId === currentMessageRef.current) {
       const finalMessage = Array.isArray(messages)
-        ? [...messages].reverse().find((message) =>
-          isAgentSessionMessage(message) && message.role === 'assistant')
+        ? [...messages].reverse().find((message: any) => message?.role === 'assistant')
         : null;
       const finalContent = extractMessageText(finalMessage);
       const finalMetadata = extractAgentMessageMetadata(finalMessage);
@@ -343,7 +318,7 @@ export function useAgentChat(options: UseAgentChatOptions) {
             onStart: () => {
               sseAccepted = true;
             },
-            onMessage: (content, isComplete, metadata) => {
+            onMessage: (content: string, isComplete: boolean, metadata: any) => {
               streamingMessage += content;
               const reasoningDelta = typeof metadata?.reasoningDelta === 'string' ? metadata.reasoningDelta : '';
 

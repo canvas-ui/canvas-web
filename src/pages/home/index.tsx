@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { LayoutDashboard, Pin } from 'lucide-react';
 import { HomeFab } from '@/components/home/HomeFab';
 import { PinnedCanvasTile } from '@/components/home/PinnedCanvasTile';
-import { useCanvasPins } from '@/components/home/pins-context-data';
+import { useCanvasPins } from '@/components/home/pins-context';
 import type { PinnedCanvas } from '@/services/user-config';
 
 function EmptyHome() {
@@ -37,6 +37,11 @@ function tabLabel(pin: PinnedCanvas) {
 // Clicking a tab / list row restores its tile.
 function MinimizedTabBar({ pins, onRestore }: { pins: PinnedCanvas[]; onRestore: (id: string) => void }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // The last tile restored from the mobile list leaves nothing to pop over.
+  useEffect(() => {
+    if (pins.length === 0) setMobileOpen(false);
+  }, [pins.length]);
 
   if (pins.length === 0) return null;
   return (
@@ -104,9 +109,7 @@ export default function HomePage() {
   // Ref (not a useCallback dep) so the handler identity stays stable — HomeFab
   // notifies on open/close transitions and must not re-fire when pins change.
   const pinsRef = useRef(pins);
-  useEffect(() => {
-    pinsRef.current = pins;
-  }, [pins]);
+  pinsRef.current = pins;
 
   const minimize = (id: string) => {
     setMinimizedIds((prev) => new Set(prev).add(id));

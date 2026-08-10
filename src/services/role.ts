@@ -19,7 +19,7 @@ export interface Role {
   };
   scope?: string;
   communication?: string;
-  capabilities?: Record<string, unknown>;
+  capabilities?: Record<string, any>;
 }
 
 export interface RoleTemplate {
@@ -61,7 +61,7 @@ export interface CreateRoleData {
   type: 'global' | 'workspace';
   userId?: string;
   workspaceId?: string;
-  config?: Record<string, unknown>;
+  config?: Record<string, any>;
 }
 
 export interface RoleLog {
@@ -89,7 +89,7 @@ export interface RoleHealth {
   status: 'healthy' | 'unhealthy' | 'stopped' | 'unknown';
   reason?: string;
   failingStreak?: number;
-  log?: unknown[];
+  log?: any[];
 }
 
 // Role Service

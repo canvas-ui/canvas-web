@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { Socket } from 'socket.io-client'
 
 export interface EventHandlers {
-  [event: string]: (...args: unknown[]) => void
+  [event: string]: (...args: any[]) => void
 }
 
 /**
@@ -38,8 +38,8 @@ export function useSocketSubscription(
     return () => {
       socket.emit('unsubscribe', { channel: topic })
       for (const [event, handler] of Object.entries(handlers)) {
-        socket.off(event, handler)
+        socket.off(event, handler as any)
       }
     }
-  }, [socket, topic, handlers])
+  }, [socket, topic])
 }

@@ -97,7 +97,7 @@ export class StreamingService {
         try {
           const data = JSON.parse(trimmed.slice(6));
           currentMessage = { ...currentMessage, ...data };
-        } catch {
+        } catch (error) {
           console.warn('Failed to parse SSE data:', trimmed);
         }
       } else if (trimmed === '') {

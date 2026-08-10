@@ -396,13 +396,13 @@ export async function copyContextPath(contextId: string, from: string, to: strin
   return response.payload ?? true
 }
 
-export async function mergeContextLayer(contextId: string, layerId: string, targetLayers: string[]): Promise<unknown> {
-  const response = await api.post<ApiPayload<unknown>>(`${API_ROUTES.contexts}/${contextId}/tree/layers/merge`, { layerId, targetLayers })
+export async function mergeContextLayer(contextId: string, layerId: string, targetLayers: string[]): Promise<any> {
+  const response = await api.post<ApiPayload<any>>(`${API_ROUTES.contexts}/${contextId}/tree/layers/merge`, { layerId, targetLayers })
   return response.payload
 }
 
-export async function subtractContextLayer(contextId: string, layerId: string, targetLayers: string[]): Promise<unknown> {
-  const response = await api.post<ApiPayload<unknown>>(`${API_ROUTES.contexts}/${contextId}/tree/layers/subtract`, { layerId, targetLayers })
+export async function subtractContextLayer(contextId: string, layerId: string, targetLayers: string[]): Promise<any> {
+  const response = await api.post<ApiPayload<any>>(`${API_ROUTES.contexts}/${contextId}/tree/layers/subtract`, { layerId, targetLayers })
   return response.payload
 }
 

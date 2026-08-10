@@ -51,7 +51,7 @@ export interface CreateWorkspaceData {
   description?: string;
   color?: string;
   type?: 'workspace' | 'universe';
-  metadata?: Record<string, unknown>;
+  metadata?: Record<string, any>;
 }
 
 export interface AdminLogEntry {

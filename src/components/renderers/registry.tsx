@@ -9,8 +9,7 @@ import {
 import { ImageRenderer, AudioRenderer, VideoRenderer, PdfRenderer } from './media'
 import { PlaintextRenderer, MarkdownRenderer } from './text'
 import { YouTubeEmbed } from './YouTubeEmbed'
-import { UrlPdfRenderer } from './UrlPdfRenderer'
-import { isPdfUrl } from './pdf-url'
+import { UrlPdfRenderer, isPdfUrl } from './UrlPdfRenderer'
 import { LinkCardRenderer } from './LinkCardRenderer'
 import { TodoRenderer } from './TodoRenderer'
 import { EmailRenderer } from './EmailRenderer'
@@ -20,7 +19,7 @@ import { BinaryFallback } from './BinaryFallback'
 // used to live in DocumentSideCard / file-preview). Renderers are
 // self-fetching (RendererProps), so they are equally usable from the object
 // properties card, toolbox panels and canvas widgets.
-function resolveRenderer(document: Document): ComponentType<RendererProps> | null {
+export function resolveRenderer(document: Document): ComponentType<RendererProps> | null {
   const schema = document.schema
   if (schema === NOTE_SCHEMA) return MarkdownRenderer
   if (schema === TODO_SCHEMA) return TodoRenderer
@@ -43,6 +42,10 @@ function resolveRenderer(document: Document): ComponentType<RendererProps> | nul
     case 'text': return PlaintextRenderer
     default: return BinaryFallback
   }
+}
+
+export function hasRenderer(document: Document): boolean {
+  return resolveRenderer(document) != null
 }
 
 export function DocumentRenderer({ workspaceId, document, className }: RendererProps) {

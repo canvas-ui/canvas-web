@@ -3,7 +3,7 @@ import { useEffect, useState } from "react"
 import { FormPanel } from '@/components/common/form-panel'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { useToast } from "@/components/ui/toast-context"
+import { useToast } from "@/components/ui/toast-container"
 import { Plus } from "lucide-react"
 import { AgentCard } from "@/components/ui/agent-card"
 import { useNavigate } from "react-router-dom"
@@ -20,54 +20,13 @@ import {
   CreateAgentData,
 } from "@/services/agent"
 
-const DEFAULT_BASE_URLS = {
-  anthropic: 'https://api.anthropic.com',
-  openai: 'https://api.openai.com/v1',
-  ollama: 'http://localhost:11434/v1',
-}
-
-const DEFAULT_MODELS = {
-  anthropic: 'claude-3-5-sonnet-20241022',
-  openai: 'gpt-4o',
-  ollama: 'qwen2.5-coder:latest',
-}
-
-type AgentProvider = keyof typeof DEFAULT_MODELS
-
-function createDefaultConnectorConfig(provider: AgentProvider) {
-  return {
-    apiKey: "",
-    baseUrl: DEFAULT_BASE_URLS[provider],
-    maxTokens: 4096,
-    temperature: 0.7,
-    topP: 1.0,
-    frequencyPenalty: 0.0,
-    presencePenalty: 0.0,
-    numCtx: 4096,
-  }
-}
-
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error) return error.message
-  if (typeof error !== 'object' || error === null) return fallback
-
-  const value = error as Record<string, unknown>
-  const payload = typeof value.payload === 'object' && value.payload !== null
-    ? value.payload as Record<string, unknown>
-    : {}
-  return [value.message, value.error, payload.message, payload.error, value.statusText]
-    .find((message): message is string => typeof message === 'string' && Boolean(message)) || fallback
-}
-
-function isAgentStatus(status: string): status is Agent['status'] {
-  return ['active', 'inactive', 'error', 'starting', 'stopping', 'available'].includes(status)
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
-
 export default function AgentsPage() {
+  const defaultBaseUrls = {
+    anthropic: 'https://api.anthropic.com',
+    openai: 'https://api.openai.com/v1',
+    ollama: 'http://localhost:11434/v1',
+  }
+
   const [agents, setAgents] = useState<Agent[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -75,9 +34,18 @@ export default function AgentsPage() {
   const [newAgentDescription, setNewAgentDescription] = useState("")
   const [newAgentColor, setNewAgentColor] = useState(generateNiceRandomHexColor())
   const [newAgentLabel, setNewAgentLabel] = useState("")
-  const [newAgentProvider, setNewAgentProvider] = useState<AgentProvider>('anthropic')
-  const [newAgentModel, setNewAgentModel] = useState(DEFAULT_MODELS.anthropic)
-  const [newAgentConnectorConfig, setNewAgentConnectorConfig] = useState(createDefaultConnectorConfig('anthropic'))
+  const [newAgentProvider, setNewAgentProvider] = useState<'anthropic' | 'openai' | 'ollama'>('anthropic')
+  const [newAgentModel, setNewAgentModel] = useState("")
+  const [newAgentConnectorConfig, setNewAgentConnectorConfig] = useState({
+    apiKey: "",
+    baseUrl: defaultBaseUrls.anthropic,
+    maxTokens: 4096,
+    temperature: 0.7,
+    topP: 1.0,
+    frequencyPenalty: 0.0,
+    presencePenalty: 0.0,
+    numCtx: 4096
+  })
   const [newAgentSystemPrompt, setNewAgentSystemPrompt] = useState("")
   const [isCreating, setIsCreating] = useState(false)
   const [showCreate, setShowCreate] = useCreatePanel()
@@ -87,24 +55,41 @@ export default function AgentsPage() {
 
   // WebSocket live updates
   useSocketSubscription(socket, 'agent', {
-    'agent:status:changed': (...[data]: unknown[]) => {
-      if (!isRecord(data) || typeof data.agentId !== 'string' || typeof data.status !== 'string' || typeof data.isActive !== 'boolean') return
-      const { agentId, status, isActive } = data
+    'agent:status:changed': (data: { agentId: string; status: string; isActive: boolean }) => {
       setAgents(prev => prev.map(agent =>
-        agent.id === agentId
-          ? { ...agent, status: isAgentStatus(status) ? status : agent.status, isActive }
-          : agent
+        agent.id === data.agentId ? { ...agent, status: data.status as any, isActive: data.isActive } : agent
       ))
     },
-    'agent:created': (...[data]: unknown[]) => {
-      if (!isRecord(data) || !isRecord(data.agent) || typeof data.agent.id !== 'string') return
-      setAgents(prev => [...prev, data.agent as Agent])
+    'agent:created': (data: { agent: Agent }) => {
+      setAgents(prev => [...prev, data.agent])
     },
-    'agent:deleted': (...[data]: unknown[]) => {
-      if (!isRecord(data) || typeof data.agentId !== 'string') return
+    'agent:deleted': (data: { agentId: string }) => {
       setAgents(prev => prev.filter(agent => agent.id !== data.agentId))
     }
   })
+
+  // Default models for reference
+  const defaultModels = {
+    anthropic: 'claude-3-5-sonnet-20241022',
+    openai: 'gpt-4o',
+    ollama: 'qwen2.5-coder:latest'
+  }
+
+  useEffect(() => {
+    // Set default model when provider changes
+    setNewAgentModel(defaultModels[newAgentProvider])
+    // Reset connector config when provider changes
+    setNewAgentConnectorConfig({
+      apiKey: "",
+      baseUrl: defaultBaseUrls[newAgentProvider],
+      maxTokens: 4096,
+      temperature: 0.7,
+      topP: 1.0,
+      frequencyPenalty: 0.0,
+      presencePenalty: 0.0,
+      numCtx: 4096
+    })
+  }, [newAgentProvider])
 
   useEffect(() => {
     const loadAgents = async () => {
@@ -114,8 +99,21 @@ export default function AgentsPage() {
         setAgents(agentsData)
         setError(null)
       } catch (err) {
-        console.error('Agent fetch error:', err)
-        const errorMessage = getErrorMessage(err, 'Failed to fetch agents')
+        console.error('Agent fetch error:', err);
+        let errorMessage = 'Failed to fetch agents';
+
+        if (err instanceof Error) {
+          errorMessage = err.message;
+        } else if (typeof err === 'object' && err !== null) {
+          const errorObj = err as any;
+          errorMessage = errorObj.message ||
+                       errorObj.error ||
+                       errorObj.payload?.message ||
+                       errorObj.payload?.error ||
+                       errorObj.statusText ||
+                       'Failed to fetch agents';
+        }
+
         setError(errorMessage)
         showToast({
           title: 'Error',
@@ -127,7 +125,18 @@ export default function AgentsPage() {
       }
     }
     loadAgents()
-  }, [showToast])
+
+    // legacy subscription code removed
+
+    return () => {
+      if (socket) {
+        // socket.emit('unsubscribe', { topic: 'agent' }) // handled by useSocketSubscription
+        // socket.off('agent:status:changed')
+        // socket.off('agent:created')
+        // socket.off('agent:deleted')
+      }
+    }
+  }, [socket])
 
   const handleCreateAgent = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -183,15 +192,37 @@ export default function AgentsPage() {
       setNewAgentColor(generateNiceRandomHexColor())
       setNewAgentLabel("")
       setNewAgentSystemPrompt("")
-      setNewAgentConnectorConfig(createDefaultConnectorConfig(newAgentProvider))
+      setNewAgentConnectorConfig({
+        apiKey: "",
+        baseUrl: defaultBaseUrls[newAgentProvider],
+        maxTokens: 4096,
+        temperature: 0.7,
+        topP: 1.0,
+        frequencyPenalty: 0.0,
+        presencePenalty: 0.0,
+        numCtx: 4096
+      })
       showToast({
         title: 'Success',
         description: `Agent '${newAgent.label || newAgent.name}' created.`
       })
       setShowCreate(false)
     } catch (err) {
-      console.error('Agent creation error:', err)
-      const errorMessage = getErrorMessage(err, 'Failed to create agent')
+      console.error('Agent creation error:', err);
+      let errorMessage = 'Failed to create agent';
+
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === 'object' && err !== null) {
+        const errorObj = err as any;
+        errorMessage = errorObj.message ||
+                     errorObj.error ||
+                     errorObj.payload?.message ||
+                     errorObj.payload?.error ||
+                     errorObj.statusText ||
+                     'Failed to create agent';
+      }
+
       showToast({
         title: 'Error',
         description: errorMessage,
@@ -211,8 +242,21 @@ export default function AgentsPage() {
         description: `Agent '${updatedAgent.label || updatedAgent.name}' started.`
       })
     } catch (err) {
-      console.error('Agent start error:', err)
-      const errorMessage = getErrorMessage(err, 'Failed to start agent')
+      console.error('Agent start error:', err);
+      let errorMessage = 'Failed to start agent';
+
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === 'object' && err !== null) {
+        const errorObj = err as any;
+        errorMessage = errorObj.message ||
+                     errorObj.error ||
+                     errorObj.payload?.message ||
+                     errorObj.payload?.error ||
+                     errorObj.statusText ||
+                     'Failed to start agent';
+      }
+
       showToast({
         title: 'Error',
         description: errorMessage,
@@ -233,8 +277,21 @@ export default function AgentsPage() {
         description: `Agent '${agentName}' stopped.`
       })
     } catch (err) {
-      console.error('Agent stop error:', err)
-      const errorMessage = getErrorMessage(err, 'Failed to stop agent')
+      console.error('Agent stop error:', err);
+      let errorMessage = 'Failed to stop agent';
+
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === 'object' && err !== null) {
+        const errorObj = err as any;
+        errorMessage = errorObj.message ||
+                     errorObj.error ||
+                     errorObj.payload?.message ||
+                     errorObj.payload?.error ||
+                     errorObj.statusText ||
+                     'Failed to stop agent';
+      }
+
       showToast({
         title: 'Error',
         description: errorMessage,
@@ -293,12 +350,7 @@ export default function AgentsPage() {
               <select
                 id="agent-provider"
                 value={newAgentProvider}
-                onChange={(e) => {
-                  const provider = e.target.value as AgentProvider
-                  setNewAgentProvider(provider)
-                  setNewAgentModel(DEFAULT_MODELS[provider])
-                  setNewAgentConnectorConfig(createDefaultConnectorConfig(provider))
-                }}
+                onChange={(e) => setNewAgentProvider(e.target.value as 'anthropic' | 'openai' | 'ollama')}
                 className="w-full mt-1 px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 disabled={isCreating}
               >
@@ -351,7 +403,7 @@ export default function AgentsPage() {
                 id="baseUrl"
                 value={newAgentConnectorConfig.baseUrl}
                 onChange={(e) => setNewAgentConnectorConfig(prev => ({ ...prev, baseUrl: e.target.value }))}
-                placeholder={DEFAULT_BASE_URLS[newAgentProvider]}
+                placeholder={defaultBaseUrls[newAgentProvider]}
                 disabled={isCreating}
               />
             </div>

@@ -12,12 +12,19 @@ interface FormData {
   strategy: string
 }
 
-type AuthConfig = Awaited<ReturnType<typeof getAuthConfig>>
-
-type ApiError = {
-  message?: string
-  error?: string
-  payload?: { message?: string }
+interface AuthConfig {
+  allowUserRegistrations?: boolean
+  strategies: {
+    local: { enabled: boolean }
+    imap: {
+      enabled: boolean
+      domains: Array<{
+        domain: string
+        name: string
+        requireAppPassword: boolean
+      }>
+    }
+  }
 }
 
 const localEnabled = (config: AuthConfig | null) => config?.strategies?.local?.enabled !== false
@@ -80,8 +87,8 @@ export default function LoginPage() {
     setIsLoading(true)
     try {
       console.log('Attempting login with:', formData.email, 'strategy:', formData.strategy);
-      await loginUser(formData.email, formData.password, formData.strategy);
-      console.log('Login successful');
+      const response = await loginUser(formData.email, formData.password, formData.strategy);
+      console.log('Login successful, received token:', !!response.payload?.token);
 
       // Clear any existing errors
       setErrors({})
@@ -98,7 +105,7 @@ export default function LoginPage() {
         errorMessage = error.message;
       } else if (typeof error === 'object' && error !== null) {
         // Handle API response error objects
-        const apiError = error as ApiError;
+        const apiError = error as any;
         if (apiError.message) {
           errorMessage = apiError.message;
         } else if (apiError.error) {

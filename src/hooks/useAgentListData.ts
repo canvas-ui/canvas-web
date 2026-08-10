@@ -2,17 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { listAgents, type Agent } from '@/services/agent'
 import socketService from '@/lib/socket'
 
-function isAgent(value: unknown): value is Agent {
-  return typeof value === 'object' && value !== null
-    && typeof (value as { id?: unknown }).id === 'string'
-}
-
-function eventAgent(value: unknown): Agent | null {
-  if (isAgent(value)) return value
-  if (typeof value !== 'object' || value === null) return null
-  return isAgent((value as { agent?: unknown }).agent) ? (value as { agent: Agent }).agent : null
-}
-
 export function useAgentListData(enabled: boolean) {
   const [agents, setAgents] = useState<Agent[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -52,34 +41,32 @@ export function useAgentListData(enabled: boolean) {
     const offConnect = socketService.on('connect', subscribe)
     subscribe()
 
-    const handleCreated = (data: unknown) => {
-      const agent = eventAgent(data)
-      if (!agent) return
+    const handleCreated = (data: any) => {
+      const agent = data?.agent ?? data
+      if (!agent?.id) return
       setAgents(prev => prev.some(a => a.id === agent.id) ? prev : [...prev, agent])
     }
 
-    const handleUpdated = (data: unknown) => {
-      const agent = eventAgent(data)
-      if (!agent) return
+    const handleUpdated = (data: any) => {
+      const agent = data?.agent ?? data
+      if (!agent?.id) return
       setAgents(prev => prev.map(a => a.id === agent.id ? { ...a, ...agent } : a))
     }
 
-    const handleDeleted = (data: unknown) => {
-      const event = data as { agentId?: string; id?: string }
-      const id = event?.agentId ?? event?.id
+    const handleDeleted = (data: any) => {
+      const id = data?.agentId ?? data?.id
       if (!id) return
       setAgents(prev => prev.filter(a => a.id !== id))
     }
 
-    const handleStatusChanged = (data: unknown) => {
-      const event = data as { agentId?: string; id?: string; status?: Agent['status'] }
-      const id = event?.agentId ?? event?.id
-      const status = event?.status
+    const handleStatusChanged = (data: any) => {
+      const id = data?.agentId ?? data?.id
+      const status = data?.status
       if (!id || !status) return
       setAgents(prev => prev.map(a => a.id === id ? { ...a, status } : a))
     }
 
-    const events: Array<[string, (data: unknown) => void]> = [
+    const events: Array<[string, Function]> = [
       ['agent:created', handleCreated],
       ['agent.created', handleCreated],
       ['agent:updated', handleUpdated],
@@ -96,7 +83,7 @@ export function useAgentListData(enabled: boolean) {
       offConnect?.()
       events.forEach(([e, h]) => socketService.off(e, h))
     }
-  }, [enabled, fetch])
+  }, [enabled])
 
   // Window event fallback
   useEffect(() => {

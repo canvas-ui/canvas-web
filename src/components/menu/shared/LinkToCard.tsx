@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { X, Search, Link2, ChevronRight, ChevronDown, FolderPlus, GitBranch, FolderTree } from 'lucide-react'
+import { X, Search, Link2, ChevronRight, ChevronDown, FolderPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Loader } from '@/components/ui/loader'
 import { cn } from '@/lib/utils'
@@ -14,19 +14,10 @@ import {
 } from '@/services/workspace'
 import type { TreeNode } from '@/types/workspace'
 import {
-  LinkNode, WorkspaceListStep, InlineCreateRow,
+  type TreeTab, type RowMenuEvent,
+  TAB_ICONS, TAB_LABELS, LinkNode, WorkspaceListStep, InlineCreateRow, useRowMenu,
 } from './tree-picker-shared'
-import { type TreeTab, type RowMenuEvent, useRowMenu } from './tree-picker-utils'
 // Workspace is a global type declared in src/types/api.d.ts
-
-const TAB_ICONS: Record<TreeTab, React.ReactNode> = {
-  context: <GitBranch className="h-3.5 w-3.5" />,
-  directory: <FolderTree className="h-3.5 w-3.5" />,
-}
-const TAB_LABELS: Record<TreeTab, string> = {
-  context: 'Context tree',
-  directory: 'Directory tree',
-}
 
 export interface LinkToTarget {
   workspaceName: string
@@ -100,17 +91,8 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
 
   useEffect(() => {
     if (fixedWorkspaceName) return
-    async function loadWorkspaces() {
-      setLoadingWorkspaces(true)
-      try {
-        setWorkspaces(await listWorkspaces())
-      } catch {
-        setWorkspaces([])
-      } finally {
-        setLoadingWorkspaces(false)
-      }
-    }
-    loadWorkspaces()
+    setLoadingWorkspaces(true)
+    listWorkspaces().then(setWorkspaces).catch(() => setWorkspaces([])).finally(() => setLoadingWorkspaces(false))
   }, [fixedWorkspaceName])
 
   useEffect(() => {

@@ -34,10 +34,11 @@ export function LayerIconPicker({ x, y, current, onChange, onClose }: LayerIconP
   // native dblclick (it needs both clicks on the same element).
   const lastClick = useRef<{ name: string; t: number }>({ name: '', t: 0 })
 
-  const handleIconClick = (name: string, timestamp: number) => {
+  const handleIconClick = (name: string) => {
     onChange({ icon: name })
-    if (lastClick.current.name === name && timestamp - lastClick.current.t < 350) onClose()
-    lastClick.current = { name, t: timestamp }
+    const now = Date.now()
+    if (lastClick.current.name === name && now - lastClick.current.t < 350) onClose()
+    lastClick.current = { name, t: now }
   }
 
   useEffect(() => { searchRef.current?.focus() }, [])
@@ -54,13 +55,11 @@ export function LayerIconPicker({ x, y, current, onChange, onClose }: LayerIconP
   // browse the cached Phosphor list.
   useEffect(() => {
     const q = query.trim()
+    if (!q) { setResults([]); setSearching(false); return }
+    setSearching(true)
     const t = setTimeout(() => {
-      if (!q) {
-        setResults([])
-        return
-      }
       searchIcons(q).then((r) => { setResults(r); setSearching(false) })
-    }, q ? 250 : 0)
+    }, 250)
     return () => clearTimeout(t)
   }, [query])
 
@@ -160,10 +159,7 @@ export function LayerIconPicker({ x, y, current, onChange, onClose }: LayerIconP
         <input
           ref={searchRef}
           value={query}
-          onChange={(e) => {
-            setQuery(e.target.value)
-            setSearching(Boolean(e.target.value.trim()))
-          }}
+          onChange={(e) => setQuery(e.target.value)}
           placeholder="Search icons…"
           className="w-full mb-2 rounded-sm border bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-primary"
         />
@@ -191,7 +187,7 @@ export function LayerIconPicker({ x, y, current, onChange, onClose }: LayerIconP
               key={name}
               type="button"
               title={name.replace(/^[^:]+:/, '').replace('-fill', '')}
-              onClick={e => handleIconClick(name, e.timeStamp)}
+              onClick={() => handleIconClick(name)}
               className={cn(
                 'aspect-square flex items-center justify-center rounded-sm hover:bg-accent',
                 current.icon === name && 'bg-accent ring-1 ring-primary',

@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { Check, ChevronDown, ChevronRight, RefreshCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useToast } from '@/components/ui/toast-context'
+import { useToast } from '@/components/ui/toast-container'
 import { useSocket } from '@/hooks/useSocket'
 import { useSocketSubscription } from '@/hooks/useSocketSubscription'
 import {
@@ -134,11 +134,9 @@ export function PendingActionsPanel({ workspaceId, onPendingCount }: PendingActi
     } finally {
       setIsLoading(false)
     }
-  }, [workspaceId, statusFilter, onPendingCount, showToast])
+  }, [workspaceId, statusFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    void Promise.resolve().then(load)
-  }, [load])
+  useEffect(() => { void load() }, [load])
 
   // Live refresh: proposal/decision events for this workspace push through the
   // websocket workspace channel.

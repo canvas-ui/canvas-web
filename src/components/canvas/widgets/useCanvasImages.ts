@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { WidgetCanvasContext } from '../widget-types'
 import type { Document } from '@/types/workspace'
-import { DEFAULT_TIMELINE_SORT, type TimelineSort } from './timeline-sort'
+import { DEFAULT_TIMELINE_SORT, type TimelineSort } from './sort-control'
 import { useCanvasQueries } from './useCanvasQueries'
 
 const FILE_SCHEMA = 'data/schema/file'

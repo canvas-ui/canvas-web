@@ -2,9 +2,28 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link2, Trash2 } from 'lucide-react'
 import { LinkToCard, type LinkToTarget } from '@/components/menu/shared/LinkToCard'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
-import { pasteDocumentsToWorkspacePath } from '@/services/workspace'
+import {
+  getWorkspaceDocuments,
+  deleteWorkspaceDocuments,
+  pasteDocumentsToWorkspacePath,
+  DEFAULT_WORKSPACE_TREE_NAME,
+} from '@/services/workspace'
+import { getContextDocuments, getContext } from '@/services/context'
+import type { Document } from '@/types/workspace'
+import type { AppletTarget } from './applet-target'
+
+// One page of the document list - a path binding deliberately shows the first
+// page only (the applet is a notepad, not a browser).
+export const APPLET_LIST_LIMIT = 50
 
 export const APPLET_AUTOSAVE_MS = 1200
+
+export function formatCreated(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) +
+    ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+}
 
 // Auto-growing borderless textarea - the notepad body.
 export function GrowingTextarea({
@@ -40,6 +59,77 @@ export function GrowingTextarea({
       className="w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/60"
     />
   )
+}
+
+// The workspace surface a target resolves to - update/delete always go through
+// a workspace even when the applet is bound to a context.
+export interface AppletScope {
+  workspaceName: string
+  path: string
+  treeName: string
+  treeType: 'context' | 'directory'
+}
+
+// Load + live-refresh one schema's documents for an applet target, and expose
+// the resolved scope for writes.
+export function useAppletDocs(target: AppletTarget, schema: string) {
+  const [docs, setDocs] = useState<Document[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [scope, setScope] = useState<AppletScope | null>(null)
+
+  const load = useCallback(async () => {
+    if (!target) { setDocs([]); setScope(null); return }
+    setLoading(true)
+    setError(null)
+    try {
+      if (target.mode === 'context') {
+        const [list, ctx] = await Promise.all([
+          getContextDocuments(target.contextId, [schema]),
+          getContext(target.contextId),
+        ])
+        setDocs(Array.isArray(list) ? (list as unknown as Document[]) : [])
+        const wn = ctx.workspaceName || ctx.workspaceId
+        setScope(wn ? {
+          workspaceName: wn,
+          path: ctx.path || '/',
+          treeName: ctx.treeId || DEFAULT_WORKSPACE_TREE_NAME,
+          treeType: 'context',
+        } : null)
+      } else {
+        const res = await getWorkspaceDocuments(target.workspaceName, target.path, [schema], {
+          treeName: target.treeName,
+          treeType: target.treeType,
+          limit: APPLET_LIST_LIMIT,
+        })
+        setDocs(res.payload || [])
+        setScope({ workspaceName: target.workspaceName, path: target.path, treeName: target.treeName, treeType: target.treeType })
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load documents')
+    } finally {
+      setLoading(false)
+    }
+  }, [target, schema])
+
+  useEffect(() => { load() }, [load])
+
+  // External creates/edits (AddPanel, quick-add cards, other tabs) land live.
+  useEffect(() => {
+    const onRefresh = () => load()
+    window.addEventListener('workspace:documents:refresh', onRefresh)
+    return () => window.removeEventListener('workspace:documents:refresh', onRefresh)
+  }, [load])
+
+  // Delete = move to workspace trash (same semantics as the document list's
+  // Delete action), then drop the row locally.
+  const removeDoc = useCallback(async (id: number) => {
+    if (!scope) throw new Error('No workspace scope resolved')
+    await deleteWorkspaceDocuments(scope.workspaceName, [id], scope.path, [], scope.treeName, scope.treeType)
+    setDocs(prev => prev.filter(d => d.id !== id))
+  }, [scope])
+
+  return { docs, setDocs, loading, error, scope, reload: load, removeDoc }
 }
 
 // Per-item Link To / Delete controls for the meta row. Quiet by default on

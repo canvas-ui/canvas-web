@@ -1,4 +1,4 @@
-import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import GridLayout, { WidthProvider } from 'react-grid-layout'
 import type { Layout } from 'react-grid-layout'
 import { Plus, Save } from 'lucide-react'
@@ -8,7 +8,7 @@ import './canvas-grid.css'
 import './widgets'
 import { getWidget, listWidgets } from './widget-registry'
 import { WidgetFrame } from './WidgetFrame'
-import { DEFAULT_TIMELINE_SORT, type TimelineSort } from './widgets/timeline-sort'
+import { DEFAULT_TIMELINE_SORT, type TimelineSort } from './widgets/sort-control'
 import type { WidgetCanvasContext, WidgetConfig, WidgetDocumentsResult, WidgetFetchOpts } from './widget-types'
 import { saveCanvasUi, getCanvasPathDocuments } from '@/services/workspace'
 import { cn } from '@/lib/utils'
@@ -188,26 +188,22 @@ export function CanvasGrid({
   // Reset local state when navigating to a different canvas.
   useEffect(() => {
     const next = readUi(metadata)
-    startTransition(() => {
-      setLayout(next.layout)
-      setWidgets(next.widgets)
-      setCanvasSortState(querySpec?.sort ?? DEFAULT_TIMELINE_SORT)
-      setCanvasQueriesState(queriesFromSpec(querySpec?.query))
-      setIsDirty(false)
-    })
+    setLayout(next.layout)
+    setWidgets(next.widgets)
     latest.current = next
+    setCanvasSortState(querySpec?.sort ?? DEFAULT_TIMELINE_SORT)
     sortDirtyRef.current = false
+    setCanvasQueriesState(queriesFromSpec(querySpec?.query))
     queriesDirtyRef.current = false
-  }, [path, layerId, metadata, querySpec?.query, querySpec?.sort])
+    setIsDirty(false)
+  }, [path, layerId])
 
   // Public/read-only views reload metadata over the socket; keep in sync without remounting.
   useEffect(() => {
     if (!readOnly) return
     const next = readUi(metadata)
-    startTransition(() => {
-      setLayout(next.layout)
-      setWidgets(next.widgets)
-    })
+    setLayout(next.layout)
+    setWidgets(next.widgets)
     latest.current = next
   }, [readOnly, savedUiKey, metadata])
 

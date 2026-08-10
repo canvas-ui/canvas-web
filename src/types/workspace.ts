@@ -239,7 +239,7 @@ export interface Document {
   id: number
   schema: string
   schemaVersion: string
-  data: Record<string, unknown>
+  data: Record<string, any>
   // Optional user-authored free-text note (top-level, never regenerated).
   comment?: string
   metadata: {
@@ -256,7 +256,7 @@ export interface Document {
     // Auto-folded into FTS + embedded as its own text-space chunk server-side.
     summary?: string
   }
-  locations?: Array<{ url: string; metadata?: Record<string, unknown> }>
+  locations?: Array<{ url: string; metadata?: Record<string, any> }>
   indexOptions: {
     checksumAlgorithms: string[]
     checksumFields: string[]
@@ -266,7 +266,7 @@ export interface Document {
       embeddingModel: string
       embeddingDimensions: number
       embeddingProvider: string
-      embeddingProviderOptions: Record<string, unknown>
+      embeddingProviderOptions: Record<string, any>
       chunking: {
         type: string
         chunkSize: number

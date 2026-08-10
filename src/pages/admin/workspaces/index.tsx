@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useToast } from "@/components/ui/toast-context"
+import { useToast } from "@/components/ui/toast-container"
 import { Plus, Trash, Eye, X, Users } from "lucide-react"
 import { adminService, AdminWorkspace, CreateWorkspaceData, AdminUser } from "@/services/admin"
 import { getCurrentUserFromToken } from "@/services/auth"
@@ -59,9 +59,17 @@ export default function AdminWorkspacesPage() {
   // Check if current user is admin
   const isCurrentUserAdmin = currentUser?.userType === 'admin'
 
+  useEffect(() => {
+    if (!isCurrentUserAdmin) {
+      setError('Access denied. Admin privileges required.')
+      setIsLoading(false)
+      return
+    }
+    fetchWorkspaces()
+  }, [isCurrentUserAdmin])
+
   const fetchWorkspaces = useCallback(async () => {
     try {
-      await Promise.resolve()
       setIsLoading(true)
       const fetchedWorkspaces = await adminService.workspaces.listAllWorkspaces()
       setWorkspaces(fetchedWorkspaces)
@@ -78,12 +86,6 @@ export default function AdminWorkspacesPage() {
       setIsLoading(false)
     }
   }, [showToast])
-
-  useEffect(() => {
-    if (isCurrentUserAdmin) {
-      void Promise.resolve().then(fetchWorkspaces)
-    }
-  }, [fetchWorkspaces, isCurrentUserAdmin])
 
   const fetchUsers = useCallback(async () => {
     try {

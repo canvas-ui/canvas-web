@@ -1,19 +1,17 @@
 import { useIsMobile } from '@/hooks/use-mobile'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Plus, Play, Square, Settings, GripVertical } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import { cn } from '@/lib/utils'
 import { moveItem, persistSequentialOrder, useListReorder } from '@/lib/list-order'
 import { visibleAccentColor, onAccentTextClass } from '@/utils/color'
-import { useMenu } from '@/components/shell/menu-context-data'
+import { useMenu } from '@/components/shell/menu-context'
 import { useWorkspaceListData } from '@/hooks/useWorkspaceListData'
 import { startWorkspace, stopWorkspace, updateWorkspace } from '@/services/workspace'
-import { useToast } from '@/components/ui/toast-context'
+import { useToast } from '@/components/ui/toast-container'
 import { useNavigate } from 'react-router-dom'
 import { LayerIconPicker } from '@/components/menu/shared/LayerIconPicker'
 import { DEFAULT_WORKSPACE_ICON, type LayerStyle } from '@/lib/layer-style'
-
-type WorkspaceWithHost = Workspace & { host?: string }
 
 function StatusDot({ status }: { status: string }) {
   const color =
@@ -39,12 +37,12 @@ export function WorkspaceList() {
   // replaces it. Sequential ints are persisted only for rows that moved.
   const [optimisticOrder, setOptimisticOrder] = useState<Workspace[] | null>(null)
   const orderedWorkspaces = optimisticOrder ?? workspaces
+  useEffect(() => { setOptimisticOrder(null) }, [workspaces])
   const { rowProps, handleProps, draggingIndex, insertLineClass } = useListReorder((from, to) => {
     const next = moveItem(orderedWorkspaces, from, to)
     setOptimisticOrder(next)
     persistSequentialOrder(next, (ws, order) => updateWorkspace(ws.name, { order }))
       .then(({ failed }) => {
-        setOptimisticOrder(null)
         window.dispatchEvent(new CustomEvent('workspaces:refresh'))
         if (failed) showToast({ title: 'Partial reorder', description: `${failed} workspace(s) could not be reordered`, variant: 'destructive' })
       })
@@ -135,7 +133,6 @@ export function WorkspaceList() {
               const isInactive = ws.status !== 'active'
               const style = styleFor(ws)
               const accent = visibleAccentColor(style.color)
-              const host = (ws as WorkspaceWithHost).host
 
               return (
                 <div
@@ -248,9 +245,9 @@ export function WorkspaceList() {
 
                   {/* Meta: host + owner */}
                   <div className="flex items-center gap-2 mt-1 pl-3.5">
-                    {host && (
+                    {(ws as any).host && (
                       <span className="text-[10px] text-muted-foreground truncate">
-                        {host}
+                        {(ws as any).host}
                       </span>
                     )}
                     {ws.ownerEmail && (

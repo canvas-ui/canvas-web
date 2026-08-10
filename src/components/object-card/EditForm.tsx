@@ -8,10 +8,13 @@ import { tagsToFeatures, featuresToTags } from '@/components/toolbox/add/tags'
 import { updateWorkspaceDocument, listWorkspaceTagSuggestions } from '@/services/workspace'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { NOTE_SCHEMA, LINK_SCHEMA, TAB_SCHEMA, TODO_SCHEMA } from '@/components/renderers/types'
-import { isEditableSchema } from './editable-schema'
 import { TodoFields } from '@/components/toolbox/add/TodoFields'
 import { buildTodoData, isoToLocalInput, todayEndOfDayLocal, type TodoStatus } from '@/components/toolbox/add/useTodoFields'
 import type { Document } from '@/types/workspace'
+
+export function isEditableSchema(schema: string): boolean {
+  return schema === NOTE_SCHEMA || schema === LINK_SCHEMA || schema === TAB_SCHEMA || schema === TODO_SCHEMA
+}
 
 // Per-schema field mapping for the url/title pair. Legacy links store these as
 // uri/label; tabs use url/title. Notes have no url.

@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import type { KeyboardEvent, PointerEvent } from 'react'
-import { useDocumentModal } from '@/components/shell/document-modal-context-data'
+import { useDocumentModal } from '@/components/shell/document-modal-context'
 import type { Document } from '@/types/workspace'
 
 const LONG_PRESS_MS = 450

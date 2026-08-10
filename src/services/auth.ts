@@ -39,7 +39,6 @@ interface NestedLoginResponse {
       userType: string;
     };
   };
-  token?: never;
 }
 
 // Generic API response
@@ -53,33 +52,7 @@ interface ApiResponse<T> {
 // Union type for possible login response structures
 type LoginResponseData = DirectLoginResponse | NestedLoginResponse;
 
-interface AuthConfig {
-  allowUserRegistrations?: boolean;
-  strategies: {
-    local: {
-      enabled: boolean;
-      requireEmailVerification?: boolean;
-      passwordPolicy?: {
-        minLength: number;
-        requireUppercase: boolean;
-        requireLowercase: boolean;
-        requireNumbers: boolean;
-        requireSpecialChars: boolean;
-        maxLength: number;
-      };
-    };
-    imap: {
-      enabled: boolean;
-      domains: Array<{
-        domain: string;
-        name: string;
-        requireAppPassword: boolean;
-      }>;
-    };
-  };
-}
-
-export async function loginUser(email: string, password: string, strategy: string = 'auto'): Promise<ApiResponse<LoginResponseData>> {
+export async function loginUser(email: string, password: string, strategy: string = 'auto'): Promise<ApiResponse<any>> {
   try {
     const response = await api.post<ApiResponse<LoginResponseData>>(API_ROUTES.login, {
       email,
@@ -93,7 +66,7 @@ export async function loginUser(email: string, password: string, strategy: strin
     const loginData = response.payload;
 
     // Handle direct token structure (matches DirectLoginResponse)
-    if (typeof loginData.token === 'string') {
+    if ('token' in loginData) {
       console.log('Setting auth token (direct):', loginData.token.substring(0, 10) + '...');
       api.setAuthToken(loginData.token);
 
@@ -151,7 +124,7 @@ export async function logoutUser(): Promise<void> {
   }
 }
 
-export async function registerUser(name: string, email: string, password: string): Promise<unknown> {
+export async function registerUser(name: string, email: string, password: string): Promise<any> {
   try {
     return await api.post(API_ROUTES.register, {
       name,
@@ -244,9 +217,9 @@ export function isAuthenticated(): boolean {
   return api.isAuthenticated();
 }
 
-export async function getAuthConfig(): Promise<AuthConfig> {
+export async function getAuthConfig(): Promise<any> {
   try {
-    const response = await api.get<ApiResponse<AuthConfig>>(API_ROUTES.authConfig, { skipAuth: true });
+    const response = await api.get<ApiResponse<any>>(API_ROUTES.authConfig, { skipAuth: true });
     return response.payload || response;
   } catch (error) {
     console.error('Failed to get auth config:', error);

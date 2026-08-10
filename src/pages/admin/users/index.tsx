@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useToast } from "@/components/ui/toast-context"
+import { useToast } from "@/components/ui/toast-container"
 import { Plus, Trash, Edit2, X } from "lucide-react"
 import { adminService, AdminUser, CreateUserData, UpdateUserData } from "@/services/admin"
 import { getCurrentUserFromToken, getAuthConfig, requestEmailVerification } from "@/services/auth"
@@ -56,6 +56,27 @@ export default function AdminUsersPage() {
   // Check if current user is admin
   const isCurrentUserAdmin = currentUser?.userType === 'admin'
 
+  useEffect(() => {
+    if (!isCurrentUserAdmin) {
+      setError('Access denied. Admin privileges required.')
+      setIsLoading(false)
+      return
+    }
+    fetchUsers()
+    // load auth config to decide on resend activation visibility
+    ;(async () => {
+      try {
+        const conf = await getAuthConfig()
+        const req = !!conf?.strategies?.local?.requireEmailVerification
+        setRequireEmailVerification(req)
+        setPasswordPolicy(conf?.strategies?.local?.passwordPolicy || null)
+      } catch (_) {
+        setRequireEmailVerification(false)
+        setPasswordPolicy(null)
+      }
+    })()
+  }, [isCurrentUserAdmin])
+
   const validateUsername = (name: string) => {
     const username = name.trim().toLowerCase()
     if (username.length < 3 || username.length > 39) return 'Username must be 3-39 characters long'
@@ -107,7 +128,6 @@ export default function AdminUsersPage() {
 
   const fetchUsers = useCallback(async () => {
     try {
-      await Promise.resolve()
       setIsLoading(true)
       const { status, userType } = filters
       const fetchedUsers = await adminService.users.listUsers({
@@ -130,22 +150,9 @@ export default function AdminUsersPage() {
   }, [filters, showToast])
 
   useEffect(() => {
-    if (!isCurrentUserAdmin) {
-      return
+    if (isCurrentUserAdmin) {
+      fetchUsers()
     }
-
-    void Promise.resolve().then(fetchUsers)
-    void (async () => {
-      try {
-        const config = await getAuthConfig()
-        const local = config?.strategies?.local
-        setRequireEmailVerification(Boolean(local?.requireEmailVerification))
-        setPasswordPolicy((local as { passwordPolicy?: PasswordPolicy } | undefined)?.passwordPolicy ?? null)
-      } catch {
-        setRequireEmailVerification(false)
-        setPasswordPolicy(null)
-      }
-    })()
   }, [fetchUsers, isCurrentUserAdmin])
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -193,11 +200,7 @@ export default function AdminUsersPage() {
 
       // If verification is required and user is pending, trigger verification email
       if (requireEmailVerification && formData.status === 'pending') {
-        try {
-          await requestEmailVerification(formData.email.trim())
-        } catch {
-          // Account creation succeeds even if the email service is unavailable.
-        }
+        try { await requestEmailVerification(formData.email.trim()) } catch (_) {}
       }
 
       // Reset form

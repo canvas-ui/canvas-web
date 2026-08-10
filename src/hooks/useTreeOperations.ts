@@ -107,8 +107,8 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     return false
   }, [contextId, workspaceId, wsTree])
 
-  const onMergeLayer = useCallback(async (layerId: string, targetLayers: string[]): Promise<unknown> => {
-    let result: unknown
+  const onMergeLayer = useCallback(async (layerId: string, targetLayers: string[]): Promise<any> => {
+    let result: any
     if (contextId) result = await mergeContextLayer(contextId, layerId, targetLayers)
     else if (workspaceId) result = await mergeWorkspaceLayer(workspaceId, layerId, targetLayers, wsTree)
     else return null
@@ -116,8 +116,8 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     return result
   }, [contextId, workspaceId, wsTree, refresh])
 
-  const onSubtractLayer = useCallback(async (layerId: string, targetLayers: string[]): Promise<unknown> => {
-    let result: unknown
+  const onSubtractLayer = useCallback(async (layerId: string, targetLayers: string[]): Promise<any> => {
+    let result: any
     if (contextId) result = await subtractContextLayer(contextId, layerId, targetLayers)
     else if (workspaceId) result = await subtractWorkspaceLayer(workspaceId, layerId, targetLayers, wsTree)
     else return null

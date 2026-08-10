@@ -169,7 +169,7 @@ export default function PublicCanvasPage() {
   }, [code])
 
   useEffect(() => {
-    void Promise.resolve().then(load)
+    load()
   }, [load])
 
   useEffect(() => {

@@ -3,7 +3,7 @@ import { Clock } from 'lucide-react'
 import { registerWidget } from '../widget-registry'
 import type { WidgetProps } from '../widget-types'
 
-export function ClockWidget({ config, setConfig, canvas }: WidgetProps) {
+function ClockWidget({ config, setConfig, canvas }: WidgetProps) {
   const [now, setNow] = useState(() => new Date())
   const hour12 = config.format !== '24'
 

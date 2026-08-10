@@ -33,11 +33,10 @@ export function useVoiceRecorder() {
       recorder.start()
       recorderRef.current = recorder
       setIsRecording(true)
-    } catch (err: unknown) {
-      const error = err instanceof Error ? err : null
-      setRecorderError(error?.name === 'NotAllowedError'
+    } catch (err: any) {
+      setRecorderError(err?.name === 'NotAllowedError'
         ? 'Microphone access denied'
-        : error?.message ?? 'Could not start recording')
+        : err?.message ?? 'Could not start recording')
     }
   }, [])
 

@@ -5,20 +5,6 @@ import { getAgentSession, startAgent, voicePrompt } from '@/services/agent'
 import { extractAgentMessageReasoning } from '@/services/agent'
 import { extractAgentMessageMetadata, type AgentResponseMetadata } from '@/services/agent'
 
-type AgentSessionMessage = {
-  role?: unknown
-  content?: unknown
-  errorMessage?: unknown
-  metadata?: { reasoning?: unknown; toolCalls?: unknown }
-  api?: unknown
-  provider?: unknown
-  model?: unknown
-  stopReason?: unknown
-  timestamp?: unknown
-  responseId?: unknown
-  usage?: unknown
-}
-
 export interface PromptMessage {
   role: 'user' | 'assistant'
   content: string
@@ -27,26 +13,19 @@ export interface PromptMessage {
   metadata?: AgentResponseMetadata
 }
 
-function extractMessageText(message: unknown): string {
-  if (!message || typeof message !== 'object') return ''
-  const { errorMessage, content } = message as Record<string, unknown>
-  if (typeof errorMessage === 'string' && errorMessage.trim()) {
-    return errorMessage.trim()
+function extractMessageText(message: any): string {
+  if (!message) return ''
+  if (typeof message.errorMessage === 'string' && message.errorMessage.trim()) {
+    return message.errorMessage.trim()
   }
+  const content = message.content
   if (typeof content === 'string') return content
   if (!Array.isArray(content)) return ''
   const text = content
-    .filter((block): block is { type: string; text: string } =>
-      typeof block === 'object' && block !== null
-      && (block as Record<string, unknown>).type === 'text'
-      && typeof (block as Record<string, unknown>).text === 'string')
-    .map(block => block.text)
+    .filter((block: any) => block?.type === 'text' && typeof block.text === 'string')
+    .map((block: any) => block.text)
     .join('\n')
   return text || ''
-}
-
-function isAgentSessionMessage(value: unknown): value is AgentSessionMessage {
-  return typeof value === 'object' && value !== null
 }
 
 export function useAgentPromptStream(agentId: string) {
@@ -59,7 +38,7 @@ export function useAgentPromptStream(agentId: string) {
     let cancelled = false
 
     if (!agentId) {
-      queueMicrotask(() => setMessages([]))
+      setMessages([])
       return
     }
 
@@ -96,12 +75,11 @@ export function useAgentPromptStream(agentId: string) {
 
     try {
       await startAgent(agentId)
-    } catch (startErr: unknown) {
-      const error = startErr instanceof Error ? startErr : null
+    } catch (startErr: any) {
       // 'Agent is not active' means it's already running — fine to ignore.
       // Any other error (model unknown, API unreachable, etc.) surfaces in the stream.
-      if (!error?.message.includes('not active') && !error?.message.includes('already')) {
-        setError(error?.message ?? 'Failed to start agent')
+      if (!startErr?.message?.includes('not active') && !startErr?.message?.includes('already')) {
+        setError(startErr?.message ?? 'Failed to start agent')
         setIsStreaming(false)
         return
       }
@@ -129,7 +107,7 @@ export function useAgentPromptStream(agentId: string) {
               const raw = line.slice(6).trim()
               if (raw === '[DONE]') return
               try {
-                const ev = JSON.parse(raw) as { type?: string; delta?: string; messages?: unknown[]; error?: string }
+                const ev = JSON.parse(raw)
                 if (ev.type === 'chunk') {
                   assistantContent += ev.delta || ''
                   setMessages(prev => {
@@ -159,8 +137,7 @@ export function useAgentPromptStream(agentId: string) {
                   })
                 } else if (ev.type === 'complete') {
                   const finalMessage = Array.isArray(ev.messages)
-                    ? [...ev.messages].reverse().find((message) =>
-                      isAgentSessionMessage(message) && message.role === 'assistant')
+                    ? [...ev.messages].reverse().find((message: any) => message?.role === 'assistant')
                     : null
                   const finalContent = extractMessageText(finalMessage)
                   const finalReasoning = extractAgentMessageReasoning(finalMessage) || assistantReasoning
@@ -179,7 +156,7 @@ export function useAgentPromptStream(agentId: string) {
                     return copy
                   })
                 } else if (ev.type === 'error') {
-                  setError(ev.error ?? 'Stream failed')
+                  setError(ev.error)
                 }
               } catch { /* malformed line */ }
             }
@@ -198,9 +175,8 @@ export function useAgentPromptStream(agentId: string) {
           },
         }
       )
-    } catch (err: unknown) {
-      const error = err instanceof Error ? err : null
-      if (error?.name !== 'AbortError') setError(error?.message ?? 'Stream failed')
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') setError(err?.message ?? 'Stream failed')
       setMessages(prev => {
         const copy = [...prev]
         const last = copy[copy.length - 1]
@@ -236,8 +212,8 @@ export function useAgentPromptStream(agentId: string) {
         const player = new Audio(`data:${result.audioMimeType};base64,${result.audio}`)
         player.play().catch(() => { /* autoplay blocked — text reply is still shown */ })
       }
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Voice prompt failed')
+    } catch (err: any) {
+      setError(err?.message ?? 'Voice prompt failed')
       // Drop the transcribing placeholder so the log stays clean.
       setMessages(prev => {
         const copy = [...prev]

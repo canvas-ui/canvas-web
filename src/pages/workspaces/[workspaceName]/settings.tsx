@@ -1,6 +1,6 @@
-import { useMenu } from '@/components/shell/menu-context-data'
+import { useMenu } from '@/components/shell/menu-context'
 import { useIsMobile } from '@/hooks/use-mobile'
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Copy, Database, ExternalLink, FolderPlus, HardDrive, RefreshCw, Server, Square, Trash2, Unlink, Activity, Monitor, Link2, Check, X as XIcon, Pencil } from 'lucide-react'
 import { Icon } from '@iconify/react'
@@ -8,8 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { LayerIconPicker } from '@/components/menu/shared/LayerIconPicker'
 import { DEFAULT_WORKSPACE_ICON, getBackendStyle, type LayerStyle } from '@/lib/layer-style'
-import { DefaultFoldersPicker } from '@/components/workspaces/DefaultFoldersPicker'
-import { createDefaultFolders, useFolderSelection } from '@/components/workspaces/default-folders'
+import { DefaultFoldersPicker, createDefaultFolders, useFolderSelection } from '@/components/workspaces/DefaultFoldersPicker'
 import { adminReindexTimelines, adminReindexSearch, adminOptimize, adminReindexMime } from '@/services/admin'
 import { PageHeader } from '@/components/common/page-header'
 import { WORKSPACE_SETTINGS_SECTIONS, resolveWorkspaceSettingsTab, type WorkspaceSettingsTab } from '@/lib/settings-sections'
@@ -18,7 +17,7 @@ import { HooksPanel } from '@/components/workspace/hooks-panel'
 import { TrashPanel } from '@/components/workspace/trash-panel'
 import { ImapMailboxesPanel } from '@/components/workspace/imap-mailboxes-panel'
 import { TokenManager } from '@/components/workspace/token-manager'
-import { useToast } from '@/components/ui/toast-context'
+import { useToast } from '@/components/ui/toast-container'
 import { isQueryDebugEnabled, setQueryDebugEnabled } from '@/lib/query-debug'
 import { generateNiceRandomHexColor, visibleAccentColor } from '@/utils/color'
 import {
@@ -62,7 +61,6 @@ import {
 
 type SettingsTab = WorkspaceSettingsTab
 type ServiceId = 'dotfiles' | 'git' | 'home' | 'webdav' | 'imap' | 'imapSync'
-type FtsStats = { ready?: boolean; rowCount?: number; error?: string }
 
 const DATA_BACKEND_LABELS: Record<string, { title: string; description: string }> = {
   'workspace:home': {
@@ -324,16 +322,13 @@ function BackendExclusionsEditor({
 }) {
   const cfg = (backend.config || {}) as Record<string, unknown>
   const userPatterns = Array.isArray(cfg.exclude) ? (cfg.exclude as string[]) : []
-  const userPatternsKey = userPatterns.join('\n')
   const effective = Array.isArray(cfg.effectiveExclusions) ? (cfg.effectiveExclusions as string[]) : []
   const defaultCount = Math.max(effective.length - userPatterns.length, 0)
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState(userPatterns.join('\n'))
   const [showDefaults, setShowDefaults] = useState(false)
 
-  useEffect(() => {
-    queueMicrotask(() => setDraft(userPatternsKey))
-  }, [userPatternsKey])
+  useEffect(() => { setDraft(userPatterns.join('\n')) }, [userPatterns.join('\n')]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="mt-3 border-t pt-3">
@@ -721,7 +716,6 @@ function DbStatsTab({
   onRefresh: () => void
   workspaceName: string
 }) {
-  const fts = stats?.fts as FtsStats | undefined
   if (isLoading) {
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -767,20 +761,20 @@ function DbStatsTab({
             <StatRow label="Deleted (pending GC)" value={stats.deletedDocumentsCount?.toLocaleString()} />
           </section>
 
-          {fts && (
+          {stats.fts && (
             <section className="rounded-lg border p-4">
               <div className="mb-3 flex items-center gap-2">
                 <Activity className="h-4 w-4 text-muted-foreground" />
                 <h2 className="text-sm font-semibold">Full-Text Search (LanceDB)</h2>
               </div>
-              {'ready' in fts && (
-                <StatRow label="Ready" value={String(fts.ready)} />
+              {'ready' in stats.fts && (
+                <StatRow label="Ready" value={String((stats.fts as any).ready)} />
               )}
-              {fts.rowCount !== undefined && (
-                <StatRow label="Row count" value={fts.rowCount.toLocaleString()} />
+              {(stats.fts as any).rowCount !== undefined && (
+                <StatRow label="Row count" value={(stats.fts as any).rowCount?.toLocaleString()} />
               )}
-              {fts.error && (
-                <StatRow label="Error" value={<span className="text-destructive">{fts.error}</span>} />
+              {(stats.fts as any).error && (
+                <StatRow label="Error" value={<span className="text-destructive">{(stats.fts as any).error}</span>} />
               )}
             </section>
           )}
@@ -869,7 +863,7 @@ export default function WorkspaceSettingsPage() {
 
   const workspaceId = workspace?.name || workspaceName || ''
 
-  const loadShares = useCallback(async (id = workspaceId) => {
+  const loadShares = async (id = workspaceId) => {
     if (!id) return
     try {
       const result = await listWorkspaceShares(id)
@@ -877,9 +871,9 @@ export default function WorkspaceSettingsPage() {
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to load shares', variant: 'destructive' })
     }
-  }, [showToast, workspaceId])
+  }
 
-  const loadDbStats = useCallback(async (id = workspaceId) => {
+  const loadDbStats = async (id = workspaceId) => {
     if (!id) return
     setIsLoadingDbStats(true)
     try {
@@ -890,9 +884,9 @@ export default function WorkspaceSettingsPage() {
     } finally {
       setIsLoadingDbStats(false)
     }
-  }, [showToast, workspaceId])
+  }
 
-  const loadDevices = useCallback(async (id = workspaceId) => {
+  const loadDevices = async (id = workspaceId) => {
     if (!id) return
     setIsLoadingDevices(true)
     try {
@@ -904,7 +898,7 @@ export default function WorkspaceSettingsPage() {
     } finally {
       setIsLoadingDevices(false)
     }
-  }, [showToast, workspaceId])
+  }
 
   const handleLinkDevice = async (deviceId: string) => {
     setDeviceBusy(deviceId)
@@ -945,7 +939,7 @@ export default function WorkspaceSettingsPage() {
     }
   }
 
-  const loadRuntimeSettings = useCallback(async (id = workspaceId) => {
+  const loadRuntimeSettings = async (id = workspaceId) => {
     if (!id) return
     const [nextServices, nextBackends] = await Promise.all([
       getWorkspaceServicesStatus(id).catch(() => null),
@@ -954,7 +948,7 @@ export default function WorkspaceSettingsPage() {
     setServices(nextServices)
     // The Data tab manages storage backends; imap accounts have their own panel.
     setDataBackends(nextBackends.filter((b) => b.kind === 'storage'))
-  }, [workspaceId])
+  }
 
   // Keep the "indexing m / n" readout live while any backend scan is running.
   const anyResyncing = dataBackends.some((b) => b.resyncing)
@@ -962,7 +956,7 @@ export default function WorkspaceSettingsPage() {
     if (!anyResyncing || !workspaceId) return
     const timer = setInterval(() => { loadRuntimeSettings() }, 4000)
     return () => clearInterval(timer)
-  }, [anyResyncing, loadRuntimeSettings, workspaceId])
+  }, [anyResyncing, workspaceId])
 
   useEffect(() => {
     async function load() {
@@ -984,16 +978,16 @@ export default function WorkspaceSettingsPage() {
       }
     }
     load()
-  }, [workspaceName, loadRuntimeSettings, loadShares, showToast])
+  }, [workspaceName])
 
   useEffect(() => {
     if (activeTab === 'db' && workspaceId && !dbStats && !isLoadingDbStats) {
-      void Promise.resolve().then(() => loadDbStats())
+      loadDbStats()
     }
     if (activeTab === 'devices' && workspaceId && !isLoadingDevices && allDevices.length === 0) {
-      void Promise.resolve().then(() => loadDevices())
+      loadDevices()
     }
-  }, [activeTab, allDevices.length, dbStats, isLoadingDbStats, isLoadingDevices, loadDbStats, loadDevices, workspaceId])
+  }, [activeTab, workspaceId])
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()

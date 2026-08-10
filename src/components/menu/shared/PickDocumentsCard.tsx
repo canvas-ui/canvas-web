@@ -1,24 +1,14 @@
 import { useEffect, useState } from 'react'
-import { X, Search, FileSearch, ChevronRight, ChevronDown, GitBranch, FolderTree } from 'lucide-react'
+import { X, Search, FileSearch, ChevronRight, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Loader } from '@/components/ui/loader'
 import { cn } from '@/lib/utils'
 import { listWorkspaces, getCachedWorkspaceTreeByName, getCanvasPathDocuments, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import type { TreeNode, Document } from '@/types/workspace'
-import { LinkNode, WorkspaceListStep } from './tree-picker-shared'
-import { type TreeTab } from './tree-picker-utils'
+import { type TreeTab, TAB_ICONS, TAB_LABELS, LinkNode, WorkspaceListStep } from './tree-picker-shared'
 import { DocumentIcon } from '@/components/common/DocumentIcon'
 // Workspace is a global type declared in src/types/api.d.ts
-
-const TAB_ICONS: Record<TreeTab, React.ReactNode> = {
-  context: <GitBranch className="h-3.5 w-3.5" />,
-  directory: <FolderTree className="h-3.5 w-3.5" />,
-}
-const TAB_LABELS: Record<TreeTab, string> = {
-  context: 'Context tree',
-  directory: 'Directory tree',
-}
 
 export interface PickDocumentsContext {
   workspaceName: string
@@ -59,17 +49,8 @@ export function PickDocumentsCard({ onClose, onConfirm, fixedWorkspaceName, savi
 
   useEffect(() => {
     if (fixedWorkspaceName) return
-    async function loadWorkspaces() {
-      setLoadingWorkspaces(true)
-      try {
-        setWorkspaces(await listWorkspaces())
-      } catch {
-        setWorkspaces([])
-      } finally {
-        setLoadingWorkspaces(false)
-      }
-    }
-    loadWorkspaces()
+    setLoadingWorkspaces(true)
+    listWorkspaces().then(setWorkspaces).catch(() => setWorkspaces([])).finally(() => setLoadingWorkspaces(false))
   }, [fixedWorkspaceName])
 
   useEffect(() => {
