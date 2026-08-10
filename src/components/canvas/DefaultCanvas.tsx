@@ -209,6 +209,12 @@ interface DefaultCanvasProps {
   // When provided, replaces the document list body (e.g. the canvas widget grid)
   // while keeping the canvas header and its share/delete controls.
   children?: ReactNode
+  /**
+   * Rendered above the content, whether that content is the document list or a
+   * canvas grid. Separate from `children` on purpose: children REPLACE the
+   * document list, so anything meant to sit beside it belongs here.
+   */
+  contentBanner?: ReactNode
 }
 
 export function DefaultCanvas({
@@ -264,6 +270,7 @@ export function DefaultCanvas({
   linkTree,
   selectedCount = 0,
   children,
+  contentBanner,
 }: DefaultCanvasProps) {
   const isCanvas = urlType === 'canvas'
 
@@ -376,6 +383,11 @@ export function DefaultCanvas({
       )}
 
       <div className="flex-1 min-h-0 overflow-y-auto">
+        {contentBanner}
+        {/* ⚠️ `children ||` means ANY children replace the document list — and an
+            array of children is truthy even when every element is false. Never
+            add a second child here to show something ALONGSIDE the list; use
+            contentBanner, which is what it is for. */}
         {children || (
         <DocumentList
           documents={documents}

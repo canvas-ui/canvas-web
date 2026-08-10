@@ -1198,10 +1198,10 @@ export default function WorkspaceDetailPage() {
       canSaveChanges={canSaveChanges}
       isSavingChanges={toolboxState.isSaving}
       onSaveChanges={saveFilters}
+      contentBanner={queryDebug && queryDebugData
+        ? <QueryDebugPanel data={queryDebugData} className="mb-3" />
+        : null}
     >
-      {queryDebug && queryDebugData && (
-        <QueryDebugPanel data={queryDebugData} className="mb-3" />
-      )}
       {showCanvasGrid && selectedNode && (
         <CanvasGrid
           workspaceId={workspace.name}
