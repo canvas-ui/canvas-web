@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { tagsToFeatures } from './tags'
 import { useTagSuggestions } from './useTagSuggestions'
+import { useGeotag, type Geotag } from '@/hooks/useGeotag'
 import type { BlobUploadResult } from '@/services/blobs'
+import type { DocumentGeo } from '@/types/workspace'
 
 const FILE_SCHEMA = 'data/schema/file'
 const FILE_SCHEMA_VERSION = '3.0'
@@ -12,6 +14,7 @@ export interface FileFields {
   comment: string
   setComment: (v: string) => void
   suggestions: string[]
+  geotag: Geotag
 }
 
 /**
@@ -27,15 +30,16 @@ export function useFileFields(workspaceName?: string | null): FileFields {
   const [tags, setTags] = useState<string[]>([])
   const [comment, setComment] = useState('')
   const suggestions = useTagSuggestions(workspaceName)
+  const geotag = useGeotag()
 
-  return { tags, setTags, comment, setComment, suggestions }
+  return { tags, setTags, comment, setComment, suggestions, geotag }
 }
 
 /** The File document every upload surface inserts. */
 export function buildFileDocument(
   blob: BlobUploadResult,
   file: File,
-  opts: { tags?: string[]; comment?: string } = {},
+  opts: { tags?: string[]; comment?: string; geo?: DocumentGeo | null } = {},
 ): Record<string, unknown> {
   const features = tagsToFeatures(opts.tags ?? [])
   const comment = opts.comment?.trim()
@@ -54,6 +58,11 @@ export function buildFileDocument(
       contentType: file.type,
       size: blob.size,
       ...(features.length ? { features } : {}),
+      // A photo's own EXIF fix outranks this one server-side (pickGeo: exif >
+      // device), so tagging an upload from the couch never overwrites where the
+      // shot was actually taken — but it does locate the scans, screenshots and
+      // documents that carry no EXIF at all.
+      ...(opts.geo ? { geo: opts.geo } : {}),
     },
   }
 }

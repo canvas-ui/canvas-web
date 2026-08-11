@@ -74,10 +74,14 @@ export function FileForm({ capture = false }: { capture?: boolean } = {}) {
     setSubmitting(true)
     try {
       const { workspaceName } = await resolveUploadWorkspace(target)
+      // One fix for the whole batch, taken before the uploads start — the
+      // same location the user saw in the form, not wherever they are several
+      // megabytes later. Resolves null unless they opted in; never rejects.
+      const geo = await meta.geotag.capture()
       const docs = []
       for (const file of files) {
         const blob = await uploadWorkspaceBlob(workspaceName, file)
-        docs.push(buildFileDocument(blob, file, { tags: meta.tags, comment: meta.comment }))
+        docs.push(buildFileDocument(blob, file, { tags: meta.tags, comment: meta.comment, geo }))
       }
       await submitDocuments(target, docs)
       showSuccessToast(`${files.length} file(s) uploaded`)

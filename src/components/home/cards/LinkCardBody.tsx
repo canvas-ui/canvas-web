@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { TagInput } from '@/components/toolbox/add/TagInput'
 import { useLinkFields } from '@/components/toolbox/add/useLinkFields'
+import { GeotagToggle } from '@/components/toolbox/add/GeotagToggle'
 import { B5Card, type B5SaveTarget } from '../B5Card'
 import type { QuickAddInitialData } from '../quick-add-types'
 
@@ -56,6 +57,8 @@ export function LinkCardBody({ onClose, initialData }: { onClose: () => void; in
           <Label>Tags</Label>
           <TagInput tags={f.tags} onChange={f.setTags} />
         </div>
+
+        <GeotagToggle geotag={f.geotag} idPrefix="qa-link-geotag" />
       </div>
     </B5Card>
   )

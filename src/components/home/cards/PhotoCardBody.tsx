@@ -31,8 +31,9 @@ export function PhotoCardBody({ onClose }: { onClose: () => void }) {
     if (!file) return []
     setSaving(true)
     try {
+      const geo = await meta.geotag.capture()
       const blob = await uploadWorkspaceBlob(target.workspaceName, file)
-      const doc = buildFileDocument(blob, file, { tags: meta.tags, comment: meta.comment })
+      const doc = buildFileDocument(blob, file, { tags: meta.tags, comment: meta.comment, geo })
       const addTarget: AddTarget = { mode: 'workspace', ...target }
       return await submitDocuments(addTarget, [doc])
     } finally {

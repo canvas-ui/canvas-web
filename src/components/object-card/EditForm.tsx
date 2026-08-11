@@ -8,9 +8,10 @@ import { tagsToFeatures, featuresToTags } from '@/components/toolbox/add/tags'
 import { updateWorkspaceDocument, listWorkspaceTagSuggestions } from '@/services/workspace'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { NOTE_SCHEMA, LINK_SCHEMA, TAB_SCHEMA, TODO_SCHEMA } from '@/components/renderers/types'
+import { DocumentGeoField } from '@/components/common/DocumentGeoField'
 import { TodoFields } from '@/components/toolbox/add/TodoFields'
 import { buildTodoData, isoToLocalInput, todayEndOfDayLocal, type TodoStatus } from '@/components/toolbox/add/useTodoFields'
-import type { Document } from '@/types/workspace'
+import type { Document, DocumentGeo } from '@/types/workspace'
 
 export function isEditableSchema(schema: string): boolean {
   return schema === NOTE_SCHEMA || schema === LINK_SCHEMA || schema === TAB_SCHEMA || schema === TODO_SCHEMA
@@ -46,6 +47,12 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
   const [priority, setPriority] = useState<number | ''>(typeof doc.data?.priority === 'number' ? doc.data.priority : '')
   const [due, setDue] = useState<string>(doc.data?.dueDate ? isoToLocalInput(String(doc.data.dueDate)) : todayEndOfDayLocal())
   const [comment, setComment] = useState<string>(String(doc.comment ?? ''))
+  // Location is universal (like the comment), not schema-specific: a photo with
+  // no EXIF fix is the main reason this exists. The patch below is sent only
+  // when it actually changed, so an unrelated edit never rewrites metadata.geo.
+  const initialGeo = ((doc.metadata as Record<string, unknown> | undefined)?.geo as DocumentGeo | undefined) ?? null
+  const [geo, setGeo] = useState<DocumentGeo | null>(initialGeo)
+  const geoChanged = JSON.stringify(geo ?? null) !== JSON.stringify(initialGeo ?? null)
   const [tags, setTags] = useState<string[]>(
     featuresToTags((doc.metadata as Record<string, unknown>)?.features as string[] | undefined).length
       ? featuresToTags((doc.metadata as Record<string, unknown>)?.features as string[] | undefined)
@@ -96,6 +103,10 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
         payload.data = data
         payload.metadata = { features: tagsToFeatures(tags) }
       }
+      // metadata is a shallow-MERGE patch server-side (Document.update), so
+      // sending geo alone is safe even on a photo — contentType/size/exif and
+      // the rest of the object survive. null un-indexes it from the geo index.
+      if (geoChanged) payload.metadata = { ...(payload.metadata ?? {}), geo }
       await updateWorkspaceDocument(workspaceId, payload)
       showSuccessToast('Document updated')
       window.dispatchEvent(new CustomEvent('workspace:documents:refresh'))
@@ -148,6 +159,9 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
           <TagInput tags={tags} onChange={setTags} suggestions={suggestions} />
         </div>
       )}
+
+      {/* Universal: any document can carry a location, whatever its schema. */}
+      <DocumentGeoField value={geo} onChange={setGeo} />
 
       {/* Universal: every document can carry a user-authored comment. */}
       <div className="space-y-1.5">

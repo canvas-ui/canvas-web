@@ -1,11 +1,12 @@
 import { Label } from '@/components/ui/label'
 import { TagInput } from './TagInput'
+import { GeotagToggle } from './GeotagToggle'
 import type { FileFields } from './useFileFields'
 
 const textareaClass = 'flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-elevation-1 transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
 
 /**
- * Tags + comment for an upload. Shared by the toolbox FileForm and the home
+ * Tags + comment + geotag for an upload. Shared by the toolbox FileForm and the home
  * File/Photo cards. When several files are selected the values apply to all of
  * them — batch-tagging a set of photos is the common case, and per-file fields
  * would be unusable on a phone.
@@ -32,6 +33,8 @@ export function FileMetaFields({ fields: f, idPrefix = 'file', multiple = false 
           <p className="text-xs text-muted-foreground">Applied to every file in this upload</p>
         )}
       </div>
+
+      <GeotagToggle geotag={f.geotag} idPrefix={`${idPrefix}-geotag`} />
     </>
   )
 }

@@ -54,10 +54,12 @@ export function FileCardBody({ onClose, initialData }: { onClose: () => void; in
     setSaving(true)
     try {
       const addTarget: AddTarget = { mode: 'workspace', ...target }
+      // One fix for the whole batch, taken before the uploads start.
+      const geo = await meta.geotag.capture()
       const docs = []
       for (const file of files) {
         const blob = await uploadWorkspaceBlob(target.workspaceName, file)
-        docs.push(buildFileDocument(blob, file, { tags: meta.tags, comment: meta.comment }))
+        docs.push(buildFileDocument(blob, file, { tags: meta.tags, comment: meta.comment, geo }))
       }
       return await submitDocuments(addTarget, docs)
     } finally {

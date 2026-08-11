@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { tagsToFeatures } from './tags'
 import { submitDocuments, type AddTarget } from './useAddTarget'
+import { useGeotag } from '@/hooks/useGeotag'
 
 // Links are stored as tabs for now (schema unification pending a larger
 // refactor — Link/Tab share the same shape). Editable fields: url + title.
@@ -18,6 +19,7 @@ export function useLinkFields() {
   const [title, setTitle] = useState('')
   const [tags, setTags] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
+  const geotag = useGeotag()
 
   const trimmedUrl = url.trim()
   const urlValid = isValidUrl(trimmedUrl)
@@ -28,6 +30,9 @@ export function useLinkFields() {
     if (!urlValid) throw new Error('Enter a valid URL')
     setSaving(true)
     try {
+      // Off by default; capture() resolves null unless the user opted in, and
+      // never rejects — a missing fix must not block saving the link.
+      const geo = await geotag.capture()
       const cleanTags = tags.map((t) => t.trim()).filter(Boolean)
       const doc = {
         schema: TAB_SCHEMA,
@@ -37,7 +42,7 @@ export function useLinkFields() {
           ...(title.trim() ? { title: title.trim() } : {}),
           ...(cleanTags.length ? { tags: cleanTags } : {}),
         },
-        metadata: { features: tagsToFeatures(tags) },
+        metadata: { features: tagsToFeatures(tags), ...(geo ? { geo } : {}) },
       }
       return await submitDocuments(target, [doc])
     } finally {
@@ -45,5 +50,5 @@ export function useLinkFields() {
     }
   }
 
-  return { url, setUrl, title, setTitle, tags, setTags, saving, canSave, urlValid, showUrlError, save }
+  return { url, setUrl, title, setTitle, tags, setTags, saving, canSave, urlValid, showUrlError, save, geotag }
 }

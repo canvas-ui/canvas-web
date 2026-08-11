@@ -13,7 +13,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { Check, Crosshair, Loader2, MapPin, Search, X } from 'lucide-react'
+import { Check, Crosshair, LocateFixed, Loader2, MapPin, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // Violet, matching the MapTab pin. Literal hex, not a theme token: it is written
@@ -66,6 +66,7 @@ export function LocationPickerSheet({
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
   const [resolving, setResolving] = useState(false)
+  const [locating, setLocating] = useState(false)
   // Drives the enter transition — mounted off-screen, then slid in on the next
   // frame so the browser has a "from" state to animate out of.
   const [shown, setShown] = useState(false)
@@ -182,6 +183,27 @@ export function LocationPickerSheet({
     }
   }, [query])
 
+  // Device fix as a starting point — the edit path has no other way to say
+  // "here", and on the add path it saves a search for somewhere you're standing.
+  // The pin it drops is still a manual pick, so it stays draggable.
+  const locateMe = useCallback(() => {
+    if (!navigator.geolocation) { setSearchError('This browser has no geolocation'); return }
+    setLocating(true)
+    setSearchError(null)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocating(false)
+        mapRef.current?.setView([pos.coords.latitude, pos.coords.longitude], 16)
+        placePin(pos.coords.latitude, pos.coords.longitude)
+      },
+      () => {
+        setLocating(false)
+        setSearchError('Could not read your location — search or click the map instead')
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+    )
+  }, [placePin])
+
   const chooseResult = useCallback((r: SearchResult) => {
     const map = mapRef.current
     const lat = Number(r.lat)
@@ -244,6 +266,16 @@ export function LocationPickerSheet({
                 className="h-8 w-full rounded-md border border-input bg-transparent pl-7 pr-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
               />
             </div>
+            <button
+              type="button"
+              onClick={locateMe}
+              disabled={locating}
+              title="Use my current location"
+              aria-label="Use my current location"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+            >
+              {locating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LocateFixed className="h-3.5 w-3.5" />}
+            </button>
             <button
               type="button"
               onClick={runSearch}

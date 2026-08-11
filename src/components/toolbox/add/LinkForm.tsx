@@ -7,6 +7,7 @@ import { TagInput } from './TagInput'
 import { useAddTarget, describeTarget } from './useAddTarget'
 import { useLinkFields } from './useLinkFields'
 import { useTagSuggestions } from './useTagSuggestions'
+import { GeotagToggle } from './GeotagToggle'
 
 export function LinkForm() {
   const { closeAdd, state } = useToolbox()
@@ -58,6 +59,8 @@ export function LinkForm() {
         <Label>Tags</Label>
         <TagInput tags={f.tags} onChange={f.setTags} suggestions={suggestions} />
       </div>
+
+      <GeotagToggle geotag={f.geotag} idPrefix="link-geotag" />
 
       <p className="text-xs text-muted-foreground">{describeTarget(target)}</p>
 
