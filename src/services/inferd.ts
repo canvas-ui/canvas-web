@@ -213,6 +213,14 @@ export interface ImageSummaryStatus {
   skipped: number
   failed: number
   errors?: Array<{ id: number | string; error: string }>
+  /**
+   * The run stopped early because the model worker died and inferd refused to
+   * respawn it (OOM being the usual cause). Distinct from "everything failed":
+   * the images after the crash were never attempted, and starting a new run
+   * re-arms the breaker.
+   */
+  aborted?: boolean
+  abortedReason?: string | null
   force?: boolean
   startedAt?: string | null
   finishedAt?: string | null

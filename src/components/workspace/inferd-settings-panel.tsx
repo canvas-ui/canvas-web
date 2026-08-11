@@ -513,11 +513,15 @@ function SummarizeControls({
           <span className="font-mono text-xs text-muted-foreground">{backend.model}</span>
         </div>
         {summaryStatus && (summaryStatus.running || summaryStatus.total > 0 || summaryStatus.finishedAt) && (
-          <p className="text-xs text-muted-foreground">
-            {running ? 'Running' : 'Last run'}: {summaryStatus.described}/{summaryStatus.total} described
+          <p className={cn('text-xs', summaryStatus.aborted ? 'text-destructive' : 'text-muted-foreground')}>
+            {running ? 'Running' : summaryStatus.aborted ? 'Stopped' : 'Last run'}: {summaryStatus.described}/{summaryStatus.total} described
             {summaryStatus.skipped ? `, ${summaryStatus.skipped} skipped` : ''}
             {summaryStatus.failed ? `, ${summaryStatus.failed} failed` : ''}
-            {firstError ? ` — ${firstError}` : ''}
+            {/* An abort says why it stopped and that the rest were never tried —
+                more useful than the first per-image error underneath it. */}
+            {summaryStatus.aborted
+              ? ` — ${summaryStatus.abortedReason || 'model worker died'}. Remaining images were not attempted; generate again to retry.`
+              : firstError ? ` — ${firstError}` : ''}
           </p>
         )}
         <div className="flex flex-wrap items-center justify-between gap-3">
