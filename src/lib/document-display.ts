@@ -41,16 +41,25 @@ export function isImageFile(document: Document): boolean {
 }
 
 // Basename of a location URL, for schemes where the path IS a name (file://
-// from `ws add`, https://, smb://). A `stored://` key is a content hash, so it
-// never yields one.
+// from `ws add`, https://, smb://). A `stored://` key is only sometimes one:
+// file-backed keys are the real workspace path, cacache/auto-generated keys are
+// content hashes — so a stored key must look like a filename to count.
 function nameBearingBasename(url?: string): string {
-  if (!url || /^stored:\/\//i.test(url)) return ''
+  if (!url) return ''
   const afterScheme = url.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')
   const slash = afterScheme.indexOf('/')
   const key = slash >= 0 ? afterScheme.slice(slash + 1) : afterScheme
   const base = key.split('/').filter(Boolean).pop()
   if (!base) return ''
-  try { return decodeURIComponent(base) } catch { return base }
+  let decoded: string
+  try { decoded = decodeURIComponent(base) } catch { decoded = base }
+  if (/^stored:\/\//i.test(url) && !looksLikeFilename(decoded)) return ''
+  return decoded
+}
+
+// A name a person would recognise: has an extension and isn't a bare digest.
+function looksLikeFilename(base: string): boolean {
+  return /\.[A-Za-z0-9]{1,12}$/.test(base) && !/^[a-f0-9]{16,}$/i.test(base.replace(/\.[^.]*$/, ''))
 }
 
 /**
@@ -65,7 +74,8 @@ function nameBearingBasename(url?: string): string {
  *   2. `data.filename` — the same idea for JSON abstractions;
  *   3. the name on the canvas-owned copy (`stored://workspace:*`);
  *   4. any location name, by a STABLE sort (url), never array order;
- *   5. the URL basename, for name-bearing schemes only.
+ *   5. the URL basename, where the path really is a name (a `stored://` key
+ *      counts only when it looks like a filename, not a content hash).
  *
  * Mirrors `displayFilename()` in the server's webdav/vfs-shared.js — keep them
  * in step.

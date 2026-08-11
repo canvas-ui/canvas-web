@@ -41,6 +41,10 @@ export interface ToolboxState {
   t1Open: boolean
   t1View: T1View
   toolsTab: ToolsTab
+  // Applet open in the Apps tab, or null for its launcher grid. Toolbox-level
+  // rather than AppsPanel-local so a closed toolbox can be re-opened straight
+  // back into the running applet (the Lens widget does exactly that).
+  appsAppletId: string | null
   // T2 — agent chat overlay
   t2Open: boolean
   t2AgentId: string | null
@@ -96,6 +100,7 @@ type ToolboxAction =
   | { type: 'CLOSE_ADD' }
   | { type: 'OPEN_EDIT'; document: WorkspaceDocument; workspaceId: string }
   | { type: 'SET_TOOLS_TAB'; tab: ToolsTab }
+  | { type: 'SET_APPS_APPLET'; appletId: string | null }
   | { type: 'SET_ACCENT_COLOR'; color: string | null }
   | { type: 'SET_GEO_SELECTION'; selection: GeoSelection | null }
   | { type: 'SET_MAP_DOCUMENTS'; documents: WorkspaceDocument[]; workspaceId: string | null }
@@ -133,6 +138,7 @@ const initialState: ToolboxState = {
   t1Open: false,
   t1View: null,
   toolsTab: 'features',
+  appsAppletId: null,
   t2Open: false,
   t2AgentId: null,
   addOpen: false,
@@ -181,6 +187,8 @@ function toolboxReducer(state: ToolboxState, action: ToolboxAction): ToolboxStat
       return { ...state, addOpen: true, addKind: null, editDocument: action.document, editWorkspaceId: action.workspaceId }
     case 'SET_TOOLS_TAB':
       return { ...state, toolsTab: action.tab }
+    case 'SET_APPS_APPLET':
+      return { ...state, appsAppletId: action.appletId }
     case 'SET_ACCENT_COLOR':
       return state.activeAccentColor === action.color ? state : { ...state, activeAccentColor: action.color }
     case 'SET_GEO_SELECTION':
@@ -324,6 +332,8 @@ interface ToolboxContextValue {
   closeAdd: () => void
   openEdit: (document: WorkspaceDocument, workspaceId: string) => void
   setToolsTab: (tab: ToolsTab) => void
+  /** Open an applet in the Apps tab (null returns to the launcher). */
+  openApplet: (appletId: string | null) => void
   setAccentColor: (color: string | null) => void
   setFilters: (filters: ToolboxFilters) => void
   setFeatureToggle: (key: string, on: boolean) => void
@@ -491,6 +501,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
   const closeAdd = useCallback(() => dispatch({ type: 'CLOSE_ADD' }), [])
   const openEdit = useCallback((document: WorkspaceDocument, workspaceId: string) => dispatch({ type: 'OPEN_EDIT', document, workspaceId }), [])
   const setToolsTab = useCallback((tab: ToolsTab) => dispatch({ type: 'SET_TOOLS_TAB', tab }), [])
+  const openApplet = useCallback((appletId: string | null) => dispatch({ type: 'SET_APPS_APPLET', appletId }), [])
   const setAccentColor = useCallback((color: string | null) => dispatch({ type: 'SET_ACCENT_COLOR', color }), [])
 
   const setFilters = useCallback((filters: ToolboxFilters) => {
@@ -696,7 +707,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
 
   return (
     <ToolboxCtx.Provider
-      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, closeAdd, openEdit, setToolsTab, setAccentColor, setFilters, setFeatureToggle, setFeatureMode, clearFilters, hasActiveFilters, setTimelineFilter, setGeoBBox, setLensGps, setLensIds, setGeoSelection, setMapDocuments, setSort, saveFilters, deleteBitmap, deleteDataset, createTimeline, deleteTimeline, refreshTimelines }}
+      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, closeAdd, openEdit, setToolsTab, openApplet, setAccentColor, setFilters, setFeatureToggle, setFeatureMode, clearFilters, hasActiveFilters, setTimelineFilter, setGeoBBox, setLensGps, setLensIds, setGeoSelection, setMapDocuments, setSort, saveFilters, deleteBitmap, deleteDataset, createTimeline, deleteTimeline, refreshTimelines }}
     >
       {children}
     </ToolboxCtx.Provider>

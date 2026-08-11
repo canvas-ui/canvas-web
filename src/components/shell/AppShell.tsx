@@ -7,6 +7,8 @@ import { AgentSessionProvider } from '@/components/agent/agent-session-context'
 import { ToolboxProvider } from '@/components/toolbox/toolbox-context'
 import { AddPanel } from '@/components/toolbox/AddPanel'
 import { ToolboxPanel } from '@/components/toolbox/ToolboxPanel'
+import { LensFeedProvider } from '@/components/toolbox/lens-feed-context'
+import { LensFeedWidget } from '@/components/toolbox/LensFeedWidget'
 import { SideViewProvider } from './side-view-context'
 import { DocumentModalProvider } from './document-modal-context'
 
@@ -15,6 +17,10 @@ export function AppShell() {
     <MenuProvider>
       <AgentSessionProvider>
         <ToolboxProvider>
+          {/* Above the toolbox on purpose: the Lens camera has to outlive the
+              panel that started it (closing the toolbox unmounts that panel,
+              and on mobile closing it is the only way to see the results). */}
+          <LensFeedProvider>
           <SideViewProvider>
             <DocumentModalProvider>
             {/* h-viewport (not h-screen) so the shell tracks the real visible height
@@ -34,8 +40,11 @@ export function AppShell() {
                 rail, toggled by the bottom-left menu button */}
             <ToolboxFab />
             <MobileMenuToggle />
+            {/* A running feed with no panel showing it collapses to here. */}
+            <LensFeedWidget />
             </DocumentModalProvider>
           </SideViewProvider>
+          </LensFeedProvider>
         </ToolboxProvider>
       </AgentSessionProvider>
     </MenuProvider>

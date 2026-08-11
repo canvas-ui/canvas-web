@@ -17,12 +17,16 @@ export function useWebcam(opts: { onEnded?: () => void } = {}) {
   const streamRef = useRef<MediaStream | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const [active, setActive] = useState(false)
+  // Exposed so surfaces other than `videoRef` can bind the same feed — the
+  // Lens widget previews the stream while the panel that started it is gone.
+  const [stream, setStream] = useState<MediaStream | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const stop = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
     if (videoRef.current) videoRef.current.srcObject = null
+    setStream(null)
     setActive(false)
   }, [])
 
@@ -35,6 +39,7 @@ export function useWebcam(opts: { onEnded?: () => void } = {}) {
       videoRef.current.srcObject = stream
       await videoRef.current.play().catch(() => {})
     }
+    setStream(stream)
     setActive(true)
   }, [stop])
 
@@ -114,5 +119,5 @@ export function useWebcam(opts: { onEnded?: () => void } = {}) {
 
   useEffect(() => stop, [stop])
 
-  return { videoRef, active, error, start, startScreen, stop, captureFrame }
+  return { videoRef, stream, active, error, start, startScreen, stop, captureFrame }
 }

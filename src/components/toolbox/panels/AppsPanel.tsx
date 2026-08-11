@@ -1,14 +1,19 @@
 import { useState } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useToolbox } from '../toolbox-context'
 import { APPLETS, appletsForMode, type AppletMode } from '../applets/registry'
 
 // Apps tab: the applet launcher plus the host for the opened applet.
 // Two sub-tabs mirror the two applet modes: Context applets see only data
 // pre-filtered by the focused context; Global applets are context-free.
 export function AppsPanel() {
+  const { state, openApplet } = useToolbox()
   const [mode, setMode] = useState<AppletMode>('context')
-  const [openId, setOpenId] = useState<string | null>(null)
+  // Which applet is open lives in the toolbox, not here: this panel unmounts
+  // whenever the toolbox closes, and a long-running applet (Lens) has to be
+  // re-openable from outside it.
+  const openId = state.appsAppletId
 
   const open = openId ? APPLETS.find(a => a.id === openId) : null
 
@@ -18,7 +23,7 @@ export function AppsPanel() {
         <div className="flex shrink-0 items-center gap-2 border-b border-border px-2 py-1.5">
           <button
             type="button"
-            onClick={() => setOpenId(null)}
+            onClick={() => openApplet(null)}
             className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             aria-label="Back to applets"
             title="Back to applets"
@@ -69,7 +74,7 @@ export function AppsPanel() {
             <button
               key={a.id}
               type="button"
-              onClick={() => setOpenId(a.id)}
+              onClick={() => openApplet(a.id)}
               className="flex min-h-[4.5rem] flex-col items-center justify-center gap-1.5 rounded-lg border border-border bg-muted/40 p-3 text-foreground transition-colors hover:bg-muted"
               title={a.description}
             >

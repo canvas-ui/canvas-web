@@ -6,6 +6,7 @@ import { APPLETS } from '@/components/toolbox/applets/registry'
 import { AppletTargetProvider, type AppletTarget } from '@/components/toolbox/applets/applet-target'
 import { listWorkspaces, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
 import { DocumentModalProvider } from '@/components/shell/document-modal-context'
+import { LensFeedProvider } from '@/components/toolbox/lens-feed-context'
 import { listContexts } from '@/services/context'
 
 const DEFAULT_WORKSPACE = 'universe'
@@ -78,6 +79,9 @@ export default function AppletHostPage() {
 
   return (
     <DocumentModalProvider>
+    {/* Lens needs its feed hosted above the applet here too — this page has no
+        shell, so nothing else would own the camera. */}
+    <LensFeedProvider>
     <div className="flex h-viewport flex-col surface-desk p-shell gap-shell">
       {/* Header: identity + binding. Two binding modes: a workspace path
           (default /) or a context - the applet shows only what the binding
@@ -163,6 +167,7 @@ export default function AppletHostPage() {
         )}
       </div>
     </div>
+    </LensFeedProvider>
     </DocumentModalProvider>
   )
 }

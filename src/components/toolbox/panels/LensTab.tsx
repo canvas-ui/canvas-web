@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Camera, CircleStop, LocateFixed, Monitor } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToolbox } from '../toolbox-context'
-import { useWebcam } from '@/hooks/useWebcam'
-import { searchByImage } from '@/services/lens'
-import { LENS_RATES, DEFAULT_LENS_RATE_MS } from '../lens-rates'
+import { useLensFeed, useLensFeedViewer, LensFeedVideo } from '../lens-feed-context'
+import { LENS_RATES } from '../lens-rates'
 
 // The Lens filter tab: LIVE feeds refining the current view, sitting beside
 // Features / Timeline / Map.
@@ -15,6 +14,11 @@ import { LENS_RATES, DEFAULT_LENS_RATE_MS } from '../lens-rates'
 //  - Camera / Desktop refine: frames at a selectable rate → search-by-image (idsOnly,
 //    frames are ephemeral) → majority-vote smoothing → the survivors become an
 //    `ids` constraint ANDed into the listing.
+//
+// The camera half is only a VIEW: the stream and the frame loop belong to
+// LensFeedProvider, above the toolbox, because this tab unmounts whenever the
+// toolbox closes or another tab is picked — which on mobile is the only way to
+// see the results it produces. See lens-feed-context.tsx.
 //
 // All of it is deliberately EPHEMERAL state: cleared rather than persisted —
 // a saved canvas must not replay yesterday's position or a long-gone frame.
@@ -27,16 +31,13 @@ const RADII = [
   { label: '10 km', m: 10000 },
 ] as const
 
-const SMOOTH_WINDOW = 3
-const KNN_LIMIT = 32
-
 const selectClass = 'h-7 rounded-md border border-input bg-transparent px-1.5 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring'
 const inputClass = 'h-7 rounded-md border border-input bg-transparent px-2 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring'
 
 const round4 = (n: number) => Math.round(n * 10000) / 10000
 
 export function LensTab() {
-  const { state, setLensGps, setLensIds } = useToolbox()
+  const { state, setLensGps } = useToolbox()
   const lens = state.filters.lens
   const workspaceName = state.activeWorkspaceName
 
@@ -104,99 +105,22 @@ export function LensTab() {
   }
 
   // ── Camera / Desktop refine ────────────────────────────────────────────────
-  // Ending a screen share via the browser's own UI must also tear the loop
-  // down — the hook reports it through onEnded (no reactive effect needed).
-  const feedEndedRef = useRef<() => void>(() => {})
-  const { videoRef, error: mediaError, start, startScreen, stop, captureFrame } = useWebcam({ onEnded: () => feedEndedRef.current() })
-  const [source, setSource] = useState<'camera' | 'screen' | null>(null)
-  const [rateMs, setRateMs] = useState<number>(DEFAULT_LENS_RATE_MS)
-  const [maxDistance, setMaxDistance] = useState('')
-  const [feedError, setFeedError] = useState<string | null>(null)
-  const [lastCount, setLastCount] = useState<number | null>(null)
+  // A view onto the hoisted feed. Mounting registers this tab as the visible
+  // surface so the collapsed widget stands down while the panel is open.
+  const feed = useLensFeed()
+  const { rateMs, setRateMs, maxDistance, setMaxDistance, error: feedError } = feed
+  // The feed can belong to the Lens applet instead; this tab then shows it as
+  // busy rather than offering to start a second camera over the top.
+  const ownFeed = feed.running && feed.consumer === 'filter'
+  const otherFeed = feed.running && feed.consumer !== 'filter'
+  useLensFeedViewer(ownFeed)
 
-  const loopRef = useRef({ running: false, workspaceName: '', maxDistance: NaN, rateMs: DEFAULT_LENS_RATE_MS })
-  const historyRef = useRef<number[][]>([])
-  // Last committed smoothed set — a stable scene must not dispatch identical
-  // filter state every tick (each dispatch re-renders every toolbox consumer).
-  const committedRef = useRef<number[] | null>(null)
-  const timerRef = useRef<number | null>(null)
-  const abortRef = useRef<AbortController | null>(null)
-  const tickRef = useRef<() => Promise<void>>(async () => {})
+  const startFeed = (kind: 'camera' | 'screen') => {
+    if (!workspaceName) return
+    void feed.start(kind, 'filter', { workspaceRef: workspaceName })
+  }
 
-  useEffect(() => {
-    loopRef.current.workspaceName = workspaceName ?? ''
-    loopRef.current.maxDistance = maxDistance === '' ? NaN : Number(maxDistance)
-    loopRef.current.rateMs = rateMs
-  }, [workspaceName, maxDistance, rateMs])
-
-  const tick = useCallback(async () => {
-    const s = loopRef.current
-    if (!s.running) return
-    const t0 = performance.now()
-    const frame = captureFrame()
-    if (frame && s.workspaceName) {
-      abortRef.current = new AbortController()
-      try {
-        const res = await searchByImage(s.workspaceName, frame, {
-          maxDistance: Number.isFinite(s.maxDistance) ? s.maxDistance : undefined,
-          limit: KNN_LIMIT,
-          idsOnly: true,
-          signal: abortRef.current.signal,
-        })
-        setFeedError(null)
-        historyRef.current = [...historyRef.current.slice(-(SMOOTH_WINDOW - 1)), res.ids]
-        const history = historyRef.current
-        const union = [...new Set(history.flat())]
-        // Majority vote across the window (raw pass-through until it fills).
-        const smoothed = history.length < 2
-          ? res.ids
-          : union.filter((id) => history.filter((f) => f.includes(id)).length >= 2)
-        setLastCount(smoothed.length)
-        const prev = committedRef.current
-        if (!prev || prev.length !== smoothed.length || prev.some((id, i) => id !== smoothed[i])) {
-          committedRef.current = smoothed
-          setLensIds(smoothed)
-        }
-      } catch (err) {
-        if ((err as Error)?.name !== 'AbortError') setFeedError((err as Error)?.message || 'search failed')
-      }
-    }
-    if (loopRef.current.running) {
-      // Aim for the selected rate by charging the request latency against the
-      // interval; at high fps this degrades to back-to-back (never overlapping)
-      // requests, so the server sees at most one in-flight search per feed.
-      const delay = Math.max(0, loopRef.current.rateMs - (performance.now() - t0))
-      timerRef.current = window.setTimeout(() => void tickRef.current(), delay)
-    }
-  }, [captureFrame, setLensIds])
-
-  useEffect(() => { tickRef.current = tick }, [tick])
-
-  const startFeed = useCallback(async (kind: 'camera' | 'screen') => {
-    const ok = kind === 'camera' ? await start() : await startScreen()
-    if (!ok) return
-    setSource(kind)
-    historyRef.current = []
-    loopRef.current.running = true
-    void tick()
-  }, [start, startScreen, tick])
-
-  const stopFeed = useCallback(() => {
-    loopRef.current.running = false
-    if (timerRef.current) window.clearTimeout(timerRef.current)
-    abortRef.current?.abort()
-    stop()
-    setSource(null)
-    setLastCount(null)
-    committedRef.current = null
-    setLensIds(null)
-  }, [stop, setLensIds])
-
-  useEffect(() => { feedEndedRef.current = stopFeed }, [stopFeed])
-
-  useEffect(() => stopFeed, [stopFeed])
-
-  const feedRunning = source !== null
+  const feedRunning = ownFeed
 
   return (
     <div className="flex flex-col gap-4 p-3 text-sm">
@@ -243,25 +167,25 @@ export function LensTab() {
           {feedRunning ? (
             <button
               type="button"
-              onClick={stopFeed}
+              onClick={feed.stop}
               className="flex h-7 items-center gap-1 rounded-md bg-destructive px-2.5 text-xs font-medium text-destructive-foreground hover:bg-destructive/90"
             >
-              <CircleStop className="h-3.5 w-3.5" /> Stop {source === 'camera' ? 'camera' : 'recording'}
+              <CircleStop className="h-3.5 w-3.5" /> Stop {feed.source === 'camera' ? 'camera' : 'recording'}
             </button>
           ) : (
             <>
               <button
                 type="button"
-                onClick={() => void startFeed('camera')}
-                disabled={!workspaceName}
+                onClick={() => startFeed('camera')}
+                disabled={!workspaceName || otherFeed}
                 className="flex h-7 items-center gap-1 rounded-md bg-foreground px-2.5 text-xs font-medium text-background hover:bg-foreground/90 disabled:opacity-50"
               >
                 <Camera className="h-3.5 w-3.5" /> Camera
               </button>
               <button
                 type="button"
-                onClick={() => void startFeed('screen')}
-                disabled={!workspaceName}
+                onClick={() => startFeed('screen')}
+                disabled={!workspaceName || otherFeed}
                 className="flex h-7 items-center gap-1 rounded-md bg-foreground px-2.5 text-xs font-medium text-background hover:bg-foreground/90 disabled:opacity-50"
               >
                 <Monitor className="h-3.5 w-3.5" /> Desktop
@@ -288,14 +212,16 @@ export function LensTab() {
         </div>
 
         <div className={cn('relative overflow-hidden rounded-lg border border-border bg-black/80', feedRunning ? 'aspect-video' : 'hidden')}>
-          <video ref={videoRef} muted playsInline className="h-full w-full object-cover" />
+          <LensFeedVideo className="h-full w-full object-cover" />
         </div>
 
         <p className="text-xs text-muted-foreground">
-          {mediaError || feedError ? (
-            <span className="text-destructive">{mediaError || feedError}</span>
+          {feedError ? (
+            <span className="text-destructive">{feedError}</span>
           ) : feedRunning ? (
-            `Live — view narrowed to ${lastCount ?? '…'} match${lastCount === 1 ? '' : 'es'}. Frames are ephemeral, never stored.`
+            `Live — view narrowed to ${feed.lastCount ?? '…'} match${feed.lastCount === 1 ? '' : 'es'}. Frames are ephemeral, never stored. Closing the toolbox keeps it running.`
+          ) : otherFeed ? (
+            'The Lens applet is using the camera — stop it there first.'
           ) : !workspaceName ? (
             'Open a workspace to refine with a live feed.'
           ) : (
