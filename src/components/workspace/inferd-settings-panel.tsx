@@ -480,6 +480,7 @@ function SummarizeControls({
   const [summaryStatus, setSummaryStatus] = useState<ImageSummaryStatus | null>(null)
   const [starting, setStarting] = useState(false)
   const [stopping, setStopping] = useState(false)
+  const [rebuild, setRebuild] = useState(false)
 
   const listed = IMAGE_CAPTION_BACKENDS.find(b => `${b.provider}::${b.model}` === backendKey)
   const isCustom = backendKey === CUSTOM_BACKEND_KEY
@@ -551,8 +552,8 @@ function SummarizeControls({
       const status = await startWorkspaceImageSummaries(workspaceId, { force })
       setSummaryStatus(status)
       showToast({
-        title: force ? 'Regenerating image summaries' : 'Generating image summaries',
-        description: `${status.total.toLocaleString()} image(s) queued. First run may download model weights.`,
+        title: force ? 'Rebuilding image summaries' : 'Backfilling image summaries',
+        description: `${status.total.toLocaleString()} candidate image(s). First run downloads model weights.`,
       })
     } catch (err) {
       showToast({
@@ -656,9 +657,30 @@ function SummarizeControls({
                 : firstError ? ` — ${firstError}` : ''}
           </p>
         )}
+        {/* Same two-verb split as the embedding fill above: add what is
+            missing, or redo everything. */}
+        <label className="flex items-start gap-2 text-xs">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={rebuild}
+            disabled={saving || running}
+            onChange={e => setRebuild(e.target.checked)}
+          />
+          <span>
+            Re-caption images that already have a summary
+            {rebuild && (
+              <span className="mt-1 block text-[11px] text-warning">
+                Replaces every existing <span className="font-mono">metadata.summary</span>, including ones written by a
+                different model. Leave this off to fill in only what is missing.
+              </span>
+            )}
+          </span>
+        </label>
+
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">
-            Enable + save, then generate. Only the local caption provider is wired today.
+            Enable + save, then run. Only the local caption provider is wired today.
             Candidates come from <span className="font-mono">data/mime/image</span>.
           </p>
           <div className="flex flex-wrap items-center gap-2">
@@ -667,20 +689,16 @@ function SummarizeControls({
             </Button>
             <Button
               size="sm"
-              onClick={() => void generate(false)}
+              onClick={() => void generate(rebuild)}
               disabled={saving || dirty || starting || running || !imageEnabled}
-              title={!imageEnabled ? 'Enable image summaries and save first' : dirty ? 'Save config first' : undefined}
+              title={
+                !imageEnabled ? 'Enable image summaries and save first'
+                  : dirty ? 'Save config first'
+                    : rebuild ? 'Re-caption every image, replacing existing summaries'
+                      : 'Caption images that have no summary yet'
+              }
             >
-              {running || starting ? 'Generating…' : 'Generate summaries'}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => void generate(true)}
-              disabled={saving || dirty || starting || running || !imageEnabled}
-              title="Overwrite existing metadata.summary values"
-            >
-              Force
+              {running || starting ? 'Running…' : rebuild ? 'Rebuild' : 'Backfill'}
             </Button>
             {/* Only while there is something to stop — a disabled Stop sitting
                 there permanently reads as broken. */}
