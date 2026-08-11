@@ -389,10 +389,18 @@ function AdvancedFill({
   )
 }
 
+/** Caption backends the summarize.image path actually supports today. */
+const IMAGE_CAPTION_BACKENDS = [
+  {
+    provider: 'blip',
+    model: 'Xenova/vit-gpt2-image-captioning',
+    label: 'Local captioner (vit-gpt2 / ONNX)',
+  },
+] as const
+
 /**
- * Per-modality summary generation. Image captions use local BLIP
- * (`Xenova/blip-image-captioning-base`) by default when enabled; results land
- * in `metadata.summary` and are folded into FTS + a reserved text-space chunk.
+ * Image captions via the local Transformers.js worker (`blip` provider).
+ * Results land in `metadata.summary` (FTS + reserved text-space chunk).
  */
 function SummarizeControls({
   workspaceId,
@@ -408,28 +416,19 @@ function SummarizeControls({
   const { showToast } = useToast()
   const workspace = config.workspace || {}
   const effective = config.effective || {}
-  const providerIds = Object.keys(effective.providers || {})
-  const [draft, setDraft] = useState<Record<string, { enabled: boolean; provider: string; model: string }>>(() => {
-    const src = { ...(effective.summarize || {}), ...(workspace.summarize || {}) }
-    const init: Record<string, { enabled: boolean; provider: string; model: string }> = {}
-    for (const modality of ['image', 'audio', 'text']) {
-      const spec = src[modality] || {}
-      init[modality] = {
-        enabled: spec.enabled === true,
-        provider: spec.provider || (modality === 'image' ? 'blip' : ''),
-        model: spec.model || (modality === 'image' ? 'Xenova/blip-image-captioning-base' : ''),
-      }
-    }
-    return init
+  const defaultBackend = IMAGE_CAPTION_BACKENDS[0]
+  const [enabled, setEnabled] = useState(() => effective.summarize?.image?.enabled === true || workspace.summarize?.image?.enabled === true)
+  const [backendKey, setBackendKey] = useState(() => {
+    const provider = workspace.summarize?.image?.provider || effective.summarize?.image?.provider || defaultBackend.provider
+    const model = workspace.summarize?.image?.model || effective.summarize?.image?.model || defaultBackend.model
+    const match = IMAGE_CAPTION_BACKENDS.find(b => b.provider === provider && b.model === model)
+    return match ? `${match.provider}::${match.model}` : `${defaultBackend.provider}::${defaultBackend.model}`
   })
   const [dirty, setDirty] = useState(false)
   const [summaryStatus, setSummaryStatus] = useState<ImageSummaryStatus | null>(null)
   const [starting, setStarting] = useState(false)
 
-  const setField = (modality: string, patch: Partial<{ enabled: boolean; provider: string; model: string }>) => {
-    setDraft(d => ({ ...d, [modality]: { ...d[modality], ...patch } }))
-    setDirty(true)
-  }
+  const backend = IMAGE_CAPTION_BACKENDS.find(b => `${b.provider}::${b.model}` === backendKey) || defaultBackend
 
   const pollSummarize = useCallback(() => (
     getWorkspaceInferdStatus(workspaceId)
@@ -449,16 +448,13 @@ function SummarizeControls({
   }, [pollSummarize])
 
   const save = async () => {
-    const summarize: NonNullable<InferdConfig['summarize']> = {}
-    for (const [modality, spec] of Object.entries(draft)) {
-      if (!spec.enabled && !spec.provider && !spec.model) continue
-      summarize[modality] = {
-        enabled: spec.enabled,
-        ...(spec.provider ? { provider: spec.provider } : {}),
-        ...(spec.model ? { model: spec.model } : {}),
-      }
-    }
-    await onSave({ ...workspace, summarize })
+    await onSave({
+      ...workspace,
+      summarize: {
+        ...(workspace.summarize || {}),
+        image: { enabled, provider: backend.provider, model: backend.model },
+      },
+    })
     setDirty(false)
   }
 
@@ -469,7 +465,7 @@ function SummarizeControls({
       setSummaryStatus(status)
       showToast({
         title: force ? 'Regenerating image summaries' : 'Generating image summaries',
-        description: `${status.total.toLocaleString()} image(s) queued. First run may download BLIP weights.`,
+        description: `${status.total.toLocaleString()} image(s) queued. First run may download model weights.`,
       })
     } catch (err) {
       showToast({
@@ -482,67 +478,51 @@ function SummarizeControls({
     }
   }
 
-  const MODALITIES: Array<{ key: string; label: string; ready: boolean; hint: string }> = [
-    { key: 'image', label: 'Images', ready: true, hint: 'Local BLIP captioner (ONNX). Default: Xenova/blip-image-captioning-base.' },
-    { key: 'audio', label: 'Audio', ready: false, hint: 'Planned — transcription/description of audio blobs.' },
-    { key: 'text', label: 'Text', ready: false, hint: 'Planned — abstracts for long documents.' },
-  ]
-
   const imageEnabled = effective.summarize?.image?.enabled === true
   const running = summaryStatus?.running === true
+  const firstError = summaryStatus?.errors?.[0]?.error
 
   return (
     <Fold
       title="Summaries"
-      hint="Generate descriptions for indexed media (metadata.summary) — searchable via full-text and dense search"
+      hint="Generate descriptions for indexed images (metadata.summary) — searchable via full-text and dense search"
     >
       <div className="space-y-3">
-        {MODALITIES.map(({ key, label, ready, hint }) => {
-          const spec = draft[key]
-          const disabled = !ready || saving
-          return (
-            <div key={key} className={cn('flex flex-wrap items-center gap-2', !ready && 'opacity-50')}>
-              <label className="flex w-28 items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={spec.enabled}
-                  disabled={disabled}
-                  onChange={e => setField(key, { enabled: e.target.checked })}
-                />
-                {label}
-              </label>
-              <select
-                className={selectClass}
-                value={spec.provider}
-                disabled={disabled}
-                onChange={e => setField(key, { provider: e.target.value })}
-              >
-                <option value="">provider…</option>
-                {providerIds.map(id => (
-                  <option key={id} value={id}>{id}</option>
-                ))}
-              </select>
-              <Input
-                className="h-8 w-56"
-                placeholder="model (e.g. Xenova/blip-image-captioning-base)"
-                value={spec.model}
-                disabled={disabled}
-                onChange={e => setField(key, { model: e.target.value })}
-              />
-              <span className="text-xs text-muted-foreground">{hint}</span>
-            </div>
-          )
-        })}
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={enabled}
+              disabled={saving}
+              onChange={e => { setEnabled(e.target.checked); setDirty(true) }}
+            />
+            Images
+          </label>
+          <select
+            className={selectClass}
+            value={`${backend.provider}::${backend.model}`}
+            disabled={saving || !enabled}
+            onChange={e => { setBackendKey(e.target.value); setDirty(true) }}
+          >
+            {IMAGE_CAPTION_BACKENDS.map(b => (
+              <option key={`${b.provider}::${b.model}`} value={`${b.provider}::${b.model}`}>
+                {b.label}
+              </option>
+            ))}
+          </select>
+          <span className="font-mono text-xs text-muted-foreground">{backend.model}</span>
+        </div>
         {summaryStatus && (summaryStatus.running || summaryStatus.total > 0 || summaryStatus.finishedAt) && (
           <p className="text-xs text-muted-foreground">
             {running ? 'Running' : 'Last run'}: {summaryStatus.described}/{summaryStatus.total} described
             {summaryStatus.skipped ? `, ${summaryStatus.skipped} skipped` : ''}
             {summaryStatus.failed ? `, ${summaryStatus.failed} failed` : ''}
+            {firstError ? ` — ${firstError}` : ''}
           </p>
         )}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">
-            Enable + save, then generate. Skips images that already have a summary unless you force regenerate.
+            Enable + save, then generate. Only the local caption provider is wired today.
             Candidates come from <span className="font-mono">data/mime/image</span>.
           </p>
           <div className="flex flex-wrap items-center gap-2">
