@@ -5,7 +5,11 @@ import { useAppletTarget, type AppletTarget } from './applet-target'
 import { submitDocuments, describeTarget } from '../add/useAddTarget'
 import { updateWorkspaceDocument } from '@/services/workspace'
 import { TODO_SCHEMA } from '@/components/renderers/types'
-import { buildTodoData, todayEndOfDayLocal, type TodoStatus, TODO_STATUS_LABELS } from '../add/useTodoFields'
+import {
+  buildTodoData, isoToLocalInput, localInputToISO, todayEndOfDayLocal,
+  type TodoStatus, TODO_STATUS_LABELS,
+} from '../add/useTodoFields'
+import { DateTimePicker } from '@/components/ui/date-time-picker'
 import type { Document } from '@/types/workspace'
 import type { AppletProps } from './registry'
 import {
@@ -17,16 +21,9 @@ const TODO_SCHEMA_VERSION = '2.1'
 // Done = anything the user no longer acts on.
 const DONE_STATUSES: ReadonlySet<string> = new Set(['completed', 'cancelled'])
 
-function formatDue(iso?: string): string | null {
-  if (!iso) return null
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return null
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-}
-
 // One todo in the stack - the Notes item plus a status checkbox; the body is
 // the todo's description. Title/description autosave like a note, the
-// checkbox writes through immediately.
+// checkbox and the due-date picker write through immediately.
 function TodoItem({
   doc,
   updateWorkspace,
@@ -49,29 +46,38 @@ function TodoItem({
   const [title, setTitle] = useState(String(doc.data?.title ?? ''))
   const [description, setDescription] = useState(String(doc.data?.description ?? ''))
   const [itemStatus, setItemStatus] = useState<TodoStatus>((doc.data?.status as TodoStatus) || 'pending')
+  // Local-input form of data.dueDate, so the picker and the doc never disagree
+  // about the timezone (ISO in storage, wall clock in the control).
+  const [due, setDue] = useState<string>(isoToLocalInput(doc.data?.dueDate as string | undefined))
   const [saveState, setSaveState] = useState<'idle' | 'dirty' | 'saving' | 'saved' | 'error'>('idle')
   const baseline = useRef({ title: String(doc.data?.title ?? ''), description: String(doc.data?.description ?? '') })
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saveSeq = useRef(0)
 
-  const persist = useCallback(async (next: { title: string; description: string; status: TodoStatus }) => {
+  const persist = useCallback(async (next: { title: string; description: string; status: TodoStatus; due: string }) => {
     if (!updateWorkspace) return
     // A todo without a title fails schema-side; keep the last titled save.
     if (!next.title.trim()) return
     const seq = ++saveSeq.current
     setSaveState('saving')
     try {
+      const dueISO = localInputToISO(next.due)
+      const data: Record<string, unknown> = {
+        ...(doc.data || {}),
+        title: next.title.trim(),
+        ...(next.description.trim() ? { description: next.description.trim() } : { description: undefined }),
+        status: next.status,
+        completed: next.status === 'completed',
+      }
+      // `data` replaces the stored payload wholesale, so a cleared due date has
+      // to be dropped from the object rather than sent as undefined.
+      if (dueISO) data.dueDate = dueISO
+      else delete data.dueDate
       await updateWorkspaceDocument(updateWorkspace, {
         id: doc.id,
         schema: doc.schema,
         schemaVersion: doc.schemaVersion,
-        data: {
-          ...(doc.data || {}),
-          title: next.title.trim(),
-          ...(next.description.trim() ? { description: next.description.trim() } : { description: undefined }),
-          status: next.status,
-          completed: next.status === 'completed',
-        },
+        data,
         metadata: doc.metadata,
       })
       if (seq !== saveSeq.current) return
@@ -87,25 +93,32 @@ function TodoItem({
     if (nextTitle === baseline.current.title && nextDescription === baseline.current.description) return
     setSaveState('dirty')
     if (timer.current) clearTimeout(timer.current)
-    timer.current = setTimeout(() => persist({ title: nextTitle, description: nextDescription, status: itemStatus }), APPLET_AUTOSAVE_MS)
-  }, [persist, itemStatus])
+    timer.current = setTimeout(() => persist({ title: nextTitle, description: nextDescription, status: itemStatus, due }), APPLET_AUTOSAVE_MS)
+  }, [persist, itemStatus, due])
 
   const flush = useCallback(() => {
     if (timer.current) { clearTimeout(timer.current); timer.current = null }
-    persist({ title, description, status: itemStatus })
-  }, [persist, title, description, itemStatus])
+    persist({ title, description, status: itemStatus, due })
+  }, [persist, title, description, itemStatus, due])
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
 
   const toggleDone = useCallback(async () => {
     const next: TodoStatus = itemStatus === 'completed' ? 'pending' : 'completed'
     setItemStatus(next)
-    await persist({ title, description, status: next })
+    await persist({ title, description, status: next, due })
     onStatusSaved(doc.id, next)
-  }, [itemStatus, persist, title, description, doc.id, onStatusSaved])
+  }, [itemStatus, persist, title, description, due, doc.id, onStatusSaved])
+
+  // Due changes write through immediately (like the checkbox) — the picker is
+  // a discrete commit, not typing, so there is nothing to debounce.
+  const changeDue = useCallback((next: string) => {
+    setDue(next)
+    if (timer.current) { clearTimeout(timer.current); timer.current = null }
+    persist({ title, description, status: itemStatus, due: next })
+  }, [persist, title, description, itemStatus])
 
   const done = DONE_STATUSES.has(itemStatus)
-  const due = formatDue(doc.data?.dueDate as string | undefined)
 
   return (
     <div
@@ -116,10 +129,18 @@ function TodoItem({
       )}
     >
       <div className="mb-1 flex items-baseline justify-between gap-2">
-        <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
-          {formatCreated(doc.createdAt)} · #{doc.id}
-          {due && <span> · due {due}</span>}
-          {itemStatus !== 'pending' && <span> · {TODO_STATUS_LABELS[itemStatus] ?? itemStatus}</span>}
+        <span className="flex min-w-0 items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground/70">
+          <span className="shrink-0">
+            {formatCreated(doc.createdAt)} · #{doc.id}
+            {itemStatus !== 'pending' && <span> · {TODO_STATUS_LABELS[itemStatus] ?? itemStatus}</span>}
+          </span>
+          <DateTimePicker
+            value={due}
+            onChange={changeDue}
+            compact
+            placeholder="No due date"
+            className="w-[168px] shrink-0 normal-case tracking-normal"
+          />
         </span>
         <span className="flex items-center gap-1 text-[10px] text-muted-foreground/70">
           {saveState === 'saving' && <Loader2 className="inline h-3 w-3 animate-spin" />}
@@ -165,10 +186,11 @@ function TodoItem({
 }
 
 // Inline creation - due defaults to end of today, matching every other todo
-// add surface.
+// add surface, and is editable in place on the same 15-minute grid.
 function DraftTodo({ target, onCreated, onCancel }: { target: AppletTarget; onCreated: () => void; onCancel: () => void }) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
+  const [due, setDue] = useState<string>(todayEndOfDayLocal())
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -180,7 +202,7 @@ function DraftTodo({ target, onCreated, onCancel }: { target: AppletTarget; onCr
       await submitDocuments(target, [{
         schema: TODO_SCHEMA,
         schemaVersion: TODO_SCHEMA_VERSION,
-        data: buildTodoData({ title, description, status: 'pending', priority: '', due: todayEndOfDayLocal() }),
+        data: buildTodoData({ title, description, status: 'pending', priority: '', due }),
         metadata: { features: [] },
       }])
       onCreated()
@@ -193,7 +215,7 @@ function DraftTodo({ target, onCreated, onCancel }: { target: AppletTarget; onCr
   return (
     <div className="border-t border-border/60 bg-muted/30 px-4 py-3">
       <div className="mb-1 flex items-baseline justify-between">
-        <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">New todo · due today</span>
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">New todo</span>
         <button type="button" onClick={onCancel} className="text-muted-foreground hover:text-foreground" aria-label="Discard draft">
           <X className="h-3 w-3" />
         </button>
@@ -207,6 +229,9 @@ function DraftTodo({ target, onCreated, onCancel }: { target: AppletTarget; onCr
         className="mb-1 w-full border-0 bg-transparent p-0 text-sm font-semibold text-foreground outline-none placeholder:text-muted-foreground/50"
       />
       <GrowingTextarea value={description} onChange={setDescription} placeholder="Description (optional)…" />
+      <div className="mt-2">
+        <DateTimePicker value={due} onChange={setDue} compact placeholder="No due date" className="w-[188px]" />
+      </div>
       {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
       <div className="mt-2 flex justify-end">
         <button

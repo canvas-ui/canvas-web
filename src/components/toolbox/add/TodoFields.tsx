@@ -1,5 +1,6 @@
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { DateTimePicker } from '@/components/ui/date-time-picker'
 import { TODO_STATUSES, TODO_STATUS_LABELS, type TodoStatus } from './useTodoFields'
 
 // RFC 5545 priority is 1 (highest) … 9 (lowest); 0/unset = none. Label the
@@ -49,8 +50,8 @@ export function TodoFields({
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label htmlFor={`${idPrefix}-due`}>Due</Label>
-          {/* datetime-local IS the native calendar+time picker; pre-filled to today EOD. */}
-          <Input id={`${idPrefix}-due`} type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} />
+          {/* Calendar + 15-minute time slots (Outlook granularity); pre-filled to today EOD. */}
+          <DateTimePicker id={`${idPrefix}-due`} value={due} onChange={setDue} placeholder="No due date" />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor={`${idPrefix}-priority`}>Priority</Label>
