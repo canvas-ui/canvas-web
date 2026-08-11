@@ -24,11 +24,11 @@ import { API_ROUTES } from '@/config/api'
  */
 
 /** Provider implementations the server knows how to build. */
-export const INFERD_PROVIDER_TYPES = ['onnx', 'ollama', 'clip', 'openai'] as const
+export const INFERD_PROVIDER_TYPES = ['onnx', 'ollama', 'clip', 'blip', 'openai'] as const
 export type InferdProviderType = (typeof INFERD_PROVIDER_TYPES)[number]
 
 /** Provider ids that exist without being declared, and can only be merged over. */
-export const BUILTIN_PROVIDER_IDS = ['onnx', 'ollama', 'clip'] as const
+export const BUILTIN_PROVIDER_IDS = ['onnx', 'ollama', 'clip', 'blip'] as const
 
 export interface InferdProviderSpec {
   type?: InferdProviderType
@@ -69,9 +69,8 @@ export interface InferdConfig {
   rules?: InferdRule[]
   /**
    * Per-modality summary generation (the "describe" capability): captions for
-   * images first, audio/text later. Validated + persisted server-side; the
-   * captioner loop that consumes it ships with the qwen-vl provider work.
-   * Merges key-wise per modality across config layers.
+   * images first, audio/text later. Local default is BLIP via the `blip`
+   * provider (disabled until enabled). Merges key-wise per modality.
    */
   summarize?: Record<string, InferdSummarizeSpec>
   /** Server defaults only: host allowlist for the SSRF endpoint guard. */
@@ -207,10 +206,41 @@ export interface WorkspaceInferdQueue {
   ingestDisabled?: boolean
 }
 
-/** Cheap in-memory readout; null when the workspace has no queue yet. */
-export async function getWorkspaceInferdStatus(workspaceId: string): Promise<WorkspaceInferdQueue | null> {
-  const res = await api.get<{ payload: { queue: WorkspaceInferdQueue | null } }>(`${workspaceInferd(workspaceId)}/status`)
-  return res.payload.queue ?? null
+export interface ImageSummaryStatus {
+  running: boolean
+  total: number
+  described: number
+  skipped: number
+  failed: number
+  errors?: Array<{ id: number | string; error: string }>
+  force?: boolean
+  startedAt?: string | null
+  finishedAt?: string | null
+}
+
+export interface WorkspaceInferdStatus {
+  queue: WorkspaceInferdQueue | null
+  summarize: ImageSummaryStatus
+}
+
+/** Cheap in-memory readout; null queue when the workspace has no queue yet. */
+export async function getWorkspaceInferdStatus(workspaceId: string): Promise<WorkspaceInferdStatus> {
+  const res = await api.get<{ payload: WorkspaceInferdStatus }>(`${workspaceInferd(workspaceId)}/status`)
+  return res.payload
+}
+
+/** Start captioning images into metadata.summary (async; poll status.summarize). */
+export async function startWorkspaceImageSummaries(
+  workspaceId: string,
+  options: { force?: boolean } = {},
+): Promise<ImageSummaryStatus> {
+  const body: Record<string, unknown> = {}
+  if (options.force !== undefined) { body.force = options.force }
+  const res = await api.post<{ payload: ImageSummaryStatus }>(
+    `${workspaceInferd(workspaceId)}/summarize/images`,
+    body,
+  )
+  return res.payload
 }
 
 export async function getWorkspaceInferdConfig(workspaceId: string): Promise<WorkspaceInferdConfig> {

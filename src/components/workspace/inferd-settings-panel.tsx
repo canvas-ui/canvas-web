@@ -14,6 +14,8 @@ import {
   listWorkspaceVectorTables,
   reindexWorkspaceEmbeddings,
   saveWorkspaceInferdConfig,
+  startWorkspaceImageSummaries,
+  type ImageSummaryStatus,
   type InferdConfig,
   type VectorTable,
   type WorkspaceInferdConfig,
@@ -91,7 +93,9 @@ function PipelineStatus({
   const [busy, setBusy] = useState(false)
 
   const poll = useCallback(() => (
-    getWorkspaceInferdStatus(workspaceId).then(setQueue).catch(() => { /* transient — keep the last readout */ })
+    getWorkspaceInferdStatus(workspaceId)
+      .then(status => setQueue(status.queue ?? null))
+      .catch(() => { /* transient — keep the last readout */ })
   ), [workspaceId])
 
   useEffect(() => {
@@ -386,22 +390,22 @@ function AdvancedFill({
 }
 
 /**
- * Summary generation (the inferd "describe" capability): per-modality
- * provider/model picks that write the validated `summarize` config block.
- * Generated summaries land in `metadata.summary` — auto-folded into FTS and
- * embedded as their own text-space chunk, so a captioned photo is searchable
- * by its description. Image ships first (qwen-vl); audio/text are declared in
- * the config shape but not yet consumed.
+ * Per-modality summary generation. Image captions use local BLIP
+ * (`Xenova/blip-image-captioning-base`) by default when enabled; results land
+ * in `metadata.summary` and are folded into FTS + a reserved text-space chunk.
  */
 function SummarizeControls({
+  workspaceId,
   config,
   saving,
   onSave,
 }: {
+  workspaceId: string
   config: WorkspaceInferdConfig
   saving: boolean
   onSave: (next: InferdConfig) => Promise<void>
 }) {
+  const { showToast } = useToast()
   const workspace = config.workspace || {}
   const effective = config.effective || {}
   const providerIds = Object.keys(effective.providers || {})
@@ -410,16 +414,39 @@ function SummarizeControls({
     const init: Record<string, { enabled: boolean; provider: string; model: string }> = {}
     for (const modality of ['image', 'audio', 'text']) {
       const spec = src[modality] || {}
-      init[modality] = { enabled: spec.enabled === true, provider: spec.provider || '', model: spec.model || '' }
+      init[modality] = {
+        enabled: spec.enabled === true,
+        provider: spec.provider || (modality === 'image' ? 'blip' : ''),
+        model: spec.model || (modality === 'image' ? 'Xenova/blip-image-captioning-base' : ''),
+      }
     }
     return init
   })
   const [dirty, setDirty] = useState(false)
+  const [summaryStatus, setSummaryStatus] = useState<ImageSummaryStatus | null>(null)
+  const [starting, setStarting] = useState(false)
 
   const setField = (modality: string, patch: Partial<{ enabled: boolean; provider: string; model: string }>) => {
     setDraft(d => ({ ...d, [modality]: { ...d[modality], ...patch } }))
     setDirty(true)
   }
+
+  const pollSummarize = useCallback(() => (
+    getWorkspaceInferdStatus(workspaceId)
+      .then(status => setSummaryStatus(status.summarize || null))
+      .catch(() => { /* keep last */ })
+  ), [workspaceId])
+
+  useEffect(() => {
+    void pollSummarize()
+    const timer = window.setInterval(() => {
+      setSummaryStatus(prev => {
+        if (prev?.running) { void pollSummarize() }
+        return prev
+      })
+    }, 2000)
+    return () => window.clearInterval(timer)
+  }, [pollSummarize])
 
   const save = async () => {
     const summarize: NonNullable<InferdConfig['summarize']> = {}
@@ -435,11 +462,34 @@ function SummarizeControls({
     setDirty(false)
   }
 
+  const generate = async (force = false) => {
+    setStarting(true)
+    try {
+      const status = await startWorkspaceImageSummaries(workspaceId, { force })
+      setSummaryStatus(status)
+      showToast({
+        title: force ? 'Regenerating image summaries' : 'Generating image summaries',
+        description: `${status.total.toLocaleString()} image(s) queued. First run may download BLIP weights.`,
+      })
+    } catch (err) {
+      showToast({
+        title: 'Summaries failed to start',
+        description: err instanceof Error ? err.message : 'Failed to start',
+        variant: 'destructive',
+      })
+    } finally {
+      setStarting(false)
+    }
+  }
+
   const MODALITIES: Array<{ key: string; label: string; ready: boolean; hint: string }> = [
-    { key: 'image', label: 'Images', ready: true, hint: 'Vision model captions each photo (e.g. qwen-vl via an ollama provider).' },
+    { key: 'image', label: 'Images', ready: true, hint: 'Local BLIP captioner (ONNX). Default: Xenova/blip-image-captioning-base.' },
     { key: 'audio', label: 'Audio', ready: false, hint: 'Planned — transcription/description of audio blobs.' },
     { key: 'text', label: 'Text', ready: false, hint: 'Planned — abstracts for long documents.' },
   ]
+
+  const imageEnabled = effective.summarize?.image?.enabled === true
+  const running = summaryStatus?.running === true
 
   return (
     <Fold
@@ -473,8 +523,8 @@ function SummarizeControls({
                 ))}
               </select>
               <Input
-                className="h-8 w-48"
-                placeholder="model (e.g. qwen2.5vl)"
+                className="h-8 w-56"
+                placeholder="model (e.g. Xenova/blip-image-captioning-base)"
                 value={spec.model}
                 disabled={disabled}
                 onChange={e => setField(key, { model: e.target.value })}
@@ -483,14 +533,40 @@ function SummarizeControls({
             </div>
           )
         })}
-        <div className="flex items-center justify-between gap-3">
+        {summaryStatus && (summaryStatus.running || summaryStatus.total > 0 || summaryStatus.finishedAt) && (
           <p className="text-xs text-muted-foreground">
-            Summaries are machine-generated and kept separate from your comments; enabling a modality needs a
-            provider and model. Generation starts once the capability ships — the config is honored end-to-end.
+            {running ? 'Running' : 'Last run'}: {summaryStatus.described}/{summaryStatus.total} described
+            {summaryStatus.skipped ? `, ${summaryStatus.skipped} skipped` : ''}
+            {summaryStatus.failed ? `, ${summaryStatus.failed} failed` : ''}
           </p>
-          <Button size="sm" onClick={() => void save()} disabled={saving || !dirty}>
-            Save summaries
-          </Button>
+        )}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-muted-foreground">
+            Enable + save, then generate. Skips images that already have a summary unless you force regenerate.
+            Candidates come from <span className="font-mono">data/mime/image</span>.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => void save()} disabled={saving || !dirty}>
+              Save summaries
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => void generate(false)}
+              disabled={saving || dirty || starting || running || !imageEnabled}
+              title={!imageEnabled ? 'Enable image summaries and save first' : dirty ? 'Save config first' : undefined}
+            >
+              {running || starting ? 'Generating…' : 'Generate summaries'}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => void generate(true)}
+              disabled={saving || dirty || starting || running || !imageEnabled}
+              title="Overwrite existing metadata.summary values"
+            >
+              Force
+            </Button>
+          </div>
         </div>
       </div>
     </Fold>
@@ -640,6 +716,7 @@ export function InferdSettingsPanel({
         <SummarizeControls
           // Remount on config reload so the draft resets from saved state.
           key={`summarize:${JSON.stringify(config.workspace?.summarize || {})}`}
+          workspaceId={workspaceId}
           config={config}
           saving={saving}
           onSave={save}
