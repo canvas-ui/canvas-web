@@ -38,6 +38,11 @@ export interface Geotag {
   /** Last fix taken, shown as feedback while the form is open. */
   fix: DocumentGeo | null
   setEnabled: (on: boolean) => void
+  /** Hand-picked point (map picker), source 'manual'. Overrides the device fix. */
+  manual: DocumentGeo | null
+  /** Display name of the manual point — UI only, never persisted (see setManual). */
+  manualLabel: string | null
+  setManual: (point: { lat: number; lon: number; label?: string } | null) => void
   /** Fresh fix for the doc about to be saved; null when off/unavailable. */
   capture: () => Promise<DocumentGeo | null>
 }
@@ -61,11 +66,14 @@ export function useGeotag(): Geotag {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [fix, setFix] = useState<DocumentGeo | null>(null)
+  const [manual, setManualState] = useState<DocumentGeo | null>(null)
+  const [manualLabel, setManualLabel] = useState<string | null>(null)
 
   // capture() is called from save() closures — refs keep it reading live values
   // without re-creating the callback on every keystroke.
   const enabledRef = useRef(false)
   const fixRef = useRef<DocumentGeo | null>(null)
+  const manualRef = useRef<DocumentGeo | null>(null)
 
   useEffect(() => {
     if (!supported || !navigator.permissions?.query) return
@@ -91,13 +99,48 @@ export function useGeotag(): Geotag {
     }
   }, [supported])
 
+  /**
+   * Set (or clear) a hand-picked location. Independent of device support: a
+   * custom geotag is just a point on a map, so it works on an insecure origin
+   * and with location permission denied — the cases where the switch is dead.
+   *
+   * The label is kept for the form's own feedback only. The server's
+   * normalizeGeo() coerces geo to {lat,lon,alt,accuracy,source} and drops
+   * everything else, so persisting a name here would be a silent no-op.
+   */
+  const setManual = useCallback((point: { lat: number; lon: number; label?: string } | null) => {
+    setError(null)
+    if (!point) {
+      manualRef.current = null
+      setManualState(null)
+      setManualLabel(null)
+      // Only the manual pin is being cleared; a device fix (if the switch is on)
+      // stays the active source.
+      if (!enabledRef.current) setEnabledState(false)
+      return
+    }
+    // 'manual' outranks device/exif server-side (core/workspace/lib/geo.js), so a
+    // hand-placed pin survives re-indexing instead of being reverted to a fix.
+    const geo: DocumentGeo = { lat: point.lat, lon: point.lon, source: 'manual' }
+    manualRef.current = geo
+    setManualState(geo)
+    setManualLabel(point.label ?? null)
+    setEnabledState(true)
+  }, [])
+
   const setEnabled = useCallback((on: boolean) => {
     setError(null)
     if (!on) {
       enabledRef.current = false
+      manualRef.current = null
+      setManualState(null)
+      setManualLabel(null)
       setEnabledState(false)
       return
     }
+    // A manual pin already answers "where"; flipping the switch on top of it
+    // would fire the OS prompt and then lose to the pin at capture() anyway.
+    if (manualRef.current) return
     if (!supported) return
     enabledRef.current = true
     setEnabledState(true)
@@ -124,6 +167,9 @@ export function useGeotag(): Geotag {
   }, [supported])
 
   const capture = useCallback(async (): Promise<DocumentGeo | null> => {
+    // A hand-picked point wins outright: the user said where this document
+    // belongs, so never overwrite it with wherever the device happens to be.
+    if (manualRef.current) return manualRef.current
     if (!enabledRef.current || !supported) return null
     try {
       return toGeo(await getPosition())
@@ -134,5 +180,8 @@ export function useGeotag(): Geotag {
     }
   }, [supported])
 
-  return { supported, permission, enabled, busy, error, fix, setEnabled, capture }
+  return {
+    supported, permission, enabled, busy, error, fix, setEnabled,
+    manual, manualLabel, setManual, capture,
+  }
 }
