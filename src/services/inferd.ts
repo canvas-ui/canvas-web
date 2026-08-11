@@ -81,6 +81,14 @@ export interface InferdSummarizeSpec {
   enabled?: boolean
   provider?: string
   model?: string
+  /**
+   * Model FAMILY, which decides how the model is driven — a plain captioner
+   * takes an image alone, an instruct VLM takes a prompt, Florence-2 takes a
+   * task token. Unset = inferred from the model id.
+   */
+  task?: 'caption' | 'instruct' | 'florence2'
+  /** Steers an `instruct` model. Ignored by the other families. */
+  prompt?: string
 }
 
 /** A space as actually resolved, including the Lance table it is bound to. */
@@ -221,6 +229,8 @@ export interface ImageSummaryStatus {
    */
   aborted?: boolean
   abortedReason?: string | null
+  /** The operator stopped the run on purpose. */
+  cancelled?: boolean
   force?: boolean
   startedAt?: string | null
   finishedAt?: string | null
@@ -247,6 +257,19 @@ export async function startWorkspaceImageSummaries(
   const res = await api.post<{ payload: ImageSummaryStatus }>(
     `${workspaceInferd(workspaceId)}/summarize/images`,
     body,
+  )
+  return res.payload
+}
+
+/**
+ * Stop a caption run. Cooperative — the image in flight finishes first, so the
+ * status keeps reporting `running` for a beat after this resolves. Images never
+ * attempted are left alone for a later run.
+ */
+export async function stopWorkspaceImageSummaries(workspaceId: string): Promise<ImageSummaryStatus> {
+  const res = await api.post<{ payload: ImageSummaryStatus }>(
+    `${workspaceInferd(workspaceId)}/summarize/images/stop`,
+    {},
   )
   return res.payload
 }

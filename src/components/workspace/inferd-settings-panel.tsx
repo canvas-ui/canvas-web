@@ -15,6 +15,7 @@ import {
   reindexWorkspaceEmbeddings,
   saveWorkspaceInferdConfig,
   startWorkspaceImageSummaries,
+  stopWorkspaceImageSummaries,
   type ImageSummaryStatus,
   type InferdConfig,
   type VectorTable,
@@ -389,14 +390,57 @@ function AdvancedFill({
   )
 }
 
-/** Caption backends the summarize.image path actually supports today. */
+/**
+ * Caption backends the summarize.image path actually supports today, worst
+ * first. All run locally in the forked Transformers.js worker.
+ *
+ * `task` is the model FAMILY — it decides how the model is driven, so it
+ * cannot be inferred safely for a hand-typed model id (hence the field on the
+ * custom option too). The BLIP ONNX repos are all gated on the Hub now, which
+ * is why there is no BLIP entry here.
+ */
 const IMAGE_CAPTION_BACKENDS = [
   {
     provider: 'blip',
+    model: 'HuggingFaceTB/SmolVLM-500M-Instruct',
+    task: 'instruct' as const,
+    label: 'SmolVLM 500M — prompted description (recommended)',
+    note: '~500 MB. Follows the prompt below, so architecture/materials/setting can be asked for.',
+  },
+  {
+    provider: 'blip',
+    model: 'HuggingFaceTB/SmolVLM-256M-Instruct',
+    task: 'instruct' as const,
+    label: 'SmolVLM 256M — prompted, smaller',
+    note: '~250 MB. Same prompting, weaker; for memory-tight boxes.',
+  },
+  {
+    provider: 'blip',
+    model: 'onnx-community/Florence-2-base-ft',
+    task: 'florence2' as const,
+    label: 'Florence-2 base — detailed caption',
+    note: 'Detailed multi-sentence captions, but not steerable: no prompt, fixed task token.',
+  },
+  {
+    provider: 'blip',
     model: 'Xenova/vit-gpt2-image-captioning',
-    label: 'Local captioner (vit-gpt2 / ONNX)',
+    task: 'caption' as const,
+    label: 'vit-gpt2 — one short sentence (weakest)',
+    note: 'The old default. Terse and repetition-prone; kept for continuity and low memory.',
   },
 ] as const
+
+const CUSTOM_BACKEND_KEY = 'custom'
+
+const CAPTION_TASKS = [
+  { value: 'instruct', label: 'Instruct VLM (image + prompt)' },
+  { value: 'florence2', label: 'Florence-2 (task token)' },
+  { value: 'caption', label: 'Plain captioner (image only)' },
+] as const
+
+const DEFAULT_CAPTION_PROMPT = 'Describe this photograph in two or three sentences. '
+  + 'If it shows a building or interior, name the architectural style, the main materials and the setting. '
+  + 'Describe only what is visible.'
 
 /**
  * Image captions via the local Transformers.js worker (`blip` provider).
@@ -417,18 +461,34 @@ function SummarizeControls({
   const workspace = config.workspace || {}
   const effective = config.effective || {}
   const defaultBackend = IMAGE_CAPTION_BACKENDS[0]
+  const saved = workspace.summarize?.image || effective.summarize?.image || {}
   const [enabled, setEnabled] = useState(() => effective.summarize?.image?.enabled === true || workspace.summarize?.image?.enabled === true)
+  // A model the picker doesn't know is kept as-is under `custom` rather than
+  // being silently snapped back to a listed one — the config layer accepts any
+  // model id and a hand-set one must survive a visit to this panel.
   const [backendKey, setBackendKey] = useState(() => {
-    const provider = workspace.summarize?.image?.provider || effective.summarize?.image?.provider || defaultBackend.provider
-    const model = workspace.summarize?.image?.model || effective.summarize?.image?.model || defaultBackend.model
-    const match = IMAGE_CAPTION_BACKENDS.find(b => b.provider === provider && b.model === model)
-    return match ? `${match.provider}::${match.model}` : `${defaultBackend.provider}::${defaultBackend.model}`
+    const match = IMAGE_CAPTION_BACKENDS.find(b => b.provider === (saved.provider || defaultBackend.provider) && b.model === saved.model)
+    if (match) { return `${match.provider}::${match.model}` }
+    return saved.model ? CUSTOM_BACKEND_KEY : `${defaultBackend.provider}::${defaultBackend.model}`
   })
+  const [customModel, setCustomModel] = useState(() => (
+    IMAGE_CAPTION_BACKENDS.some(b => b.model === saved.model) ? '' : (saved.model || '')
+  ))
+  const [customTask, setCustomTask] = useState<'caption' | 'instruct' | 'florence2'>(() => saved.task || 'instruct')
+  const [prompt, setPrompt] = useState(() => saved.prompt || '')
   const [dirty, setDirty] = useState(false)
   const [summaryStatus, setSummaryStatus] = useState<ImageSummaryStatus | null>(null)
   const [starting, setStarting] = useState(false)
+  const [stopping, setStopping] = useState(false)
 
-  const backend = IMAGE_CAPTION_BACKENDS.find(b => `${b.provider}::${b.model}` === backendKey) || defaultBackend
+  const listed = IMAGE_CAPTION_BACKENDS.find(b => `${b.provider}::${b.model}` === backendKey)
+  const isCustom = backendKey === CUSTOM_BACKEND_KEY
+  const backend = isCustom
+    ? { provider: defaultBackend.provider, model: customModel.trim(), task: customTask, label: 'Custom', note: '' }
+    : (listed || defaultBackend)
+  // Only an instruct model reads the prompt; showing the field for the others
+  // would promise steering that silently does nothing.
+  const promptApplies = backend.task === 'instruct'
 
   const pollSummarize = useCallback(() => (
     getWorkspaceInferdStatus(workspaceId)
@@ -452,10 +512,37 @@ function SummarizeControls({
       ...workspace,
       summarize: {
         ...(workspace.summarize || {}),
-        image: { enabled, provider: backend.provider, model: backend.model },
+        image: {
+          enabled,
+          provider: backend.provider,
+          model: backend.model,
+          task: backend.task,
+          // Omit rather than send '' — an empty prompt would override the
+          // worker's default with nothing.
+          ...(promptApplies && prompt.trim() ? { prompt: prompt.trim() } : {}),
+        },
       },
     })
     setDirty(false)
+  }
+
+  const stop = async () => {
+    setStopping(true)
+    try {
+      setSummaryStatus(await stopWorkspaceImageSummaries(workspaceId))
+      showToast({
+        title: 'Stopping image summaries',
+        description: 'The image being captioned finishes first; the rest are left for a later run.',
+      })
+    } catch (err) {
+      showToast({
+        title: 'Could not stop',
+        description: err instanceof Error ? err.message : 'Failed to stop',
+        variant: 'destructive',
+      })
+    } finally {
+      setStopping(false)
+    }
   }
 
   const generate = async (force = false) => {
@@ -500,7 +587,7 @@ function SummarizeControls({
           </label>
           <select
             className={selectClass}
-            value={`${backend.provider}::${backend.model}`}
+            value={backendKey}
             disabled={saving || !enabled}
             onChange={e => { setBackendKey(e.target.value); setDirty(true) }}
           >
@@ -509,19 +596,64 @@ function SummarizeControls({
                 {b.label}
               </option>
             ))}
+            <option value={CUSTOM_BACKEND_KEY}>Custom model…</option>
           </select>
-          <span className="font-mono text-xs text-muted-foreground">{backend.model}</span>
+          {!isCustom && <span className="font-mono text-xs text-muted-foreground">{backend.model}</span>}
         </div>
+
+        {isCustom && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              className="h-8 w-72 font-mono text-xs"
+              placeholder="org/model-id (Transformers.js / ONNX)"
+              value={customModel}
+              disabled={saving || !enabled}
+              onChange={e => { setCustomModel(e.target.value); setDirty(true) }}
+            />
+            <select
+              className={selectClass}
+              value={customTask}
+              disabled={saving || !enabled}
+              onChange={e => { setCustomTask(e.target.value as typeof customTask); setDirty(true) }}
+            >
+              {CAPTION_TASKS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </div>
+        )}
+
+        {enabled && backend.note && (
+          <p className="text-xs text-muted-foreground">{backend.note}</p>
+        )}
+
+        {enabled && promptApplies && (
+          <div className="space-y-1">
+            <textarea
+              className="w-full rounded-md border border-input bg-transparent p-2 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              rows={3}
+              placeholder={DEFAULT_CAPTION_PROMPT}
+              value={prompt}
+              disabled={saving}
+              onChange={e => { setPrompt(e.target.value); setDirty(true) }}
+            />
+            <p className="text-xs text-muted-foreground">
+              What to ask of every image. Empty uses the default shown above. Captions are indexed,
+              so ask for the words you would search by.
+            </p>
+          </div>
+        )}
         {summaryStatus && (summaryStatus.running || summaryStatus.total > 0 || summaryStatus.finishedAt) && (
           <p className={cn('text-xs', summaryStatus.aborted ? 'text-destructive' : 'text-muted-foreground')}>
-            {running ? 'Running' : summaryStatus.aborted ? 'Stopped' : 'Last run'}: {summaryStatus.described}/{summaryStatus.total} described
+            {running ? 'Running' : summaryStatus.aborted ? 'Stopped' : summaryStatus.cancelled ? 'Cancelled' : 'Last run'}
+            : {summaryStatus.described}/{summaryStatus.total} described
             {summaryStatus.skipped ? `, ${summaryStatus.skipped} skipped` : ''}
             {summaryStatus.failed ? `, ${summaryStatus.failed} failed` : ''}
             {/* An abort says why it stopped and that the rest were never tried —
                 more useful than the first per-image error underneath it. */}
             {summaryStatus.aborted
               ? ` — ${summaryStatus.abortedReason || 'model worker died'}. Remaining images were not attempted; generate again to retry.`
-              : firstError ? ` — ${firstError}` : ''}
+              : summaryStatus.cancelled
+                ? ' — stopped by you. The remaining images were left untouched; generate again to continue.'
+                : firstError ? ` — ${firstError}` : ''}
           </p>
         )}
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -550,6 +682,19 @@ function SummarizeControls({
             >
               Force
             </Button>
+            {/* Only while there is something to stop — a disabled Stop sitting
+                there permanently reads as broken. */}
+            {running && (
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => void stop()}
+                disabled={stopping}
+                title="Finish the current image, then stop. The rest are left for later."
+              >
+                {stopping ? 'Stopping…' : 'Stop'}
+              </Button>
+            )}
           </div>
         </div>
       </div>
