@@ -4,6 +4,7 @@ import { ExternalLink } from 'lucide-react'
 import { M2Header } from '@/components/menu/shared/M2Header'
 import { M2SettingsNav, type M2NavItem } from '@/components/menu/shared/M2SettingsNav'
 import { useMenu } from '@/components/shell/menu-context'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style'
 import { WORKSPACE_SETTINGS_SECTIONS, resolveWorkspaceSettingsTab } from '@/lib/settings-sections'
 import { getWorkspace } from '@/services/workspace'
@@ -13,6 +14,7 @@ import { getWorkspace } from '@/services/workspace'
 // keeps scaling as settings grow.
 export function WorkspaceM2Settings() {
   const { state, closeM2 } = useMenu()
+  const isMobile = useIsMobile()
   const navigate = useNavigate()
   const location = useLocation()
   const wsName = state.selectedEntityId
@@ -58,8 +60,12 @@ export function WorkspaceM2Settings() {
         icon={style.icon || DEFAULT_WORKSPACE_ICON}
         accentColor={style.color}
         onBack={() => {
-          if (wsName) navigate(`/workspaces/${wsName}`)
-          else closeM2()
+          // Mobile: the section list is a step INSIDE the drawer (opened without
+          // navigating), so back means "up one step" — slide M2 out and land on
+          // the workspace list in M1. Navigating instead would close the whole
+          // drawer and open the workspace, which is an exit, not a back.
+          if (isMobile || !wsName) closeM2()
+          else navigate(`/workspaces/${wsName}`)
         }}
         action={
           <button

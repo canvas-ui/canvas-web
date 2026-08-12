@@ -4,6 +4,7 @@ import { ExternalLink } from 'lucide-react'
 import { M2Header } from '@/components/menu/shared/M2Header'
 import { M2SettingsNav, type M2NavItem } from '@/components/menu/shared/M2SettingsNav'
 import { useMenu } from '@/components/shell/menu-context'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style'
 import { CONTEXT_SETTINGS_SECTIONS, resolveContextSettingsTab } from '@/lib/settings-sections'
 import { getContext } from '@/services/context'
@@ -12,6 +13,7 @@ import { getContext } from '@/services/context'
 // sections, the content area renders one.
 export function ContextM2Settings() {
   const { state, closeM2 } = useMenu()
+  const isMobile = useIsMobile()
   const navigate = useNavigate()
   const location = useLocation()
   const entityId = state.selectedEntityId
@@ -47,7 +49,8 @@ export function ContextM2Settings() {
         title={`Settings — ${context?.name || entityId || 'Context'}`}
         icon={context?.icon || DEFAULT_WORKSPACE_ICON}
         accentColor={context?.color ?? null}
-        onBack={() => (backPath ? navigate(backPath) : closeM2())}
+        // Mobile: back is "up one step" inside the drawer (see WorkspaceM2Settings).
+        onBack={() => (backPath && !isMobile ? navigate(backPath) : closeM2())}
         action={
           <button
             type="button"

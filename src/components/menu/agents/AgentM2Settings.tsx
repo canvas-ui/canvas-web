@@ -4,6 +4,7 @@ import { ExternalLink } from 'lucide-react'
 import { M2Header } from '@/components/menu/shared/M2Header'
 import { M2SettingsNav, type M2NavItem } from '@/components/menu/shared/M2SettingsNav'
 import { useMenu } from '@/components/shell/menu-context'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { AGENT_SETTINGS_SECTIONS, resolveAgentSettingsTab } from '@/lib/settings-sections'
 import { getAgent, type Agent } from '@/services/agent'
 
@@ -11,6 +12,7 @@ import { getAgent, type Agent } from '@/services/agent'
 // renders one. Agent and workspace settings are the same UX by construction.
 export function AgentM2Settings() {
   const { state, closeM2 } = useMenu()
+  const isMobile = useIsMobile()
   const navigate = useNavigate()
   const location = useLocation()
   const entityId = state.selectedEntityId
@@ -46,8 +48,10 @@ export function AgentM2Settings() {
         title={`Settings — ${agent?.label || agent?.name || entityId || 'Agent'}`}
         accentColor={agent?.color ?? null}
         onBack={() => {
-          if (routeAgentId) navigate(`/agents/${routeAgentId}`)
-          else closeM2()
+          // Same rule as WorkspaceM2Settings: on mobile back is "up one step"
+          // inside the drawer, not a navigation that closes it.
+          if (isMobile || !routeAgentId) closeM2()
+          else navigate(`/agents/${routeAgentId}`)
         }}
         action={
           <button
