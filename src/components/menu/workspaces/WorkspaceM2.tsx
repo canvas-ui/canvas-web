@@ -7,6 +7,7 @@ import { M2Header } from '@/components/menu/shared/M2Header'
 import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style'
 import { MenuTreeView } from '@/components/menu/shared/MenuTreeView'
 import { useMenu } from '@/components/shell/menu-context'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { getWorkspace, getCachedWorkspaceTreeByName, invalidateWorkspaceTreeCache, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer, pasteDocumentsToWorkspacePath, createPublicCanvasShare, listBackends, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
 import type { Layer } from '@/services/workspace'
 import { useTreeOperations } from '@/hooks/useTreeOperations'
@@ -37,7 +38,8 @@ const tabForTree = (treeName: string, layerId?: string | null): TreeTab =>
   layerId ? 'layers' : treeName === 'directory' ? 'directory' : treeName === 'backends' ? 'backends' : 'context'
 
 export function WorkspaceM2() {
-  const { state, closeM2 } = useMenu()
+  const { state, closeM2, openM2 } = useMenu()
+  const isMobile = useIsMobile()
   const wsName = state.selectedEntityId
   const navigate = useNavigate()
   const location = useLocation()
@@ -333,8 +335,16 @@ export function WorkspaceM2() {
             </button>
             <button
               type="button"
-              // M2 stays open — the URL sync swaps it to the settings section list.
-              onClick={() => navigate(`/workspaces/${wsName}/settings/general`)}
+              // Desktop: M2 stays open and the URL sync swaps it to the settings
+              // section list, so the sections stay on screen next to the page.
+              // Mobile: the drawer is an overlay that any navigation closes, so
+              // going straight to a section would strand the user in General with
+              // no way back to the list — show the list as its own step instead
+              // (same rule as the workspace row's gear in M1).
+              onClick={() => {
+                if (isMobile) openM2('settings', wsName ?? null)
+                else navigate(`/workspaces/${wsName}/settings/general`)
+              }}
               className="flex items-center justify-center w-8 h-8 rounded hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors"
               title="Settings"
             >

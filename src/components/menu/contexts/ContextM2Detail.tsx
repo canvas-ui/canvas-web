@@ -8,13 +8,15 @@ import { M2Header } from '@/components/menu/shared/M2Header'
 import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style'
 import { MenuTreeView } from '@/components/menu/shared/MenuTreeView'
 import { useMenu } from '@/components/shell/menu-context'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { useNavigate } from 'react-router-dom'
 import { getContext, updateContextUrl, getContextTree } from '@/services/context'
 import { useTreeOperations } from '@/hooks/useTreeOperations'
 import type { TreeNode } from '@/types/workspace'
 
 export function ContextM2Detail() {
-  const { state, closeM2, closeM1, closeM0 } = useMenu()
+  const { state, closeM2, closeM1, closeM0, openM2 } = useMenu()
+  const isMobile = useIsMobile()
   const navigate = useNavigate()
   const entityId = state.selectedEntityId
   const { showToast } = useToast()
@@ -121,7 +123,13 @@ export function ContextM2Detail() {
         action={
           <button
             type="button"
-            onClick={() => entityId && navigate(`/contexts/${entityId}/settings/general`)}
+            // Mobile shows the section list as its own step — navigating closes
+            // the drawer, so jumping to a section strands the user in General.
+            onClick={() => {
+              if (!entityId) return
+              if (isMobile) openM2('settings', entityId)
+              else navigate(`/contexts/${entityId}/settings/general`)
+            }}
             className="flex items-center justify-center w-8 h-8 rounded hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors"
             title="Settings"
           >

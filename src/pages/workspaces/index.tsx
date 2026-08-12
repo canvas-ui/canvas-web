@@ -13,6 +13,8 @@ import { Plus, GripVertical } from "lucide-react"
 import { WorkspaceCard } from "@/components/ui/workspace-card"
 import { useNavigate } from "react-router-dom"
 import { useCreatePanel } from "@/hooks/use-create-panel"
+import { useIsMobile } from "@/hooks/use-mobile"
+import { useMenu } from "@/components/shell/menu-context"
 import { useSocket } from "@/hooks/useSocket"
 import {
   listWorkspaces,
@@ -53,6 +55,8 @@ export default function WorkspacesPage() {
   const [editingWorkspace, setEditingWorkspace] = useState<Workspace | null>(null)
   const { showToast } = useToast()
   const navigate = useNavigate()
+  const isMobile = useIsMobile()
+  const { openM2Drawer } = useMenu()
   const socket = useSocket()
 
   // WebSocket live updates
@@ -511,7 +515,12 @@ export default function WorkspacesPage() {
                       onStop={handleStopWorkspace}
                       onEnter={handleEnterWorkspace}
                       onEdit={handleEditWorkspace}
-                      onSettings={(w) => navigate(`/workspaces/${w.name}/settings/general`)}
+                      // Mobile lands on the section list in the menu drawer
+                      // instead of General, so the other sections stay reachable.
+                      onSettings={(w) => {
+                        if (isMobile) openM2Drawer('workspaces', 'settings', w.name)
+                        else navigate(`/workspaces/${w.name}/settings/general`)
+                      }}
                       onDestroy={handleDestroyWorkspace}
                     />
                   </div>
