@@ -127,6 +127,11 @@ export default function WorkspacesPage() {
       })
       // The service now returns the new workspace object directly
       setWorkspaces(prev => [...prev, newWorkspace as Workspace])
+      // Mirror it into the M1 menu list, same as every other mutation on this
+      // page — that list keeps its own copy and only refetches on this event
+      // (the socket 'workspace:created' broadcast is not guaranteed for the
+      // creating client's own request).
+      window.dispatchEvent(new CustomEvent('workspaces:refresh'))
       // Starter folders: tree writes need the workspace running, so start it
       // first (cheap if the server auto-started it already).
       if (folderPick.selected.size > 0) {

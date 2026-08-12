@@ -141,6 +141,12 @@ type NamedStyledNode = StyledNode & { name?: string; label?: string }
 /**
  * Read the effective icon/color for a node (color field is a legacy fallback;
  * well-known folder names fall back to FOLDER_NAME_DEFAULTS).
+ *
+ * The name fallback is only a SAFETY NET for layers created before presets were
+ * persisted (see presetStylePatch): a style resolved from the name alone dies
+ * on rename, because the name is no longer in the table. New layers get the
+ * preset written into their own metadata at creation, so the stored value wins
+ * here and survives any later rename.
  */
 export function getLayerStyle(node: NamedStyledNode): LayerStyle {
   const ui = (node.metadata?.ui ?? {}) as LayerStyle
@@ -149,6 +155,20 @@ export function getLayerStyle(node: NamedStyledNode): LayerStyle {
     icon: typeof ui.icon === 'string' ? ui.icon : named?.icon,
     color: typeof ui.color === 'string' ? ui.color : (node.color ?? named?.color),
   }
+}
+
+/**
+ * The creation-time patch that pins a well-known folder's preset style ONTO the
+ * layer, so `Shopping` keeps its cart and amber after being renamed to
+ * `Groceries`. Returns null for names with no preset (nothing to store).
+ *
+ * Takes a path and uses its last segment — nested inserts auto-create ancestors,
+ * but only the leaf is the layer the user just named.
+ */
+export function presetStylePatch(path: string): { metadata: LayerMetadata } | null {
+  const name = path.split('/').filter(Boolean).pop() ?? ''
+  const preset = FOLDER_NAME_DEFAULTS[name.trim().toLowerCase()]
+  return preset ? { metadata: mergeLayerStyle(undefined, preset) } : null
 }
 
 /**

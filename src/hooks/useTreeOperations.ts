@@ -12,6 +12,7 @@ import {
   mergeContextLayer, subtractContextLayer, updateContextPath,
 } from '@/services/context'
 import type { LayerMetadata } from '@/types/workspace'
+import { presetStylePatch } from '@/lib/layer-style'
 import {
   insertWorkspacePath, removeWorkspacePath, moveWorkspacePath, copyWorkspacePath,
   mergeWorkspaceLayer, subtractWorkspaceLayer,
@@ -55,6 +56,19 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     if (contextId) result = await insertContextPath(contextId, path, autoCreateLayers)
     else if (workspaceId) result = await insertWorkspacePath(workspaceId, path, autoCreateLayers, wsTree)
     else return false
+    // Pin a well-known name's preset style onto the layer itself. Rendering it
+    // from the name would look identical until the first rename, at which point
+    // the folder silently loses its icon and colour.
+    const patch = presetStylePatch(path)
+    if (result && patch) {
+      try {
+        if (contextId) await updateContextPath(contextId, path, patch)
+        else if (workspaceId) await updateWorkspacePath(workspaceId, path, patch, wsTree)
+      } catch {
+        // Best effort — the folder exists; it just falls back to the name-keyed
+        // style until someone sets one explicitly.
+      }
+    }
     refresh()
     return result
   }, [contextId, workspaceId, wsTree, refresh])

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Icon } from '@iconify/react'
-import { FOLDER_NAME_DEFAULTS } from '@/lib/layer-style'
-import { insertWorkspacePath, invalidateWorkspaceTreeCache } from '@/services/workspace'
+import { FOLDER_NAME_DEFAULTS, presetStylePatch } from '@/lib/layer-style'
+import { insertWorkspacePath, updateWorkspacePath, invalidateWorkspaceTreeCache } from '@/services/workspace'
 
 // Well-known starter folders (each ships a default icon + color via
 // FOLDER_NAME_DEFAULTS) — turns a fresh workspace into a stash-anything setup.
@@ -25,9 +25,17 @@ export async function createDefaultFolders(
 ): Promise<{ ok: number; failed: number }> {
   let ok = 0
   let failed = 0
+  const treeName = tree === 'directory' ? 'directory' : 'context'
   for (const name of names) {
     try {
-      await insertWorkspacePath(workspaceName, `/${name}`, true, tree === 'directory' ? 'directory' : 'context')
+      await insertWorkspacePath(workspaceName, `/${name}`, true, treeName)
+      // Store the preset ON the layer rather than leaving it to the name-keyed
+      // render fallback, which a rename would drop.
+      const patch = presetStylePatch(`/${name}`)
+      if (patch) {
+        await updateWorkspacePath(workspaceName, `/${name}`, patch, treeName)
+          .catch(() => { /* folder is created; style stays on the fallback */ })
+      }
       ok += 1
     } catch {
       failed += 1
