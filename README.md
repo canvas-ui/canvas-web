@@ -7,6 +7,36 @@
 - Bundled with [Canvas Server](https://github.com/canvas-ui/canvas-server)  
 - For standalone deployment, see the installation section below
 
+## Apps (applets)
+
+The Toolbox has a top-level **Apps** tab hosting small self-contained applets
+(`src/components/toolbox/applets/`). Each applet declares which modes it
+supports (`context` and/or `global`) and renders free of page-level assumptions,
+so the same component can be reused by other frontends (desktop overlay, tauri).
+
+- **Notes** — every note in the focused context stacked as one editable,
+  searchable document view with debounced autosave and inline add.
+- **Todos** — the same stacked view with status checkboxes, due dates, and
+  completed items hidden behind an eye toggle.
+- Per item: **Link To** (file into any workspace/path) and **Delete**.
+
+Applets also run standalone, outside the app shell, at `/apps/<id>` — the data
+binding lives in the URL (`?workspace=&path=` or `?context=<id>`, `add=1` opens
+the inline draft). `/apps/add/<kind>` (note|todo|link|file|photo) is a chrome-free
+quick-add card, and the PWA manifest exposes shortcuts for Notes / Add Note /
+Add Todo / Add Photo.
+
+## Data management
+
+- **Import / export documents** — the document toolbar exports the selected
+  (or all) documents as JSON and imports pasted JSON, in both workspace and
+  context detail views.
+- **Drag and drop** — tree layers and documents are draggable: drop documents
+  onto tree paths, copy/move layers between paths (modifier keys switch mode),
+  and transfer between side-by-side workspace panes (F5 copy, F6 move).
+- **Context sharing** — contexts can be shared with other users by email with
+  per-user access levels, managed from the context settings page.
+
 ## Screenshots
 
 ### Workspace Management

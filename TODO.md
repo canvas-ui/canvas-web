@@ -1,5 +1,35 @@
 # TODO
 
+## Simplify the canvas-web UI!!
+
+- We need to add a "simple" or "compact" UI version and leave the current one as "advanced"
+- Simple version
+  - Focused on context switching, Pinned tree layers, canvases + a A2UI canvas controlled via an internal inferd UI runtime thread
+
+## Applets (moved from canvas-server TODO; framework + Notes/Todos landed 2026-08-07/08, see README)
+
+- [ ] Configurable keyboard shortcut to open an applet (Notes) directly, and a floating
+      "Applets" button for ad-hoc opening (the toolbox FAB currently opens Filters).
+- [ ] Global applets: none exist yet - a clock and/or calendar is the natural first one
+      (the Global sub-tab shows an empty state until then). The camera-stream showcase
+      (live synapsd results for a camera feed) is a global applet + the planned
+      services.streams work.
+- [ ] Standalone host niceties: tree-picker for the path binding (text input today),
+      context labels in the picker (shows ids), remember last binding per applet.
+- [ ] Manual ordering (needs order: in metadata - deliberately skipped).
+- [ ] Applet niceties: tag editing, search-term highlighting inside the body, load-more
+      beyond the first page.
+
+## WebUI cosmetics
+
+- [ ] (deffered) Content area section should support tabs
+
+## Published JSON Schemas (moved from canvas/TODO.md)
+
+- [ ] Consume the server-published JSON Schemas and delete copied enums — the
+      server half shipped (`/schemas/data/schema/<id>.json`); `src/lib/schema-meta.ts`
+      still hardcodes metadata and never fetches them.
+
 ## Menu/design refactor (all integrations!)
 
 - Electron/desktop overlay, webUI, browser extension and CLI support a bound (context) and a explorer(workspace) mode, this distinction supposed to be more prominent but hey, non-standard UI design idea + AI(react + shadcn) => "free wordpress template" design
@@ -30,9 +60,6 @@ We need to replace the current  tree+document view frankenstein with a nice clea
   - Lock/Unlock layer
   - Destroy layer
 
-- We need full drag-and-drop support
-- Import/export documents(already there)
-
 ## Workspaces view update
 
 - Cleanup workspace sharing (token and user email based)
@@ -42,11 +69,11 @@ We need to replace the current  tree+document view frankenstein with a nice clea
 ## Context++
 
 - Assign agents, minions and peers to contexts
-- Proper context controlls (same as above - share/unshare, lock/unlock)
+- Proper context controls: lock/unlock (share/unshare already shipped in context settings)
 
 ## Tools
 
-- simple MVP level editors to add / edit notes, todo items, contacts
+- simple MVP level editor to add / edit contacts (notes and todos shipped as applets, see README)
 
 ## Timeline map (design session needed)
 
