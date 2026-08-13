@@ -1,5 +1,5 @@
 import { Document, TreeNode } from '@/types/workspace'
-import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, Table as TableIcon } from 'lucide-react'
+import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, Play, Table as TableIcon } from 'lucide-react'
 import { LinkToCard, type LinkToTarget } from '@/components/menu/shared/LinkToCard'
 import { PickDocumentsCard } from '@/components/menu/shared/PickDocumentsCard'
 import { useSideView } from '@/components/shell/use-side-view'
@@ -23,6 +23,7 @@ import { ObjectPropertiesModal } from '@/components/object-card/ObjectProperties
 import { isEditableSchema } from '@/components/object-card/editable-schema'
 import { usePublicShareCode } from '@/components/renderers/public-share'
 import { useDocumentThumbnail } from '@/components/renderers/useDocumentThumbnail'
+import { useDocumentStreamSrc } from '@/components/renderers/useDocumentBlobUrl'
 import { DocumentIcon } from '@/components/common/DocumentIcon'
 import { TimelineSortControl } from '@/components/canvas/widgets/sort-control'
 import type { ToolboxSort } from '@/types/workspace'
@@ -675,6 +676,30 @@ function isImageDocument(document: Document): boolean {
     && String(document.metadata?.contentType || '').startsWith('image/')
 }
 
+function isVideoDocument(document: Document): boolean {
+  return document.schema === 'data/schema/file'
+    && String(document.metadata?.contentType || '').startsWith('video/')
+}
+
+// First-frame preview for video tiles: a bare <video preload="metadata"> —
+// the browser fetches only the header + first frame over the existing
+// range-capable content endpoint (media-ticket auth via useDocumentStreamSrc).
+// No server-side thumbnailing (no ffmpeg) involved.
+function TileVideoPreview({ workspaceId, documentId, fallback }: { workspaceId: string; documentId: number; fallback: React.ReactNode }) {
+  const { src, error } = useDocumentStreamSrc(workspaceId, documentId)
+  const [failed, setFailed] = useState(false)
+  if (error || failed) return <>{fallback}</>
+  if (!src) return <div className="aspect-video w-full animate-pulse bg-muted/60" />
+  return (
+    <div className="relative">
+      <video src={src} preload="metadata" muted playsInline onError={() => setFailed(true)} className="block h-auto w-full" />
+      <span className="pointer-events-none absolute bottom-2 right-2 rounded-sm bg-scrim p-1 text-scrim-foreground">
+        <Play className="h-3.5 w-3.5" />
+      </span>
+    </div>
+  )
+}
+
 // Tile view cell — a prominent picture/thumbnail tile (image docs) or a large
 // icon tile (everything else). Mirrors DocumentRow's click/selection/right-click
 // behavior. Sized for a responsive auto-fill grid, so it reads on mobile too.
@@ -683,6 +708,7 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
   const isTabDocument = document.schema === 'data/schema/tab'
   const tabUrl = isTabDocument ? document.data.url : null
   const isImage = isImageDocument(document)
+  const isVideo = isVideoDocument(document)
   const display = getDocumentDisplayInfo(document)
   // Notes, tabs/URLs, emails: the content IS the picture — render a text tile
   // (title + clamped body) instead of a giant icon. Files keep the icon tile.
@@ -715,12 +741,18 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
           onClick={(e) => e.stopPropagation()}
           onChange={(e) => onSelect?.(document.id, e.target.checked, true)}
         />
-        {/* Images and text tiles take their natural height (masonry columns);
-            icon tiles stay square. */}
-        <div className={`relative w-full bg-muted/40 ${isImage && blobUrl ? '' : isTextTile ? '' : 'aspect-square'}`}>
+        {/* Images, videos and text tiles take their natural height (masonry
+            columns); icon tiles stay square. */}
+        <div className={`relative w-full bg-muted/40 ${(isImage && blobUrl) || isTextTile || (isVideo && workspaceId) ? '' : 'aspect-square'}`}>
           {isImage && loading && <div className="absolute inset-0 animate-pulse bg-muted/60" />}
           {isImage && blobUrl ? (
             <img src={blobUrl} alt={display.title} loading="lazy" className="block h-auto w-full" />
+          ) : isVideo && workspaceId ? (
+            <TileVideoPreview
+              workspaceId={workspaceId}
+              documentId={document.id}
+              fallback={<div className="flex aspect-square w-full items-center justify-center"><DocumentIcon document={document} size={10} chip /></div>}
+            />
           ) : isTextTile ? (
             <div className="flex min-h-28 w-full flex-col gap-1.5 overflow-hidden bg-card p-3 pt-7 text-left">
               <div className="flex items-center gap-1.5">
