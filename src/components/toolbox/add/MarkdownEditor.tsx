@@ -129,7 +129,14 @@ export function MarkdownEditor({ value, onChange, placeholder }: MarkdownEditorP
   return (
     <div className="rounded-md border border-input bg-transparent focus-within:ring-1 focus-within:ring-ring">
       <Toolbar editor={editor} />
-      <EditorContent editor={editor} />
+      {/* resize-y needs a scroll container; the ProseMirror div stretches to
+          fill it so clicks below short content still focus the editor. */}
+      <div
+        className="resize-y overflow-y-auto min-h-[8rem] max-h-[70vh] flex flex-col [&>div]:flex-1 [&_.ProseMirror]:h-full"
+        onClick={() => editor.chain().focus().run()}
+      >
+        <EditorContent editor={editor} />
+      </div>
     </div>
   )
 }

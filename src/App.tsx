@@ -14,6 +14,7 @@ import ContextDetailPage from './pages/contexts/[contextId]'
 import ApiTokensPage from './pages/api-tokens'
 import DevicesPage from './pages/devices'
 import AppearancePage from './pages/appearance'
+import AboutPage from './pages/about'
 import EmbeddingDefaultsPage from './pages/embedding'
 import SharedViewerPage from './pages/shared'
 import PublicCanvasPage from './pages/pub/canvas'
@@ -96,6 +97,7 @@ function AppContent() {
           <Route path="roles" element={<RolesPage />} />
           <Route path="remotes" element={<RemotesPage />} />
           <Route path="appearance" element={<AppearancePage />} />
+          <Route path="about" element={<AboutPage />} />
           <Route path="api-tokens" element={<ApiTokensPage />} />
           <Route path="devices" element={<DevicesPage />} />
           <Route path="embedding" element={<EmbeddingDefaultsPage />} />

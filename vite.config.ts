@@ -1,4 +1,5 @@
 import path from "path"
+import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -24,8 +25,13 @@ const devProxy = proxyTarget
     }
   : undefined
 
+// The running UI's own version (Settings > About). package.json is read
+// directly rather than imported so tsconfig needs no resolveJsonModule.
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
+
 // https://vitejs.dev/config/
 export default defineConfig({
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   server: { proxy: devProxy },
   plugins: [
     react(),
