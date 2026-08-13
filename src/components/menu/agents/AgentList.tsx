@@ -2,10 +2,10 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import { useState } from 'react'
 import { Plus, Play, Square, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useMenu } from '@/components/shell/menu-context'
+import { useMenu } from '@/components/shell/use-menu'
 import { useAgentListData } from '@/hooks/useAgentListData'
 import { startAgent, stopAgent, type Agent } from '@/services/agent'
-import { useToast } from '@/components/ui/toast-container'
+import { useToast } from '@/components/ui/use-toast'
 import { useNavigate } from 'react-router-dom'
 
 function StatusDot({ status }: { status: string }) {

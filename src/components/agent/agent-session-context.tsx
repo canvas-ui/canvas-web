@@ -1,7 +1,5 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import {
-  type AgentSession,
-  type AgentSessionList,
   type AgentSessionMutationResult,
   createAgentSession,
   deleteAgentSession,
@@ -10,24 +8,12 @@ import {
   renameAgentSession,
   selectAgentSession,
 } from '@/services/agent'
-
-type SessionMode = 'persistent' | 'experimental' | 'incognito'
-
-interface AgentSessionState {
-  current: AgentSession | null
-  sessions: AgentSessionList | null
-  isLoading: boolean
-  error: string | null
-}
-
-interface AgentSessionContextValue {
-  getState: (agentId: string) => AgentSessionState
-  refresh: (agentId: string) => Promise<void>
-  create: (agentId: string, data: { mode: SessionMode; name?: string }) => Promise<AgentSessionMutationResult>
-  select: (agentId: string, data: { mode: SessionMode; sessionId?: string }) => Promise<AgentSessionMutationResult>
-  rename: (agentId: string, sessionId: string, name: string) => Promise<AgentSessionMutationResult>
-  remove: (agentId: string, sessionId: string) => Promise<AgentSessionMutationResult>
-}
+import {
+  AgentSessionContext,
+  type AgentSessionContextValue,
+  type AgentSessionState,
+  type SessionMode,
+} from './use-agent-sessions'
 
 const defaultState: AgentSessionState = {
   current: null,
@@ -35,8 +21,6 @@ const defaultState: AgentSessionState = {
   isLoading: false,
   error: null,
 }
-
-const AgentSessionContext = createContext<AgentSessionContextValue | null>(null)
 
 function normalizeError(error: unknown) {
   return error instanceof Error ? error.message : 'Session request failed'
@@ -132,47 +116,3 @@ export function AgentSessionProvider({ children }: { children: ReactNode }) {
   return <AgentSessionContext.Provider value={value}>{children}</AgentSessionContext.Provider>
 }
 
-export function useAgentSessions(agentId: string) {
-  const context = useContext(AgentSessionContext)
-  if (!context) {
-    throw new Error('useAgentSessions must be used within an AgentSessionProvider')
-  }
-
-  const {
-    getState,
-    refresh: refreshSession,
-    create: createSession,
-    select: selectSession,
-    rename: renameSession,
-    remove: removeSession,
-  } = context
-
-  const state = getState(agentId)
-
-  const refresh = useCallback(() => refreshSession(agentId), [refreshSession, agentId])
-  const create = useCallback(
-    (data: { mode: SessionMode; name?: string }) => createSession(agentId, data),
-    [createSession, agentId],
-  )
-  const select = useCallback(
-    (data: { mode: SessionMode; sessionId?: string }) => selectSession(agentId, data),
-    [selectSession, agentId],
-  )
-  const rename = useCallback(
-    (sessionId: string, name: string) => renameSession(agentId, sessionId, name),
-    [renameSession, agentId],
-  )
-  const remove = useCallback(
-    (sessionId: string) => removeSession(agentId, sessionId),
-    [removeSession, agentId],
-  )
-
-  return useMemo(() => ({
-    ...state,
-    refresh,
-    create,
-    select,
-    rename,
-    remove,
-  }), [state, refresh, create, select, rename, remove])
-}

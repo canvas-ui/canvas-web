@@ -1,10 +1,10 @@
 import { PageHeader } from '@/components/common/page-header'
-import { useEffect, useState, useRef } from "react"
+import { useCallback, useEffect, useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { API_ROUTES } from "@/config/api"
 import { api } from "@/lib/api"
-import { useToast } from "@/components/ui/toast-container"
+import { useToast } from "@/components/ui/use-toast"
 import { Plus, Trash, Copy, Check } from "lucide-react"
 
 interface ApiToken {

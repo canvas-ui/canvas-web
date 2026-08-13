@@ -6,7 +6,8 @@ import { cn } from '@/lib/utils'
 import { listWorkspaces, getCachedWorkspaceTreeByName, getCanvasPathDocuments, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import type { TreeNode, Document } from '@/types/workspace'
-import { type TreeTab, TAB_ICONS, TAB_LABELS, LinkNode, WorkspaceListStep } from './tree-picker-shared'
+import { LinkNode, WorkspaceListStep } from './tree-picker-shared'
+import { type TreeTab, TAB_ICONS, TAB_LABELS } from './tree-picker-utils'
 import { DocumentIcon } from '@/components/common/DocumentIcon'
 // Workspace is a global type declared in src/types/api.d.ts
 

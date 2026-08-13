@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useToolbox } from '../toolbox-context'
+import { useToolbox } from '../use-toolbox'
 import {
   DEFAULT_WORKSPACE_TREE_NAME,
   importDocumentsToWorkspacePath,

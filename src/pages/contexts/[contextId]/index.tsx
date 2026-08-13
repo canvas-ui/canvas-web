@@ -1,7 +1,7 @@
 import { CloseSectionButton, SectionBackButton } from '@/components/common/page-header';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { useToast } from '@/components/ui/toast-container';
+import { useToast } from '@/components/ui/use-toast';
 import {
   getContext,
   getContextDocuments,
@@ -14,8 +14,8 @@ import socketService from '@/lib/socket';
 import { DefaultCanvas } from '@/components/canvas/DefaultCanvas';
 import { Document as WorkspaceDocument, buildDatetimeFilters, buildGeoFilters } from '@/types/workspace';
 import { docInGeoSelection } from '@/utils/geo';
-import { useToolbox } from '@/components/toolbox/toolbox-context';
-import { useMenu } from '@/components/shell/menu-context';
+import { useToolbox } from '@/components/toolbox/use-toolbox';
+import { useMenu } from '@/components/shell/use-menu';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Icon } from '@iconify/react';
 import { Filter } from 'lucide-react';
@@ -84,6 +84,13 @@ export default function ContextDetailPage() {
   // removing one previews immediately.
   const tbScopeFilters = [...buildDatetimeFilters(toolboxState.filters.timeline), ...buildGeoFilters(toolboxState.filters.geo)];
   const tbFiltersKey = JSON.stringify({ a: tbAllOf, b: tbAnyOf, c: tbNoneOf, d: tbScopeFilters });
+  // Stable snapshot of the toolbox filters, re-derived only when their content
+  // (the serialized key) changes — the raw arrays above get fresh identities on
+  // every render, so depending on them directly would refetch constantly.
+  const tbFilters = useMemo(
+    () => JSON.parse(tbFiltersKey) as { a: typeof tbAllOf; b: typeof tbAnyOf; c: typeof tbNoneOf; d: typeof tbScopeFilters },
+    [tbFiltersKey],
+  );
 
   const [context, setContext] = useState<ContextData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -109,9 +116,9 @@ export default function ContextDetailPage() {
     try {
       const data = await getContextDocuments(
         contextId,
-        tbAllOf,
-        tbScopeFilters,
-        { limit: pageSize, page: currentPage, queries: serverSearchQueries.length ? serverSearchQueries : undefined, anyOf: tbAnyOf, noneOf: tbNoneOf, applyContextSpec: false },
+        tbFilters.a,
+        tbFilters.d,
+        { limit: pageSize, page: currentPage, queries: serverSearchQueries.length ? serverSearchQueries : undefined, anyOf: tbFilters.b, noneOf: tbFilters.c, applyContextSpec: false },
         ownerId,
       );
       setDocuments(data as unknown as WorkspaceDocument[]);
@@ -123,8 +130,7 @@ export default function ContextDetailPage() {
     } finally {
       setIsLoadingDocuments(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contextId, currentPage, pageSize, ownerId, serverSearchQueries, tbFiltersKey]);
+  }, [contextId, currentPage, pageSize, ownerId, serverSearchQueries, tbFilters, showToast]);
 
   const fetchContextDetails = useCallback(async () => {
     if (!contextId) return;
@@ -174,9 +180,12 @@ export default function ContextDetailPage() {
       showToast({ title: 'Error', description: message, variant: 'destructive' });
     }
     setIsLoading(false);
-  }, [contextId, ownerId, isSharedContext]);
+  }, [contextId, ownerId, isSharedContext, showToast]);
 
-  useEffect(() => { fetchContextDetails(); }, [fetchContextDetails]);
+  useEffect(() => {
+    const run = () => fetchContextDetails();
+    void run();
+  }, [fetchContextDetails]);
 
   // Publish the context accent to the toolbox so its top-bar bottom border
   // matches the content being filtered. Cleared on unmount (→ black).
@@ -196,19 +205,45 @@ export default function ContextDetailPage() {
     () => (geoSelection ? documents.filter((d) => docInGeoSelection(d, geoSelection)) : documents),
     [documents, geoSelection],
   );
-  useEffect(() => { if (context) fetchDocuments(); }, [context?.id, fetchDocuments]);
+  const loadedContextId = context?.id;
+  useEffect(() => {
+    if (!loadedContextId) return;
+    const run = () => fetchDocuments();
+    void run();
+  }, [loadedContextId, fetchDocuments]);
   useEffect(() => {
     const onRefresh = () => fetchDocuments();
     window.addEventListener('workspace:documents:refresh', onRefresh);
     return () => window.removeEventListener('workspace:documents:refresh', onRefresh);
   }, [fetchDocuments]);
-  useEffect(() => { setCurrentPage(1); setIgnoreSavedSearch(false); }, [contextId]);
-  useEffect(() => { setServerSearchQueries(urlSearchQueries); setCurrentPage(1); }, [urlSearchQueries]);
-  useEffect(() => {
-    if (urlSearchQueries.length || ignoreSavedSearch) return;
-    setServerSearchQueries(savedContextSearchQuery ? [savedContextSearchQuery] : []);
+
+  // Prop/URL-driven state resets, done during render (previous-value-in-state
+  // pattern) rather than in effects. Order matters and mirrors the former
+  // effect order: context switch → URL query stack → saved context search.
+  const [prevContextId, setPrevContextId] = useState(contextId);
+  if (prevContextId !== contextId) {
+    setPrevContextId(contextId);
     setCurrentPage(1);
-  }, [urlSearchQueries, ignoreSavedSearch, savedContextSearchQuery]);
+    setIgnoreSavedSearch(false);
+  }
+  const [prevUrlSearchQueries, setPrevUrlSearchQueries] = useState(urlSearchQueries);
+  if (prevUrlSearchQueries !== urlSearchQueries) {
+    setPrevUrlSearchQueries(urlSearchQueries);
+    setServerSearchQueries(urlSearchQueries);
+    setCurrentPage(1);
+  }
+  const [prevSavedSearch, setPrevSavedSearch] = useState({ urlSearchQueries, ignoreSavedSearch, savedContextSearchQuery });
+  if (
+    prevSavedSearch.urlSearchQueries !== urlSearchQueries ||
+    prevSavedSearch.ignoreSavedSearch !== ignoreSavedSearch ||
+    prevSavedSearch.savedContextSearchQuery !== savedContextSearchQuery
+  ) {
+    setPrevSavedSearch({ urlSearchQueries, ignoreSavedSearch, savedContextSearchQuery });
+    if (!urlSearchQueries.length && !ignoreSavedSearch) {
+      setServerSearchQueries(savedContextSearchQuery ? [savedContextSearchQuery] : []);
+      setCurrentPage(1);
+    }
+  }
 
   const syncQueriesToUrl = useCallback((queries: string[]) => {
     const params = new URLSearchParams(location.search);

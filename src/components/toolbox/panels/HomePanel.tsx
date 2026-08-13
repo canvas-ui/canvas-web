@@ -1,6 +1,6 @@
 import { Bell, Clock, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useNotificationsOptional } from '@/components/notifications/notifications-context'
+import { useNotificationsOptional } from '@/components/notifications/use-notifications'
 
 export function HomePanel() {
   const notifications = useNotificationsOptional()

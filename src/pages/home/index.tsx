@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { LayoutDashboard, Pin } from 'lucide-react';
 import { HomeFab } from '@/components/home/HomeFab';
 import { PinnedCanvasTile } from '@/components/home/PinnedCanvasTile';
-import { useCanvasPins } from '@/components/home/pins-context';
+import { useCanvasPins } from '@/components/home/use-canvas-pins';
 import type { PinnedCanvas } from '@/services/user-config';
 
 function EmptyHome() {
@@ -38,10 +38,14 @@ function tabLabel(pin: PinnedCanvas) {
 function MinimizedTabBar({ pins, onRestore }: { pins: PinnedCanvas[]; onRestore: (id: string) => void }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // The last tile restored from the mobile list leaves nothing to pop over.
-  useEffect(() => {
+  // The last tile restored from the mobile list leaves nothing to pop over:
+  // close the list whenever the pin count drops to zero (previous-value-in-state
+  // pattern, so the reset happens during render rather than in an effect).
+  const [prevPinCount, setPrevPinCount] = useState(pins.length);
+  if (prevPinCount !== pins.length) {
+    setPrevPinCount(pins.length);
     if (pins.length === 0) setMobileOpen(false);
-  }, [pins.length]);
+  }
 
   if (pins.length === 0) return null;
   return (
@@ -108,8 +112,12 @@ export default function HomePage() {
   const autoMinimizedRef = useRef<Set<string>>(new Set());
   // Ref (not a useCallback dep) so the handler identity stays stable — HomeFab
   // notifies on open/close transitions and must not re-fire when pins change.
+  // Synced in an effect (not during render) per the rules of refs; the handler
+  // only runs from user events, which always follow the sync.
   const pinsRef = useRef(pins);
-  pinsRef.current = pins;
+  useEffect(() => {
+    pinsRef.current = pins;
+  }, [pins]);
 
   const minimize = (id: string) => {
     setMinimizedIds((prev) => new Set(prev).add(id));

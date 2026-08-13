@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom"
 import { useCreatePanel } from "@/hooks/use-create-panel"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { useToast } from "@/components/ui/toast-container"
+import { useToast } from "@/components/ui/use-toast"
 import { FormPanel } from "@/components/common/form-panel"
 import { Plus, Trash, DoorOpen, Edit, Share2 } from "lucide-react"
 import {
@@ -15,8 +15,8 @@ import {
   TableHeader,
   TableRow,
   SortableTableHead,
-  useSortableData,
 } from "@/components/ui/table"
+import { useSortableData } from "@/components/ui/use-sortable-data"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -148,10 +148,11 @@ export default function ContextsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedWorkspaceId]);
+  }, [selectedWorkspaceId, showToast]);
 
   useEffect(() => {
-    fetchData();
+    const run = () => fetchData();
+    void run();
   }, [fetchData]);
 
 

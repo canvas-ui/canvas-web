@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useToast } from "@/components/ui/toast-container"
+import { useToast } from "@/components/ui/use-toast"
 import { Plus, Trash, Eye, X, Users } from "lucide-react"
 import { adminService, AdminWorkspace, CreateWorkspaceData, AdminUser } from "@/services/admin"
 import { getCurrentUserFromToken } from "@/services/auth"
@@ -29,11 +29,19 @@ const generateRandomColor = (): string => {
 };
 
 export default function AdminWorkspacesPage() {
+  const currentUser = getCurrentUserFromToken()
+  // Check if current user is admin
+  const isCurrentUserAdmin = currentUser?.userType === 'admin'
+
   const [workspaces, setWorkspaces] = useState<AdminWorkspace[]>([])
   const [users, setUsers] = useState<AdminUser[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  // Non-admins never load anything: start settled with the access error instead
+  // of flipping the state from an effect.
+  const [isLoading, setIsLoading] = useState(isCurrentUserAdmin)
   const [isLoadingUsers, setIsLoadingUsers] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(
+    isCurrentUserAdmin ? null : 'Access denied. Admin privileges required.'
+  )
   const [isCreating, setIsCreating] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [filters, setFilters] = useState({
@@ -54,19 +62,6 @@ export default function AdminWorkspacesPage() {
   })
 
   const { showToast } = useToast()
-  const currentUser = getCurrentUserFromToken()
-
-  // Check if current user is admin
-  const isCurrentUserAdmin = currentUser?.userType === 'admin'
-
-  useEffect(() => {
-    if (!isCurrentUserAdmin) {
-      setError('Access denied. Admin privileges required.')
-      setIsLoading(false)
-      return
-    }
-    fetchWorkspaces()
-  }, [isCurrentUserAdmin])
 
   const fetchWorkspaces = useCallback(async () => {
     try {
@@ -86,6 +81,14 @@ export default function AdminWorkspacesPage() {
       setIsLoading(false)
     }
   }, [showToast])
+
+  useEffect(() => {
+    if (!isCurrentUserAdmin) {
+      return
+    }
+    const run = () => fetchWorkspaces()
+    void run()
+  }, [isCurrentUserAdmin, fetchWorkspaces])
 
   const fetchUsers = useCallback(async () => {
     try {

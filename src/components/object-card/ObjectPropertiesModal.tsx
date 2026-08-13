@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { Maximize2, Minimize2 } from 'lucide-react'
 import { ObjectPropertiesCard, type ObjectCardTab } from './ObjectPropertiesCard'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
-import { useToolboxOptional } from '@/components/toolbox/toolbox-context'
+import { useToolboxOptional } from '@/components/toolbox/use-toolbox'
 import { cn } from '@/lib/utils'
 import type { Document } from '@/types/workspace'
 

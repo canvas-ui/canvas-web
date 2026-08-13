@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useToast } from "@/components/ui/toast-container"
+import { useToast } from "@/components/ui/use-toast"
 import { Plus, Trash, Edit2, X } from "lucide-react"
 import { adminService, AdminUser, CreateUserData, UpdateUserData } from "@/services/admin"
 import { getCurrentUserFromToken, getAuthConfig, requestEmailVerification } from "@/services/auth"
@@ -27,9 +27,17 @@ type PasswordPolicy = {
 }
 
 export default function AdminUsersPage() {
+  const currentUser = getCurrentUserFromToken()
+  // Check if current user is admin
+  const isCurrentUserAdmin = currentUser?.userType === 'admin'
+
   const [users, setUsers] = useState<AdminUser[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  // Non-admins never load anything: start settled with the access error instead
+  // of flipping the state from an effect.
+  const [isLoading, setIsLoading] = useState(isCurrentUserAdmin)
+  const [error, setError] = useState<string | null>(
+    isCurrentUserAdmin ? null : 'Access denied. Admin privileges required.'
+  )
   const [isCreating, setIsCreating] = useState(false)
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -51,19 +59,14 @@ export default function AdminUsersPage() {
   })
 
   const { showToast } = useToast()
-  const currentUser = getCurrentUserFromToken()
-
-  // Check if current user is admin
-  const isCurrentUserAdmin = currentUser?.userType === 'admin'
 
   useEffect(() => {
     if (!isCurrentUserAdmin) {
-      setError('Access denied. Admin privileges required.')
-      setIsLoading(false)
       return
     }
-    fetchUsers()
-    // load auth config to decide on resend activation visibility
+    // The user list itself is fetched by the effect below (which also re-runs
+    // when the filters change); this one only loads the auth config to decide
+    // on resend activation visibility.
     ;(async () => {
       try {
         const conf = await getAuthConfig()
@@ -151,7 +154,8 @@ export default function AdminUsersPage() {
 
   useEffect(() => {
     if (isCurrentUserAdmin) {
-      fetchUsers()
+      const run = () => fetchUsers()
+      void run()
     }
   }, [fetchUsers, isCurrentUserAdmin])
 

@@ -5,8 +5,8 @@ import {
   CalendarDays, Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useToolbox } from '@/components/toolbox/toolbox-context'
-import { useToast } from '@/components/ui/toast-container'
+import { useToolbox } from '@/components/toolbox/use-toolbox'
+import { useToast } from '@/components/ui/use-toast'
 import { timelineColor } from '@/lib/timeline-meta'
 import { onAccentTextClass } from '@/utils/color'
 import { fetchTimelineHistogram, type TimelineHistogramBucket } from '@/services/workspace'

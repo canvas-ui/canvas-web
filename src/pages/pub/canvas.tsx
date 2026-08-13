@@ -169,7 +169,8 @@ export default function PublicCanvasPage() {
   }, [code])
 
   useEffect(() => {
-    load()
+    const run = () => load()
+    void run()
   }, [load])
 
   useEffect(() => {

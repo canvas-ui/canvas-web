@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Brain, Play, Square } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useToolbox } from '../toolbox-context'
+import { useToolbox } from '../use-toolbox'
 import { useAgentListData } from '@/hooks/useAgentListData'
-import { useMenu } from '@/components/shell/menu-context'
-import { useToast } from '@/components/ui/toast-container'
+import { useMenu } from '@/components/shell/use-menu'
+import { useToast } from '@/components/ui/use-toast'
 import { useNavigate } from 'react-router-dom'
 import { startAgent, stopAgent, type Agent } from '@/services/agent'
 

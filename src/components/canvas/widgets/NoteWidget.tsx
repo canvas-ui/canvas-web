@@ -2,7 +2,7 @@ import { StickyNote } from 'lucide-react'
 import { registerWidget } from '../widget-registry'
 import type { WidgetProps } from '../widget-types'
 
-function NoteWidget({ config, setConfig, canvas }: WidgetProps) {
+export function NoteWidget({ config, setConfig, canvas }: WidgetProps) {
   const text = typeof config.text === 'string' ? config.text : ''
   return (
     <textarea

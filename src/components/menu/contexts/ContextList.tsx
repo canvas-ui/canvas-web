@@ -1,15 +1,15 @@
 import { useIsMobile } from '@/hooks/use-mobile'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Plus, Settings, Link2, GripVertical } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import { visibleAccentColor, onAccentTextClass } from '@/utils/color'
 import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style'
 import { cn } from '@/lib/utils'
-import { useMenu } from '@/components/shell/menu-context'
+import { useMenu } from '@/components/shell/use-menu'
 import { useContextListData } from '@/hooks/useContextListData'
 import { updateContext } from '@/services/context'
 import { moveItem, persistSequentialOrder, useListReorder } from '@/lib/list-order'
-import { useToast } from '@/components/ui/toast-container'
+import { useToast } from '@/components/ui/use-toast'
 import { useNavigate } from 'react-router-dom'
 
 export function ContextList() {

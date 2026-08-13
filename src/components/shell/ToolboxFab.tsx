@@ -1,5 +1,5 @@
 import { useLocation } from 'react-router-dom'
-import { useToolbox } from '@/components/toolbox/toolbox-context'
+import { useToolbox } from '@/components/toolbox/use-toolbox'
 
 // Single entry point into the toolbox — biggest button on screen, fixed to
 // the viewport (not the layout flow) so it stays reachable on small/mobile

@@ -9,7 +9,7 @@ import { useDocumentActivation } from '../useDocumentActivation'
 // A single recent-document line. Click / tap / long-press opens the shared
 // document modal (the full view/edit controls) — the widget is a shortcut, not
 // a dead-end view. No-op on the public share (no modal provider).
-function RecentDocRow({ doc, workspaceId }: { doc: Document; workspaceId: string }) {
+export function RecentDocRow({ doc, workspaceId }: { doc: Document; workspaceId: string }) {
   const display = getDocumentDisplayInfo(doc)
   const { activationProps } = useDocumentActivation(doc, workspaceId)
   return (
@@ -26,7 +26,7 @@ function RecentDocRow({ doc, workspaceId }: { doc: Document; workspaceId: string
   )
 }
 
-function RecentDocumentsWidget({ config, canvas }: WidgetProps) {
+export function RecentDocumentsWidget({ config, canvas }: WidgetProps) {
   const limit = typeof config.limit === 'number' ? config.limit : 10
   const [documents, setDocuments] = useState<Document[]>([])
   const [isLoading, setIsLoading] = useState(true)

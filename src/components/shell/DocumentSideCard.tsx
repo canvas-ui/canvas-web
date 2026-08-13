@@ -4,7 +4,7 @@ import { ObjectPropertiesCard } from '@/components/object-card/ObjectPropertiesC
 import { NOTE_SCHEMA, TAB_SCHEMA, FILE_SCHEMA, EMAIL_SCHEMA } from '@/components/renderers/types'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { pasteDocumentsToWorkspacePath } from '@/services/workspace'
-import { useSideView } from './side-view-context'
+import { useSideView } from './use-side-view'
 import type { Document } from '@/types/workspace'
 
 function iconFor(document: Document) {

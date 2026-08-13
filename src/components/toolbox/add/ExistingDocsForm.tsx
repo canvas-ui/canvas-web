@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { PickDocumentsCard } from '@/components/menu/shared/PickDocumentsCard'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
-import { useToolbox } from '../toolbox-context'
+import { useToolbox } from '../use-toolbox'
 import { useAddTarget, linkExistingDocuments } from './useAddTarget'
 
 // Opens PickDocumentsCard as a flat right-docked panel (no backdrop dim, same

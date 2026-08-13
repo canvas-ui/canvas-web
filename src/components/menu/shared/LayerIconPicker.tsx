@@ -65,12 +65,12 @@ export function LayerIconPicker({ x, y, current, onChange, onClose }: LayerIconP
   }, [query])
 
   const trimmedQuery = query.trim()
-  const results = resultsFor.q === trimmedQuery ? resultsFor.list : []
-  const searching = trimmedQuery !== '' && resultsFor.q !== trimmedQuery
+  const hasResults = resultsFor.q === trimmedQuery
+  const searching = trimmedQuery !== '' && !hasResults
 
   const icons = useMemo(
-    () => (trimmedQuery ? results : allIcons).slice(0, MAX_RESULTS),
-    [trimmedQuery, results, allIcons],
+    () => (trimmedQuery ? (hasResults ? resultsFor.list : []) : allIcons).slice(0, MAX_RESULTS),
+    [trimmedQuery, hasResults, resultsFor.list, allIcons],
   )
 
   const panelRef = useRef<HTMLDivElement>(null)

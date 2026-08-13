@@ -1,9 +1,9 @@
 import { PageHeader } from '@/components/common/page-header'
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useToast } from "@/components/ui/toast-container"
+import { useToast } from "@/components/ui/use-toast"
 import {
   Play,
   Square,
@@ -59,10 +59,17 @@ function TypeBadge({ type }: { type: 'global' | 'workspace' }) {
 }
 
 export default function AdminRolesPage() {
+  const currentUser = getCurrentUserFromToken()
+  const isCurrentUserAdmin = currentUser?.userType === 'admin'
+
   const [roles, setRoles] = useState<Role[]>([])
   const [templates, setTemplates] = useState<RoleTemplate[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  // Non-admins never load anything: start settled with the access error instead
+  // of flipping the state from an effect.
+  const [isLoading, setIsLoading] = useState(isCurrentUserAdmin)
+  const [error, setError] = useState<string | null>(
+    isCurrentUserAdmin ? null : 'Access denied. Admin privileges required.'
+  )
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedRole, setSelectedRole] = useState<Role | null>(null)
   const [isLogsModalOpen, setIsLogsModalOpen] = useState(false)
@@ -81,23 +88,20 @@ export default function AdminRolesPage() {
   })
 
   const { showToast } = useToast()
-  const currentUser = getCurrentUserFromToken()
-  const isCurrentUserAdmin = currentUser?.userType === 'admin'
 
+  // Latest-value ref: fetchRoles reads the current filters without depending on
+  // them, so its identity stays stable and the initial-load effect below does
+  // not re-fire when filters change (filter changes only apply on the next
+  // explicit refresh, as before).
+  const filtersRef = useRef(filters)
   useEffect(() => {
-    if (!isCurrentUserAdmin) {
-      setError('Access denied. Admin privileges required.')
-      setIsLoading(false)
-      return
-    }
-    fetchRoles()
-    fetchTemplates()
-  }, [isCurrentUserAdmin])
+    filtersRef.current = filters
+  }, [filters])
 
   const fetchRoles = useCallback(async () => {
     try {
       setIsLoading(true)
-      const { type, status } = filters
+      const { type, status } = filtersRef.current
       const fetchedRoles = await roleService.listRoles({
         type: type || undefined,
         status: status || undefined
@@ -110,7 +114,7 @@ export default function AdminRolesPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [filters])
+  }, [])
 
   const fetchTemplates = useCallback(async () => {
     try {
@@ -120,6 +124,17 @@ export default function AdminRolesPage() {
       console.error('Failed to fetch templates:', err)
     }
   }, [])
+
+  useEffect(() => {
+    if (!isCurrentUserAdmin) {
+      return
+    }
+    const run = () => {
+      void fetchRoles()
+      void fetchTemplates()
+    }
+    run()
+  }, [isCurrentUserAdmin, fetchRoles, fetchTemplates])
 
   const handleCreateRole = async () => {
     if (!formData.template || !formData.name) {

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useToolbox } from '../toolbox-context'
+import { useToolbox } from '../use-toolbox'
 import { APPLETS, appletsForMode, type AppletMode } from '../applets/registry'
 
 // Apps tab: the applet launcher plus the host for the opened applet.

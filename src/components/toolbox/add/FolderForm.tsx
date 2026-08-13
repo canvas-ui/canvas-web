@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { insertWorkspacePath } from '@/services/workspace'
-import { useToolbox } from '../toolbox-context'
+import { useToolbox } from '../use-toolbox'
 import { useAddTarget, describeTarget, resolveUploadWorkspace } from './useAddTarget'
 
 // Creates a folder (tree path) under the current target — workspace mode uses

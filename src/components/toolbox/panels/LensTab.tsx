@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Camera, CircleStop, LocateFixed, Monitor } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useToolbox } from '../toolbox-context'
-import { useLensFeed, useLensFeedViewer, LensFeedVideo } from '../lens-feed-context'
+import { useToolbox } from '../use-toolbox'
+import { useLensFeed, useLensFeedViewer } from '../use-lens-feed'
+import { LensFeedVideo } from '../lens-feed-context'
 import { LENS_RATES } from '../lens-rates'
 
 // The Lens filter tab: LIVE feeds refining the current view, sitting beside

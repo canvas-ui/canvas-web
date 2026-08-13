@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useToast } from '@/components/ui/toast-container';
+import { useToast } from '@/components/ui/use-toast';
 import {
   listBackends,
   addBackend,
@@ -72,18 +72,31 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
   const sorted = useMemo(() => [...accounts].sort((a, b) => a.address.localeCompare(b.address)), [accounts]);
   const current = useMemo(() => accounts.find((a) => a.address === selected) || null, [accounts, selected]);
 
+  // Fetch without the synchronous spinner set — the load effect calls this
+  // directly; setState only happens inside promise callbacks.
+  const fetchAccounts = useCallback(() =>
+    listBackends(workspaceId, 'imap')
+      .then((list) => setAccounts(list))
+      .catch((error: unknown) => {
+        showToast({ title: 'Error', description: error instanceof Error ? error.message : 'Failed to load IMAP accounts', variant: 'destructive' });
+      })
+      .finally(() => setIsLoading(false)), [workspaceId, showToast]);
+
+  // Handler-triggered reloads keep the sync spinner (fine in event handlers).
   const load = useCallback(async () => {
     setIsLoading(true);
-    try {
-      setAccounts(await listBackends(workspaceId, 'imap'));
-    } catch (error) {
-      showToast({ title: 'Error', description: error instanceof Error ? error.message : 'Failed to load IMAP accounts', variant: 'destructive' });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [workspaceId, showToast]);
+    await fetchAccounts();
+  }, [fetchAccounts]);
 
-  useEffect(() => { void load(); }, [load]);
+  // Spinner for workspace switches is set during render (prev-value-in-state);
+  // the initial-mount case is covered by isLoading's initializer.
+  const [prevWorkspaceId, setPrevWorkspaceId] = useState(workspaceId);
+  if (workspaceId !== prevWorkspaceId) {
+    setPrevWorkspaceId(workspaceId);
+    setIsLoading(true);
+  }
+
+  useEffect(() => { void fetchAccounts(); }, [fetchAccounts]);
 
   // Discover the account's server-side folder list. For an existing account
   // this runs automatically on select; for a new one it needs credentials

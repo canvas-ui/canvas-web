@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { Check, ChevronDown, ChevronRight, RefreshCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useToast } from '@/components/ui/toast-container'
+import { useToast } from '@/components/ui/use-toast'
 import { useSocket } from '@/hooks/useSocket'
 import { useSocketSubscription } from '@/hooks/useSocketSubscription'
 import {
@@ -115,28 +115,43 @@ export function PendingActionsPanel({ workspaceId, onPendingCount }: PendingActi
   const [amends, setAmends] = useState<Record<string, Record<string, unknown>>>({})
   const [isDeciding, setIsDeciding] = useState(false)
 
-  const load = useCallback(async () => {
-    try {
-      setIsLoading(true)
-      const list = await listPendingActions(workspaceId, {
-        status: statusFilter === 'all' ? undefined : statusFilter,
-        limit: 200,
+  // Fetch without the synchronous spinner set — the load effect calls this
+  // directly; setState only happens inside promise callbacks.
+  const fetchActions = useCallback(() =>
+    listPendingActions(workspaceId, {
+      status: statusFilter === 'all' ? undefined : statusFilter,
+      limit: 200,
+    })
+      .then((list) => {
+        setItems(list)
+        setSelected((prev) => new Set(list.filter((i) => i.status === 'pending' && prev.has(i.actionId)).map((i) => i.actionId)))
+        onPendingCount?.(
+          statusFilter === 'pending'
+            ? list.length
+            : list.filter((i) => i.status === 'pending').length,
+        )
       })
-      setItems(list)
-      setSelected((prev) => new Set(list.filter((i) => i.status === 'pending' && prev.has(i.actionId)).map((i) => i.actionId)))
-      onPendingCount?.(
-        statusFilter === 'pending'
-          ? list.length
-          : list.filter((i) => i.status === 'pending').length,
-      )
-    } catch {
-      showToast({ title: 'Error', description: 'Failed to load pending actions', variant: 'destructive' })
-    } finally {
-      setIsLoading(false)
-    }
-  }, [workspaceId, statusFilter]) // eslint-disable-line react-hooks/exhaustive-deps
+      .catch(() => {
+        showToast({ title: 'Error', description: 'Failed to load pending actions', variant: 'destructive' })
+      })
+      .finally(() => setIsLoading(false)), [workspaceId, statusFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { void load() }, [load])
+  // Handler/socket-triggered reloads keep the sync spinner (fine in callbacks).
+  const load = useCallback(async () => {
+    setIsLoading(true)
+    await fetchActions()
+  }, [fetchActions])
+
+  // Spinner for workspace/filter switches is set during render
+  // (prev-value-in-state); the initial mount is covered by the initializer.
+  const [prevLoadKey, setPrevLoadKey] = useState(`${workspaceId}|${statusFilter}`)
+  const loadKey = `${workspaceId}|${statusFilter}`
+  if (loadKey !== prevLoadKey) {
+    setPrevLoadKey(loadKey)
+    setIsLoading(true)
+  }
+
+  useEffect(() => { void fetchActions() }, [fetchActions])
 
   // Live refresh: proposal/decision events for this workspace push through the
   // websocket workspace channel.

@@ -5,27 +5,33 @@ import { uploadWorkspaceBlob } from '@/services/blobs'
 import { submitDocuments, type AddTarget } from '@/components/toolbox/add/useAddTarget'
 import { useFileFields, buildFileDocument } from '@/components/toolbox/add/useFileFields'
 import { FileMetaFields } from '@/components/toolbox/add/FileMetaFields'
-import { useToolbox } from '@/components/toolbox/toolbox-context'
+import { useToolbox } from '@/components/toolbox/use-toolbox'
 import { B5Card, type B5SaveTarget } from '../B5Card'
 
 // Capture-to-file only: the OS camera UI *is* the capture flow (no in-app
 // preview/record). Explicitly not the deferred live record-to-agent feature.
 export function PhotoCardBody({ onClose }: { onClose: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null)
-  const [file, setFile] = useState<File | null>(null)
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  // File + its object URL live together: the URL is created in the pick
+  // handler (event, not effect) and revoked by the effect cleanup below.
+  const [shot, setShot] = useState<{ file: File; url: string } | null>(null)
+  const file = shot?.file ?? null
+  const previewUrl = shot?.url ?? null
   const [saving, setSaving] = useState(false)
   // Target workspace comes from the Save/Link-to picker, so suggestions fall
   // back to the toolbox's active workspace (null on home → freeform).
   const { state } = useToolbox()
   const meta = useFileFields(state.activeWorkspaceName)
 
+  const pickFile = (f: File | null) =>
+    setShot(f ? { file: f, url: URL.createObjectURL(f) } : null)
+
+  // Revoke the object URL when the shot changes or the card unmounts.
   useEffect(() => {
-    if (!file) { setPreviewUrl(null); return }
-    const url = URL.createObjectURL(file)
-    setPreviewUrl(url)
+    if (!shot) return
+    const url = shot.url
     return () => URL.revokeObjectURL(url)
-  }, [file])
+  }, [shot])
 
   const save = async (target: B5SaveTarget) => {
     if (!file) return []
@@ -76,7 +82,7 @@ export function PhotoCardBody({ onClose }: { onClose: () => void }) {
               <div className="flex w-full shrink-0 items-center gap-2 rounded border border-input px-3 py-2 text-sm">
                 <FileIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <span className="flex-1 truncate">{file.name}</span>
-                <button type="button" onClick={() => setFile(null)} aria-label="Remove" className="text-muted-foreground hover:text-foreground">
+                <button type="button" onClick={() => pickFile(null)} aria-label="Remove" className="text-muted-foreground hover:text-foreground">
                   <X className="h-3.5 w-3.5" />
                 </button>
               </div>
@@ -92,7 +98,7 @@ export function PhotoCardBody({ onClose }: { onClose: () => void }) {
           accept="image/*,video/*"
           capture="environment"
           className="hidden"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
         />
       </div>
     </B5Card>

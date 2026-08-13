@@ -4,13 +4,14 @@ import { registerWidget } from '../widget-registry'
 import type { WidgetProps } from '../widget-types'
 import { DocumentList } from '@/components/common/document-list'
 import type { Document } from '@/types/workspace'
-import { TimelineSortControl, DEFAULT_TIMELINE_SORT, type TimelineSort } from './sort-control'
+import { TimelineSortControl } from './sort-control'
+import { DEFAULT_TIMELINE_SORT, type TimelineSort } from './useTimelineOptions'
 import { useCanvasQueries } from './useCanvasQueries'
 
 // The "default" widget: the canvas path's documents in any of the three view
 // modes (table / grid-tile / card), with timeline sort and scoped server
 // search. Reuses the same DocumentList the standard folder view renders.
-function DocumentsTableWidget({ config, canvas }: WidgetProps) {
+export function DocumentsTableWidget({ config, canvas }: WidgetProps) {
   const pageSize = typeof config.pageSize === 'number' ? config.pageSize : 50
   const initialView = (config.viewMode === 'card' || config.viewMode === 'tile' || config.viewMode === 'table')
     ? config.viewMode

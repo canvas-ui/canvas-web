@@ -1,6 +1,7 @@
 import { CircleStop, Maximize2, Pause, Play, Camera, Monitor } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useLensFeed, LensFeedVideo } from './lens-feed-context'
+import { useLensFeed } from './use-lens-feed'
+import { LensFeedVideo } from './lens-feed-context'
 
 // The running Lens feed, collapsed.
 //

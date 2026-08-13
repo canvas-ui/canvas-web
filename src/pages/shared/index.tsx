@@ -1,10 +1,10 @@
 import { PageHeader } from '@/components/common/page-header'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useToast } from '@/components/ui/toast-container'
+import { useToast } from '@/components/ui/use-toast'
 import { SourceLink } from '@/components/common/source-link'
 
 export default function SharedViewerPage() {
@@ -69,7 +69,12 @@ export default function SharedViewerPage() {
     }
   }
 
-  useEffect(() => { if (resourceUrl && token) load() }, [])
+  // Auto-load exactly once on mount with the initial URL/token (load() itself
+  // no-ops when either is empty). The ref freezes the first-render closure so
+  // later keystrokes in the inputs never re-trigger a fetch — the user drives
+  // subsequent loads via the Load button.
+  const initialLoadRef = useRef(load)
+  useEffect(() => { void initialLoadRef.current() }, [])
 
   return (
     <div className="space-y-4">

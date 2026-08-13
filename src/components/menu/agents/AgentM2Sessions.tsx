@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Edit3, Infinity as InfinityIcon, Plus, Settings, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { useAgentSessions } from '@/components/agent/agent-session-context'
+import { useAgentSessions } from '@/components/agent/use-agent-sessions'
 import { M2Header } from '@/components/menu/shared/M2Header'
-import { useMenu } from '@/components/shell/menu-context'
+import { useMenu } from '@/components/shell/use-menu'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useToast } from '@/components/ui/toast-container'
+import { useToast } from '@/components/ui/use-toast'
 import { getAgent, type Agent, type AgentSessionMutationResult, type AgentSessionSummary } from '@/services/agent'
 
 function formatSessionTitle(session: AgentSessionSummary) {

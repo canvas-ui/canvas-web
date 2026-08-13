@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
-import { useToast } from "@/components/ui/toast-container"
+import { useToast } from "@/components/ui/use-toast"
 import {
   Server,
   Play,
@@ -62,13 +62,6 @@ export default function RolesPage() {
   const { showToast } = useToast()
   const currentUser = getCurrentUserFromToken()
 
-  useEffect(() => {
-    fetchRoles()
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(fetchRoles, 30000)
-    return () => clearInterval(interval)
-  }, [])
-
   const fetchRoles = useCallback(async () => {
     try {
       setIsLoading(true)
@@ -86,6 +79,14 @@ export default function RolesPage() {
       setIsLoading(false)
     }
   }, [currentUser?.id])
+
+  useEffect(() => {
+    const run = () => fetchRoles()
+    void run()
+    // Auto-refresh every 30 seconds
+    const interval = setInterval(run, 30000)
+    return () => clearInterval(interval)
+  }, [fetchRoles])
 
   // Templates and workspaces are only needed by the creation form, so they
   // load with it rather than on every visit to the list.

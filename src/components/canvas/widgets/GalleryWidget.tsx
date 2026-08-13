@@ -8,7 +8,7 @@ import { ImageGridToolbar, ImageLightbox, ImageThumb } from './image-grid'
 // Flickr-like image gallery over the canvas' current context: a uniform grid
 // with search, timeline sort, server pagination, and a keyboard-navigable
 // lightbox. (For a varied 500px-style layout, use the Mosaic widget.)
-function GalleryWidget({ config, canvas }: WidgetProps) {
+export function GalleryWidget({ config, canvas }: WidgetProps) {
   const pageSize = typeof config.pageSize === 'number' ? config.pageSize : 60
   const state = useCanvasImages(canvas, pageSize)
   const [lightbox, setLightbox] = useState<number | null>(null)

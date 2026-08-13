@@ -36,4 +36,19 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // Deliberate exceptions, kept visible as warnings rather than silenced:
+    // the socket hooks publish the just-created socket instance synchronously
+    // (consumers must see the handle before connect resolves; socket.io queues
+    // pre-connect emits), and CanvasGrid's navigation reset interleaves state
+    // with ref writes that a render-time reset is not allowed to touch.
+    files: [
+      'src/hooks/useSocket.ts',
+      'src/hooks/useAgentSocket.ts',
+      'src/components/canvas/CanvasGrid.tsx',
+    ],
+    rules: {
+      'react-hooks/set-state-in-effect': 'warn',
+    },
+  },
 )

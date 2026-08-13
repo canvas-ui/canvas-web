@@ -13,10 +13,8 @@ import {
   DEFAULT_WORKSPACE_TREE_NAME,
 } from '@/services/workspace'
 import type { TreeNode } from '@/types/workspace'
-import {
-  type TreeTab, type RowMenuEvent,
-  TAB_ICONS, TAB_LABELS, LinkNode, WorkspaceListStep, InlineCreateRow, useRowMenu,
-} from './tree-picker-shared'
+import { LinkNode, WorkspaceListStep, InlineCreateRow } from './tree-picker-shared'
+import { type TreeTab, type RowMenuEvent, TAB_ICONS, TAB_LABELS, useRowMenu } from './tree-picker-utils'
 // Workspace is a global type declared in src/types/api.d.ts
 
 export interface LinkToTarget {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useToast } from '@/components/ui/toast-container';
+import { useToast } from '@/components/ui/use-toast';
 import { Plus, Copy, Trash2, Eye, EyeOff, Check } from 'lucide-react';
 import { api } from '@/lib/api';
 

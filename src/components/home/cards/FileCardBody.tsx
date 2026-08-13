@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type DragEvent } from 'react'
+import { useRef, useState, type DragEvent } from 'react'
 import { Upload, File as FileIcon, X } from 'lucide-react'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
@@ -6,7 +6,7 @@ import { uploadWorkspaceBlob } from '@/services/blobs'
 import { submitDocuments, type AddTarget } from '@/components/toolbox/add/useAddTarget'
 import { useFileFields, buildFileDocument } from '@/components/toolbox/add/useFileFields'
 import { FileMetaFields } from '@/components/toolbox/add/FileMetaFields'
-import { useToolbox } from '@/components/toolbox/toolbox-context'
+import { useToolbox } from '@/components/toolbox/use-toolbox'
 import { B5Card, type B5SaveTarget } from '../B5Card'
 import type { QuickAddInitialData } from '../quick-add-types'
 
@@ -18,7 +18,8 @@ function formatSize(bytes: number): string {
 
 export function FileCardBody({ onClose, initialData }: { onClose: () => void; initialData?: QuickAddInitialData }) {
   const inputRef = useRef<HTMLInputElement>(null)
-  const [files, setFiles] = useState<File[]>([])
+  // Prefill once on open only (lazy initializer, not an effect).
+  const [files, setFiles] = useState<File[]>(() => (initialData?.files?.length ? initialData.files : []))
   const [dragOver, setDragOver] = useState(false)
   const [saving, setSaving] = useState(false)
   // The real target is only known once the Save/Link-to picker runs, so tag
@@ -26,12 +27,6 @@ export function FileCardBody({ onClose, initialData }: { onClose: () => void; in
   // screen, where TagInput just goes freeform.
   const { state } = useToolbox()
   const meta = useFileFields(state.activeWorkspaceName)
-
-  useEffect(() => {
-    if (initialData?.files?.length) setFiles(initialData.files)
-    // Prefill once on open only.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   const addFiles = (list: FileList | null) => {
     if (!list) return

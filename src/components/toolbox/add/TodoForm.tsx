@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
-import { useToolbox } from '../toolbox-context'
+import { useToolbox } from '../use-toolbox'
 import { useAddTarget, describeTarget } from './useAddTarget'
 import { useTodoFields } from './useTodoFields'
 import { TodoFields } from './TodoFields'

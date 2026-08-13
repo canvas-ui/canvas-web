@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDownWideNarrow, ArrowUpNarrowWide, Check, CheckCircle2, Circle, Eye, EyeOff, Loader2, Plus, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useAppletTarget, type AppletTarget } from './applet-target'
+import { useAppletTarget, type AppletTarget } from './use-applet-target'
 import { submitDocuments, describeTarget } from '../add/useAddTarget'
 import { updateWorkspaceDocument } from '@/services/workspace'
 import { TODO_SCHEMA } from '@/components/renderers/types'
@@ -12,9 +12,8 @@ import {
 import { DateTimePicker } from '@/components/ui/date-time-picker'
 import type { Document } from '@/types/workspace'
 import type { AppletProps } from './registry'
-import {
-  APPLET_AUTOSAVE_MS, GrowingTextarea, ItemActions, LinkDocOverlay, formatCreated, useAppletDocs,
-} from './shared'
+import { GrowingTextarea, ItemActions, LinkDocOverlay } from './shared'
+import { APPLET_AUTOSAVE_MS, formatCreated, useAppletDocs } from './use-applet-docs'
 
 const TODO_SCHEMA_VERSION = '2.1'
 
@@ -309,7 +308,6 @@ export function TodosApplet({ autoAdd = false }: AppletProps) {
     return out
   }, [query, sorted])
 
-  useEffect(() => { setMatchIdx(0) }, [query])
 
   const currentMatch = matches.length ? matches[Math.min(matchIdx, matches.length - 1)] : null
 
@@ -346,7 +344,7 @@ export function TodosApplet({ autoAdd = false }: AppletProps) {
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => { setQuery(e.target.value); setMatchIdx(0) }}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confirmMatch(true) } }}
             placeholder="Search todos…"
             spellCheck={false}

@@ -3,7 +3,7 @@ import { LayoutDashboard, BookMarked, Share2, Unlink, Save, Trash2, Plus, Link2,
 import { Document, TreeNode } from '@/types/workspace'
 import { DocumentList } from '@/components/common/document-list'
 import type { DocumentPasteOptions } from '@/components/common/document-list'
-import { useToolbox } from '@/components/toolbox/toolbox-context'
+import { useToolbox } from '@/components/toolbox/use-toolbox'
 
 // Right-most round "+" in the content header — opens the side AddPanel picker so
 // a note/link/file is created at the path shown in the URL bar.

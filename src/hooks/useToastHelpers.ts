@@ -1,4 +1,4 @@
-import { useToast } from '@/components/ui/toast-container'
+import { useToast } from '@/components/ui/use-toast'
 
 export function useToastHelpers() {
   const { showToast } = useToast()

@@ -2,7 +2,7 @@ import { Document, TreeNode } from '@/types/workspace'
 import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, Table as TableIcon } from 'lucide-react'
 import { LinkToCard, type LinkToTarget } from '@/components/menu/shared/LinkToCard'
 import { PickDocumentsCard } from '@/components/menu/shared/PickDocumentsCard'
-import { useSideView } from '@/components/shell/side-view-context'
+import { useSideView } from '@/components/shell/use-side-view'
 import { useState, useCallback, useMemo, useEffect, useRef, useDeferredValue } from 'react'
 import { createPortal } from 'react-dom'
 import Fuse from 'fuse.js'
@@ -14,13 +14,13 @@ import {
   TableHeader,
   TableRow,
   SortableTableHead,
-  useSortableData,
 } from '@/components/ui/table'
+import { useSortableData } from '@/components/ui/use-sortable-data'
 import { Button } from '@/components/ui/button'
 import { ContextMenuShell } from '@/components/common/context-menu-shell'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { ObjectPropertiesModal } from '@/components/object-card/ObjectPropertiesModal'
-import { isEditableSchema } from '@/components/object-card/EditForm'
+import { isEditableSchema } from '@/components/object-card/editable-schema'
 import { usePublicShareCode } from '@/components/renderers/public-share'
 import { useDocumentThumbnail } from '@/components/renderers/useDocumentThumbnail'
 import { DocumentIcon } from '@/components/common/DocumentIcon'
@@ -792,10 +792,13 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     return () => clearTimeout(t)
   }, [allowViewToggle])
 
-  // Clear selection when context path changes
-  useEffect(() => {
+  // Clear selection when context path changes (during render — prev-value-in-
+  // state — so no effect round-trip)
+  const [prevContextPath, setPrevContextPath] = useState(contextPath)
+  if (contextPath !== prevContextPath) {
+    setPrevContextPath(contextPath)
     setSelectedDocuments(new Set())
-  }, [contextPath])
+  }
 
   // Content-header "Link selection" button (DefaultCanvas) — selection + the
   // LinkTo modal live here, so it just pings us.
@@ -1036,7 +1039,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     }
     setContextMenu(null)
     setSelectedDocuments(new Set())
-  }, [onCopyDocuments, onCutDocuments, onRemoveDocument, onRemoveDocuments, onDeleteDocument, onDeleteDocuments, onDestroyDocument, onDestroyDocuments, documents, workspaceId])
+  }, [onCopyDocuments, onCutDocuments, onRemoveDocument, onRemoveDocuments, onDeleteDocument, onDeleteDocuments, onDestroyDocument, onDestroyDocuments, documents])
 
   const handleEmptyAreaRightClick = useCallback((event: React.MouseEvent) => {
     // Right-clicks inside a portaled dialog bubble here via the React tree —

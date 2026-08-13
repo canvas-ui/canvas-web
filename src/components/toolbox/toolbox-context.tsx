@@ -1,6 +1,4 @@
 import {
-  createContext,
-  useContext,
   useReducer,
   useCallback,
   useEffect,
@@ -8,6 +6,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useLocation } from 'react-router-dom'
+import { ToolboxCtx } from './use-toolbox'
 import type { ToolboxFilters, ToolboxTimelineFilters, ToolboxGeoFilters, ToolboxLensFilters, GeoBBox, GeoSelection, ToolboxSort, Document as WorkspaceDocument } from '@/types/workspace'
 import { DEFAULT_TOOLBOX_FILTERS, DEFAULT_TOOLBOX_SORT, buildDatetimeFilters, buildGeoFilters } from '@/types/workspace'
 import {
@@ -320,7 +319,7 @@ function findTreeNode(root: TreeNode, path: string): TreeNode | null {
 
 // ─── Context value ────────────────────────────────────────────────────────────
 
-interface ToolboxContextValue {
+export interface ToolboxContextValue {
   state: ToolboxState
   setView: (view: T1View) => void
   toggleView: (view: T1View) => void
@@ -358,27 +357,18 @@ interface ToolboxContextValue {
   refreshTimelines: () => void
 }
 
-const ToolboxCtx = createContext<ToolboxContextValue | null>(null)
-
-export function useToolbox(): ToolboxContextValue {
-  const ctx = useContext(ToolboxCtx)
-  if (!ctx) throw new Error('useToolbox must be used within a ToolboxProvider')
-  return ctx
-}
-
-// For components that also render outside the app shell (public shares):
-// null instead of throwing when no provider is mounted.
-export function useToolboxOptional(): ToolboxContextValue | null {
-  return useContext(ToolboxCtx)
-}
-
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function ToolboxProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(toolboxReducer, initialState)
   const location = useLocation()
   const stateRef = useRef(state)
-  stateRef.current = state
+  // Ref synced in an effect (not during render). Declared before every other
+  // effect so, with in-order effect execution, all of them — and every
+  // post-commit callback — read the current render's state.
+  useEffect(() => {
+    stateRef.current = state
+  })
 
   // ── URL → navigation state ────────────────────────────────────────────────
 

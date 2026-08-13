@@ -3,7 +3,7 @@ import { Plus, Save, Trash2, RefreshCw, Power, PowerOff, GitBranch, BookOpen, Hi
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CodeEditor } from '@/components/ui/code-editor'
-import { useToast } from '@/components/ui/toast-container'
+import { useToast } from '@/components/ui/use-toast'
 import { API_URL } from '@/config/api'
 import {
   listHooks,

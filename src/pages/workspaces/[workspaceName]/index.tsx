@@ -6,8 +6,8 @@ import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style';
 import { visibleAccentColor } from '@/utils/color';
 import { api } from '@/lib/api';
 import { API_ROUTES } from '@/config/api';
-import { useToast } from '@/components/ui/toast-container';
-import { useMenu } from '@/components/shell/menu-context';
+import { useToast } from '@/components/ui/use-toast';
+import { useMenu } from '@/components/shell/use-menu';
 import { Button } from '@/components/ui/button';
 import { FormPanel } from '@/components/common/form-panel';
 import { CloseSectionButton, SectionBackButton } from '@/components/common/page-header';
@@ -45,8 +45,8 @@ import {
 import { Document, TreeNode, buildDatetimeFilters, buildGeoFilters, buildLensFilters, DEFAULT_TOOLBOX_SORT } from '@/types/workspace';
 import { sanitizeUrlPath, buildWorkspaceUrl, parseWorkspacePathFromUrl } from '@/utils/url-params';
 import { docInGeoSelection } from '@/utils/geo';
-import { useToolbox } from '@/components/toolbox/toolbox-context';
-import { useCanvasPins } from '@/components/home/pins-context';
+import { useToolbox } from '@/components/toolbox/use-toolbox';
+import { useCanvasPins } from '@/components/home/use-canvas-pins';
 import { useQuerySession } from '@/hooks/useQuerySession';
 import type { SessionSpec } from '@/services/session';
 import { useQueryDebug, type QueryDebugData } from '@/lib/query-debug';
@@ -586,7 +586,8 @@ export default function WorkspaceDetailPage() {
   }, [workspaceName, selectedPath, selectedTreeName, selectedLayerId, isLayerView, currentPage, pageSize, workspace?.status, serverSearchQueries, tbFiltersKey, docScope, unfiledOnly, queryDebug]);
 
   useEffect(() => {
-    fetchDocuments();
+    const run = () => fetchDocuments();
+    void run();
   }, [fetchDocuments]);
 
   useEffect(() => {
@@ -1537,7 +1538,8 @@ function SideWorkspaceCanvas({
   }, [workspaceName, pane.treeName]);
 
   useEffect(() => {
-    fetchPaneDocuments();
+    const run = () => fetchPaneDocuments();
+    void run();
   }, [fetchPaneDocuments]);
 
   useEffect(() => {

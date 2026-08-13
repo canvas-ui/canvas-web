@@ -8,13 +8,13 @@ import { useSocketSubscription } from "@/hooks/useSocketSubscription"
 import { FormPanel } from '@/components/common/form-panel';
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { useToast } from "@/components/ui/toast-container"
+import { useToast } from "@/components/ui/use-toast"
 import { Plus, GripVertical } from "lucide-react"
 import { WorkspaceCard } from "@/components/ui/workspace-card"
 import { useNavigate } from "react-router-dom"
 import { useCreatePanel } from "@/hooks/use-create-panel"
 import { useIsMobile } from "@/hooks/use-mobile"
-import { useMenu } from "@/components/shell/menu-context"
+import { useMenu } from "@/components/shell/use-menu"
 import { useSocket } from "@/hooks/useSocket"
 import {
   listWorkspaces,
@@ -25,7 +25,8 @@ import {
   updateWorkspace,
   removeWorkspace,
 } from "@/services/workspace"
-import { DefaultFoldersPicker, createDefaultFolders, useFolderSelection } from '@/components/workspaces/DefaultFoldersPicker'
+import { DefaultFoldersPicker } from '@/components/workspaces/DefaultFoldersPicker'
+import { createDefaultFolders, useFolderSelection } from '@/components/workspaces/default-folders'
 import { WorkspaceLayoutPicker } from '@/components/workspaces/WorkspaceLayoutPicker'
 import { useDefaultWorkspaceLayout } from '@/hooks/useDefaultWorkspaceLayout'
 import { sortByOrder, moveItem, persistSequentialOrder, useListReorder } from '@/lib/list-order'

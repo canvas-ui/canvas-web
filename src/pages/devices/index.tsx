@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Monitor, RefreshCw, Pencil, Check, X as XIcon, Link2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useToast } from '@/components/ui/toast-container'
+import { useToast } from '@/components/ui/use-toast'
 import {
   listDevices,
   updateDevice,

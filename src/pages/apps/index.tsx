@@ -3,7 +3,8 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { House } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { APPLETS } from '@/components/toolbox/applets/registry'
-import { AppletTargetProvider, type AppletTarget } from '@/components/toolbox/applets/applet-target'
+import { AppletTargetProvider } from '@/components/toolbox/applets/applet-target'
+import type { AppletTarget } from '@/components/toolbox/applets/use-applet-target'
 import { listWorkspaces, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
 import { DocumentModalProvider } from '@/components/shell/document-modal-context'
 import { LensFeedProvider } from '@/components/toolbox/lens-feed-context'
@@ -47,8 +48,14 @@ export default function AppletHostPage() {
     listContexts().then(setContexts).catch(() => setContexts([]))
   }, [])
 
+  // Re-seed the draft whenever the URL's path changes (previous-value-in-state
+  // pattern: reset during render instead of via an effect).
   const [pathDraft, setPathDraft] = useState(path)
-  useEffect(() => { setPathDraft(path) }, [path])
+  const [prevPath, setPrevPath] = useState(path)
+  if (prevPath !== path) {
+    setPrevPath(path)
+    setPathDraft(path)
+  }
 
   const setParams = (updates: Record<string, string | null>) => {
     const next = new URLSearchParams(searchParams)

@@ -4,7 +4,7 @@ import { Activity, Pause, Play, RotateCw, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useToast } from "@/components/ui/toast-container"
+import { useToast } from "@/components/ui/use-toast"
 import { adminService, type AdminLogEntry, type AdminLogFilters } from "@/services/admin"
 import { getCurrentUserFromToken } from "@/services/auth"
 
@@ -48,10 +48,14 @@ export default function AdminLogsPage() {
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [draftFilters, setDraftFilters] = useState(DEFAULT_FILTERS)
   const [logs, setLogs] = useState<AdminLogEntry[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  // Non-admins never load anything: start settled with the access error instead
+  // of flipping the state from an effect.
+  const [isLoading, setIsLoading] = useState(isCurrentUserAdmin)
   const [isStreaming, setIsStreaming] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(
+    isCurrentUserAdmin ? null : "Access denied. Admin privileges required."
+  )
 
   const loadSnapshot = useCallback(async (nextFilters: AdminLogFilters) => {
     try {
@@ -74,42 +78,45 @@ export default function AdminLogsPage() {
 
   useEffect(() => {
     if (!isCurrentUserAdmin) {
-      setIsLoading(false)
-      setError("Access denied. Admin privileges required.")
       return
     }
 
-    loadSnapshot(filters)
+    const run = () => loadSnapshot(filters)
+    void run()
   }, [filters, isCurrentUserAdmin, loadSnapshot])
 
   useEffect(() => {
     if (!isCurrentUserAdmin || isPaused) {
-      setIsStreaming(false)
+      // No setIsStreaming(false) needed: it starts false, and any previous
+      // stream's .finally() below resets it once the abort settles.
       return
     }
 
     const controller = new AbortController()
-    setIsStreaming(true)
 
-    void adminService.logs.streamLogs(filters, {
-      signal: controller.signal,
-      onEntry: (entry) => {
-        setLogs((current) => mergeLogBuffer([...current, entry]))
-      },
-      onError: (streamError) => {
-        setError(streamError.message)
-      },
-    }).catch((streamError) => {
-      const message = streamError instanceof Error ? streamError.message : "Log stream stopped"
-      setError(message)
-      showToast({
-        title: "Stream error",
-        description: message,
-        variant: "destructive",
+    const startStream = () => {
+      setIsStreaming(true)
+      return adminService.logs.streamLogs(filters, {
+        signal: controller.signal,
+        onEntry: (entry) => {
+          setLogs((current) => mergeLogBuffer([...current, entry]))
+        },
+        onError: (streamError) => {
+          setError(streamError.message)
+        },
+      }).catch((streamError) => {
+        const message = streamError instanceof Error ? streamError.message : "Log stream stopped"
+        setError(message)
+        showToast({
+          title: "Stream error",
+          description: message,
+          variant: "destructive",
+        })
+      }).finally(() => {
+        setIsStreaming(false)
       })
-    }).finally(() => {
-      setIsStreaming(false)
-    })
+    }
+    void startStream()
 
     return () => {
       controller.abort()

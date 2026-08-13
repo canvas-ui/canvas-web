@@ -1,6 +1,6 @@
 import { Outlet, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
-import { useSideView } from './side-view-context'
+import { useSideView } from './use-side-view'
 import { DocumentSideCard } from './DocumentSideCard'
 
 // Detail views (canvas, file-manager, agent chat, settings) manage their own

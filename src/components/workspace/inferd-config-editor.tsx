@@ -3,7 +3,7 @@ import { AlertTriangle, ChevronDown, Plus, Trash2, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { useToast } from '@/components/ui/toast-container'
+import { useToast } from '@/components/ui/use-toast'
 import {
   BUILTIN_PROVIDER_IDS,
   INFERD_PROVIDER_TYPES,

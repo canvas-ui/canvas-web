@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw, ShieldAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useToast } from '@/components/ui/toast-container'
+import { useToast } from '@/components/ui/use-toast'
 import { InferdConfigEditor } from '@/components/workspace/inferd-config-editor'
 import { getCurrentUserFromToken } from '@/services/auth'
 import {

@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2, Save, X, Braces, PlayCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useToast } from '@/components/ui/toast-container'
+import { useToast } from '@/components/ui/use-toast'
 import { getRules, saveRules, backfillHook, type HookRule, type HookRuleAction } from '@/services/hooks'
 import { listScripts } from '@/services/scripts'
 
@@ -329,16 +329,20 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
   const [isSaving, setIsSaving] = useState(false)
   const [scripts, setScripts] = useState<string[]>([])
 
-  const load = useCallback(async () => {
+  // Spinner for workspace switches is set during render (prev-value-in-state);
+  // the initial mount is covered by isLoading's initializer. The load effect
+  // itself only sets state inside promise callbacks.
+  const [prevWorkspaceId, setPrevWorkspaceId] = useState(workspaceId)
+  if (workspaceId !== prevWorkspaceId) {
+    setPrevWorkspaceId(workspaceId)
     setIsLoading(true)
-    try {
-      setRules(await getRules(workspaceId))
-    } finally {
-      setIsLoading(false)
-    }
-  }, [workspaceId])
+  }
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    void getRules(workspaceId)
+      .then((r) => setRules(r))
+      .finally(() => setIsLoading(false))
+  }, [workspaceId])
   useEffect(() => {
     listScripts(workspaceId).then((files) => setScripts(files.map((f) => f.path))).catch(() => setScripts([]))
   }, [workspaceId])
