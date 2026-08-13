@@ -42,31 +42,35 @@ export function useContextListData(enabled: boolean) {
     const offConnect = socketService.on('connect', subscribe)
     subscribe()
 
-    const handleCreated = (data: any) => {
-      if (!data?.id || !data?.userId) return
+    const handleCreated = (data: unknown) => {
+      const ctx = data as Context | null | undefined
+      if (!ctx?.id || !ctx?.userId) return
       setContexts(prev => {
-        if (prev.some(c => c.id === data.id && c.userId === data.userId)) return prev
-        return [...prev, data]
+        if (prev.some(c => c.id === ctx.id && c.userId === ctx.userId)) return prev
+        return [...prev, ctx]
       })
     }
 
-    const handleUpdated = (data: any) => {
-      if (!data?.id || !data?.userId) return
+    const handleUpdated = (data: unknown) => {
+      const ctx = data as Context | null | undefined
+      if (!ctx?.id || !ctx?.userId) return
       setContexts(prev => prev.map(c =>
-        (c.id === data.id && c.userId === data.userId) ? { ...c, ...data } : c
+        (c.id === ctx.id && c.userId === ctx.userId) ? { ...c, ...ctx } : c
       ))
     }
 
-    const handleDeleted = (data: any) => {
-      const id = data?.contextId ?? data?.id
+    const handleDeleted = (data: unknown) => {
+      const payload = data as { contextId?: string; id?: string } | null | undefined
+      const id = payload?.contextId ?? payload?.id
       if (!id) return
       setContexts(prev => prev.filter(c => c.id !== id))
     }
 
-    const handleUrlChanged = (data: any) => {
-      if (!data?.id || !data?.userId) return
+    const handleUrlChanged = (data: unknown) => {
+      const ctx = data as Context | null | undefined
+      if (!ctx?.id || !ctx?.userId) return
       setContexts(prev => prev.map(c =>
-        (c.id === data.id && c.userId === data.userId) ? { ...c, ...data } : c
+        (c.id === ctx.id && c.userId === ctx.userId) ? { ...c, ...ctx } : c
       ))
     }
 
@@ -75,7 +79,7 @@ export function useContextListData(enabled: boolean) {
       fetch()
     }
 
-    const events: Array<[string, Function]> = [
+    const events: Array<[string, (data: unknown) => void]> = [
       ['context:created', handleCreated],
       ['context.created', handleCreated],
       ['context:updated', handleUpdated],

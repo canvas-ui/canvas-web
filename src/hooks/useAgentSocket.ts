@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { API_ROUTES } from '@/config/api';
-import type { AgentImageContent, AgentResponseMetadata } from '@/services/agent';
+import type { AgentImageContent, AgentResponseMetadata, RawAgentMessage } from '@/services/agent';
 
 export interface StreamingChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -18,7 +18,7 @@ export interface StreamingChatChunk {
   type: string;       // Backend uses type field
   content: string;
   delta: string;      // Backend includes delta field
-  messages?: any[];
+  messages?: RawAgentMessage[];
 }
 
 export interface StreamingChatRequest {
@@ -35,13 +35,13 @@ export interface StreamingChatError {
   agentId: string;
   messageId?: string; // Updated to match backend
   error: string;
-  details?: any;
+  details?: unknown;
 }
 
 export interface UseAgentSocketOptions {
   agentId?: string;
   onMessage?: (chunk: StreamingChatChunk) => void;
-  onComplete?: (agentId: string, messageId: string, messages?: any[]) => void;
+  onComplete?: (agentId: string, messageId: string, messages?: RawAgentMessage[]) => void;
   onError?: (error: StreamingChatError) => void;
 }
 
@@ -120,7 +120,7 @@ export function useAgentSocket(options: UseAgentSocketOptions = {}) {
     });
 
     // Backend sends different completion event
-    socketInstance.on('agent:chat:complete', (data: { agentId: string; messageId: string; messages?: any[] }) => {
+    socketInstance.on('agent:chat:complete', (data: { agentId: string; messageId: string; messages?: RawAgentMessage[] }) => {
       console.log('Chat stream complete:', data);
       if (optionsRef.current.onComplete) {
         optionsRef.current.onComplete(data.agentId, data.messageId, data.messages);

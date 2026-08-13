@@ -131,7 +131,7 @@ export default function RegisterPage() {
     }
     setIsLoading(true)
     try {
-      const response: any = await registerUser(formData.name, formData.email, formData.password)
+      const response = await registerUser(formData.name, formData.email, formData.password)
       console.log('Registration successful:', response)
 
       showToast({
@@ -144,9 +144,9 @@ export default function RegisterPage() {
       setRegistrationComplete(true)
       setFormData({ name: "", email: "", password: "" }) // Clear form
       setErrors({})
-    } catch (error: any) {
+    } catch (error) {
       console.error('Registration failed:', error)
-      const msg = error?.message || 'Registration failed'
+      const msg = (error as { message?: string } | null | undefined)?.message || 'Registration failed'
       // Prefer to attach the message to password if it mentions password
       if (msg.toLowerCase().includes('password')) {
         setErrors({ ...errors, password: msg })

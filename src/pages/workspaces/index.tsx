@@ -86,7 +86,7 @@ export default function WorkspacesPage() {
         if (err instanceof Error) {
           errorMessage = err.message;
         } else if (typeof err === 'object' && err !== null) {
-          const errorObj = err as any;
+          const errorObj = err as { message?: string; error?: string; statusText?: string; payload?: { message?: string; error?: string } };
           // Try to extract from various possible error structures
           errorMessage = errorObj.message ||
                        errorObj.error ||
@@ -164,7 +164,7 @@ export default function WorkspacesPage() {
       if (err instanceof Error) {
         errorMessage = err.message;
       } else if (typeof err === 'object' && err !== null) {
-        const errorObj = err as any;
+        const errorObj = err as { message?: string; error?: string; statusText?: string; payload?: { message?: string; error?: string } };
         // Try to extract from various possible error structures
         errorMessage = errorObj.message ||
                      errorObj.error ||
@@ -263,7 +263,7 @@ export default function WorkspacesPage() {
       if (err instanceof Error) {
         errorMessage = err.message;
       } else if (typeof err === 'object' && err !== null) {
-        const errorObj = err as any;
+        const errorObj = err as { message?: string; error?: string; statusText?: string; payload?: { message?: string; error?: string } };
         // Try to extract from various possible error structures
         errorMessage = errorObj.message ||
                      errorObj.error ||
@@ -300,7 +300,7 @@ export default function WorkspacesPage() {
       if (err instanceof Error) {
         errorMessage = err.message;
       } else if (typeof err === 'object' && err !== null) {
-        const errorObj = err as any;
+        const errorObj = err as { message?: string; error?: string; statusText?: string; payload?: { message?: string; error?: string } };
         // Try to extract from various possible error structures
         errorMessage = errorObj.message ||
                      errorObj.error ||
@@ -655,7 +655,7 @@ function AddRemoteWorkspace({ onImported, onClose }: { onImported: (ws: Workspac
       })
       onImported(ws as Workspace)
     } catch (err) {
-      const errorObj = err as any
+      const errorObj = err as { message?: string; payload?: { message?: string } } | null | undefined
       const message = errorObj?.message || errorObj?.payload?.message || 'Failed to import remote workspace'
       showToast({ title: 'Error', description: message, variant: 'destructive' })
     } finally {

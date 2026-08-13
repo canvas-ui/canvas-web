@@ -44,7 +44,7 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
         ...token,
         hash: token.hash || token.tokenHash || '',
       })).filter(token => token.hash));
-    } catch (error) {
+    } catch {
       showToast({
         title: 'Error',
         description: 'Failed to load workspace tokens',
@@ -105,7 +105,7 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
         description: 'Workspace sharing token created successfully',
         variant: 'default'
       });
-    } catch (error) {
+    } catch {
       showToast({
         title: 'Error',
         description: 'Failed to create token',
@@ -124,7 +124,7 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
         description: 'Token revoked successfully'
       });
       await loadTokens();
-    } catch (error) {
+    } catch {
       showToast({
         title: 'Error',
         description: 'Failed to revoke token',
@@ -157,7 +157,7 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
         title: 'Copied',
         description: 'Token hash copied to clipboard'
       });
-    } catch (error) {
+    } catch {
       showToast({
         title: 'Error',
         description: 'Failed to copy to clipboard',
@@ -175,7 +175,7 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
         description: 'Token copied to clipboard'
       });
       setTimeout(() => setCopiedNewToken(false), 2000);
-    } catch (error) {
+    } catch {
       showToast({
         title: 'Error',
         description: 'Failed to copy token to clipboard',
@@ -209,14 +209,14 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
           <div>
             <label className="text-sm font-medium mb-2 block">Permissions</label>
             <div className="flex gap-2 flex-wrap">
-              {['read', 'write', 'admin'].map((permission) => (
+              {(['read', 'write', 'admin'] as const).map((permission) => (
                 <label key={permission} className="flex items-center gap-2">
                   <input
                     type="checkbox"
-                    checked={newTokenPermissions.includes(permission as any)}
+                    checked={newTokenPermissions.includes(permission)}
                     onChange={(e) => {
                       if (e.target.checked) {
-                        setNewTokenPermissions([...newTokenPermissions, permission as any]);
+                        setNewTokenPermissions([...newTokenPermissions, permission]);
                       } else {
                         setNewTokenPermissions(newTokenPermissions.filter(p => p !== permission));
                       }
@@ -392,7 +392,7 @@ function WorkspaceEmailShares({ workspaceId }: { workspaceId: string }) {
     try {
       const res = await api.get<{ payload: typeof shares | { emailShares?: typeof shares } }>(`/workspaces/${workspaceId}/shares`)
       setShares(Array.isArray(res.payload) ? res.payload : res.payload?.emailShares || [])
-    } catch (e) {
+    } catch {
       // silent
     }
   }
@@ -431,11 +431,11 @@ function WorkspaceEmailShares({ workspaceId }: { workspaceId: string }) {
       <div className="flex gap-2 flex-wrap items-center">
         <Input placeholder="user@local.server" value={email} onChange={(e) => setEmail(e.target.value)} className="max-w-xs" />
         <div className="flex gap-2">
-          {['read','write','admin'].map(p => (
+          {(['read','write','admin'] as const).map(p => (
             <label key={p} className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={permissions.includes(p as any)} onChange={(e) => {
-                if (e.target.checked) setPermissions([...permissions, p as any])
-                else setPermissions(permissions.filter(x => x !== (p as any)))
+              <input type="checkbox" checked={permissions.includes(p)} onChange={(e) => {
+                if (e.target.checked) setPermissions([...permissions, p])
+                else setPermissions(permissions.filter(x => x !== p))
               }} />
               {p}
             </label>

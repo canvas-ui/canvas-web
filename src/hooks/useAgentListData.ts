@@ -41,32 +41,34 @@ export function useAgentListData(enabled: boolean) {
     const offConnect = socketService.on('connect', subscribe)
     subscribe()
 
-    const handleCreated = (data: any) => {
-      const agent = data?.agent ?? data
+    const handleCreated = (data: unknown) => {
+      const agent = ((data as { agent?: Agent } | null | undefined)?.agent ?? data) as Agent | null | undefined
       if (!agent?.id) return
       setAgents(prev => prev.some(a => a.id === agent.id) ? prev : [...prev, agent])
     }
 
-    const handleUpdated = (data: any) => {
-      const agent = data?.agent ?? data
+    const handleUpdated = (data: unknown) => {
+      const agent = ((data as { agent?: Agent } | null | undefined)?.agent ?? data) as Agent | null | undefined
       if (!agent?.id) return
       setAgents(prev => prev.map(a => a.id === agent.id ? { ...a, ...agent } : a))
     }
 
-    const handleDeleted = (data: any) => {
-      const id = data?.agentId ?? data?.id
+    const handleDeleted = (data: unknown) => {
+      const payload = data as { agentId?: string; id?: string } | null | undefined
+      const id = payload?.agentId ?? payload?.id
       if (!id) return
       setAgents(prev => prev.filter(a => a.id !== id))
     }
 
-    const handleStatusChanged = (data: any) => {
-      const id = data?.agentId ?? data?.id
-      const status = data?.status
+    const handleStatusChanged = (data: unknown) => {
+      const payload = data as { agentId?: string; id?: string; status?: Agent['status'] } | null | undefined
+      const id = payload?.agentId ?? payload?.id
+      const status = payload?.status
       if (!id || !status) return
       setAgents(prev => prev.map(a => a.id === id ? { ...a, status } : a))
     }
 
-    const events: Array<[string, Function]> = [
+    const events: Array<[string, (data: unknown) => void]> = [
       ['agent:created', handleCreated],
       ['agent.created', handleCreated],
       ['agent:updated', handleUpdated],

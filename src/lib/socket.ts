@@ -19,14 +19,32 @@ interface SocketAck {
   payload?: unknown
 }
 
+/**
+ * Any event handler a caller may register. `never[]` params make every concrete
+ * handler signature assignable (contravariance) without resorting to `any`.
+ */
+export type SocketEventHandler = (...args: never[]) => void
+
+/** Internal wrapper shape actually bound onto the socket.io instance. */
+type SocketListener = (...args: unknown[]) => void
+
+/** Extra fields socket.io attaches to connect_error errors. */
+interface SocketConnectError extends Error {
+  description?: unknown
+  context?: unknown
+  type?: string
+  transport?: string
+  code?: string | number
+}
+
 class SocketService {
   private socket: Socket | null = null
   private connected: boolean = false
   private pending: boolean = false
   private reconnectAttempts: number = 0
   private maxReconnectAttempts: number = 5
-  private handlers: Map<string, Set<Function>> = new Map()
-  private socketWrappers: Map<string, Map<Function, Function>> = new Map()
+  private handlers: Map<string, Set<SocketEventHandler>> = new Map()
+  private socketWrappers: Map<string, Map<SocketEventHandler, SocketListener>> = new Map()
   private desiredSubscriptions: Set<string> = new Set()
   private baseUrl: string
   private connectionId: string = '';
@@ -171,7 +189,7 @@ class SocketService {
       }
     })
 
-    this.socket.on('connect_error', (error: any) => {
+    this.socket.on('connect_error', (error: SocketConnectError) => {
       console.error('💥 Socket connection error:', error.message)
       console.error('🔍 DEBUG: Connection error details:', {
         message: error.message,
@@ -186,17 +204,17 @@ class SocketService {
       this.pending = false
     })
 
-    this.socket.on('error', (error: any) => {
+    this.socket.on('error', (error: unknown) => {
       console.error('Socket error:', error)
     })
 
     // Add handler for authenticated event
-    this.socket.on('authenticated', (data: any) => {
+    this.socket.on('authenticated', (data: unknown) => {
       console.log('Socket authenticated:', data)
     })
 
     // Add handler for connection change events
-    this.socket.on('connection:change', (data: any) => {
+    this.socket.on('connection:change', (data: unknown) => {
       console.log('Connection status changed:', data)
     })
   }
@@ -212,7 +230,7 @@ class SocketService {
     })
   }
 
-  private attach(event: string, callback: Function) {
+  private attach(event: string, callback: SocketEventHandler) {
     if (!this.socket) return
     let eventWrappers = this.socketWrappers.get(event)
     if (!eventWrappers) {
@@ -221,17 +239,17 @@ class SocketService {
     }
     if (eventWrappers.has(callback)) return
 
-    const wrapper = (...args: any[]) => callback(...args)
+    const wrapper: SocketListener = (...args) => (callback as SocketListener)(...args)
     eventWrappers.set(callback, wrapper)
-    this.socket.on(event, wrapper as any)
+    this.socket.on(event, wrapper)
   }
 
-  private detach(event: string, callback: Function) {
+  private detach(event: string, callback: SocketEventHandler) {
     if (!this.socket) return
     const eventWrappers = this.socketWrappers.get(event)
     const wrapper = eventWrappers?.get(callback)
     if (!wrapper) return
-    this.socket.off(event, wrapper as any)
+    this.socket.off(event, wrapper)
     eventWrappers?.delete(callback)
     if (eventWrappers && eventWrappers.size === 0) {
       this.socketWrappers.delete(event)
@@ -239,7 +257,7 @@ class SocketService {
   }
 
   // Add event handler
-  on(event: string, callback: Function) {
+  on(event: string, callback: SocketEventHandler) {
     if (!this.handlers.has(event)) this.handlers.set(event, new Set())
     const set = this.handlers.get(event)!
     if (set.has(callback)) return () => this.off(event, callback)
@@ -251,7 +269,7 @@ class SocketService {
   }
 
   // Remove event handler
-  off(event: string, callback: Function) {
+  off(event: string, callback: SocketEventHandler) {
     const set = this.handlers.get(event)
     if (!set) return
     if (!set.has(callback)) return
@@ -303,14 +321,14 @@ class SocketService {
   }
 
   // Emit event to server
-  emit(event: string, ...args: any[]) {
+  emit(event: string, ...args: unknown[]) {
     // Track desired subscriptions so we can auto-resubscribe after reconnects.
     if (event === 'subscribe') {
-      const payload = args?.[0]
+      const payload = args?.[0] as { channel?: unknown } | undefined
       const channel = payload?.channel
       if (typeof channel === 'string' && channel) this.desiredSubscriptions.add(channel)
     } else if (event === 'unsubscribe') {
-      const payload = args?.[0]
+      const payload = args?.[0] as { channel?: unknown } | undefined
       const channel = payload?.channel
       if (typeof channel === 'string' && channel) this.desiredSubscriptions.delete(channel)
     }

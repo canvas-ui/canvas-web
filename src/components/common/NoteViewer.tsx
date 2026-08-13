@@ -1,16 +1,17 @@
 import { useEffect } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import TiptapLink from '@tiptap/extension-link'
 import { Markdown as TiptapMarkdown } from 'tiptap-markdown'
+import { getMarkdown } from '@/lib/tiptap-markdown'
 
 // Read-only markdown renderer (tiptap). Kept in its own module so the tiptap /
 // ProseMirror stack lands in a lazy-loaded chunk, off the main bundle.
 export function NoteViewer({ content }: { content: string }) {
   const editor = useEditor({
     extensions: [
-      StarterKit,
-      TiptapLink.configure({ openOnClick: true, autolink: true }),
+      // StarterKit bundles the Link extension since tiptap v3 — configure it
+      // here instead of registering @tiptap/extension-link a second time.
+      StarterKit.configure({ link: { openOnClick: true, autolink: true } }),
       TiptapMarkdown.configure({ html: false, transformPastedText: true }),
     ],
     content,
@@ -22,8 +23,8 @@ export function NoteViewer({ content }: { content: string }) {
 
   useEffect(() => {
     if (!editor) return
-    const current = editor.storage.markdown?.getMarkdown?.() ?? ''
-    if (content !== current) editor.commands.setContent(content || '', false)
+    const current = getMarkdown(editor)
+    if (content !== current) editor.commands.setContent(content || '', { emitUpdate: false })
   }, [content, editor])
 
   if (!editor) return null

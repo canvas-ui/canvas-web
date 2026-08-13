@@ -2,8 +2,13 @@ import { useEffect } from 'react'
 import { Socket } from 'socket.io-client'
 
 export interface EventHandlers {
-  [event: string]: (...args: any[]) => void
+  // `never[]` params keep every concrete handler signature assignable
+  // (contravariance) without resorting to `any`.
+  [event: string]: (...args: never[]) => void
 }
+
+/** Listener shape socket.io accepts; handlers are widened to it when bound. */
+type SocketListener = (...args: unknown[]) => void
 
 /**
  * Generic hook to subscribe to a Canvas WebSocket topic and wire event handlers.
@@ -31,14 +36,14 @@ export function useSocketSubscription(
 
     // Register event listeners
     for (const [event, handler] of Object.entries(handlers)) {
-      socket.on(event, handler)
+      socket.on(event, handler as SocketListener)
     }
 
     // Cleanup on unmount or socket change
     return () => {
       socket.emit('unsubscribe', { channel: topic })
       for (const [event, handler] of Object.entries(handlers)) {
-        socket.off(event, handler as any)
+        socket.off(event, handler as SocketListener)
       }
     }
   }, [socket, topic])

@@ -52,7 +52,15 @@ interface ApiResponse<T> {
 // Union type for possible login response structures
 type LoginResponseData = DirectLoginResponse | NestedLoginResponse;
 
-export async function loginUser(email: string, password: string, strategy: string = 'auto'): Promise<ApiResponse<any>> {
+// Widened login payload shape returned to callers: covers both the direct and
+// the nested server response variants (all fields optional).
+export interface LoginResult {
+  token?: string;
+  user?: DirectLoginResponse['user'];
+  payload?: NestedLoginResponse['payload'];
+}
+
+export async function loginUser(email: string, password: string, strategy: string = 'auto'): Promise<ApiResponse<LoginResult>> {
   try {
     const response = await api.post<ApiResponse<LoginResponseData>>(API_ROUTES.login, {
       email,
@@ -124,7 +132,7 @@ export async function logoutUser(): Promise<void> {
   }
 }
 
-export async function registerUser(name: string, email: string, password: string): Promise<any> {
+export async function registerUser(name: string, email: string, password: string): Promise<unknown> {
   try {
     return await api.post(API_ROUTES.register, {
       name,
@@ -217,10 +225,41 @@ export function isAuthenticated(): boolean {
   return api.isAuthenticated();
 }
 
-export async function getAuthConfig(): Promise<any> {
+// Server auth configuration (GET /auth/config)
+export interface AuthPasswordPolicy {
+  minLength: number;
+  maxLength: number;
+  requireUppercase: boolean;
+  requireLowercase: boolean;
+  requireNumbers: boolean;
+  requireSpecialChars: boolean;
+}
+
+export interface AuthImapDomain {
+  domain: string;
+  name: string;
+  requireAppPassword: boolean;
+}
+
+export interface AuthConfig {
+  allowUserRegistrations?: boolean;
+  strategies: {
+    local: {
+      enabled: boolean;
+      requireEmailVerification?: boolean;
+      passwordPolicy?: AuthPasswordPolicy;
+    };
+    imap: {
+      enabled: boolean;
+      domains: AuthImapDomain[];
+    };
+  };
+}
+
+export async function getAuthConfig(): Promise<AuthConfig> {
   try {
-    const response = await api.get<ApiResponse<any>>(API_ROUTES.authConfig, { skipAuth: true });
-    return response.payload || response;
+    const response = await api.get<ApiResponse<AuthConfig>>(API_ROUTES.authConfig, { skipAuth: true });
+    return response.payload || (response as unknown as AuthConfig);
   } catch (error) {
     console.error('Failed to get auth config:', error);
     // Return default config if API call fails

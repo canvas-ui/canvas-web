@@ -12,6 +12,8 @@ import {
   convertToStreamingMessages,
   ChatMessage,
   AgentImageContent,
+  AgentStreamMetadata,
+  RawAgentMessage,
   extractAgentMessageMetadata,
   getAgentSession,
 } from '@/services/agent';
@@ -36,7 +38,7 @@ export interface ChatState {
   error: string | null;
 }
 
-function extractMessageText(message: any): string {
+function extractMessageText(message: RawAgentMessage | null | undefined): string {
   if (!message) return '';
   if (typeof message.errorMessage === 'string' && message.errorMessage.trim()) {
     return message.errorMessage.trim();
@@ -45,8 +47,8 @@ function extractMessageText(message: any): string {
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return '';
   const text = content
-    .filter((block: any) => block?.type === 'text' && typeof block.text === 'string')
-    .map((block: any) => block.text)
+    .filter((block) => block?.type === 'text' && typeof block.text === 'string')
+    .map((block) => block.text ?? '')
     .join('\n');
   return text || '';
 }
@@ -56,7 +58,7 @@ function appendReasoning(currentReasoning: string | undefined, delta: string | u
   return nextReasoning || undefined;
 }
 
-function sanitizeStreamingMetadata(metadata: Record<string, any> | undefined, reasoning: string | undefined) {
+function sanitizeStreamingMetadata(metadata: AgentStreamMetadata | undefined, reasoning: string | undefined) {
   if (!metadata && !reasoning) return undefined;
   const { reasoningDelta: _reasoningDelta, ...rest } = metadata || {};
   return {
@@ -192,10 +194,10 @@ export function useAgentChat(options: UseAgentChatOptions) {
     }
   }
 
-  function handleWebSocketComplete(_agentId: string, messageId: string, messages?: any[]) {
+  function handleWebSocketComplete(_agentId: string, messageId: string, messages?: RawAgentMessage[]) {
     if (messageId === currentMessageRef.current) {
       const finalMessage = Array.isArray(messages)
-        ? [...messages].reverse().find((message: any) => message?.role === 'assistant')
+        ? [...messages].reverse().find((message) => message?.role === 'assistant')
         : null;
       const finalContent = extractMessageText(finalMessage);
       const finalMetadata = extractAgentMessageMetadata(finalMessage);
@@ -318,7 +320,7 @@ export function useAgentChat(options: UseAgentChatOptions) {
             onStart: () => {
               sseAccepted = true;
             },
-            onMessage: (content: string, isComplete: boolean, metadata: any) => {
+            onMessage: (content: string, isComplete: boolean, metadata: AgentStreamMetadata) => {
               streamingMessage += content;
               const reasoningDelta = typeof metadata?.reasoningDelta === 'string' ? metadata.reasoningDelta : '';
 

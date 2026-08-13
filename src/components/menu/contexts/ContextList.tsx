@@ -24,7 +24,7 @@ export function ContextList() {
   const [optimisticOrder, setOptimisticOrder] = useState<Context[] | null>(null)
   const orderedContexts = optimisticOrder ?? contexts
   useEffect(() => { setOptimisticOrder(null) }, [contexts])
-  const isSharedCtx = (ctx: Context & Record<string, any>) => ctx.isShared === true || ctx.type === 'shared'
+  const isSharedCtx = (ctx: Context & { isShared?: boolean; type?: string }) => ctx.isShared === true || ctx.type === 'shared'
   const { rowProps, handleProps, draggingIndex, insertLineClass } = useListReorder((from, to) => {
     const next = moveItem(orderedContexts, from, to)
     setOptimisticOrder(next)
@@ -36,7 +36,7 @@ export function ContextList() {
       })
   })
 
-  const handleSelect = (ctx: Context & Record<string, any>) => {
+  const handleSelect = (ctx: Context) => {
     selectEntity(ctx.id)
     navigate(`/contexts/${ctx.id}`)
   }

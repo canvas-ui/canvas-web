@@ -187,10 +187,20 @@ export async function removeWorkspace(id: string): Promise<Workspace> {
 
 
 
+// Summary row of a workspace tree as returned by GET /workspaces/:id/trees.
+export interface WorkspaceTreeSummary {
+  id: string;
+  name: string;
+  type: 'context' | 'directory' | string;
+  label?: string;
+  description?: string;
+  color?: string | null;
+}
+
 // List all trees for a workspace
-export async function listWorkspaceTrees(workspaceId: string): Promise<any[]> {
+export async function listWorkspaceTrees(workspaceId: string): Promise<WorkspaceTreeSummary[]> {
   try {
-    const res = await api.get<{ payload: any[] }>(`${API_ROUTES.workspaces}/${workspaceId}/trees`);
+    const res = await api.get<{ payload: WorkspaceTreeSummary[] }>(`${API_ROUTES.workspaces}/${workspaceId}/trees`);
     return res.payload || [];
   } catch (error) {
     console.error(`Failed to list workspace trees ${workspaceId}:`, error);
@@ -485,8 +495,12 @@ export interface WorkspacePublicCanvasShare {
   } | null
 }
 
-export async function listWorkspaceShares(workspaceId: string): Promise<{ publicCanvasShares: WorkspacePublicCanvasShare[]; emailShares: any[] }> {
-  const response = await api.get<{ payload: { publicCanvasShares?: WorkspacePublicCanvasShare[]; emailShares?: any[] } }>(
+// Email-based workspace share entry; shape is server-defined and only passed
+// through to the UI, so it stays an open record.
+export type WorkspaceEmailShare = Record<string, unknown>
+
+export async function listWorkspaceShares(workspaceId: string): Promise<{ publicCanvasShares: WorkspacePublicCanvasShare[]; emailShares: WorkspaceEmailShare[] }> {
+  const response = await api.get<{ payload: { publicCanvasShares?: WorkspacePublicCanvasShare[]; emailShares?: WorkspaceEmailShare[] } }>(
     `${API_ROUTES.workspaces}/${workspaceId}/shares`
   )
   return {
@@ -634,13 +648,13 @@ export async function destroyWorkspaceLayer(workspaceId: string, layerId: string
   return true
 }
 
-export async function mergeWorkspaceLayer(workspaceId: string, layerId: string, targetLayers: string[], treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<any> {
-  const res = await api.post<{ payload: any }>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers/merge`, { layerId, targetLayers })
+export async function mergeWorkspaceLayer(workspaceId: string, layerId: string, targetLayers: string[], treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<unknown> {
+  const res = await api.post<{ payload: unknown }>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers/merge`, { layerId, targetLayers })
   return res.payload
 }
 
-export async function subtractWorkspaceLayer(workspaceId: string, layerId: string, targetLayers: string[], treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<any> {
-  const res = await api.post<{ payload: any }>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers/subtract`, { layerId, targetLayers })
+export async function subtractWorkspaceLayer(workspaceId: string, layerId: string, targetLayers: string[], treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<unknown> {
+  const res = await api.post<{ payload: unknown }>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers/subtract`, { layerId, targetLayers })
   return res.payload
 }
 
@@ -712,7 +726,7 @@ export interface DestroyResult {
 
 export async function updateWorkspaceDocument(
   workspaceId: string,
-  document: { id: number; schema: string; schemaVersion: string; data?: Record<string, any>; metadata?: Record<string, any>; comment?: string }
+  document: { id: number; schema: string; schemaVersion: string; data?: Record<string, unknown>; metadata?: Record<string, unknown>; comment?: string }
 ): Promise<boolean> {
   await api.put<{ payload: unknown }>(
     `${API_ROUTES.workspaces}/${workspaceId}/documents`,

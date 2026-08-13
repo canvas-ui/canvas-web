@@ -245,9 +245,9 @@ export function WorkspaceList() {
 
                   {/* Meta: host + owner */}
                   <div className="flex items-center gap-2 mt-1 pl-3.5">
-                    {(ws as any).host && (
+                    {(ws as Workspace & { host?: string }).host && (
                       <span className="text-[10px] text-muted-foreground truncate">
-                        {(ws as any).host}
+                        {(ws as Workspace & { host?: string }).host}
                       </span>
                     )}
                     {ws.ownerEmail && (

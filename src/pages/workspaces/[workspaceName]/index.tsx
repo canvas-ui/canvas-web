@@ -948,7 +948,7 @@ export default function WorkspaceDetailPage() {
     }
   };
 
-  const handleImportDocuments = async (docs: any[], contextPath: string): Promise<boolean> => {
+  const handleImportDocuments = async (docs: Record<string, unknown>[], contextPath: string): Promise<boolean> => {
     if (!workspaceName) return false;
     try {
       const ids = await importDocumentsToWorkspacePath(workspaceName, contextPath, docs, selectedTreeName, selectedTreeType);

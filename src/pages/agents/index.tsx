@@ -57,7 +57,7 @@ export default function AgentsPage() {
   useSocketSubscription(socket, 'agent', {
     'agent:status:changed': (data: { agentId: string; status: string; isActive: boolean }) => {
       setAgents(prev => prev.map(agent =>
-        agent.id === data.agentId ? { ...agent, status: data.status as any, isActive: data.isActive } : agent
+        agent.id === data.agentId ? { ...agent, status: data.status as Agent['status'], isActive: data.isActive } : agent
       ))
     },
     'agent:created': (data: { agent: Agent }) => {
@@ -105,7 +105,7 @@ export default function AgentsPage() {
         if (err instanceof Error) {
           errorMessage = err.message;
         } else if (typeof err === 'object' && err !== null) {
-          const errorObj = err as any;
+          const errorObj = err as { message?: string; error?: string; statusText?: string; payload?: { message?: string; error?: string } };
           errorMessage = errorObj.message ||
                        errorObj.error ||
                        errorObj.payload?.message ||
@@ -214,7 +214,7 @@ export default function AgentsPage() {
       if (err instanceof Error) {
         errorMessage = err.message;
       } else if (typeof err === 'object' && err !== null) {
-        const errorObj = err as any;
+        const errorObj = err as { message?: string; error?: string; statusText?: string; payload?: { message?: string; error?: string } };
         errorMessage = errorObj.message ||
                      errorObj.error ||
                      errorObj.payload?.message ||
@@ -248,7 +248,7 @@ export default function AgentsPage() {
       if (err instanceof Error) {
         errorMessage = err.message;
       } else if (typeof err === 'object' && err !== null) {
-        const errorObj = err as any;
+        const errorObj = err as { message?: string; error?: string; statusText?: string; payload?: { message?: string; error?: string } };
         errorMessage = errorObj.message ||
                      errorObj.error ||
                      errorObj.payload?.message ||
@@ -283,7 +283,7 @@ export default function AgentsPage() {
       if (err instanceof Error) {
         errorMessage = err.message;
       } else if (typeof err === 'object' && err !== null) {
-        const errorObj = err as any;
+        const errorObj = err as { message?: string; error?: string; statusText?: string; payload?: { message?: string; error?: string } };
         errorMessage = errorObj.message ||
                      errorObj.error ||
                      errorObj.payload?.message ||

@@ -3,7 +3,7 @@ import { api } from '@/lib/api'
 import { API_URL } from '@/config/api'
 import { getAgentSession, startAgent, voicePrompt } from '@/services/agent'
 import { extractAgentMessageReasoning } from '@/services/agent'
-import { extractAgentMessageMetadata, type AgentResponseMetadata } from '@/services/agent'
+import { extractAgentMessageMetadata, type AgentResponseMetadata, type RawAgentMessage } from '@/services/agent'
 
 export interface PromptMessage {
   role: 'user' | 'assistant'
@@ -13,7 +13,7 @@ export interface PromptMessage {
   metadata?: AgentResponseMetadata
 }
 
-function extractMessageText(message: any): string {
+function extractMessageText(message: RawAgentMessage | null | undefined): string {
   if (!message) return ''
   if (typeof message.errorMessage === 'string' && message.errorMessage.trim()) {
     return message.errorMessage.trim()
@@ -22,8 +22,8 @@ function extractMessageText(message: any): string {
   if (typeof content === 'string') return content
   if (!Array.isArray(content)) return ''
   const text = content
-    .filter((block: any) => block?.type === 'text' && typeof block.text === 'string')
-    .map((block: any) => block.text)
+    .filter((block) => block?.type === 'text' && typeof block.text === 'string')
+    .map((block) => block.text ?? '')
     .join('\n')
   return text || ''
 }
@@ -75,11 +75,12 @@ export function useAgentPromptStream(agentId: string) {
 
     try {
       await startAgent(agentId)
-    } catch (startErr: any) {
+    } catch (startErr) {
       // 'Agent is not active' means it's already running — fine to ignore.
       // Any other error (model unknown, API unreachable, etc.) surfaces in the stream.
-      if (!startErr?.message?.includes('not active') && !startErr?.message?.includes('already')) {
-        setError(startErr?.message ?? 'Failed to start agent')
+      const startMessage = startErr instanceof Error ? startErr.message : undefined
+      if (!startMessage?.includes('not active') && !startMessage?.includes('already')) {
+        setError(startMessage ?? 'Failed to start agent')
         setIsStreaming(false)
         return
       }
@@ -137,7 +138,7 @@ export function useAgentPromptStream(agentId: string) {
                   })
                 } else if (ev.type === 'complete') {
                   const finalMessage = Array.isArray(ev.messages)
-                    ? [...ev.messages].reverse().find((message: any) => message?.role === 'assistant')
+                    ? ([...ev.messages] as RawAgentMessage[]).reverse().find((message) => message?.role === 'assistant')
                     : null
                   const finalContent = extractMessageText(finalMessage)
                   const finalReasoning = extractAgentMessageReasoning(finalMessage) || assistantReasoning
@@ -175,8 +176,9 @@ export function useAgentPromptStream(agentId: string) {
           },
         }
       )
-    } catch (err: any) {
-      if (err?.name !== 'AbortError') setError(err?.message ?? 'Stream failed')
+    } catch (err) {
+      const streamErr = err instanceof Error ? err : null
+      if (streamErr?.name !== 'AbortError') setError(streamErr?.message ?? 'Stream failed')
       setMessages(prev => {
         const copy = [...prev]
         const last = copy[copy.length - 1]
@@ -212,8 +214,8 @@ export function useAgentPromptStream(agentId: string) {
         const player = new Audio(`data:${result.audioMimeType};base64,${result.audio}`)
         player.play().catch(() => { /* autoplay blocked — text reply is still shown */ })
       }
-    } catch (err: any) {
-      setError(err?.message ?? 'Voice prompt failed')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Voice prompt failed')
       // Drop the transcribing placeholder so the log stays clean.
       setMessages(prev => {
         const copy = [...prev]

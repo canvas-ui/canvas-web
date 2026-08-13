@@ -150,7 +150,7 @@ export default function ApiTokensPage() {
         description: 'Token copied to clipboard'
       })
       setTimeout(() => setCopiedToken(false), 2000)
-    } catch (err) {
+    } catch {
       showToast({
         title: 'Error',
         description: 'Failed to copy token to clipboard',

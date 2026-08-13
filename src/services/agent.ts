@@ -57,8 +57,38 @@ export interface AgentResponseMetadata {
   timestamp?: string | number;
   responseId?: string;
   usage?: AgentResponseUsage;
-  toolCalls?: any[];
+  toolCalls?: unknown[];
   reasoning?: string;
+}
+
+// Streaming metadata handed to chat onMessage callbacks: response metadata
+// plus the incremental reasoning delta emitted by 'thinking' events.
+export interface AgentStreamMetadata extends AgentResponseMetadata {
+  reasoningDelta?: string;
+}
+
+// One content block of a raw agent runtime message (provider-specific shapes).
+export interface AgentMessageContentBlock {
+  type?: string;
+  text?: string;
+  thinking?: string;
+  reasoning?: string;
+}
+
+// Raw message shape as returned by the agent runtime (session/prompt payloads),
+// before normalization into ChatMessage.
+export interface RawAgentMessage {
+  role?: string;
+  content?: string | AgentMessageContentBlock[];
+  errorMessage?: string;
+  timestamp?: string | number;
+  api?: string;
+  provider?: string;
+  model?: string;
+  stopReason?: string;
+  responseId?: string;
+  usage?: AgentResponseUsage;
+  metadata?: { reasoning?: string; toolCalls?: unknown[] };
 }
 
 export interface AgentImageContent {
@@ -178,7 +208,7 @@ export interface MCPTool {
   description: string;
   inputSchema: {
     type: string;
-    properties: Record<string, any>;
+    properties: Record<string, unknown>;
     required?: string[];
   };
   server: string;
@@ -191,7 +221,7 @@ export interface AgentMemory {
   agentId: string;
   type: 'conversation' | 'context' | 'instruction';
   content: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
   timestamp?: string;
@@ -207,7 +237,7 @@ export interface ChatMessage {
   metadata?: AgentResponseMetadata;
 }
 
-function extractAgentMessageText(message: any): string {
+function extractAgentMessageText(message: RawAgentMessage | null | undefined): string {
   if (!message) return '';
   if (typeof message.errorMessage === 'string' && message.errorMessage.trim()) {
     return message.errorMessage.trim();
@@ -216,21 +246,21 @@ function extractAgentMessageText(message: any): string {
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return '';
   const text = content
-    .filter((block: any) => block?.type === 'text' && typeof block.text === 'string')
-    .map((block: any) => block.text)
+    .filter((block): block is AgentMessageContentBlock & { text: string } => block?.type === 'text' && typeof block.text === 'string')
+    .map((block) => block.text)
     .join('\n');
   return text || '';
 }
 
-export function extractAgentMessageReasoning(message: any): string {
+export function extractAgentMessageReasoning(message: RawAgentMessage | null | undefined): string {
   if (!message) return '';
   if (typeof message?.metadata?.reasoning === 'string' && message.metadata.reasoning.trim()) {
     return message.metadata.reasoning.trim();
   }
   if (!Array.isArray(message.content)) return '';
   return message.content
-    .filter((block: any) => block?.type === 'thinking' || block?.type === 'reasoning')
-    .map((block: any) => {
+    .filter((block: AgentMessageContentBlock) => block?.type === 'thinking' || block?.type === 'reasoning')
+    .map((block: AgentMessageContentBlock) => {
       if (typeof block?.thinking === 'string') return block.thinking;
       if (typeof block?.reasoning === 'string') return block.reasoning;
       if (typeof block?.text === 'string') return block.text;
@@ -241,7 +271,7 @@ export function extractAgentMessageReasoning(message: any): string {
     .trim();
 }
 
-export function extractAgentMessageMetadata(message: any): AgentResponseMetadata | undefined {
+export function extractAgentMessageMetadata(message: RawAgentMessage | null | undefined): AgentResponseMetadata | undefined {
   if (!message) return undefined;
 
   const reasoning = extractAgentMessageReasoning(message);
@@ -269,10 +299,10 @@ function normalizeMessageTimestamp(timestamp: string | number | undefined): stri
   return new Date().toISOString();
 }
 
-export function convertAgentSessionMessages(messages: any[] = []): ChatMessage[] {
+export function convertAgentSessionMessages(messages: RawAgentMessage[] = []): ChatMessage[] {
   return messages
-    .filter((message: any) => message?.role === 'user' || message?.role === 'assistant')
-    .map((message: any) => ({
+    .filter((message): message is RawAgentMessage & { role: 'user' | 'assistant' } => message?.role === 'user' || message?.role === 'assistant')
+    .map((message) => ({
       role: message.role,
       content: extractAgentMessageText(message),
       timestamp: normalizeMessageTimestamp(message.timestamp),
@@ -283,7 +313,23 @@ export function convertAgentSessionMessages(messages: any[] = []): ChatMessage[]
     .filter((message) => message.content || message.metadata?.reasoning);
 }
 
-function normalizeAgentSessionPayload(payload: any): AgentSession {
+// Raw session payload as returned by the agent session endpoints, before the
+// messages are normalized into ChatMessage form.
+export interface RawAgentSessionPayload {
+  mode?: AgentSession['mode'];
+  sessionId?: string;
+  sessionFile?: string;
+  thinkingLevel?: string;
+  model?: AgentSession['model'];
+  messages?: RawAgentMessage[];
+}
+
+export interface RawAgentSessionMutationPayload {
+  current?: RawAgentSessionPayload;
+  sessions: AgentSessionList;
+}
+
+function normalizeAgentSessionPayload(payload: RawAgentSessionPayload | null | undefined): AgentSession {
   return {
     mode: payload?.mode,
     sessionId: payload?.sessionId,
@@ -294,7 +340,7 @@ function normalizeAgentSessionPayload(payload: any): AgentSession {
   };
 }
 
-function normalizeAgentSessionMutationResult(payload: any): AgentSessionMutationResult {
+function normalizeAgentSessionMutationResult(payload: RawAgentSessionMutationPayload): AgentSessionMutationResult {
   return {
     current: normalizeAgentSessionPayload(payload?.current),
     sessions: payload?.sessions,
@@ -626,7 +672,7 @@ export async function getAgent(agentId: string): Promise<Agent> {
 }
 
 export async function getAgentSession(agentId: string): Promise<AgentSession> {
-  const response = await api.get<{ payload: any }>(`${API_URL}/agents/${agentId}/session`);
+  const response = await api.get<{ payload: RawAgentSessionPayload }>(`${API_URL}/agents/${agentId}/session`);
   return normalizeAgentSessionPayload(response.payload);
 }
 
@@ -639,7 +685,7 @@ export async function createAgentSession(
   agentId: string,
   data: { mode: 'persistent' | 'experimental' | 'incognito'; name?: string }
 ): Promise<AgentSessionMutationResult> {
-  const response = await api.post<{ payload: AgentSessionMutationResult }>(`${API_URL}/agents/${agentId}/sessions`, data);
+  const response = await api.post<{ payload: RawAgentSessionMutationPayload }>(`${API_URL}/agents/${agentId}/sessions`, data);
   return normalizeAgentSessionMutationResult(response.payload);
 }
 
@@ -647,7 +693,7 @@ export async function selectAgentSession(
   agentId: string,
   data: { mode: 'persistent' | 'experimental' | 'incognito'; sessionId?: string }
 ): Promise<AgentSessionMutationResult> {
-  const response = await api.put<{ payload: AgentSessionMutationResult }>(`${API_URL}/agents/${agentId}/session`, data);
+  const response = await api.put<{ payload: RawAgentSessionMutationPayload }>(`${API_URL}/agents/${agentId}/session`, data);
   return normalizeAgentSessionMutationResult(response.payload);
 }
 
@@ -656,7 +702,7 @@ export async function renameAgentSession(
   sessionId: string,
   data: { name: string }
 ): Promise<AgentSessionMutationResult> {
-  const response = await api.patch<{ payload: AgentSessionMutationResult }>(`${API_URL}/agents/${agentId}/sessions/${sessionId}`, data);
+  const response = await api.patch<{ payload: RawAgentSessionMutationPayload }>(`${API_URL}/agents/${agentId}/sessions/${sessionId}`, data);
   return normalizeAgentSessionMutationResult(response.payload);
 }
 
@@ -664,7 +710,7 @@ export async function deleteAgentSession(
   agentId: string,
   sessionId: string
 ): Promise<AgentSessionMutationResult> {
-  const response = await api.delete<{ payload: AgentSessionMutationResult }>(`${API_URL}/agents/${agentId}/sessions/${sessionId}`);
+  const response = await api.delete<{ payload: RawAgentSessionMutationPayload }>(`${API_URL}/agents/${agentId}/sessions/${sessionId}`);
   return normalizeAgentSessionMutationResult(response.payload);
 }
 
@@ -775,10 +821,10 @@ export async function getAgentMCPTools(agentId: string): Promise<MCPTool[]> {
 export async function callMCPTool(
   agentId: string,
   toolName: string,
-  arguments_: Record<string, any>,
+  arguments_: Record<string, unknown>,
   source?: string
-): Promise<any> {
-  const response = await api.post<{ payload: any }>(`${API_URL}/agents/${agentId}/mcp/tools/${toolName}`, {
+): Promise<unknown> {
+  const response = await api.post<{ payload: unknown }>(`${API_URL}/agents/${agentId}/mcp/tools/${toolName}`, {
     arguments: arguments_,
     source
   });
@@ -796,8 +842,8 @@ export async function chatWithAgentStream(
   message: string,
   options: {
     onStart?: () => void;
-    onMessage?: (content: any, isComplete: any, metadata: any) => void;
-    onError?: (error: any) => void;
+    onMessage?: (content: string, isComplete: boolean, metadata: AgentStreamMetadata) => void;
+    onError?: (error: Error) => void;
     onComplete?: () => void;
     context?: ChatMessage[];
     mcpContext?: boolean;
@@ -840,7 +886,7 @@ export async function chatWithAgentStream(
               onMessage('', false, { ...(data.metadata || {}), reasoningDelta: data.delta || '' });
             } else if (data.type === 'complete') {
               const finalMessage = Array.isArray(data.messages)
-                ? [...data.messages].reverse().find((msg: any) => msg?.role === 'assistant')
+                ? [...data.messages].reverse().find((msg: RawAgentMessage) => msg?.role === 'assistant')
                 : null;
               // Pass empty string for content — the streaming buffer already has the full accumulated text.
               // Re-appending the final text here would double the message.
@@ -869,8 +915,8 @@ export async function chatWithAgentFallback(
   agentId: string,
   options: {
     message: string;
-    onMessage?: (content: any, isComplete: any, metadata: any) => void;
-    onError?: (error: any) => void;
+    onMessage?: (content: string, isComplete: boolean, metadata: AgentStreamMetadata | undefined) => void;
+    onError?: (error: Error) => void;
     onComplete?: () => void;
     context?: ChatMessage[];
     mcpContext?: boolean;
@@ -878,13 +924,13 @@ export async function chatWithAgentFallback(
     temperature?: number;
     images?: AgentImageContent[];
   }
-): Promise<{ content: string; metadata?: any }> {
+): Promise<{ content: string; metadata?: AgentResponseMetadata }> {
   const { message, onMessage, onError, onComplete, context, mcpContext, maxTokens, temperature, images } = options;
 
   try {
     const response = await api.post<{
       payload: {
-        messages: any[];
+        messages: RawAgentMessage[];
       }
     }>(`${API_URL}/agents/${agentId}/prompt`, {
       message,
@@ -896,7 +942,7 @@ export async function chatWithAgentFallback(
     });
 
     const finalMessage = Array.isArray(response.payload.messages)
-      ? [...response.payload.messages].reverse().find((msg: any) => msg?.role === 'assistant')
+      ? [...response.payload.messages].reverse().find((msg: RawAgentMessage) => msg?.role === 'assistant')
       : null;
     const result = {
       content: extractAgentMessageText(finalMessage),
@@ -913,7 +959,7 @@ export async function chatWithAgentFallback(
     return result;
   } catch (error) {
     if (onError) {
-      onError(error);
+      onError(error as Error);
     }
     throw error;
   }

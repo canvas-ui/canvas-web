@@ -105,7 +105,7 @@ export default function LoginPage() {
         errorMessage = error.message;
       } else if (typeof error === 'object' && error !== null) {
         // Handle API response error objects
-        const apiError = error as any;
+        const apiError = error as { message?: string; error?: string; payload?: { message?: string } };
         if (apiError.message) {
           errorMessage = apiError.message;
         } else if (apiError.error) {

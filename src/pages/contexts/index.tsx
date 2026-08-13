@@ -43,7 +43,7 @@ interface ContextEntry {
   path: string | null;
   pathArray: string[];
   workspaceId: string;
-  acl: Record<string, any>;
+  acl: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
   locked: boolean;
@@ -58,7 +58,7 @@ interface ContextEntry {
   type?: string; // 'shared' for shared contexts
   isShared?: boolean; // True if this is a shared context
   ownerEmail?: string; // Email of the context owner
-  sharedVia?: string | any; // Access level or share metadata
+  sharedVia?: string | { accessLevel?: string; [key: string]: unknown }; // Access level or share metadata
 }
 
 export default function ContextsPage() {
@@ -129,7 +129,7 @@ export default function ContextsPage() {
       if (err instanceof Error) {
         errorMessage = err.message;
       } else if (typeof err === 'object' && err !== null) {
-        const errorObj = err as any;
+        const errorObj = err as { message?: string; error?: string; statusText?: string; payload?: { message?: string; error?: string } };
         // Try to extract from various possible error structures
         errorMessage = errorObj.message ||
                      errorObj.error ||
@@ -164,7 +164,8 @@ export default function ContextsPage() {
     console.log('Subscribing to context events');
     subscribe()
 
-    const handleContextCreated = (data: ContextEntry) => {
+    const handleContextCreated = (raw: unknown) => {
+      const data = raw as ContextEntry;
       console.log('Received context created:', data);
       // The backend sends the context data directly, not nested under 'context' property
       // Validate the context data before adding
@@ -183,7 +184,8 @@ export default function ContextsPage() {
         return [...prev, data];
       });
     }
-    const handleContextUpdated = (data: ContextEntry) => {
+    const handleContextUpdated = (raw: unknown) => {
+      const data = raw as ContextEntry;
       console.log('Received context update:', data);
       // Validate the context data before updating
       if (!data || !data.id || !data.userId) {
@@ -196,16 +198,18 @@ export default function ContextsPage() {
         (ctx && ctx.id === data.id && ctx.userId === data.userId) ? { ...ctx, ...data } : ctx
       ))
     }
-    const handleContextDeleted = (data: { contextId: string }) => {
+    const handleContextDeleted = (raw: unknown) => {
+      const data = raw as { contextId?: string; id?: string } | null | undefined;
       console.log('Received context deletion:', data);
-      const contextId = (data as any)?.contextId ?? (data as any)?.id
+      const contextId = data?.contextId ?? data?.id
       if (!contextId) {
         console.error('Invalid context deletion data received:', data);
         return;
       }
       setContexts(prev => prev.filter(ctx => ctx && ctx.id !== contextId))
     }
-    const handleContextUrlChanged = (data: ContextEntry) => {
+    const handleContextUrlChanged = (raw: unknown) => {
+      const data = raw as ContextEntry;
       console.log('Received context URL change:', data);
       // Validate the context data before updating
       if (!data || !data.id || !data.userId) {
@@ -220,7 +224,7 @@ export default function ContextsPage() {
     }
 
     // Support both dot & colon notations (server has been inconsistent)
-    const contextEventMap: Array<[string, Function]> = [
+    const contextEventMap: Array<[string, (data: unknown) => void]> = [
       ['context:created', handleContextCreated],
       ['context.created', handleContextCreated],
       ['context:updated', handleContextUpdated],
@@ -330,7 +334,7 @@ export default function ContextsPage() {
       if (err instanceof Error) {
         errorMessage = err.message;
       } else if (typeof err === 'object' && err !== null) {
-        const errorObj = err as any;
+        const errorObj = err as { message?: string; error?: string; statusText?: string; payload?: { message?: string; error?: string } };
         // Try to extract from various possible error structures
         errorMessage = errorObj.message ||
                      errorObj.error ||

@@ -234,12 +234,41 @@ export interface DocumentGeo {
   source?: GeoSource
 }
 
+// Schema-specific document payload. Documents are polymorphic (notes, todos,
+// links, files, emails, …), so only the fields the UI actually reads are
+// declared; anything else stays an unknown-valued extra.
+export interface DocumentData {
+  title?: string
+  label?: string
+  name?: string
+  description?: string
+  content?: string
+  summary?: string
+  url?: string
+  uri?: string
+  tags?: string[]
+  // todo fields
+  status?: string
+  priority?: string
+  dueDate?: string
+  completed?: boolean
+  // email fields
+  subject?: string
+  from?: string
+  body?: string
+  bodyHtml?: string
+  bodyPreview?: string
+  // file fields
+  size?: number
+  [key: string]: unknown
+}
+
 // Document structure from API
 export interface Document {
   id: number
   schema: string
   schemaVersion: string
-  data: Record<string, any>
+  data: DocumentData
   // Optional user-authored free-text note (top-level, never regenerated).
   comment?: string
   metadata: {
@@ -256,7 +285,7 @@ export interface Document {
     // Auto-folded into FTS + embedded as its own text-space chunk server-side.
     summary?: string
   }
-  locations?: Array<{ url: string; metadata?: Record<string, any> }>
+  locations?: Array<{ url: string; metadata?: Record<string, unknown> }>
   indexOptions: {
     checksumAlgorithms: string[]
     checksumFields: string[]
@@ -266,7 +295,7 @@ export interface Document {
       embeddingModel: string
       embeddingDimensions: number
       embeddingProvider: string
-      embeddingProviderOptions: Record<string, any>
+      embeddingProviderOptions: Record<string, unknown>
       chunking: {
         type: string
         chunkSize: number

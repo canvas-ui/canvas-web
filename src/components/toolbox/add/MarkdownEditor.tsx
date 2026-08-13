@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import Link from '@tiptap/extension-link'
 import { Markdown } from 'tiptap-markdown'
+import { getMarkdown } from '@/lib/tiptap-markdown'
 import './md-editor.css'
 import {
   Bold,
@@ -98,8 +98,9 @@ function Toolbar({ editor }: { editor: Editor }) {
 export function MarkdownEditor({ value, onChange, placeholder }: MarkdownEditorProps) {
   const editor = useEditor({
     extensions: [
-      StarterKit,
-      Link.configure({ openOnClick: false, autolink: true }),
+      // StarterKit bundles the Link extension since tiptap v3 — configure it
+      // here instead of registering @tiptap/extension-link a second time.
+      StarterKit.configure({ link: { openOnClick: false, autolink: true } }),
       Markdown.configure({ html: false, transformPastedText: true }),
     ],
     content: value,
@@ -110,19 +111,17 @@ export function MarkdownEditor({ value, onChange, placeholder }: MarkdownEditorP
       },
     },
     onUpdate: ({ editor }) => {
-      const md = editor.storage.markdown?.getMarkdown?.() ?? ''
-      onChange(md)
+      onChange(getMarkdown(editor))
     },
   })
 
   // Keep editor in sync if the value is reset externally (e.g. after submit).
   useEffect(() => {
     if (!editor) return
-    const current = editor.storage.markdown?.getMarkdown?.() ?? ''
+    const current = getMarkdown(editor)
     if (value !== current) {
-      editor.commands.setContent(value || '', false)
+      editor.commands.setContent(value || '', { emitUpdate: false })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, editor])
 
   if (!editor) return null

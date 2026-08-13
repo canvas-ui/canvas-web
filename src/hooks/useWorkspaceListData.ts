@@ -42,26 +42,28 @@ export function useWorkspaceListData(enabled: boolean) {
     const offConnect = socketService.on('connect', subscribe)
     subscribe()
 
-    const handleStatusChanged = (data: any) => {
-      const id = data?.workspaceId ?? data?.id
-      const status = data?.status
+    const handleStatusChanged = (data: unknown) => {
+      const payload = data as { workspaceId?: string; id?: string; status?: Workspace['status'] } | null | undefined
+      const id = payload?.workspaceId ?? payload?.id
+      const status = payload?.status
       if (!id || !status) return
       setWorkspaces(prev => prev.map(ws => ws.id === id ? { ...ws, status } : ws))
     }
 
-    const handleCreated = (data: any) => {
-      const ws = data?.workspace ?? data
+    const handleCreated = (data: unknown) => {
+      const ws = ((data as { workspace?: Workspace } | null | undefined)?.workspace ?? data) as Workspace | null | undefined
       if (!ws?.id) return
       setWorkspaces(prev => prev.some(w => w.id === ws.id) ? prev : [...prev, ws])
     }
 
-    const handleDeleted = (data: any) => {
-      const id = data?.workspaceId ?? data?.id
+    const handleDeleted = (data: unknown) => {
+      const payload = data as { workspaceId?: string; id?: string } | null | undefined
+      const id = payload?.workspaceId ?? payload?.id
       if (!id) return
       setWorkspaces(prev => prev.filter(ws => ws.id !== id))
     }
 
-    const events: Array<[string, Function]> = [
+    const events: Array<[string, (data: unknown) => void]> = [
       ['workspace:status:changed', handleStatusChanged],
       ['workspace.status.changed', handleStatusChanged],
       ['workspace:created', handleCreated],

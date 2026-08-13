@@ -200,7 +200,7 @@ export default function AdminUsersPage() {
 
       // If verification is required and user is pending, trigger verification email
       if (requireEmailVerification && formData.status === 'pending') {
-        try { await requestEmailVerification(formData.email.trim()) } catch (_) {}
+        try { await requestEmailVerification(formData.email.trim()) } catch { /* best-effort */ }
       }
 
       // Reset form

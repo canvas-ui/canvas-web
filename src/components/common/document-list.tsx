@@ -43,7 +43,7 @@ interface DocumentListProps {
   onCopyDocuments?: (documentIds: number[]) => void
   onCutDocuments?: (documentIds: number[]) => void
   onPasteDocuments?: (path: string, documentIds: number[], options?: DocumentPasteOptions) => Promise<boolean>
-  onImportDocuments?: (documents: any[], contextPath: string) => Promise<boolean>
+  onImportDocuments?: (documents: Record<string, unknown>[], contextPath: string) => Promise<boolean>
   onSelectionChange?: (documentIds: number[]) => void
   pastedDocumentIds?: number[]
   viewMode?: 'card' | 'table' | 'tile'
@@ -127,7 +127,7 @@ interface ExportModalProps {
 interface ImportModalProps {
   isOpen: boolean
   onClose: () => void
-  onImport: (documents: any[]) => Promise<boolean>
+  onImport: (documents: Record<string, unknown>[]) => Promise<boolean>
 }
 
 function ExportModal({ isOpen, onClose, documents, selectedDocuments }: ExportModalProps) {
@@ -260,7 +260,7 @@ function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
       } else {
         setError('Failed to import documents')
       }
-    } catch (err) {
+    } catch {
       setError('Invalid JSON format')
     } finally {
       setIsImporting(false)
@@ -981,9 +981,18 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
       case 'copy': onCopyDocuments?.(documentIds); break
       case 'cut': onCutDocuments?.(documentIds); break
       case 'link-to': setLinkPanelIds(documentIds); setContextMenu(null); return
-      case 'remove': documentIds.length === 1 ? onRemoveDocument?.(documentIds[0]) : onRemoveDocuments?.(documentIds); break
-      case 'delete': documentIds.length === 1 ? onDeleteDocument?.(documentIds[0]) : onDeleteDocuments?.(documentIds); break
-      case 'destroy': documentIds.length === 1 ? onDestroyDocument?.(documentIds[0]) : onDestroyDocuments?.(documentIds); break
+      case 'remove':
+        if (documentIds.length === 1) onRemoveDocument?.(documentIds[0])
+        else onRemoveDocuments?.(documentIds)
+        break
+      case 'delete':
+        if (documentIds.length === 1) onDeleteDocument?.(documentIds[0])
+        else onDeleteDocuments?.(documentIds)
+        break
+      case 'destroy':
+        if (documentIds.length === 1) onDestroyDocument?.(documentIds[0])
+        else onDestroyDocuments?.(documentIds)
+        break
       case 'view-details':
         if (documentIds.length === 1) {
           const doc = documents.find(d => d.id === documentIds[0]);
@@ -1063,7 +1072,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     }
   }, [selectedDocuments.size, filteredDocuments])
 
-  const handleImport = useCallback(async (importedDocuments: any[]) => {
+  const handleImport = useCallback(async (importedDocuments: Record<string, unknown>[]) => {
     if (!onImportDocuments) return false
     try {
       return await onImportDocuments(importedDocuments, contextPath)

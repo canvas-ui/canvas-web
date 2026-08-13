@@ -41,7 +41,7 @@ interface ContextData {
   pathArray: string[];
   workspaceId: string;
   workspaceName: string;
-  acl: Record<string, any>;
+  acl: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
   locked: boolean;
@@ -114,8 +114,8 @@ export default function ContextDetailPage() {
         { limit: pageSize, page: currentPage, queries: serverSearchQueries.length ? serverSearchQueries : undefined, anyOf: tbAnyOf, noneOf: tbNoneOf, applyContextSpec: false },
         ownerId,
       );
-      setDocuments(data as any[]);
-      setDocumentsTotalCount((data as any).totalCount || (data as any).count || (data as any[]).length);
+      setDocuments(data as unknown as WorkspaceDocument[]);
+      setDocumentsTotalCount(data.totalCount || data.count || data.length);
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to fetch documents', variant: 'destructive' });
       setDocuments([]);
@@ -133,12 +133,13 @@ export default function ContextDetailPage() {
       const fetched = isSharedContext ? await getContext(contextId, ownerId) : await getContext(contextId);
       if (!fetched) throw new Error('No context data received.');
 
+      const fetchedWorkspace = (fetched as { workspace?: string | { id?: string; name?: string } }).workspace;
       const workspaceId =
-        (fetched as any).workspaceId ||
-        (typeof (fetched as any).workspace === 'string' ? (fetched as any).workspace : (fetched as any).workspace?.id) || '';
+        fetched.workspaceId ||
+        (typeof fetchedWorkspace === 'string' ? fetchedWorkspace : fetchedWorkspace?.id) || '';
       const workspaceName =
-        (fetched as any).workspaceName ||
-        (typeof (fetched as any).workspace === 'string' ? (fetched as any).workspace : (fetched as any).workspace?.name) || '';
+        fetched.workspaceName ||
+        (typeof fetchedWorkspace === 'string' ? fetchedWorkspace : fetchedWorkspace?.name) || '';
 
       setContext({
         id: fetched.id,
@@ -149,7 +150,7 @@ export default function ContextDetailPage() {
         pathArray: fetched.pathArray || [],
         workspaceId,
         workspaceName,
-        acl: (fetched as any).acl || {},
+        acl: (fetched as { acl?: Record<string, unknown> }).acl || {},
         createdAt: fetched.createdAt,
         updatedAt: fetched.updatedAt,
         locked: fetched.locked || false,
@@ -160,7 +161,7 @@ export default function ContextDetailPage() {
         filterArray: fetched.filterArray || [],
         pendingUrl: fetched.pendingUrl || null,
         description: fetched.description || null,
-        metadata: (fetched as any).metadata || {},
+        metadata: (fetched as { metadata?: Record<string, unknown> }).metadata || {},
         name: fetched.name ?? null,
         color: fetched.color ?? null,
         icon: fetched.icon ?? null,
@@ -252,8 +253,13 @@ export default function ContextDetailPage() {
     const offConnect = socketService.on('connect', subscribe);
     subscribe();
 
+    type ContextEventPayload = Partial<ContextData> & {
+      contextId?: string;
+      context?: Partial<ContextData> & { contextId?: string };
+    };
+
     const recentEvents = new Map<string, number>();
-    const shouldProcess = (type: string, data: any): boolean => {
+    const shouldProcess = (type: string, data: ContextEventPayload | null | undefined): boolean => {
       const now = Date.now();
       const key = `${type}:${data?.id || data?.contextId || contextId}`;
       if ((recentEvents.get(key) || 0) + 1000 > now) return false;
@@ -261,7 +267,8 @@ export default function ContextDetailPage() {
       return true;
     };
 
-    const onContextUpdate = (data: any) => {
+    const onContextUpdate = (raw: unknown) => {
+      const data = raw as ContextEventPayload | null | undefined;
       const ctx = data?.context || data;
       if (ctx?.id !== contextId && ctx?.contextId !== contextId) return;
       if (!shouldProcess('ctx:updated', ctx)) return;
@@ -269,7 +276,8 @@ export default function ContextDetailPage() {
       if (ctx.url) fetchDocuments();
     };
 
-    const onUrlChanged = (data: any) => {
+    const onUrlChanged = (raw: unknown) => {
+      const data = raw as ContextEventPayload | null | undefined;
       const id = data?.id || data?.contextId || data?.context?.id;
       const url = data?.url || data?.context?.url;
       if (id !== contextId || typeof url !== 'string') return;
@@ -278,14 +286,15 @@ export default function ContextDetailPage() {
       fetchDocuments();
     };
 
-    const onDocumentChanged = (data: any) => {
+    const onDocumentChanged = (raw: unknown) => {
+      const data = raw as ContextEventPayload | null | undefined;
       const id = data?.contextId || data?.id || data?.context?.id;
       if (id !== contextId) return;
       if (!shouldProcess('doc:changed', data)) return;
       fetchDocuments();
     };
 
-    const events: [string, (d: any) => void][] = [
+    const events: [string, (d: unknown) => void][] = [
       ['context.updated', onContextUpdate], ['context:updated', onContextUpdate],
       ['context.url.set', onUrlChanged], ['context:url:set', onUrlChanged],
       ['document.inserted', onDocumentChanged], ['document.updated', onDocumentChanged],
@@ -370,7 +379,7 @@ export default function ContextDetailPage() {
     }
   };
 
-  const handleImportDocuments = async (docs: any[], contextPath: string): Promise<boolean> => {
+  const handleImportDocuments = async (docs: Record<string, unknown>[], contextPath: string): Promise<boolean> => {
     if (!context) return false;
     try {
       const success = await importDocumentsToContext(context.workspaceId, contextPath, docs);

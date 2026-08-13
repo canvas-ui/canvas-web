@@ -768,13 +768,13 @@ function DbStatsTab({
                 <h2 className="text-sm font-semibold">Full-Text Search (LanceDB)</h2>
               </div>
               {'ready' in stats.fts && (
-                <StatRow label="Ready" value={String((stats.fts as any).ready)} />
+                <StatRow label="Ready" value={String((stats.fts as { ready?: boolean; rowCount?: number; error?: string }).ready)} />
               )}
-              {(stats.fts as any).rowCount !== undefined && (
-                <StatRow label="Row count" value={(stats.fts as any).rowCount?.toLocaleString()} />
+              {(stats.fts as { ready?: boolean; rowCount?: number; error?: string }).rowCount !== undefined && (
+                <StatRow label="Row count" value={(stats.fts as { ready?: boolean; rowCount?: number; error?: string }).rowCount?.toLocaleString()} />
               )}
-              {(stats.fts as any).error && (
-                <StatRow label="Error" value={<span className="text-destructive">{(stats.fts as any).error}</span>} />
+              {(stats.fts as { ready?: boolean; rowCount?: number; error?: string }).error && (
+                <StatRow label="Error" value={<span className="text-destructive">{(stats.fts as { ready?: boolean; rowCount?: number; error?: string }).error}</span>} />
               )}
             </section>
           )}
