@@ -143,7 +143,20 @@ export default function DevicesPage() {
     }
   }
 
-  useEffect(() => { load() }, [])
+  // Initial load: isLoading already starts true, so no synchronous spinner
+  // toggle is needed here (unlike the user-driven `load` above).
+  useEffect(() => {
+    const run = async () => {
+      try {
+        setDevices(await listDevices())
+      } catch (err) {
+        showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to load devices', variant: 'destructive' })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    void run()
+  }, [showToast])
 
   const handleUpdated = (updated: Device) =>
     setDevices(prev => prev.map(d => d.deviceId === updated.deviceId ? updated : d))

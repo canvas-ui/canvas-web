@@ -26,19 +26,21 @@ interface LayerIconPickerProps {
 export function LayerIconPicker({ x, y, current, onChange, onClose }: LayerIconPickerProps) {
   const [query, setQuery] = useState('')
   const [allIcons, setAllIcons] = useState<string[]>([])
-  const [results, setResults] = useState<string[]>([])
+  // Results tagged with the query they answer — `searching` and the visible
+  // list are derived from whether the stored results match the live query.
+  const [resultsFor, setResultsFor] = useState<{ q: string; list: string[] }>({ q: '', list: [] })
   const [loading, setLoading] = useState(true)
-  const [searching, setSearching] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
   // Manual double-click: Iconify swaps the icon's inner DOM async, which breaks
   // native dblclick (it needs both clicks on the same element).
   const lastClick = useRef<{ name: string; t: number }>({ name: '', t: 0 })
 
-  const handleIconClick = (name: string) => {
+  // `t` comes from the click event's timeStamp so no clock is read here —
+  // only the delta between two clicks matters.
+  const handleIconClick = (name: string, t: number) => {
     onChange({ icon: name })
-    const now = Date.now()
-    if (lastClick.current.name === name && now - lastClick.current.t < 350) onClose()
-    lastClick.current = { name, t: now }
+    if (lastClick.current.name === name && t - lastClick.current.t < 350) onClose()
+    lastClick.current = { name, t }
   }
 
   useEffect(() => { searchRef.current?.focus() }, [])
@@ -55,17 +57,20 @@ export function LayerIconPicker({ x, y, current, onChange, onClose }: LayerIconP
   // browse the cached Phosphor list.
   useEffect(() => {
     const q = query.trim()
-    if (!q) { setResults([]); setSearching(false); return }
-    setSearching(true)
+    if (!q) return
     const t = setTimeout(() => {
-      searchIcons(q).then((r) => { setResults(r); setSearching(false) })
+      searchIcons(q).then((r) => { setResultsFor({ q, list: r }) })
     }, 250)
     return () => clearTimeout(t)
   }, [query])
 
+  const trimmedQuery = query.trim()
+  const results = resultsFor.q === trimmedQuery ? resultsFor.list : []
+  const searching = trimmedQuery !== '' && resultsFor.q !== trimmedQuery
+
   const icons = useMemo(
-    () => (query.trim() ? results : allIcons).slice(0, MAX_RESULTS),
-    [query, results, allIcons],
+    () => (trimmedQuery ? results : allIcons).slice(0, MAX_RESULTS),
+    [trimmedQuery, results, allIcons],
   )
 
   const panelRef = useRef<HTMLDivElement>(null)
@@ -187,7 +192,7 @@ export function LayerIconPicker({ x, y, current, onChange, onClose }: LayerIconP
               key={name}
               type="button"
               title={name.replace(/^[^:]+:/, '').replace('-fill', '')}
-              onClick={() => handleIconClick(name)}
+              onClick={(e) => handleIconClick(name, e.timeStamp)}
               className={cn(
                 'aspect-square flex items-center justify-center rounded-sm hover:bg-accent',
                 current.icon === name && 'bg-accent ring-1 ring-primary',

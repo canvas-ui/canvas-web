@@ -188,12 +188,11 @@ export function useAgentSocket(options: UseAgentSocketOptions = {}) {
     return messageId;
   }, [socket, isConnected]);
 
-  // Auto-connect effect
+  // Auto-connect effect. No disconnect needed in the no-agent branch: the
+  // previous run's cleanup already disconnected, and connect() is a no-op
+  // without an agentId, so no socket can exist here.
   useEffect(() => {
-    if (!options.agentId) {
-      disconnect();
-      return;
-    }
+    if (!options.agentId) return;
 
     connect();
 

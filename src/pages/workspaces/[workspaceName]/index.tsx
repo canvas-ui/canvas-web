@@ -132,7 +132,12 @@ export default function WorkspaceDetailPage() {
   const [queryDebugData, setQueryDebugData] = useState<QueryDebugData | null>(null);
   // Turning the toggle off must drop stale numbers immediately, not leave the
   // last query's distances hanging around until the next search.
-  useEffect(() => { if (!queryDebug) setQueryDebugData(null); }, [queryDebug]);
+  // (State adjustment during render — see react.dev "You Might Not Need an Effect".)
+  const [prevQueryDebug, setPrevQueryDebug] = useState(queryDebug);
+  if (prevQueryDebug !== queryDebug) {
+    setPrevQueryDebug(queryDebug);
+    if (!queryDebug) setQueryDebugData(null);
+  }
   // 'path' scopes to the selected tree path; 'workspace' lists every document.
   const [docScope, setDocScope] = useState<'path' | 'workspace'>('path');
   const [isStartingWorkspace, setIsStartingWorkspace] = useState(false);
@@ -198,7 +203,13 @@ export default function WorkspaceDetailPage() {
   // safe-to-purge candidates on the backend).
   const backendTarget = isBackendsPath ? backendAddressFromTreePath(selectedPath, wsBackends) : null;
   const [unfiledOnly, setUnfiledOnly] = useState(false);
-  useEffect(() => { setUnfiledOnly(false); }, [selectedTreeName, selectedPath]);
+  // Reset the filter when the tree/path changes (state adjustment during render).
+  const unfiledResetKey = `${selectedTreeName}\0${selectedPath}`;
+  const [prevUnfiledResetKey, setPrevUnfiledResetKey] = useState(unfiledResetKey);
+  if (prevUnfiledResetKey !== unfiledResetKey) {
+    setPrevUnfiledResetKey(unfiledResetKey);
+    setUnfiledOnly(false);
+  }
 
   const isLayerView = searchParams.get('layer') === '1';
   const selectedLayerId = searchParams.get('layerId') || null;
@@ -329,7 +340,7 @@ export default function WorkspaceDetailPage() {
     };
 
     fetchWorkspace();
-  }, [workspaceName]);
+  }, [workspaceName, showToast]);
 
   // A query woke this workspace up (see src/lib/api.ts): reflect it in the
   // status pill, which otherwise keeps showing the stale 'inactive' it was
@@ -611,9 +622,11 @@ export default function WorkspaceDetailPage() {
   // workspace socket channel keyed by workspace id. We subscribe but never
   // unsubscribe on cleanup so we don't tear down a sibling component's
   // subscription to the same channel.
+  const wsChannelName = workspace?.name;
+  const wsChannelId = workspace?.id;
   useEffect(() => {
-    if (!workspaceName || !workspace) return;
-    const channels = [workspace.name, workspace.id].filter(Boolean).map(id => `workspace:${id}`);
+    if (!workspaceName || (!wsChannelName && !wsChannelId)) return;
+    const channels = [wsChannelName, wsChannelId].filter(Boolean).map(id => `workspace:${id}`);
     const subscribe = () => channels.forEach(ch => socketService.emit('subscribe', { channel: ch }));
     subscribe();
     const offConnect = socketService.on('connect', subscribe);
@@ -653,24 +666,45 @@ export default function WorkspaceDetailPage() {
       offConnect?.();
       events.forEach(ev => socketService.off(ev, refresh));
     };
-  }, [workspaceName, workspace?.id, workspace?.name, selectedTreeName, selectedPath, fetchDocuments, resyncSession]);
+  }, [workspaceName, wsChannelId, wsChannelName, selectedTreeName, selectedPath, fetchDocuments, resyncSession]);
 
-  useEffect(() => {
+  // Reset pagination / saved-search suppression when the addressed view changes
+  // (state adjustment during render, not an effect).
+  const pageResetKey = `${selectedPath}\0${selectedTreeName}\0${selectedLayerId ?? ''}\0${docScope}`;
+  const [prevPageResetKey, setPrevPageResetKey] = useState(pageResetKey);
+  if (prevPageResetKey !== pageResetKey) {
+    setPrevPageResetKey(pageResetKey);
     setCurrentPage(1);
     setIgnoredSavedSearchPath(null);
-  }, [selectedPath, selectedTreeName, selectedLayerId, docScope]);
+  }
 
   // Leaving whole-workspace scope is implicit when the user navigates to a path.
-  useEffect(() => {
+  const scopeResetKey = `${selectedPath}\0${selectedTreeName}\0${selectedLayerId ?? ''}`;
+  const [prevScopeResetKey, setPrevScopeResetKey] = useState(scopeResetKey);
+  if (prevScopeResetKey !== scopeResetKey) {
+    setPrevScopeResetKey(scopeResetKey);
     setDocScope('path');
-  }, [selectedPath, selectedTreeName, selectedLayerId]);
+  }
+
+  const openCreateCanvas = (parentPath: string, captureView: boolean) => {
+    const defaultName = parentPath === '/' ? 'canvas' : (parentPath.split('/').pop() || 'canvas');
+    setSaveAsCanvasName(defaultName);
+    setCreateCanvas({ parentPath, captureView });
+  };
 
   // The M2 tree's "New canvas here…" navigates to the parent path with this
   // flag; consume it so a reload or back-navigation does not reopen the form.
   const wantsCreateCanvas = searchParams.get('createCanvas') === '1';
+  // Open the form when the flag appears (state adjustment during render;
+  // initialized to false so a direct landing on ?createCanvas=1 still opens it).
+  const [prevWantsCreateCanvas, setPrevWantsCreateCanvas] = useState(false);
+  if (prevWantsCreateCanvas !== wantsCreateCanvas) {
+    setPrevWantsCreateCanvas(wantsCreateCanvas);
+    if (wantsCreateCanvas) openCreateCanvas(selectedPath, false);
+  }
+  // Consuming the flag from the URL is a real side effect — keep it in an effect.
   useEffect(() => {
     if (!wantsCreateCanvas) return;
-    openCreateCanvas(selectedPath, false);
     const params = new URLSearchParams(location.search);
     params.delete('createCanvas');
     const nextSearch = params.toString();
@@ -688,19 +722,27 @@ export default function WorkspaceDetailPage() {
     navigate(`${location.pathname}${nextSearch ? `?${nextSearch}` : ''}`);
   }, [location.pathname, location.search, navigate]);
 
+  // URL is the source of truth for the query stack: when it changes, mirror it
+  // into state (state adjustment during render, not an effect).
   const urlQueriesKey = urlSearchQueries.join('␟');
-  useEffect(() => {
+  const [prevUrlQueriesKey, setPrevUrlQueriesKey] = useState(urlQueriesKey);
+  if (prevUrlQueriesKey !== urlQueriesKey) {
+    setPrevUrlQueriesKey(urlQueriesKey);
     setServerSearchQueries(urlSearchQueries);
     setCurrentPage(1);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlQueriesKey]);
+  }
 
-  useEffect(() => {
-    if (urlSearchQueries.length > 0 || selectedNodeType !== 'canvas' || ignoredSavedSearchPath === selectedPath) return;
-    setServerSearchQueries(savedCanvasSearchQuery ? [savedCanvasSearchQuery] : []);
-    setCurrentPage(1);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlQueriesKey, selectedNodeType, savedCanvasSearchQuery, selectedPath, ignoredSavedSearchPath]);
+  // Apply a canvas node's saved query when landing on it without an explicit
+  // URL query (same render-time adjustment pattern as above).
+  const savedQueryKey = `${urlQueriesKey}\0${selectedNodeType ?? ''}\0${savedCanvasSearchQuery}\0${selectedPath}\0${ignoredSavedSearchPath ?? ''}`;
+  const [prevSavedQueryKey, setPrevSavedQueryKey] = useState(savedQueryKey);
+  if (prevSavedQueryKey !== savedQueryKey) {
+    setPrevSavedQueryKey(savedQueryKey);
+    if (!(urlSearchQueries.length > 0 || selectedNodeType !== 'canvas' || ignoredSavedSearchPath === selectedPath)) {
+      setServerSearchQueries(savedCanvasSearchQuery ? [savedCanvasSearchQuery] : []);
+      setCurrentPage(1);
+    }
+  }
 
   // Append a query to the stack (refine). Empty input is ignored; duplicates skipped.
   const handleBackendSearch = useCallback((query: string) => {
@@ -714,7 +756,7 @@ export default function WorkspaceDetailPage() {
       setCurrentPage(1);
       return next;
     });
-  }, [syncQueriesToUrl]);
+  }, [syncQueriesToUrl, setIgnoredSavedSearchPath, setServerSearchQueries, setCurrentPage]);
 
   // Remove one query chip (or clear all when index < 0).
   const handleRemoveBackendQuery = useCallback((index: number) => {
@@ -725,7 +767,7 @@ export default function WorkspaceDetailPage() {
       setCurrentPage(1);
       return next;
     });
-  }, [syncQueriesToUrl, selectedPath]);
+  }, [syncQueriesToUrl, selectedPath, setIgnoredSavedSearchPath, setServerSearchQueries, setCurrentPage]);
 
   const currentSearchQuery = serverSearchQueries.join(' ').trim();
   const canSaveChanges = Boolean(toolboxState.activeContextType)
@@ -733,9 +775,11 @@ export default function WorkspaceDetailPage() {
 
   // Full tree JSON is expensive for directory trees. Load it once per tree and
   // refresh only when the backend tells us tree metadata changed.
+  // No workspace addressed → no tree (guarded state adjustment during render).
+  if (!workspaceName && tree !== null) setTree(null);
   useEffect(() => {
     let cancelled = false;
-    if (!workspaceName) { setTree(null); return; }
+    if (!workspaceName) return;
 
     const loadTree = (force = false) => {
       if (force) invalidateWorkspaceTreeCache(workspaceName, selectedTreeName);
@@ -782,12 +826,13 @@ export default function WorkspaceDetailPage() {
     };
   }, [workspaceName, selectedTreeName]);
 
+  // Not on a shareable canvas → no public-share state (guarded state adjustment
+  // during render; the effect below only handles the fetch).
+  const isShareableCanvas = Boolean(workspaceName) && selectedNodeType === 'canvas' && !isLayerView;
+  if (!isShareableCanvas && publicCanvasShare !== null) setPublicCanvasShare(null);
   useEffect(() => {
     let cancelled = false;
-    if (!workspaceName || selectedNodeType !== 'canvas' || isLayerView) {
-      setPublicCanvasShare(null);
-      return;
-    }
+    if (!workspaceName || selectedNodeType !== 'canvas' || isLayerView) return;
 
     getPublicCanvasShare(workspaceName, selectedPath, selectedTreeName)
       .then(share => { if (!cancelled) setPublicCanvasShare(share); })
@@ -977,12 +1022,6 @@ export default function WorkspaceDetailPage() {
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to purge documents', variant: 'destructive' });
     }
-  };
-
-  const openCreateCanvas = (parentPath: string, captureView: boolean) => {
-    const defaultName = parentPath === '/' ? 'canvas' : (parentPath.split('/').pop() || 'canvas');
-    setSaveAsCanvasName(defaultName);
-    setCreateCanvas({ parentPath, captureView });
   };
 
   const handleSaveAsCanvas = () => openCreateCanvas(selectedPath, true);
@@ -1545,7 +1584,7 @@ function SideWorkspaceCanvas({
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to paste documents', variant: 'destructive' });
       return false;
     }
-  }, [workspaceName, pane.treeName, treeType, fetchPaneDocuments, showToast, clipboard]);
+  }, [workspaceName, pane.treeName, treeType, fetchPaneDocuments, showToast, clipboard, setClipboard]);
 
   // Remove / delete / destroy, scoped to this pane's own path + tree.
   const refreshPane = useCallback(() => {

@@ -50,7 +50,9 @@ interface LinkToCardProps {
 export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceName, multiple = true, saving = false, sizeClassName }: LinkToCardProps) {
   const [step, setStep] = useState<'workspace' | 'tree'>(fixedWorkspaceName ? 'tree' : 'workspace')
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
-  const [loadingWorkspaces, setLoadingWorkspaces] = useState(false)
+  // Starts true whenever the workspace list will be fetched (no fixed
+  // workspace) — the fetch effect below only ever clears it.
+  const [loadingWorkspaces, setLoadingWorkspaces] = useState(!fixedWorkspaceName)
   const [workspaceName, setWorkspaceName] = useState<string | null>(fixedWorkspaceName ?? null)
   const [activeTab, setActiveTab] = useState<TreeTab>('context')
   const [tree, setTree] = useState<TreeNode | null>(null)
@@ -89,9 +91,17 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
     }
   }
 
+  // Show the list spinner again if the card ever switches from a fixed
+  // workspace to the picker step (prop change) — happens during render so the
+  // effect below never needs a synchronous setState.
+  const [prevFixedWorkspaceName, setPrevFixedWorkspaceName] = useState(fixedWorkspaceName)
+  if (fixedWorkspaceName !== prevFixedWorkspaceName) {
+    setPrevFixedWorkspaceName(fixedWorkspaceName)
+    if (!fixedWorkspaceName) setLoadingWorkspaces(true)
+  }
+
   useEffect(() => {
     if (fixedWorkspaceName) return
-    setLoadingWorkspaces(true)
     listWorkspaces().then(setWorkspaces).catch(() => setWorkspaces([])).finally(() => setLoadingWorkspaces(false))
   }, [fixedWorkspaceName])
 

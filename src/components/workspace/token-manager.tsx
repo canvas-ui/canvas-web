@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast-container';
@@ -31,29 +31,39 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
   const [copiedNewToken, setCopiedNewToken] = useState(false);
   const { showToast } = useToast();
 
-  // Load existing tokens
-  useEffect(() => {
-    loadTokens();
-  }, [workspaceId]);
+  // Re-show the token spinner when switching workspaces — during render, so
+  // the load effect never needs a synchronous setState.
+  const [prevWorkspaceId, setPrevWorkspaceId] = useState(workspaceId);
+  if (workspaceId !== prevWorkspaceId) {
+    setPrevWorkspaceId(workspaceId);
+    setIsLoading(true);
+  }
 
-  const loadTokens = async () => {
-    try {
-      setIsLoading(true);
-      const response = await api.get<{ payload: Array<Token & { tokenHash?: string }> }>(`/workspaces/${workspaceId}/tokens`);
-      setTokens((response.payload || []).map(token => ({
-        ...token,
-        hash: token.hash || token.tokenHash || '',
-      })).filter(token => token.hash));
-    } catch {
-      showToast({
-        title: 'Error',
-        description: 'Failed to load workspace tokens',
-        variant: 'destructive'
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Load existing tokens. Declared before the effect that calls it; setState
+  // only happens inside promise callbacks. showToast is stable (useCallback
+  // with no deps in ToastContainer).
+  const loadTokens = useCallback(() =>
+    api.get<{ payload: Array<Token & { tokenHash?: string }> }>(`/workspaces/${workspaceId}/tokens`)
+      .then((response) => {
+        setTokens((response.payload || []).map(token => ({
+          ...token,
+          hash: token.hash || token.tokenHash || '',
+        })).filter(token => token.hash));
+      })
+      .catch(() => {
+        showToast({
+          title: 'Error',
+          description: 'Failed to load workspace tokens',
+          variant: 'destructive'
+        });
+      })
+      .finally(() => {
+        setIsLoading(false);
+      }), [workspaceId, showToast]);
+
+  useEffect(() => {
+    void loadTokens();
+  }, [loadTokens]);
 
   const createToken = async () => {
     if (!newTokenDescription.trim()) {
@@ -97,7 +107,9 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
       setNeverExpires(true);
       setShowNewTokenForm(false);
 
-      // Reload tokens
+      // Reload tokens (spinner set here — event handler — so loadTokens
+      // itself stays free of synchronous setState for the load effect)
+      setIsLoading(true);
       await loadTokens();
 
       showToast({
@@ -123,6 +135,7 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
         title: 'Success',
         description: 'Token revoked successfully'
       });
+      setIsLoading(true);
       await loadTokens();
     } catch {
       showToast({
@@ -388,16 +401,14 @@ function WorkspaceEmailShares({ workspaceId }: { workspaceId: string }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [shares, setShares] = useState<Array<{ userEmail: string; permissions: string[]; description?: string; grantedAt?: string }>>([])
 
-  const loadShares = async () => {
-    try {
-      const res = await api.get<{ payload: typeof shares | { emailShares?: typeof shares } }>(`/workspaces/${workspaceId}/shares`)
-      setShares(Array.isArray(res.payload) ? res.payload : res.payload?.emailShares || [])
-    } catch {
-      // silent
-    }
-  }
+  const loadShares = useCallback(() =>
+    api.get<{ payload: typeof shares | { emailShares?: typeof shares } }>(`/workspaces/${workspaceId}/shares`)
+      .then((res) => setShares(Array.isArray(res.payload) ? res.payload : res.payload?.emailShares || []))
+      .catch(() => {
+        // silent
+      }), [workspaceId])
 
-  useEffect(() => { loadShares() }, [workspaceId])
+  useEffect(() => { void loadShares() }, [loadShares])
 
   const addShare = async () => {
     if (!email.trim()) return

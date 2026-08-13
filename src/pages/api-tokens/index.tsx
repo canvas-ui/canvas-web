@@ -41,11 +41,7 @@ export default function ApiTokensPage() {
   const { showToast } = useToast()
   const tokenDisplayRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    fetchTokens()
-  }, [])
-
-  const fetchTokens = async () => {
+  const fetchTokens = useCallback(async () => {
     try {
       setIsLoading(true)
       const data = await api.get<ApiResponse<ApiToken[] | { tokens: ApiToken[] }>>(API_ROUTES.tokens)
@@ -68,7 +64,12 @@ export default function ApiTokensPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [showToast])
+
+  useEffect(() => {
+    const run = () => fetchTokens()
+    void run()
+  }, [fetchTokens])
 
   const handleGenerateToken = async () => {
     if (!newTokenName.trim() || isCreating) {

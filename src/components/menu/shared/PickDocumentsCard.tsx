@@ -34,7 +34,9 @@ interface PickDocumentsCardProps {
 export function PickDocumentsCard({ onClose, onConfirm, fixedWorkspaceName, saving = false, sizeClassName }: PickDocumentsCardProps) {
   const [step, setStep] = useState<'workspace' | 'browse'>(fixedWorkspaceName ? 'browse' : 'workspace')
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
-  const [loadingWorkspaces, setLoadingWorkspaces] = useState(false)
+  // Starts true whenever the workspace list will be fetched (no fixed
+  // workspace) — the fetch effect below only ever clears it.
+  const [loadingWorkspaces, setLoadingWorkspaces] = useState(!fixedWorkspaceName)
   const [workspaceName, setWorkspaceName] = useState<string | null>(fixedWorkspaceName ?? null)
   const [activeTab, setActiveTab] = useState<TreeTab>('context')
   const [tree, setTree] = useState<TreeNode | null>(null)
@@ -47,9 +49,17 @@ export function PickDocumentsCard({ onClose, onConfirm, fixedWorkspaceName, savi
   const [loadingDocs, setLoadingDocs] = useState(false)
   const [selectedDocIds, setSelectedDocIds] = useState<Set<number>>(new Set())
 
+  // Show the list spinner again if the card ever switches from a fixed
+  // workspace to the picker step (prop change) — happens during render so the
+  // effect below never needs a synchronous setState.
+  const [prevFixedWorkspaceName, setPrevFixedWorkspaceName] = useState(fixedWorkspaceName)
+  if (fixedWorkspaceName !== prevFixedWorkspaceName) {
+    setPrevFixedWorkspaceName(fixedWorkspaceName)
+    if (!fixedWorkspaceName) setLoadingWorkspaces(true)
+  }
+
   useEffect(() => {
     if (fixedWorkspaceName) return
-    setLoadingWorkspaces(true)
     listWorkspaces().then(setWorkspaces).catch(() => setWorkspaces([])).finally(() => setLoadingWorkspaces(false))
   }, [fixedWorkspaceName])
 

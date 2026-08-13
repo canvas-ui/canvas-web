@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Socket } from 'socket.io-client'
 
 export interface EventHandlers {
@@ -28,22 +28,35 @@ export function useSocketSubscription(
   topic: string,
   handlers: EventHandlers
 ) {
+  // Keep the latest handlers readable from the subscription below without
+  // making them a dependency — callers pass inline objects, and resubscribing
+  // on every render would thrash the socket channel.
+  const handlersRef = useRef(handlers)
+  useEffect(() => {
+    handlersRef.current = handlers
+  })
+
   useEffect(() => {
     if (!socket) return
 
     // Subscribe to the channel once connected
     socket.emit('subscribe', { channel: topic })
 
-    // Register event listeners
-    for (const [event, handler] of Object.entries(handlers)) {
-      socket.on(event, handler as SocketListener)
-    }
+    // Register stable listeners that dispatch to the latest handlers. The set
+    // of event names is captured when the subscription is (re)created.
+    const listeners: Array<[string, SocketListener]> = Object.keys(handlersRef.current).map((event) => {
+      const listener: SocketListener = (...args) => {
+        (handlersRef.current[event] as SocketListener | undefined)?.(...args)
+      }
+      socket.on(event, listener)
+      return [event, listener]
+    })
 
     // Cleanup on unmount or socket change
     return () => {
       socket.emit('unsubscribe', { channel: topic })
-      for (const [event, handler] of Object.entries(handlers)) {
-        socket.off(event, handler as SocketListener)
+      for (const [event, listener] of listeners) {
+        socket.off(event, listener)
       }
     }
   }, [socket, topic])

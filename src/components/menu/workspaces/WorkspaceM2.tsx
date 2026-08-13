@@ -79,9 +79,12 @@ export function WorkspaceM2() {
 
   // Keep selectedPath in sync with the URL — handles external navigation (back/forward,
   // direct links, workspace-detail navigation) where setSelectedPath is never called.
-  useEffect(() => {
+  // Reset-on-prop-change happens during render (no effect round-trip).
+  const [prevUrlPath, setPrevUrlPath] = useState(urlPath)
+  if (urlPath !== prevUrlPath) {
+    setPrevUrlPath(urlPath)
     setSelectedPath(urlPath)
-  }, [urlPath])
+  }
 
   const loadTree = useCallback(async (name: string, tab: TreeDataTab, force = false) => {
     const setLoading = tab === 'context' ? setIsLoadingContext : tab === 'directory' ? setIsLoadingDirectory : setIsLoadingBackends
@@ -237,8 +240,14 @@ export function WorkspaceM2() {
     }
   }, [wsName, wsId, refreshAll])
 
-  // Sync active tab and selected path when URL pathname changes externally
-  useEffect(() => {
+  // Sync active tab and selected path when URL pathname changes externally.
+  // Runs during render (prev-value-in-state) — initialised to null so the
+  // first render applies the URL-derived state exactly like the old
+  // mount-effect did.
+  const [prevLocKey, setPrevLocKey] = useState<string | null>(null)
+  const locKey = `${location.pathname}|${location.search}`
+  if (locKey !== prevLocKey) {
+    setPrevLocKey(locKey)
     const { treeName: tree, path } = parseWorkspacePathFromUrl(location.pathname)
     // A selected layer (layerId param) keeps us on the Layers tab — otherwise the
     // pathname-only derivation would kick us back to the context tree.
@@ -247,7 +256,7 @@ export function WorkspaceM2() {
     setActiveTab(tab)
     setSelectedPath(path)
     setContentPath(path !== '/' ? path : null)
-  }, [location.pathname, location.search])
+  }
 
   const ops = useTreeOperations({
     workspaceId: wsName ?? undefined,

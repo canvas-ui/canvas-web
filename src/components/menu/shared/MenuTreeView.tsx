@@ -679,13 +679,17 @@ export function MenuTreeView({
   // mid-session, and without this the next pick would merge onto the stale
   // pre-edit style from picker.node, dropping the change just saved.
   const pickerStyleRef = useRef<{ path: string; style: LayerStyle } | null>(null)
+  // State mirror of pickerStyleRef — same value, written in the same handlers
+  // (batched with their existing setState calls) so the render-time reset
+  // below can read it without touching the ref during render.
+  const [keptPickerStyle, setKeptPickerStyle] = useState<{ path: string; style: LayerStyle } | null>(null)
 
   // Drop optimistic style overrides once fresh server data arrives (root
   // identity changes on refetch). Reset-on-prop-change happens during render.
   // Keep the open picker session's style so its preview doesn't flicker back.
   if (root !== prevRoot) {
     setPrevRoot(root)
-    const kept = pickerStyleRef.current
+    const kept = keptPickerStyle
     setStyleOverrides(kept ? new Map([[kept.path, kept.style]]) : new Map())
   }
   const [inlineCreateParent, setInlineCreateParent] = useState<string | null>(null)
@@ -845,6 +849,7 @@ export function MenuTreeView({
   const openPicker = useCallback((e: React.MouseEvent, path: string, node: TreeNode) => {
     e.stopPropagation()
     pickerStyleRef.current = null
+    setKeptPickerStyle(null)
     setPicker({ x: e.clientX, y: e.clientY, path, node })
   }, [])
 
@@ -855,6 +860,7 @@ export function MenuTreeView({
       ?? (pickerStyleRef.current?.path === path ? pickerStyleRef.current.style : getLayerStyle(picker.node))
     const next: LayerStyle = { ...base, ...change }
     pickerStyleRef.current = { path, style: next }
+    setKeptPickerStyle({ path, style: next })
     // Instant local preview for both the tree row and the picker.
     setStyleOverrides(prev => new Map(prev).set(path, next))
     // Debounced persist — the native color input fires rapidly while dragging.

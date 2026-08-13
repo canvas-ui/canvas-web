@@ -22,6 +22,14 @@ export function useContextListData(enabled: boolean) {
     }
   }, [isLoading])
 
+  // Latest fetch for the long-lived socket subscription below, so the effect
+  // does not need `fetch` as a dependency (its identity changes with isLoading
+  // and would tear down / re-create the subscription on every load).
+  const fetchRef = useRef(fetch)
+  useEffect(() => {
+    fetchRef.current = fetch
+  })
+
   const refresh = useCallback(() => {
     hasFetched.current = false
     fetch()
@@ -76,7 +84,7 @@ export function useContextListData(enabled: boolean) {
 
     const handleWorkspaceStatusChanged = () => {
       hasFetched.current = false
-      fetch()
+      fetchRef.current()
     }
 
     const events: Array<[string, (data: unknown) => void]> = [

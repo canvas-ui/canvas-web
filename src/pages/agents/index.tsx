@@ -27,6 +27,13 @@ export default function AgentsPage() {
     ollama: 'http://localhost:11434/v1',
   }
 
+  // Default models for reference
+  const defaultModels = {
+    anthropic: 'claude-3-5-sonnet-20241022',
+    openai: 'gpt-4o',
+    ollama: 'qwen2.5-coder:latest',
+  }
+
   const [agents, setAgents] = useState<Agent[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -35,7 +42,7 @@ export default function AgentsPage() {
   const [newAgentColor, setNewAgentColor] = useState(generateNiceRandomHexColor())
   const [newAgentLabel, setNewAgentLabel] = useState("")
   const [newAgentProvider, setNewAgentProvider] = useState<'anthropic' | 'openai' | 'ollama'>('anthropic')
-  const [newAgentModel, setNewAgentModel] = useState("")
+  const [newAgentModel, setNewAgentModel] = useState<string>(defaultModels.anthropic)
   const [newAgentConnectorConfig, setNewAgentConnectorConfig] = useState({
     apiKey: "",
     baseUrl: defaultBaseUrls.anthropic,
@@ -68,20 +75,13 @@ export default function AgentsPage() {
     }
   })
 
-  // Default models for reference
-  const defaultModels = {
-    anthropic: 'claude-3-5-sonnet-20241022',
-    openai: 'gpt-4o',
-    ollama: 'qwen2.5-coder:latest'
-  }
-
-  useEffect(() => {
-    // Set default model when provider changes
-    setNewAgentModel(defaultModels[newAgentProvider])
-    // Reset connector config when provider changes
+  // Set default model and reset connector config when the provider changes.
+  const handleProviderChange = (provider: 'anthropic' | 'openai' | 'ollama') => {
+    setNewAgentProvider(provider)
+    setNewAgentModel(defaultModels[provider])
     setNewAgentConnectorConfig({
       apiKey: "",
-      baseUrl: defaultBaseUrls[newAgentProvider],
+      baseUrl: defaultBaseUrls[provider],
       maxTokens: 4096,
       temperature: 0.7,
       topP: 1.0,
@@ -89,7 +89,7 @@ export default function AgentsPage() {
       presencePenalty: 0.0,
       numCtx: 4096
     })
-  }, [newAgentProvider])
+  }
 
   useEffect(() => {
     const loadAgents = async () => {
@@ -136,7 +136,7 @@ export default function AgentsPage() {
         // socket.off('agent:deleted')
       }
     }
-  }, [socket])
+  }, [socket, showToast])
 
   const handleCreateAgent = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -350,7 +350,7 @@ export default function AgentsPage() {
               <select
                 id="agent-provider"
                 value={newAgentProvider}
-                onChange={(e) => setNewAgentProvider(e.target.value as 'anthropic' | 'openai' | 'ollama')}
+                onChange={(e) => handleProviderChange(e.target.value as 'anthropic' | 'openai' | 'ollama')}
                 className="w-full mt-1 px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 disabled={isCreating}
               >

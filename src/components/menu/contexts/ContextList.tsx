@@ -20,14 +20,15 @@ export function ContextList() {
   const navigate = useNavigate()
 
   // Drag-to-reorder (own contexts only — shared rows aren't writable and keep
-  // their unordered sort-last position).
-  const [optimisticOrder, setOptimisticOrder] = useState<Context[] | null>(null)
-  const orderedContexts = optimisticOrder ?? contexts
-  useEffect(() => { setOptimisticOrder(null) }, [contexts])
+  // their unordered sort-last position). The optimistic order is tagged with
+  // the list it was derived from, so it is simply ignored (derived during
+  // render) once a fresh list arrives.
+  const [optimisticOrder, setOptimisticOrder] = useState<{ base: Context[]; order: Context[] } | null>(null)
+  const orderedContexts = optimisticOrder && optimisticOrder.base === contexts ? optimisticOrder.order : contexts
   const isSharedCtx = (ctx: Context & { isShared?: boolean; type?: string }) => ctx.isShared === true || ctx.type === 'shared'
   const { rowProps, handleProps, draggingIndex, insertLineClass } = useListReorder((from, to) => {
     const next = moveItem(orderedContexts, from, to)
-    setOptimisticOrder(next)
+    setOptimisticOrder({ base: contexts, order: next })
     persistSequentialOrder(next, (ctx, order) =>
       isSharedCtx(ctx) ? Promise.resolve() : updateContext(ctx.id, { order }))
       .then(({ failed }) => {

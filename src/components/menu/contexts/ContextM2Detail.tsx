@@ -67,7 +67,8 @@ export function ContextM2Detail() {
     }
     load()
     return () => { cancelled = true }
-  }, [entityId])
+    // showToast is stable (useCallback with no deps in ToastContainer).
+  }, [entityId, showToast])
 
   const ops = useTreeOperations({
     contextId: entityId ?? undefined,

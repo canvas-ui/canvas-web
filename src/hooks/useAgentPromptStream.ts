@@ -34,13 +34,18 @@ export function useAgentPromptStream(agentId: string) {
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
+  // Reset the log during render when the agent changes and there is no agent
+  // to load a session for (prop-driven state reset, no effect needed).
+  const [prevAgentId, setPrevAgentId] = useState(agentId)
+  if (prevAgentId !== agentId) {
+    setPrevAgentId(agentId)
+    if (!agentId) setMessages([])
+  }
+
   useEffect(() => {
     let cancelled = false
 
-    if (!agentId) {
-      setMessages([])
-      return
-    }
+    if (!agentId) return
 
     getAgentSession(agentId)
       .then((session) => {

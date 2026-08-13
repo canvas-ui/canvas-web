@@ -1,6 +1,6 @@
 import { useMenu } from '@/components/shell/menu-context'
 import { useIsMobile } from '@/hooks/use-mobile'
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Copy, Database, ExternalLink, FolderPlus, HardDrive, RefreshCw, Server, Square, Trash2, Unlink, Activity, Monitor, Link2, Check, X as XIcon, Pencil } from 'lucide-react'
 import { Icon } from '@iconify/react'
@@ -328,7 +328,14 @@ function BackendExclusionsEditor({
   const [draft, setDraft] = useState(userPatterns.join('\n'))
   const [showDefaults, setShowDefaults] = useState(false)
 
-  useEffect(() => { setDraft(userPatterns.join('\n')) }, [userPatterns.join('\n')]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Re-seed the draft when the backend's saved patterns change (state
+  // adjustment during render, not an effect).
+  const userPatternsKey = userPatterns.join('\n')
+  const [prevUserPatternsKey, setPrevUserPatternsKey] = useState(userPatternsKey)
+  if (prevUserPatternsKey !== userPatternsKey) {
+    setPrevUserPatternsKey(userPatternsKey)
+    setDraft(userPatternsKey)
+  }
 
   return (
     <div className="mt-3 border-t pt-3">
@@ -862,35 +869,43 @@ export default function WorkspaceSettingsPage() {
   const [deviceBusy, setDeviceBusy] = useState<string | null>(null)
 
   const workspaceId = workspace?.name || workspaceName || ''
+  // Latest id for the loaders below: keeping them identity-stable (deps only on
+  // the stable showToast) lets effects depend on them without re-running when
+  // the workspace object loads.
+  const workspaceIdRef = useRef(workspaceId)
+  useEffect(() => { workspaceIdRef.current = workspaceId })
 
-  const loadShares = async (id = workspaceId) => {
-    if (!id) return
+  const loadShares = useCallback(async (id?: string) => {
+    const target = id ?? workspaceIdRef.current
+    if (!target) return
     try {
-      const result = await listWorkspaceShares(id)
+      const result = await listWorkspaceShares(target)
       setShares(result.publicCanvasShares)
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to load shares', variant: 'destructive' })
     }
-  }
+  }, [showToast])
 
-  const loadDbStats = async (id = workspaceId) => {
-    if (!id) return
+  const loadDbStats = useCallback(async (id?: string) => {
+    const target = id ?? workspaceIdRef.current
+    if (!target) return
     setIsLoadingDbStats(true)
     try {
-      const stats = await getWorkspaceDbStats(id)
+      const stats = await getWorkspaceDbStats(target)
       setDbStats(stats)
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to load DB stats', variant: 'destructive' })
     } finally {
       setIsLoadingDbStats(false)
     }
-  }
+  }, [showToast])
 
-  const loadDevices = async (id = workspaceId) => {
-    if (!id) return
+  const loadDevices = useCallback(async (id?: string) => {
+    const target = id ?? workspaceIdRef.current
+    if (!target) return
     setIsLoadingDevices(true)
     try {
-      const [all, linked] = await Promise.all([listDevices(), listWorkspaceDevices(id)])
+      const [all, linked] = await Promise.all([listDevices(), listWorkspaceDevices(target)])
       setAllDevices(all)
       setLinkedDevices(linked)
     } catch (err) {
@@ -898,7 +913,7 @@ export default function WorkspaceSettingsPage() {
     } finally {
       setIsLoadingDevices(false)
     }
-  }
+  }, [showToast])
 
   const handleLinkDevice = async (deviceId: string) => {
     setDeviceBusy(deviceId)
@@ -939,16 +954,17 @@ export default function WorkspaceSettingsPage() {
     }
   }
 
-  const loadRuntimeSettings = async (id = workspaceId) => {
-    if (!id) return
+  const loadRuntimeSettings = useCallback(async (id?: string) => {
+    const target = id ?? workspaceIdRef.current
+    if (!target) return
     const [nextServices, nextBackends] = await Promise.all([
-      getWorkspaceServicesStatus(id).catch(() => null),
-      listBackends(id).catch(() => [] as Backend[]),
+      getWorkspaceServicesStatus(target).catch(() => null),
+      listBackends(target).catch(() => [] as Backend[]),
     ])
     setServices(nextServices)
     // The Data tab manages storage backends; imap accounts have their own panel.
     setDataBackends(nextBackends.filter((b) => b.kind === 'storage'))
-  }
+  }, [])
 
   // Keep the "indexing m / n" readout live while any backend scan is running.
   const anyResyncing = dataBackends.some((b) => b.resyncing)
@@ -956,7 +972,7 @@ export default function WorkspaceSettingsPage() {
     if (!anyResyncing || !workspaceId) return
     const timer = setInterval(() => { loadRuntimeSettings() }, 4000)
     return () => clearInterval(timer)
-  }, [anyResyncing, workspaceId])
+  }, [anyResyncing, workspaceId, loadRuntimeSettings])
 
   useEffect(() => {
     async function load() {
@@ -978,16 +994,26 @@ export default function WorkspaceSettingsPage() {
       }
     }
     load()
-  }, [workspaceName])
+  }, [workspaceName, loadShares, loadRuntimeSettings, showToast])
+
+  // Mirror "already loaded / in flight" into refs so the lazy tab loader below
+  // keeps its run-once-per-visit semantics without depending on the very state
+  // its fetches mutate (which would retrigger it).
+  const dbTabSatisfiedRef = useRef(false)
+  const devicesTabSatisfiedRef = useRef(false)
+  useEffect(() => {
+    dbTabSatisfiedRef.current = Boolean(dbStats) || isLoadingDbStats
+    devicesTabSatisfiedRef.current = isLoadingDevices || allDevices.length > 0
+  })
 
   useEffect(() => {
-    if (activeTab === 'db' && workspaceId && !dbStats && !isLoadingDbStats) {
+    if (activeTab === 'db' && workspaceId && !dbTabSatisfiedRef.current) {
       loadDbStats()
     }
-    if (activeTab === 'devices' && workspaceId && !isLoadingDevices && allDevices.length === 0) {
+    if (activeTab === 'devices' && workspaceId && !devicesTabSatisfiedRef.current) {
       loadDevices()
     }
-  }, [activeTab, workspaceId])
+  }, [activeTab, workspaceId, loadDbStats, loadDevices])
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()

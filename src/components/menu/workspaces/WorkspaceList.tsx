@@ -35,12 +35,13 @@ export function WorkspaceList() {
 
   // Drag-to-reorder: optimistic order shown until the refetched (sorted) list
   // replaces it. Sequential ints are persisted only for rows that moved.
-  const [optimisticOrder, setOptimisticOrder] = useState<Workspace[] | null>(null)
-  const orderedWorkspaces = optimisticOrder ?? workspaces
-  useEffect(() => { setOptimisticOrder(null) }, [workspaces])
+  // The optimistic order is tagged with the list it was derived from, so it is
+  // simply ignored (derived during render) once a fresh list arrives.
+  const [optimisticOrder, setOptimisticOrder] = useState<{ base: Workspace[]; order: Workspace[] } | null>(null)
+  const orderedWorkspaces = optimisticOrder && optimisticOrder.base === workspaces ? optimisticOrder.order : workspaces
   const { rowProps, handleProps, draggingIndex, insertLineClass } = useListReorder((from, to) => {
     const next = moveItem(orderedWorkspaces, from, to)
-    setOptimisticOrder(next)
+    setOptimisticOrder({ base: workspaces, order: next })
     persistSequentialOrder(next, (ws, order) => updateWorkspace(ws.name, { order }))
       .then(({ failed }) => {
         window.dispatchEvent(new CustomEvent('workspaces:refresh'))

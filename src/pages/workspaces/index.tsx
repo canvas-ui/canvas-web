@@ -109,7 +109,7 @@ export default function WorkspacesPage() {
     loadWorkspaces()
 
 
-  }, [socket])
+  }, [socket, showToast])
 
   const handleCreateWorkspace = async (e: React.FormEvent) => {
     e.preventDefault()

@@ -14,42 +14,45 @@ export function StreamingChatMessageComponent({
   isStreaming = false,
   connectionStatus = 'disconnected'
 }: StreamingChatMessageProps) {
-  const [displayedContent, setDisplayedContent] = useState('');
-  const [showCursor, setShowCursor] = useState(false);
+  const [typedContent, setTypedContent] = useState('');
+  // Starts visible; the blink interval below toggles it while streaming. The
+  // cursor span is only rendered while streaming, so no reset is needed after.
+  const [showCursor, setShowCursor] = useState(true);
 
   // Simulate typing effect for streaming messages
   useEffect(() => {
-    if (isStreaming && !message.isComplete) {
-      const content = message.content;
-      let index = 0;
+    if (!isStreaming || message.isComplete) return;
 
-      const typewriter = setInterval(() => {
-        if (index < content.length) {
-          setDisplayedContent(content.substring(0, index + 1));
-          index++;
-        } else {
-          clearInterval(typewriter);
-        }
-      }, 20); // Adjust typing speed
+    const content = message.content;
+    let index = 0;
 
-      return () => clearInterval(typewriter);
-    } else {
-      setDisplayedContent(message.content);
-    }
+    const typewriter = setInterval(() => {
+      if (index < content.length) {
+        setTypedContent(content.substring(0, index + 1));
+        index++;
+      } else {
+        clearInterval(typewriter);
+      }
+    }, 20); // Adjust typing speed
+
+    return () => clearInterval(typewriter);
   }, [message.content, isStreaming, message.isComplete]);
+
+  // While streaming, show the typewriter output; otherwise the full content.
+  const displayedContent = isStreaming && !message.isComplete ? typedContent : message.content;
 
   // Cursor blinking effect
   useEffect(() => {
-    if (isStreaming && !message.isComplete) {
-      setShowCursor(true);
-      const blinkInterval = setInterval(() => {
-        setShowCursor(prev => !prev);
-      }, 500);
+    if (!isStreaming || message.isComplete) return;
 
-      return () => clearInterval(blinkInterval);
-    } else {
-      setShowCursor(false);
-    }
+    const blinkInterval = setInterval(() => {
+      setShowCursor(prev => !prev);
+    }, 500);
+
+    return () => {
+      clearInterval(blinkInterval);
+      setShowCursor(true);
+    };
   }, [isStreaming, message.isComplete]);
 
   const getConnectionIcon = () => {
