@@ -37,6 +37,44 @@ export default tseslint.config(
     },
   },
   {
+    // /next shell boundary (see src/next/README.md): the experimental UI may
+    // use the data layer + renderers + ui primitives, never the management
+    // UI's chrome. Keeps promotion/deletion of /next a one-route change.
+    files: ['src/next/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '@/components/*',
+                '!@/components/ui',
+                '!@/components/ui/*',
+                '!@/components/renderers',
+                '!@/components/renderers/*',
+              ],
+              message: 'src/next/ must not import the management UI chrome — only @/components/ui and @/components/renderers (see src/next/README.md).',
+            },
+            { group: ['@/pages/*'], message: 'src/next/ must not import management UI pages.' },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // …and the management UI never reaches into /next (App.tsx holds the
+    // single lazy mount point).
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/next/**', 'src/App.tsx'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        { patterns: [{ group: ['@/next/*', '**/next/NextShell'], message: 'Only App.tsx mounts the /next shell.' }] },
+      ],
+    },
+  },
+  {
     // Deliberate exceptions, kept visible as warnings rather than silenced:
     // the socket hooks publish the just-created socket instance synchronously
     // (consumers must see the handle before connect resolves; socket.io queues

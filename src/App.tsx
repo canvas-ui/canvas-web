@@ -1,5 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { useEffect } from 'react'
+import { useEffect, lazy, Suspense } from 'react'
+
+// The experimental content-centric shell (src/next/) — lazily mounted so the
+// management UI's bundle is unaffected. This is its ONLY entry point.
+const NextShell = lazy(() => import('./next/NextShell'))
 import LoginPage from './pages/auth/login'
 import RegisterPage from './pages/auth/register'
 import WorkspacesPage from './pages/workspaces'
@@ -69,6 +73,10 @@ function AppContent() {
         {/* Standalone applet host - chrome-free, one PWA-shortcut click away.
             /apps/add/:kind is more specific and matches inside the shell below. */}
         <Route path="/apps/:appletId" element={<ProtectedRoute><AppletHostPage /></ProtectedRoute>} />
+
+        {/* /next — the experimental content-centric shell. Chrome-free like
+            the applet host; auth required (it talks to the same API). */}
+        <Route path="/next/*" element={<ProtectedRoute><Suspense fallback={null}><NextShell /></Suspense></ProtectedRoute>} />
 
         {/* Dashboard layout for authenticated routes */}
         <Route path="/" element={<ProtectedRoute><NotificationsProvider><CanvasPinsProvider><AppShell /></CanvasPinsProvider></NotificationsProvider></ProtectedRoute>}>

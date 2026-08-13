@@ -1,0 +1,71 @@
+/* Wallpaper + glass for the /next shell. Self-contained — nothing here leaks
+   into the management UI (all selectors live under .next-shell). */
+
+.next-shell {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #0b0f1a;
+  color: rgb(235 240 250);
+}
+
+/* Animated wallpaper: three slow-drifting gradient blobs. Pure CSS so the
+   scaffold ships zero assets; a real wallpaper/video can replace this layer. */
+.next-wallpaper {
+  position: absolute;
+  inset: -20%;
+  filter: blur(60px) saturate(1.2);
+}
+.next-wallpaper::before,
+.next-wallpaper::after,
+.next-wallpaper > i {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  will-change: transform;
+}
+.next-wallpaper::before {
+  width: 55vmax; height: 55vmax; left: -5%; top: -10%;
+  background: radial-gradient(circle at 30% 30%, rgb(56 89 199 / 0.55), transparent 65%);
+  animation: next-drift-a 47s ease-in-out infinite alternate;
+}
+.next-wallpaper::after {
+  width: 60vmax; height: 60vmax; right: -10%; bottom: -15%;
+  background: radial-gradient(circle at 60% 60%, rgb(133 76 199 / 0.4), transparent 65%);
+  animation: next-drift-b 59s ease-in-out infinite alternate;
+}
+.next-wallpaper > i {
+  width: 40vmax; height: 40vmax; left: 35%; top: 45%;
+  background: radial-gradient(circle at 50% 40%, rgb(32 148 143 / 0.35), transparent 65%);
+  animation: next-drift-c 71s ease-in-out infinite alternate;
+}
+@keyframes next-drift-a { to { transform: translate(12vmax, 8vmax) scale(1.1); } }
+@keyframes next-drift-b { to { transform: translate(-10vmax, -6vmax) scale(0.92); } }
+@keyframes next-drift-c { to { transform: translate(-8vmax, 10vmax) scale(1.15); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .next-wallpaper::before, .next-wallpaper::after, .next-wallpaper > i {
+    animation: none;
+  }
+}
+
+/* Frosted glass surface — canvases, the toolbox panel, chips. */
+.next-glass {
+  background: rgb(255 255 255 / 0.08);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  border: 1px solid rgb(255 255 255 / 0.14);
+  box-shadow: 0 8px 32px rgb(0 0 0 / 0.35);
+}
+
+/* The one control: a round orb, bottom right. */
+.next-orb {
+  background: rgb(255 255 255 / 0.12);
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  border: 1px solid rgb(255 255 255 / 0.22);
+  box-shadow: 0 8px 32px rgb(0 0 0 / 0.45), inset 0 1px 0 rgb(255 255 255 / 0.25);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+.next-orb:hover { transform: scale(1.06); }
+.next-orb:active { transform: scale(0.97); }
