@@ -210,6 +210,15 @@ async function main() {
   await sleep(1200);
   await send('Runtime.evaluate', { expression: `localStorage.setItem('authToken', ${JSON.stringify(token)})` });
 
+  // Optional extra localStorage seeding (JSON object of key -> value), e.g.
+  // SCREENSHOT_LOCALSTORAGE='{"doclist:view":"tile"}' to pin a view mode.
+  if (process.env.SCREENSHOT_LOCALSTORAGE) {
+    const extra = JSON.parse(process.env.SCREENSHOT_LOCALSTORAGE);
+    for (const [key, value] of Object.entries(extra)) {
+      await send('Runtime.evaluate', { expression: `localStorage.setItem(${JSON.stringify(key)}, ${JSON.stringify(String(value))})` });
+    }
+  }
+
   for (const route of opts.routes) {
     await send('Page.navigate', { url: `${opts.base}${route}` });
     await sleep(opts.wait);

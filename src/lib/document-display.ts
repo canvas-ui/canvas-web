@@ -12,6 +12,20 @@ function truncate(value: unknown, maxLength: number): string {
   return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text
 }
 
+// Note bodies are markdown; previews should read as plain text, not syntax.
+// Deliberately lossy — just enough to keep tiles/rows clean.
+function stripMarkdown(value: unknown): string {
+  return String(value || '')
+    .replace(/```[\s\S]*?```/g, ' ')          // fenced code blocks
+    .replace(/`([^`]*)`/g, '$1')              // inline code
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1') // images → alt text
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')  // links → link text
+    .replace(/^#{1,6}\s+/gm, '')              // heading markers
+    .replace(/^\s*>\s?/gm, '')                // blockquote markers
+    .replace(/^\s*[-*+]\s+/gm, '')            // list bullets
+    .replace(/(\*\*|__|\*|_|~~)/g, '')        // emphasis/strikethrough
+}
+
 function formatEmailParty(value: unknown): string {
   if (!value) return ''
   if (typeof value === 'string') return value
@@ -159,7 +173,9 @@ export function getDocumentDisplayInfo(document: Document): {
 
   return {
     title: truncate(document.data.title || document.data.name || document.data.subject || getLocationFilename(document), 160) || `Document ${document.id}`,
-    preview: truncate(document.data.content || document.data.description || document.data.summary || document.data.bodyPreview || document.data.body, 140),
+    // 400 chars: enough body for a tile to fill its clamped preview area; the
+    // row view clamps to 2 lines anyway, so the extra length costs nothing.
+    preview: truncate(stripMarkdown(document.data.content || document.data.description || document.data.summary || document.data.bodyPreview || document.data.body), 400),
     subtitle: '',
     icon: 'file',
     isExternal: false,

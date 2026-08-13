@@ -559,6 +559,9 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
   const isEditable = isEditableSchema(document.schema)
   const tabUrl = isTabDocument ? document.data.url : null
   const display = getDocumentDisplayInfo(document)
+  const isImage = isImageDocument(document)
+  // Small row preview — 128px render is plenty for a 56px square.
+  const { blobUrl: rowThumbUrl } = useDocumentThumbnail(workspaceId ?? '', document.id, 128, { enabled: isImage })
 
   const handleDragStart = (e: React.DragEvent) => {
     onDragStart?.(e, document.id);
@@ -606,6 +609,15 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
         onDragStart={handleDragStart}
       >
         <div className="flex items-start justify-between gap-4">
+          {isImage && (
+            <div className="h-14 w-14 shrink-0 overflow-hidden rounded-md border bg-muted/40">
+              {rowThumbUrl ? (
+                <img src={rowThumbUrl} alt={display.title} loading="lazy" className="h-full w-full object-cover" />
+              ) : (
+                <div className="h-full w-full animate-pulse bg-muted/60" />
+              )}
+            </div>
+          )}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2 overflow-hidden">
               <DocumentIcon document={document} chip />
@@ -672,6 +684,9 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
   const tabUrl = isTabDocument ? document.data.url : null
   const isImage = isImageDocument(document)
   const display = getDocumentDisplayInfo(document)
+  // Notes, tabs/URLs, emails: the content IS the picture — render a text tile
+  // (title + clamped body) instead of a giant icon. Files keep the icon tile.
+  const isTextTile = !isImage && document.schema !== 'data/schema/file' && !!display.preview
   // 768px render keeps the larger (300px column, retina) photo tiles crisp.
   const { blobUrl, loading } = useDocumentThumbnail(workspaceId ?? '', document.id, 768, { enabled: isImage })
 
@@ -700,10 +715,26 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
           onClick={(e) => e.stopPropagation()}
           onChange={(e) => onSelect?.(document.id, e.target.checked, true)}
         />
-        <div className={`relative w-full bg-muted/40 ${isImage && blobUrl ? '' : 'aspect-square'}`}>
+        {/* Images and text tiles take their natural height (masonry columns);
+            icon tiles stay square. */}
+        <div className={`relative w-full bg-muted/40 ${isImage && blobUrl ? '' : isTextTile ? '' : 'aspect-square'}`}>
           {isImage && loading && <div className="absolute inset-0 animate-pulse bg-muted/60" />}
           {isImage && blobUrl ? (
             <img src={blobUrl} alt={display.title} loading="lazy" className="block h-auto w-full" />
+          ) : isTextTile ? (
+            <div className="flex min-h-28 w-full flex-col gap-1.5 overflow-hidden bg-card p-3 pt-7 text-left">
+              <div className="flex items-center gap-1.5">
+                <DocumentIcon document={document} />
+                <span className="min-w-0 truncate text-[10px] uppercase tracking-wide text-muted-foreground">{display.schemaLabel}</span>
+              </div>
+              <div className="line-clamp-2 text-sm font-semibold leading-snug">{display.title}</div>
+              {display.subtitle && (
+                <div className="truncate text-[11px] text-info">{display.subtitle}</div>
+              )}
+              {/* The "CSS magic": -webkit-line-clamp — up to 8 body lines,
+                  then an ellipsis; shorter notes make shorter tiles. */}
+              <p className="line-clamp-[8] text-xs leading-relaxed text-muted-foreground">{display.preview}</p>
+            </div>
           ) : (
             <div className="flex h-full w-full items-center justify-center">
               <DocumentIcon document={document} size={10} chip />
@@ -719,10 +750,13 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
             </button>
           )}
         </div>
-        <div className="flex items-center gap-1.5 border-t bg-card px-2 py-1.5">
-          <span className="truncate text-xs font-medium" title={display.title}>{display.title}</span>
-          {display.isExternal && <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />}
-        </div>
+        {/* Text tiles carry their title inside the tile body already. */}
+        {!isTextTile && (
+          <div className="flex items-center gap-1.5 border-t bg-card px-2 py-1.5">
+            <span className="truncate text-xs font-medium" title={display.title}>{display.title}</span>
+            {display.isExternal && <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />}
+          </div>
+        )}
       </div>
       <ObjectPropertiesModal document={document} isOpen={showDetailModal} onClose={() => setShowDetailModal(false)} workspaceId={workspaceId} />
     </>
