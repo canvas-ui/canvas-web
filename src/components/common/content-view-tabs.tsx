@@ -111,6 +111,16 @@ export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = 
 
       {!readOnly && (adding ? (
         <span className="relative z-[1] mb-1.5 ml-1 flex shrink-0 items-center gap-1">
+          {/* Deleted the default "All" view? Offer it back verbatim. */}
+          {!views.some((v) => v.id === DEFAULT_VIEW.id) && (
+            <button
+              type="button"
+              onClick={() => { setAdding(false); onSave([{ ...DEFAULT_VIEW }, ...views], DEFAULT_VIEW.id) }}
+              className="flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+            >
+              <LayoutList className="h-3 w-3" /> All
+            </button>
+          )}
           <button
             type="button"
             onClick={() => addView('documents')}
