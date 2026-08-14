@@ -14,6 +14,9 @@ import { CloseSectionButton, SectionBackButton } from '@/components/common/page-
 import { useIsMobile } from '@/hooks/use-mobile';
 import { DefaultCanvas } from '@/components/canvas/DefaultCanvas';
 import type { CanvasInfo } from '@/components/canvas/DefaultCanvas';
+import { ContentViewTabs } from '@/components/common/content-view-tabs';
+import { viewsFromLayerMetadata, DEFAULT_VIEW, type ContentView } from '@/components/common/content-views';
+import { SchemaColumnsBoard } from '@/components/common/schema-columns-board';
 import { CanvasGrid } from '@/components/canvas/CanvasGrid';
 import type { WidgetFetchOpts, WidgetDocumentsResult } from '@/components/canvas/widget-types';
 import type { DocumentPasteOptions } from '@/components/common/document-list';
@@ -21,6 +24,7 @@ import {
   getWorkspaceDocuments,
   getWorkspaceLayerDocuments,
   getCanvasPathDocuments,
+  updateWorkspacePath,
   getCachedWorkspaceTreeByName,
   invalidateWorkspaceTreeCache,
   createWorkspaceCanvas,
@@ -234,6 +238,32 @@ export default function WorkspaceDetailPage() {
     return node;
   }, [tree, selectedPath, isLayerView]);
   const selectedNodeType = selectedNode?.type === 'canvas' ? 'canvas' : null;
+
+  // ── Content-area views (tabs) ──────────────────────────────────────────
+  // A tree path is a layer — the "task container" — and its named views live
+  // in the layer's metadata (`metadata.views`). Local state is derived per
+  // path-key (no effects); edits are optimistic with a PATCH behind them.
+  // Root '/' is the root layer: its node is the tree itself.
+  const nodeForViews = !isLayerView ? (selectedPath === '/' ? tree : selectedNode) : null;
+  const viewsKey = `${selectedTreeName}\0${selectedPath}`;
+  const [viewsState, setViewsState] = useState<{ key: string; views: ContentView[]; activeId: string } | null>(null);
+  const contentViews = viewsState?.key === viewsKey ? viewsState.views : viewsFromLayerMetadata(nodeForViews?.metadata);
+  const activeContentViewId = viewsState?.key === viewsKey ? viewsState.activeId : contentViews[0]?.id ?? DEFAULT_VIEW.id;
+  const activeContentView = contentViews.find(v => v.id === activeContentViewId) ?? contentViews[0] ?? DEFAULT_VIEW;
+
+  const selectContentView = (id: string) => setViewsState({ key: viewsKey, views: contentViews, activeId: id });
+  const saveContentViews = (views: ContentView[], nextActiveId?: string) => {
+    setViewsState({ key: viewsKey, views, activeId: nextActiveId ?? activeContentViewId });
+    // metadata is REPLACED server-side — carry the layer's other keys along.
+    updateWorkspacePath(
+      workspaceName!,
+      selectedPath,
+      { metadata: { ...(nodeForViews?.metadata ?? {}), views } },
+      selectedTreeName,
+    ).catch(() => {
+      showToast({ title: 'View not saved', description: 'Could not persist views to the layer', variant: 'destructive' });
+    });
+  };
   const savedCanvasSearchQuery = selectedNodeType === 'canvas' && typeof selectedNode?.querySpec?.query === 'string'
     ? selectedNode.querySpec.query
     : '';
@@ -1241,11 +1271,27 @@ export default function WorkspaceDetailPage() {
       canSaveChanges={canSaveChanges}
       isSavingChanges={toolboxState.isSaving}
       onSaveChanges={saveFilters}
-      contentBanner={queryDebug && queryDebugData
-        ? <QueryDebugPanel data={queryDebugData} className="mb-3" />
-        : null}
+      contentBanner={
+        <>
+          {/* Named views of this layer (tabs) — not on canvases (they have the
+              widget grid) and not on the backends mirror. */}
+          {!showCanvasGrid && !isBackendsPath && nodeForViews && (
+            <ContentViewTabs
+              className="mb-2"
+              views={contentViews}
+              activeId={activeContentViewId}
+              onSelect={selectContentView}
+              onSave={saveContentViews}
+              readOnly={!!nodeForViews.locked && selectedPath !== '/'}
+            />
+          )}
+          {queryDebug && queryDebugData ? <QueryDebugPanel data={queryDebugData} className="mb-3" /> : null}
+        </>
+      }
     >
-      {showCanvasGrid && selectedNode && (
+      {/* Single expression on purpose — see the children guard in DefaultCanvas:
+          an array of children is truthy even when every element is false. */}
+      {showCanvasGrid && selectedNode ? (
         <CanvasGrid
           workspaceId={workspace.name}
           treeName={selectedTreeName}
@@ -1258,7 +1304,16 @@ export default function WorkspaceDetailPage() {
           // filters; a clean canvas keeps the default server-composed read.
           fetchDocuments={toolboxState.isDirty ? canvasFetchDocuments : undefined}
         />
-      )}
+      ) : !isBackendsPath && activeContentView.kind === 'columns' ? (
+        <SchemaColumnsBoard
+          documents={shownDocuments}
+          workspaceId={workspace.name}
+          columns={activeContentView.columns ?? []}
+          onColumnsChange={(columns) => saveContentViews(
+            contentViews.map(v => (v.id === activeContentView.id ? { ...v, columns } : v)),
+          )}
+        />
+      ) : null}
     </DefaultCanvas>
   );
 
