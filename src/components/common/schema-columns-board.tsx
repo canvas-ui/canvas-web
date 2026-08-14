@@ -124,7 +124,7 @@ export function SchemaColumnsBoard({ documents, workspaceId, columns, onColumnsC
             // applies below `sm`.
             <div
               key={column.id}
-              className={`relative flex h-full min-h-0 shrink-0 grow-0 basis-full snap-start flex-col rounded-lg border bg-muted/20 ${
+              className={`relative flex h-full min-h-0 min-w-0 shrink-0 grow-0 basis-full snap-start flex-col rounded-lg border bg-muted/20 ${
                 draggedWidth ? 'sm:basis-[var(--col-w)]' : 'sm:basis-[48%] lg:basis-[32%] xl:basis-[24%]'
               }`}
               style={draggedWidth ? ({ '--col-w': `${draggedWidth}px` } as React.CSSProperties) : undefined}
@@ -173,14 +173,14 @@ export function SchemaColumnsBoard({ documents, workspaceId, columns, onColumnsC
                       key={document.id}
                       type="button"
                       onClick={() => setOpenDocument(document)}
-                      className="w-full rounded-md border bg-card px-2.5 py-2 text-left transition-colors hover:bg-accent/50"
+                      className="w-full min-w-0 rounded-md border bg-card px-2.5 py-2 text-left transition-colors hover:bg-accent/50"
                     >
                       <div className="flex items-center gap-1.5">
                         <DocumentIcon document={document} size={3.5} />
                         <span className="truncate text-xs font-medium" title={display.title}>{display.title}</span>
                       </div>
                       {display.preview && (
-                        <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-muted-foreground">{display.preview}</p>
+                        <p className="mt-1 line-clamp-2 break-words text-[11px] leading-snug text-muted-foreground">{display.preview}</p>
                       )}
                       <p className="mt-1 text-[10px] text-muted-foreground/70">
                         {new Date(document.updatedAt || document.createdAt).toLocaleDateString()}
