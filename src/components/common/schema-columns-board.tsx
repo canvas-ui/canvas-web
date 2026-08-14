@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Plus, X } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ChevronRight, Plus, X } from 'lucide-react'
 import type { Document } from '@/types/workspace'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { DocumentIcon } from '@/components/common/DocumentIcon'
@@ -45,6 +45,23 @@ export function SchemaColumnsBoard({ documents, workspaceId, columns, onColumnsC
   const [filterDrafts, setFilterDrafts] = useState<Record<string, string>>({})
   // Live width while dragging a column edge; persisted once on pointer-up.
   const [widthDrafts, setWidthDrafts] = useState<Record<string, number>>({})
+  // Whether more columns hide beyond the right edge (drives the chevron hint).
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [moreRight, setMoreRight] = useState(false)
+  const updateMoreRight = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    setMoreRight(el.scrollWidth - el.clientWidth - el.scrollLeft > 8)
+  }, [])
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    // ResizeObserver covers mount, viewport changes and column resizes; the
+    // scroll handler on the container covers the rest.
+    const observer = new ResizeObserver(() => updateMoreRight())
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [updateMoreRight])
 
   const startResize = (e: React.PointerEvent, columnId: string) => {
     e.preventDefault()
@@ -86,7 +103,7 @@ export function SchemaColumnsBoard({ documents, workspaceId, columns, onColumnsC
     // Snap-scrolling flex row: swipe (or scroll) horizontally column by
     // column; each column scrolls vertically on its own. h-full works because
     // the DefaultCanvas content pane has a definite height (flex-1 min-h-0).
-    <div className="flex h-full snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain pb-2 pr-2" data-testid="schema-columns-board">
+    <div ref={scrollRef} onScroll={updateMoreRight} className="flex h-full snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain pb-2 pr-2" data-testid="schema-columns-board">
         {columns.map((column) => {
           const filterText = (filterDrafts[column.id] ?? column.filter ?? '').toLowerCase()
           const columnDocuments = documents
@@ -115,7 +132,7 @@ export function SchemaColumnsBoard({ documents, workspaceId, columns, onColumnsC
                   onPointerDown={(e) => startResize(e, column.id)}
                   onDoubleClick={() => resetWidth(column.id)}
                   title="Drag to resize — double-click to reset"
-                  className="absolute -right-2 inset-y-0 z-10 w-3 cursor-col-resize touch-none"
+                  className="absolute right-0 inset-y-0 z-10 w-2 cursor-col-resize touch-none rounded-r-lg transition-colors hover:bg-primary/25 active:bg-primary/40"
                 />
               )}
               <div className="flex items-center gap-2 px-3 pb-1 pt-2.5">
@@ -175,44 +192,50 @@ export function SchemaColumnsBoard({ documents, workspaceId, columns, onColumnsC
           )
         })}
 
-        {/* Add-column control: a full-height ghost rail (the "add another
-            list" pattern), sticky at the right edge so it is always reachable
-            without swiping to the end — that's also how a removed column
-            comes back: it returns to this list. Opaque background so it reads
-            as docked, not floating, when it overlaps a column while stuck. */}
-        {!readOnly && addableColumns.length > 0 && (
-          <div className="sticky right-0 z-20 h-full shrink-0 bg-background pl-1">
-            {addingColumn ? (
-              <div className="w-44 rounded-lg border bg-muted/20 p-2">
-                <p className="px-2 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Add column</p>
-                {addableColumns.map((k) => (
-                  <button
-                    key={k.id}
-                    type="button"
-                    onClick={() => { setAddingColumn(false); onColumnsChange([...columns, { ...k }]) }}
-                    className="w-full rounded-md px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                  >
-                    {k.label}
-                  </button>
-                ))}
+        {/* Right-edge indicator line: a slim gradient strip hosting the small
+            add-column button (top) and a chevron hint when more columns hide
+            beyond the edge. Net-zero layout width (-ml-7 + w-7) and
+            pointer-events pass through everywhere except the button, so the
+            column resize handles beneath stay grabbable. */}
+        {((!readOnly && addableColumns.length > 0) || moreRight) && (
+          <div className="pointer-events-none sticky right-0 z-20 -ml-7 flex h-full w-7 shrink-0 flex-col items-center bg-gradient-to-l from-background via-background/60 to-transparent py-1">
+            {!readOnly && addableColumns.length > 0 && (
+              <div className="pointer-events-auto relative">
                 <button
                   type="button"
-                  onClick={() => setAddingColumn(false)}
-                  className="mt-1 w-full rounded-md px-2 py-1.5 text-left text-xs text-muted-foreground/60 hover:bg-accent/50"
+                  onClick={() => setAddingColumn((v) => !v)}
+                  title="Add column"
+                  aria-label="Add column"
+                  className="flex h-6 w-6 items-center justify-center rounded-md border bg-background text-muted-foreground shadow-elevation-1 hover:bg-accent hover:text-foreground"
                 >
-                  Cancel
+                  <Plus className="h-3.5 w-3.5" />
                 </button>
+                {addingColumn && (
+                  <div className="absolute right-0 top-7 w-44 rounded-lg border bg-background p-2 shadow-elevation-2">
+                    <p className="px-2 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Add column</p>
+                    {addableColumns.map((k) => (
+                      <button
+                        key={k.id}
+                        type="button"
+                        onClick={() => { setAddingColumn(false); onColumnsChange([...columns, { ...k }]) }}
+                        className="w-full rounded-md px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                      >
+                        {k.label}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setAddingColumn(false)}
+                      className="mt-1 w-full rounded-md px-2 py-1.5 text-left text-xs text-muted-foreground/60 hover:bg-accent/50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
               </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setAddingColumn(true)}
-                title="Add column"
-                aria-label="Add column"
-                className="flex h-full w-11 flex-col items-center justify-center gap-1 rounded-lg border border-dashed text-muted-foreground transition-colors hover:bg-accent/30 hover:text-foreground"
-              >
-                <Plus className="h-4 w-4" />
-              </button>
+            )}
+            {moreRight && (
+              <ChevronRight className="my-auto h-4 w-4 text-muted-foreground/70" aria-label="More columns" />
             )}
           </div>
         )}
