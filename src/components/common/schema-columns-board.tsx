@@ -56,8 +56,10 @@ export function SchemaColumnsBoard({ documents, workspaceId, columns, onColumnsC
   const addableColumns = KNOWN_COLUMNS.filter((k) => !columns.some((c) => c.id === k.id))
 
   return (
-    <div className="flex-1 min-h-0 overflow-x-auto" data-testid="schema-columns-board">
-      <div className="flex h-full min-w-max gap-3 pb-2 pr-2">
+    // Snap-scrolling flex row: swipe (or scroll) horizontally column by
+    // column; each column scrolls vertically on its own. h-full works because
+    // the DefaultCanvas content pane has a definite height (flex-1 min-h-0).
+    <div className="flex h-full snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain pb-2 pr-2" data-testid="schema-columns-board">
         {columns.map((column) => {
           const filterText = (filterDrafts[column.id] ?? column.filter ?? '').toLowerCase()
           const columnDocuments = documents
@@ -69,7 +71,11 @@ export function SchemaColumnsBoard({ documents, workspaceId, columns, onColumnsC
             })
 
           return (
-            <div key={column.id} className="flex h-full w-72 shrink-0 flex-col rounded-lg border bg-muted/20">
+            // Viewport-proportional widths: ~1 column on a phone (with a peek
+            // of the next), 2 / 3 / 4 as the pane widens. Percentages resolve
+            // against the scroll container, so a narrow side pane gets the
+            // same column-per-swipe feel as a full-width monitor.
+            <div key={column.id} className="flex h-full min-h-0 shrink-0 grow-0 basis-[85%] snap-start flex-col rounded-lg border bg-muted/20 sm:basis-[48%] lg:basis-[32%] xl:basis-[24%]">
               <div className="flex items-center gap-2 px-3 pb-1 pt-2.5">
                 <span className="truncate text-sm font-medium">{column.label}</span>
                 <span className="text-xs text-muted-foreground">{columnDocuments.length}</span>
@@ -160,14 +166,13 @@ export function SchemaColumnsBoard({ documents, workspaceId, columns, onColumnsC
             )}
           </div>
         )}
-      </div>
 
-      <ObjectPropertiesModal
-        document={openDocument}
-        isOpen={openDocument !== null}
-        onClose={() => setOpenDocument(null)}
-        workspaceId={workspaceId}
-      />
+        <ObjectPropertiesModal
+          document={openDocument}
+          isOpen={openDocument !== null}
+          onClose={() => setOpenDocument(null)}
+          workspaceId={workspaceId}
+        />
     </div>
   )
 }
