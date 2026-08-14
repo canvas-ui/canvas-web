@@ -1271,23 +1271,9 @@ export default function WorkspaceDetailPage() {
       canSaveChanges={canSaveChanges}
       isSavingChanges={toolboxState.isSaving}
       onSaveChanges={saveFilters}
-      contentBanner={
-        <>
-          {/* Named views of this layer (tabs) — not on canvases (they have the
-              widget grid) and not on the backends mirror. */}
-          {!showCanvasGrid && !isBackendsPath && nodeForViews && (
-            <ContentViewTabs
-              className="mb-2"
-              views={contentViews}
-              activeId={activeContentViewId}
-              onSelect={selectContentView}
-              onSave={saveContentViews}
-              readOnly={!!nodeForViews.locked && selectedPath !== '/'}
-            />
-          )}
-          {queryDebug && queryDebugData ? <QueryDebugPanel data={queryDebugData} className="mb-3" /> : null}
-        </>
-      }
+      contentBanner={queryDebug && queryDebugData
+        ? <QueryDebugPanel data={queryDebugData} className="mb-3" />
+        : null}
     >
       {/* Single expression on purpose — see the children guard in DefaultCanvas:
           an array of children is truthy even when every element is false. */}
@@ -1358,7 +1344,19 @@ export default function WorkspaceDetailPage() {
           />
           <span className="truncate">{workspace.label || workspace.name}</span>
         </button>
-        <div className="flex-1" />
+        {/* Browser-style: the layer's view tabs ride the title row. */}
+        {!showCanvasGrid && !isBackendsPath && nodeForViews ? (
+          <ContentViewTabs
+            className="min-w-0 flex-1"
+            views={contentViews}
+            activeId={activeContentViewId}
+            onSelect={selectContentView}
+            onSave={saveContentViews}
+            readOnly={!!nodeForViews.locked && selectedPath !== '/'}
+          />
+        ) : (
+          <div className="flex-1" />
+        )}
         {/* Backend mirrors: show only docs never filed into another tree
             (safe-to-purge candidates on the backend). */}
         {backendTarget && (
@@ -1381,7 +1379,7 @@ export default function WorkspaceDetailPage() {
           <button
             onClick={() => toggleView('tools')}
             className={cn(
-              'flex items-center gap-1.5 px-3 py-1 text-xs border rounded-md transition-colors',
+              'flex h-7 w-7 items-center justify-center border rounded-md transition-colors',
               // Filters narrow every tree read - keep the button colored while
               // any are active so an empty folder is explainable at a glance.
               hasActiveFilters
@@ -1390,10 +1388,10 @@ export default function WorkspaceDetailPage() {
                   ? 'bg-accent text-foreground'
                   : 'hover:bg-accent text-muted-foreground hover:text-foreground',
             )}
+            aria-label="Filters"
             title={hasActiveFilters ? 'Toolbox filters are active and narrow this view' : 'Open the toolbox filters'}
           >
-            <Filter className="w-3 h-3" />
-            Filter{hasActiveFilters ? ' on' : ''}
+            <Filter className="h-3.5 w-3.5" />
           </button>
         ) : (
           <button
