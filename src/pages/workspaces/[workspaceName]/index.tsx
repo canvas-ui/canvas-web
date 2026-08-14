@@ -1407,7 +1407,7 @@ export default function WorkspaceDetailPage() {
           <button
             onClick={() => toggleView('tools')}
             className={cn(
-              'flex h-7 w-7 items-center justify-center border rounded-md transition-colors',
+              'flex h-7 w-7 items-center justify-center border rounded-md transition-colors touch-target',
               // Filters narrow every tree read - keep the button colored while
               // any are active so an empty folder is explainable at a glance.
               hasActiveFilters
@@ -1425,7 +1425,7 @@ export default function WorkspaceDetailPage() {
           <button
             onClick={handleStartWorkspace}
             disabled={isStartingWorkspace}
-            className="px-3 py-1 text-xs border rounded-md hover:bg-accent disabled:opacity-50"
+            className="px-3 py-1 text-xs border rounded-md hover:bg-accent disabled:opacity-50 touch-target"
           >
             {isStartingWorkspace ? 'Starting…' : 'Start'}
           </button>

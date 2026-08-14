@@ -117,25 +117,29 @@ export function SchemaColumnsBoard({ documents, workspaceId, columns, onColumnsC
           const draggedWidth = widthDrafts[column.id] ?? column.width
 
           return (
-            // Viewport-proportional widths: ~1 column on a phone (with a peek
-            // of the next), 2 / 3 / 4 as the pane widens. Percentages resolve
-            // against the scroll container, so a narrow side pane gets the
-            // same column-per-swipe feel as a full-width monitor. A dragged
-            // width (right-edge handle) overrides the responsive default.
+            // Phones: one column spans the full area, swipe left/right to
+            // switch (snap pager) — no resizing. From `sm` up: 2 / 3 / 4
+            // columns as the pane widens; a dragged width (right-edge handle)
+            // overrides the responsive default via a CSS var so it never
+            // applies below `sm`.
             <div
               key={column.id}
-              className="relative flex h-full min-h-0 shrink-0 grow-0 basis-[85%] snap-start flex-col rounded-lg border bg-muted/20 sm:basis-[48%] lg:basis-[32%] xl:basis-[24%]"
-              style={draggedWidth ? { flexBasis: draggedWidth } : undefined}
+              className={`relative flex h-full min-h-0 shrink-0 grow-0 basis-full snap-start flex-col rounded-lg border bg-muted/20 ${
+                draggedWidth ? 'sm:basis-[var(--col-w)]' : 'sm:basis-[48%] lg:basis-[32%] xl:basis-[24%]'
+              }`}
+              style={draggedWidth ? ({ '--col-w': `${draggedWidth}px` } as React.CSSProperties) : undefined}
             >
               {!readOnly && (
                 <div
                   onPointerDown={(e) => startResize(e, column.id)}
                   onDoubleClick={() => resetWidth(column.id)}
                   title="Drag to resize — double-click to reset"
-                  className="absolute right-0 inset-y-0 z-10 w-2 cursor-col-resize touch-none rounded-r-lg transition-colors hover:bg-primary/25 active:bg-primary/40"
+                  className="absolute right-0 inset-y-0 z-10 w-2 cursor-col-resize touch-none rounded-r-lg transition-colors hover:bg-primary/25 active:bg-primary/40 max-sm:hidden"
                 />
               )}
-              <div className="flex items-center gap-2 px-3 pb-1 pt-2.5">
+              {/* max-sm: keep the remove-X clear of the edge strip's + button
+                  (full-span columns sit directly beneath it). */}
+              <div className="flex items-center gap-2 px-3 pb-1 pt-2.5 max-sm:pr-10">
                 <span className="truncate text-sm font-medium">{column.label}</span>
                 <span className="text-xs text-muted-foreground">{columnDocuments.length}</span>
                 <span className="flex-1" />
