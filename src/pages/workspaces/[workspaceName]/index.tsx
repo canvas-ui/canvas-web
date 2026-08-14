@@ -1309,11 +1309,25 @@ export default function WorkspaceDetailPage() {
           color as the primary accent; near-white colors fall back to the
           theme border so the accent never vanishes on the light background. */}
       <div
-        className="flex h-12 items-center gap-3 border-b px-4 shrink-0"
+        className="shrink-0 border-b"
         style={visibleAccentColor(workspace.color)
           ? { borderBottom: `3px solid ${visibleAccentColor(workspace.color)}` }
           : { borderBottomWidth: 3 }}
       >
+        {/* Mobile: browser order — tabs first, then the title/controls row,
+            then the URL bar (rendered by DefaultCanvas below). */}
+        {!showCanvasGrid && !isBackendsPath && nodeForViews && (
+          <div className="px-2 pt-1.5 sm:hidden">
+            <ContentViewTabs
+              views={contentViews}
+              activeId={activeContentViewId}
+              onSelect={selectContentView}
+              onSave={saveContentViews}
+              readOnly={!!nodeForViews.locked && selectedPath !== '/'}
+            />
+          </div>
+        )}
+        <div className="flex h-12 items-center gap-3 px-4">
         {/* Same gesture as a settings page: reopen the tree panel on mobile
             (it closed on navigation), step up to the list on desktop. */}
         <SectionBackButton
@@ -1344,16 +1358,20 @@ export default function WorkspaceDetailPage() {
           />
           <span className="truncate">{workspace.label || workspace.name}</span>
         </button>
-        {/* Browser-style: the layer's view tabs ride the title row. */}
+        {/* Desktop: browser-style, the view tabs ride the title row. On
+            mobile they render as their own top row above (max-sm:hidden). */}
         {!showCanvasGrid && !isBackendsPath && nodeForViews ? (
-          <ContentViewTabs
-            className="min-w-0 flex-1"
-            views={contentViews}
-            activeId={activeContentViewId}
-            onSelect={selectContentView}
-            onSave={saveContentViews}
-            readOnly={!!nodeForViews.locked && selectedPath !== '/'}
-          />
+          <>
+            <ContentViewTabs
+              className="min-w-0 flex-1 max-sm:hidden"
+              views={contentViews}
+              activeId={activeContentViewId}
+              onSelect={selectContentView}
+              onSave={saveContentViews}
+              readOnly={!!nodeForViews.locked && selectedPath !== '/'}
+            />
+            <div className="flex-1 sm:hidden" />
+          </>
         ) : (
           <div className="flex-1" />
         )}
@@ -1403,6 +1421,7 @@ export default function WorkspaceDetailPage() {
           </button>
         )}
         <CloseSectionButton />
+        </div>
       </div>
 
       {createCanvas && (

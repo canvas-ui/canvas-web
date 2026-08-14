@@ -47,7 +47,10 @@ export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = 
   }
 
   return (
-    <div className={cn('flex items-center gap-1 overflow-x-auto', className)}>
+    <div className={cn('flex min-w-0 items-center gap-1', className)}>
+      {/* Only the tab list scrolls — the add control stays pinned outside the
+          scroll region so it can never drift out of view. */}
+      <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
       {views.map((view) => {
         const isActive = view.id === activeId
         if (editingId === view.id) {
@@ -89,6 +92,7 @@ export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = 
           </button>
         )
       })}
+      </div>
 
       {!readOnly && (adding ? (
         <span className="flex shrink-0 items-center gap-1">
