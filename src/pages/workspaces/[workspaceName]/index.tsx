@@ -1333,7 +1333,9 @@ export default function WorkspaceDetailPage() {
               activeId={activeContentViewId}
               onSelect={selectContentView}
               onSave={saveContentViews}
-              readOnly={!!nodeForViews.locked && selectedPath !== '/'}
+              // Locked layers still allow metadata-only (presentation) updates
+              // server-side — views are editable everywhere.
+              readOnly={false}
             />
           </div>
         )}
@@ -1378,7 +1380,9 @@ export default function WorkspaceDetailPage() {
               activeId={activeContentViewId}
               onSelect={selectContentView}
               onSave={saveContentViews}
-              readOnly={!!nodeForViews.locked && selectedPath !== '/'}
+              // Locked layers still allow metadata-only (presentation) updates
+              // server-side — views are editable everywhere.
+              readOnly={false}
             />
             <div className="flex-1 sm:hidden" />
           </>

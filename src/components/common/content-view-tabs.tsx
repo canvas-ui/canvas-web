@@ -93,8 +93,14 @@ export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = 
             {view.kind === 'columns' ? <Columns3 className="h-3 w-3 shrink-0" /> : <LayoutList className="h-3 w-3 shrink-0" />}
             <span className="max-w-32 truncate">{view.name}</span>
             {!readOnly && views.length > 1 && (
+              // Chrome semantics: the ACTIVE tab always shows its close (the
+              // only way it is reachable on touch); inactive tabs reveal it
+              // on hover.
               <X
-                className="h-3 w-3 shrink-0 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                className={cn(
+                  'h-3 w-3 shrink-0 transition-opacity hover:text-destructive',
+                  isActive ? 'opacity-60 hover:opacity-100' : 'opacity-0 group-hover:opacity-100',
+                )}
                 onClick={(e) => { e.stopPropagation(); removeView(view.id) }}
               />
             )}
