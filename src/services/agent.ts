@@ -655,8 +655,8 @@ export const agentService = new AgentService();
  */
 export async function listAgents(): Promise<Agent[]> {
   try {
-    const response = await api.get<{ payload: Agent[] }>(`${API_URL}/agents`);
-    return response.payload || [];
+    const response = await api.get<Agent[]>(`${API_URL}/agents`);
+    return response || [];
   } catch (error) {
     console.error('Failed to list agents:', error);
     return [];
@@ -667,34 +667,34 @@ export async function listAgents(): Promise<Agent[]> {
  * Get a specific agent by ID
  */
 export async function getAgent(agentId: string): Promise<Agent> {
-  const response = await api.get<{ payload: Agent }>(`${API_URL}/agents/${agentId}`);
-  return response.payload;
+  const response = await api.get<Agent>(`${API_URL}/agents/${agentId}`);
+  return response;
 }
 
 export async function getAgentSession(agentId: string): Promise<AgentSession> {
-  const response = await api.get<{ payload: RawAgentSessionPayload }>(`${API_URL}/agents/${agentId}/session`);
-  return normalizeAgentSessionPayload(response.payload);
+  const response = await api.get<RawAgentSessionPayload>(`${API_URL}/agents/${agentId}/session`);
+  return normalizeAgentSessionPayload(response);
 }
 
 export async function listAgentSessions(agentId: string): Promise<AgentSessionList> {
-  const response = await api.get<{ payload: AgentSessionList }>(`${API_URL}/agents/${agentId}/sessions`);
-  return response.payload;
+  const response = await api.get<AgentSessionList>(`${API_URL}/agents/${agentId}/sessions`);
+  return response;
 }
 
 export async function createAgentSession(
   agentId: string,
   data: { mode: 'persistent' | 'experimental' | 'incognito'; name?: string }
 ): Promise<AgentSessionMutationResult> {
-  const response = await api.post<{ payload: RawAgentSessionMutationPayload }>(`${API_URL}/agents/${agentId}/sessions`, data);
-  return normalizeAgentSessionMutationResult(response.payload);
+  const response = await api.post<RawAgentSessionMutationPayload>(`${API_URL}/agents/${agentId}/sessions`, data);
+  return normalizeAgentSessionMutationResult(response);
 }
 
 export async function selectAgentSession(
   agentId: string,
   data: { mode: 'persistent' | 'experimental' | 'incognito'; sessionId?: string }
 ): Promise<AgentSessionMutationResult> {
-  const response = await api.put<{ payload: RawAgentSessionMutationPayload }>(`${API_URL}/agents/${agentId}/session`, data);
-  return normalizeAgentSessionMutationResult(response.payload);
+  const response = await api.put<RawAgentSessionMutationPayload>(`${API_URL}/agents/${agentId}/session`, data);
+  return normalizeAgentSessionMutationResult(response);
 }
 
 export async function renameAgentSession(
@@ -702,47 +702,47 @@ export async function renameAgentSession(
   sessionId: string,
   data: { name: string }
 ): Promise<AgentSessionMutationResult> {
-  const response = await api.patch<{ payload: RawAgentSessionMutationPayload }>(`${API_URL}/agents/${agentId}/sessions/${sessionId}`, data);
-  return normalizeAgentSessionMutationResult(response.payload);
+  const response = await api.patch<RawAgentSessionMutationPayload>(`${API_URL}/agents/${agentId}/sessions/${sessionId}`, data);
+  return normalizeAgentSessionMutationResult(response);
 }
 
 export async function deleteAgentSession(
   agentId: string,
   sessionId: string
 ): Promise<AgentSessionMutationResult> {
-  const response = await api.delete<{ payload: RawAgentSessionMutationPayload }>(`${API_URL}/agents/${agentId}/sessions/${sessionId}`);
-  return normalizeAgentSessionMutationResult(response.payload);
+  const response = await api.delete<RawAgentSessionMutationPayload>(`${API_URL}/agents/${agentId}/sessions/${sessionId}`);
+  return normalizeAgentSessionMutationResult(response);
 }
 
 export async function listAgentSkills(agentId: string): Promise<AgentSkill[]> {
-  const response = await api.get<{ payload: AgentSkill[] }>(`${API_URL}/agents/${agentId}/skills`);
-  return response.payload || [];
+  const response = await api.get<AgentSkill[]>(`${API_URL}/agents/${agentId}/skills`);
+  return response || [];
 }
 
 export async function installAgentSkill(agentId: string, skill: Partial<AgentSkill>): Promise<AgentSkill[]> {
-  const response = await api.post<{ payload: AgentSkill[] }>(`${API_URL}/agents/${agentId}/skills`, skill);
-  return response.payload || [];
+  const response = await api.post<AgentSkill[]>(`${API_URL}/agents/${agentId}/skills`, skill);
+  return response || [];
 }
 
 export async function removeAgentSkill(agentId: string, skillName: string): Promise<AgentSkill[]> {
-  const response = await api.delete<{ payload: AgentSkill[] }>(`${API_URL}/agents/${agentId}/skills/${encodeURIComponent(skillName)}`);
-  return response.payload || [];
+  const response = await api.delete<AgentSkill[]>(`${API_URL}/agents/${agentId}/skills/${encodeURIComponent(skillName)}`);
+  return response || [];
 }
 
 /**
  * Create a new agent
  */
 export async function createAgent(agentData: CreateAgentData): Promise<Agent> {
-  const response = await api.post<{ payload: Agent }>(`${API_URL}/agents`, agentData);
-  return response.payload;
+  const response = await api.post<Agent>(`${API_URL}/agents`, agentData);
+  return response;
 }
 
 /**
  * Update an existing agent
  */
 export async function updateAgent(agentId: string, agentData: Partial<CreateAgentData>): Promise<Agent> {
-  const response = await api.put<{ payload: Agent }>(`${API_URL}/agents/${agentId}`, agentData);
-  return response.payload;
+  const response = await api.put<Agent>(`${API_URL}/agents/${agentId}`, agentData);
+  return response;
 }
 
 /**
@@ -756,24 +756,24 @@ export async function deleteAgent(agentId: string): Promise<void> {
  * Start an agent
  */
 export async function startAgent(agentId: string): Promise<Agent> {
-  const response = await api.post<{ payload: Agent }>(`${API_URL}/agents/${agentId}/start`);
-  return response.payload;
+  const response = await api.post<Agent>(`${API_URL}/agents/${agentId}/start`);
+  return response;
 }
 
 /**
  * Stop an agent
  */
 export async function stopAgent(agentId: string): Promise<Agent> {
-  const response = await api.post<{ payload: Agent }>(`${API_URL}/agents/${agentId}/stop`);
-  return response.payload;
+  const response = await api.post<Agent>(`${API_URL}/agents/${agentId}/stop`);
+  return response;
 }
 
 /**
  * Get agent status
  */
 export async function getAgentStatus(agentId: string): Promise<{ status: string; isActive: boolean; lastAccessed?: string }> {
-  const response = await api.get<{ payload: { status: string; isActive: boolean; lastAccessed?: string } }>(`${API_URL}/agents/${agentId}/status`);
-  return response.payload;
+  const response = await api.get<{ status: string; isActive: boolean; lastAccessed?: string }>(`${API_URL}/agents/${agentId}/status`);
+  return response;
 }
 
 // Agent Memory Functions
@@ -784,8 +784,8 @@ export async function getAgentStatus(agentId: string): Promise<{ status: string;
  */
 export async function getAgentMemory(agentId: string): Promise<AgentMemory[]> {
   try {
-    const response = await api.get<{ payload: AgentMemory[] }>(`${API_URL}/agents/${agentId}/memory`);
-    return response.payload || [];
+    const response = await api.get<AgentMemory[]>(`${API_URL}/agents/${agentId}/memory`);
+    return response || [];
   } catch (error) {
     console.error('Failed to get agent memory:', error);
     return [];
@@ -807,8 +807,8 @@ export async function clearAgentMemory(agentId: string): Promise<void> {
  */
 export async function getAgentMCPTools(agentId: string): Promise<MCPTool[]> {
   try {
-    const response = await api.get<{ payload: MCPTool[] }>(`${API_URL}/agents/${agentId}/mcp/tools`);
-    return response.payload || [];
+    const response = await api.get<MCPTool[]>(`${API_URL}/agents/${agentId}/mcp/tools`);
+    return response || [];
   } catch (error) {
     console.error('Failed to get MCP tools:', error);
     return [];
@@ -824,11 +824,11 @@ export async function callMCPTool(
   arguments_: Record<string, unknown>,
   source?: string
 ): Promise<unknown> {
-  const response = await api.post<{ payload: unknown }>(`${API_URL}/agents/${agentId}/mcp/tools/${toolName}`, {
+  const response = await api.post<unknown>(`${API_URL}/agents/${agentId}/mcp/tools/${toolName}`, {
     arguments: arguments_,
     source
   });
-  return response.payload;
+  return response;
 }
 
 // Chat Functions for Streaming
@@ -929,10 +929,8 @@ export async function chatWithAgentFallback(
 
   try {
     const response = await api.post<{
-      payload: {
         messages: RawAgentMessage[];
-      }
-    }>(`${API_URL}/agents/${agentId}/prompt`, {
+      }>(`${API_URL}/agents/${agentId}/prompt`, {
       message,
       images,
       context,
@@ -941,8 +939,8 @@ export async function chatWithAgentFallback(
       temperature,
     });
 
-    const finalMessage = Array.isArray(response.payload.messages)
-      ? [...response.payload.messages].reverse().find((msg: RawAgentMessage) => msg?.role === 'assistant')
+    const finalMessage = Array.isArray(response.messages)
+      ? [...response.messages].reverse().find((msg: RawAgentMessage) => msg?.role === 'assistant')
       : null;
     const result = {
       content: extractAgentMessageText(finalMessage),
@@ -994,8 +992,8 @@ export interface VoiceStatus {
 }
 
 export async function getVoiceStatus(): Promise<VoiceStatus> {
-  const response = await api.get<{ payload: VoiceStatus }>(`${API_URL}/voice/status`);
-  return response.payload;
+  const response = await api.get<VoiceStatus>(`${API_URL}/voice/status`);
+  return response;
 }
 
 /**
@@ -1016,9 +1014,9 @@ export async function voicePrompt(
   if (options.voice) params.set('voice', options.voice);
   const query = params.toString() ? `?${params.toString()}` : '';
 
-  const response = await api.post<{ payload: AgentVoiceResult }>(
+  const response = await api.post<AgentVoiceResult>(
     `${API_URL}/agents/${agentId}/voice${query}`,
     form,
   );
-  return response.payload;
+  return response;
 }

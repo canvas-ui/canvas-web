@@ -26,16 +26,13 @@ export function useServerVersion(): UseServerVersionReturn {
         setIsLoading(true);
         setError(null);
 
-        const response = await api.get<{
-          status: string;
-          statusCode: number;
-          message: string;
-          payload: ServerInfo;
-        }>('/ping', { skipAuth: true });
+        const response = await api.get<ServerInfo>('/ping', { skipAuth: true });
 
         if (isMounted) {
-          if (response.status === 'success' && response.statusCode === 200 && response.payload?.version) {
-            setServerVersion(response.payload.version);
+          // No status/statusCode check: an error envelope rejects in the
+          // client, so reaching here already means success.
+          if (response?.version) {
+            setServerVersion(response.version);
           } else {
             setError('Invalid server response');
           }

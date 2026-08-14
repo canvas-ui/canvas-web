@@ -79,7 +79,7 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
       await insertWorkspacePath(workspaceName, path, true, treeName)
       invalidateWorkspaceTreeCache(workspaceName)
       const res = await getCachedWorkspaceTreeByName(workspaceName, activeTab)
-      setTree(res.payload)
+      setTree(res)
       setSelected(prev => (multiple ? new Set([...prev, path]) : new Set([path])))
       setCreateParent(null)
     } catch (err) {
@@ -111,7 +111,7 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
       setLoadingTree(true)
       try {
         const res = await getCachedWorkspaceTreeByName(workspaceName as string, activeTab)
-        if (!cancelled) setTree(res.payload)
+        if (!cancelled) setTree(res)
       } catch {
         if (!cancelled) setTree(null)
       } finally {

@@ -253,7 +253,7 @@ export function CanvasGrid({
       setCanvasQueries: editable ? setCanvasQueries : undefined,
       fetchDocuments: fetchDocuments ?? (async (opts) => {
         const res = await getCanvasPathDocuments(workspaceId, path, treeName, opts)
-        return { payload: (res.payload as Document[]) || [], count: res.count, totalCount: res.totalCount }
+        return { payload: (res.payload as Document[]) || [], count: res.count ?? undefined, totalCount: res.totalCount ?? undefined }
       }),
     }),
     [workspaceId, treeName, path, layerId, querySpec, editable, interactive, fetchDocuments, canvasSort, setCanvasSort, canvasQueries, setCanvasQueries],

@@ -243,8 +243,8 @@ export interface WorkspaceInferdStatus {
 
 /** Cheap in-memory readout; null queue when the workspace has no queue yet. */
 export async function getWorkspaceInferdStatus(workspaceId: string): Promise<WorkspaceInferdStatus> {
-  const res = await api.get<{ payload: WorkspaceInferdStatus }>(`${workspaceInferd(workspaceId)}/status`)
-  return res.payload
+  const res = await api.get<WorkspaceInferdStatus>(`${workspaceInferd(workspaceId)}/status`)
+  return res
 }
 
 /** Start captioning images into metadata.summary (async; poll status.summarize). */
@@ -254,11 +254,11 @@ export async function startWorkspaceImageSummaries(
 ): Promise<ImageSummaryStatus> {
   const body: Record<string, unknown> = {}
   if (options.force !== undefined) { body.force = options.force }
-  const res = await api.post<{ payload: ImageSummaryStatus }>(
+  const res = await api.post<ImageSummaryStatus>(
     `${workspaceInferd(workspaceId)}/summarize/images`,
     body,
   )
-  return res.payload
+  return res
 }
 
 /**
@@ -267,16 +267,16 @@ export async function startWorkspaceImageSummaries(
  * attempted are left alone for a later run.
  */
 export async function stopWorkspaceImageSummaries(workspaceId: string): Promise<ImageSummaryStatus> {
-  const res = await api.post<{ payload: ImageSummaryStatus }>(
+  const res = await api.post<ImageSummaryStatus>(
     `${workspaceInferd(workspaceId)}/summarize/images/stop`,
     {},
   )
-  return res.payload
+  return res
 }
 
 export async function getWorkspaceInferdConfig(workspaceId: string): Promise<WorkspaceInferdConfig> {
-  const res = await api.get<{ payload: WorkspaceInferdConfig }>(`${workspaceInferd(workspaceId)}/config`)
-  return res.payload
+  const res = await api.get<WorkspaceInferdConfig>(`${workspaceInferd(workspaceId)}/config`)
+  return res
 }
 
 /**
@@ -289,8 +289,8 @@ export async function saveWorkspaceInferdConfig(
   workspaceId: string,
   config: InferdConfig,
 ): Promise<WorkspaceInferdSaveResult> {
-  const res = await api.put<{ payload: WorkspaceInferdSaveResult }>(`${workspaceInferd(workspaceId)}/config`, config)
-  return res.payload
+  const res = await api.put<WorkspaceInferdSaveResult>(`${workspaceInferd(workspaceId)}/config`, config)
+  return res
 }
 
 /**
@@ -311,13 +311,13 @@ export async function reindexWorkspaceEmbeddings(
   if (options.space) { body.space = options.space }
   if (options.reindex !== undefined) { body.reindex = options.reindex }
   if (options.scope) { body.scope = options.scope }
-  const res = await api.post<{ payload: InferdReindexResult }>(`${workspaceInferd(workspaceId)}/reindex`, body)
-  return res.payload
+  const res = await api.post<InferdReindexResult>(`${workspaceInferd(workspaceId)}/reindex`, body)
+  return res
 }
 
 export async function listWorkspaceVectorTables(workspaceId: string): Promise<VectorTableList> {
-  const res = await api.get<{ payload: VectorTableList }>(`${workspaceInferd(workspaceId)}/vector-tables`)
-  return res.payload
+  const res = await api.get<VectorTableList>(`${workspaceInferd(workspaceId)}/vector-tables`)
+  return res
 }
 
 /** Irreversible. The server refuses a space's live table, so only superseded
@@ -327,41 +327,41 @@ export async function dropWorkspaceVectorTable(
   workspaceId: string,
   table: string,
 ): Promise<{ dropped: boolean; name?: string; error?: string }> {
-  const res = await api.delete<{ payload: { dropped: boolean; name?: string; error?: string } }>(
+  const res = await api.delete<{ dropped: boolean; name?: string; error?: string }>(
     `${workspaceInferd(workspaceId)}/vector-tables/${encodeURIComponent(table)}`,
   )
-  return res.payload
+  return res
 }
 
 // ── User layer (defaults new workspaces inherit) ────────────────────────────
 
 export async function getUserInferdConfig(): Promise<UserInferdConfig> {
-  const res = await api.get<{ payload: UserInferdConfig }>(`${API_ROUTES.inferd}/config`)
-  return res.payload
+  const res = await api.get<UserInferdConfig>(`${API_ROUTES.inferd}/config`)
+  return res
 }
 
 export async function saveUserInferdConfig(config: InferdConfig): Promise<UserInferdSaveResult> {
-  const res = await api.put<{ payload: UserInferdSaveResult }>(`${API_ROUTES.inferd}/config`, config)
-  return res.payload
+  const res = await api.put<UserInferdSaveResult>(`${API_ROUTES.inferd}/config`, config)
+  return res
 }
 
 // ── Server layer (admin) ────────────────────────────────────────────────────
 
 /** Readable by any authenticated user — the UI shows what you inherit. */
 export async function getServerInferdDefaults(): Promise<ServerInferdDefaults> {
-  const res = await api.get<{ payload: ServerInferdDefaults }>(`${API_ROUTES.inferd}/defaults`)
-  return res.payload
+  const res = await api.get<ServerInferdDefaults>(`${API_ROUTES.inferd}/defaults`)
+  return res
 }
 
 /** Admin-only; a non-admin gets 403. */
 export async function saveServerInferdDefaults(
   config: InferdConfig,
 ): Promise<{ serverDefaults: InferdConfig; configPath: string; restartRequired: boolean }> {
-  const res = await api.put<{ payload: { serverDefaults: InferdConfig; configPath: string; restartRequired: boolean } }>(
+  const res = await api.put<{ serverDefaults: InferdConfig; configPath: string; restartRequired: boolean }>(
     `${API_ROUTES.inferd}/defaults`,
     config,
   )
-  return res.payload
+  return res
 }
 
 // ── Connectivity check ──────────────────────────────────────────────────────
@@ -386,12 +386,12 @@ export async function probeInferdModelCache(
   const spec: InferdProviderSpec = { ...provider }
   delete spec.apiKeySet
   delete spec.headerNames
-  const res = await api.post<{ payload: { cached: boolean | null } }>(`${API_ROUTES.inferd}/test`, {
+  const res = await api.post<{ cached: boolean | null }>(`${API_ROUTES.inferd}/test`, {
     provider: spec,
     ...(model ? { model } : {}),
     probe: true,
   })
-  return res.payload.cached ?? null
+  return res.cached ?? null
 }
 
 export async function testInferdBackend(
@@ -402,10 +402,10 @@ export async function testInferdBackend(
   const spec: InferdProviderSpec = { ...provider }
   delete spec.apiKeySet
   delete spec.headerNames
-  const res = await api.post<{ payload: InferdTestResult }>(`${API_ROUTES.inferd}/test`, {
+  const res = await api.post<InferdTestResult>(`${API_ROUTES.inferd}/test`, {
     provider: spec,
     ...(model ? { model } : {}),
     modality,
   })
-  return res.payload
+  return res
 }

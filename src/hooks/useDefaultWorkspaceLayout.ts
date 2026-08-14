@@ -16,9 +16,9 @@ export function useDefaultWorkspaceLayout(): [WorkspaceLayout, (layout: Workspac
   useEffect(() => {
     let isMounted = true;
     api
-      .get<{ payload?: { defaults?: { workspaceLayout?: WorkspaceLayout } } }>('/ping', { skipAuth: true })
+      .get<{ defaults?: { workspaceLayout?: WorkspaceLayout } }>('/ping', { skipAuth: true })
       .then((response) => {
-        const serverDefault = response.payload?.defaults?.workspaceLayout;
+        const serverDefault = response?.defaults?.workspaceLayout;
         if (isMounted && !touched && (serverDefault === 'home' || serverDefault === 'full')) {
           setLayout(serverDefault);
         }

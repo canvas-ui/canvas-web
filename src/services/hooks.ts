@@ -11,13 +11,13 @@ function hooksBase(workspaceId: string) {
 }
 
 export async function listHooks(workspaceId: string): Promise<HookFile[]> {
-  const res = await api.get<{ payload: HookFile[] }>(hooksBase(workspaceId))
-  return res.payload || []
+  const res = await api.get<HookFile[]>(hooksBase(workspaceId))
+  return res || []
 }
 
 export async function getHook(workspaceId: string, path: string): Promise<string> {
-  const res = await api.get<{ payload: { path: string; content: string } }>(`${hooksBase(workspaceId)}/${path}`)
-  return res.payload?.content ?? ''
+  const res = await api.get<{ path: string; content: string }>(`${hooksBase(workspaceId)}/${path}`)
+  return res?.content ?? ''
 }
 
 export async function saveHook(workspaceId: string, path: string, content: string): Promise<void> {
@@ -178,13 +178,13 @@ export async function listPendingActions(
   if (opts.handler) params.set('handler', opts.handler)
   if (opts.limit) params.set('limit', String(opts.limit))
   const query = params.toString()
-  const res = await api.get<{ payload: PendingAction[] }>(`${hooksBase(workspaceId)}/pending${query ? `?${query}` : ''}`)
-  return res.payload || []
+  const res = await api.get<PendingAction[]>(`${hooksBase(workspaceId)}/pending${query ? `?${query}` : ''}`)
+  return res || []
 }
 
 export async function getPendingAction(workspaceId: string, actionId: string): Promise<PendingAction> {
-  const res = await api.get<{ payload: PendingAction }>(`${hooksBase(workspaceId)}/pending/${actionId}`)
-  return res.payload
+  const res = await api.get<PendingAction>(`${hooksBase(workspaceId)}/pending/${actionId}`)
+  return res
 }
 
 export async function decidePendingActions(
@@ -194,10 +194,10 @@ export async function decidePendingActions(
     decline?: string[]
   },
 ): Promise<{ decided: number; failed: number; results: PendingDecisionOutcome[] }> {
-  const res = await api.post<{ payload: { decided: number; failed: number; results: PendingDecisionOutcome[] } }>(
+  const res = await api.post<{ decided: number; failed: number; results: PendingDecisionOutcome[] }>(
     `${hooksBase(workspaceId)}/pending/decisions`, decisions,
   )
-  return res.payload
+  return res
 }
 
 // ── Run log + explain (GET /hooks/runs, POST /hooks/explain) ────────────────
@@ -238,8 +238,8 @@ export async function listRuns(
   if (opts.event) params.set('event', opts.event)
   if (opts.failed) params.set('failed', 'true')
   const query = params.toString()
-  const res = await api.get<{ payload: HookRun[] }>(`${hooksBase(workspaceId)}/runs${query ? `?${query}` : ''}`)
-  return res.payload || []
+  const res = await api.get<HookRun[]>(`${hooksBase(workspaceId)}/runs${query ? `?${query}` : ''}`)
+  return res || []
 }
 
 export interface ExplainCheck {
@@ -262,8 +262,8 @@ export async function explainDocument(
   workspaceId: string,
   body: { documentId: number; event?: string; paths?: string[] },
 ): Promise<ExplainResult> {
-  const res = await api.post<{ payload: ExplainResult }>(`${hooksBase(workspaceId)}/explain`, body)
-  return res.payload
+  const res = await api.post<ExplainResult>(`${hooksBase(workspaceId)}/explain`, body)
+  return res
 }
 
 // ── Backfill + replay ────────────────────────────────────────────────────────
@@ -282,13 +282,13 @@ export async function backfillHook(
   workspaceId: string,
   body: { ruleId?: string; hookFile?: string; event?: string; schema?: string; limit?: number; dryRun?: boolean },
 ): Promise<BackfillResult> {
-  const res = await api.post<{ payload: BackfillResult }>(`${hooksBase(workspaceId)}/backfill`, body)
-  return res.payload
+  const res = await api.post<BackfillResult>(`${hooksBase(workspaceId)}/backfill`, body)
+  return res
 }
 
 export async function replayRun(workspaceId: string, runId: string): Promise<{ status: string }> {
-  const res = await api.post<{ payload: { status: string } }>(`${hooksBase(workspaceId)}/runs/${runId}/replay`, {})
-  return res.payload
+  const res = await api.post<{ status: string }>(`${hooksBase(workspaceId)}/runs/${runId}/replay`, {})
+  return res
 }
 
 // ── Create-hook wizard backend (GET /hooks/meta + POST /hooks/generate) ─────
@@ -320,8 +320,8 @@ export interface HooksMeta {
 }
 
 export async function getHooksMeta(workspaceId: string): Promise<HooksMeta> {
-  const res = await api.get<{ payload: HooksMeta }>(`${hooksBase(workspaceId)}/meta`)
-  return res.payload
+  const res = await api.get<HooksMeta>(`${hooksBase(workspaceId)}/meta`)
+  return res
 }
 
 // Generates an editable, disabled-by-default skeleton on the server and
@@ -330,8 +330,8 @@ export async function generateHook(
   workspaceId: string,
   spec: { event: string; name: string; actions: string[] },
 ): Promise<{ path: string; content: string }> {
-  const res = await api.post<{ payload: { path: string; content: string } }>(
+  const res = await api.post<{ path: string; content: string }>(
     `${hooksBase(workspaceId)}/generate`, spec,
   )
-  return res.payload
+  return res
 }

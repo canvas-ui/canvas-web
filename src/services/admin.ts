@@ -108,32 +108,32 @@ export const adminUserService = {
     const queryString = params.toString();
     const url = queryString ? `${API_ROUTES.admin.users}?${queryString}` : API_ROUTES.admin.users;
 
-    const response = await api.get<ApiResponse<AdminUser[]>>(url);
-    return response.payload;
+    const response = await api.get<AdminUser[]>(url);
+    return response;
   },
 
   /**
    * Get user by ID
    */
   async getUser(userId: string): Promise<AdminUser> {
-    const response = await api.get<ApiResponse<AdminUser>>(`${API_ROUTES.admin.users}/${userId}`);
-    return response.payload;
+    const response = await api.get<AdminUser>(`${API_ROUTES.admin.users}/${userId}`);
+    return response;
   },
 
   /**
    * Create a new user
    */
   async createUser(userData: CreateUserData): Promise<AdminUser> {
-    const response = await api.post<ApiResponse<AdminUser>>(API_ROUTES.admin.users, userData);
-    return response.payload;
+    const response = await api.post<AdminUser>(API_ROUTES.admin.users, userData);
+    return response;
   },
 
   /**
    * Update user
    */
   async updateUser(userId: string, userData: UpdateUserData): Promise<AdminUser> {
-    const response = await api.put<ApiResponse<AdminUser>>(`${API_ROUTES.admin.users}/${userId}`, userData);
-    return response.payload;
+    const response = await api.put<AdminUser>(`${API_ROUTES.admin.users}/${userId}`, userData);
+    return response;
   },
 
   /**
@@ -150,16 +150,16 @@ export const adminWorkspaceService = {
    * List all workspaces (admin view)
    */
   async listAllWorkspaces(): Promise<AdminWorkspace[]> {
-    const response = await api.get<ApiResponse<AdminWorkspace[]>>(API_ROUTES.admin.workspaces);
-    return response.payload;
+    const response = await api.get<AdminWorkspace[]>(API_ROUTES.admin.workspaces);
+    return response;
   },
 
   /**
    * Create workspace for user
    */
   async createWorkspace(workspaceData: CreateWorkspaceData): Promise<AdminWorkspace> {
-    const response = await api.post<ApiResponse<AdminWorkspace>>(API_ROUTES.admin.workspaces, workspaceData);
-    return response.payload;
+    const response = await api.post<AdminWorkspace>(API_ROUTES.admin.workspaces, workspaceData);
+    return response;
   },
 
   /**
@@ -172,10 +172,10 @@ export const adminWorkspaceService = {
 
 export const adminLogService = {
   async getLogs(filters: AdminLogFilters = {}): Promise<AdminLogEntry[]> {
-    const response = await api.get<ApiResponse<{ logs: AdminLogEntry[] }>>(
+    const response = await api.get<{ logs: AdminLogEntry[] }>(
       `${API_ROUTES.admin.logs}${buildLogQuery(filters)}`
     );
-    return response.payload.logs || [];
+    return response.logs || [];
   },
 
   async streamLogs(
@@ -272,11 +272,13 @@ export interface ReindexResult {
 }
 
 async function postReindex(workspaceName: string, path: string, body?: Record<string, unknown>): Promise<ReindexResult> {
-  const res = await api.post<{ message: string; payload?: Record<string, unknown> }>(
+  // Envelope variant: the reindex result the UI shows is the envelope's
+  // `message`, which the payload does not carry.
+  const res = await api.postEnvelope<Record<string, unknown>>(
     `${API_ROUTES.admin.workspaces}/${encodeURIComponent(workspaceName)}/${path}`,
     body ?? {},
   )
-  return { message: res.message, payload: res.payload }
+  return { message: res.message ?? '', payload: res.payload }
 }
 
 /** Rebuild crud:created/updated timelines from document data (synchronous). */

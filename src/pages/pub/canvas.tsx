@@ -154,11 +154,11 @@ export default function PublicCanvasPage() {
     if (!code) return
     setIsLoading(true)
     try {
-      const response = await api.get<{ payload: PublicCanvasPayload }>(
+      const response = await api.get<PublicCanvasPayload>(
         `${API_URL}/pub/c/${encodeURIComponent(code)}`,
         { skipAuth: true }
       )
-      setPayload(response.payload)
+      setPayload(response)
       setError(null)
     } catch (err) {
       setPayload(null)

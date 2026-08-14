@@ -92,13 +92,6 @@ interface ApiToken {
   expiresAt: string
 }
 
-interface ApiResponse<T = unknown> {
-  status: string
-  statusCode: number
-  message: string
-  payload: T
-}
-
 interface RequestOptions extends RequestInit {
   skipAuth?: boolean
   includeSession?: boolean

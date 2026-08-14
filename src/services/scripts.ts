@@ -9,13 +9,13 @@ function scriptsBase(workspaceId: string) {
 }
 
 export async function listScripts(workspaceId: string): Promise<HookFile[]> {
-  const res = await api.get<{ payload: HookFile[] }>(scriptsBase(workspaceId))
-  return res.payload || []
+  const res = await api.get<HookFile[]>(scriptsBase(workspaceId))
+  return res || []
 }
 
 export async function getScript(workspaceId: string, path: string): Promise<string> {
-  const res = await api.get<{ payload: { path: string; content: string } }>(`${scriptsBase(workspaceId)}/${path}`)
-  return res.payload?.content ?? ''
+  const res = await api.get<{ path: string; content: string }>(`${scriptsBase(workspaceId)}/${path}`)
+  return res?.content ?? ''
 }
 
 export async function saveScript(workspaceId: string, path: string, content: string): Promise<void> {

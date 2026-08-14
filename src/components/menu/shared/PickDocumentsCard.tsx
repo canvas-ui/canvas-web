@@ -72,7 +72,7 @@ export function PickDocumentsCard({ onClose, onConfirm, fixedWorkspaceName, savi
       setLoadingTree(true)
       try {
         const res = await getCachedWorkspaceTreeByName(workspaceName as string, activeTab)
-        if (!cancelled) setTree(res.payload)
+        if (!cancelled) setTree(res)
       } catch {
         if (!cancelled) setTree(null)
       } finally {

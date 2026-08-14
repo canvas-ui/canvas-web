@@ -23,12 +23,6 @@ interface ApiTokenResponse {
   createdAt: string;
 }
 
-interface ApiResponse<T> {
-  message: string;
-  payload: T;
-  status: "success" | "error";
-  statusCode: number;
-}
 
 export default function ApiTokensPage() {
   const [tokens, setTokens] = useState<ApiToken[]>([])
@@ -44,12 +38,12 @@ export default function ApiTokensPage() {
   const fetchTokens = useCallback(async () => {
     try {
       setIsLoading(true)
-      const data = await api.get<ApiResponse<ApiToken[] | { tokens: ApiToken[] }>>(API_ROUTES.tokens)
+      const data = await api.get<ApiToken[] | { tokens: ApiToken[] }>(API_ROUTES.tokens)
 
       // Handle both response formats
-      const tokensData = Array.isArray(data.payload)
-        ? data.payload
-        : (data.payload as { tokens: ApiToken[] }).tokens || [];
+      const tokensData = Array.isArray(data)
+        ? data
+        : (data as { tokens: ApiToken[] }).tokens || [];
 
       setTokens(tokensData)
       setError(null)
@@ -78,15 +72,15 @@ export default function ApiTokensPage() {
 
     setIsCreating(true)
     try {
-      const response = await api.post<ApiResponse<ApiTokenResponse>>(API_ROUTES.tokens, {
+      const response = await api.post<ApiTokenResponse>(API_ROUTES.tokens, {
         name: newTokenName
       })
 
       setNewTokenName("")
       await fetchTokens()
 
-      if (response.payload && response.payload.token) {
-        setNewTokenValue(response.payload.token);
+      if (response && response.token) {
+        setNewTokenValue(response.token);
         // Focus and select the token after it's generated
         setTimeout(() => {
           if (tokenDisplayRef.current) {

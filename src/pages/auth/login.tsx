@@ -88,7 +88,7 @@ export default function LoginPage() {
     try {
       console.log('Attempting login with:', formData.email, 'strategy:', formData.strategy);
       const response = await loginUser(formData.email, formData.password, formData.strategy);
-      console.log('Login successful, received token:', !!response.payload?.token);
+      console.log('Login successful, received token:', 'token' in response ? !!response.token : !!response.payload?.token);
 
       // Clear any existing errors
       setErrors({})

@@ -1,15 +1,21 @@
 import { CanvasApiClient, CanvasError, isNetworkError } from '@augmentd-labs/canvas-api-client'
-import { isWorkspaceNotActive } from '@augmentd-labs/canvas-protocol'
+import { isWorkspaceNotActive, type ResponseEnvelope } from '@augmentd-labs/canvas-protocol'
 import { API_URL } from '@/config/api'
 import { handleApiError } from './error-handler'
 
-// JSON transport comes from the shared workspace client in envelope mode
-// (unwrap: false): api.get/post/... keep returning whole envelopes because
-// the service layer still reads .status/.payload itself (~164 sites; they
-// migrate to unwrapped semantics service-by-service). Web-only policy stays
-// here: the redirect guard, token-format gate, 401 → /login, and the
-// workspace autostart-and-replay. stream() keeps a raw fetch path — it needs
-// the untouched Response body.
+// JSON transport comes from the shared workspace client on its DEFAULT
+// unwrapping semantics: api.get/post/... resolve to the envelope's payload,
+// and an error envelope rejects (the client throws for those regardless of
+// the flag, which is why `status === 'error'` never needed checking here).
+//
+// The one exception is `api.*Envelope()`, which returns the whole
+// ResponseEnvelope, for the few callers that need a field the payload does not
+// carry: `count`/`totalCount` (document lists, lens search) and `message`
+// (admin reindex). Everything else uses the plain methods.
+//
+// Web-only policy stays here: the redirect guard, token-format gate,
+// 401 → /login, and the workspace autostart-and-replay. stream() keeps a raw
+// fetch path — it needs the untouched Response body.
 
 // Keep track of redirects to prevent loops
 let isRedirecting = false;
@@ -34,6 +40,10 @@ interface RequestOptions extends RequestInit {
   // state. For optional/background fetches whose failure must never hijack
   // navigation — e.g. a `.catch()`ed notifications poll on a public page.
   noAuthRedirect?: boolean
+  // Resolve to the whole ResponseEnvelope rather than its payload. Needed only
+  // where the caller reads `count`/`totalCount`, which the payload does not
+  // carry. Prefer the plain (unwrapped) methods everywhere else.
+  envelope?: boolean
 }
 
 // Centralized "auth failed → bounce to login" side effect. Skipped entirely
@@ -120,7 +130,7 @@ const webFetch: typeof fetch = (input, init = {}) => {
   });
 }
 
-function buildClient(authed: boolean): CanvasApiClient {
+function buildClient(authed: boolean, envelope: boolean): CanvasApiClient {
   return new CanvasApiClient({
     baseUrl: API_URL,
     apiBase: '',
@@ -128,13 +138,23 @@ function buildClient(authed: boolean): CanvasApiClient {
     appName: getAppName(),
     // The web app never had a client-side request timeout; keep it that way.
     timeout: 0,
-    unwrap: false,
+    // Default (true) everywhere except the explicit envelope opt-in.
+    unwrap: !envelope,
     fetch: webFetch,
   });
 }
 
-const authedClient = buildClient(true);
-const anonClient = buildClient(false);
+const clients = {
+  authed: buildClient(true, false),
+  anon: buildClient(false, false),
+  authedEnvelope: buildClient(true, true),
+  anonEnvelope: buildClient(false, true),
+};
+
+function pickClient(skipAuth: boolean, envelope: boolean): CanvasApiClient {
+  if (envelope) return skipAuth ? clients.anonEnvelope : clients.authedEnvelope;
+  return skipAuth ? clients.anon : clients.authed;
+}
 
 // --- Offline workspaces -----------------------------------------------------
 // Workspaces stay stopped until something actually reads from them. Any query
@@ -185,11 +205,11 @@ async function requestJson<T>(
   data: unknown,
   options: RequestOptions = {},
 ): Promise<T> {
-  const { skipAuth = false, noAuthRedirect = false, skipWorkspaceAutostart = false, headers, signal, body } = options;
+  const { skipAuth = false, noAuthRedirect = false, skipWorkspaceAutostart = false, envelope = false, headers, signal, body } = options;
 
   ensureAuthReady(skipAuth, noAuthRedirect);
 
-  const client = skipAuth ? anonClient : authedClient;
+  const client = pickClient(skipAuth, envelope);
   try {
     const out = await client.request(method, toClientPath(endpoint), {
       data: data !== undefined ? data : body ?? undefined,
@@ -255,6 +275,19 @@ export const api = {
 
   async delete<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
     return requestJson<T>('DELETE', endpoint, undefined, options);
+  },
+
+  // --- Envelope variants ----------------------------------------------------
+  // Only for callers that need `count`/`totalCount`, which live on the
+  // envelope rather than in the payload. Everything else uses the plain
+  // methods above and gets the payload directly.
+
+  async getEnvelope<T>(endpoint: string, options: RequestOptions = {}): Promise<ResponseEnvelope<T>> {
+    return requestJson<ResponseEnvelope<T>>('GET', endpoint, undefined, { ...options, envelope: true });
+  },
+
+  async postEnvelope<T>(endpoint: string, data?: unknown, options: RequestOptions = {}): Promise<ResponseEnvelope<T>> {
+    return requestJson<ResponseEnvelope<T>>('POST', endpoint, data, { ...options, envelope: true });
   },
 
   // Helper function to set auth token after login

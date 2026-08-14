@@ -406,7 +406,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
       getCachedWorkspaceTreeByName(newWorkspaceName, wsTreeName)
         .then(res => {
           if (cancelled) return
-          const node = findTreeNode(res.payload, wsPath)
+          const node = findTreeNode(res, wsPath)
           dispatchNav(node?.type === 'canvas' ? node.id : null)
         })
         .catch(() => dispatchNav(null))
@@ -445,7 +445,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
 
     if (activeContextType === 'canvas' && activeCanvasId && activeWorkspaceName && activeContextPath) {
       getCachedWorkspaceTreeByName(activeWorkspaceName, activeTreeName || DEFAULT_WORKSPACE_TREE_NAME).then(res => {
-        const node = findTreeNode(res.payload, activeContextPath)
+        const node = findTreeNode(res, activeContextPath)
         const saved = extractToolboxFilters(node?.metadata)
         dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: saved, savedSearchQuery: node?.querySpec?.query ?? null })
       }).catch(() => {
@@ -586,7 +586,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
       if (activeContextType === 'canvas' && activeWorkspaceName && activeContextPath) {
         const treeName = activeTreeName || DEFAULT_WORKSPACE_TREE_NAME
         const tree = await getCachedWorkspaceTreeByName(activeWorkspaceName, treeName)
-        const node = findTreeNode(tree.payload, activeContextPath)
+        const node = findTreeNode(tree, activeContextPath)
         const searchQuery = new URLSearchParams(location.search).get('q') || new URLSearchParams(location.search).get('search') || ''
         await updateWorkspacePath(activeWorkspaceName, activeContextPath, {
           metadata: { ...(node?.metadata || {}), toolbox: stripEphemeral(filters) },

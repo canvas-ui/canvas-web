@@ -74,13 +74,13 @@ interface DocumentResponse {
 export async function listContexts(): Promise<Context[]> {
   try {
     // The API returns a ResponseObject with contexts in the payload field
-    const response = await api.get<{ payload: Context[]; message: string; status: string; statusCode: number }>(API_ROUTES.contexts);
+    const response = await api.get<Context[]>(API_ROUTES.contexts);
 
     // Ensure we always return an array even if the response structure is unexpected
-    if (Array.isArray(response.payload)) {
-      return response.payload;
+    if (Array.isArray(response)) {
+      return response;
     } else {
-      console.warn('listContexts: response.payload is not an array:', response.payload);
+      console.warn('listContexts: response.payload is not an array:', response);
       return [];
     }
   } catch (error) {
@@ -98,9 +98,9 @@ function withOwnerId(endpoint: string, ownerId?: string): string {
 export async function getContext(id: string, ownerId?: string): Promise<Context> {
   try {
     const endpoint = withOwnerId(`${API_ROUTES.contexts}/${id}`, ownerId);
-    const response = await api.get<{ payload: Context }>(endpoint);
-    if (response && response.payload) {
-      return response.payload;
+    const response = await api.get<Context>(endpoint);
+    if (response && response) {
+      return response;
     }
     throw new Error('Context data not found in API response');
   } catch (error) {
@@ -115,9 +115,9 @@ export async function getSharedContext(contextId: string, ownerId?: string): Pro
 
 export async function createContext(contextData: CreateContextPayload): Promise<Context> {
   try {
-    const response = await api.post<{ payload: { context: Context } }>(API_ROUTES.contexts, contextData);
-    if (response && response.payload && response.payload.context) {
-      return response.payload.context;
+    const response = await api.post<{ context: Context }>(API_ROUTES.contexts, contextData);
+    if (response && response && response.context) {
+      return response.context;
     }
     throw new Error('Created context data not found in API response');
   } catch (error) {
@@ -129,9 +129,9 @@ export async function createContext(contextData: CreateContextPayload): Promise<
 export async function patchContext(id: string, updates: { name?: string; description?: string; metadata?: Record<string, unknown>; features?: { allOf: string[]; anyOf: string[]; noneOf: string[] }; filters?: string[] }, ownerId?: string): Promise<Context> {
   try {
     const endpoint = withOwnerId(`${API_ROUTES.contexts}/${id}`, ownerId);
-    const response = await api.put<{ payload: { context: Context } }>(endpoint, updates);
-    if (response?.payload?.context) {
-      return response.payload.context;
+    const response = await api.put<{ context: Context }>(endpoint, updates);
+    if (response?.context) {
+      return response.context;
     }
     throw new Error('Updated context data not found in API response');
   } catch (error) {
@@ -143,9 +143,9 @@ export async function patchContext(id: string, updates: { name?: string; descrip
 export async function updateContext(id: string, updates: { name?: string | null; baseUrl?: string | null; order?: number }, ownerId?: string): Promise<Context> {
   try {
     const endpoint = withOwnerId(`${API_ROUTES.contexts}/${id}`, ownerId);
-    const response = await api.put<{ payload: { context: Context } }>(endpoint, updates);
-    if (response?.payload?.context) {
-      return response.payload.context;
+    const response = await api.put<{ context: Context }>(endpoint, updates);
+    if (response?.context) {
+      return response.context;
     }
     throw new Error('Updated context data not found in API response');
   } catch (error) {
@@ -157,11 +157,11 @@ export async function updateContext(id: string, updates: { name?: string | null;
 export async function updateContextUrl(id: string, url: string, ownerId?: string): Promise<Context> {
   try {
     const endpoint = withOwnerId(`${API_ROUTES.contexts}/${id}/url`, ownerId);
-    const response = await api.post<{ payload: { url: string } }>(endpoint, { url });
-    if (response && response.payload && response.payload.url) {
+    const response = await api.post<{ url: string }>(endpoint, { url });
+    if (response && response && response.url) {
       // The URL update endpoint returns just the URL, not the full context
       // We'll need to fetch the context again or return a partial update
-      return { url: response.payload.url } as Context;
+      return { url: response.url } as Context;
     }
     throw new Error('Updated context data not found in API response');
   } catch (error) {
@@ -211,17 +211,19 @@ export async function getContextDocuments(
     queryStack.forEach(term => params.append('q', term));
 
     const url = `${API_ROUTES.contexts}/${id}/documents${params.toString() ? '?' + params.toString() : ''}`;
-    const response = await api.get<{ payload: DocumentResponse['data']; count: number; totalCount: number }>(url);
+    // Envelope variant: the pagination counts stitched onto the array below
+    // live on the envelope, not in the payload.
+    const response = await api.getEnvelope<DocumentResponse['data']>(url);
+    const documents = response.payload;
 
-    // Handle the correct API response structure where documents are directly in payload
-    if (Array.isArray(response.payload)) {
+    if (Array.isArray(documents)) {
       // Attach pagination metadata to the array
-      const result = response.payload as DocumentResponse['data'] & { count?: number; totalCount?: number };
-      result.count = response.count;
-      result.totalCount = response.totalCount;
+      const result = documents as DocumentResponse['data'] & { count?: number; totalCount?: number };
+      result.count = response.count ?? undefined;
+      result.totalCount = response.totalCount ?? undefined;
       return result;
     } else {
-      console.warn('getContextDocuments: response.payload is not an array:', response.payload);
+      console.warn('getContextDocuments: payload is not an array:', documents);
       return [];
     }
   } catch (error) {
@@ -311,14 +313,14 @@ export async function removeDocumentsFromContext(
     const params = new URLSearchParams();
     const endpoint = `${API_ROUTES.contexts}/${contextId}/documents/remove${params.toString() ? `?${params.toString()}` : ''}`;
 
-    const response = await api.delete<{ payload: string }>(
+    const response = await api.delete<string>(
         withOwnerId(endpoint, ownerId),
         {
           body: JSON.stringify(idsArray),
           headers: { 'Content-Type': 'application/json' }
         }
     );
-    return { message: response.payload || 'Documents removed from context' };
+    return { message: response || 'Documents removed from context' };
   } catch (error) {
     console.error(`Failed to remove documents from context ${contextId}:`, error);
     throw error;

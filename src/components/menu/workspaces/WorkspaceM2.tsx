@@ -93,7 +93,7 @@ export function WorkspaceM2() {
     try {
       if (force) invalidateWorkspaceTreeCache(name, tab)
       const res = await getCachedWorkspaceTreeByName(name, tab, { force })
-      setData(res.payload)
+      setData(res)
     } catch {
       // tree unavailable
     } finally {
@@ -132,9 +132,9 @@ export function WorkspaceM2() {
         // Fetch workspace details for label (non-blocking)
         getWorkspace(name).then(ws => { if (!cancelled) { setWsLabel(ws.label || null); setWsId(ws.id || null); setWsStyle({ icon: ws.icon ?? null, color: ws.color ?? null }) } }).catch(() => {})
         if (cancelled) return
-        if (ctxRes.status === 'fulfilled') setContextTree(ctxRes.value.payload)
-        if (dirRes.status === 'fulfilled') setDirectoryTree(dirRes.value.payload)
-        if (beRes.status === 'fulfilled') setBackendsTree(beRes.value.payload)
+        if (ctxRes.status === 'fulfilled') setContextTree(ctxRes.value)
+        if (dirRes.status === 'fulfilled') setDirectoryTree(dirRes.value)
+        if (beRes.status === 'fulfilled') setBackendsTree(beRes.value)
       } finally {
         if (!cancelled) {
           setIsLoadingContext(false)

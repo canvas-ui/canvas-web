@@ -43,9 +43,9 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
   // only happens inside promise callbacks. showToast is stable (useCallback
   // with no deps in ToastContainer).
   const loadTokens = useCallback(() =>
-    api.get<{ payload: Array<Token & { tokenHash?: string }> }>(`/workspaces/${workspaceId}/tokens`)
+    api.get<Array<Token & { tokenHash?: string }>>(`/workspaces/${workspaceId}/tokens`)
       .then((response) => {
-        setTokens((response.payload || []).map(token => ({
+        setTokens((response || []).map(token => ({
           ...token,
           hash: token.hash || token.tokenHash || '',
         })).filter(token => token.hash));
@@ -93,11 +93,11 @@ export function TokenManager({ workspaceId }: TokenManagerProps) {
         expiresAt
       };
 
-      const response = await api.post<{ payload: { token: string; hash: string } }>(`/workspaces/${workspaceId}/tokens`, payload);
+      const response = await api.post<{ token: string; hash: string }>(`/workspaces/${workspaceId}/tokens`, payload);
 
       // Store the new token value to display in UI
-      if (response.payload && response.payload.token) {
-        setNewTokenValue(response.payload.token);
+      if (response && response.token) {
+        setNewTokenValue(response.token);
       }
 
       // Reset form
@@ -402,8 +402,8 @@ function WorkspaceEmailShares({ workspaceId }: { workspaceId: string }) {
   const [shares, setShares] = useState<Array<{ userEmail: string; permissions: string[]; description?: string; grantedAt?: string }>>([])
 
   const loadShares = useCallback(() =>
-    api.get<{ payload: typeof shares | { emailShares?: typeof shares } }>(`/workspaces/${workspaceId}/shares`)
-      .then((res) => setShares(Array.isArray(res.payload) ? res.payload : res.payload?.emailShares || []))
+    api.get<typeof shares | { emailShares?: typeof shares }>(`/workspaces/${workspaceId}/shares`)
+      .then((res) => setShares(Array.isArray(res) ? res : res?.emailShares || []))
       .catch(() => {
         // silent
       }), [workspaceId])

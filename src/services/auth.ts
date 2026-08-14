@@ -41,28 +41,14 @@ interface NestedLoginResponse {
   };
 }
 
-// Generic API response
-interface ApiResponse<T> {
-  status: string;
-  statusCode: number;
-  message: string;
-  payload: T;
-}
-
-// Union type for possible login response structures
+// Union type for possible login response structures. This is the envelope's
+// PAYLOAD — `api.post` already unwrapped it. The nested variant covers servers
+// that put a second `payload` object inside the envelope payload.
 type LoginResponseData = DirectLoginResponse | NestedLoginResponse;
 
-// Widened login payload shape returned to callers: covers both the direct and
-// the nested server response variants (all fields optional).
-export interface LoginResult {
-  token?: string;
-  user?: DirectLoginResponse['user'];
-  payload?: NestedLoginResponse['payload'];
-}
-
-export async function loginUser(email: string, password: string, strategy: string = 'auto'): Promise<ApiResponse<LoginResult>> {
+export async function loginUser(email: string, password: string, strategy: string = 'auto'): Promise<LoginResponseData> {
   try {
-    const response = await api.post<ApiResponse<LoginResponseData>>(API_ROUTES.login, {
+    const response = await api.post<LoginResponseData>(API_ROUTES.login, {
       email,
       password,
       strategy,
@@ -71,7 +57,7 @@ export async function loginUser(email: string, password: string, strategy: strin
     console.log('Login response:', response);
 
     // Check if the response has the expected structure
-    const loginData = response.payload;
+    const loginData = response;
 
     // Handle direct token structure (matches DirectLoginResponse)
     if ('token' in loginData) {
@@ -178,16 +164,16 @@ export async function getCurrentUser(): Promise<UserProfile | null> {
       return null;
     }
 
-    const response = await api.get<ApiResponse<UserProfile>>(API_ROUTES.me);
+    const response = await api.get<UserProfile>(API_ROUTES.me);
     console.log('Current user response:', response);
 
     // Extract user from the response payload
-    if (response && response.payload) {
+    if (response && response) {
       // Ensure WebSocket is connected if we have a valid user
       if (!socketService.isConnected()) {
         socketService.reconnect();
       }
-      return response.payload;
+      return response;
     } else {
       console.warn('Invalid user profile response structure:', response);
       return null;
@@ -258,8 +244,8 @@ export interface AuthConfig {
 
 export async function getAuthConfig(): Promise<AuthConfig> {
   try {
-    const response = await api.get<ApiResponse<AuthConfig>>(API_ROUTES.authConfig, { skipAuth: true });
-    return response.payload || (response as unknown as AuthConfig);
+    const response = await api.get<AuthConfig>(API_ROUTES.authConfig, { skipAuth: true });
+    return response || (response as unknown as AuthConfig);
   } catch (error) {
     console.error('Failed to get auth config:', error);
     // Return default config if API call fails

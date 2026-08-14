@@ -1,5 +1,6 @@
 import { api } from '@/lib/api'
 import { API_ROUTES } from '@/config/api'
+import type { ResponseEnvelope } from '@augmentd-labs/canvas-protocol'
 import type { Document } from '@/types/workspace'
 
 /**
@@ -41,10 +42,10 @@ export interface LensSearchResult {
   distances: LensDistance[] | null
 }
 
-interface LensResponse {
-  payload?: Document[] | number[]
-  count?: number
-  totalCount?: number
+// Envelope variant: this read needs count/totalCount (pagination) and the
+// `debug` distances, none of which the payload carries.
+type LensPayload = Document[] | number[]
+type LensEnvelope = ResponseEnvelope<LensPayload | undefined> & {
   debug?: {
     distances?: LensDistance[]
     imageDistances?: LensDistance[]
@@ -73,11 +74,11 @@ export async function searchByImage(
   if (opts.idsOnly) body.idsOnly = true
   if (opts.contextPath) body.context = opts.contextPath
 
-  const res = await api.post<LensResponse>(
+  const res = await api.postEnvelope<LensPayload | undefined>(
     `${API_ROUTES.workspaces}/${encodeURIComponent(workspaceRef)}/documents/search/image`,
     body,
     opts.signal ? { signal: opts.signal } : undefined,
-  )
+  ) as LensEnvelope
   const payload = res.payload ?? []
   const idsOnly = opts.idsOnly === true
   return {

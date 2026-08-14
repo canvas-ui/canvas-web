@@ -1,6 +1,21 @@
+import type { ResponseEnvelope } from '@augmentd-labs/canvas-protocol';
 import { API_ROUTES, API_URL } from '@/config/api';
 import { api } from '@/lib/api';
 import type { Document as CanvasDocument, TreeNode, TimelineInfo, TimelineQueryInterval, TimelineQueryOptions } from '@/types/workspace';
+
+// Document lists stay enveloped: their pagination counts (count/totalCount)
+// live on the envelope, not in the payload. Every other call in this file
+// resolves to its payload directly.
+export type DocumentsEnvelope = ResponseEnvelope<CanvasDocument[]>;
+
+// Calibration reads (?debug=true) get raw kNN distances attached; the base
+// envelope types `debug` as unknown, so narrow it here.
+export type DocumentsEnvelopeWithDebug = DocumentsEnvelope & {
+  debug?: {
+    distances?: Array<{ id: number; distance: number }>;
+    imageDistances?: Array<{ id: number; distance: number }>;
+  };
+};
 // GLOBAL Workspace type from src/types/api.d.ts will be used.
 // No local Workspace interface should be defined here.
 
@@ -26,10 +41,8 @@ export function findTreeNodeByPath(root: TreeNode | null, path: string): TreeNod
   return node ?? null
 }
 
-type WorkspaceTreeResponse = { payload: TreeNode; status: string; statusCode: number; message: string }
-
-const workspaceTreeCache = new Map<string, WorkspaceTreeResponse>()
-const workspaceTreeInflight = new Map<string, Promise<WorkspaceTreeResponse>>()
+const workspaceTreeCache = new Map<string, TreeNode>()
+const workspaceTreeInflight = new Map<string, Promise<TreeNode>>()
 
 function appendWorkspaceContext(params: URLSearchParams, contextSpec: string = '/', treeName = DEFAULT_WORKSPACE_TREE_NAME, treeType: 'context' | 'directory' = 'context') {
   params.append('treeNameOrTreeId', treeName)
@@ -90,8 +103,8 @@ function getWorkspaceTreePathRoute(workspaceId: string, treeName: string, path: 
 }
 
 export async function getWorkspace(id: string): Promise<Workspace> {
-  const response = await api.get<{ payload: { workspace: Workspace } | Workspace }>(`${API_ROUTES.workspaces}/${id}`)
-  const p = response.payload
+  const response = await api.get<{ workspace: Workspace } | Workspace>(`${API_ROUTES.workspaces}/${id}`)
+  const p = response
   return (p && 'workspace' in p) ? p.workspace : p as Workspace
 }
 
@@ -99,13 +112,13 @@ export async function getWorkspace(id: string): Promise<Workspace> {
 export async function listWorkspaces(): Promise<Workspace[]> {
   try {
     // The API returns a ResponseObject with workspaces in the payload field
-    const response = await api.get<{ payload: Workspace[]; message: string; status: string; statusCode: number }>(API_ROUTES.workspaces);
+    const response = await api.get<Workspace[]>(API_ROUTES.workspaces);
 
     // Ensure we always return an array even if the response structure is unexpected
-    if (Array.isArray(response.payload)) {
-      return response.payload;
+    if (Array.isArray(response)) {
+      return response;
     } else {
-      console.warn('listWorkspaces: response.payload is not an array:', response.payload);
+      console.warn('listWorkspaces: response.payload is not an array:', response);
       return [];
     }
   } catch (error) {
@@ -130,8 +143,8 @@ interface CreateWorkspacePayload {
 export async function createWorkspace(payload: CreateWorkspacePayload): Promise<Workspace> {
   try {
     // The backend returns a ResponseObject with the workspace in the payload property
-    const response = await api.post<{ payload: Workspace; message: string; status: string; statusCode: number }>(API_ROUTES.workspaces, payload);
-    return response.payload;
+    const response = await api.post<Workspace>(API_ROUTES.workspaces, payload);
+    return response;
   } catch (error) {
     console.error('Failed to create workspace:', error);
     throw error;
@@ -143,11 +156,11 @@ export async function createWorkspace(payload: CreateWorkspacePayload): Promise<
 // downloads the archive and imports it as a local workspace.
 export async function importWorkspaceFromRemote(url: string, token: string): Promise<Workspace> {
   try {
-    const response = await api.post<{ payload: Workspace; message: string; status: string; statusCode: number }>(
+    const response = await api.post<Workspace>(
       `${API_ROUTES.workspaces}/import`,
       { url, token }
     );
-    return response.payload;
+    return response;
   } catch (error) {
     console.error('Failed to import workspace from remote:', error);
     throw error;
@@ -156,8 +169,8 @@ export async function importWorkspaceFromRemote(url: string, token: string): Pro
 
 export async function startWorkspace(id: string): Promise<Workspace> {
   try {
-    const response = await api.post<{ payload: Workspace; message: string; status: string; statusCode: number }>(`${API_ROUTES.workspaces}/${id}/start`);
-    return response.payload;
+    const response = await api.post<Workspace>(`${API_ROUTES.workspaces}/${id}/start`);
+    return response;
   } catch (error) {
     console.error('Failed to start workspace:', error);
     throw error;
@@ -166,8 +179,8 @@ export async function startWorkspace(id: string): Promise<Workspace> {
 
 export async function stopWorkspace(id: string): Promise<Workspace> {
   try {
-    const response = await api.post<{ payload: Workspace; message: string; status: string; statusCode: number }>(`${API_ROUTES.workspaces}/${id}/stop`);
-    return response.payload;
+    const response = await api.post<Workspace>(`${API_ROUTES.workspaces}/${id}/stop`);
+    return response;
   } catch (error) {
     console.error('Failed to stop workspace:', error);
     throw error;
@@ -177,8 +190,8 @@ export async function stopWorkspace(id: string): Promise<Workspace> {
 
 export async function removeWorkspace(id: string): Promise<Workspace> {
   try {
-    const response = await api.delete<{ payload: Workspace; message: string; status: string; statusCode: number }>(`${API_ROUTES.workspaces}/${id}`);
-    return response.payload;
+    const response = await api.delete<Workspace>(`${API_ROUTES.workspaces}/${id}`);
+    return response;
   } catch (error) {
     console.error('Failed to remove workspace:', error);
     throw error;
@@ -200,8 +213,8 @@ export interface WorkspaceTreeSummary {
 // List all trees for a workspace
 export async function listWorkspaceTrees(workspaceId: string): Promise<WorkspaceTreeSummary[]> {
   try {
-    const res = await api.get<{ payload: WorkspaceTreeSummary[] }>(`${API_ROUTES.workspaces}/${workspaceId}/trees`);
-    return res.payload || [];
+    const res = await api.get<WorkspaceTreeSummary[]>(`${API_ROUTES.workspaces}/${workspaceId}/trees`);
+    return res || [];
   } catch (error) {
     console.error(`Failed to list workspace trees ${workspaceId}:`, error);
     throw error;
@@ -211,9 +224,9 @@ export async function listWorkspaceTrees(workspaceId: string): Promise<Workspace
 // Get workspace tree
 export async function getWorkspaceTree(
   id: string
-): Promise<{ payload: TreeNode; status: string; statusCode: number; message: string }> {
+): Promise<TreeNode> {
   try {
-    return await api.get<{ payload: TreeNode; status: string; statusCode: number; message: string }>(
+    return await api.get<TreeNode>(
       getWorkspaceTreeBaseRoute(id)
     );
   } catch (error) {
@@ -226,9 +239,9 @@ export async function getWorkspaceTree(
 export async function getWorkspaceTreeByName(
   workspaceId: string,
   treeName: string
-): Promise<WorkspaceTreeResponse> {
+): Promise<TreeNode> {
   try {
-    return await api.get<WorkspaceTreeResponse>(
+    return await api.get<TreeNode>(
       `${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}`
     );
   } catch (error) {
@@ -273,7 +286,7 @@ export async function getCachedWorkspaceTreeByName(
   workspaceId: string,
   treeName: string,
   options: { force?: boolean } = {}
-): Promise<WorkspaceTreeResponse> {
+): Promise<TreeNode> {
   const key = workspaceTreeCacheKey(workspaceId, treeName)
   if (!options.force && workspaceTreeCache.has(key)) {
     return workspaceTreeCache.get(key)!
@@ -287,7 +300,7 @@ export async function getCachedWorkspaceTreeByName(
       // Prune at the root only: `.trash` is a top-level path of the default
       // directory tree, and a user folder called `.trash` deeper in the tree is
       // theirs to see.
-      const pruned = { ...response, payload: withoutTrashNode(response.payload) as TreeNode }
+      const pruned = withoutTrashNode(response) as TreeNode
       workspaceTreeCache.set(key, pruned)
       return pruned
     })
@@ -305,7 +318,7 @@ export async function getWorkspaceDocuments(
   contextSpec: string = '/',
   featureArray: string[] = [],
   options: { limit?: number; offset?: number; page?: number; treeName?: string; treeType?: string; q?: string; queries?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[]; ids?: number[] | null; scope?: 'path' | 'workspace'; sortBy?: string; order?: 'asc' | 'desc'; applyCanvasSpec?: boolean; debug?: boolean; debugLimit?: number } = {}
-): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string; debug?: { distances?: Array<{ id: number; distance: number }>; imageDistances?: Array<{ id: number; distance: number }> } }> {
+): Promise<DocumentsEnvelopeWithDebug> {
   try {
     const params = new URLSearchParams();
     const wholeWorkspace = options.scope === 'workspace'
@@ -338,7 +351,7 @@ export async function getWorkspaceDocuments(
     const queryString = params.toString();
     const url = `${API_ROUTES.workspaces}/${id}/documents${queryString ? '?' + queryString : ''}`;
 
-    return await api.get<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string; debug?: { distances?: Array<{ id: number; distance: number }>; imageDistances?: Array<{ id: number; distance: number }> } }>(url);
+    return await api.getEnvelope<CanvasDocument[]>(url) as DocumentsEnvelopeWithDebug;
   } catch (error) {
     console.error(`Failed to get workspace documents ${id}:`, error);
     throw error;
@@ -353,7 +366,7 @@ export async function getCanvasPathDocuments(
   path: string,
   treeName = DEFAULT_WORKSPACE_TREE_NAME,
   options: { limit?: number; offset?: number; page?: number; q?: string; queries?: string[]; allOf?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[]; ids?: number[] | null; sortBy?: string; order?: 'asc' | 'desc'; applyCanvasSpec?: boolean } = {}
-): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }> {
+): Promise<DocumentsEnvelope> {
   const treeType = treeName === 'directory' ? 'directory' : 'context'
   return getWorkspaceDocuments(id, path, options.allOf || [], {
     treeName,
@@ -377,7 +390,7 @@ export async function getWorkspaceLayerDocuments(
   treeName: string,
   layerId: string,
   options: { limit?: number; offset?: number; page?: number; q?: string; queries?: string[]; allOf?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[]; ids?: number[] | null; sortBy?: string; order?: 'asc' | 'desc' } = {}
-): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string }> {
+): Promise<DocumentsEnvelope> {
   try {
     const params = new URLSearchParams();
     if (options.limit !== undefined) params.append('limit', options.limit.toString());
@@ -393,7 +406,7 @@ export async function getWorkspaceLayerDocuments(
     if (options.order) params.append('order', options.order);
     const queryString = params.toString();
     const url = `${API_ROUTES.workspaces}/${id}/trees/${encodeURIComponent(treeName)}/layers/${encodeURIComponent(layerId)}/documents${queryString ? '?' + queryString : ''}`;
-    return await api.get<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number; status: string; statusCode: number; message: string; debug?: { distances?: Array<{ id: number; distance: number }>; imageDistances?: Array<{ id: number; distance: number }> } }>(url);
+    return await api.getEnvelope<import('@/types/workspace').Document[]>(url);
   } catch (error) {
     console.error(`Failed to get workspace layer documents ${id}/${treeName}/${layerId}:`, error);
     throw error;
@@ -402,8 +415,8 @@ export async function getWorkspaceLayerDocuments(
 
 export async function updateWorkspace(id: string, payload: Partial<CreateWorkspacePayload>): Promise<Workspace> {
   try {
-    const response = await api.patch<{ payload: Workspace; message: string; status: string; statusCode: number }>(`${API_ROUTES.workspaces}/${id}`, payload);
-    return response.payload;
+    const response = await api.patch<Workspace>(`${API_ROUTES.workspaces}/${id}`, payload);
+    return response;
   } catch (error) {
     console.error('Failed to update workspace:', error);
     throw error;
@@ -413,7 +426,7 @@ export async function updateWorkspace(id: string, payload: Partial<CreateWorkspa
 // Workspace tree operations
 export async function insertWorkspacePath(workspaceId: string, path: string, autoCreateLayers = true, treeName = DEFAULT_WORKSPACE_TREE_NAME, type: 'context' | 'canvas' = 'context'): Promise<boolean> {
   try {
-    await api.put<{ payload: unknown; message: string; status: string; statusCode: number }>(
+    await api.put<unknown>(
       getWorkspaceTreePathRoute(workspaceId, treeName, path),
       { type, autoCreateLayers }
     );
@@ -426,7 +439,7 @@ export async function insertWorkspacePath(workspaceId: string, path: string, aut
 
 export async function createWorkspaceCanvas(workspaceId: string, path: string, treeName = DEFAULT_WORKSPACE_TREE_NAME, options: { querySpec?: object; metadata?: object } = {}): Promise<boolean> {
   try {
-    await api.put<{ payload: unknown; message: string; status: string; statusCode: number }>(
+    await api.put<unknown>(
       getWorkspaceTreePathRoute(workspaceId, treeName, path),
       { type: 'canvas', ...options }
     )
@@ -451,23 +464,23 @@ export async function saveCanvasUi(workspaceId: string, path: string, treeName: 
 }
 
 export async function createPublicCanvasShare(workspaceId: string, path: string, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<{ code: string; url: string }> {
-  const response = await api.post<{ payload: { code: string; url: string } }>(
+  const response = await api.post<{ code: string; url: string }>(
     `${API_URL}/pub/c`,
     { workspaceId, path, treeName }
   )
-  return response.payload
+  return response
 }
 
 export async function getPublicCanvasShare(workspaceId: string, path: string, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<{ code: string; url: string } | null> {
   const params = new URLSearchParams({ workspaceId, path, treeName })
-  const response = await api.get<{ payload: { code: string; url: string } | null }>(
+  const response = await api.get<{ code: string; url: string } | null>(
     `${API_URL}/pub/c?${params.toString()}`
   )
-  return response.payload
+  return response
 }
 
 export async function deletePublicCanvasShare(code: string): Promise<boolean> {
-  await api.delete<{ payload: boolean }>(`${API_URL}/pub/c/${encodeURIComponent(code)}`)
+  await api.delete<boolean>(`${API_URL}/pub/c/${encodeURIComponent(code)}`)
   return true
 }
 
@@ -500,17 +513,17 @@ export interface WorkspacePublicCanvasShare {
 export type WorkspaceEmailShare = Record<string, unknown>
 
 export async function listWorkspaceShares(workspaceId: string): Promise<{ publicCanvasShares: WorkspacePublicCanvasShare[]; emailShares: WorkspaceEmailShare[] }> {
-  const response = await api.get<{ payload: { publicCanvasShares?: WorkspacePublicCanvasShare[]; emailShares?: WorkspaceEmailShare[] } }>(
+  const response = await api.get<{ publicCanvasShares?: WorkspacePublicCanvasShare[]; emailShares?: WorkspaceEmailShare[] }>(
     `${API_ROUTES.workspaces}/${workspaceId}/shares`
   )
   return {
-    publicCanvasShares: response.payload?.publicCanvasShares || [],
-    emailShares: response.payload?.emailShares || [],
+    publicCanvasShares: response?.publicCanvasShares || [],
+    emailShares: response?.emailShares || [],
   }
 }
 
 export async function revokeWorkspacePublicCanvasShare(workspaceId: string, code: string): Promise<boolean> {
-  await api.delete<{ payload: boolean }>(
+  await api.delete<boolean>(
     `${API_ROUTES.workspaces}/${workspaceId}/shares/public-canvas/${encodeURIComponent(code)}`
   )
   return true
@@ -518,7 +531,7 @@ export async function revokeWorkspacePublicCanvasShare(workspaceId: string, code
 
 export async function updateWorkspacePath(workspaceId: string, path: string, updates: Record<string, unknown>, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<boolean> {
   try {
-    await api.patch<{ payload: unknown; message: string; status: string; statusCode: number }>(
+    await api.patch<unknown>(
       getWorkspaceTreePathRoute(workspaceId, treeName, path),
       updates
     )
@@ -539,7 +552,7 @@ export async function removeWorkspacePath(workspaceId: string, path: string, rec
     const params = new URLSearchParams({ recursive: recursive.toString() });
     if (purge) params.set('purge', 'true');
     if (destroy) params.set('destroy', 'true');
-    await api.delete<{ payload: unknown; message: string; status: string; statusCode: number }>(
+    await api.delete<unknown>(
       `${getWorkspaceTreePathRoute(workspaceId, treeName, path)}?${params.toString()}`
     );
     return true;
@@ -551,7 +564,7 @@ export async function removeWorkspacePath(workspaceId: string, path: string, rec
 
 export async function moveWorkspacePath(workspaceId: string, fromPath: string, toPath: string, recursive = false, treeName = DEFAULT_WORKSPACE_TREE_NAME, targetTreeName?: string): Promise<boolean> {
   try {
-    await api.patch<{ payload: unknown; message: string; status: string; statusCode: number }>(
+    await api.patch<unknown>(
       getWorkspaceTreePathRoute(workspaceId, treeName, fromPath),
       { to: toPath, recursive, ...(targetTreeName && targetTreeName !== treeName ? { targetTreeNameOrTreeId: targetTreeName } : {}) }
     );
@@ -564,7 +577,7 @@ export async function moveWorkspacePath(workspaceId: string, fromPath: string, t
 
 export async function copyWorkspacePath(workspaceId: string, fromPath: string, toPath: string, recursive = false, treeName = DEFAULT_WORKSPACE_TREE_NAME, targetTreeName?: string): Promise<boolean> {
   try {
-    await api.post<{ payload: unknown; message: string; status: string; statusCode: number }>(
+    await api.post<unknown>(
       getWorkspaceTreePathRoute(workspaceId, treeName, fromPath),
       { to: toPath, recursive, ...(targetTreeName && targetTreeName !== treeName ? { targetTreeNameOrTreeId: targetTreeName } : {}) }
     );
@@ -578,7 +591,7 @@ export async function copyWorkspacePath(workspaceId: string, fromPath: string, t
 export async function pasteDocumentsToWorkspacePath(workspaceId: string, path: string, documentIds: number[], treeName = DEFAULT_WORKSPACE_TREE_NAME, treeType: 'context' | 'directory' = 'context'): Promise<boolean> {
   try {
     const ids = normalizeDocumentIds(Array.isArray(documentIds) ? documentIds : [documentIds])
-    await api.post<{ payload: unknown; message: string; status: string; statusCode: number }>(
+    await api.post<unknown>(
       `${API_ROUTES.workspaces}/${workspaceId}/documents`,
       { documentIds: ids, treeNameOrTreeId: treeName, treeType, context: path }
     );
@@ -595,11 +608,11 @@ export async function pasteDocumentsToWorkspacePath(workspaceId: string, path: s
 export async function importDocumentsToWorkspacePath(workspaceId: string, path: string, documents: unknown[], treeName = DEFAULT_WORKSPACE_TREE_NAME, treeType: 'context' | 'directory' = 'context'): Promise<number[]> {
   try {
     const docs = Array.isArray(documents) ? documents : [documents]
-    const response = await api.post<{ payload: number[]; message: string; status: string; statusCode: number }>(
+    const response = await api.post<number[]>(
       `${API_ROUTES.workspaces}/${workspaceId}/documents`,
       { documents: docs, treeNameOrTreeId: treeName, treeType, context: path }
     );
-    return Array.isArray(response.payload) ? response.payload : [];
+    return Array.isArray(response) ? response : [];
   } catch (error) {
     console.error(`Failed to import documents to workspace path ${path}:`, error);
     throw error;
@@ -619,18 +632,18 @@ export interface Layer {
 }
 
 export async function listWorkspaceLayers(workspaceId: string, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<Layer[]> {
-  const res = await api.get<{ payload: Layer[] }>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers`)
-  return res.payload || []
+  const res = await api.get<Layer[]>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers`)
+  return res || []
 }
 
 export async function getWorkspaceLayer(workspaceId: string, layerId: string, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<Layer> {
-  const res = await api.get<{ payload: Layer }>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers/${layerId}`)
-  return res.payload
+  const res = await api.get<Layer>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers/${layerId}`)
+  return res
 }
 
 export async function renameWorkspaceLayer(workspaceId: string, layerId: string, newName: string, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<Layer> {
-  const res = await api.patch<{ payload: Layer }>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers/${layerId}`, { name: newName })
-  return res.payload
+  const res = await api.patch<Layer>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers/${layerId}`, { name: newName })
+  return res
 }
 
 export async function lockWorkspaceLayer(workspaceId: string, layerId: string, lockBy: string, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<boolean> {
@@ -649,13 +662,13 @@ export async function destroyWorkspaceLayer(workspaceId: string, layerId: string
 }
 
 export async function mergeWorkspaceLayer(workspaceId: string, layerId: string, targetLayers: string[], treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<unknown> {
-  const res = await api.post<{ payload: unknown }>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers/merge`, { layerId, targetLayers })
-  return res.payload
+  const res = await api.post<unknown>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers/merge`, { layerId, targetLayers })
+  return res
 }
 
 export async function subtractWorkspaceLayer(workspaceId: string, layerId: string, targetLayers: string[], treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<unknown> {
-  const res = await api.post<{ payload: unknown }>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers/subtract`, { layerId, targetLayers })
-  return res.payload
+  const res = await api.post<unknown>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers/subtract`, { layerId, targetLayers })
+  return res
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -728,7 +741,7 @@ export async function updateWorkspaceDocument(
   workspaceId: string,
   document: { id: number; schema: string; schemaVersion: string; data?: Record<string, unknown>; metadata?: Record<string, unknown>; comment?: string }
 ): Promise<boolean> {
-  await api.put<{ payload: unknown }>(
+  await api.put<unknown>(
     `${API_ROUTES.workspaces}/${workspaceId}/documents`,
     { documents: [document] }
   )
@@ -744,14 +757,14 @@ export async function destroyWorkspaceDocuments(
   const body: Record<string, unknown> = { documentIds: ids }
   if (options.urls) body.urls = options.urls
   if (options.keepDocument) body.keepDocument = true
-  const response = await api.delete<{ payload: DestroyResult }>(
+  const response = await api.delete<DestroyResult>(
     `${API_ROUTES.workspaces}/${workspaceId}/documents/destroy`,
     {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }
   )
-  return response.payload
+  return response
 }
 
 // ── Document sub-resources (object properties card) ─────────────────────────
@@ -765,10 +778,10 @@ export interface DocumentLocationInfo {
 }
 
 export async function getDocumentLocations(workspaceId: string, documentId: number | string): Promise<DocumentLocationInfo[]> {
-  const response = await api.get<{ payload: DocumentLocationInfo[] }>(
+  const response = await api.get<DocumentLocationInfo[]>(
     `${API_ROUTES.workspaces}/${workspaceId}/documents/${documentId}/locations`
   )
-  return response.payload || []
+  return response || []
 }
 
 export interface DocumentTreeMembership {
@@ -784,10 +797,10 @@ export async function getDocumentMemberships(
   tree?: string
 ): Promise<DocumentTreeMembership[]> {
   const qs = tree ? `?tree=${encodeURIComponent(tree)}` : ''
-  const response = await api.get<{ payload: { documentId: number; memberships: DocumentTreeMembership[] } }>(
+  const response = await api.get<{ documentId: number; memberships: DocumentTreeMembership[] }>(
     `${API_ROUTES.workspaces}/${workspaceId}/documents/${documentId}/memberships${qs}`
   )
-  return response.payload?.memberships || []
+  return response?.memberships || []
 }
 
 function buildContentApiPath(workspaceId: string, documentId: number | string, opts: { download?: boolean; url?: string } = {}): string {
@@ -892,10 +905,10 @@ export async function purgeWorkspaceDocuments(
   if (contextSpec) params.append('context', contextSpec)
   appendAllOf(params, featureArray)
   appendFilters(params, filterArray)
-  const response = await api.delete<{ payload: { requested: number; deleted: number } }>(
+  const response = await api.delete<{ requested: number; deleted: number }>(
     `${API_ROUTES.workspaces}/${workspaceId}/documents/purge?${params.toString()}`
   )
-  return response.payload
+  return response
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -926,8 +939,8 @@ export interface WorkspaceServicesStatus {
  */
 export async function getWorkspaceServicesStatus(workspaceId: string): Promise<WorkspaceServicesStatus> {
   try {
-    const response = await api.get<{ payload: WorkspaceServicesStatus }>(`${API_ROUTES.workspaces}/${workspaceId}/services`);
-    return response.payload;
+    const response = await api.get<WorkspaceServicesStatus>(`${API_ROUTES.workspaces}/${workspaceId}/services`);
+    return response;
   } catch (error) {
     console.error(`Failed to get workspace services status:`, error);
     throw error;
@@ -942,10 +955,10 @@ export async function enableWorkspaceService(
   serviceName: 'dotfiles' | 'git' | 'home' | 'webdav' | 'imap' | 'imapSync'
 ): Promise<{ success: boolean; path?: string }> {
   try {
-    const response = await api.post<{ payload: { success: boolean; path?: string } }>(
+    const response = await api.post<{ success: boolean; path?: string }>(
       `${API_ROUTES.workspaces}/${workspaceId}/services/${serviceName}/enable`
     );
-    return response.payload;
+    return response;
   } catch (error) {
     console.error(`Failed to enable ${serviceName} service:`, error);
     throw error;
@@ -960,10 +973,10 @@ export async function disableWorkspaceService(
   serviceName: 'dotfiles' | 'git' | 'home' | 'webdav' | 'imap' | 'imapSync'
 ): Promise<{ success: boolean }> {
   try {
-    const response = await api.post<{ payload: { success: boolean } }>(
+    const response = await api.post<{ success: boolean }>(
       `${API_ROUTES.workspaces}/${workspaceId}/services/${serviceName}/disable`
     );
-    return response.payload;
+    return response;
   } catch (error) {
     console.error(`Failed to disable ${serviceName} service:`, error);
     throw error;
@@ -1032,34 +1045,34 @@ const backendPath = (workspaceId: string, driver: string, address: string) =>
 
 export async function listBackends(workspaceId: string, driver?: string): Promise<Backend[]> {
   const url = driver ? `${backendsBase(workspaceId)}/${encodeURIComponent(driver)}` : backendsBase(workspaceId);
-  const response = await api.get<{ payload: Backend[] }>(url);
-  return response.payload || [];
+  const response = await api.get<Backend[]>(url);
+  return response || [];
 }
 
 export async function getBackend(workspaceId: string, driver: string, address: string): Promise<Backend> {
-  const response = await api.get<{ payload: Backend }>(backendPath(workspaceId, driver, address));
-  return response.payload;
+  const response = await api.get<Backend>(backendPath(workspaceId, driver, address));
+  return response;
 }
 
 // On-demand on-disk size of a local storage backend. Walks the backend root
 // server-side — potentially slow on large trees, so only call on user action.
 export async function getBackendDiskUsage(workspaceId: string, driver: string, address: string): Promise<BackendDiskUsage> {
-  const response = await api.get<{ payload: BackendDiskUsage }>(`${backendPath(workspaceId, driver, address)}/usage`);
-  return response.payload;
+  const response = await api.get<BackendDiskUsage>(`${backendPath(workspaceId, driver, address)}/usage`);
+  return response;
 }
 
 // Wipe the on-demand thumbnail cache (derived artifacts — regenerated on
 // demand, always safe to clear).
 export async function clearThumbnailCache(workspaceId: string): Promise<{ removed: number }> {
-  const response = await api.delete<{ payload: { removed: number } }>(`${API_ROUTES.workspaces}/${workspaceId}/thumbnails`);
-  return response.payload;
+  const response = await api.delete<{ removed: number }>(`${API_ROUTES.workspaces}/${workspaceId}/thumbnails`);
+  return response;
 }
 
 // On-demand on-disk size of the whole workspace root (per-dir breakdown
 // included) — the export/sync planning number. Slow on large workspaces.
 export async function getWorkspaceDiskUsage(workspaceId: string): Promise<WorkspaceDiskUsage> {
-  const response = await api.get<{ payload: WorkspaceDiskUsage }>(`${API_ROUTES.workspaces}/${workspaceId}/usage`);
-  return response.payload;
+  const response = await api.get<WorkspaceDiskUsage>(`${API_ROUTES.workspaces}/${workspaceId}/usage`);
+  return response;
 }
 
 // Human-readable byte size (1024-based, one decimal above KB).
@@ -1078,46 +1091,46 @@ export function formatBytes(bytes: number | null | undefined): string {
 }
 
 export async function addBackend(workspaceId: string, driver: string, config: Record<string, unknown>): Promise<Backend> {
-  const response = await api.post<{ payload: Backend }>(`${backendsBase(workspaceId)}/${encodeURIComponent(driver)}`, config);
-  return response.payload;
+  const response = await api.post<Backend>(`${backendsBase(workspaceId)}/${encodeURIComponent(driver)}`, config);
+  return response;
 }
 
 export async function updateBackend(workspaceId: string, driver: string, address: string, patch: Record<string, unknown>): Promise<Backend> {
-  const response = await api.patch<{ payload: Backend }>(backendPath(workspaceId, driver, address), patch);
-  return response.payload;
+  const response = await api.patch<Backend>(backendPath(workspaceId, driver, address), patch);
+  return response;
 }
 
 export async function removeBackend(workspaceId: string, driver: string, address: string): Promise<{ removed: boolean }> {
-  const response = await api.delete<{ payload: { removed: boolean } }>(backendPath(workspaceId, driver, address));
-  return response.payload;
+  const response = await api.delete<{ removed: boolean }>(backendPath(workspaceId, driver, address));
+  return response;
 }
 
 export async function syncBackend(workspaceId: string, driver: string, address: string): Promise<unknown> {
-  const response = await api.post<{ payload: unknown }>(`${backendPath(workspaceId, driver, address)}/sync`);
-  return response.payload;
+  const response = await api.post<unknown>(`${backendPath(workspaceId, driver, address)}/sync`);
+  return response;
 }
 
 // Stop an in-flight resync. The server aborts the walk at the next file;
 // already-indexed files stay indexed and a later sync resumes cheaply via the
 // checksum cache — so stop + later re-sync behaves like pause/resume.
 export async function cancelBackendSync(workspaceId: string, driver: string, address: string): Promise<unknown> {
-  const response = await api.post<{ payload: unknown }>(`${backendPath(workspaceId, driver, address)}/sync/cancel`);
-  return response.payload;
+  const response = await api.post<unknown>(`${backendPath(workspaceId, driver, address)}/sync/cancel`);
+  return response;
 }
 
 export async function testBackend(workspaceId: string, driver: string, address: string): Promise<unknown> {
-  const response = await api.post<{ payload: unknown }>(`${backendPath(workspaceId, driver, address)}/test`);
-  return response.payload;
+  const response = await api.post<unknown>(`${backendPath(workspaceId, driver, address)}/test`);
+  return response;
 }
 
 export async function listBackendContainers(workspaceId: string, driver: string, address: string): Promise<BackendContainer[]> {
-  const response = await api.get<{ payload: BackendContainer[] }>(`${backendPath(workspaceId, driver, address)}/containers`);
-  return response.payload || [];
+  const response = await api.get<BackendContainer[]>(`${backendPath(workspaceId, driver, address)}/containers`);
+  return response || [];
 }
 
 export async function syncBackendContainer(workspaceId: string, driver: string, address: string, name: string): Promise<unknown> {
-  const response = await api.post<{ payload: unknown }>(`${backendPath(workspaceId, driver, address)}/containers/${encodeURIComponent(name)}/sync`);
-  return response.payload;
+  const response = await api.post<unknown>(`${backendPath(workspaceId, driver, address)}/containers/${encodeURIComponent(name)}/sync`);
+  return response;
 }
 
 // Connector folders (imap boxes, …) — used for the subscribe picker.
@@ -1131,25 +1144,25 @@ export interface BackendFolder {
 
 // ?available=1 lists folders that can still be subscribed (server-side).
 export async function listBackendFoldersAvailable(workspaceId: string, driver: string, address: string): Promise<BackendFolder[]> {
-  const response = await api.get<{ payload: BackendFolder[] }>(`${backendPath(workspaceId, driver, address)}/containers?available=1`);
-  return response.payload || [];
+  const response = await api.get<BackendFolder[]>(`${backendPath(workspaceId, driver, address)}/containers?available=1`);
+  return response || [];
 }
 
 export async function addBackendContainers(workspaceId: string, driver: string, address: string, folders: string[]): Promise<unknown> {
-  const response = await api.post<{ payload: unknown }>(`${backendPath(workspaceId, driver, address)}/containers`, { folders });
-  return response.payload;
+  const response = await api.post<unknown>(`${backendPath(workspaceId, driver, address)}/containers`, { folders });
+  return response;
 }
 
 export async function removeBackendContainer(workspaceId: string, driver: string, address: string, name: string): Promise<{ removed: boolean }> {
-  const response = await api.delete<{ payload: { removed: boolean } }>(`${backendPath(workspaceId, driver, address)}/containers/${encodeURIComponent(name)}`);
-  return response.payload;
+  const response = await api.delete<{ removed: boolean }>(`${backendPath(workspaceId, driver, address)}/containers/${encodeURIComponent(name)}`);
+  return response;
 }
 
 // Rename/move a container (file-backend folder). `name` is the current key, the
 // body carries the new name/key. Returns the new key.
 export async function renameBackendContainer(workspaceId: string, driver: string, address: string, name: string, newName: string): Promise<unknown> {
-  const response = await api.patch<{ payload: unknown }>(`${backendPath(workspaceId, driver, address)}/containers/${encodeURIComponent(name)}`, { name: newName });
-  return response.payload;
+  const response = await api.patch<unknown>(`${backendPath(workspaceId, driver, address)}/containers/${encodeURIComponent(name)}`, { name: newName });
+  return response;
 }
 
 // Match a backends-tree node path to a known backend by its server-provided
@@ -1195,19 +1208,19 @@ export async function listBackendDocuments(
   driver: string,
   address: string,
   options: { linked?: boolean; limit?: number; offset?: number } = {},
-): Promise<{ payload: import('@/types/workspace').Document[]; count?: number; totalCount?: number }> {
+): Promise<DocumentsEnvelope> {
   const params = new URLSearchParams()
   if (options.linked !== undefined) params.append('linked', String(options.linked))
   if (options.limit !== undefined) params.append('limit', String(options.limit))
   if (options.offset !== undefined) params.append('offset', String(options.offset))
   const qs = params.toString()
-  return await api.get(`${backendPath(workspaceId, driver, address)}/documents${qs ? `?${qs}` : ''}`)
+  return await api.getEnvelope<CanvasDocument[]>(`${backendPath(workspaceId, driver, address)}/documents${qs ? `?${qs}` : ''}`)
 }
 
 // Pre-create folder discovery for the "add account" flow (no instance yet).
 export async function discoverBackendFolders(workspaceId: string, driver: string, config: Record<string, unknown>): Promise<BackendFolder[]> {
-  const response = await api.post<{ payload: BackendFolder[] }>(`${backendsBase(workspaceId)}/${encodeURIComponent(driver)}/discover`, config);
-  return response.payload || [];
+  const response = await api.post<BackendFolder[]>(`${backendsBase(workspaceId)}/${encodeURIComponent(driver)}/discover`, config);
+  return response || [];
 }
 
 // Parse a backends-tree /<driver>/<address>/… node path to its addressable
@@ -1233,30 +1246,30 @@ export interface WorkspaceHookFile {
 }
 
 export async function listWorkspaceHooks(workspaceId: string): Promise<WorkspaceHookFile[]> {
-  const response = await api.get<{ payload: WorkspaceHookFile[] }>(`${API_ROUTES.workspaces}/${workspaceId}/hooks`);
-  return response.payload || [];
+  const response = await api.get<WorkspaceHookFile[]>(`${API_ROUTES.workspaces}/${workspaceId}/hooks`);
+  return response || [];
 }
 
 export async function getWorkspaceHook(workspaceId: string, hookPath: string): Promise<{ path: string; content: string }> {
-  const response = await api.get<{ payload: { path: string; content: string } }>(
+  const response = await api.get<{ path: string; content: string }>(
     `${API_ROUTES.workspaces}/${workspaceId}/hooks/${encodeURIComponent(hookPath).replace(/%2F/g, '/')}`
   );
-  return response.payload;
+  return response;
 }
 
 export async function saveWorkspaceHook(workspaceId: string, hookPath: string, content: string): Promise<{ path: string }> {
-  const response = await api.put<{ payload: { path: string } }>(
+  const response = await api.put<{ path: string }>(
     `${API_ROUTES.workspaces}/${workspaceId}/hooks/${encodeURIComponent(hookPath).replace(/%2F/g, '/')}`,
     { content }
   );
-  return response.payload;
+  return response;
 }
 
 export async function deleteWorkspaceHook(workspaceId: string, hookPath: string): Promise<{ path: string }> {
-  const response = await api.delete<{ payload: { path: string } }>(
+  const response = await api.delete<{ path: string }>(
     `${API_ROUTES.workspaces}/${workspaceId}/hooks/${encodeURIComponent(hookPath).replace(/%2F/g, '/')}`
   );
-  return response.payload;
+  return response;
 }
 
 // ─── Bitmaps ────────────────────────────────────────────────────────────────
@@ -1266,10 +1279,10 @@ const EXCLUDED_BITMAP_PREFIXES = ['internal/', 'context/', 'vfs/']
 
 export async function listWorkspaceBitmaps(workspaceId: string): Promise<string[]> {
   try {
-    const response = await api.get<{ payload: unknown[] }>(
+    const response = await api.get<unknown[]>(
       `${API_ROUTES.workspaces}/${encodeURIComponent(workspaceId)}/bitmaps`
     )
-    const items = response.payload || []
+    const items = response || []
     // Response is string[] or { key: string }[] depending on workspace version
     const keys = items.map(item =>
       typeof item === 'string' ? item : (item as Record<string, string>).key ?? String(item)
@@ -1296,7 +1309,7 @@ export async function deleteWorkspaceBitmap(workspaceId: string, bitmapKey: stri
   if (cleaned.startsWith('data/') || cleaned === 'data') {
     throw new Error('data/* bitmaps are protected and cannot be deleted manually')
   }
-  await api.delete<{ payload: { key: string } }>(
+  await api.delete<{ key: string }>(
     `${API_ROUTES.workspaces}/${encodeURIComponent(workspaceId)}/bitmaps/${cleaned.split('/').map(encodeURIComponent).join('/')}`
   )
   return true
@@ -1313,10 +1326,10 @@ export interface WorkspaceDataset {
 }
 
 export async function listWorkspaceDatasets(workspaceId: string): Promise<WorkspaceDataset[]> {
-  const res = await api.get<{ payload: WorkspaceDataset[] }>(
+  const res = await api.get<WorkspaceDataset[]>(
     `${API_ROUTES.workspaces}/${encodeURIComponent(workspaceId)}/datasets`
   )
-  return res.payload || []
+  return res || []
 }
 
 export async function deleteWorkspaceDataset(
@@ -1327,10 +1340,10 @@ export async function deleteWorkspaceDataset(
   const cleaned = name.replace(/^data\/dataset\//, '').replace(/^\/+|\/+$/g, '')
   if (!cleaned) throw new Error('Dataset name is required')
   if (cleaned === 'default') throw new Error('The "default" dataset is virtual and cannot be deleted')
-  const res = await api.delete<{ payload: { name: string; documentsDeleted: number } }>(
+  const res = await api.delete<{ name: string; documentsDeleted: number }>(
     `${API_ROUTES.workspaces}/${encodeURIComponent(workspaceId)}/datasets/${cleaned.split('/').map(encodeURIComponent).join('/')}?dropDocuments=${dropDocuments}`
   )
-  return res.payload
+  return res
 }
 
 // ─── Timeline API ─────────────────────────────────────────────────────────────
@@ -1341,20 +1354,20 @@ function timelineBase(workspaceId: string) {
 
 export async function listWorkspaceTimelines(workspaceId: string): Promise<string[]> {
   try {
-    const res = await api.get<{ payload: string[] }>(timelineBase(workspaceId))
-    return res.payload || []
+    const res = await api.get<string[]>(timelineBase(workspaceId))
+    return res || []
   } catch {
     return []
   }
 }
 
 export async function createWorkspaceTimeline(workspaceId: string, name: string): Promise<TimelineInfo> {
-  const res = await api.post<{ payload: TimelineInfo }>(timelineBase(workspaceId), { name })
-  return res.payload
+  const res = await api.post<TimelineInfo>(timelineBase(workspaceId), { name })
+  return res
 }
 
 export async function deleteWorkspaceTimeline(workspaceId: string, name: string): Promise<boolean> {
-  await api.delete<{ payload: unknown }>(`${timelineBase(workspaceId)}/${encodeURIComponent(name)}`)
+  await api.delete<unknown>(`${timelineBase(workspaceId)}/${encodeURIComponent(name)}`)
   return true
 }
 
@@ -1388,11 +1401,11 @@ export async function fetchTimelineHistogram(
   workspaceId: string,
   request: TimelineHistogramRequest,
 ): Promise<TimelineHistogramBucket[]> {
-  const res = await api.post<{ payload: { buckets: TimelineHistogramBucket[] } }>(
+  const res = await api.post<{ buckets: TimelineHistogramBucket[] }>(
     `${timelineBase(workspaceId)}/histogram`,
     request,
   )
-  return res.payload?.buckets ?? []
+  return res?.buckets ?? []
 }
 
 export async function queryWorkspaceTimeline(
@@ -1401,11 +1414,11 @@ export async function queryWorkspaceTimeline(
   interval: TimelineQueryInterval,
   options: TimelineQueryOptions = {},
 ): Promise<number[]> {
-  const res = await api.post<{ payload: number[] }>(
+  const res = await api.post<number[]>(
     `${timelineBase(workspaceId)}/${encodeURIComponent(timelineName)}/query`,
     { ...interval, ...options },
   )
-  return res.payload || []
+  return res || []
 }
 
 export interface WorkspaceDbStats {
@@ -1455,15 +1468,15 @@ export async function setInferdPaused(
   workspaceId?: string,
 ): Promise<{ paused: boolean; pending: number; workspace?: string }> {
   const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ''
-  const res = await api.post<{ payload: { paused: boolean; pending: number; workspace?: string } }>(
+  const res = await api.post<{ paused: boolean; pending: number; workspace?: string }>(
     `${API_ROUTES.admin.inferd}/${paused ? 'pause' : 'resume'}${query}`,
   )
-  return res.payload
+  return res
 }
 
 export async function getWorkspaceDbStats(workspaceId: string): Promise<WorkspaceDbStats> {
-  const res = await api.get<{ payload: WorkspaceDbStats }>(`${API_ROUTES.workspaces}/${workspaceId}/db/stats`)
-  return res.payload
+  const res = await api.get<WorkspaceDbStats>(`${API_ROUTES.workspaces}/${workspaceId}/db/stats`)
+  return res
 }
 
 export interface SearchWeights {
@@ -1477,11 +1490,11 @@ export async function setWorkspaceSearchTuning(
   workspaceId: string,
   tuning: { imageMaxDistance?: number | null; imageFloorMode?: 'relative' | 'absolute'; imageRelativeMargin?: number; searchWeights?: SearchWeights },
 ): Promise<{ semantic: { imageMaxDistance?: number | null; imageFloorMode?: 'relative' | 'absolute'; imageRelativeMargin?: number; searchWeights?: SearchWeights } }> {
-  const res = await api.put<{ payload: { semantic: { imageMaxDistance?: number | null; imageFloorMode?: 'relative' | 'absolute'; imageRelativeMargin?: number; searchWeights?: SearchWeights } } }>(
+  const res = await api.put<{ semantic: { imageMaxDistance?: number | null; imageFloorMode?: 'relative' | 'absolute'; imageRelativeMargin?: number; searchWeights?: SearchWeights } }>(
     `${API_ROUTES.workspaces}/${workspaceId}/db/tuning`,
     tuning,
   )
-  return res.payload
+  return res
 }
 
 
@@ -1497,32 +1510,32 @@ export interface TrashedDocument extends CanvasDocument {
 }
 
 export async function listTrash(workspaceId: string): Promise<TrashedDocument[]> {
-  const response = await api.get<{ payload: TrashedDocument[] }>(
+  const response = await api.get<TrashedDocument[]>(
     `${API_ROUTES.workspaces}/${workspaceId}/trash`
   )
-  return Array.isArray(response.payload) ? response.payload : []
+  return Array.isArray(response) ? response : []
 }
 
 export async function restoreFromTrash(
   workspaceId: string,
   documentIds: readonly (string | number)[]
 ): Promise<{ restored: number[]; failed: Array<{ id: number; error: string }> }> {
-  const response = await api.post<{ payload: { restored: number[]; failed: Array<{ id: number; error: string }> } }>(
+  const response = await api.post<{ restored: number[]; failed: Array<{ id: number; error: string }> }>(
     `${API_ROUTES.workspaces}/${workspaceId}/trash/restore`,
     { documentIds: normalizeDocumentIds(documentIds) }
   )
-  return response.payload
+  return response
 }
 
 export async function emptyTrash(
   workspaceId: string,
   documentIds?: readonly (string | number)[]
 ): Promise<{ destroyed: number[]; failed: unknown[] }> {
-  const response = await api.delete<{ payload: { destroyed: number[]; failed: unknown[] } }>(
+  const response = await api.delete<{ destroyed: number[]; failed: unknown[] }>(
     `${API_ROUTES.workspaces}/${workspaceId}/trash`,
     documentIds?.length
       ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ documentIds: normalizeDocumentIds(documentIds) }) }
       : {}
   )
-  return response.payload
+  return response
 }

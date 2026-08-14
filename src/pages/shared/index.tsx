@@ -52,12 +52,14 @@ export default function SharedViewerPage() {
     try {
       const normalized = normalizeResourceUrl(resourceUrl)
       // Fetch meta
-      const metaResp = await api.get<{ payload?: unknown }>(normalized, { skipAuth: true, headers: authHeaders() })
-      setMeta(metaResp.payload || metaResp)
-      // Fetch documents
-      const docsResp = await api.get<{ payload?: unknown; data?: unknown }>(`${normalized}/documents`, { skipAuth: true, headers: authHeaders() })
-      const payload = docsResp.payload as { data?: unknown } | undefined
-      const list = (payload && Array.isArray(payload.data)) ? payload.data : (Array.isArray(payload) ? payload : docsResp.data || [])
+      const metaResp = await api.get<unknown>(normalized, { skipAuth: true, headers: authHeaders() })
+      setMeta(metaResp)
+      // Fetch documents. The payload is either the array itself or a { data }
+      // wrapper, depending on which share route answered.
+      const docsResp = await api.get<{ data?: unknown } | unknown[]>(`${normalized}/documents`, { skipAuth: true, headers: authHeaders() })
+      const list = Array.isArray(docsResp)
+        ? docsResp
+        : (Array.isArray(docsResp?.data) ? docsResp.data : [])
       setDocuments(Array.isArray(list) ? (list as Array<{ id?: number | string; schema?: string }>) : [])
     } catch (err) {
       const hint = resourceUrl.includes('/rest/v2/workspaces/') ? 'Ensure the URL uses /rest/v2/pub/workspaces/<workspace-id> and the token matches that workspace.' : resourceUrl.includes('/rest/v2/contexts/') ? 'Ensure the URL uses /rest/v2/pub/contexts/<context-id>.' : undefined

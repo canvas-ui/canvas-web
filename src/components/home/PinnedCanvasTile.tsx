@@ -22,7 +22,7 @@ function usePinnedCanvas(pin: PinnedCanvas): Resolved {
     let cancelled = false
     getWorkspaceTreeByName(pin.workspaceName, pin.treeName)
       .then((res) => {
-        if (!cancelled) setLoaded({ key: addressKey, node: findTreeNodeByPath(res.payload, pin.path) })
+        if (!cancelled) setLoaded({ key: addressKey, node: findTreeNodeByPath(res, pin.path) })
       })
       .catch(() => { if (!cancelled) setLoaded({ key: addressKey, node: null }) })
     return () => { cancelled = true }

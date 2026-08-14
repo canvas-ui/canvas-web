@@ -37,9 +37,9 @@ let cached: Promise<ServerSource> | null = null
 function fetchServerSource(): Promise<ServerSource> {
   if (!cached) {
     cached = api
-      .get<{ status: string; statusCode: number; payload: PingPayload }>('/ping', { skipAuth: true })
+      .get<PingPayload>('/ping', { skipAuth: true })
       .then((response) => {
-        const payload = response?.payload ?? {}
+        const payload = response ?? {}
         return {
           sourceUrl: payload.sourceUrl || FALLBACK_SOURCE_URL,
           version: payload.version ?? null,

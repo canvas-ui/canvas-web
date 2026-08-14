@@ -25,30 +25,30 @@ export interface WorkspaceDevice {
 }
 
 export async function listDevices(): Promise<Device[]> {
-  const res = await api.get<{ payload: Device[] }>(API_ROUTES.devices)
-  return res.payload || []
+  const res = await api.get<Device[]>(API_ROUTES.devices)
+  return res || []
 }
 
 export async function updateDevice(deviceId: string, patch: { name?: string; description?: string }): Promise<Device> {
-  const res = await api.patch<{ payload: Device }>(`${API_ROUTES.devices}/${encodeURIComponent(deviceId)}`, patch)
-  return res.payload
+  const res = await api.patch<Device>(`${API_ROUTES.devices}/${encodeURIComponent(deviceId)}`, patch)
+  return res
 }
 
 export async function listWorkspaceDevices(workspaceId: string): Promise<WorkspaceDevice[]> {
-  const res = await api.get<{ payload: WorkspaceDevice[] }>(`${API_ROUTES.workspaces}/${workspaceId}/devices`)
-  return res.payload || []
+  const res = await api.get<WorkspaceDevice[]>(`${API_ROUTES.workspaces}/${workspaceId}/devices`)
+  return res || []
 }
 
 export async function linkWorkspaceDevice(workspaceId: string, deviceId: string): Promise<WorkspaceDevice[]> {
-  const res = await api.post<{ payload: WorkspaceDevice[] }>(
+  const res = await api.post<WorkspaceDevice[]>(
     `${API_ROUTES.workspaces}/${workspaceId}/devices`,
     { deviceId }
   )
-  return Array.isArray(res.payload) ? res.payload : [res.payload]
+  return Array.isArray(res) ? res : [res]
 }
 
 export async function unlinkWorkspaceDevice(workspaceId: string, deviceId: string): Promise<void> {
-  await api.delete<{ payload: unknown }>(
+  await api.delete<unknown>(
     `${API_ROUTES.workspaces}/${workspaceId}/devices/${encodeURIComponent(deviceId)}`
   )
 }

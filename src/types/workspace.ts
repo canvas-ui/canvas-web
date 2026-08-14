@@ -316,16 +316,7 @@ export interface DocumentsResponse {
   error: string | null
 }
 
-// API response structure for tree
-export interface TreeResponse {
-  payload: TreeNode
-}
-
-// API response structure for documents
-export interface DocumentsApiResponse {
-  status: string
-  statusCode: number
-  message: string
-  payload: DocumentsResponse
-  count: number | null
-}
+// NOTE: the envelope shapes that used to live here (TreeResponse,
+// DocumentsApiResponse) are gone — api.* resolves to the payload, and the
+// handful of calls that still need the envelope use api.*Envelope(), typed
+// with protocol's ResponseEnvelope<T>.

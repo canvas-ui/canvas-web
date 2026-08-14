@@ -304,7 +304,7 @@ export default function WorkspaceDetailPage() {
       queries: [...serverSearchQueries, ...(opts?.queries ?? []), ...(opts?.q ? [opts.q] : [])],
       applyCanvasSpec: false,
     });
-    return { payload: (res.payload as Document[]) || [], count: res.count, totalCount: res.totalCount };
+    return { payload: (res.payload as Document[]) || [], count: res.count ?? undefined, totalCount: res.totalCount ?? undefined };
   // tbFiltersKey encodes all the tb* filter arrays; serverSearchQueries covers the query stack.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceName, selectedPath, selectedTreeName, tbFiltersKey, serverSearchQueries]);
@@ -316,14 +316,14 @@ export default function WorkspaceDetailPage() {
     const fetchWorkspace = async () => {
       setIsLoadingWorkspace(true);
       try {
-        const response = await api.get<ApiResponse<{ workspace: Workspace } | Workspace>>(
+        const response = await api.get<{ workspace: Workspace } | Workspace>(
           `${API_ROUTES.workspaces}/${workspaceName}`
         );
         let ws: Workspace;
-        if (response.payload && 'workspace' in response.payload) {
-          ws = response.payload.workspace as Workspace;
+        if (response && 'workspace' in response) {
+          ws = response.workspace as Workspace;
         } else {
-          ws = response.payload as Workspace;
+          ws = response as Workspace;
         }
         setWorkspace(ws);
         // An offline workspace is NOT started here — opening the view is not
@@ -785,7 +785,7 @@ export default function WorkspaceDetailPage() {
     const loadTree = (force = false) => {
       if (force) invalidateWorkspaceTreeCache(workspaceName, selectedTreeName);
       getCachedWorkspaceTreeByName(workspaceName, selectedTreeName, { force })
-        .then(res => { if (!cancelled) setTree(res.payload); })
+        .then(res => { if (!cancelled) setTree(res); })
         .catch(() => { if (!cancelled) setTree(null); });
     };
 
@@ -1052,7 +1052,7 @@ export default function WorkspaceDetailPage() {
       invalidateWorkspaceTreeCache(workspaceName!, selectedTreeName);
       try {
         const res = await getCachedWorkspaceTreeByName(workspaceName!, selectedTreeName, { force: true });
-        setTree(res.payload);
+        setTree(res);
       } catch { /* falls back to the tree:refresh event below */ }
       window.dispatchEvent(new CustomEvent('workspace:tree:refresh', { detail: { workspaceName } }));
       navigate(buildWorkspaceUrl(workspaceName!, path, selectedTreeName));
@@ -1517,7 +1517,7 @@ function SideWorkspaceCanvas({
     const loadTree = (force = false) => {
       if (force) invalidateWorkspaceTreeCache(workspaceName, pane.treeName);
       getCachedWorkspaceTreeByName(workspaceName, pane.treeName, { force })
-        .then(res => { if (!cancelled) setTree(res.payload); })
+        .then(res => { if (!cancelled) setTree(res); })
         .catch(() => { if (!cancelled) setTree(null); });
     };
 

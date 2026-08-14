@@ -25,11 +25,11 @@ export interface WebuiConfig {
 }
 
 export async function getWebuiConfig(): Promise<WebuiConfig> {
-  const res = await api.get<{ payload: WebuiConfig }>(`${API_URL}/users/me/config/webui`)
-  return res.payload ?? {}
+  const res = await api.get<WebuiConfig>(`${API_URL}/users/me/config/webui`)
+  return res ?? {}
 }
 
 export async function putWebuiConfig(config: WebuiConfig): Promise<WebuiConfig> {
-  const res = await api.put<{ payload: WebuiConfig }>(`${API_URL}/users/me/config/webui`, config)
-  return res.payload ?? config
+  const res = await api.put<WebuiConfig>(`${API_URL}/users/me/config/webui`, config)
+  return res ?? config
 }

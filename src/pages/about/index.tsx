@@ -47,9 +47,9 @@ export default function AboutPage() {
   useEffect(() => {
     let isMounted = true
     api
-      .get<{ payload?: AboutInfo }>('/ping', { skipAuth: true })
+      .get<AboutInfo>('/ping', { skipAuth: true })
       .then((response) => {
-        if (isMounted) setInfo(response?.payload ?? {})
+        if (isMounted) setInfo(response ?? {})
       })
       .catch((err) => {
         if (isMounted) setError(err instanceof Error ? err.message : 'Failed to reach the server')
