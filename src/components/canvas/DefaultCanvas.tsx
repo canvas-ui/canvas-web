@@ -94,19 +94,21 @@ function UrlBar({
 
   // Editable address bar when a submit handler is provided; otherwise the old
   // read-only URL (kept clickable to browse the tree if onUrlClick is set).
+  // Omnibox pill (Chrome-style): the tree chip plays the site-info role at
+  // the left, the scheme+path are the address. Focus lifts it to an input.
   if (onUrlSubmit) {
     return (
-      <>
+      <div className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-full border border-transparent bg-muted/60 px-3 transition-colors hover:bg-muted focus-within:border-border focus-within:bg-background focus-within:shadow-elevation-1">
         {chipEl}
         <form
-          className="flex flex-1 min-w-0 items-center rounded border border-transparent transition-colors hover:border-border focus-within:border-border focus-within:bg-background"
+          className="flex flex-1 min-w-0 items-center"
           onSubmit={(e) => {
             e.preventDefault()
             onUrlSubmit(inputRef.current?.value ?? initialPath)
           }}
         >
           {scheme && (
-            <span className="shrink-0 pl-2 font-mono text-sm text-muted-foreground select-none">{scheme}</span>
+            <span className="shrink-0 font-mono text-sm text-muted-foreground select-none">{scheme}</span>
           )}
           <input
             ref={inputRef}
@@ -116,15 +118,15 @@ function UrlBar({
             spellCheck={false}
             autoComplete="off"
             title="Edit path — press Enter to go"
-            className="w-full min-w-0 flex-1 truncate bg-transparent px-2 py-1 font-mono text-sm text-foreground focus:outline-none"
+            className="w-full min-w-0 flex-1 truncate bg-transparent px-1 py-1 font-mono text-sm text-foreground focus:outline-none"
           />
         </form>
-      </>
+      </div>
     )
   }
 
   return (
-    <>
+    <div className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-full bg-muted/60 px-3">
       {chipEl}
       {onUrlClick ? (
         <button
@@ -138,7 +140,7 @@ function UrlBar({
       ) : (
         <span className="text-sm text-foreground truncate flex-1">{urlDisplay}</span>
       )}
-    </>
+    </div>
   )
 }
 

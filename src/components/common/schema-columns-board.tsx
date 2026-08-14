@@ -175,13 +175,15 @@ export function SchemaColumnsBoard({ documents, workspaceId, columns, onColumnsC
           )
         })}
 
-        {/* Add-column control — sticky at the right edge of the scroll row so
-            it is always reachable without swiping to the end (that's also how
-            a removed column comes back: it returns to this list). */}
+        {/* Add-column control: a full-height ghost rail (the "add another
+            list" pattern), sticky at the right edge so it is always reachable
+            without swiping to the end — that's also how a removed column
+            comes back: it returns to this list. Opaque background so it reads
+            as docked, not floating, when it overlaps a column while stuck. */}
         {!readOnly && addableColumns.length > 0 && (
-          <div className="sticky right-0 z-20 flex h-full shrink-0 flex-col items-end pl-1">
+          <div className="sticky right-0 z-20 h-full shrink-0 bg-background pl-1">
             {addingColumn ? (
-              <div className="w-40 rounded-lg border bg-background p-2 shadow-elevation-2">
+              <div className="w-44 rounded-lg border bg-muted/20 p-2">
                 <p className="px-2 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Add column</p>
                 {addableColumns.map((k) => (
                   <button
@@ -207,7 +209,7 @@ export function SchemaColumnsBoard({ documents, workspaceId, columns, onColumnsC
                 onClick={() => setAddingColumn(true)}
                 title="Add column"
                 aria-label="Add column"
-                className="flex h-9 w-9 items-center justify-center rounded-lg border bg-background/90 text-muted-foreground shadow-elevation-1 backdrop-blur hover:bg-accent hover:text-foreground"
+                className="flex h-full w-11 flex-col items-center justify-center gap-1 rounded-lg border border-dashed text-muted-foreground transition-colors hover:bg-accent/30 hover:text-foreground"
               >
                 <Plus className="h-4 w-4" />
               </button>

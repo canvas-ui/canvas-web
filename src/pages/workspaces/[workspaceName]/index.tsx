@@ -1308,16 +1308,26 @@ export default function WorkspaceDetailPage() {
       {/* Compact workspace status bar — bottom border carries the workspace
           color as the primary accent; near-white colors fall back to the
           theme border so the accent never vanishes on the light background. */}
-      <div
-        className="shrink-0 border-b"
-        style={visibleAccentColor(workspace.color)
-          ? { borderBottom: `3px solid ${visibleAccentColor(workspace.color)}` }
-          : { borderBottomWidth: 3 }}
-      >
+      <div className="relative shrink-0 max-sm:border-b">
+        {/* The main divider (workspace accent) is an internal element, not a
+            border, so the active view tab can connect through it — Chrome's
+            tab-strip schema. Desktop: at the wrapper's bottom (tabs share the
+            title row). Mobile: directly under the tabs row; a plain border-b
+            closes the wrapper under the controls. */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] bg-border max-sm:hidden"
+          style={visibleAccentColor(workspace.color) ? { backgroundColor: visibleAccentColor(workspace.color)! } : undefined}
+        />
         {/* Mobile: browser order — tabs first, then the title/controls row,
             then the URL bar (rendered by DefaultCanvas below). */}
         {!showCanvasGrid && !isBackendsPath && nodeForViews && (
-          <div className="px-2 pt-1.5 sm:hidden">
+          <div className="relative px-2 pt-1.5 sm:hidden">
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] bg-border"
+              style={visibleAccentColor(workspace.color) ? { backgroundColor: visibleAccentColor(workspace.color)! } : undefined}
+            />
             <ContentViewTabs
               views={contentViews}
               activeId={activeContentViewId}
@@ -1363,7 +1373,7 @@ export default function WorkspaceDetailPage() {
         {!showCanvasGrid && !isBackendsPath && nodeForViews ? (
           <>
             <ContentViewTabs
-              className="min-w-0 flex-1 max-sm:hidden"
+              className="min-w-0 flex-1 self-stretch max-sm:hidden"
               views={contentViews}
               activeId={activeContentViewId}
               onSelect={selectContentView}
