@@ -16,6 +16,8 @@ export interface BoardColumnConfig {
   schemas: string[]
   /** Free-text filter, editable under the column header, persisted with the view. */
   filter?: string
+  /** Fixed pixel width set by dragging the column edge; unset = responsive default. */
+  width?: number
 }
 
 export interface ContentView {

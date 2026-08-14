@@ -47,10 +47,15 @@ export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = 
   }
 
   return (
-    <div className={cn('flex min-w-0 items-center gap-1', className)}>
+    // Paper tabs: a baseline runs the strip's full width and the ACTIVE tab
+    // interrupts it — the tab connects to the page below the line, like a
+    // physical tab extending from a binder. The line is an absolute element
+    // (not border-b) so the active tab can sit on top of it.
+    <div className={cn('relative flex min-w-0 items-end', className)}>
+      <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-border" />
       {/* Only the tab list scrolls — the add control stays pinned outside the
           scroll region so it can never drift out of view. */}
-      <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
+      <div className="flex min-w-0 items-end gap-0.5 overflow-x-auto pt-1">
       {views.map((view) => {
         const isActive = view.id === activeId
         if (editingId === view.id) {
@@ -65,7 +70,7 @@ export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = 
                 if (e.key === 'Enter') commitRename()
                 if (e.key === 'Escape') setEditingId(null)
               }}
-              className="h-7 w-28 rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="relative z-[1] h-8 w-28 rounded-t-md border border-b-0 border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
           )
         }
@@ -77,8 +82,12 @@ export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = 
             onDoubleClick={() => { if (!readOnly) { setEditingId(view.id); setDraft(view.name) } }}
             title={readOnly ? view.name : `${view.name} — double-click to rename`}
             className={cn(
-              'group flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs transition-colors',
-              isActive ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+              'group flex h-8 shrink-0 items-center gap-1.5 rounded-t-md px-3 text-xs transition-colors',
+              isActive
+                // bg-background + no bottom border + z above the baseline =
+                // the tab visibly "opens into" the content below the line.
+                ? 'relative z-[1] border border-b-0 border-border bg-background font-medium text-foreground'
+                : 'border border-b-0 border-transparent bg-muted/40 text-muted-foreground hover:bg-accent/60 hover:text-foreground',
             )}
           >
             {view.kind === 'columns' ? <Columns3 className="h-3 w-3 shrink-0" /> : <LayoutList className="h-3 w-3 shrink-0" />}
@@ -95,7 +104,7 @@ export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = 
       </div>
 
       {!readOnly && (adding ? (
-        <span className="flex shrink-0 items-center gap-1">
+        <span className="relative z-[1] mb-1 ml-1 flex shrink-0 items-center gap-1">
           <button
             type="button"
             onClick={() => addView('documents')}
@@ -120,7 +129,7 @@ export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = 
           onClick={() => setAdding(true)}
           title="Add view"
           aria-label="Add view"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+          className="relative z-[1] mb-1 ml-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground"
         >
           <Plus className="h-3.5 w-3.5" />
         </button>

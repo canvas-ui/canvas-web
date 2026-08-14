@@ -43,6 +43,33 @@ export function SchemaColumnsBoard({ documents, workspaceId, columns, onColumnsC
   // Filters are edited locally per keystroke and persisted on blur/Enter so a
   // PATCH doesn't fire per character.
   const [filterDrafts, setFilterDrafts] = useState<Record<string, string>>({})
+  // Live width while dragging a column edge; persisted once on pointer-up.
+  const [widthDrafts, setWidthDrafts] = useState<Record<string, number>>({})
+
+  const startResize = (e: React.PointerEvent, columnId: string) => {
+    e.preventDefault()
+    const columnEl = (e.currentTarget as HTMLElement).parentElement
+    if (!columnEl) return
+    const startX = e.clientX
+    const startWidth = columnEl.getBoundingClientRect().width
+    let latest = startWidth
+    const onMove = (ev: PointerEvent) => {
+      latest = Math.min(900, Math.max(220, startWidth + ev.clientX - startX))
+      setWidthDrafts((prev) => ({ ...prev, [columnId]: latest }))
+    }
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      onColumnsChange(columns.map((c) => (c.id === columnId ? { ...c, width: Math.round(latest) } : c)))
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+
+  const resetWidth = (columnId: string) => {
+    setWidthDrafts((prev) => { const next = { ...prev }; delete next[columnId]; return next })
+    onColumnsChange(columns.map((c) => (c.id === columnId ? { ...c, width: undefined } : c)))
+  }
 
   const commitFilter = (columnId: string) => {
     const draft = filterDrafts[columnId]
@@ -70,12 +97,27 @@ export function SchemaColumnsBoard({ documents, workspaceId, columns, onColumnsC
               return `${display.title}\n${display.preview}\n${display.subtitle}`.toLowerCase().includes(filterText)
             })
 
+          const draggedWidth = widthDrafts[column.id] ?? column.width
+
           return (
             // Viewport-proportional widths: ~1 column on a phone (with a peek
             // of the next), 2 / 3 / 4 as the pane widens. Percentages resolve
             // against the scroll container, so a narrow side pane gets the
-            // same column-per-swipe feel as a full-width monitor.
-            <div key={column.id} className="flex h-full min-h-0 shrink-0 grow-0 basis-[85%] snap-start flex-col rounded-lg border bg-muted/20 sm:basis-[48%] lg:basis-[32%] xl:basis-[24%]">
+            // same column-per-swipe feel as a full-width monitor. A dragged
+            // width (right-edge handle) overrides the responsive default.
+            <div
+              key={column.id}
+              className="relative flex h-full min-h-0 shrink-0 grow-0 basis-[85%] snap-start flex-col rounded-lg border bg-muted/20 sm:basis-[48%] lg:basis-[32%] xl:basis-[24%]"
+              style={draggedWidth ? { flexBasis: draggedWidth } : undefined}
+            >
+              {!readOnly && (
+                <div
+                  onPointerDown={(e) => startResize(e, column.id)}
+                  onDoubleClick={() => resetWidth(column.id)}
+                  title="Drag to resize — double-click to reset"
+                  className="absolute -right-2 inset-y-0 z-10 w-3 cursor-col-resize touch-none"
+                />
+              )}
               <div className="flex items-center gap-2 px-3 pb-1 pt-2.5">
                 <span className="truncate text-sm font-medium">{column.label}</span>
                 <span className="text-xs text-muted-foreground">{columnDocuments.length}</span>
@@ -133,10 +175,14 @@ export function SchemaColumnsBoard({ documents, workspaceId, columns, onColumnsC
           )
         })}
 
+        {/* Add-column control — sticky at the right edge of the scroll row so
+            it is always reachable without swiping to the end (that's also how
+            a removed column comes back: it returns to this list). */}
         {!readOnly && addableColumns.length > 0 && (
-          <div className="flex h-full w-44 shrink-0 flex-col">
+          <div className="sticky right-0 z-20 flex h-full shrink-0 flex-col items-end pl-1">
             {addingColumn ? (
-              <div className="rounded-lg border bg-muted/20 p-2">
+              <div className="w-40 rounded-lg border bg-background p-2 shadow-elevation-2">
+                <p className="px-2 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Add column</p>
                 {addableColumns.map((k) => (
                   <button
                     key={k.id}
@@ -159,9 +205,11 @@ export function SchemaColumnsBoard({ documents, workspaceId, columns, onColumnsC
               <button
                 type="button"
                 onClick={() => setAddingColumn(true)}
-                className="flex h-9 items-center justify-center gap-1.5 rounded-lg border border-dashed text-xs text-muted-foreground hover:bg-accent/30 hover:text-foreground"
+                title="Add column"
+                aria-label="Add column"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border bg-background/90 text-muted-foreground shadow-elevation-1 backdrop-blur hover:bg-accent hover:text-foreground"
               >
-                <Plus className="h-3.5 w-3.5" /> Column
+                <Plus className="h-4 w-4" />
               </button>
             )}
           </div>
