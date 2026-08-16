@@ -31,6 +31,7 @@ export type MenuAction =
   | { type: 'CLOSE_M1' }
   | { type: 'OPEN_M2'; view: M2View; entityId?: string | null }
   | { type: 'OPEN_M2_DRAWER'; section: MenuSection; view: M2View; entityId: string | null }
+  | { type: 'OPEN_M1_DRAWER'; section: MenuSection }
   | { type: 'CLOSE_M2' }
   | { type: 'SELECT_ENTITY'; entityId: string | null }
   | { type: 'SYNC_FROM_URL'; section: MenuSection; entityId: string | null; m2View: M2View; mobile?: boolean }
@@ -46,6 +47,7 @@ export interface MenuContextValue {
   closeM1: () => void
   openM2: (view: M2View, entityId?: string | null) => void
   openM2Drawer: (section: MenuSection, view: M2View, entityId: string | null) => void
+  openM1Drawer: (section: MenuSection) => void
   closeM2: () => void
   selectEntity: (entityId: string | null) => void
 }

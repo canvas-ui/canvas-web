@@ -2,7 +2,7 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import { useRef, useState } from 'react'
 import { Plus, Play, Square, Settings, GripVertical } from 'lucide-react'
 import { Icon } from '@iconify/react'
-import { cn } from '@/lib/utils'
+import { cn, isCoarsePointer } from '@/lib/utils'
 import { moveItem, persistSequentialOrder, useListReorder } from '@/lib/list-order'
 import { visibleAccentColor, onAccentTextClass } from '@/utils/color'
 import { useMenu } from '@/components/shell/use-menu'
@@ -171,7 +171,17 @@ export function WorkspaceList() {
                     <button
                       type="button"
                       title="Change icon"
+                      // Touch: a plain tap on the logo opens the workspace
+                      // like the rest of the row — the icon/color picker is
+                      // reached via long-press (contextmenu) so it can't be
+                      // triggered accidentally.
                       onClick={(e) => {
+                        if (isCoarsePointer()) return // bubbles to the row → open workspace
+                        e.stopPropagation()
+                        setPicker({ x: Math.min(e.clientX, window.innerWidth - 290), y: Math.min(e.clientY, window.innerHeight - 360), name: ws.name })
+                      }}
+                      onContextMenu={(e) => {
+                        e.preventDefault()
                         e.stopPropagation()
                         setPicker({ x: Math.min(e.clientX, window.innerWidth - 290), y: Math.min(e.clientY, window.innerHeight - 360), name: ws.name })
                       }}

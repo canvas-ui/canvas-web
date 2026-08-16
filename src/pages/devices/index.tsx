@@ -1,4 +1,5 @@
 import { PageHeader } from '@/components/common/page-header'
+import { useSettingsMenuBack } from '@/components/common/use-settings-back'
 import { useEffect, useState } from 'react'
 import { Monitor, RefreshCw, Pencil, Check, X as XIcon, Link2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -167,6 +168,7 @@ export default function DevicesPage() {
         <PageHeader
           compact
           title="Devices"
+          onBack={useSettingsMenuBack()}
           description="All devices registered to your account. Link them to individual workspaces in Workspace &rsaquo; Settings &rsaquo; Devices."
           actions={
             <Button type="button" variant="outline" size="sm" onClick={load} disabled={isLoading}>

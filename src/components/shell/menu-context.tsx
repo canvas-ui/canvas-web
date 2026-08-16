@@ -86,6 +86,19 @@ function menuReducer(state: MenuState, action: MenuAction): MenuState {
         selectedEntityId: action.entityId,
       }
 
+    case 'OPEN_M1_DRAWER':
+      // Programmatic rail + M1 open with no M2 — the mobile "back to the menu
+      // I came from" step for sections whose M1 list has no entity (settings).
+      return {
+        ...state,
+        m0Open: true,
+        activeSection: action.section,
+        m1Open: true,
+        m2Open: false,
+        m2View: null,
+        selectedEntityId: null,
+      }
+
     case 'CLOSE_M2':
       return { ...state, m2Open: false, m2View: null }
 
@@ -160,6 +173,10 @@ export function MenuProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'OPEN_M2_DRAWER', section, view, entityId })
   }, [])
 
+  const openM1Drawer = useCallback((section: MenuSection) => {
+    dispatch({ type: 'OPEN_M1_DRAWER', section })
+  }, [])
+
   const closeM2 = useCallback(() => {
     dispatch({ type: 'CLOSE_M2' })
   }, [])
@@ -178,6 +195,7 @@ export function MenuProvider({ children }: { children: ReactNode }) {
     closeM1,
     openM2,
     openM2Drawer,
+    openM1Drawer,
     closeM2,
     selectEntity,
   }

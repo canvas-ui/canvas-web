@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { PageHeader } from '@/components/common/page-header'
+import { useSettingsMenuBack } from '@/components/common/use-settings-back'
 import { api } from '@/lib/api'
 
 /**
@@ -73,6 +74,7 @@ export default function AboutPage() {
       <PageHeader
         className="mb-6"
         title="About"
+        onBack={useSettingsMenuBack()}
         description="Versions of every Canvas component this installation is running."
       />
 

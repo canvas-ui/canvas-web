@@ -1,4 +1,5 @@
 import { PageHeader } from '@/components/common/page-header'
+import { useSettingsMenuBack } from '@/components/common/use-settings-back'
 import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -64,6 +65,7 @@ export default function EmbeddingDefaultsPage() {
         compact
         className="mb-6"
         title="Embedding defaults"
+        onBack={useSettingsMenuBack()}
         description="What new workspaces inherit. A workspace can override any of it, and its own setting always wins."
         actions={
           <Button type="button" size="sm" variant="outline" onClick={refresh} disabled={loading}>

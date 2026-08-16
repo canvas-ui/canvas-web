@@ -1,4 +1,5 @@
 import { PageHeader } from '@/components/common/page-header'
+import { useSettingsMenuBack } from '@/components/common/use-settings-back'
 import { AppearanceSettings } from '@/components/settings/appearance-settings'
 
 export default function AppearancePage() {
@@ -7,6 +8,7 @@ export default function AppearancePage() {
       <PageHeader
         className="mb-6"
         title="Appearance"
+        onBack={useSettingsMenuBack()}
         description="Theme, colour scheme and density. Changes apply immediately and are remembered on this device."
       />
       <AppearanceSettings />

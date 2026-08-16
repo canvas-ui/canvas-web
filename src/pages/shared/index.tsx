@@ -1,4 +1,5 @@
 import { PageHeader } from '@/components/common/page-header'
+import { useSettingsMenuBack } from '@/components/common/use-settings-back'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { api } from '@/lib/api'
@@ -80,7 +81,7 @@ export default function SharedViewerPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Shared Resource Viewer" description="Open a resource someone shared with you." />
+      <PageHeader onBack={useSettingsMenuBack()} title="Shared Resource Viewer" description="Open a resource someone shared with you." />
       <div className="grid gap-2 md:grid-cols-3">
         <Input value={resourceUrl} onChange={(e) => setResourceUrl(e.target.value)} placeholder="Full pub URL" />
         <Input value={token} onChange={(e) => setToken(e.target.value)} placeholder="Access token (canvas-...)" />

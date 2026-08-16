@@ -10,7 +10,9 @@ export function ToolboxFab() {
   const { pathname } = useLocation()
 
   // The panel has its own close control, so the FAB is redundant while open.
-  if (state.t1Open) return null
+  // Same while the side AddPanel drawer is up — the FAB floats exactly over
+  // its bottom-right Save/confirm controls.
+  if (state.t1Open || state.addOpen) return null
 
   // Settings pages have no documents to filter — the toolbox is dead weight
   // there (covers workspaces/contexts/agents .../settings and any tab under

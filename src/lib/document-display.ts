@@ -2,6 +2,7 @@ import type { Document } from '@/types/workspace'
 
 const EMAIL_SCHEMA = 'data/schema/message/email'
 const TAB_SCHEMA = 'data/schema/tab'
+const TASK_SCHEMA = 'data/schema/task'
 export const FILE_SCHEMA = 'data/schema/file'
 
 type DisplayIcon = 'file' | 'globe' | 'mail'
@@ -149,6 +150,22 @@ export function getDocumentDisplayInfo(document: Document): {
       subtitle: url,
       icon: 'globe',
       isExternal: Boolean(url),
+      schemaLabel,
+    }
+  }
+
+  if (document.schema === TASK_SCHEMA || document.schema.startsWith(`${TASK_SCHEMA}/`)) {
+    const status = String(document.data.status || (document.data.completed ? 'completed' : 'pending')).trim()
+    const due = document.data.dueDate ? new Date(String(document.data.dueDate)) : null
+    const dueLabel = due && !Number.isNaN(due.getTime())
+      ? due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+      : ''
+    return {
+      title: truncate(document.data.title || document.data.name, 160) || `Task ${document.id}`,
+      preview: truncate(stripMarkdown(document.data.description || document.data.summary), 400),
+      subtitle: [status, dueLabel ? `due ${dueLabel}` : ''].filter(Boolean).join(' · '),
+      icon: 'file',
+      isExternal: false,
       schemaLabel,
     }
   }

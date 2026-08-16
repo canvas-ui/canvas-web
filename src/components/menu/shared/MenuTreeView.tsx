@@ -11,7 +11,7 @@ import {
   Layers, LayoutDashboard, MoreHorizontal, Lock, Unlock, Eye, Share2, Palette, RefreshCw,
 } from 'lucide-react'
 import { Icon } from '@iconify/react'
-import { cn } from '@/lib/utils'
+import { cn, isCoarsePointer } from '@/lib/utils'
 import type { TreeNode, LayerMetadata } from '@/types/workspace'
 import {
   getLayerStyle, mergeLayerStyle, DEFAULT_FOLDER_ICON, DEFAULT_CANVAS_ICON,
@@ -568,7 +568,14 @@ function CardNode({
               type="button"
               className="shrink-0 rounded p-0.5 -m-0.5 hover:bg-muted-foreground/10 touch-target"
               title="Change icon"
-              onClick={e => { e.stopPropagation(); onOpenPicker(e, path, node) }}
+              // Touch: a plain tap on the icon must act like a row tap (a
+              // finger aiming at the row easily lands on it) — the picker
+              // opens via long-press (contextmenu) instead.
+              onClick={e => {
+                if (isCoarsePointer()) return // bubbles to the row → select
+                e.stopPropagation(); onOpenPicker(e, path, node)
+              }}
+              onContextMenu={e => { e.preventDefault(); e.stopPropagation(); onOpenPicker(e, path, node) }}
             >
               {iconEl}
             </button>

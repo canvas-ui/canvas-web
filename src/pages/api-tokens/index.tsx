@@ -1,4 +1,5 @@
 import { PageHeader } from '@/components/common/page-header'
+import { useSettingsMenuBack } from '@/components/common/use-settings-back'
 import { useCallback, useEffect, useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -158,6 +159,7 @@ export default function ApiTokensPage() {
     <div className="space-y-6">
       <PageHeader
         title="API Tokens"
+        onBack={useSettingsMenuBack()}
         description="Create and manage API tokens for programmatic access"
       />
 

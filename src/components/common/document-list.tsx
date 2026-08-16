@@ -710,9 +710,10 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
   const isImage = isImageDocument(document)
   const isVideo = isVideoDocument(document)
   const display = getDocumentDisplayInfo(document)
-  // Notes, tabs/URLs, emails: the content IS the picture — render a text tile
-  // (title + clamped body) instead of a giant icon. Files keep the icon tile.
-  const isTextTile = !isImage && document.schema !== 'data/schema/file' && !!display.preview
+  // Notes, tabs/URLs, emails, todos: the content IS the picture — render a
+  // text tile (title + clamped body, or just title + status subtitle) instead
+  // of a giant icon. Files keep the icon tile.
+  const isTextTile = !isImage && document.schema !== 'data/schema/file' && !!(display.preview || display.subtitle)
   // 768px render keeps the larger (300px column, retina) photo tiles crisp.
   const { blobUrl, loading } = useDocumentThumbnail(workspaceId ?? '', document.id, 768, { enabled: isImage })
 
