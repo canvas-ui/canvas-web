@@ -38,7 +38,7 @@ export const WORKSPACE_SETTINGS_SECTIONS: readonly SettingsSection<WorkspaceSett
   { id: 'data', label: 'Data Backends', description: 'Sources, disk usage, trash', icon: HardDrive },
   { id: 'db', label: 'Database', description: 'Index, search tuning, embeddings', icon: Database },
   { id: 'devices', label: 'Devices', description: 'Linked devices', icon: Monitor },
-  { id: 'services', label: 'Services', description: 'Git, WebDAV, IMAP', icon: Server },
+  { id: 'services', label: 'Services', description: 'Connectors, Git, WebDAV, IMAP', icon: Server },
   { id: 'shares', label: 'Shares / ACL', description: 'Public links and access', icon: Link2 },
   { id: 'hooks', label: 'Hooks', description: 'Event-driven automation', icon: Webhook },
 ]

@@ -1449,10 +1449,6 @@ export default function WorkspaceSettingsPage() {
           </section>
           <AddLocalFolderForm workspaceId={workspaceId} onAdded={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />
 
-          {/* External poll-synced sources (GitHub / Slack / GCal / Teams) —
-              same backends facade, read-only mirrors into the backends tree. */}
-          {workspaceId && <ConnectorsSection workspaceId={workspaceId} />}
-
           {/* Trash is where deleted documents are held before they are purged
               from these same backends — it reads as one story with them. */}
           {workspaceName && (
@@ -1502,6 +1498,10 @@ export default function WorkspaceSettingsPage() {
 
       {activeTab === 'services' && (
         <div className="space-y-4">
+          {/* External poll-synced sources (GitHub / Slack / GCal / CalDAV /
+              Teams) — background sync services over the backends facade,
+              read-only mirrors into the backends tree. */}
+          {workspaceId && <ConnectorsSection workspaceId={workspaceId} />}
           <div className="space-y-3">
             {SERVICE_ITEMS.map(service => {
               const status = services?.[service.id] || services?.[service.id === 'git' ? 'dotfiles' : service.id === 'webdav' ? 'home' : 'imap']
