@@ -24,6 +24,7 @@ interface FieldSpec {
   placeholder?: string
   secret?: boolean
   list?: boolean
+  bool?: boolean
   required?: boolean
 }
 
@@ -58,6 +59,19 @@ const DRIVERS: Record<string, { label: string; icon: string; blurb: string; fiel
       { key: 'clientSecret', label: 'OAuth client secret', secret: true, required: true },
       { key: 'refreshToken', label: 'Refresh token', secret: true, required: true },
       { key: 'calendars', label: 'Calendar ids (empty = primary)', list: true },
+    ],
+  },
+  caldav: {
+    label: 'CalDAV',
+    icon: 'mdi:calendar-sync',
+    blurb: 'Any CalDAV endpoint (GroupOffice, Nextcloud, Radicale, SOGo…). Read-only by default — enable write-back to create events from Canvas.',
+    fields: [
+      { key: 'address', label: 'Account label', placeholder: 'e.g. groupoffice', required: true },
+      { key: 'url', label: 'CalDAV URL (calendar home or one calendar)', placeholder: 'https://host/caldav/user', required: true },
+      { key: 'username', label: 'Username' },
+      { key: 'password', label: 'Password', secret: true },
+      { key: 'calendars', label: 'Calendars (names, empty = all)', list: true },
+      { key: 'writeBack', label: 'Allow creating events from Canvas (write-back)', bool: true },
     ],
   },
   teams: {
@@ -116,7 +130,12 @@ export function ConnectorsSection({ workspaceId }: { workspaceId: string }) {
         if (field.required) { showToast({ title: `${field.label} is required`, variant: 'destructive' }); return }
         continue
       }
-      config[field.key] = field.list ? parseList(raw) : raw
+      config[field.key] = field.list ? parseList(raw) : (field.bool ? raw === 'true' : raw)
+    }
+    // caldav: the UI asks the positive question; the server flag is readOnly.
+    if (adding === 'caldav') {
+      config.readOnly = config.writeBack !== true
+      delete config.writeBack
     }
     setBusy(true)
     try {
@@ -158,7 +177,7 @@ export function ConnectorsSection({ workspaceId }: { workspaceId: string }) {
         <div>
           <h2 className="text-sm font-semibold">Connectors</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            GitHub issues, Slack, Google Calendar and MS Teams — polled read-only into the backends tree.
+            GitHub issues, Slack, Google Calendar, CalDAV and MS Teams — polled into the backends tree (read-only unless write-back is enabled).
           </p>
         </div>
         <Button type="button" variant="outline" size="sm" onClick={() => { void load() }} title="Refresh">
@@ -212,7 +231,16 @@ export function ConnectorsSection({ workspaceId }: { workspaceId: string }) {
             {DRIVERS[adding].fields.map((field) => (
               <label key={field.key} className={`text-xs ${field.list ? 'sm:col-span-2' : ''}`}>
                 <span className="text-muted-foreground">{field.label}</span>
-                {field.list ? (
+                {field.bool ? (
+                  <span className="mt-1 flex h-8 items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={form[field.key] === 'true'}
+                      onChange={(e) => setForm((prev) => ({ ...prev, [field.key]: e.target.checked ? 'true' : '' }))}
+                      className="h-4 w-4 accent-primary"
+                    />
+                  </span>
+                ) : field.list ? (
                   <textarea
                     value={form[field.key] || ''}
                     onChange={(e) => setForm((prev) => ({ ...prev, [field.key]: e.target.value }))}
