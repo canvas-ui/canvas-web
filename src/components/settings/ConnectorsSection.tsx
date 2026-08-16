@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '@iconify/react'
-import { Plus, RefreshCw, Trash2, X } from 'lucide-react'
+import { Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/use-toast'
 import {
-  listBackends, addBackend, removeBackend, syncBackend,
+  listBackends, addBackend, updateBackend, removeBackend, syncBackend,
   type Backend,
 } from '@/services/workspace'
 
@@ -22,6 +22,7 @@ interface FieldSpec {
   key: string
   label: string
   placeholder?: string
+  hint?: string
   secret?: boolean
   list?: boolean
   bool?: boolean
@@ -35,9 +36,9 @@ const DRIVERS: Record<string, { label: string; icon: string; blurb: string; fiel
     blurb: 'Issues from the listed repos sync as todos. Token optional for public repos.',
     fields: [
       { key: 'address', label: 'Account label', placeholder: 'e.g. canvas-ui', required: true },
-      { key: 'token', label: 'Personal access token (optional for read, required for write-back)', secret: true },
-      { key: 'repos', label: 'Repos (owner/repo, one per line)', placeholder: 'canvas-ui/canvas-server', list: true, required: true },
-      { key: 'writeBack', label: 'Allow managing issues from Canvas (create / edit / close — needs a PAT with repo scope)', bool: true },
+      { key: 'token', label: 'Personal access token', hint: 'Optional for public repos; required for write-back.', secret: true },
+      { key: 'repos', label: 'Repositories', placeholder: 'owner/repo, one per line', hint: 'Issues from each repo sync as todos.', list: true, required: true },
+      { key: 'writeBack', label: 'Manage issues from Canvas', hint: 'Create, edit and close issues — needs a PAT with repo scope.', bool: true },
     ],
   },
   slack: {
@@ -72,7 +73,7 @@ const DRIVERS: Record<string, { label: string; icon: string; blurb: string; fiel
       { key: 'username', label: 'Username' },
       { key: 'password', label: 'Password', secret: true },
       { key: 'calendars', label: 'Calendars (names, empty = all)', list: true },
-      { key: 'writeBack', label: 'Allow creating events from Canvas (write-back)', bool: true },
+      { key: 'writeBack', label: 'Create events from Canvas', hint: 'Write-back into the CalDAV calendar.', bool: true },
     ],
   },
   teams: {
@@ -97,13 +98,20 @@ export function ConnectorsSection({ workspaceId }: { workspaceId: string }) {
   const { showToast } = useToast()
   const [connectors, setConnectors] = useState<Backend[]>([])
   const [adding, setAdding] = useState<string | null>(null) // driver being configured
+  const [editing, setEditing] = useState<Backend | null>(null) // existing connector being edited (null = adding new)
   const [form, setForm] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
 
   const load = useCallback(async () => {
     const backends = await listBackends(workspaceId).catch(() => [] as Backend[])
     setConnectors(backends.filter((b) => b.kind === 'connector'))
   }, [workspaceId])
+
+  const refresh = async () => {
+    setRefreshing(true)
+    try { await load() } finally { setRefreshing(false) }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -121,6 +129,28 @@ export function ConnectorsSection({ workspaceId }: { workspaceId: string }) {
     return () => clearInterval(timer)
   }, [anySyncing, load])
 
+  // Prefill the form from a connector's (secret-redacted) config. Secrets stay
+  // blank — the server keeps the stored value when a secret is omitted.
+  const openEdit = (c: Backend) => {
+    const spec = DRIVERS[c.driver]
+    if (!spec) return
+    const cfg = (c.config || {}) as Record<string, unknown>
+    const next: Record<string, string> = {}
+    for (const field of spec.fields) {
+      if (field.key === 'address') { next.address = c.address; continue }
+      if (field.secret) continue
+      if (field.key === 'writeBack') { next.writeBack = cfg.readOnly === false ? 'true' : ''; continue }
+      const value = cfg[field.key]
+      if (field.list) { next[field.key] = Array.isArray(value) ? value.join('\n') : ''; continue }
+      if (value !== undefined && value !== null) next[field.key] = String(value)
+    }
+    setForm(next)
+    setAdding(c.driver)
+    setEditing(c)
+  }
+
+  const closeForm = () => { setAdding(null); setEditing(null); setForm({}) }
+
   const submit = async () => {
     if (!adding) return
     const spec = DRIVERS[adding]
@@ -128,23 +158,26 @@ export function ConnectorsSection({ workspaceId }: { workspaceId: string }) {
     for (const field of spec.fields) {
       const raw = (form[field.key] || '').trim()
       if (!raw) {
-        if (field.required) { showToast({ title: `${field.label} is required`, variant: 'destructive' }); return }
+        // A blank secret on edit keeps the stored value; the server merges the
+        // patch, so lists/bools must be sent explicitly to be clearable.
+        if (field.required && !(editing && field.secret)) { showToast({ title: `${field.label} is required`, variant: 'destructive' }); return }
+        if (editing && !field.secret) config[field.key] = field.list ? [] : (field.bool ? false : '')
         continue
       }
       config[field.key] = field.list ? parseList(raw) : (field.bool ? raw === 'true' : raw)
     }
     // The UI asks the positive question; the server flag is readOnly.
-    if ('writeBack' in config || DRIVERS[adding].fields.some((f) => f.key === 'writeBack')) {
+    if (spec.fields.some((f) => f.key === 'writeBack')) {
       config.readOnly = config.writeBack !== true
       delete config.writeBack
     }
     setBusy(true)
     try {
-      await addBackend(workspaceId, adding, config)
-      setAdding(null)
-      setForm({})
+      if (editing) await updateBackend(workspaceId, editing.driver, editing.address, config)
+      else await addBackend(workspaceId, adding, config)
+      closeForm()
       await load()
-      showToast({ title: 'Connector saved — first sync started' })
+      showToast({ title: editing ? 'Connector updated — sync restarted' : 'Connector saved — first sync started' })
     } catch (err) {
       showToast({ title: 'Failed to save connector', description: err instanceof Error ? err.message : String(err), variant: 'destructive' })
     } finally {
@@ -181,8 +214,8 @@ export function ConnectorsSection({ workspaceId }: { workspaceId: string }) {
             GitHub issues, Slack, Google Calendar, CalDAV and MS Teams — polled into the backends tree (read-only unless write-back is enabled).
           </p>
         </div>
-        <Button type="button" variant="outline" size="sm" onClick={() => { void load() }} title="Refresh">
-          <RefreshCw className="h-3.5 w-3.5" />
+        <Button type="button" variant="outline" size="sm" disabled={refreshing} onClick={() => { void refresh() }} title="Refresh">
+          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
         </Button>
       </div>
 
@@ -200,6 +233,9 @@ export function ConnectorsSection({ workspaceId }: { workspaceId: string }) {
                   <Button type="button" variant="outline" size="sm" disabled={c.status === 'syncing'} onClick={() => { void sync(c) }}>
                     <RefreshCw className={`mr-1 h-3 w-3 ${c.status === 'syncing' ? 'animate-spin' : ''}`} />
                     {c.status === 'syncing' ? 'Syncing' : 'Sync now'}
+                  </Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => openEdit(c)} title="Edit connector">
+                    <Pencil className="h-3.5 w-3.5" />
                   </Button>
                   <Button type="button" variant="ghost" size="sm" onClick={() => { void remove(c) }} title="Remove connector">
                     <Trash2 className="h-3.5 w-3.5 text-destructive" />
@@ -221,25 +257,29 @@ export function ConnectorsSection({ workspaceId }: { workspaceId: string }) {
         <div className="mt-3 rounded-md border p-3">
           <div className="flex items-center gap-2">
             <Icon icon={DRIVERS[adding].icon} width={16} height={16} />
-            <span className="text-sm font-medium">{DRIVERS[adding].label}</span>
+            <span className="text-sm font-medium">
+              {editing ? `Edit ${DRIVERS[adding].label}` : DRIVERS[adding].label}
+            </span>
+            {editing && <span className="font-mono text-xs text-muted-foreground">{editing.address}</span>}
             <span className="flex-1" />
-            <button type="button" onClick={() => { setAdding(null); setForm({}) }} className="p-1 text-muted-foreground hover:text-foreground" aria-label="Cancel">
+            <button type="button" onClick={closeForm} className="p-1 text-muted-foreground hover:text-foreground" aria-label="Cancel">
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">{DRIVERS[adding].blurb}</p>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
             {DRIVERS[adding].fields.map((field) => (
-              <label key={field.key} className={`text-xs ${field.list ? 'sm:col-span-2' : ''}`}>
-                <span className="text-muted-foreground">{field.label}</span>
+              <label key={field.key} className={`text-xs ${field.list || field.bool ? 'sm:col-span-2' : ''}`}>
+                {!field.bool && <span className="text-muted-foreground">{field.label}</span>}
                 {field.bool ? (
-                  <span className="mt-1 flex h-8 items-center gap-2">
+                  <span className="mt-1 flex items-center gap-2">
                     <input
                       type="checkbox"
                       checked={form[field.key] === 'true'}
                       onChange={(e) => setForm((prev) => ({ ...prev, [field.key]: e.target.checked ? 'true' : '' }))}
                       className="h-4 w-4 accent-primary"
                     />
+                    <span>{field.label}</span>
                   </span>
                 ) : field.list ? (
                   <textarea
@@ -253,17 +293,19 @@ export function ConnectorsSection({ workspaceId }: { workspaceId: string }) {
                   <Input
                     type={field.secret ? 'password' : 'text'}
                     value={form[field.key] || ''}
+                    disabled={!!editing && field.key === 'address'}
                     onChange={(e) => setForm((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                    placeholder={field.placeholder}
+                    placeholder={editing && field.secret ? 'Leave blank to keep current' : field.placeholder}
                     autoComplete="off"
                     className="mt-1 h-8 text-xs"
                   />
                 )}
+                {field.hint && <span className="mt-0.5 block text-[11px] text-muted-foreground/80">{field.hint}</span>}
               </label>
             ))}
           </div>
           <Button type="button" size="sm" className="mt-3" disabled={busy} onClick={() => { void submit() }}>
-            {busy ? 'Saving…' : 'Save & sync'}
+            {busy ? 'Saving…' : (editing ? 'Save changes & sync' : 'Save & sync')}
           </Button>
         </div>
       ) : (

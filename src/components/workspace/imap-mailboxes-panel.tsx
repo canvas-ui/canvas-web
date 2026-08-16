@@ -18,7 +18,7 @@ import {
   type Backend,
   type BackendFolder,
 } from '@/services/workspace';
-import { Loader2, Mail, RefreshCw, Save, Trash2, FolderPlus } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2, Mail, RefreshCw, Save, Trash2, FolderPlus } from 'lucide-react';
 
 interface ImapMailboxesPanelProps {
   workspaceId: string;
@@ -59,7 +59,8 @@ function formFromBackend(b: Backend): AccountForm {
 
 export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelProps) {
   const [accounts, setAccounts] = useState<Backend[]>([]);
-  const [selected, setSelected] = useState<string | null>(null); // address, or null = new
+  const [selected, setSelected] = useState<string | null>(null); // address of the expanded account
+  const [showNew, setShowNew] = useState(false); // new-account form visible
   const [form, setForm] = useState<AccountForm>(EMPTY_FORM);
   const [folders, setFolders] = useState<BackendFolder[]>([]);
   const [selectedFolders, setSelectedFolders] = useState<string[]>(['INBOX']);
@@ -119,7 +120,19 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
     }
   }, [workspaceId, showToast]);
 
+  const resetForm = () => {
+    setShowNew(false);
+    setSelected(null);
+    setForm(EMPTY_FORM);
+    setFolders([]);
+    setSelectedFolders(['INBOX']);
+  };
+
+  // Clicking a listed account expands its options inline; clicking it again
+  // collapses them.
   const selectAccount = (b: Backend) => {
+    if (selected === b.address) { resetForm(); return; }
+    setShowNew(false);
     setSelected(b.address);
     setForm(formFromBackend(b));
     setFolders([]);
@@ -129,11 +142,9 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
     void discoverFoldersFor(b);
   };
 
-  const resetForm = () => {
-    setSelected(null);
-    setForm(EMPTY_FORM);
-    setFolders([]);
-    setSelectedFolders(['INBOX']);
+  const startNewAccount = () => {
+    resetForm();
+    setShowNew(true);
   };
 
   const change = <K extends keyof AccountForm>(key: K, value: AccountForm[K]) => setForm((f) => ({ ...f, [key]: value }));
@@ -179,6 +190,7 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
       }
 
       await load();
+      setShowNew(false);
       setSelected(form.user.trim());
       showToast({ title: 'Saved', description: `IMAP account ${form.user.trim()} saved — sync runs in the background` });
     } catch (error) {
@@ -230,73 +242,10 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
     }
   };
 
-  return (
-    <div className="space-y-3 border-t pt-4">
-      <div className="space-y-1">
-        <h4 className="text-sm font-medium">IMAP Accounts</h4>
-        <p className="text-xs text-muted-foreground">Each account mirrors under /imap/&lt;account&gt; in the backends tree; its folders are synced as containers.</p>
-      </div>
-
-      {!enabled && (
-        <p className="rounded-md border bg-muted/40 p-2 text-xs text-muted-foreground">
-          Enable the IMAP service before polling starts. Accounts can still be configured while it is off.
-        </p>
-      )}
-
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="outline" onClick={resetForm}><Mail className="h-3 w-3" /> New Account</Button>
-        <Button size="sm" variant="ghost" onClick={load} disabled={isLoading}>
-          {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />} Refresh
-        </Button>
-      </div>
-
-      <div className="rounded-md border">
-        <div className="max-h-52 overflow-y-auto p-2 space-y-1">
-          {sorted.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No IMAP accounts configured.</p>
-          ) : (
-            sorted.map((acc) => (
-              <div
-                key={acc.address}
-                className={`rounded px-2 py-2 text-xs transition-colors ${selected === acc.address ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'}`}
-              >
-                <button onClick={() => selectAccount(acc)} className="w-full text-left">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium">{acc.address}</span>
-                    <span className={`shrink-0 ${acc.status === 'error' ? 'text-destructive' : 'text-muted-foreground'}`}>{acc.status}</span>
-                  </div>
-                  <div className="text-muted-foreground">{String((acc.config as Record<string, unknown>)?.host || '')} · {(acc.containers || []).length} folder(s)</div>
-                  {acc.lastError && <div className="text-destructive">error: {acc.lastError}</div>}
-                </button>
-                <div className="mt-1 space-y-0.5">
-                  {(acc.containers || []).map((c) => (
-                    <div key={c.name} className="flex items-center justify-between gap-2 rounded bg-background/60 px-2 py-1">
-                      <span className="font-mono truncate">{c.name}</span>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button title="Sync folder" className="p-1 hover:bg-accent rounded" onClick={() => syncFolder(acc.address, c.name)} disabled={!!runningAction}>
-                          {runningAction === `folder-sync:${acc.address}:${c.name}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-                        </button>
-                        <button
-                          title="Remove folder"
-                          className="p-1 hover:bg-destructive/10 text-destructive rounded"
-                          onClick={() => removeBackendContainer(workspaceId, 'imap', acc.address, c.name)
-                            .then(load)
-                            .catch((error) => showToast({ title: 'Error', description: error instanceof Error ? error.message : 'Failed to remove folder', variant: 'destructive' }))}
-                          disabled={!!runningAction}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
-      <div className="grid gap-3">
+  // Shared account settings form — rendered inline under the expanded account,
+  // or in the "new account" card.
+  const configForm = (
+    <div className="grid gap-3">
         <div className="grid gap-2">
           <Label htmlFor="imap-host">Host</Label>
           <Input id="imap-host" value={form.host} disabled={!!current} onChange={(e) => change('host', e.target.value)} placeholder="imap.example.com" />
@@ -367,21 +316,116 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
           </label>
         </div>
       </div>
+  );
+
+  return (
+    <div className="space-y-3 border-t pt-4">
+      <div className="space-y-1">
+        <h4 className="text-sm font-medium">IMAP Accounts</h4>
+        <p className="text-xs text-muted-foreground">Each account mirrors under /imap/&lt;account&gt; in the backends tree; its folders are synced as containers. Click an account to edit its settings.</p>
+      </div>
+
+      {!enabled && (
+        <p className="rounded-md border bg-muted/40 p-2 text-xs text-muted-foreground">
+          Enable the IMAP service before polling starts. Accounts can still be configured while it is off.
+        </p>
+      )}
 
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" onClick={handleSave} disabled={isSaving}>
-          {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} Save
+        <Button size="sm" variant="outline" onClick={showNew ? resetForm : startNewAccount}>
+          <Mail className="h-3 w-3" /> {showNew ? 'Cancel' : 'New Account'}
         </Button>
-        <Button size="sm" variant="outline" disabled={!current || !!runningAction} onClick={() => current && accountAction('test', current.address)}>
-          {runningAction === `test:${current?.address}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Mail className="h-3 w-3" />} Test
-        </Button>
-        <Button size="sm" variant="outline" disabled={!current || !!runningAction} onClick={() => current && accountAction('sync', current.address)}>
-          {runningAction === `sync:${current?.address}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />} Sync all
-        </Button>
-        <Button size="sm" variant="destructive" disabled={!current || !!runningAction} onClick={handleDelete}>
-          {runningAction === `delete:${current?.address}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />} Delete
+        <Button size="sm" variant="ghost" onClick={load} disabled={isLoading}>
+          {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />} Refresh
         </Button>
       </div>
+
+      <div className="rounded-md border">
+        <div className="max-h-[32rem] overflow-y-auto p-2 space-y-1">
+          {sorted.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No IMAP accounts configured.</p>
+          ) : (
+            sorted.map((acc) => {
+              const expanded = selected === acc.address;
+              return (
+                <div
+                  key={acc.address}
+                  className={`rounded px-2 py-2 text-xs transition-colors ${expanded ? 'bg-accent/40' : 'hover:bg-accent/50'}`}
+                >
+                  <button onClick={() => selectAccount(acc)} className="w-full text-left">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-1.5 font-medium">
+                        {expanded ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
+                        {acc.address}
+                      </span>
+                      <span className={`shrink-0 ${acc.status === 'error' ? 'text-destructive' : 'text-muted-foreground'}`}>{acc.status}</span>
+                    </div>
+                    <div className="pl-[18px] text-muted-foreground">{String((acc.config as Record<string, unknown>)?.host || '')} · {(acc.containers || []).length} folder(s)</div>
+                    {acc.lastError && <div className="pl-[18px] text-destructive">error: {acc.lastError}</div>}
+                  </button>
+
+                  {expanded && (
+                    <div className="mt-2 space-y-3 border-t pt-2">
+                      <div className="space-y-0.5">
+                        {(acc.containers || []).map((c) => (
+                          <div key={c.name} className="flex items-center justify-between gap-2 rounded bg-background/60 px-2 py-1">
+                            <span className="font-mono truncate">{c.name}</span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button title="Sync folder" className="p-1 hover:bg-accent rounded" onClick={() => syncFolder(acc.address, c.name)} disabled={!!runningAction}>
+                                {runningAction === `folder-sync:${acc.address}:${c.name}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                              </button>
+                              <button
+                                title="Remove folder"
+                                className="p-1 hover:bg-destructive/10 text-destructive rounded"
+                                onClick={() => removeBackendContainer(workspaceId, 'imap', acc.address, c.name)
+                                  .then(load)
+                                  .catch((error) => showToast({ title: 'Error', description: error instanceof Error ? error.message : 'Failed to remove folder', variant: 'destructive' }))}
+                                disabled={!!runningAction}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {configForm}
+
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" onClick={handleSave} disabled={isSaving}>
+                          {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} Save
+                        </Button>
+                        <Button size="sm" variant="outline" disabled={!!runningAction} onClick={() => accountAction('test', acc.address)}>
+                          {runningAction === `test:${acc.address}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Mail className="h-3 w-3" />} Test
+                        </Button>
+                        <Button size="sm" variant="outline" disabled={!!runningAction} onClick={() => accountAction('sync', acc.address)}>
+                          {runningAction === `sync:${acc.address}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />} Sync all
+                        </Button>
+                        <Button size="sm" variant="destructive" disabled={!!runningAction} onClick={handleDelete}>
+                          {runningAction === `delete:${acc.address}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />} Delete
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {showNew && (
+        <div className="space-y-3 rounded-md border p-3">
+          <h5 className="text-xs font-medium">New IMAP account</h5>
+          {configForm}
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={handleSave} disabled={isSaving}>
+              {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} Save
+            </Button>
+            <Button size="sm" variant="ghost" onClick={resetForm}>Cancel</Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
