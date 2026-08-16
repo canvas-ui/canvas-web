@@ -16,6 +16,7 @@ import { WORKSPACE_SETTINGS_SECTIONS, resolveWorkspaceSettingsTab, type Workspac
 import { InferdSettingsPanel } from '@/components/workspace/inferd-settings-panel'
 import { HooksPanel } from '@/components/workspace/hooks-panel'
 import { TrashPanel } from '@/components/workspace/trash-panel'
+import { ConnectorsSection } from '@/components/settings/ConnectorsSection'
 import { ImapMailboxesPanel } from '@/components/workspace/imap-mailboxes-panel'
 import { TokenManager } from '@/components/workspace/token-manager'
 import { useToast } from '@/components/ui/use-toast'
@@ -1447,6 +1448,10 @@ export default function WorkspaceSettingsPage() {
             </div>
           </section>
           <AddLocalFolderForm workspaceId={workspaceId} onAdded={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />
+
+          {/* External poll-synced sources (GitHub / Slack / GCal / Teams) —
+              same backends facade, read-only mirrors into the backends tree. */}
+          {workspaceId && <ConnectorsSection workspaceId={workspaceId} />}
 
           {/* Trash is where deleted documents are held before they are purged
               from these same backends — it reads as one story with them. */}

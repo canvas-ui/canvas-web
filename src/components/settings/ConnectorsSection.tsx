@@ -1,0 +1,253 @@
+import { useCallback, useEffect, useState } from 'react'
+import { Icon } from '@iconify/react'
+import { Plus, RefreshCw, Trash2, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { useToast } from '@/components/ui/use-toast'
+import {
+  listBackends, addBackend, removeBackend, syncBackend,
+  type Backend,
+} from '@/services/workspace'
+
+/**
+ * Workspace Settings › Data Backends › Connectors — poll-synced external
+ * sources (GitHub issues, Slack, Google Calendar, MS Teams). Read-only
+ * mirrors into the backends tree; server-side model in canvas-server
+ * docs/connectors.md. Secrets are write-only: the server redacts them to
+ * `true` in reads, and leaving a secret field empty on edit keeps the stored
+ * value.
+ */
+
+interface FieldSpec {
+  key: string
+  label: string
+  placeholder?: string
+  secret?: boolean
+  list?: boolean
+  required?: boolean
+}
+
+const DRIVERS: Record<string, { label: string; icon: string; blurb: string; fields: FieldSpec[] }> = {
+  github: {
+    label: 'GitHub Issues',
+    icon: 'mdi:github',
+    blurb: 'Issues from the listed repos sync as todos. Token optional for public repos.',
+    fields: [
+      { key: 'address', label: 'Account label', placeholder: 'e.g. canvas-ui', required: true },
+      { key: 'token', label: 'Personal access token (optional)', secret: true },
+      { key: 'repos', label: 'Repos (owner/repo, one per line)', placeholder: 'canvas-ui/canvas-server', list: true, required: true },
+    ],
+  },
+  slack: {
+    label: 'Slack',
+    icon: 'mdi:slack',
+    blurb: 'Channel messages sync as message documents. Bot/user token with channels:read + channels:history.',
+    fields: [
+      { key: 'address', label: 'Workspace label', placeholder: 'e.g. acme', required: true },
+      { key: 'token', label: 'Token (xoxb-… / xoxp-…)', secret: true, required: true },
+      { key: 'channels', label: 'Channels (names or ids, empty = all joined)', list: true },
+    ],
+  },
+  gcal: {
+    label: 'Google Calendar',
+    icon: 'mdi:calendar-month',
+    blurb: 'Events sync as calendar entries (recurring series kept as series). Offline-access OAuth credentials.',
+    fields: [
+      { key: 'address', label: 'Account label', placeholder: 'e.g. me-gmail', required: true },
+      { key: 'clientId', label: 'OAuth client id', required: true },
+      { key: 'clientSecret', label: 'OAuth client secret', secret: true, required: true },
+      { key: 'refreshToken', label: 'Refresh token', secret: true, required: true },
+      { key: 'calendars', label: 'Calendar ids (empty = primary)', list: true },
+    ],
+  },
+  teams: {
+    label: 'MS Teams',
+    icon: 'mdi:microsoft-teams',
+    blurb: 'Channel messages via Microsoft Graph (app-only credentials, admin-consented ChannelMessage.Read.All).',
+    fields: [
+      { key: 'address', label: 'Tenant label', placeholder: 'e.g. corp', required: true },
+      { key: 'tenantId', label: 'Tenant id', required: true },
+      { key: 'clientId', label: 'Client id', required: true },
+      { key: 'clientSecret', label: 'Client secret', secret: true, required: true },
+      { key: 'teams', label: 'Team ids (one per line)', list: true, required: true },
+    ],
+  },
+}
+
+function parseList(value: string): string[] {
+  return value.split(/[\n,]/).map((s) => s.trim()).filter(Boolean)
+}
+
+export function ConnectorsSection({ workspaceId }: { workspaceId: string }) {
+  const { showToast } = useToast()
+  const [connectors, setConnectors] = useState<Backend[]>([])
+  const [adding, setAdding] = useState<string | null>(null) // driver being configured
+  const [form, setForm] = useState<Record<string, string>>({})
+  const [busy, setBusy] = useState(false)
+
+  const load = useCallback(async () => {
+    const backends = await listBackends(workspaceId).catch(() => [] as Backend[])
+    setConnectors(backends.filter((b) => b.kind === 'connector'))
+  }, [workspaceId])
+
+  useEffect(() => {
+    let cancelled = false
+    listBackends(workspaceId)
+      .then((backends) => { if (!cancelled) setConnectors(backends.filter((b) => b.kind === 'connector')) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [workspaceId])
+
+  // Freshly added/synced connectors flip status quickly — follow up briefly.
+  const anySyncing = connectors.some((c) => c.status === 'syncing')
+  useEffect(() => {
+    if (!anySyncing) return
+    const timer = setInterval(() => { void load() }, 4000)
+    return () => clearInterval(timer)
+  }, [anySyncing, load])
+
+  const submit = async () => {
+    if (!adding) return
+    const spec = DRIVERS[adding]
+    const config: Record<string, unknown> = {}
+    for (const field of spec.fields) {
+      const raw = (form[field.key] || '').trim()
+      if (!raw) {
+        if (field.required) { showToast({ title: `${field.label} is required`, variant: 'destructive' }); return }
+        continue
+      }
+      config[field.key] = field.list ? parseList(raw) : raw
+    }
+    setBusy(true)
+    try {
+      await addBackend(workspaceId, adding, config)
+      setAdding(null)
+      setForm({})
+      await load()
+      showToast({ title: 'Connector saved — first sync started' })
+    } catch (err) {
+      showToast({ title: 'Failed to save connector', description: err instanceof Error ? err.message : String(err), variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const sync = async (c: Backend) => {
+    try {
+      await syncBackend(workspaceId, c.driver, c.address)
+      showToast({ title: `Syncing ${c.driver}/${c.address}` })
+      setTimeout(() => { void load() }, 1500)
+    } catch (err) {
+      showToast({ title: 'Sync failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' })
+    }
+  }
+
+  const remove = async (c: Backend) => {
+    if (!window.confirm(`Remove ${c.driver}/${c.address}? Synced documents stay in the backends tree until purged.`)) return
+    try {
+      await removeBackend(workspaceId, c.driver, c.address)
+      await load()
+    } catch (err) {
+      showToast({ title: 'Remove failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' })
+    }
+  }
+
+  return (
+    <section className="rounded-lg border p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold">Connectors</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            GitHub issues, Slack, Google Calendar and MS Teams — polled read-only into the backends tree.
+          </p>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={() => { void load() }} title="Refresh">
+          <RefreshCw className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
+      {connectors.length > 0 && (
+        <div className="mt-3 space-y-2">
+          {connectors.map((c) => {
+            const spec = DRIVERS[c.driver]
+            return (
+              <div key={`${c.driver}:${c.address}`} className="rounded-md border p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Icon icon={spec?.icon || 'mdi:cloud-sync'} width={16} height={16} className="shrink-0" />
+                  <span className="text-sm font-medium">{spec?.label || c.driver}</span>
+                  <span className="font-mono text-xs text-muted-foreground">{c.address}</span>
+                  <span className="flex-1" />
+                  <Button type="button" variant="outline" size="sm" disabled={c.status === 'syncing'} onClick={() => { void sync(c) }}>
+                    <RefreshCw className={`mr-1 h-3 w-3 ${c.status === 'syncing' ? 'animate-spin' : ''}`} />
+                    {c.status === 'syncing' ? 'Syncing' : 'Sync now'}
+                  </Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => { void remove(c) }} title="Remove connector">
+                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                  </Button>
+                </div>
+                <div className="mt-1.5 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                  <span>status: {c.status}</span>
+                  {c.lastSyncAt && <span>last sync: {new Date(c.lastSyncAt).toLocaleString()}</span>}
+                  {c.treePath && <span className="font-mono">{c.treePath}</span>}
+                </div>
+                {c.lastError && <p className="mt-1 text-[11px] text-destructive">{c.lastError}</p>}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {adding ? (
+        <div className="mt-3 rounded-md border p-3">
+          <div className="flex items-center gap-2">
+            <Icon icon={DRIVERS[adding].icon} width={16} height={16} />
+            <span className="text-sm font-medium">{DRIVERS[adding].label}</span>
+            <span className="flex-1" />
+            <button type="button" onClick={() => { setAdding(null); setForm({}) }} className="p-1 text-muted-foreground hover:text-foreground" aria-label="Cancel">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">{DRIVERS[adding].blurb}</p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {DRIVERS[adding].fields.map((field) => (
+              <label key={field.key} className={`text-xs ${field.list ? 'sm:col-span-2' : ''}`}>
+                <span className="text-muted-foreground">{field.label}</span>
+                {field.list ? (
+                  <textarea
+                    value={form[field.key] || ''}
+                    onChange={(e) => setForm((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                    placeholder={field.placeholder}
+                    rows={2}
+                    className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  />
+                ) : (
+                  <Input
+                    type={field.secret ? 'password' : 'text'}
+                    value={form[field.key] || ''}
+                    onChange={(e) => setForm((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                    placeholder={field.placeholder}
+                    autoComplete="off"
+                    className="mt-1 h-8 text-xs"
+                  />
+                )}
+              </label>
+            ))}
+          </div>
+          <Button type="button" size="sm" className="mt-3" disabled={busy} onClick={() => { void submit() }}>
+            {busy ? 'Saving…' : 'Save & sync'}
+          </Button>
+        </div>
+      ) : (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {Object.entries(DRIVERS).map(([driver, spec]) => (
+            <Button key={driver} type="button" variant="outline" size="sm" onClick={() => { setAdding(driver); setForm({}) }}>
+              <Plus className="mr-1 h-3 w-3" />
+              <Icon icon={spec.icon} width={14} height={14} className="mr-1" />
+              {spec.label}
+            </Button>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}

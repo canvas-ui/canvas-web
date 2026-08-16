@@ -1022,7 +1022,7 @@ export interface WorkspaceDiskUsage {
 export interface Backend {
   driver: string;
   address: string;
-  kind: 'storage' | 'messages' | 'hybrid';
+  kind: 'storage' | 'messages' | 'connector' | 'hybrid';
   enabled: boolean;
   status: 'running' | 'idle' | 'stopped' | 'error' | 'syncing' | string;
   // Live resync state (initial/catch-up scan running in the background).
