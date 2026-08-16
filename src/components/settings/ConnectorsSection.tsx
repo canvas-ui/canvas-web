@@ -35,8 +35,9 @@ const DRIVERS: Record<string, { label: string; icon: string; blurb: string; fiel
     blurb: 'Issues from the listed repos sync as todos. Token optional for public repos.',
     fields: [
       { key: 'address', label: 'Account label', placeholder: 'e.g. canvas-ui', required: true },
-      { key: 'token', label: 'Personal access token (optional)', secret: true },
+      { key: 'token', label: 'Personal access token (optional for read, required for write-back)', secret: true },
       { key: 'repos', label: 'Repos (owner/repo, one per line)', placeholder: 'canvas-ui/canvas-server', list: true, required: true },
+      { key: 'writeBack', label: 'Allow managing issues from Canvas (create / edit / close — needs a PAT with repo scope)', bool: true },
     ],
   },
   slack: {
@@ -132,8 +133,8 @@ export function ConnectorsSection({ workspaceId }: { workspaceId: string }) {
       }
       config[field.key] = field.list ? parseList(raw) : (field.bool ? raw === 'true' : raw)
     }
-    // caldav: the UI asks the positive question; the server flag is readOnly.
-    if (adding === 'caldav') {
+    // The UI asks the positive question; the server flag is readOnly.
+    if ('writeBack' in config || DRIVERS[adding].fields.some((f) => f.key === 'writeBack')) {
       config.readOnly = config.writeBack !== true
       delete config.writeBack
     }

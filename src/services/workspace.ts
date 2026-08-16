@@ -994,15 +994,21 @@ export interface BackendCapabilities {
   containers: boolean;
   mutableContainers: boolean;
   deleteObject: boolean;
+  // Connectors: write-back (create/update/delete remote objects) enabled.
+  write?: boolean;
 }
 
 export interface BackendContainer {
   name: string;
+  id?: string;
   mailboxId?: string;
   enabled?: boolean;
   status?: string;
   lastSyncAt?: string | null;
   lastError?: string | null;
+  // Connector containers: write-back enabled (rw backend) — destination
+  // pickers (todo → GitHub repo, event → calendar) read this.
+  writable?: boolean;
 }
 
 export interface BackendDiskUsage {
@@ -1126,6 +1132,16 @@ export async function testBackend(workspaceId: string, driver: string, address: 
 export async function listBackendContainers(workspaceId: string, driver: string, address: string): Promise<BackendContainer[]> {
   const response = await api.get<BackendContainer[]>(`${backendPath(workspaceId, driver, address)}/containers`);
   return response || [];
+}
+
+/** Write-back: create a document in a connector container (GitHub issue, calendar event). */
+export async function createBackendContainerDocument(
+  workspaceId: string, driver: string, address: string, container: string,
+  payload: Record<string, unknown>,
+): Promise<{ uid?: string; href?: string; docId?: number | null }> {
+  const response = await api.post<{ uid?: string; href?: string; docId?: number | null }>(
+    `${backendPath(workspaceId, driver, address)}/containers/${encodeURIComponent(container)}/documents`, payload);
+  return response;
 }
 
 export async function syncBackendContainer(workspaceId: string, driver: string, address: string, name: string): Promise<unknown> {

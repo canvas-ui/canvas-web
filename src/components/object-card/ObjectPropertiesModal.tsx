@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Maximize2, Minimize2 } from 'lucide-react'
+import { ExternalLink, Maximize2, Minimize2 } from 'lucide-react'
 import { ObjectPropertiesCard, type ObjectCardTab } from './ObjectPropertiesCard'
-import { getDocumentDisplayInfo } from '@/lib/document-display'
+import { getDocumentDisplayInfo, getExternalUrl } from '@/lib/document-display'
 import { useToolboxOptional } from '@/components/toolbox/use-toolbox'
 import { cn } from '@/lib/utils'
 import type { Document } from '@/types/workspace'
@@ -62,6 +62,23 @@ export function ObjectPropertiesModal({ document, isOpen, onClose, workspaceId, 
             <p className="text-xs text-muted-foreground">ID: {document.id} · {document.schema}</p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
+            {/* Synced/linked documents keep a web permalink (GitHub issue,
+                calendar event, tab URL) — surface it right in the header. */}
+            {(() => {
+              const externalUrl = getExternalUrl(document)
+              return externalUrl ? (
+                <a
+                  href={externalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-sm p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  title={`Open original — ${externalUrl}`}
+                  aria-label="Open original"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              ) : null
+            })()}
             <button
               onClick={() => setFullscreen(!fullscreen)}
               className="hidden rounded-sm p-2 hover:bg-muted md:block"

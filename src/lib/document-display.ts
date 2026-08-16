@@ -118,6 +118,22 @@ export function getLocationFilename(document: Document): string {
   return ''
 }
 
+/**
+ * The document's original home on the web, if it has one: a tab/link's own
+ * URL, a connector doc's permalink (GitHub issue page, calendar event link…),
+ * or any https location recorded on it. Null for purely local documents.
+ */
+export function getExternalUrl(document: Document): string | null {
+  const data = document.data as { url?: unknown; htmlUrl?: unknown; htmlLink?: unknown }
+  for (const candidate of [data.url, data.htmlUrl, data.htmlLink]) {
+    if (typeof candidate === 'string' && /^https?:\/\//i.test(candidate)) return candidate
+  }
+  for (const location of document.locations || []) {
+    if (typeof location?.url === 'string' && /^https?:\/\//i.test(location.url)) return location.url
+  }
+  return null
+}
+
 export function getDocumentDisplayInfo(document: Document): {
   title: string
   preview: string
