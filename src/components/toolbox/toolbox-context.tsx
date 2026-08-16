@@ -14,9 +14,10 @@ import {
   listWorkspaceBitmaps,
   deleteWorkspaceBitmap,
   deleteWorkspaceDataset,
-  listWorkspaceTimelines,
+  listWorkspaceTimelinesVerbose,
   createWorkspaceTimeline,
   deleteWorkspaceTimeline,
+  setWorkspaceTimelineQuantum,
   getCachedWorkspaceTreeByName,
   invalidateWorkspaceTreeCache,
   updateWorkspacePath,
@@ -84,6 +85,8 @@ export interface ToolboxState {
   bitmapsLoading: boolean
   // Timelines
   availableTimelines: string[]
+  // Membership quantum per timeline ('Gyr'…'day') — parametrized timelines.
+  timelineQuantums: Record<string, string>
   timelinesLoading: boolean
 }
 
@@ -117,7 +120,8 @@ type ToolboxAction =
   | { type: 'SET_SAVING'; isSaving: boolean }
   | { type: 'SET_BITMAPS'; keys: string[] }
   | { type: 'SET_BITMAPS_LOADING'; loading: boolean }
-  | { type: 'SET_TIMELINES'; names: string[] }
+  | { type: 'SET_TIMELINES'; names: string[]; quantums?: Record<string, string> }
+  | { type: 'SET_TIMELINE_QUANTUM'; name: string; quantum: string }
   | { type: 'SET_TIMELINES_LOADING'; loading: boolean }
 
 // ─── Reducer ──────────────────────────────────────────────────────────────────
@@ -162,6 +166,7 @@ const initialState: ToolboxState = {
   availableBitmaps: [],
   bitmapsLoading: false,
   availableTimelines: [],
+  timelineQuantums: {},
   timelinesLoading: false,
 }
 
@@ -231,7 +236,14 @@ function toolboxReducer(state: ToolboxState, action: ToolboxAction): ToolboxStat
     case 'SET_BITMAPS_LOADING':
       return { ...state, bitmapsLoading: action.loading }
     case 'SET_TIMELINES':
-      return { ...state, availableTimelines: action.names, timelinesLoading: false }
+      return {
+        ...state,
+        availableTimelines: action.names,
+        timelineQuantums: action.quantums ?? state.timelineQuantums,
+        timelinesLoading: false,
+      }
+    case 'SET_TIMELINE_QUANTUM':
+      return { ...state, timelineQuantums: { ...state.timelineQuantums, [action.name]: action.quantum } }
     case 'SET_TIMELINES_LOADING':
       return { ...state, timelinesLoading: action.loading }
     default:
@@ -352,8 +364,9 @@ export interface ToolboxContextValue {
   saveFilters: () => Promise<void>
   deleteBitmap: (key: string) => Promise<void>
   deleteDataset: (key: string) => Promise<number>
-  createTimeline: (name: string) => Promise<void>
+  createTimeline: (name: string, quantum?: string) => Promise<void>
   deleteTimeline: (name: string) => Promise<void>
+  setTimelineQuantum: (name: string, quantum: string) => Promise<string>
   refreshTimelines: () => void
 }
 
@@ -433,8 +446,12 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
     const wn = state.activeWorkspaceName
     if (!wn) return
     dispatch({ type: 'SET_TIMELINES_LOADING', loading: true })
-    listWorkspaceTimelines(wn).then(names => {
-      dispatch({ type: 'SET_TIMELINES', names })
+    listWorkspaceTimelinesVerbose(wn).then(infos => {
+      dispatch({
+        type: 'SET_TIMELINES',
+        names: infos.map(t => t.name),
+        quantums: Object.fromEntries(infos.filter(t => t.quantum).map(t => [t.name, t.quantum as string])),
+      })
     })
   }, [state.activeWorkspaceName])
 
@@ -663,17 +680,31 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
     const wn = stateRef.current.activeWorkspaceName
     if (!wn) return
     dispatch({ type: 'SET_TIMELINES_LOADING', loading: true })
-    listWorkspaceTimelines(wn).then(names => {
-      dispatch({ type: 'SET_TIMELINES', names })
+    listWorkspaceTimelinesVerbose(wn).then(infos => {
+      dispatch({
+        type: 'SET_TIMELINES',
+        names: infos.map(t => t.name),
+        quantums: Object.fromEntries(infos.filter(t => t.quantum).map(t => [t.name, t.quantum as string])),
+      })
     })
   }, [])
 
-  const createTimeline = useCallback(async (name: string) => {
+  const createTimeline = useCallback(async (name: string, quantum?: string) => {
     const wn = stateRef.current.activeWorkspaceName
     if (!wn) throw new Error('No active workspace')
-    await createWorkspaceTimeline(wn, name)
+    await createWorkspaceTimeline(wn, name, quantum)
     refreshTimelines()
   }, [refreshTimelines])
+
+  // Set a timeline's membership quantum (server persists it in workspace.json).
+  // Existing cells are not re-tiled — the tab warns for populated timelines.
+  const setTimelineQuantum = useCallback(async (name: string, quantum: string) => {
+    const wn = stateRef.current.activeWorkspaceName
+    if (!wn) throw new Error('No active workspace')
+    const applied = await setWorkspaceTimelineQuantum(wn, name, quantum)
+    dispatch({ type: 'SET_TIMELINE_QUANTUM', name, quantum: applied })
+    return applied
+  }, [])
 
   const deleteTimeline = useCallback(async (name: string) => {
     const wn = stateRef.current.activeWorkspaceName
@@ -697,7 +728,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
 
   return (
     <ToolboxCtx.Provider
-      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, closeAdd, openEdit, setToolsTab, openApplet, setAccentColor, setFilters, setFeatureToggle, setFeatureMode, clearFilters, hasActiveFilters, setTimelineFilter, setGeoBBox, setLensGps, setLensIds, setGeoSelection, setMapDocuments, setSort, saveFilters, deleteBitmap, deleteDataset, createTimeline, deleteTimeline, refreshTimelines }}
+      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, closeAdd, openEdit, setToolsTab, openApplet, setAccentColor, setFilters, setFeatureToggle, setFeatureMode, clearFilters, hasActiveFilters, setTimelineFilter, setGeoBBox, setLensGps, setLensIds, setGeoSelection, setMapDocuments, setSort, saveFilters, deleteBitmap, deleteDataset, createTimeline, deleteTimeline, setTimelineQuantum, refreshTimelines }}
     >
       {children}
     </ToolboxCtx.Provider>

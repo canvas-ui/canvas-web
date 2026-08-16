@@ -1361,9 +1361,35 @@ export async function listWorkspaceTimelines(workspaceId: string): Promise<strin
   }
 }
 
-export async function createWorkspaceTimeline(workspaceId: string, name: string): Promise<TimelineInfo> {
-  const res = await api.post<TimelineInfo>(timelineBase(workspaceId), { name })
+// Verbose listing: one call returns each timeline with its membership quantum
+// ('Gyr'…'day') — the parametrized-timeline analog of the plain name list.
+export async function listWorkspaceTimelinesVerbose(workspaceId: string): Promise<TimelineInfo[]> {
+  try {
+    const res = await api.get<TimelineInfo[]>(`${timelineBase(workspaceId)}?verbose=true`)
+    return res || []
+  } catch {
+    return []
+  }
+}
+
+export async function createWorkspaceTimeline(workspaceId: string, name: string, quantum?: string): Promise<TimelineInfo> {
+  const res = await api.post<TimelineInfo>(timelineBase(workspaceId), quantum ? { name, quantum } : { name })
   return res
+}
+
+// Set a timeline's membership quantum (persisted server-side in workspace.json
+// and applied to the live index). Existing membership cells are NOT re-tiled —
+// set the quantum before ingesting into the timeline where possible.
+export async function setWorkspaceTimelineQuantum(
+  workspaceId: string,
+  name: string,
+  quantum: string,
+): Promise<string> {
+  const res = await api.put<{ name: string; quantum: string }>(
+    `${timelineBase(workspaceId)}/${encodeURIComponent(name)}/quantum`,
+    { quantum },
+  )
+  return res?.quantum ?? quantum
 }
 
 export async function deleteWorkspaceTimeline(workspaceId: string, name: string): Promise<boolean> {

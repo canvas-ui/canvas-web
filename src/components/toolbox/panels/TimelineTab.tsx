@@ -10,7 +10,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { timelineColor } from '@/lib/timeline-meta'
 import { onAccentTextClass } from '@/utils/color'
 import { fetchTimelineHistogram, type TimelineHistogramBucket } from '@/services/workspace'
-import { buildGeoFilters, getTimelineRanges, type TimelineRange } from '@/types/workspace'
+import { buildGeoFilters, getTimelineRanges, TIMELINE_QUANTA, DEFAULT_TIMELINE_QUANTUM, type TimelineRange } from '@/types/workspace'
 
 // ─── Quick filter matrix ──────────────────────────────────────────────────────
 // Tokens must match the server's CRUD_TIMEFRAMES (synapsd filters.js) — named
@@ -603,10 +603,11 @@ function TimelineToggle({ label, checked, onChange, color }: TimelineToggleProps
 // ─── Timeline tab ─────────────────────────────────────────────────────────────
 
 export function TimelineTab() {
-  const { state, setTimelineFilter, createTimeline, deleteTimeline, refreshTimelines } = useToolbox()
+  const { state, setTimelineFilter, createTimeline, deleteTimeline, setTimelineQuantum, refreshTimelines } = useToolbox()
   const { timeline } = state.filters
-  const { availableTimelines, timelinesLoading } = state
+  const { availableTimelines, timelineQuantums, timelinesLoading } = state
   const [newTimelineName, setNewTimelineName] = useState('')
+  const [newTimelineQuantum, setNewTimelineQuantum] = useState<string>(DEFAULT_TIMELINE_QUANTUM)
   const [creatingTimeline, setCreatingTimeline] = useState(false)
   const [deletingTimeline, setDeletingTimeline] = useState<string | null>(null)
   const [specMode, setSpecMode] = useState<'quick' | 'calendar'>('quick')
@@ -639,13 +640,25 @@ export function TimelineTab() {
     if (!name) return
     setCreatingTimeline(true)
     try {
-      await createTimeline(name)
+      // Quantum is passed at creation (before any entry lands): membership
+      // cells are tiled at the quantum in force when they are written.
+      await createTimeline(name, newTimelineQuantum !== DEFAULT_TIMELINE_QUANTUM ? newTimelineQuantum : undefined)
       setNewTimelineName('')
+      setNewTimelineQuantum(DEFAULT_TIMELINE_QUANTUM)
       showToast({ title: 'Timeline created', description: name })
     } catch (e) {
       showToast({ title: 'Failed to create timeline', description: e instanceof Error ? e.message : String(e), variant: 'destructive' })
     } finally {
       setCreatingTimeline(false)
+    }
+  }
+
+  const handleQuantumChange = async (name: string, quantum: string) => {
+    try {
+      const applied = await setTimelineQuantum(name, quantum)
+      showToast({ title: 'Quantum updated', description: `${name} → ${applied}. New entries tile at ${applied}; existing ones keep their cells.` })
+    } catch (e) {
+      showToast({ title: 'Failed to set quantum', description: e instanceof Error ? e.message : String(e), variant: 'destructive' })
     }
   }
 
@@ -902,6 +915,17 @@ export function TimelineTab() {
                     <span className="flex-1 text-sm text-foreground truncate select-none">
                       {name}
                     </span>
+                    {/* Membership quantum — the timeline's finest granularity.
+                        Changing it re-tiles NEW entries only, so the toast says so. */}
+                    <select
+                      value={timelineQuantums[name] ?? DEFAULT_TIMELINE_QUANTUM}
+                      onChange={(e) => { e.stopPropagation(); handleQuantumChange(name, e.target.value) }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="shrink-0 text-[10px] px-1 py-0.5 rounded bg-muted text-muted-foreground border border-transparent hover:border-ring/40 focus:border-ring focus:outline-none cursor-pointer"
+                      title={`Membership quantum for "${name}" (finest cell granularity; new entries only)`}
+                    >
+                      {TIMELINE_QUANTA.map(q => <option key={q} value={q}>{q}</option>)}
+                    </select>
                     <button
                       type="button"
                       disabled={deletingTimeline === name}
@@ -929,6 +953,14 @@ export function TimelineTab() {
               placeholder="New timeline name…"
               className="flex-1 px-2 py-1 text-xs rounded-md bg-muted border border-transparent focus:border-ring focus:outline-none"
             />
+            <select
+              value={newTimelineQuantum}
+              onChange={e => setNewTimelineQuantum(e.target.value)}
+              className="shrink-0 px-1.5 py-1 text-xs rounded-md bg-muted text-muted-foreground border border-transparent focus:border-ring focus:outline-none cursor-pointer"
+              title="Membership quantum: the timeline's finest granularity (day for calendars, year for historical corpora, Kyr/Myr/Gyr for deep time)"
+            >
+              {TIMELINE_QUANTA.map(q => <option key={q} value={q}>{q}</option>)}
+            </select>
             <button
               type="button"
               onClick={handleCreateTimeline}

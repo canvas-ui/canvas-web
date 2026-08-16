@@ -180,9 +180,34 @@ export function buildDatetimeFilters(timeline: ToolboxTimelineFilters): string[]
 }
 
 // Timeline types
+
+// Membership quantum: the finest granularity a timeline's multi-position
+// membership plane tiles at (synapsd time-quantum, coarse→fine). Precision IS
+// the quantum — queries round outward to whole cells — so 'day' suits calendar
+// data, 'year' a wikipedia-style corpus, Kyr/Myr/Gyr the deep-time axes.
+// Sub-day quantums are rejected server-side until an hour/minute tier exists.
+export const TIMELINE_QUANTA = ['Gyr', 'Myr', 'Kyr', 'year', 'month', 'day'] as const
+export type TimelineQuantum = typeof TIMELINE_QUANTA[number]
+export const DEFAULT_TIMELINE_QUANTUM: TimelineQuantum = 'day'
+
 export interface TimelineInfo {
   name: string
   scales?: string[]
+  quantum?: TimelineQuantum | string
+}
+
+// One document position on a timeline (documents may declare several per
+// timeline). The entry flagged `primary: true` — or the first — is the
+// document's sortable interval; the rest are membership positions. `ref` is an
+// opaque anchor into the document's content, stored and returned verbatim.
+export interface TimelineEntry {
+  timeline?: string
+  name?: string
+  start: string | number
+  end?: string | number | null
+  scale?: string
+  primary?: boolean
+  ref?: string
 }
 
 export interface TimelineQueryInterval {
@@ -192,7 +217,8 @@ export interface TimelineQueryInterval {
 }
 
 export interface TimelineQueryOptions {
-  mode?: 'union' | 'layers'
+  // 'grouped' = one id list per timeline, scales pre-unioned (zeitgeist).
+  mode?: 'union' | 'layers' | 'grouped'
   scales?: string[]
 }
 
