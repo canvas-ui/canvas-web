@@ -561,8 +561,10 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
   const tabUrl = isTabDocument ? document.data.url : null
   const display = getDocumentDisplayInfo(document)
   const isImage = isImageDocument(document)
-  // Small row preview — 128px render is plenty for a 56px square.
-  const { blobUrl: rowThumbUrl } = useDocumentThumbnail(workspaceId ?? '', document.id, 128, { enabled: isImage })
+  const hasThumb = isImage || isPdfDocument(document)
+  // Small row preview — 128px render is plenty for a 56px square. Raw PDF
+  // bytes can't render in an <img>, so PDFs skip the full-bytes fallback.
+  const { blobUrl: rowThumbUrl, loading: rowThumbLoading } = useDocumentThumbnail(workspaceId ?? '', document.id, 128, { enabled: hasThumb, blobFallback: isImage })
 
   const handleDragStart = (e: React.DragEvent) => {
     onDragStart?.(e, document.id);
@@ -610,12 +612,14 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
         onDragStart={handleDragStart}
       >
         <div className="flex items-start justify-between gap-4">
-          {isImage && (
+          {hasThumb && (
             <div className="h-14 w-14 shrink-0 overflow-hidden rounded-md border bg-muted/40">
               {rowThumbUrl ? (
                 <img src={rowThumbUrl} alt={display.title} loading="lazy" className="h-full w-full object-cover" />
-              ) : (
+              ) : rowThumbLoading ? (
                 <div className="h-full w-full animate-pulse bg-muted/60" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center"><DocumentIcon document={document} /></div>
               )}
             </div>
           )}
@@ -681,6 +685,13 @@ function isVideoDocument(document: Document): boolean {
     && String(document.metadata?.contentType || '').startsWith('video/')
 }
 
+// PDFs get a server-rendered first-page thumbnail through the same endpoint
+// as images (webp, cached content-addressed server-side).
+function isPdfDocument(document: Document): boolean {
+  return document.schema === 'data/schema/file'
+    && String(document.metadata?.contentType || '') === 'application/pdf'
+}
+
 // First-frame preview for video tiles: a bare <video preload="metadata"> —
 // the browser fetches only the header + first frame over the existing
 // range-capable content endpoint (media-ticket auth via useDocumentStreamSrc).
@@ -709,13 +720,16 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
   const tabUrl = isTabDocument ? document.data.url : null
   const isImage = isImageDocument(document)
   const isVideo = isVideoDocument(document)
+  // Images and PDFs share the thumbnail pipeline (PDFs render page 1
+  // server-side); a PDF with unreachable bytes falls back to the icon tile.
+  const hasThumb = isImage || isPdfDocument(document)
   const display = getDocumentDisplayInfo(document)
   // Notes, tabs/URLs, emails, todos: the content IS the picture — render a
   // text tile (title + clamped body, or just title + status subtitle) instead
   // of a giant icon. Files keep the icon tile.
-  const isTextTile = !isImage && document.schema !== 'data/schema/file' && !!(display.preview || display.subtitle)
+  const isTextTile = !hasThumb && document.schema !== 'data/schema/file' && !!(display.preview || display.subtitle)
   // 768px render keeps the larger (300px column, retina) photo tiles crisp.
-  const { blobUrl, loading } = useDocumentThumbnail(workspaceId ?? '', document.id, 768, { enabled: isImage })
+  const { blobUrl, loading } = useDocumentThumbnail(workspaceId ?? '', document.id, 768, { enabled: hasThumb, blobFallback: isImage })
 
   const handleClick = (e: React.MouseEvent) => {
     const isCtrlClick = e.ctrlKey || e.metaKey
@@ -744,9 +758,9 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
         />
         {/* Images, videos and text tiles take their natural height (masonry
             columns); icon tiles stay square. */}
-        <div className={`relative w-full bg-muted/40 ${(isImage && blobUrl) || isTextTile || (isVideo && workspaceId) ? '' : 'aspect-square'}`}>
-          {isImage && loading && <div className="absolute inset-0 animate-pulse bg-muted/60" />}
-          {isImage && blobUrl ? (
+        <div className={`relative w-full bg-muted/40 ${(hasThumb && blobUrl) || isTextTile || (isVideo && workspaceId) ? '' : 'aspect-square'}`}>
+          {hasThumb && loading && <div className="absolute inset-0 animate-pulse bg-muted/60" />}
+          {hasThumb && blobUrl ? (
             <img src={blobUrl} alt={display.title} loading="lazy" className="block h-auto w-full" />
           ) : isVideo && workspaceId ? (
             <TileVideoPreview

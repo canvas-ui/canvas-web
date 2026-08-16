@@ -812,7 +812,7 @@ function buildContentApiPath(workspaceId: string, documentId: number | string, o
   return `${API_ROUTES.workspaces}/${workspaceId}/documents/${documentId}/content${qs ? `?${qs}` : ''}`
 }
 
-/** Authed fetch of the on-demand server thumbnail (image docs only). */
+/** Authed fetch of the on-demand server thumbnail (image and PDF docs). */
 export async function fetchDocumentThumbnail(workspaceId: string, documentId: number | string, size = 256): Promise<{ blob: Blob; mime: string }> {
   const token = localStorage.getItem('authToken')
   const res = await fetch(`${API_ROUTES.workspaces}/${workspaceId}/documents/${documentId}/thumbnail?size=${size}`, {

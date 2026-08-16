@@ -1220,7 +1220,7 @@ export default function WorkspaceDetailPage() {
 
   const currentCanvas = (
     <DefaultCanvas
-      urlType={isLayerView ? (selectedTreeName === 'directory' ? 'directory-layer' : 'context-layer') : (selectedNodeType === 'canvas' ? 'canvas' : selectedTreeName === 'directory' ? 'directory' : 'context')}
+      urlType={isLayerView ? (treeTypeForName(selectedTreeName) === 'directory' ? 'directory-layer' : 'context-layer') : (selectedNodeType === 'canvas' ? 'canvas' : treeTypeForName(selectedTreeName) === 'directory' ? 'directory' : 'context')}
       urlDisplay={urlDisplay}
       contextPath={selectedPath}
       treeName={selectedTreeName}

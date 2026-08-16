@@ -22,6 +22,25 @@ export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [adding, setAdding] = useState(false)
+  // Native HTML5 drag-to-reorder (same approach as MenuTreeView): the order
+  // is persisted once, on drop.
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [dropTarget, setDropTarget] = useState<{ id: string; before: boolean } | null>(null)
+
+  const endDrag = () => { setDragId(null); setDropTarget(null) }
+
+  const handleDrop = () => {
+    if (dragId && dropTarget && dragId !== dropTarget.id) {
+      const dragged = views.find((v) => v.id === dragId)
+      const next = views.filter((v) => v.id !== dragId)
+      const idx = next.findIndex((v) => v.id === dropTarget.id)
+      if (dragged && idx >= 0) {
+        next.splice(dropTarget.before ? idx : idx + 1, 0, dragged)
+        if (next.some((v, i) => v.id !== views[i].id)) onSave(next)
+      }
+    }
+    endDrag()
+  }
 
   const commitRename = () => {
     if (!editingId) return
@@ -80,7 +99,23 @@ export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = 
             type="button"
             onClick={() => onSelect(view.id)}
             onDoubleClick={() => { if (!readOnly) { setEditingId(view.id); setDraft(view.name) } }}
-            title={readOnly ? view.name : `${view.name} — double-click to rename`}
+            title={readOnly ? view.name : `${view.name} — double-click to rename, drag to reorder`}
+            draggable={!readOnly}
+            onDragStart={(e) => {
+              e.dataTransfer.setData('text/plain', view.name)
+              e.dataTransfer.effectAllowed = 'move'
+              setDragId(view.id)
+            }}
+            onDragOver={(e) => {
+              if (!dragId || dragId === view.id) return
+              e.preventDefault()
+              e.dataTransfer.dropEffect = 'move'
+              const rect = e.currentTarget.getBoundingClientRect()
+              const before = e.clientX < rect.left + rect.width / 2
+              setDropTarget((prev) => (prev?.id === view.id && prev.before === before ? prev : { id: view.id, before }))
+            }}
+            onDrop={(e) => { e.preventDefault(); handleDrop() }}
+            onDragEnd={endDrag}
             className={cn(
               'group flex h-8 shrink-0 items-center gap-1.5 rounded-t-md px-3 text-xs transition-colors',
               isActive
@@ -88,6 +123,9 @@ export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = 
                 // the tab visibly "opens into" the content below the line.
                 ? 'relative z-[1] border border-b-0 border-border bg-background font-medium text-foreground'
                 : 'mb-[3px] border border-b-0 border-transparent bg-muted/40 text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+              dragId === view.id && 'opacity-50',
+              // Insertion indicator on the side the drop would land on.
+              dropTarget?.id === view.id && (dropTarget.before ? 'border-l-2 border-l-primary' : 'border-r-2 border-r-primary'),
             )}
           >
             {view.kind === 'columns' ? <Columns3 className="h-3 w-3 shrink-0" /> : <LayoutList className="h-3 w-3 shrink-0" />}

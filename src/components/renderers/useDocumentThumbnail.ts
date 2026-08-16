@@ -10,11 +10,13 @@ interface State {
 // Server-side thumbnail (on-demand sharp → stored.cache) with graceful
 // fallback to the full-size bytes when no thumbnail is available (non-image,
 // older server, generation failure). Share-aware like useDocumentBlobUrl.
+// Pass blobFallback: false when the raw bytes are not renderable in an <img>
+// (PDFs) — a failed thumbnail then reports error instead of a broken image.
 export function useDocumentThumbnail(
   workspaceId: string,
   documentId: number | string,
   size = 256,
-  { enabled = true }: { enabled?: boolean } = {},
+  { enabled = true, blobFallback = true }: { enabled?: boolean; blobFallback?: boolean } = {},
 ): State {
   const { isPublic, fetchBlob, fetchThumbnail } = useDocumentContent(workspaceId)
   const fetchKey = `${isPublic ? 'pub' : 'ws'}:${workspaceId}:${documentId}:${size}:${enabled}`
@@ -31,7 +33,7 @@ export function useDocumentThumbnail(
     let createdUrl: string | null = null
 
     fetchThumbnail(documentId, size)
-      .catch(() => fetchBlob(documentId)) // fallback: full-size bytes
+      .catch((e) => { if (!blobFallback) throw e; return fetchBlob(documentId) }) // fallback: full-size bytes
       .then(({ blob }) => {
         if (cancelled) return
         createdUrl = URL.createObjectURL(blob)
