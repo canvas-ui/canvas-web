@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Plus, X, LayoutList, Columns3 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { relativeLuminance } from '@/utils/color'
 import { DEFAULT_VIEW, defaultBoardColumns, type ContentView, type ContentViewKind } from './content-views'
 
 /**
@@ -16,9 +17,20 @@ interface ContentViewTabsProps {
   onSave: (views: ContentView[], nextActiveId?: string) => void
   readOnly?: boolean
   className?: string
+  /**
+   * Workspace/context accent the host's divider is painted with — the active
+   * tab fills with it so it visibly grows out of the line. A user-picked hex,
+   * not a theme token: text contrast is derived from its own luminance.
+   */
+  accentColor?: string
 }
 
-export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = false, className }: ContentViewTabsProps) {
+export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = false, className, accentColor }: ContentViewTabsProps) {
+  // Full-strength contrast (unlike onAccentTextClass's muted glyphs): the tab
+  // label is primary UI, so it goes plain black/white on the accent fill.
+  const accentTextClass = accentColor
+    ? ((relativeLuminance(accentColor) ?? 0) > 0.5 ? 'text-black' : 'text-white')
+    : ''
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [adding, setAdding] = useState(false)
@@ -121,12 +133,19 @@ export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = 
               isActive
                 // Opaque bg + no bottom border + z above the host's divider =
                 // the tab visibly "opens into" the content below the line.
-                ? 'relative z-[1] border border-b-0 border-border bg-background font-medium text-foreground'
+                // With an accent it fills with the divider's own color.
+                ? cn('relative z-[1] border border-b-0 font-medium',
+                    accentColor ? accentTextClass : 'border-border bg-background text-foreground')
                 : 'mb-[3px] border border-b-0 border-transparent bg-muted/40 text-muted-foreground hover:bg-accent/60 hover:text-foreground',
               dragId === view.id && 'opacity-50',
               // Insertion indicator on the side the drop would land on.
               dropTarget?.id === view.id && (dropTarget.before ? 'border-l-2 border-l-primary' : 'border-r-2 border-r-primary'),
             )}
+            // Inline borderColor would trump the drop-indicator classes, so
+            // it is skipped while this tab is the drag target.
+            style={isActive && accentColor
+              ? { backgroundColor: accentColor, ...(dropTarget?.id === view.id ? {} : { borderColor: accentColor }) }
+              : undefined}
           >
             {view.kind === 'columns' ? <Columns3 className="h-3 w-3 shrink-0" /> : <LayoutList className="h-3 w-3 shrink-0" />}
             <span className="max-w-32 truncate">{view.name}</span>

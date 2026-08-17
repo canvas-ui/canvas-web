@@ -522,6 +522,7 @@ export default function ContextDetailPage() {
               style={accent ? { backgroundColor: accent } : undefined}
             />
             <ContentViewTabs
+              accentColor={accent}
               views={contentViews}
               activeId={activeContentViewId}
               onSelect={selectContentView}
@@ -554,6 +555,7 @@ export default function ContextDetailPage() {
           <>
             <ContentViewTabs
               className="min-w-0 flex-1 self-stretch max-sm:hidden"
+              accentColor={accent}
               views={contentViews}
               activeId={activeContentViewId}
               onSelect={selectContentView}

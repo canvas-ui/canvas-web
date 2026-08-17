@@ -1330,6 +1330,7 @@ export default function WorkspaceDetailPage() {
               style={visibleAccentColor(workspace.color) ? { backgroundColor: visibleAccentColor(workspace.color)! } : undefined}
             />
             <ContentViewTabs
+              accentColor={visibleAccentColor(workspace.color)}
               views={contentViews}
               activeId={activeContentViewId}
               onSelect={selectContentView}
@@ -1377,6 +1378,7 @@ export default function WorkspaceDetailPage() {
           <>
             <ContentViewTabs
               className="min-w-0 flex-1 self-stretch max-sm:hidden"
+              accentColor={visibleAccentColor(workspace.color)}
               views={contentViews}
               activeId={activeContentViewId}
               onSelect={selectContentView}

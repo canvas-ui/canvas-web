@@ -27,6 +27,7 @@ export function ContextM2Detail() {
   const [selectedPath, setSelectedPath] = useState('/')
   const [pendingPath, setPendingPath] = useState<string | null>(null)
   const [isLoadingTree, setIsLoadingTree] = useState(false)
+  const [treeError, setTreeError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
 
   const loadTree = useCallback(async (id: string) => {
@@ -34,8 +35,11 @@ export function ContextM2Detail() {
     try {
       const treeData = await getContextTree(id)
       setTree(treeData)
-    } catch {
-      // tree unavailable — workspace may be inactive
+      setTreeError(null)
+    } catch (err) {
+      // Keep the (possibly stale) tree if we have one; surface the server's
+      // reason under the empty state instead of a bare "No tree available".
+      setTreeError(err instanceof Error ? err.message : 'Failed to load the tree')
     } finally {
       setIsLoadingTree(false)
     }
@@ -57,7 +61,9 @@ export function ContextM2Detail() {
         setIsLoadingTree(true)
         try {
           const treeData = await getContextTree(id)
-          if (!cancelled) setTree(treeData)
+          if (!cancelled) { setTree(treeData); setTreeError(null) }
+        } catch (err) {
+          if (!cancelled) setTreeError(err instanceof Error ? err.message : 'Failed to load the tree')
         } finally {
           if (!cancelled) setIsLoadingTree(false)
         }
@@ -163,6 +169,9 @@ export function ContextM2Detail() {
         <div className="text-[10px] text-muted-foreground px-3 pt-2 pb-1 font-medium uppercase tracking-wide shrink-0">
           {context?.workspaceName || 'Workspace'} · {tree?.type === 'directory' ? 'directory' : 'context'} tree
         </div>
+        {treeError && !tree && (
+          <p className="px-3 pb-1 text-xs text-destructive">{treeError}</p>
+        )}
         <MenuTreeView
           root={tree}
           selectedPath={selectedPath}
