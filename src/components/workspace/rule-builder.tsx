@@ -50,13 +50,14 @@ const CONDITION_FIELDS: Array<{ key: ConditionKey; label: string; hint: string }
   { key: 'attachment', label: 'has attachment (mime) matching', hint: 'application/pdf, or * for any' },
 ]
 
-type ActionKey = 'link' | 'unlink' | 'tag' | 'store' | 'notify' | 'agent' | 'script' | 'delete' | 'destroy'
+type ActionKey = 'link' | 'unlink' | 'tag' | 'store' | 'unstore' | 'notify' | 'agent' | 'script' | 'delete' | 'destroy'
 
 const ACTION_FIELDS: Array<{ key: ActionKey; label: string }> = [
   { key: 'link', label: 'file it into a folder' },
   { key: 'unlink', label: 'remove it from a folder' },
   { key: 'tag', label: 'add tags' },
   { key: 'store', label: 'move/copy the file to a storage backend' },
+  { key: 'unstore', label: 'delete the file from a storage backend' },
   { key: 'notify', label: 'send me a message' },
   { key: 'agent', label: 'ask an agent' },
   { key: 'script', label: 'run a script' },
@@ -74,6 +75,8 @@ interface ActionRow {
   storeFrom: string
   storeMode: 'move' | 'copy'
   storeConflict: 'rename' | 'error' | 'overwrite'
+  // unstore action: keep the last remaining copy (guard, on by default).
+  keepLast: boolean
   // output pipeline (agent reply / script stdout):
   notePath: string // save output as note at this path
   noteTitle: string // note title (templated)
@@ -84,7 +87,7 @@ interface ActionRow {
 }
 
 const emptyAction = (kind: ActionKey): ActionRow => ({
-  kind, a: '', b: '', storeFrom: '', storeMode: 'move', storeConflict: 'rename',
+  kind, a: '', b: '', storeFrom: '', storeMode: 'move', storeConflict: 'rename', keepLast: true,
   notePath: '', noteTitle: '', filePath: '', fileBackend: 'home', fileInsert: '', notifyReply: false,
 })
 
@@ -169,6 +172,14 @@ function buildRule(form: RuleForm): HookRule {
         mode: row.storeMode,
         ...(b ? { key: b } : {}),
         onConflict: row.storeConflict,
+      })
+    }
+    if (row.kind === 'unstore' && a) {
+      then.push({
+        action: 'unstore',
+        from: a,
+        ...(b ? { ifOn: b } : {}),
+        ...(row.keepLast ? {} : { keepLast: false }),
       })
     }
     if (row.kind === 'notify' && a) then.push({ action: 'notify', message: a })
@@ -274,6 +285,14 @@ function parseRule(rule: HookRule): RuleForm | null {
         storeFrom: typeof act.from === 'string' ? act.from : (Array.isArray(act.from) ? String(act.from[0] ?? '') : ''),
         storeMode: act.mode === 'copy' ? 'copy' : 'move',
         storeConflict: act.onConflict === 'error' || act.onConflict === 'overwrite' ? act.onConflict : 'rename',
+      })
+    } else if (act.action === 'unstore' && (typeof act.from === 'string' || Array.isArray(act.from))) {
+      const first = (v: unknown) => (Array.isArray(v) ? String(v[0] ?? '') : typeof v === 'string' ? v : '')
+      actions.push({
+        ...emptyAction('unstore'),
+        a: first(act.from),
+        b: first(act.ifOn),
+        keepLast: act.keepLast !== false,
       })
     } else if (act.action === 'delete') {
       actions.push(emptyAction('delete'))
@@ -674,6 +693,35 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
                       </select>
                       <span className="w-full text-xs text-muted-foreground">
                         Moves the stored bytes only — the item keeps its id, tags and every folder it is filed in.
+                      </span>
+                    </div>
+                  )}
+                  {row.kind === 'unstore' && (
+                    <div className="flex w-full flex-wrap items-center gap-2 pl-1">
+                      <span className="text-xs text-muted-foreground">delete it from</span>
+                      {backends.length ? (
+                        <select className={`${selectClass} font-mono`} value={row.a} onChange={(e) => set({ a: e.target.value })}>
+                          <option value="">pick a backend…</option>
+                          {backends.map((b) => <option key={b.address} value={b.address}>{b.address}</option>)}
+                        </select>
+                      ) : (
+                        <Input className="h-8 w-48 font-mono text-sm" placeholder="workspace:data" value={row.a} onChange={(e) => set({ a: e.target.value })} />
+                      )}
+                      <span className="text-xs text-muted-foreground">but only once it is also on</span>
+                      {backends.length ? (
+                        <select className={`${selectClass} font-mono`} value={row.b} onChange={(e) => set({ b: e.target.value })}>
+                          <option value="">anywhere else</option>
+                          {backends.map((b) => <option key={b.address} value={b.address}>{b.address}</option>)}
+                        </select>
+                      ) : (
+                        <Input className="h-8 w-48 font-mono text-sm" placeholder="workspace:home (optional)" value={row.b} onChange={(e) => set({ b: e.target.value })} />
+                      )}
+                      <label className="flex cursor-pointer items-center gap-1.5 text-xs" title="Off means a rule may delete the only remaining copy of a file. Leave it on unless you mean exactly that.">
+                        <input type="checkbox" checked={row.keepLast} onChange={(e) => set({ keepLast: e.target.checked })} />
+                        never delete the last copy
+                      </label>
+                      <span className="w-full text-xs text-muted-foreground">
+                        Deletes the stored bytes on that backend only — copies elsewhere and the item itself are kept.
                       </span>
                     </div>
                   )}
