@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { X, HardDrive, Database, Copy, ArrowRight, Trash2, Cloud, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Loader } from '@/components/ui/loader'
@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { listBackends, type Backend, type BackendTransferMode } from '@/services/workspace'
 
-const MODES: Array<{ mode: BackendTransferMode; label: string; icon: JSX.Element }> = [
+const MODES: Array<{ mode: BackendTransferMode; label: string; icon: ReactNode }> = [
   { mode: 'copy', label: 'Copy to', icon: <Copy className="h-3.5 w-3.5" /> },
   { mode: 'move', label: 'Move to', icon: <ArrowRight className="h-3.5 w-3.5" /> },
   { mode: 'delete', label: 'Delete from', icon: <Trash2 className="h-3.5 w-3.5" /> },
