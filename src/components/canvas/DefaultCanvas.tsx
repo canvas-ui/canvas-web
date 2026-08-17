@@ -120,7 +120,7 @@ function UrlBar({
             onKeyDown={(e) => { if (e.key === 'Escape' && inputRef.current) inputRef.current.value = initialPath }}
             spellCheck={false}
             autoComplete="off"
-            title="Edit path — press Enter to go"
+            title="Edit path; press Enter to go"
             className="w-full min-w-0 flex-1 truncate bg-transparent px-1 py-1 font-mono text-sm text-foreground focus:outline-none"
           />
         </form>

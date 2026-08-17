@@ -6,8 +6,8 @@ import { TODO_STATUSES, TODO_STATUS_LABELS, type TodoStatus } from './useTodoFie
 // RFC 5545 priority is 1 (highest) … 9 (lowest); 0/unset = none. Label the
 // endpoints and the midpoint so the selectbox reads meaningfully.
 const PRIORITY_LABELS: Record<number, string> = {
-  1: '1 — Highest', 2: '2', 3: '3 — High', 4: '4', 5: '5 — Medium',
-  6: '6', 7: '7 — Low', 8: '8', 9: '9 — Lowest',
+  1: '1: Highest', 2: '2', 3: '3: High', 4: '4', 5: '5: Medium',
+  6: '6', 7: '7: Low', 8: '8', 9: '9: Lowest',
 }
 
 // Shared Todo form fields (title/description/due/status/priority) so the add

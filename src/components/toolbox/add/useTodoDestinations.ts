@@ -31,7 +31,7 @@ export function useTodoDestinations(workspaceName: string | null | undefined): T
           for (const container of containers) {
             if (container.writable === false) continue
             const repo = container.id || container.name
-            out.push({ driver: 'github', address: backend.address, container: repo, label: `GitHub — ${repo}` })
+            out.push({ driver: 'github', address: backend.address, container: repo, label: `GitHub: ${repo}` })
           }
         }
         if (!cancelled) setLoaded({ key: workspaceName, list: out })

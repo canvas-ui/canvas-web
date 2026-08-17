@@ -23,7 +23,7 @@ function getPosition(): Promise<GeolocationPosition> {
 function describeError(err: unknown): string {
   const code = (err as GeolocationPositionError | undefined)?.code
   if (code === 1) return 'Location permission denied'
-  if (code === 2) return 'Location unavailable — no fix right now'
+  if (code === 2) return 'Location unavailable; no fix right now'
   if (code === 3) return 'Timed out waiting for a location fix'
   return 'Could not read your location'
 }

@@ -117,7 +117,7 @@ export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = 
             type="button"
             onClick={() => onSelect(view.id)}
             onDoubleClick={() => { if (!readOnly) { setEditingId(view.id); setDraft(view.name) } }}
-            title={readOnly ? view.name : `${view.name} — double-click to rename, drag to reorder`}
+            title={readOnly ? view.name : `${view.name}: double-click to rename, drag to reorder`}
             draggable={!readOnly}
             onDragStart={(e) => {
               e.dataTransfer.setData('text/plain', view.name)

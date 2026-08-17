@@ -70,7 +70,7 @@ function PdfJsPages({ blob, filename }: { blob: Blob; filename: string }) {
         // Literal white: the PDF page *is* white paper. A themed ground
         // would show through the page margins and misrepresent the document.
         canvas.className = 'rounded border bg-white'
-        canvas.setAttribute('aria-label', `${filename} — page ${i}`)
+        canvas.setAttribute('aria-label', `${filename}, page ${i}`)
 
         await page.render({ canvas, viewport }).promise
         page.cleanup()
@@ -96,7 +96,7 @@ function PdfJsPages({ blob, filename }: { blob: Blob; filename: string }) {
       <div ref={containerRef} className="space-y-2" />
       {status.truncated && (
         <p className="text-xs text-muted-foreground">
-          Showing the first {MAX_RENDERED_PAGES} pages — download the file for the full document.
+          Showing the first {MAX_RENDERED_PAGES} pages. Download the file for the full document.
         </p>
       )}
     </div>

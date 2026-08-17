@@ -133,7 +133,7 @@ export function SchemaColumnsBoard({ documents, workspaceId, columns, onColumnsC
                 <div
                   onPointerDown={(e) => startResize(e, column.id)}
                   onDoubleClick={() => resetWidth(column.id)}
-                  title="Drag to resize — double-click to reset"
+                  title="Drag to resize; double-click to reset"
                   className="absolute right-0 inset-y-0 z-10 w-2 cursor-col-resize touch-none rounded-r-lg transition-colors hover:bg-primary/25 active:bg-primary/40 max-sm:hidden"
                 />
               )}

@@ -98,7 +98,7 @@ export function UrlPdfRenderer({ document: doc, className = '' }: RendererProps)
       {loading && <p className="text-sm text-muted-foreground">Loading PDF…</p>}
       {failed && (
         <p className="text-sm text-muted-foreground">
-          Inline preview unavailable (direct fetch and server proxy both failed) — use the link above.
+          Inline preview unavailable (direct fetch and server proxy both failed). Use the link above.
         </p>
       )}
       {blobUrl && <PdfViewer blob={blob} blobUrl={blobUrl} filename={filename} className="h-viewport-pane" />}

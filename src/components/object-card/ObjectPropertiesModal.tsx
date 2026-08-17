@@ -74,7 +74,7 @@ export function ObjectPropertiesModal({ document, isOpen, onClose, workspaceId, 
                   target="_blank"
                   rel="noopener noreferrer"
                   className="rounded-sm p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
-                  title={`Open original — ${externalUrl}`}
+                  title={`Open original: ${externalUrl}`}
                   aria-label="Open original"
                 >
                   <ExternalLink className="h-4 w-4" />

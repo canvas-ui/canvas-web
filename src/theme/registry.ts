@@ -55,7 +55,7 @@ export const SCHEME_OPTIONS: readonly { id: SchemePreference; name: string }[] =
 ] as const
 
 export const DENSITY_OPTIONS: readonly { id: Density; name: string; description: string }[] = [
-  { id: 'auto', name: 'Auto', description: 'Match the pointer — touch on phones, mouse on desktop' },
+  { id: 'auto', name: 'Auto', description: 'Match the pointer: touch on phones, mouse on desktop' },
   { id: 'compact', name: 'Compact', description: 'Maximum rows per screen' },
   { id: 'comfortable', name: 'Comfortable', description: 'Balanced for mouse use' },
   { id: 'touch', name: 'Touch', description: 'Large targets for finger input' },

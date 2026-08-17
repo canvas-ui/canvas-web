@@ -767,6 +767,48 @@ export async function destroyWorkspaceDocuments(
   return response
 }
 
+export type BackendTransferMode = 'copy' | 'move' | 'delete'
+
+export interface BackendTransferResult {
+  successful: Array<{
+    id: number
+    mode: BackendTransferMode
+    // copy/move: one entry per target backend. `state` is 'pending' when the
+    // destination is sync-queued — the move completes once the write lands.
+    transfers?: Array<{ backend: string; state: 'complete' | 'pending' | 'unchanged' | string }>
+    // delete: which locations went, and whether the index entry followed.
+    deleted?: string[]
+    kept?: string[]
+    docDeleted?: boolean
+  }>
+  failed: Array<{ id: number; reason: string }>
+}
+
+/**
+ * Copy / move documents to storage backends, or delete their bytes from the
+ * given backends. Addressed by document id — the server resolves each
+ * document's own source location, so external mounts work too.
+ *
+ * Partial success is normal (a document already living on the target fails
+ * alone), so callers must report `failed` rather than assume all-or-nothing.
+ */
+export async function transferDocumentsToBackends(
+  workspaceId: string,
+  documentIds: readonly (string | number)[],
+  options: { to: string[]; mode?: BackendTransferMode; keepDocument?: boolean }
+): Promise<BackendTransferResult> {
+  const response = await api.post<BackendTransferResult>(
+    `${API_ROUTES.workspaces}/${workspaceId}/documents/transfer`,
+    {
+      documentIds: normalizeDocumentIds(documentIds),
+      to: options.to,
+      mode: options.mode ?? 'copy',
+      ...(options.keepDocument ? { keepDocument: true } : {}),
+    }
+  )
+  return response
+}
+
 // ── Document sub-resources (object properties card) ─────────────────────────
 
 export interface DocumentLocationInfo {

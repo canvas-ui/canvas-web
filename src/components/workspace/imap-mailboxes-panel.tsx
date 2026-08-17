@@ -192,7 +192,7 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
       await load();
       setShowNew(false);
       setSelected(form.user.trim());
-      showToast({ title: 'Saved', description: `IMAP account ${form.user.trim()} saved — sync runs in the background` });
+      showToast({ title: 'Saved', description: `IMAP account ${form.user.trim()} saved; sync runs in the background` });
     } catch (error) {
       showToast({ title: 'Error', description: error instanceof Error ? error.message : 'Failed to save IMAP account', variant: 'destructive' });
     } finally {
@@ -295,7 +295,7 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
             )}
           </div>
           <p className="text-xs text-muted-foreground">
-            {selectedFolders.length} folder{selectedFolders.length === 1 ? '' : 's'} selected — each synced as its own container. Unchecking a synced folder removes it on Save.
+            {selectedFolders.length} folder{selectedFolders.length === 1 ? '' : 's'} selected; each synced as its own container. Unchecking a synced folder removes it on Save.
           </p>
         </div>
         <div className="grid gap-2">

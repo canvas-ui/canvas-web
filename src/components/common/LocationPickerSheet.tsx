@@ -174,9 +174,9 @@ export function LocationPickerSheet({
       if (!res.ok) throw new Error(`Search failed (${res.status})`)
       const list = (await res.json()) as SearchResult[]
       setResults(list)
-      if (!list.length) setSearchError('No match — try a different spelling, or just click the map')
+      if (!list.length) setSearchError('No match. Try a different spelling, or just click the map')
     } catch {
-      setSearchError('Search is unavailable right now — click the map to place a pin')
+      setSearchError('Search is unavailable right now. Click the map to place a pin')
     } finally {
       setSearching(false)
     }
@@ -197,7 +197,7 @@ export function LocationPickerSheet({
       },
       () => {
         setLocating(false)
-        setSearchError('Could not read your location — search or click the map instead')
+        setSearchError('Could not read your location. Search or click the map instead')
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
     )
@@ -260,7 +260,7 @@ export function LocationPickerSheet({
                 autoFocus
                 onChange={(e) => { setQuery(e.target.value); setSearchError(null) }}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runSearch() } }}
-                placeholder="Search a place — e.g. Slavkovský štít"
+                placeholder="Search a place, e.g. Slavkovský štít"
                 spellCheck={false}
                 className="h-8 w-full rounded-md border border-input bg-transparent pl-7 pr-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
               />
@@ -309,7 +309,7 @@ export function LocationPickerSheet({
           {!picked && (
             <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
               <span className="rounded-full bg-background/90 px-3 py-1 text-xs text-muted-foreground shadow-elevation-2">
-                Click the map to drop a pin — drag it to fine-tune
+                Click the map to drop a pin, or drag it to fine-tune
               </span>
             </div>
           )}

@@ -36,7 +36,7 @@ export function NoteCardBody({ onClose, initialData }: { onClose: () => void; in
             id="qa-note-title"
             value={f.title}
             onChange={(e) => f.setTitle(e.target.value)}
-            placeholder="Optional — defaults to today's date"
+            placeholder="Optional; defaults to today's date"
           />
         </div>
 

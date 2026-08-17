@@ -56,7 +56,7 @@ export function WorkspaceM2Settings() {
   return (
     <div className="flex h-full flex-col">
       <M2Header
-        title={`Settings — ${label || wsName || 'Workspace'}`}
+        title={`Settings: ${label || wsName || 'Workspace'}`}
         icon={style.icon || DEFAULT_WORKSPACE_ICON}
         accentColor={style.color}
         onBack={() => {

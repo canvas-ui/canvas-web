@@ -85,7 +85,7 @@ export function LensApplet() {
   if (target?.mode !== 'workspace') {
     return (
       <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
-        Lens searches a workspace — bind it to a workspace path to start.
+        Lens searches a workspace. Bind it to a workspace path to start.
       </div>
     )
   }
@@ -97,7 +97,7 @@ export function LensApplet() {
           className={selectClass}
           value={rateMs}
           onChange={(e) => setRateMs(Number(e.target.value))}
-          title="Frame rate. High rates (10–30 fps) are experimental — the loop never overlaps requests, so the effective rate is capped by search latency."
+          title="Frame rate. High rates (10–30 fps) are experimental; the loop never overlaps requests, so the effective rate is capped by search latency."
         >
           {LENS_RATES.map((r) => (
             <option key={r.ms} value={r.ms}>{r.label}</option>
@@ -164,7 +164,7 @@ export function LensApplet() {
         ) : running ? (
           <>live · {latencyMs != null ? `${latencyMs} ms/frame` : 'searching…'} · {hits.length} match{hits.length === 1 ? '' : 'es'}{boundPath ? ` · scoped to ${boundPath}` : ''}</>
         ) : otherFeed ? (
-          'The Lens filter is using the camera — stop it there first.'
+          'The Lens filter is using the camera. Stop it there first.'
         ) : (
           'Frames are ephemeral: embedded for the query, never stored or indexed.'
         )}

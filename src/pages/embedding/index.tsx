@@ -47,7 +47,7 @@ export default function EmbeddingDefaultsPage() {
       showToast({
         title: 'Defaults saved',
         description: result.restartRequired
-          ? `${result.workspaces.length} running workspace(s) keep their current tables until restarted — set the config on a workspace directly to change it live.`
+          ? `${result.workspaces.length} running workspace(s) keep their current tables until restarted. Set the config on a workspace directly to change it live.`
           : 'New workspaces will inherit this.',
       })
       await load()

@@ -38,7 +38,7 @@ export function NoteForm() {
           id="note-title"
           value={f.title}
           onChange={(e) => f.setTitle(e.target.value)}
-          placeholder="Optional — defaults to today's date"
+          placeholder="Optional; defaults to today's date"
         />
       </div>
 
@@ -54,7 +54,7 @@ export function NoteForm() {
           value={f.comment}
           onChange={(e) => f.setComment(e.target.value)}
           rows={2}
-          placeholder="Optional — context you can't infer from the body"
+          placeholder="Optional; context you can't infer from the body"
           className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-elevation-1 transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
         />
       </div>

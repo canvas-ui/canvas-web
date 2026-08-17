@@ -38,7 +38,7 @@ const DRIVERS: Record<string, { label: string; icon: string; blurb: string; fiel
       { key: 'address', label: 'Account label', placeholder: 'e.g. canvas-ui', required: true },
       { key: 'token', label: 'Personal access token', hint: 'Optional for public repos; required for write-back.', secret: true },
       { key: 'repos', label: 'Repositories', placeholder: 'owner/repo, one per line', hint: 'Issues from each repo sync as todos.', list: true, required: true },
-      { key: 'writeBack', label: 'Manage issues from Canvas', hint: 'Create, edit and close issues — needs a PAT with repo scope.', bool: true },
+      { key: 'writeBack', label: 'Manage issues from Canvas', hint: 'Create, edit and close issues. Needs a PAT with repo scope.', bool: true },
       { key: 'pruneRemoved', label: 'Remove items deleted at the source', hint: 'After each sync, issues that no longer exist in the repo are dropped from the mirror (kept as location-less orphans until database retention GC; skipped whenever the repo can’t be fully listed).', bool: true },
     ],
   },
@@ -67,7 +67,7 @@ const DRIVERS: Record<string, { label: string; icon: string; blurb: string; fiel
   caldav: {
     label: 'CalDAV',
     icon: 'mdi:calendar-sync',
-    blurb: 'Any CalDAV endpoint (GroupOffice, Nextcloud, Radicale, SOGo…). Read-only by default — enable write-back to create events from Canvas.',
+    blurb: 'Any CalDAV endpoint (GroupOffice, Nextcloud, Radicale, SOGo…). Read-only by default; enable write-back to create events from Canvas.',
     fields: [
       { key: 'address', label: 'Account label', placeholder: 'e.g. groupoffice', required: true },
       { key: 'url', label: 'CalDAV URL (calendar home or one calendar)', placeholder: 'https://host/caldav/user', required: true },
@@ -178,7 +178,7 @@ export function ConnectorsSection({ workspaceId }: { workspaceId: string }) {
       else await addBackend(workspaceId, adding, config)
       closeForm()
       await load()
-      showToast({ title: editing ? 'Connector updated — sync restarted' : 'Connector saved — first sync started' })
+      showToast({ title: editing ? 'Connector updated; sync restarted' : 'Connector saved; first sync started' })
     } catch (err) {
       showToast({ title: 'Failed to save connector', description: err instanceof Error ? err.message : String(err), variant: 'destructive' })
     } finally {
@@ -212,7 +212,7 @@ export function ConnectorsSection({ workspaceId }: { workspaceId: string }) {
         <div>
           <h2 className="text-sm font-semibold">Connectors</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            GitHub issues, Slack, Google Calendar, CalDAV and MS Teams — polled into the backends tree (read-only unless write-back is enabled).
+            GitHub issues, Slack, Google Calendar, CalDAV and MS Teams, polled into the backends tree (read-only unless write-back is enabled).
           </p>
         </div>
         <Button type="button" variant="outline" size="sm" disabled={refreshing} onClick={() => { void refresh() }} title="Refresh">

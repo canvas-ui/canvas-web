@@ -50,7 +50,7 @@ export function QueryDebugPanel({ data, className }: { data: QueryDebugData; cla
   if (rows.length === 0) {
     return (
       <div className={cn('rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground', className)}>
-        Query debug: no image distances for “{data.query}”. The dense side returned nothing —
+        Query debug: no image distances for “{data.query}”. The dense side returned nothing:
         either no photos are embedded in this scope, or the image space is not ready.
       </div>
     )
@@ -68,7 +68,7 @@ export function QueryDebugPanel({ data, className }: { data: QueryDebugData; cla
         {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
         Query debug
         <span className="font-normal text-muted-foreground">
-          — image distances for “{data.query}” ({rows.length} nearest, unfloored)
+          : image distances for “{data.query}” ({rows.length} nearest, unfloored)
         </span>
       </button>
 
@@ -79,9 +79,9 @@ export function QueryDebugPanel({ data, className }: { data: QueryDebugData; cla
             relevant and set the image relevance floor just above that value in
             Settings → Database → Search tuning.
             {suggested !== null ? (
-              <> A jump at <span className="font-mono">{suggested.toFixed(4)}</span> (Δ{span.biggest.toFixed(4)}, vs typical Δ{span.median.toFixed(4)}) stands out — a likely boundary.</>
+              <> A jump at <span className="font-mono">{suggested.toFixed(4)}</span> (Δ{span.biggest.toFixed(4)}, vs typical Δ{span.median.toFixed(4)}) stands out (a likely boundary).</>
             ) : (
-              <> <span className="text-amber-600 dark:text-amber-500">No boundary in this window</span> — the
+              <> <span className="text-amber-600 dark:text-amber-500">No boundary in this window</span>; the
               distances step evenly (typical Δ{span.median.toFixed(4)}), so there is nothing here to
               set a floor from. Relevance probably ends further down the list than this window
               reaches, or the model is not separating this query at all.</>
@@ -116,7 +116,7 @@ export function QueryDebugPanel({ data, className }: { data: QueryDebugData; cla
           <p className="text-[11px] text-muted-foreground">
             Range {span.first.toFixed(4)} – {span.last.toFixed(4)} (spread {(span.last - span.first).toFixed(4)})
             over {rows.length} rows. Absolute values shift with the model and are not comparable
-            across models — after a re-embed every floor has to be picked again. A spread this
+            across models. After a re-embed every floor has to be picked again. A spread this
             narrow relative to the range means ranking is doing the work, not distance.
           </p>
         </div>

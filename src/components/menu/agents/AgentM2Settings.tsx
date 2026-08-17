@@ -45,7 +45,7 @@ export function AgentM2Settings() {
   return (
     <div className="flex h-full flex-col">
       <M2Header
-        title={`Settings — ${agent?.label || agent?.name || entityId || 'Agent'}`}
+        title={`Settings: ${agent?.label || agent?.name || entityId || 'Agent'}`}
         accentColor={agent?.color ?? null}
         onBack={() => {
           // Same rule as WorkspaceM2Settings: on mobile back is "up one step"

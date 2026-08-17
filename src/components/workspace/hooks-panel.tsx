@@ -242,7 +242,7 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
       setNewActions([])
       await loadFiles()
       await openFile(path)
-      showToast({ title: 'Created', description: `${path} — edit the TODOs, then enable it` })
+      showToast({ title: 'Created', description: `${path}. Edit the TODOs, then enable it` })
     } catch {
       showToast({ title: 'Error', description: 'Failed to create hook', variant: 'destructive' })
     } finally {
@@ -457,7 +457,7 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
             </div>
             <p className="text-xs text-muted-foreground mt-2">
               Fields: {meta.classifier.fields.map((f) => <code key={f} className="font-mono">{f} </code>)}
-              — never throws; all predicates are false for a null/unknown document.
+              (never throws; all predicates are false for a null/unknown document).
             </p>
           </div>
           <p className="text-xs text-muted-foreground">
@@ -493,7 +493,7 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
               >
                 {(meta?.events ?? []).map((event) => (
                   <option key={event.name} value={event.name}>
-                    {event.name} — {event.description}
+                    {event.name}: {event.description}
                   </option>
                 ))}
               </select>
@@ -514,7 +514,7 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
             </div>
             <div>
               <label className="text-xs font-semibold text-muted-foreground block mb-1">
-                3. Then (actions — pick any)
+                3. Then (actions; pick any)
               </label>
               <div className="space-y-1 max-h-52 overflow-auto pr-1">
                 {(meta?.actions ?? []).map((action) => (
@@ -543,7 +543,7 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
             </Button>
             <Button size="sm" variant="outline" onClick={() => setShowNew(false)}>Cancel</Button>
             <p className="text-xs text-muted-foreground">
-              Creates a disabled skeleton — edit the TODOs, then enable it. Simple match→action
+              Creates a disabled skeleton. Edit the TODOs, then enable it. Simple match→action
               automations can also go into <span className="font-mono">rules.json</span> (no code).
             </p>
           </div>
@@ -647,7 +647,7 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <GitBranch className="h-3.5 w-3.5 shrink-0" />
         <span>
-          Everything here lives in the workspace git repo — clone it with{' '}
+          Everything here lives in the workspace git repo. Clone it with{' '}
           {/* A clone URL has no spaces to wrap on, so on a phone it pushed the
               panel wider than the screen. break-all keeps it inside the card. */}
           <code className="break-all rounded bg-muted px-1 py-0.5 font-mono select-all">

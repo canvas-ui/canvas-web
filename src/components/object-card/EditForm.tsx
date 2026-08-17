@@ -139,7 +139,7 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
       {editable && !isTodo && (
         <div className="space-y-1.5">
           <Label htmlFor="edit-title">Title</Label>
-          <Input id="edit-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={isNote ? "Optional — defaults to today's date" : 'Optional display title'} />
+          <Input id="edit-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={isNote ? "Optional; defaults to today's date" : 'Optional display title'} />
         </div>
       )}
 
@@ -168,7 +168,7 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
           value={comment}
           onChange={(e) => setComment(e.target.value)}
           rows={3}
-          placeholder="Add context you can't infer from the content — e.g. “sofa from the cozmo bar in Košice”"
+          placeholder="Add context you can't infer from the content, e.g. “sofa from the cozmo bar in Košice”"
           className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-elevation-1 transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
         />
       </div>

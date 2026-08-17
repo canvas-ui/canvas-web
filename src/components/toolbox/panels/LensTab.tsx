@@ -146,7 +146,7 @@ export function LensTab() {
           {!gpsSupported
             ? 'Needs a secure context (https or localhost) with location access.'
             : gpsPermission === 'denied'
-              ? <span className="text-destructive">Location is blocked for this site — allow it in your browser/app settings, then retry.</span>
+              ? <span className="text-destructive">Location is blocked for this site. Allow it in your browser/app settings, then retry.</span>
               : gpsError
                 ? (
                   <span className="text-destructive">
@@ -198,7 +198,7 @@ export function LensTab() {
             value={rateMs}
             onChange={(e) => setRateMs(Number(e.target.value))}
             disabled={!workspaceName}
-            title="Frame rate. High rates (10–30 fps) are experimental — the loop never overlaps requests, so the effective rate is capped by search latency."
+            title="Frame rate. High rates (10–30 fps) are experimental; the loop never overlaps requests, so the effective rate is capped by search latency."
           >
             {LENS_RATES.map((r) => <option key={r.ms} value={r.ms}>{r.label}</option>)}
           </select>
@@ -208,7 +208,7 @@ export function LensTab() {
             inputMode="decimal"
             value={maxDistance}
             onChange={(e) => setMaxDistance(e.target.value)}
-            title="Cosine-distance floor (0 = identical). Empty = top-K — loose but tunable."
+            title="Cosine-distance floor (0 = identical). Empty = top-K (loose but tunable)."
           />
         </div>
 
@@ -220,13 +220,13 @@ export function LensTab() {
           {feedError ? (
             <span className="text-destructive">{feedError}</span>
           ) : feedRunning ? (
-            `Live — view narrowed to ${feed.lastCount ?? '…'} match${feed.lastCount === 1 ? '' : 'es'}. Frames are ephemeral, never stored. Closing the toolbox keeps it running.`
+            `Live: view narrowed to ${feed.lastCount ?? '…'} match${feed.lastCount === 1 ? '' : 'es'}. Frames are ephemeral, never stored. Closing the toolbox keeps it running.`
           ) : otherFeed ? (
-            'The Lens applet is using the camera — stop it there first.'
+            'The Lens applet is using the camera. Stop it there first.'
           ) : !workspaceName ? (
             'Open a workspace to refine with a live feed.'
           ) : (
-            'Point a camera (or share a screen) — the view narrows to what the feed matches.'
+            'Point a camera (or share a screen). The view narrows to what the feed matches.'
           )}
         </p>
       </section>

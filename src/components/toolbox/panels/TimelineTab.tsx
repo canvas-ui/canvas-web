@@ -348,14 +348,14 @@ function TimelineRail({ quickFilterKey, activeRangeCount, onSelectRanges, histog
           const total = bucket?.total ?? 0
           const barScale = total > 0 ? Math.log1p(total) / Math.log1p(maxTotal) : 0
           const countsTitle = bucket && total > 0
-            ? ` — ${total} doc${total === 1 ? '' : 's'} (${Object.entries(bucket.counts).map(([n, c]) => `${n}: ${c}`).join(', ')})`
+            ? `: ${total} doc${total === 1 ? '' : 's'} (${Object.entries(bucket.counts).map(([n, c]) => `${n}: ${c}`).join(', ')})`
             : ''
           return (
             <button
               key={row.offset}
               type="button"
               onClick={(e) => toggleRow(row.offset, e.shiftKey)}
-              title={`${row.isNow ? 'Now' : row.label}${countsTitle} — click to tag, shift-click to fill range`}
+              title={`${row.isNow ? 'Now' : row.label}${countsTitle}. Click to tag, shift-click to fill range`}
               className={cn(
                 'w-full flex items-center gap-2 rounded-2xl px-3 py-1.5 text-xs font-medium transition-colors select-none text-left',
                 isSelected
@@ -552,7 +552,7 @@ function CalendarRangePicker({ ranges, onCommitRange, onToggleDay }: CalendarPro
 
       <p className="mt-1.5 text-[10px] text-muted-foreground/70">
         {pendingStart
-          ? `From ${pendingStart} — pick the end date`
+          ? `From ${pendingStart}: pick the end date`
           : 'Click start + end. Ctrl+click adds/removes single days.'}
       </p>
     </div>

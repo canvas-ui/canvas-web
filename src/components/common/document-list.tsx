@@ -1,7 +1,10 @@
 import { Document, TreeNode } from '@/types/workspace'
-import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, Play, Table as TableIcon } from 'lucide-react'
+import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, Play, Table as TableIcon, HardDrive, ArrowRightLeft } from 'lucide-react'
 import { LinkToCard, type LinkToTarget } from '@/components/menu/shared/LinkToCard'
+import { BackendActionCard } from '@/components/menu/shared/BackendActionCard'
 import { PickDocumentsCard } from '@/components/menu/shared/PickDocumentsCard'
+import { transferDocumentsToBackends, type BackendTransferMode } from '@/services/workspace'
+import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { useSideView } from '@/components/shell/use-side-view'
 import { useState, useCallback, useMemo, useEffect, useRef, useDeferredValue } from 'react'
 import { createPortal } from 'react-dom'
@@ -826,9 +829,16 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   const [selectedDocuments, setSelectedDocuments] = useState<Set<number>>(new Set())
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; documentIds: number[] } | null>(null)
   const [linkPanelIds, setLinkPanelIds] = useState<number[] | null>(null)
+  // Copy to / Move to / Delete from backend — the backend twin of the link panel.
+  const [backendPanel, setBackendPanel] = useState<{ ids: number[]; mode: BackendTransferMode } | null>(null)
+  const [backendSaving, setBackendSaving] = useState(false)
   const [pickDocsOpen, setPickDocsOpen] = useState(false)
   const [detailModal, setDetailModal] = useState<{ document: Document; edit?: boolean } | null>(null)
   const canLink = Boolean(linkTree && onPasteDocuments)
+  // Backend actions need a workspace to address; the picker is otherwise
+  // identical in every view that lists documents.
+  const canUseBackends = Boolean(workspaceId)
+  const { showSuccessToast, showErrorToast } = useToastHelpers()
   const sideView = useSideView()
   const openToSide = workspaceId ? (doc: Document) => sideView.open(doc, workspaceId) : undefined
   // "Remove from folder" is path-scoped: in whole-workspace scope the listed docs
@@ -1049,6 +1059,46 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     }
     setSelectedDocuments(new Set())
   }, [onPasteDocuments])
+
+  const handleBackendTransfer = useCallback(async (
+    backends: string[],
+    mode: BackendTransferMode,
+    options: { keepDocument: boolean },
+  ) => {
+    if (!workspaceId || !backendPanel) return
+    setBackendSaving(true)
+    try {
+      const result = await transferDocumentsToBackends(workspaceId, backendPanel.ids, {
+        to: backends,
+        mode,
+        keepDocument: options.keepDocument,
+      })
+      // A document already living on the target is a no-op, not a transfer —
+      // counting it as done would make a repeat click look like work happened.
+      const unchanged = result.successful.filter(s => s.transfers?.every(t => t.state === 'unchanged')).length
+      const done = result.successful.length - unchanged
+      const failed = result.failed.length
+      const verb = mode === 'delete' ? 'Deleted from' : mode === 'move' ? 'Moved to' : 'Copied to'
+      const where = backends.join(', ')
+      const notes = [
+        unchanged ? `${unchanged} already there` : null,
+        failed ? `${failed} skipped` : null,
+      ].filter(Boolean).join(' · ')
+
+      if (done > 0) showSuccessToast(`${verb} ${where}: ${done} document${done !== 1 ? 's' : ''}${notes ? ` · ${notes}` : ''}`)
+      else if (unchanged > 0) showSuccessToast(`Nothing to do — already on ${where}`)
+      else if (failed > 0) showErrorToast(result.failed[0]?.reason || 'Transfer failed')
+      if (failed > 0) console.warn('Backend transfer skipped documents:', result.failed)
+
+      window.dispatchEvent(new CustomEvent('workspace:documents:refresh'))
+      setBackendPanel(null)
+      setSelectedDocuments(new Set())
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBackendSaving(false)
+    }
+  }, [workspaceId, backendPanel, showSuccessToast, showErrorToast])
 
   const handleContextMenuAction = useCallback(async (action: string, documentIds: number[]) => {
     switch (action) {
@@ -1499,6 +1549,19 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                   </Button>
                 )}
 
+                {canUseBackends && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setBackendPanel({ ids: Array.from(selectedDocuments), mode: 'copy' })}
+                    className="flex items-center gap-2"
+                    title="Copy, move, or delete the file data on storage backends"
+                  >
+                    <HardDrive className="h-4 w-4" />
+                    Backends… ({selectedDocuments.size})
+                  </Button>
+                )}
+
                 {onCutDocuments && (
                   <Button
                     variant="outline"
@@ -1765,22 +1828,43 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
             {(removeDocument || removeDocuments) && (
               <>
                 <div className="my-1 h-px bg-border" />
-                <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" title="Unlinks from this folder — the document stays in the index" onClick={() => handleContextMenuAction('remove', contextMenu.documentIds)}>
+                <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" title="Unlinks from this folder; the document stays in the index" onClick={() => handleContextMenuAction('remove', contextMenu.documentIds)}>
                   <Move className="h-3 w-3" />
                   Remove (unlink) from folder {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
                 </button>
               </>
             )}
             {(onDeleteDocument || onDeleteDocuments) && (
-              <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2 text-destructive" title="Removes the document from the index entirely — file data stays on its backend(s)" onClick={() => handleContextMenuAction('delete', contextMenu.documentIds)}>
+              <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2 text-destructive" title="Removes the document from the index entirely; file data stays on its backend(s)" onClick={() => handleContextMenuAction('delete', contextMenu.documentIds)}>
                 <Trash2 className="h-3 w-3" />
                 Delete from index {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
               </button>
             )}
-            {/* Only offered when the selection actually has file data stored on
-                a backend (a non-empty locations array). Per-backend selection
-                is a follow-up — for now this deletes from all of them. */}
-            {(onDestroyDocument || onDestroyDocuments)
+            {/* Backends — only for a selection that actually has file data on a
+                backend (a non-empty locations array); JSON-only docs have no
+                bytes to move. */}
+            {canUseBackends
+              && contextMenu.documentIds.some(id => ((documents.find(doc => doc.id === id) as { locations?: unknown[] } | undefined)?.locations?.length ?? 0) > 0) && (
+              <>
+                <div className="my-1 h-px bg-border" />
+                <div className="px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Backends</div>
+                <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" title="Copy the file data to another storage backend (keeps the existing copies)" onClick={() => { setBackendPanel({ ids: contextMenu.documentIds, mode: 'copy' }); setContextMenu(null) }}>
+                  <HardDrive className="h-3 w-3" />
+                  Copy to backend… {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
+                </button>
+                <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" title="Move the file data to another storage backend (source released once the copy is durable)" onClick={() => { setBackendPanel({ ids: contextMenu.documentIds, mode: 'move' }); setContextMenu(null) }}>
+                  <ArrowRightLeft className="h-3 w-3" />
+                  Move to backend… {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
+                </button>
+                <button className="w-full text-left px-3 py-1 hover:bg-destructive hover:text-destructive-foreground text-sm flex items-center gap-2 text-destructive font-medium" title="Delete the file data from selected backends (copies elsewhere are kept)" onClick={() => { setBackendPanel({ ids: contextMenu.documentIds, mode: 'delete' }); setContextMenu(null) }}>
+                  <Trash2 className="h-3 w-3" />
+                  Delete from backend… {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
+                </button>
+              </>
+            )}
+            {/* Legacy whole-object destroy (every location at once) — kept for
+                views that pass the handler explicitly. */}
+            {!canUseBackends && (onDestroyDocument || onDestroyDocuments)
               && contextMenu.documentIds.some(id => ((documents.find(doc => doc.id === id) as { locations?: unknown[] } | undefined)?.locations?.length ?? 0) > 0) && (
               <button className="w-full text-left px-3 py-1 hover:bg-destructive hover:text-destructive-foreground text-sm flex items-center gap-2 text-destructive font-medium" title="Deletes the document and its file data from the storage backend(s)" onClick={() => handleContextMenuAction('destroy', contextMenu.documentIds)}>
                 <Trash2 className="h-3 w-3" />
@@ -1835,6 +1919,20 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
             fixedWorkspaceName={workspaceId}
             onConfirm={(paths, ctx) => handleLinkConfirm(paths, linkPanelIds, ctx)}
             onClose={() => setLinkPanelIds(null)}
+          />
+        </div>,
+        window.document.body,
+      )}
+
+      {backendPanel && workspaceId && createPortal(
+        <div className="fixed inset-0 z-picker flex items-center justify-center bg-scrim p-4 max-md:p-2">
+          <BackendActionCard
+            workspaceId={workspaceId}
+            documentCount={backendPanel.ids.length}
+            initialMode={backendPanel.mode}
+            saving={backendSaving}
+            onConfirm={handleBackendTransfer}
+            onClose={() => { if (!backendSaving) setBackendPanel(null) }}
           />
         </div>,
         window.document.body,

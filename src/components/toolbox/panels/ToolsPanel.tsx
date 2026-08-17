@@ -74,7 +74,7 @@ function ModeControl({ mode, onSet }: { mode: FeatureMode; onSet: (m: FeatureMod
             'px-2 py-0.5 text-[11px] font-medium transition-colors',
             mode === o.m ? o.on : 'bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
           )}
-          title={`${o.label} — ${o.m}`}
+          title={`${o.label}: ${o.m}`}
         >
           {o.label}
         </button>
@@ -111,7 +111,7 @@ function SchemaTypePicker({
               key={key}
               type="button"
               onClick={() => onCycle(key)}
-              title={`${key} — ${mode === 'off' ? 'tap to filter' : mode}`}
+              title={`${key}: ${mode === 'off' ? 'tap to filter' : mode}`}
               className={cn(
                 'relative flex flex-col items-center justify-center gap-1.5 rounded-lg border p-3 min-h-[4.5rem] transition-colors select-none',
                 mode === 'off'
@@ -156,7 +156,7 @@ function FeaturesTab() {
       setDeleting(key)
       try {
         const deleted = await deleteDataset(key)
-        showToast({ title: 'Dataset dropped', description: `"${name}" — ${deleted} document(s) deleted` })
+        showToast({ title: 'Dataset dropped', description: `"${name}": ${deleted} document(s) deleted` })
       } catch (e) {
         showToast({ title: 'Dataset drop failed', description: e instanceof Error ? e.message : String(e), variant: 'destructive' })
       } finally {
@@ -278,7 +278,7 @@ function FeaturesTab() {
                       <span
                         className="flex-1 min-w-0 text-xs font-mono text-foreground truncate"
                         title={isVirtualDefault
-                          ? 'Virtual dataset: documents not stamped with any dataset. Included by default — "not" hides them, "all" shows only them.'
+                          ? 'Virtual dataset: documents not stamped with any dataset. Included by default; "not" hides them, "all" shows only them.'
                           : key}
                       >
                         {key}
@@ -294,7 +294,7 @@ function FeaturesTab() {
                           onClick={(e) => { e.stopPropagation(); handleDelete(key) }}
                           className="shrink-0 p-1 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50 reveal-on-hover"
                           title={isNamedDataset
-                            ? `Drop dataset "${key.slice('data/dataset/'.length)}" — DELETES its documents`
+                            ? `Drop dataset "${key.slice('data/dataset/'.length)}" (DELETES its documents)`
                             : `Delete bitmap "${key}" from database`}
                           aria-label={isNamedDataset ? `Drop dataset ${key}` : `Delete bitmap ${key}`}
                         >

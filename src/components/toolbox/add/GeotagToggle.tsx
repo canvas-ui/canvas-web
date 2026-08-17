@@ -14,8 +14,8 @@ function hint(g: Geotag): string {
     const coords = `${g.manual.lat.toFixed(5)}, ${g.manual.lon.toFixed(5)}`
     return g.manualLabel ? `${g.manualLabel} · ${coords}` : `Custom pin · ${coords}`
   }
-  if (!g.supported) return 'Needs a secure (https) connection — or pick a point on the map'
-  if (g.permission === 'denied') return 'Blocked — allow location for this site, or pick a point on the map'
+  if (!g.supported) return 'Needs a secure (https) connection, or pick a point on the map'
+  if (g.permission === 'denied') return 'Blocked. Allow location for this site, or pick a point on the map'
   if (g.error) return g.error
   if (g.busy) return 'Getting your location…'
   if (g.enabled && g.fix) {
@@ -23,7 +23,7 @@ function hint(g: Geotag): string {
     return `${lat.toFixed(5)}, ${lon.toFixed(5)}${accuracy != null ? ` · ±${accuracy} m` : ''}`
   }
   if (g.enabled) return 'Location will be attached when you save'
-  return 'Attach where you are — or pick any point on the map'
+  return 'Attach where you are, or pick any point on the map'
 }
 
 export function GeotagToggle({ geotag: g, idPrefix = 'geotag' }: { geotag: Geotag; idPrefix?: string }) {

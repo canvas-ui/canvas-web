@@ -73,7 +73,7 @@ const PROVIDER_SHAPE: Record<string, {
       key: 'baseUrl',
       label: 'Base URL',
       placeholder: 'http://gpu.local:8000/v1',
-      hint: 'OpenAI-compatible embeddings endpoint. A trailing /v1 is optional — both http://host:8000 and http://host:8000/v1 work. Use this type for anything fronting Ollama with an OpenAI-compatible API.',
+      hint: 'OpenAI-compatible embeddings endpoint. A trailing /v1 is optional; both http://host:8000 and http://host:8000/v1 work. Use this type for anything fronting Ollama with an OpenAI-compatible API.',
     },
     apiKey: 'Sent as `Authorization: Bearer …`. Leave empty for servers that do not check it.',
     imageInput: true,
@@ -86,7 +86,7 @@ const PROVIDER_SHAPE: Record<string, {
       key: 'host',
       label: 'Host',
       placeholder: 'http://127.0.0.1:11434',
-      hint: 'The Ollama daemon root. This speaks Ollama\'s native /api/embed, so do NOT append /v1 — for an OpenAI-compatible proxy, switch the type to openai instead.',
+      hint: 'The Ollama daemon root. This speaks Ollama\'s native /api/embed, so do NOT append /v1. For an OpenAI-compatible proxy, switch the type to openai instead.',
     },
     apiKey: 'Sent as `Authorization: Bearer …`. Only needed when Ollama sits behind an authenticating proxy.',
     where: spec => (spec.host as string) || 'http://127.0.0.1:11434',
@@ -112,7 +112,7 @@ const ALL_CONNECTION_KEYS = ['baseUrl', 'host', 'apiKey', 'cacheDir', 'imageInpu
  * neither belongs on the local `clip` backend instead.
  */
 const IMAGE_INPUT_MODES: { value: string; label: string; hint: string }[] = [
-  { value: 'data-uri', label: 'data-uri (default)', hint: 'Images ride in the ordinary `input` array as data URIs — infinity, TEI-style servers.' },
+  { value: 'data-uri', label: 'data-uri (default)', hint: 'Images ride in the ordinary `input` array as data URIs (infinity, TEI-style servers).' },
   { value: 'messages', label: 'messages', hint: 'vLLM\'s multimodal shape: one request per image, wrapped in a chat message.' },
 ]
 
@@ -129,7 +129,7 @@ function urlProblem(value: unknown): string | null {
   try { parsed = new URL(value.trim()) }
   catch { return 'Must be an absolute URL including the scheme, e.g. http://127.0.0.1:11434' }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    return `Unsupported scheme '${parsed.protocol.replace(':', '')}' — use http or https.`
+    return `Unsupported scheme '${parsed.protocol.replace(':', '')}'. Use http or https.`
   }
   return null
 }
@@ -148,7 +148,7 @@ function SectionHead({ title, hint }: { title: string; hint: string }) {
 function InheritanceBadge({ overridden, source }: { overridden: boolean; source?: string }) {
   if (overridden) {
     return (
-      <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary" title="Set on this layer — it wins over anything inherited">
+      <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary" title="Set on this layer; it wins over anything inherited">
         overridden
       </span>
     )
@@ -550,7 +550,7 @@ export function InferdConfigEditor({
     const id = newProviderId.trim()
     if (!id) { return }
     if (providerIds.includes(id)) {
-      showToast({ title: 'Backend exists', description: `'${id}' is already declared — open it below to edit.`, variant: 'destructive' })
+      showToast({ title: 'Backend exists', description: `'${id}' is already declared. Open it below to edit.`, variant: 'destructive' })
       return
     }
     setDraft(prev => ({ ...prev, providers: { ...(prev.providers || {}), [id]: { type: 'openai' } } }))
@@ -593,7 +593,7 @@ export function InferdConfigEditor({
           setDownloading(true)
           showToast({
             title: 'Downloading model',
-            description: `'${model ?? 'the configured model'}' is not in the server's cache yet — downloading now. A first test can take a few minutes; the model is then cached for good.`,
+            description: `'${model ?? 'the configured model'}' is not in the server's cache yet; downloading now. A first test can take a few minutes; the model is then cached for good.`,
           })
         }
       } catch {
@@ -609,9 +609,9 @@ export function InferdConfigEditor({
         setSpaceField(space, 'dim', String(result.dim))
       }
       showToast({
-        title: mismatch ? 'Backend answered — dimensions corrected' : 'Backend answered',
+        title: mismatch ? 'Backend answered; dimensions corrected' : 'Backend answered',
         description: mismatch
-          ? `Returned ${result.dim}-d but '${space}' was set to ${configuredDim}-d. Dimensions updated to ${result.dim} — save to apply. (${result.latencyMs} ms)`
+          ? `Returned ${result.dim}-d but '${space}' was set to ${configuredDim}-d. Dimensions updated to ${result.dim}; save to apply. (${result.latencyMs} ms)`
           : `${result.dim}-d in ${result.latencyMs} ms`,
       })
     } catch (err) {
@@ -667,7 +667,7 @@ export function InferdConfigEditor({
         <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive-subtle p-3 text-xs">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
           <div>
-            <p className="font-medium text-destructive">Stored config does not resolve — defaults are standing in</p>
+            <p className="font-medium text-destructive">Stored config does not resolve; defaults are standing in</p>
             <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">{invalid}</p>
           </div>
         </div>
@@ -741,7 +741,7 @@ export function InferdConfigEditor({
 
                       {needsFill && (
                         <p className="mt-1 text-[11px] text-warning">
-                          New table, nothing embedded in it yet — dense search stays thin for this space until it is
+                          New table, nothing embedded in it yet; dense search stays thin for this space until it is
                           filled. Reverting the model is still instant.
                         </p>
                       )}
@@ -782,7 +782,7 @@ export function InferdConfigEditor({
                             value={override.provider ?? ''}
                             onChange={e => setSpaceField(space, 'provider', e.target.value)}
                           >
-                            <option value="">{running.provider ? `inherited — ${running.provider}` : 'inherited'}</option>
+                            <option value="">{running.provider ? `inherited: ${running.provider}` : 'inherited'}</option>
                             {providerIds.map(id => <option key={id} value={id}>{id}</option>)}
                           </select>
                         </div>
@@ -861,7 +861,7 @@ export function InferdConfigEditor({
       <section>
         <SectionHead
           title="Backends"
-          hint="Where the models run, referenced by name from the spaces above. onnx, ollama and clip always exist — declaring one merges over its defaults."
+          hint="Where the models run, referenced by name from the spaces above. onnx, ollama and clip always exist; declaring one merges over its defaults."
         />
 
         <div className="divide-y overflow-hidden rounded-lg border">
@@ -938,7 +938,7 @@ export function InferdConfigEditor({
                           value={override.type ?? ''}
                           onChange={e => setProviderField(id, 'type', e.target.value)}
                         >
-                          <option value="">{running.type ? `inherited — ${running.type}` : 'inherited'}</option>
+                          <option value="">{running.type ? `inherited: ${running.type}` : 'inherited'}</option>
                           {INFERD_PROVIDER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
                         {shape?.note && <p className="text-[11px] text-muted-foreground">{shape.note}</p>}
@@ -984,7 +984,7 @@ export function InferdConfigEditor({
                             onChange={e => setProviderField(id, 'imageInput', e.target.value)}
                           >
                             <option value="">
-                              {running.imageInput ? `inherited — ${running.imageInput}` : 'inherited — data-uri'}
+                              {running.imageInput ? `inherited: ${running.imageInput}` : 'inherited: data-uri'}
                             </option>
                             {IMAGE_INPUT_MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                           </select>
@@ -1022,7 +1022,7 @@ export function InferdConfigEditor({
                             disabled={disabled}
                             value={(override.apiKey as string) ?? ''}
                             onChange={e => setProviderField(id, 'apiKey', e.target.value)}
-                            placeholder={running.apiKeySet ? '•••••••• (stored — leave empty to keep)' : 'unset'}
+                            placeholder={running.apiKeySet ? '•••••••• (stored; leave empty to keep)' : 'unset'}
                             className="h-8 text-sm"
                           />
                           <p className="text-[11px] text-muted-foreground">

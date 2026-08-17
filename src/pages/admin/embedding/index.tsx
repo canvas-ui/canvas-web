@@ -86,7 +86,7 @@ export default function AdminEmbeddingPage() {
         <div className="mb-4 flex items-start gap-2 rounded-md border p-3 text-xs">
           <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
           <p className="text-muted-foreground">
-            Read-only — changing server defaults requires an admin account. This is what your workspaces inherit.
+            Read-only. Changing server defaults requires an admin account. This is what your workspaces inherit.
           </p>
         </div>
       )}

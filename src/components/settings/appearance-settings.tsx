@@ -139,7 +139,7 @@ function WallpaperSection() {
       setSettings(next)
       setError(null)
     } catch {
-      setError('Could not store the wallpaper (browser storage full?) — try a smaller image.')
+      setError('Could not store the wallpaper (browser storage full?). Try a smaller image.')
     }
   }
 
@@ -150,7 +150,7 @@ function WallpaperSection() {
     reader.onload = () => {
       const dataUrl = String(reader.result || '')
       if (dataUrl.length > WALLPAPER_MAX_BYTES) {
-        setError('Image too large for browser storage — use one under ~2.5 MB.')
+        setError('Image too large for browser storage. Use one under ~2.5 MB.')
         return
       }
       update({ ...settings, image: dataUrl })

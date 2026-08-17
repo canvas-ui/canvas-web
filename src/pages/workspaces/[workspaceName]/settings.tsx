@@ -71,7 +71,7 @@ const DATA_BACKEND_LABELS: Record<string, { title: string; description: string }
   },
   'workspace:data': {
     title: 'Workspace Data',
-    description: 'Managed content-addressable blob store (deduped, checksum-keyed). Opaque by design — the tree is the navigation; not meant for direct edits or export.',
+    description: 'Managed content-addressable blob store (deduped, checksum-keyed). Opaque by design: the tree is the navigation; not meant for direct edits or export.',
   },
   s3: {
     title: 'S3',
@@ -133,7 +133,7 @@ function AddLocalFolderForm({ workspaceId, onAdded }: { workspaceId: string; onA
     setBusy(true)
     try {
       await addBackend(workspaceId, 'file', { name: name.trim(), path: path.trim(), watch, readOnly })
-      showToast({ title: 'Added', description: `${name.trim()} mounted — initial scan running in the background` })
+      showToast({ title: 'Added', description: `${name.trim()} mounted; initial scan running in the background` })
       reset()
       setOpen(false)
       await onAdded()
@@ -178,7 +178,7 @@ function AddLocalFolderForm({ workspaceId, onAdded }: { workspaceId: string; onA
           watch
           <Toggle checked={watch} onClick={() => setWatch((v) => !v)} />
         </label>
-        <label className="flex items-center gap-1.5" title="Never delete bytes in this folder — Destroy degrades to a reference drop. Recommended for folders managed outside Canvas.">
+        <label className="flex items-center gap-1.5" title="Never delete bytes in this folder. Destroy degrades to a reference drop. Recommended for folders managed outside Canvas.">
           read-only
           <Toggle checked={readOnly} onClick={() => setReadOnly((v) => !v)} />
         </label>
@@ -219,7 +219,7 @@ function BackendSizeButton({ workspaceId, backend }: { workspaceId: string; back
       onClick={compute}
       disabled={busy}
       className="flex items-center gap-1.5 rounded border px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
-      title={usage ? `Computed ${new Date(usage.computedAt).toLocaleString()} — click to refresh` : 'Compute on-disk size (walks the backend folder — may take a while)'}
+      title={usage ? `Computed ${new Date(usage.computedAt).toLocaleString()}; click to refresh` : 'Compute on-disk size (walks the backend folder; may take a while)'}
     >
       <HardDrive className={`h-3 w-3 ${busy ? 'animate-pulse' : ''}`} />
       {busy ? 'Calculating…' : usage ? formatBytes(usage.bytes) : 'Size'}
@@ -246,7 +246,7 @@ function ClearThumbnailsButton({ workspaceId }: { workspaceId: string }) {
   }
 
   return (
-    <Button type="button" variant="outline" size="sm" disabled={busy} onClick={clear} title="Remove all cached thumbnails — they regenerate on demand">
+    <Button type="button" variant="outline" size="sm" disabled={busy} onClick={clear} title="Remove all cached thumbnails; they regenerate on demand">
       <Trash2 className={`mr-2 h-3.5 w-3.5 ${busy ? 'animate-pulse' : ''}`} />
       {busy ? 'Clearing…' : 'Clear thumbnails'}
     </Button>
@@ -280,7 +280,7 @@ function WorkspaceUsageSection({ workspaceId }: { workspaceId: string }) {
             <h2 className="text-sm font-semibold">Disk usage</h2>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            Total on-disk size of this workspace (index, blobs, home, cache) — what an export or sync would move.
+            Total on-disk size of this workspace (index, blobs, home, cache): what an export or sync would move.
             Computed on demand; may take a while on large workspaces.
           </p>
         </div>
@@ -645,7 +645,7 @@ function SearchTuning({ workspaceName, current, weights, floorMode: initialFloor
         </select>
         <p className="text-[11px] text-muted-foreground">
           Photo-vs-text distances shift with every query and every model, so one fixed cutoff
-          travels badly — a value tuned for one model keeps everything (or nothing) on the next.
+          travels badly: a value tuned for one model keeps everything (or nothing) on the next.
           Relative anchors on the best match for THIS query and survives a re-embed.
         </p>
       </div>
@@ -654,7 +654,7 @@ function SearchTuning({ workspaceName, current, weights, floorMode: initialFloor
           <label className="text-xs text-muted-foreground">Window width (distance from the best match)</label>
           <Input value={margin} onChange={(e) => setMargin(e.target.value)} placeholder="0.035" className="h-8 w-28 font-mono text-xs" inputMode="decimal" />
           <p className="text-[11px] text-muted-foreground">
-            Wider keeps photos that match your query only partly — which is what a photo matching
+            Wider keeps photos that match your query only partly, which is what a photo matching
             TWO things (a snowy window) looks like, since it sits further from each one than a pure
             example does. Too wide and everything gets in.
           </p>
@@ -667,7 +667,7 @@ function SearchTuning({ workspaceName, current, weights, floorMode: initialFloor
         <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="0.95" className="h-8 w-28 font-mono text-xs" inputMode="decimal" />
         <p className="text-[11px] text-muted-foreground">
           {floorMode === 'relative'
-            ? 'Nothing beyond this counts as a match however close it is to the best one. This is what lets a search of something you have no photos of come back empty — without it, a relative window always returns its nearest photo.'
+            ? 'Nothing beyond this counts as a match however close it is to the best one. This is what lets a search of something you have no photos of come back empty. Without it, a relative window always returns its nearest photo.'
             : 'Lower = stricter (fewer, more-relevant photos); raise if relevant photos are missing.'}
         </p>
       </div>
@@ -700,7 +700,7 @@ function SearchTuning({ workspaceName, current, weights, floorMode: initialFloor
         </label>
         <p className="text-[11px] text-muted-foreground">
           Attaches the raw (unfloored) image distances to each search and shows them above the
-          document list — the numbers this floor should be picked from. Local to this browser;
+          document list: the numbers this floor should be picked from. Local to this browser;
           costs a little extra work per query, so leave it off day to day.
         </p>
       </div>
@@ -1121,7 +1121,7 @@ export default function WorkspaceSettingsPage() {
     try {
       await cancelBackendSync(workspaceId, backend.driver, backend.address)
       await loadRuntimeSettings()
-      showToast({ title: 'Sync stopped', description: `${backend.address} — indexed files are kept; Re-sync resumes where it left off` })
+      showToast({ title: 'Sync stopped', description: `${backend.address}: indexed files are kept; Re-sync resumes where it left off` })
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to stop sync', variant: 'destructive' })
     } finally {
@@ -1348,7 +1348,7 @@ export default function WorkspaceSettingsPage() {
                     {backend.lastError && <p className="mt-2 text-xs text-destructive">{backend.lastError}</p>}
                     {cfg.readOnly === true && (
                       <p className="mt-1 text-[11px] text-warning">
-                        Read-only: the web UI / REST API never deletes bytes on this backend — Destroy degrades to a reference drop.
+                        Read-only: the web UI / REST API never deletes bytes on this backend. Destroy degrades to a reference drop.
                         Recommended when the folder is exported elsewhere (e.g. via Samba).
                       </p>
                     )}
@@ -1396,7 +1396,7 @@ export default function WorkspaceSettingsPage() {
                       </Button>
                     ))}
                     {alwaysOn ? (
-                      <span className="rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground" title="Structural workspace store — cannot be disabled">always on</span>
+                      <span className="rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground" title="Structural workspace store; cannot be disabled">always on</span>
                     ) : (
                       <Toggle checked={!!backend.enabled} disabled={!canToggle || busyAction === `backend:${backendId}`} onClick={() => toggleDataBackend(backend)} />
                     )}
@@ -1439,7 +1439,7 @@ export default function WorkspaceSettingsPage() {
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Internal working store: local copies of remote resources and derived artifacts (thumbnails).
-                  Regenerable — safe to clear.
+                  Regenerable; safe to clear.
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-3 max-sm:w-full max-sm:flex-wrap">
@@ -1605,14 +1605,14 @@ function ReindexSection({ workspaceName, vectorSpaces, onDone }: { workspaceName
       title: 'Bitmaps',
       ops: [
         { key: 'timelines', label: 'Reindex timelines', description: 'Rebuild the created/updated timelines from document data.', fn: () => adminReindexTimelines(workspaceName) },
-        { key: 'mime', label: 'Reindex MIME types', description: 'Rebuild the per-MIME-type presence bitmaps (data/mime/*) from stored docs — backfills blobs indexed before mime bitmaps existed.', fn: () => adminReindexMime(workspaceName) },
+        { key: 'mime', label: 'Reindex MIME types', description: 'Rebuild the per-MIME-type presence bitmaps (data/mime/*) from stored docs. Backfills blobs indexed before mime bitmaps existed.', fn: () => adminReindexMime(workspaceName) },
       ],
     },
     {
       title: 'Full-text (BM25)',
       ops: [
         { key: 'fts', label: 'Backfill', description: 'Index documents missing from the full-text table. Fast, skips already-indexed.', fn: () => adminReindexSearch(workspaceName) },
-        { key: 'fts-rebuild', label: 'Rebuild', description: 'Wipe the full-text table and rebuild from scratch — use when counts drift.', confirm: 'Wipe the FTS index and rebuild it from scratch?', fn: () => adminReindexSearch(workspaceName, true) },
+        { key: 'fts-rebuild', label: 'Rebuild', description: 'Wipe the full-text table and rebuild from scratch. Use when counts drift.', confirm: 'Wipe the FTS index and rebuild it from scratch?', fn: () => adminReindexSearch(workspaceName, true) },
         { key: 'fts-optimize', label: 'Optimize', description: 'Compact fragments + prune old versions of the full-text table.', fn: () => adminOptimize(workspaceName, 'fts') },
       ],
     },

@@ -157,7 +157,7 @@ export function ContextM2Detail() {
               isDirtyUrl && 'border-warning/60 bg-warning/10',
             )}
             placeholder="workspace://path"
-            title={isDirtyUrl ? 'Not applied yet — press Set' : undefined}
+            title={isDirtyUrl ? 'Not applied yet; press Set' : undefined}
           />
           <Button size="sm" className="h-7 px-2 text-xs shrink-0" onClick={handleSave} disabled={isSaving}>
             {isSaving ? '…' : 'Set'}

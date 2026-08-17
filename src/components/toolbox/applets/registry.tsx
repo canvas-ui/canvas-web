@@ -55,7 +55,7 @@ export const APPLETS: AppletDescriptor[] = [
     label: 'Lens',
     icon: ScanEye,
     modes: ['context'],
-    description: 'Point a camera at things — matching documents surface live',
+    description: 'Point a camera at things; matching documents surface live',
     Component: LensApplet,
   },
 ]

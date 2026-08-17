@@ -1415,7 +1415,7 @@ export default function WorkspaceDetailPage() {
                 ? 'bg-warning/15 border-warning/40 text-warning'
                 : 'hover:bg-accent text-muted-foreground hover:text-foreground',
             )}
-            title="Show only documents not filed into any context/directory tree — safe to purge from the backend"
+            title="Show only documents not filed into any context/directory tree (safe to purge from the backend)"
           >
             Unfiled only
           </button>

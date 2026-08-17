@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/use-toast'
 import { getRules, saveRules, backfillHook, getHooksMeta, type HookRule, type HookRuleAction } from '@/services/hooks'
 import { listScripts } from '@/services/scripts'
+import { listBackends, type Backend } from '@/services/workspace'
 import { LinkToCard, type LinkToTarget } from '@/components/menu/shared/LinkToCard'
 
 // Outlook-style rule builder: clickable conditions + predefined actions that
@@ -46,15 +47,16 @@ const CONDITION_FIELDS: Array<{ key: ConditionKey; label: string; hint: string }
   { key: 'urlContains', label: 'URL contains', hint: '/watch?v=' },
   { key: 'path', label: 'path starts with', hint: '/to-sort or backends:/github/owner/repo' },
   { key: 'mime', label: 'file type (mime) matches', hint: 'image/*' },
-  { key: 'attachment', label: 'has attachment (mime) matching', hint: 'application/pdf — or * for any' },
+  { key: 'attachment', label: 'has attachment (mime) matching', hint: 'application/pdf, or * for any' },
 ]
 
-type ActionKey = 'link' | 'unlink' | 'tag' | 'notify' | 'agent' | 'script' | 'delete' | 'destroy'
+type ActionKey = 'link' | 'unlink' | 'tag' | 'store' | 'notify' | 'agent' | 'script' | 'delete' | 'destroy'
 
 const ACTION_FIELDS: Array<{ key: ActionKey; label: string }> = [
   { key: 'link', label: 'file it into a folder' },
   { key: 'unlink', label: 'remove it from a folder' },
   { key: 'tag', label: 'add tags' },
+  { key: 'store', label: 'move/copy the file to a storage backend' },
   { key: 'notify', label: 'send me a message' },
   { key: 'agent', label: 'ask an agent' },
   { key: 'script', label: 'run a script' },
@@ -66,7 +68,12 @@ interface ConditionRow { field: ConditionKey; value: string }
 interface ActionRow {
   kind: ActionKey
   a: string // primary slot: link/unlink paths / tags / notify message / agent slug / script path
-  b: string // secondary slot: link tags / agent prompt
+  b: string // secondary slot: link tags / agent prompt / store key template
+  // store action: which backend the bytes must currently be on ('' = any other
+  // than the target), and whether to move or copy them.
+  storeFrom: string
+  storeMode: 'move' | 'copy'
+  storeConflict: 'rename' | 'error' | 'overwrite'
   // output pipeline (agent reply / script stdout):
   notePath: string // save output as note at this path
   noteTitle: string // note title (templated)
@@ -77,7 +84,8 @@ interface ActionRow {
 }
 
 const emptyAction = (kind: ActionKey): ActionRow => ({
-  kind, a: '', b: '', notePath: '', noteTitle: '', filePath: '', fileBackend: 'home', fileInsert: '', notifyReply: false,
+  kind, a: '', b: '', storeFrom: '', storeMode: 'move', storeConflict: 'rename',
+  notePath: '', noteTitle: '', filePath: '', fileBackend: 'home', fileInsert: '', notifyReply: false,
 })
 
 interface RuleForm {
@@ -153,6 +161,16 @@ function buildRule(form: RuleForm): HookRule {
     if (row.kind === 'link' && a) then.push({ action: 'link', paths: splitList(a), ...(b ? { tags: splitList(b) } : {}) })
     if (row.kind === 'unlink' && a) then.push({ action: 'unlink', paths: splitList(a) })
     if (row.kind === 'tag' && a) then.push({ action: 'tag', tags: splitList(a) })
+    if (row.kind === 'store' && a) {
+      then.push({
+        action: 'store',
+        to: a,
+        ...(row.storeFrom ? { from: row.storeFrom } : {}),
+        mode: row.storeMode,
+        ...(b ? { key: b } : {}),
+        onConflict: row.storeConflict,
+      })
+    }
     if (row.kind === 'notify' && a) then.push({ action: 'notify', message: a })
     if (row.kind === 'delete') then.push({ action: 'delete' })
     if (row.kind === 'destroy') then.push({ action: 'destroy' })
@@ -248,6 +266,15 @@ function parseRule(rule: HookRule): RuleForm | null {
       actions.push({ ...emptyAction('tag'), a: (act.tags as string[]).join(', ') })
     } else if (act.action === 'notify' && typeof act.message === 'string') {
       actions.push({ ...emptyAction('notify'), a: act.message })
+    } else if (act.action === 'store' && typeof act.to === 'string') {
+      actions.push({
+        ...emptyAction('store'),
+        a: act.to,
+        b: typeof act.key === 'string' ? act.key : '',
+        storeFrom: typeof act.from === 'string' ? act.from : (Array.isArray(act.from) ? String(act.from[0] ?? '') : ''),
+        storeMode: act.mode === 'copy' ? 'copy' : 'move',
+        storeConflict: act.onConflict === 'error' || act.onConflict === 'overwrite' ? act.onConflict : 'rename',
+      })
     } else if (act.action === 'delete') {
       actions.push(emptyAction('delete'))
     } else if (act.action === 'destroy') {
@@ -335,6 +362,7 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
   const [form, setForm] = useState<RuleForm | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [scripts, setScripts] = useState<string[]>([])
+  const [backends, setBackends] = useState<Backend[]>([])
 
   // Spinner for workspace switches is set during render (prev-value-in-state);
   // the initial mount is covered by isLoading's initializer. The load effect
@@ -352,6 +380,13 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
   }, [workspaceId])
   useEffect(() => {
     listScripts(workspaceId).then((files) => setScripts(files.map((f) => f.path))).catch(() => setScripts([]))
+  }, [workspaceId])
+  // Storage backends for the 'store' action's pickers (writable ones only —
+  // a rule that files photos onto a read-only mount can never succeed).
+  useEffect(() => {
+    listBackends(workspaceId)
+      .then((list) => setBackends(list.filter((b) => b.kind === 'storage' && b.config?.readOnly !== true)))
+      .catch(() => setBackends([]))
   }, [workspaceId])
 
   // Schema options from what's ACTUALLY in the workspace DB (with counts);
@@ -419,7 +454,7 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
       const run = await backfillHook(workspaceId, { ruleId: id })
       showToast({
         title: 'Backfill finished',
-        description: `${run.matched} documents processed, ${run.failed} failed — details in the Runs tab`,
+        description: `${run.matched} documents processed, ${run.failed} failed. Details in the Runs tab`,
         ...(run.failed ? { variant: 'destructive' as const } : {}),
       })
     } catch (error) {
@@ -470,7 +505,7 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
     <div className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="min-w-0 text-sm text-muted-foreground">
-          Rules run automatically when items arrive — no code needed. Each rule is stored in{' '}
+          Rules run automatically when items arrive; no code needed. Each rule is stored in{' '}
           <span className="font-mono">rules.json</span> and can be fine-tuned there.
         </p>
         <div className="flex gap-2 shrink-0">
@@ -510,14 +545,14 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
               </select>
               <label
                 className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer"
-                title="By default rules ignore items created by other rules, hooks or agents (so automations can't trigger each other in a loop). Tick to also react to those — a server-side depth limit still stops runaway chains."
+                title="By default rules ignore items created by other rules, hooks or agents (so automations can't trigger each other in a loop). Tick to also react to those. A server-side depth limit still stops runaway chains."
               >
                 <input type="checkbox" checked={form.cascade} onChange={(e) => setField('cascade', e.target.checked)} />
                 incl. automation-created items
               </label>
               <label
                 className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer"
-                title="Instead of running immediately, the rule's actions are held in the Pending queue for you to review — approve (optionally amended) or decline. Leave unticked to run automatically."
+                title="Instead of running immediately, the rule's actions are held in the Pending queue for you to review: approve (optionally amended) or decline. Leave unticked to run automatically."
               >
                 <input type="checkbox" checked={form.approval} onChange={(e) => setField('approval', e.target.checked)} />
                 request my approval before running
@@ -554,7 +589,7 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
               <Plus className="mr-1 h-3 w-3" /> add condition
             </Button>
             <p className="text-xs text-muted-foreground">
-              Conditions combine with AND. Separate alternatives with <span className="font-mono">|</span> for OR —
+              Conditions combine with AND. Separate alternatives with <span className="font-mono">|</span> for OR,
               e.g. subject contains <span className="font-mono">FMO | DC Migration | SDI</span>.
             </p>
           </div>
@@ -571,7 +606,7 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
                   {row.notePath.trim() && (
                     <Input className="h-7 w-56 text-xs" placeholder={'note title, e.g. Summary: {{doc.data.subject}}'} value={row.noteTitle} onChange={(e) => set({ noteTitle: e.target.value })} />
                   )}
-                  <Input className="h-7 w-56 font-mono text-xs" placeholder="save as file, e.g. logs/agent.log" title="Relative path — written under the workspace home/ folder, or into the data blob store" value={row.filePath} onChange={(e) => set({ filePath: e.target.value })} />
+                  <Input className="h-7 w-56 font-mono text-xs" placeholder="save as file, e.g. logs/agent.log" title="Relative path, written under the workspace home/ folder or into the data blob store" value={row.filePath} onChange={(e) => set({ filePath: e.target.value })} />
                   {row.filePath.trim() && (<>
                     <select className="h-7 rounded-md border bg-background px-1 text-xs outline-none" value={row.fileBackend} onChange={(e) => set({ fileBackend: e.target.value as 'home' | 'data' })}>
                       <option value="home">in home folder</option>
@@ -595,17 +630,58 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
                     <Input className="h-8 w-44 font-mono text-sm" placeholder="tags (optional)" value={row.b} onChange={(e) => set({ b: e.target.value })} />
                   </>)}
                   {row.kind === 'unlink' && (<>
-                    <Input className="h-8 w-64 font-mono text-sm" placeholder="/inbox or dir:/staging" title="Remove (unlink) the item from these paths — it stays everywhere else. Comma-separate multiple paths." value={row.a} onChange={(e) => set({ a: e.target.value })} />
+                    <Input className="h-8 w-64 font-mono text-sm" placeholder="/inbox or dir:/staging" title="Remove (unlink) the item from these paths; it stays everywhere else. Comma-separate multiple paths." value={row.a} onChange={(e) => set({ a: e.target.value })} />
                     {pickerButton('action', i)}
                   </>)}
                   {row.kind === 'tag' && (
                     <Input className="h-8 w-64 font-mono text-sm" placeholder="urgent, follow-up" value={row.a} onChange={(e) => set({ a: e.target.value })} />
                   )}
+                  {row.kind === 'store' && (
+                    <div className="flex w-full flex-wrap items-center gap-2 pl-1">
+                      <span className="text-xs text-muted-foreground">to</span>
+                      {backends.length ? (
+                        <select className={`${selectClass} font-mono`} value={row.a} onChange={(e) => set({ a: e.target.value })}>
+                          <option value="">pick a backend…</option>
+                          {backends.map((b) => <option key={b.address} value={b.address}>{b.address}</option>)}
+                        </select>
+                      ) : (
+                        <Input className="h-8 w-48 font-mono text-sm" placeholder="workspace:home" value={row.a} onChange={(e) => set({ a: e.target.value })} />
+                      )}
+                      <select className={selectClass} value={row.storeMode} onChange={(e) => set({ storeMode: e.target.value as 'move' | 'copy' })}>
+                        <option value="move">move the file there</option>
+                        <option value="copy">keep a copy here too</option>
+                      </select>
+                      <span className="text-xs text-muted-foreground">only when it is on</span>
+                      {backends.length ? (
+                        <select className={`${selectClass} font-mono`} value={row.storeFrom} onChange={(e) => set({ storeFrom: e.target.value })}>
+                          <option value="">any other backend</option>
+                          {backends.map((b) => <option key={b.address} value={b.address}>{b.address}</option>)}
+                        </select>
+                      ) : (
+                        <Input className="h-8 w-48 font-mono text-sm" placeholder="workspace:data (optional)" value={row.storeFrom} onChange={(e) => set({ storeFrom: e.target.value })} />
+                      )}
+                      <Input
+                        className="h-8 w-full max-w-xl font-mono text-sm"
+                        placeholder={'Fotky/{{YYYY}}/{{MM}}/{{YYYY}}{{MM}}{{DD}}_{{HH}}{{mm}}{{ss}}{{ext}}'}
+                        title="Destination path on the target backend. Tokens: {{YYYY}} {{MM}} {{DD}} {{HH}} {{mm}} {{ss}} (EXIF capture time when present, else the item's date), {{ext}} {{basename}} {{filename}}. Leave empty to keep the current name."
+                        value={row.b}
+                        onChange={(e) => set({ b: e.target.value })}
+                      />
+                      <select className={selectClass} value={row.storeConflict} onChange={(e) => set({ storeConflict: e.target.value as 'rename' | 'error' | 'overwrite' })}>
+                        <option value="rename">if the name is taken: add -1, -2…</option>
+                        <option value="error">if the name is taken: skip</option>
+                        <option value="overwrite">if the name is taken: overwrite</option>
+                      </select>
+                      <span className="w-full text-xs text-muted-foreground">
+                        Moves the stored bytes only — the item keeps its id, tags and every folder it is filed in.
+                      </span>
+                    </div>
+                  )}
                   {row.kind === 'notify' && (
                     <Input className="h-8 w-96 max-w-full text-sm" placeholder={'New mail from {{doc.data.from}}: {{doc.data.subject}}'} value={row.a} onChange={(e) => set({ a: e.target.value })} />
                   )}
                   {row.kind === 'delete' && (
-                    <span className="text-xs text-muted-foreground">removes it from the Canvas index — files, blobs and mail on storage backends stay untouched</span>
+                    <span className="text-xs text-muted-foreground">removes it from the Canvas index; files, blobs and mail on storage backends stay untouched</span>
                   )}
                   {row.kind === 'destroy' && (
                     <span className="text-xs text-destructive">⚠ irreversible: deletes the stored bytes too (blobs, workspace files, mail on the server), then removes it from the index</span>
@@ -683,7 +759,7 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
           <p className="p-3 text-sm text-muted-foreground">Loading…</p>
         ) : rules.length === 0 ? (
           <p className="p-3 text-sm text-muted-foreground">
-            No rules yet. Create one — e.g. “when an email arrives and the sender contains
+            No rules yet. Create one, e.g. “when an email arrives and the sender contains
             <span className="font-mono"> boss@</span>, file it into <span className="font-mono">/work/urgent</span> and notify me”.
           </p>
         ) : (
@@ -711,7 +787,7 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
                   </Button>
                   <Button
                     size="sm" variant="ghost" className="h-7 w-7 p-0 touch-target"
-                    title={editable ? 'Edit rule' : 'This rule uses advanced matchers — edit it as JSON'}
+                    title={editable ? 'Edit rule' : 'This rule uses advanced matchers; edit it as JSON'}
                     disabled={!editable}
                     onClick={() => { const parsed = parseRule(rule); if (parsed) setForm(parsed) }}
                   >

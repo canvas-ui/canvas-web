@@ -118,7 +118,7 @@ function PipelineStatus({
       showToast({
         title: res.paused ? 'Embedding paused' : 'Embedding resumed',
         description: res.paused
-          ? `${res.pending.toLocaleString()} job(s) held for this workspace — resume any time, and a restart also resumes.`
+          ? `${res.pending.toLocaleString()} job(s) held for this workspace. Resume any time; a restart also resumes.`
           : `${res.pending.toLocaleString()} job(s) draining.`,
       })
       await poll()
@@ -158,7 +158,7 @@ function PipelineStatus({
         {queue?.ingestDisabled && (
           <span
             className="rounded bg-warning-subtle px-1.5 py-0.5 text-[10px] font-medium text-warning"
-            title="CANVAS_INFERD_INGEST_DISABLED=true — nothing new is enqueued; existing vectors still serve search"
+            title="CANVAS_INFERD_INGEST_DISABLED=true: nothing new is enqueued; existing vectors still serve search"
           >
             ingest disabled
           </span>
@@ -174,7 +174,7 @@ function PipelineStatus({
             disabled={busy}
             onClick={toggle}
             title={queue.paused
-              ? 'Resume embedding — the held backlog drains'
+              ? 'Resume embedding; the held backlog drains'
               : 'Pause after the current batch. Stops the CPU-heavy model inference; documents keep indexing and stay searchable by text.'}
           >
             {busy ? '…' : queue.paused ? 'Resume' : 'Pause'}
@@ -241,7 +241,7 @@ function SupersededTables({
   return (
     <Fold
       title={`Previous models (${superseded.length})`}
-      hint="Kept on disk so switching back is instant. Reclaiming deletes their vectors for good — the only irreversible step here."
+      hint="Kept on disk so switching back is instant. Reclaiming deletes their vectors for good (the only irreversible step here)."
     >
       <div className="divide-y">
         {superseded.map(t => (
@@ -303,7 +303,7 @@ function AdvancedFill({
       if (result.ingestDisabled) {
         showToast({
           title: 'Ingest disabled',
-          description: 'CANVAS_INFERD_INGEST_DISABLED=true — nothing was enqueued. Existing vectors still serve search.',
+          description: 'CANVAS_INFERD_INGEST_DISABLED=true: nothing was enqueued. Existing vectors still serve search.',
           variant: 'destructive',
         })
       } else {
@@ -356,7 +356,7 @@ function AdvancedFill({
           Re-embed documents that are already embedded
           {reindex && scope.trim() && (
             <span className="mt-1 block text-[11px] text-warning">
-              Combined with a path limit this clears the WHOLE space, not just that subtree — a partial clear is not
+              Combined with a path limit this clears the WHOLE space, not just that subtree. A partial clear is not
               expressible in the ledger. Leave this off unless you mean to redo everything.
             </span>
           )}
@@ -404,28 +404,28 @@ const IMAGE_CAPTION_BACKENDS = [
     provider: 'blip',
     model: 'HuggingFaceTB/SmolVLM-500M-Instruct',
     task: 'instruct' as const,
-    label: 'SmolVLM 500M — prompted description (recommended)',
+    label: 'SmolVLM 500M: prompted description (recommended)',
     note: '~500 MB. Follows the prompt below, so architecture/materials/setting can be asked for.',
   },
   {
     provider: 'blip',
     model: 'HuggingFaceTB/SmolVLM-256M-Instruct',
     task: 'instruct' as const,
-    label: 'SmolVLM 256M — prompted, smaller',
+    label: 'SmolVLM 256M: prompted, smaller',
     note: '~250 MB. Same prompting, weaker; for memory-tight boxes.',
   },
   {
     provider: 'blip',
     model: 'onnx-community/Florence-2-base-ft',
     task: 'florence2' as const,
-    label: 'Florence-2 base — detailed caption',
+    label: 'Florence-2 base: detailed caption',
     note: 'Detailed multi-sentence captions, but not steerable: no prompt, fixed task token.',
   },
   {
     provider: 'blip',
     model: 'Xenova/vit-gpt2-image-captioning',
     task: 'caption' as const,
-    label: 'vit-gpt2 — one short sentence (weakest)',
+    label: 'vit-gpt2: one short sentence (weakest)',
     note: 'The old default. Terse and repetition-prone; kept for continuity and low memory.',
   },
 ] as const
@@ -573,7 +573,7 @@ function SummarizeControls({
   return (
     <Fold
       title="Summaries"
-      hint="Generate descriptions for indexed images (metadata.summary) — searchable via full-text and dense search"
+      hint="Generate descriptions for indexed images (metadata.summary); searchable via full-text and dense search"
     >
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -651,10 +651,10 @@ function SummarizeControls({
             {/* An abort says why it stopped and that the rest were never tried —
                 more useful than the first per-image error underneath it. */}
             {summaryStatus.aborted
-              ? ` — ${summaryStatus.abortedReason || 'model worker died'}. Remaining images were not attempted; generate again to retry.`
+              ? `. ${summaryStatus.abortedReason || 'model worker died'}. Remaining images were not attempted; generate again to retry.`
               : summaryStatus.cancelled
-                ? ' — stopped by you. The remaining images were left untouched; generate again to continue.'
-                : firstError ? ` — ${firstError}` : ''}
+                ? '. Stopped by you. The remaining images were left untouched; generate again to continue.'
+                : firstError ? `. ${firstError}` : ''}
           </p>
         )}
         {/* Same two-verb split as the embedding fill above: add what is
@@ -765,12 +765,12 @@ export function InferdSettingsPanel({
       setMovedSpaces(result.movedSpaces || [])
       if (result.movedSpaces?.length) {
         showToast({
-          title: 'Saved — fill to finish',
+          title: 'Saved; fill to finish',
           description: `${result.movedSpaces.join(', ')} now targets a new model. The switch is live, but the new table is empty until you fill it.`,
         })
       } else if (result.applied === false) {
         showToast({
-          title: 'Saved — applies on next start',
+          title: 'Saved; applies on next start',
           description: 'The workspace is not running, so the new spaces take effect when it starts.',
         })
       } else {
@@ -794,7 +794,7 @@ export function InferdSettingsPanel({
       if (result.ingestDisabled) {
         showToast({
           title: 'Ingest disabled',
-          description: 'CANVAS_INFERD_INGEST_DISABLED=true — nothing was enqueued. Existing vectors still serve search.',
+          description: 'CANVAS_INFERD_INGEST_DISABLED=true: nothing was enqueued. Existing vectors still serve search.',
           variant: 'destructive',
         })
         return
@@ -886,7 +886,7 @@ export function InferdSettingsPanel({
 
       <p className="text-xs text-muted-foreground">
         Stored in this workspace's own <span className="font-mono">workspace.json</span>, so it travels with the
-        workspace. Settings resolve in layers — built-in, then server, then your defaults, then this workspace, which
+        workspace. Settings resolve in layers: built-in, then server, then your defaults, then this workspace, which
         wins. Changes apply live, with no restart.
       </p>
     </div>

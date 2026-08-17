@@ -26,7 +26,7 @@ export function FileMetaFields({ fields: f, idPrefix = 'file', multiple = false 
           value={f.comment}
           onChange={(e) => f.setComment(e.target.value)}
           rows={3}
-          placeholder="Optional — searchable, and the only text a photo has"
+          placeholder="Optional; searchable, and the only text a photo has"
           className={textareaClass}
         />
         {multiple && f.tags.length + f.comment.trim().length > 0 && (

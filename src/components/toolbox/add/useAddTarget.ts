@@ -129,7 +129,7 @@ export async function linkExistingDocuments(target: AddTarget, documentIds: numb
 }
 
 export function describeTarget(target: AddTarget): string {
-  if (!target) return 'No destination — open a workspace path or a context first'
+  if (!target) return 'No destination. Open a workspace path or a context first'
   if (target.mode === 'context') return 'Adds to the current context'
   return `Adds to ${target.path === '/' ? '/' : target.path}`
 }

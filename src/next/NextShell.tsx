@@ -38,7 +38,7 @@ export default function NextShell() {
       <div className="relative flex h-full flex-col items-center justify-center gap-3 select-none">
         <p className="text-2xl font-light tracking-wide text-white/80">Canvas</p>
         <p className="text-sm text-white/40">
-          say something, or tap the orb — swipe up for canvases (soon)
+          say something, or tap the orb. Swipe up for canvases (soon)
         </p>
       </div>
 

@@ -18,7 +18,7 @@ const OPTIONS = [
     value: 'home' as const,
     icon: HardDrive,
     title: 'Roaming home',
-    blurb: 'The workspace folder IS your drive — mount it over WebDAV and it looks like a plain home directory. Canvas keeps its files in a hidden .workspace/.',
+    blurb: 'The workspace folder IS your drive. Mount it over WebDAV and it looks like a plain home directory. Canvas keeps its files in a hidden .workspace/.',
     tree: ['your files, at the top level', '.workspace/  ← hidden, ignored'],
   },
 ]

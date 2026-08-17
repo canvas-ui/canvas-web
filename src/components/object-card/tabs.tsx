@@ -301,7 +301,7 @@ export function SynapsesTab({ document, workspaceId }: TabProps) {
       })}
       <div>
         <h3 className="mb-2 font-semibold">Documents</h3>
-        <p className="text-sm text-muted-foreground">Related documents — coming soon.</p>
+        <p className="text-sm text-muted-foreground">Related documents: coming soon.</p>
       </div>
     </div>
   )
@@ -411,7 +411,7 @@ export function BackendsTab({ document, workspaceId, onChanged }: TabProps) {
       </div>
 
       {isJsonDoc && (
-        <p className="text-sm text-muted-foreground">No byte locations — this object lives only in the workspace database.</p>
+        <p className="text-sm text-muted-foreground">No byte locations; this object lives only in the workspace database.</p>
       )}
 
       {locations.map((loc) => {
@@ -441,7 +441,7 @@ export function BackendsTab({ document, workspaceId, onChanged }: TabProps) {
                   onClick={() => onRemoveClick(loc)}
                   disabled={busy}
                   className="text-muted-foreground hover:text-destructive disabled:opacity-50"
-                  title={loc.deletable ? 'Remove from backend' : 'Drop reference (bytes stay — backend is read-only)'}
+                  title={loc.deletable ? 'Remove from backend' : 'Drop reference (bytes stay; backend is read-only)'}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>

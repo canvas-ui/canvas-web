@@ -64,7 +64,7 @@ export default function SharedViewerPage() {
       setDocuments(Array.isArray(list) ? (list as Array<{ id?: number | string; schema?: string }>) : [])
     } catch (err) {
       const hint = resourceUrl.includes('/rest/v2/workspaces/') ? 'Ensure the URL uses /rest/v2/pub/workspaces/<workspace-id> and the token matches that workspace.' : resourceUrl.includes('/rest/v2/contexts/') ? 'Ensure the URL uses /rest/v2/pub/contexts/<context-id>.' : undefined
-      showToast({ title: 'Error', description: `${err instanceof Error ? err.message : 'Failed to load shared resource'}${hint ? ` — ${hint}` : ''}`, variant: 'destructive' })
+      showToast({ title: 'Error', description: `${err instanceof Error ? err.message : 'Failed to load shared resource'}${hint ? `: ${hint}` : ''}`, variant: 'destructive' })
       setMeta(null)
       setDocuments([])
     } finally {

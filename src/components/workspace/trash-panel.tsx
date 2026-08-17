@@ -123,7 +123,7 @@ export function TrashPanel({ workspaceName }: { workspaceName: string }) {
           <h2 className="text-sm font-medium">Trash</h2>
           <p className="text-xs text-muted-foreground mt-1 max-w-2xl">
             Removing a document from a path detaches it; when that was its last place, it lands here so
-            nothing goes missing. Restoring puts it back everywhere it was. Emptying deletes for real —
+            nothing goes missing. Restoring puts it back everywhere it was. Emptying deletes for real:
             from the index and from canvas-owned storage, never from external backends.
           </p>
         </div>

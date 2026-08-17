@@ -238,7 +238,7 @@ export function MenuBar() {
             <TooltipTrigger asChild>
               <button
                 type="button"
-                aria-label={state.user?.email ? `Profile — ${state.user.email}` : 'Profile'}
+                aria-label={state.user?.email ? `Profile: ${state.user.email}` : 'Profile'}
                 onClick={() => navigate('/home')}
                 className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-accent/50 transition-colors"
               >

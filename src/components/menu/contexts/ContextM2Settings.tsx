@@ -46,7 +46,7 @@ export function ContextM2Settings() {
   return (
     <div className="flex h-full flex-col">
       <M2Header
-        title={`Settings — ${context?.name || entityId || 'Context'}`}
+        title={`Settings: ${context?.name || entityId || 'Context'}`}
         icon={context?.icon || DEFAULT_WORKSPACE_ICON}
         accentColor={context?.color ?? null}
         // Mobile: back is "up one step" inside the drawer (see WorkspaceM2Settings).
