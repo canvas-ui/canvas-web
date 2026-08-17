@@ -39,6 +39,7 @@ const DRIVERS: Record<string, { label: string; icon: string; blurb: string; fiel
       { key: 'token', label: 'Personal access token', hint: 'Optional for public repos; required for write-back.', secret: true },
       { key: 'repos', label: 'Repositories', placeholder: 'owner/repo, one per line', hint: 'Issues from each repo sync as todos.', list: true, required: true },
       { key: 'writeBack', label: 'Manage issues from Canvas', hint: 'Create, edit and close issues — needs a PAT with repo scope.', bool: true },
+      { key: 'pruneRemoved', label: 'Remove items deleted at the source', hint: 'After each sync, issues that no longer exist in the repo are dropped from the mirror (kept as location-less orphans until database retention GC; skipped whenever the repo can’t be fully listed).', bool: true },
     ],
   },
   slack: {

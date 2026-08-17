@@ -23,6 +23,7 @@ interface TabProps {
 
 export function ViewTab({ document, workspaceId, initialEdit = false, onChanged }: TabProps & { initialEdit?: boolean }) {
   const isPublic = usePublicShareCode() != null
+  const { showErrorToast } = useToastHelpers()
   // Every non-public document is editable — at minimum the universal comment
   // section; schema-specific fields (url/title/body) render only for note/link/tab.
   const canEdit = !isPublic
@@ -50,7 +51,18 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
     // h-full and long content scrolls, while the Edit button / comment stay put.
     <div className="flex h-full min-h-0 flex-col gap-3">
       {canEdit && (
-        <div className="flex shrink-0 justify-end">
+        <div className="flex shrink-0 justify-end gap-2">
+          {/* Best-copy download (server picks the first reachable location);
+              the Storage tab keeps its per-location download buttons. */}
+          {document.schema === 'data/schema/file' && (
+            <Button
+              variant="outline" size="sm"
+              onClick={() => downloadDocument(workspaceId, document.id, getLocationFilename(document) || `document-${document.id}`)
+                .catch((e) => showErrorToast(e instanceof Error ? e.message : String(e)))}
+            >
+              <Download className="mr-1 h-3 w-3" /> Download
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
             <Pencil className="mr-1 h-3 w-3" /> Edit
           </Button>
