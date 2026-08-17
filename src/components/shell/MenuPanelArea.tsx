@@ -95,8 +95,15 @@ export function MenuPanelArea() {
             : 'relative',
         )}
       >
-        {/* M1 layer */}
-        <div className="absolute inset-0 flex flex-col" style={mobileOverlay ? undefined : { minWidth: width }}>
+        {/* M1 layer — fades out while M2 slides over it: with translucent
+            themes (frost) M2 no longer occludes, so M1 must yield itself. */}
+        <div
+          className={cn(
+            'absolute inset-0 flex flex-col transition-opacity duration-200 ease-out',
+            state.m2Open && 'opacity-0 pointer-events-none',
+          )}
+          style={mobileOverlay ? undefined : { minWidth: width }}
+        >
           {state.activeSection === 'contexts' && <ContextList />}
           {state.activeSection === 'workspaces' && <WorkspaceList />}
           {state.activeSection === 'agents' && <AgentList />}
