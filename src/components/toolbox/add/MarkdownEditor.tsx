@@ -117,7 +117,9 @@ export function MarkdownEditor({ value, onChange, placeholder }: MarkdownEditorP
 
   // Keep editor in sync if the value is reset externally (e.g. after submit).
   useEffect(() => {
-    if (!editor) return
+    // isDestroyed guard: a destroyed editor is truthy but its commandManager
+    // is nulled — editor.commands then throws (StrictMode remount race).
+    if (!editor || editor.isDestroyed) return
     const current = getMarkdown(editor)
     if (value !== current) {
       editor.commands.setContent(value || '', { emitUpdate: false })

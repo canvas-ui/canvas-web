@@ -22,7 +22,10 @@ export function NoteViewer({ content }: { content: string }) {
   })
 
   useEffect(() => {
-    if (!editor) return
+    // A DESTROYED editor is truthy but has commandManager nulled —
+    // editor.commands then throws. Happens when the effect closes over the
+    // first StrictMode-mount's instance or content lands after unmount.
+    if (!editor || editor.isDestroyed) return
     const current = getMarkdown(editor)
     if (content !== current) editor.commands.setContent(content || '', { emitUpdate: false })
   }, [content, editor])
