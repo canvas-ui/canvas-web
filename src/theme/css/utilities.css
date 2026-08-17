@@ -13,9 +13,15 @@
 
 /* ── Surfaces ──────────────────────────────────────────────────────────── */
 
-/* The desk: the neutral backdrop that sheets rest on. */
+/* The desk: the neutral backdrop that sheets rest on. An optional global
+   wallpaper (Settings > Appearance) rides on top of the theme color via
+   CSS vars set by lib/wallpaper.ts — no image, no change. */
 @utility surface-desk {
   background-color: var(--color-desk);
+  background-image: var(--wallpaper-image, none);
+  background-size: var(--wallpaper-size, cover);
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
 /* A sheet of paper: the main content area and full-height panels. */

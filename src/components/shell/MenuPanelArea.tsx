@@ -1,3 +1,4 @@
+import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { useCallback, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useIsMobile } from '@/hooks/use-mobile'
@@ -38,7 +39,11 @@ function M2Content() {
 }
 
 export function MenuPanelArea() {
-  const { state, closeM1 } = useMenu()
+  const { state, closeM1, closeM2 } = useMenu()
+  // Esc closes the menu layers innermost-first: M2 drawer, then M1 panel.
+  // Registration order (M1 hook first) keeps M2 topmost when both open at once.
+  useEscapeClose(closeM1, state.m1Open && !state.m2Open)
+  useEscapeClose(closeM2, state.m2Open)
   const isMobile = useIsMobile()
   const [width, setWidth] = useState(DEFAULT_WIDTH)
   const [isDragging, setIsDragging] = useState(false)

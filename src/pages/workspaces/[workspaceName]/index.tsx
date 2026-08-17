@@ -16,6 +16,7 @@ import { DefaultCanvas } from '@/components/canvas/DefaultCanvas';
 import type { CanvasInfo } from '@/components/canvas/DefaultCanvas';
 import { ContentViewTabs } from '@/components/common/content-view-tabs';
 import { viewsFromLayerMetadata, DEFAULT_VIEW, type ContentView } from '@/components/common/content-views';
+import { ContentAppView } from '@/components/common/content-app-view';
 import { SchemaColumnsBoard } from '@/components/common/schema-columns-board';
 import { CanvasGrid } from '@/components/canvas/CanvasGrid';
 import type { WidgetFetchOpts, WidgetDocumentsResult } from '@/components/canvas/widget-types';
@@ -61,6 +62,8 @@ import socketService from '@/lib/socket';
 type WorkspaceSidePane = {
   treeName: string;
   path: string;
+  /** Pin the side pane to one of the path's named views (tab → side-by-side). */
+  viewId?: string;
 };
 
 type FocusedPane = 'left' | 'right';
@@ -1300,6 +1303,13 @@ export default function WorkspaceDetailPage() {
             contentViews.map(v => (v.id === activeContentView.id ? { ...v, columns } : v)),
           )}
         />
+      ) : !isBackendsPath && activeContentView.kind === 'app' && activeContentView.app ? (
+        <ContentAppView
+          app={activeContentView.app}
+          workspaceId={workspace.name}
+          treeName={selectedTreeName}
+          path={selectedPath}
+        />
       ) : null}
     </DefaultCanvas>
   );
@@ -1383,6 +1393,8 @@ export default function WorkspaceDetailPage() {
               activeId={activeContentViewId}
               onSelect={selectContentView}
               onSave={saveContentViews}
+              // Side-by-side: pin this view into the right pane (same path).
+              onOpenToSide={(viewId) => { setSidePane({ treeName: selectedTreeName, path: selectedPath, viewId }); setFocusedPane('right'); }}
               // Locked layers still allow metadata-only (presentation) updates
               // server-side — views are editable everywhere.
               readOnly={false}
@@ -1569,6 +1581,11 @@ function SideWorkspaceCanvas({
   const treeType: 'context' | 'directory' = treeTypeForName(pane.treeName);
   const selectedNode = findTreeNode(tree, pane.path);
   const isCanvas = selectedNode?.type === 'canvas';
+  // Tab pinned side-by-side: resolve the named view from the layer metadata.
+  // Board edits stay read-only here — the primary pane owns persistence.
+  const paneView = pane.viewId
+    ? viewsFromLayerMetadata(selectedNode?.metadata).find((v) => v.id === pane.viewId) ?? null
+    : null;
   const urlDisplay = `${workspaceName}://${pane.path === '/' ? '' : pane.path.replace(/^\//, '')}`;
 
   const fetchPaneDocuments = useCallback(async () => {
@@ -1773,7 +1790,24 @@ function SideWorkspaceCanvas({
           description: selectedNode?.description,
           color: selectedNode?.color,
         } : undefined}
-      />
+      >
+        {paneView?.kind === 'columns' ? (
+          <SchemaColumnsBoard
+            documents={documents}
+            workspaceId={workspaceName}
+            columns={paneView.columns ?? []}
+            onColumnsChange={() => {}}
+            readOnly
+          />
+        ) : paneView?.kind === 'app' && paneView.app ? (
+          <ContentAppView
+            app={paneView.app}
+            workspaceId={workspaceName}
+            treeName={pane.treeName}
+            path={pane.path}
+          />
+        ) : null}
+      </DefaultCanvas>
     </div>
   );
 }

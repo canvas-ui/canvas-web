@@ -1,3 +1,4 @@
+import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { LayoutGrid, SlidersHorizontal, Brain, Bell, X, Maximize2, Minimize2, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -35,6 +36,10 @@ const halfScreen = () => (typeof window !== 'undefined' ? Math.round(window.inne
 // toggle on desktop; full-bleed on mobile (the parent handles the overlay).
 export function ToolboxPanel() {
   const { state, setView, closeT1, closeT2 } = useToolbox()
+  // Esc unwinds one layer at a time via the shared overlay stack: the T2
+  // agent panel first, then the toolbox itself.
+  useEscapeClose(closeT1, state.t1Open && !state.t2Open)
+  useEscapeClose(closeT2, state.t2Open)
   const { t1Open, t1View, t2Open, t2AgentId, activeAccentColor } = state
   const isMobile = useIsMobile()
 

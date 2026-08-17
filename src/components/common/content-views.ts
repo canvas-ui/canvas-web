@@ -7,7 +7,15 @@ import type { LayerMetadata } from '@/types/workspace'
  * must merge the layer's other metadata keys alongside `views`.
  */
 
-export type ContentViewKind = 'documents' | 'columns'
+export type ContentViewKind = 'documents' | 'columns' | 'app'
+
+// Full content-page apps a tab can host — each renders the layer's data
+// through an app-shaped lens (see content-app-view.tsx).
+export type ContentAppId = 'todos' | 'notes'
+export const CONTENT_APPS: ReadonlyArray<{ id: ContentAppId; label: string }> = [
+  { id: 'todos', label: 'Todos' },
+  { id: 'notes', label: 'Notes' },
+]
 
 export interface BoardColumnConfig {
   id: string
@@ -25,6 +33,8 @@ export interface ContentView {
   name: string
   kind: ContentViewKind
   columns?: BoardColumnConfig[]
+  /** kind 'app' only — which content app the tab hosts. */
+  app?: ContentAppId
 }
 
 export const DEFAULT_VIEW: ContentView = { id: 'default', name: 'All', kind: 'documents' }
@@ -43,9 +53,10 @@ export function viewsFromLayerMetadata(metadata: LayerMetadata | undefined | nul
   const raw = (metadata as { views?: unknown } | undefined | null)?.views
   if (!Array.isArray(raw)) return [DEFAULT_VIEW]
   const views = raw.filter((v): v is ContentView => {
-    const view = v as { id?: unknown; name?: unknown; kind?: unknown } | null
-    return !!view && typeof view.id === 'string' && typeof view.name === 'string'
-      && (view.kind === 'documents' || view.kind === 'columns')
+    const view = v as { id?: unknown; name?: unknown; kind?: unknown; app?: unknown } | null
+    if (!view || typeof view.id !== 'string' || typeof view.name !== 'string') return false
+    if (view.kind === 'documents' || view.kind === 'columns') return true
+    return view.kind === 'app' && CONTENT_APPS.some((a) => a.id === view.app)
   })
   return views.length > 0 ? views : [DEFAULT_VIEW]
 }

@@ -1,3 +1,4 @@
+import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { useCallback, useRef, useState } from 'react'
 import { X, StickyNote, Link as LinkIcon, Upload, Camera, Plus, Pencil, FileSearch, FolderPlus, ListTodo } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -30,6 +31,7 @@ const TITLES: Record<AddKind, { label: string; icon: typeof StickyNote }> = {
 
 export function AddPanel() {
   const { state, openAdd, closeAdd } = useToolbox()
+  useEscapeClose(closeAdd, state.addOpen)
   const { addOpen, addKind, editDocument } = state
   const isMobile = useIsMobile()
   const [width, setWidth] = useState(DEFAULT_WIDTH)

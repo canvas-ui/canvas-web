@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { Check, Monitor, Moon, Sun } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { loadWallpaper, saveWallpaper, WALLPAPER_FIT_OPTIONS, WALLPAPER_MAX_BYTES, type WallpaperSettings } from '@/lib/wallpaper'
 import {
   DENSITY_OPTIONS,
   SCHEME_OPTIONS,
@@ -109,6 +111,8 @@ export function AppearanceSettings() {
         </p>
       </section>
 
+      <WallpaperSection />
+
       <section>
         <button
           type="button"
@@ -119,6 +123,89 @@ export function AppearanceSettings() {
         </button>
       </section>
     </div>
+  )
+}
+
+// ── Wallpaper ────────────────────────────────────────────────────────────────
+// Global desk background image (local-only preference, stored as a data URL
+// in localStorage — see lib/wallpaper.ts). No image = the theme's desk color.
+function WallpaperSection() {
+  const [settings, setSettings] = useState(loadWallpaper)
+  const [error, setError] = useState<string | null>(null)
+
+  const update = (next: WallpaperSettings) => {
+    try {
+      saveWallpaper(next)
+      setSettings(next)
+      setError(null)
+    } catch {
+      setError('Could not store the wallpaper (browser storage full?) — try a smaller image.')
+    }
+  }
+
+  const onPick = (file: File | undefined) => {
+    if (!file) return
+    if (!file.type.startsWith('image/')) { setError('Pick an image file.'); return }
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = String(reader.result || '')
+      if (dataUrl.length > WALLPAPER_MAX_BYTES) {
+        setError('Image too large for browser storage — use one under ~2.5 MB.')
+        return
+      }
+      update({ ...settings, image: dataUrl })
+    }
+    reader.readAsDataURL(file)
+  }
+
+  return (
+    <section>
+      <SectionHeading
+        title="Wallpaper"
+        description="Background image for the desk behind all panels. Without one, the theme's desk color shows (the default)."
+      />
+      <div className="flex flex-wrap items-center gap-3">
+        {/* Live thumbnail of the current desk look */}
+        <div
+          className="h-20 w-32 shrink-0 rounded-md border surface-desk"
+          style={settings.image ? {
+            backgroundImage: `url("${settings.image}")`,
+            backgroundSize: settings.fit === 'fill' ? '100% 100%' : settings.fit === 'center' ? 'auto' : 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+          } : undefined}
+          aria-hidden
+        />
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap gap-2">
+            <label className="focus-ring inline-flex cursor-pointer items-center rounded-md border px-3 py-1.5 text-sm hover:bg-accent/50">
+              {settings.image ? 'Change image…' : 'Choose image…'}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => { onPick(e.target.files?.[0]); e.target.value = '' }}
+              />
+            </label>
+            {settings.image && (
+              <button
+                type="button"
+                onClick={() => update({ ...settings, image: null })}
+                className="focus-ring rounded-md border px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+              >
+                Remove
+              </button>
+            )}
+          </div>
+          <SegmentedControl
+            options={WALLPAPER_FIT_OPTIONS.map((option) => ({ id: option.id, label: option.label, title: option.description }))}
+            value={settings.fit}
+            onChange={(fit) => update({ ...settings, fit })}
+          />
+          {error && <p className="text-xs text-destructive">{error}</p>}
+        </div>
+      </div>
+    </section>
   )
 }
 

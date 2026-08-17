@@ -15,6 +15,7 @@ import { DefaultCanvas } from '@/components/canvas/DefaultCanvas';
 import { ContentViewTabs } from '@/components/common/content-view-tabs';
 import { viewsFromLayerMetadata, DEFAULT_VIEW, type ContentView } from '@/components/common/content-views';
 import { SchemaColumnsBoard } from '@/components/common/schema-columns-board';
+import { ContentAppView } from '@/components/common/content-app-view';
 import {
   getCachedWorkspaceTreeByName,
   updateWorkspacePath,
@@ -630,6 +631,13 @@ export default function ContextDetailPage() {
             onColumnsChange={(columns) => saveContentViews(
               contentViews.map(v => (v.id === activeContentView.id ? { ...v, columns } : v)),
             )}
+          />
+        ) : activeContentView.kind === 'app' && activeContentView.app ? (
+          <ContentAppView
+            app={activeContentView.app}
+            workspaceId={context.workspaceName || context.workspaceId}
+            treeName={DEFAULT_WORKSPACE_TREE_NAME}
+            path={selectedPath}
           />
         ) : null}
       </DefaultCanvas>

@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { Plus, X, LayoutList, Columns3 } from 'lucide-react'
+import { Plus, X, LayoutList, Columns3, ListTodo, StickyNote, PanelRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { relativeLuminance } from '@/utils/color'
-import { DEFAULT_VIEW, defaultBoardColumns, type ContentView, type ContentViewKind } from './content-views'
+import { CONTENT_APPS, DEFAULT_VIEW, defaultBoardColumns, type ContentAppId, type ContentView, type ContentViewKind } from './content-views'
 
 /**
  * The tab strip for a layer's named content-area views — model and
@@ -23,9 +23,11 @@ interface ContentViewTabsProps {
    * not a theme token: text contrast is derived from its own luminance.
    */
   accentColor?: string
+  /** Show a hover affordance that opens the tab's view in a side pane. */
+  onOpenToSide?: (viewId: string) => void
 }
 
-export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = false, className, accentColor }: ContentViewTabsProps) {
+export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = false, className, accentColor, onOpenToSide }: ContentViewTabsProps) {
   // Full-strength contrast (unlike onAccentTextClass's muted glyphs): the tab
   // label is primary UI, so it goes plain black/white on the accent fill.
   const accentTextClass = accentColor
@@ -61,11 +63,15 @@ export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = 
     setEditingId(null)
   }
 
-  const addView = (kind: ContentViewKind) => {
+  const addView = (kind: ContentViewKind, app?: ContentAppId) => {
     setAdding(false)
     const id = `view-${Date.now().toString(36)}`
-    const name = kind === 'columns' ? 'Board' : `View ${views.length + 1}`
-    const view: ContentView = kind === 'columns' ? { id, name, kind, columns: defaultBoardColumns() } : { id, name, kind }
+    const name = kind === 'columns' ? 'Board'
+      : kind === 'app' ? (CONTENT_APPS.find((a) => a.id === app)?.label ?? 'App')
+      : `View ${views.length + 1}`
+    const view: ContentView = kind === 'columns' ? { id, name, kind, columns: defaultBoardColumns() }
+      : kind === 'app' ? { id, name, kind, app }
+      : { id, name, kind }
     onSave([...views, view], id)
     // Straight into rename so "+ then type" names the tab in one motion.
     setEditingId(id)
@@ -147,8 +153,17 @@ export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = 
               ? { backgroundColor: accentColor, ...(dropTarget?.id === view.id ? {} : { borderColor: accentColor }) }
               : undefined}
           >
-            {view.kind === 'columns' ? <Columns3 className="h-3 w-3 shrink-0" /> : <LayoutList className="h-3 w-3 shrink-0" />}
+            {view.kind === 'columns' ? <Columns3 className="h-3 w-3 shrink-0" />
+              : view.kind === 'app' ? (view.app === 'todos' ? <ListTodo className="h-3 w-3 shrink-0" /> : <StickyNote className="h-3 w-3 shrink-0" />)
+              : <LayoutList className="h-3 w-3 shrink-0" />}
             <span className="max-w-32 truncate">{view.name}</span>
+            {onOpenToSide && (
+              <PanelRight
+                className="h-3 w-3 shrink-0 opacity-0 transition-opacity hover:opacity-100 group-hover:opacity-60"
+                aria-label="Open to the side"
+                onClick={(e) => { e.stopPropagation(); onOpenToSide(view.id) }}
+              />
+            )}
             {!readOnly && views.length > 1 && (
               // Chrome semantics: the ACTIVE tab always shows its close (the
               // only way it is reachable on touch); inactive tabs reveal it
@@ -192,6 +207,16 @@ export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = 
           >
             <Columns3 className="h-3 w-3" /> Board
           </button>
+          {CONTENT_APPS.map((app) => (
+            <button
+              key={app.id}
+              type="button"
+              onClick={() => addView('app', app.id)}
+              className="flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+            >
+              {app.id === 'todos' ? <ListTodo className="h-3 w-3" /> : <StickyNote className="h-3 w-3" />} {app.label}
+            </button>
+          ))}
           <button type="button" onClick={() => setAdding(false)} className="p-1 text-muted-foreground hover:text-foreground" aria-label="Cancel">
             <X className="h-3 w-3" />
           </button>
