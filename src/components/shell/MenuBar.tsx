@@ -208,8 +208,9 @@ export function MenuBar() {
         <div className="flex flex-col items-center gap-1 py-2 shrink-0">
           <div className="w-6 h-px bg-border mb-2" />
 
-          {/* Mobile only — the toolbox FAB is hidden below md, so the rail
-              carries the toolbox entry point instead */}
+          {/* The FAB only lives on the bare quick-capture desk (home) — on
+              content pages and on mobile the rail carries the toolbox entry
+              point instead */}
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -217,7 +218,7 @@ export function MenuBar() {
                 onClick={handleToolbox}
                 aria-label={toolboxState.t1Open ? 'Close toolbox' : 'Open toolbox'}
                 className={cn(
-                  'flex items-center justify-center w-10 h-10 rounded-lg transition-colors md:hidden',
+                  'flex items-center justify-center w-10 h-10 rounded-lg transition-colors',
                   toolboxState.t1Open
                     ? 'bg-accent text-foreground'
                     : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',

@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom'
 import { Icon } from '@iconify/react'
 import { X, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useEscapeClose } from '@/hooks/useEscapeClose'
 import {
   loadPhosphorFillIcons, searchIcons, LAYER_COLORS, DEFAULT_FOLDER_ICON,
   type LayerStyle,
@@ -24,6 +25,7 @@ interface LayerIconPickerProps {
 }
 
 export function LayerIconPicker({ x, y, current, onChange, onClose }: LayerIconPickerProps) {
+  useEscapeClose(onClose)
   const [query, setQuery] = useState('')
   const [allIcons, setAllIcons] = useState<string[]>([])
   // Results tagged with the query they answer — `searching` and the visible

@@ -14,6 +14,7 @@ import {
 } from '@/services/workspace'
 import type { TreeNode } from '@/types/workspace'
 import { LinkNode, WorkspaceListStep, InlineCreateRow } from './tree-picker-shared'
+import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { type TreeTab, type RowMenuEvent, TAB_ICONS, TAB_LABELS, useRowMenu } from './tree-picker-utils'
 // Workspace is a global type declared in src/types/api.d.ts
 
@@ -55,6 +56,9 @@ interface LinkToCardProps {
 // fixed overlay for document-list's existing usage).
 export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceName, multiple = true, saving = false, sizeClassName, tabs = ['context', 'directory'], title, confirmLabel }: LinkToCardProps) {
   const [step, setStep] = useState<'workspace' | 'tree'>(fixedWorkspaceName ? 'tree' : 'workspace')
+  // Esc closes the card (all callers render it as an overlay); disabled while
+  // a link is saving so it can't vanish mid-write.
+  useEscapeClose(onClose, !saving)
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   // Starts true whenever the workspace list will be fetched (no fixed
   // workspace) — the fetch effect below only ever clears it.

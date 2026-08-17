@@ -5,6 +5,7 @@ import { Loader } from '@/components/ui/loader'
 import { useDocumentBlobUrl } from '@/components/renderers/useDocumentBlobUrl'
 import { useDocumentThumbnail } from '@/components/renderers/useDocumentThumbnail'
 import { getLocationFilename } from '@/lib/document-display'
+import { useEscapeClose } from '@/hooks/useEscapeClose'
 import type { Document } from '@/types/workspace'
 import { TimelineSortControl } from './sort-control'
 import type { CanvasImages } from './useCanvasImages'
@@ -52,15 +53,16 @@ export function ImageLightbox({ workspaceId, docs, index, onClose, onNavigate }:
   const { blobUrl, error, loading } = useDocumentBlobUrl(workspaceId, doc.id)
   const title = getLocationFilename(doc) || `image-${doc.id}`
 
+  // Esc via the shared overlay stack (topmost-only close); arrows stay local.
+  useEscapeClose(onClose)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
       if (e.key === 'ArrowLeft' && index > 0) onNavigate(index - 1)
       if (e.key === 'ArrowRight' && index < docs.length - 1) onNavigate(index + 1)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [index, docs.length, onClose, onNavigate])
+  }, [index, docs.length, onNavigate])
 
   // Portal to body — react-grid-layout applies transforms to grid items, which
   // breaks `position: fixed` and traps the overlay inside the widget cell.

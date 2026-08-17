@@ -15,6 +15,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { Check, Crosshair, LocateFixed, Loader2, MapPin, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useEscapeClose } from '@/hooks/useEscapeClose'
 
 // Violet, matching the MapTab pin. Literal hex, not a theme token: it is written
 // into a raw HTML string for the divIcon, where `var()` does not resolve.
@@ -76,11 +77,9 @@ export function LocationPickerSheet({
     return () => cancelAnimationFrame(id)
   }, [])
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose() } }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [onClose])
+  // Shared overlay stack (useEscapeClose) so Esc closes THIS sheet, not the
+  // modal it may be stacked over.
+  useEscapeClose(onClose)
 
   // Move (or create) the pin and remember the point. Reverse geocoding is
   // kicked off separately so the coordinates are usable immediately.

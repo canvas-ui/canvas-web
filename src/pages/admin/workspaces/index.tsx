@@ -1,4 +1,5 @@
 import { PageHeader } from '@/components/common/page-header'
+import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { useEffect, useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -197,6 +198,7 @@ export default function AdminWorkspacesPage() {
   const closeModal = () => {
     setIsModalOpen(false)
   }
+  useEscapeClose(closeModal, isModalOpen)
 
   // Filter workspaces based on search and filters
   const filteredWorkspaces = workspaces.filter(workspace => {

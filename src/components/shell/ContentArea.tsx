@@ -2,6 +2,7 @@ import { Outlet, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { useSideView } from './use-side-view'
 import { DocumentSideCard } from './DocumentSideCard'
+import { isBare } from './route-chrome'
 
 // Detail views (canvas, file-manager, agent chat, settings) manage their own
 // full-height scroll + padding, so the sheet stays flush for them.
@@ -10,15 +11,6 @@ function isFullBleed(pathname: string): boolean {
   return ['contexts', 'workspaces', 'agents'].includes(section) && Boolean(entity)
 }
 
-// The FAB quick-capture surface (home, and the share-target landing that
-// reuses it) has no page chrome of its own — no "sheet of paper" card, no
-// padding — it sits directly on the surface-desk background.
-// Also covers the empty desk at `/` — with every section closed there is no
-// page to frame, so the surface shows through.
-function isBare(pathname: string): boolean {
-  const [section] = pathname.split('/').filter(Boolean)
-  return !section || section === 'home' || section === 'share-target'
-}
 
 // Shared mobile "drawer" treatment — same prominence as the M1/M2 menu panel
 // overlay (floating card over a scrim, elevation-8). Spans from left-2 since

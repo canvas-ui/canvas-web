@@ -1,4 +1,5 @@
 import { PageHeader } from '@/components/common/page-header'
+import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { useEffect, useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -337,6 +338,7 @@ export default function AdminUsersPage() {
     setIsModalOpen(false)
     setEditingUser(null)
   }
+  useEscapeClose(closeModal, isModalOpen)
 
   // Filter users based on search
   const filteredUsers = users.filter(user => {

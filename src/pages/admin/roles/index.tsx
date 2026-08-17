@@ -1,4 +1,5 @@
 import { PageHeader } from '@/components/common/page-header'
+import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { useEffect, useState, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -71,8 +72,10 @@ export default function AdminRolesPage() {
     isCurrentUserAdmin ? null : 'Access denied. Admin privileges required.'
   )
   const [isModalOpen, setIsModalOpen] = useState(false)
+  useEscapeClose(() => setIsModalOpen(false), isModalOpen)
   const [selectedRole, setSelectedRole] = useState<Role | null>(null)
   const [isLogsModalOpen, setIsLogsModalOpen] = useState(false)
+  useEscapeClose(() => setIsLogsModalOpen(false), isLogsModalOpen)
   const [logs, setLogs] = useState<string[]>([])
   const [filters, setFilters] = useState({
     type: '',

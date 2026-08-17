@@ -12,7 +12,16 @@ import {
 } from '@/services/context';
 import socketService from '@/lib/socket';
 import { DefaultCanvas } from '@/components/canvas/DefaultCanvas';
-import { Document as WorkspaceDocument, buildDatetimeFilters, buildGeoFilters } from '@/types/workspace';
+import { ContentViewTabs } from '@/components/common/content-view-tabs';
+import { viewsFromLayerMetadata, DEFAULT_VIEW, type ContentView } from '@/components/common/content-views';
+import { SchemaColumnsBoard } from '@/components/common/schema-columns-board';
+import {
+  getCachedWorkspaceTreeByName,
+  updateWorkspacePath,
+  findTreeNodeByPath,
+  DEFAULT_WORKSPACE_TREE_NAME,
+} from '@/services/workspace';
+import { Document as WorkspaceDocument, buildDatetimeFilters, buildGeoFilters, type TreeNode } from '@/types/workspace';
 import { docInGeoSelection } from '@/utils/geo';
 import { useToolbox } from '@/components/toolbox/use-toolbox';
 import { useMenu } from '@/components/shell/use-menu';
@@ -109,6 +118,48 @@ export default function ContextDetailPage() {
   const selectedPath = context ? contextUrlToPath(context.url, context.workspaceName) : '/';
   const urlType = layerParam ? 'context-layer' : 'context';
   const savedContextSearchQuery = typeof context?.metadata?.toolboxSearchQuery === 'string' ? context.metadata.toolboxSearchQuery : '';
+
+  // ── Content-area views (tabs) ──────────────────────────────────────────
+  // A context is a live pointer at a workspace tree path — the tabs are the
+  // SAME named views the workspace page shows for that path (persisted in the
+  // layer's metadata.views), so both surfaces stay in sync. Shared contexts
+  // can't read/patch the owner's workspace tree — no tabs there.
+  // Keyed by workspace so a stale tree never leaks across context switches
+  // (derived at render; the effect only does the async fetch).
+  const treeKey = !isSharedContext ? (context?.workspaceName ?? null) : null;
+  const [wsTreeState, setWsTreeState] = useState<{ key: string; tree: TreeNode | null } | null>(null);
+  useEffect(() => {
+    if (!treeKey) return;
+    let cancelled = false;
+    getCachedWorkspaceTreeByName(treeKey, DEFAULT_WORKSPACE_TREE_NAME)
+      .then((tree) => { if (!cancelled) setWsTreeState({ key: treeKey, tree }); })
+      .catch(() => { if (!cancelled) setWsTreeState({ key: treeKey, tree: null }); });
+    return () => { cancelled = true; };
+  }, [treeKey]);
+  const wsTree = treeKey && wsTreeState?.key === treeKey ? wsTreeState.tree : null;
+
+  const nodeForViews = !layerParam && !isSharedContext && wsTree
+    ? (selectedPath === '/' ? wsTree : findTreeNodeByPath(wsTree, selectedPath))
+    : null;
+  const viewsKey = `${context?.workspaceName ?? ''}\0${selectedPath}`;
+  const [viewsState, setViewsState] = useState<{ key: string; views: ContentView[]; activeId: string } | null>(null);
+  const contentViews = viewsState?.key === viewsKey ? viewsState.views : viewsFromLayerMetadata(nodeForViews?.metadata);
+  const activeContentViewId = viewsState?.key === viewsKey ? viewsState.activeId : contentViews[0]?.id ?? DEFAULT_VIEW.id;
+  const activeContentView = contentViews.find(v => v.id === activeContentViewId) ?? contentViews[0] ?? DEFAULT_VIEW;
+  const selectContentView = (id: string) => setViewsState({ key: viewsKey, views: contentViews, activeId: id });
+  const saveContentViews = (views: ContentView[], nextActiveId?: string) => {
+    setViewsState({ key: viewsKey, views, activeId: nextActiveId ?? activeContentViewId });
+    if (!context?.workspaceName) return;
+    // metadata is REPLACED server-side — carry the layer's other keys along.
+    updateWorkspacePath(
+      context.workspaceName,
+      selectedPath,
+      { metadata: { ...(nodeForViews?.metadata ?? {}), views } },
+      DEFAULT_WORKSPACE_TREE_NAME,
+    ).catch(() => {
+      showToast({ title: 'View not saved', description: 'Could not persist views to the layer', variant: 'destructive' });
+    });
+  };
 
   const fetchDocuments = useCallback(async () => {
     if (!contextId) return;
@@ -454,11 +505,32 @@ export default function ContextDetailPage() {
     <div className="flex flex-col h-full min-h-0">
       {/* Workspace indicator — a context is bound to exactly one workspace;
           icon + color keep that visible even when only the content area is
-          shown (mobile). Mirrors the workspace view's status bar. */}
-      <div
-        className="flex h-12 items-center gap-2 border-b px-4 shrink-0"
-        style={accent ? { borderBottom: `3px solid ${accent}` } : { borderBottomWidth: 3 }}
-      >
+          shown (mobile). Mirrors the workspace view's status bar, incl. the
+          internal accent divider the active view tab connects through. */}
+      <div className="relative shrink-0 max-sm:border-b">
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] bg-border max-sm:hidden"
+          style={accent ? { backgroundColor: accent } : undefined}
+        />
+        {/* Mobile: tabs get their own top row, same as the workspace view. */}
+        {nodeForViews && (
+          <div className="relative px-2 pt-1.5 sm:hidden">
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] bg-border"
+              style={accent ? { backgroundColor: accent } : undefined}
+            />
+            <ContentViewTabs
+              views={contentViews}
+              activeId={activeContentViewId}
+              onSelect={selectContentView}
+              onSave={saveContentViews}
+              readOnly={false}
+            />
+          </div>
+        )}
+        <div className="flex h-12 items-center gap-2 px-4">
         {/* Same gesture as a settings page — see the workspace view. */}
         <SectionBackButton
           title={isMobile ? 'Back to context menu' : 'Back to contexts'}
@@ -477,7 +549,22 @@ export default function ContextDetailPage() {
         <span className="min-w-0 truncate text-xs text-muted-foreground">
           @ {context.workspaceName || context.workspaceId}
         </span>
-        <div className="flex-1" />
+        {/* Desktop: browser-style, the view tabs ride the title row. */}
+        {nodeForViews ? (
+          <>
+            <ContentViewTabs
+              className="min-w-0 flex-1 self-stretch max-sm:hidden"
+              views={contentViews}
+              activeId={activeContentViewId}
+              onSelect={selectContentView}
+              onSave={saveContentViews}
+              readOnly={false}
+            />
+            <div className="flex-1 sm:hidden" />
+          </>
+        ) : (
+          <div className="flex-1" />
+        )}
         {/* Mirrors the workspace status bar — opens the toolbox Filters panel.
             Especially needed on mobile, where the toolbox FAB is easy to miss. */}
         <button
@@ -498,6 +585,7 @@ export default function ContextDetailPage() {
           Filter{hasActiveFilters ? ' on' : ''}
         </button>
         <CloseSectionButton />
+        </div>
       </div>
       <DefaultCanvas
         urlType={urlType}
@@ -529,7 +617,20 @@ export default function ContextDetailPage() {
         // (M2 detail) so the URL can be navigated by touch. Desktop already
         // has the tree visible in the side panel.
         onUrlClick={isMobile && contextId ? () => openM2Drawer('contexts', 'detail', contextId) : undefined}
-      />
+      >
+        {/* Board views replace the document list (see DefaultCanvas children
+            contract); the default 'documents' view passes null through. */}
+        {activeContentView.kind === 'columns' ? (
+          <SchemaColumnsBoard
+            documents={shownDocuments}
+            workspaceId={context.workspaceName || context.workspaceId}
+            columns={activeContentView.columns ?? []}
+            onColumnsChange={(columns) => saveContentViews(
+              contentViews.map(v => (v.id === activeContentView.id ? { ...v, columns } : v)),
+            )}
+          />
+        ) : null}
+      </DefaultCanvas>
     </div>
   );
 }

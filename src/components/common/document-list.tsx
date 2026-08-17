@@ -25,6 +25,7 @@ import { usePublicShareCode } from '@/components/renderers/public-share'
 import { useDocumentThumbnail } from '@/components/renderers/useDocumentThumbnail'
 import { useDocumentStreamSrc } from '@/components/renderers/useDocumentBlobUrl'
 import { DocumentIcon } from '@/components/common/DocumentIcon'
+import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { TimelineSortControl } from '@/components/canvas/widgets/sort-control'
 import type { ToolboxSort } from '@/types/workspace'
 
@@ -346,12 +347,7 @@ interface DocumentActionSheetProps {
 // card. Actions anchor to the bottom of the screen so everything is reachable
 // one-handed; the empty top area and Cancel both dismiss.
 function DocumentActionSheet({ document, open, onClose, onViewDetails, onEdit, onLink, onOpenToSide, onRemove, onDelete }: DocumentActionSheetProps) {
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose])
+  useEscapeClose(onClose, open)
 
   if (!open) return null
   const display = getDocumentDisplayInfo(document)

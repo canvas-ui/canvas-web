@@ -4,6 +4,7 @@ import { ExternalLink, Maximize2, Minimize2 } from 'lucide-react'
 import { ObjectPropertiesCard, type ObjectCardTab } from './ObjectPropertiesCard'
 import { getDocumentDisplayInfo, getExternalUrl } from '@/lib/document-display'
 import { useToolboxOptional } from '@/components/toolbox/use-toolbox'
+import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { cn } from '@/lib/utils'
 import type { Document } from '@/types/workspace'
 
@@ -22,6 +23,7 @@ interface ObjectPropertiesModalProps {
 export function ObjectPropertiesModal({ document, isOpen, onClose, workspaceId, initialTab, initialEdit }: ObjectPropertiesModalProps) {
   const [fullscreen, setFullscreen] = useState(false)
   const toolbox = useToolboxOptional()
+  useEscapeClose(onClose, isOpen && !!document)
 
   if (!isOpen || !document) return null
 

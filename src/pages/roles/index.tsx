@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react"
+import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/use-toast"
 import {
@@ -51,6 +52,7 @@ export default function RolesPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedLogs, setSelectedLogs] = useState<{role: Role, logs: string[]} | null>(null)
+  useEscapeClose(() => setSelectedLogs(null), selectedLogs !== null)
   const [showCreate, setShowCreate] = useCreatePanel()
   const [templates, setTemplates] = useState<RoleTemplate[]>([])
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])

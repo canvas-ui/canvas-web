@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
+import { useEscapeClose } from '@/hooks/useEscapeClose'
 
 // Portal shell for coordinate-positioned context menus: a full-screen
 // dismiss overlay plus the menu itself, clamped into the viewport after
@@ -17,6 +18,7 @@ export function ContextMenuShell({ x, y, onClose, className, children }: {
 }) {
   const menuRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState({ x, y })
+  useEscapeClose(onClose)
 
   useLayoutEffect(() => {
     const el = menuRef.current

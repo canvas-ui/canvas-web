@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { createPortal } from 'react-dom'
 import { RotateCw, Maximize2, Minimize2, X, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -42,6 +43,9 @@ export function B5Card({
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait')
   const [maximized, setMaximized] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
+  // Esc unwinds one layer at a time: picker first, then the maximized card.
+  useEscapeClose(() => setPickerOpen(false), pickerOpen)
+  useEscapeClose(() => setMaximized(false), maximized && !pickerOpen)
   const pickerRef = useRef<HTMLDivElement>(null)
   const isMobile = useIsMobile()
   const { showSuccessToast, showErrorToast } = useToastHelpers()

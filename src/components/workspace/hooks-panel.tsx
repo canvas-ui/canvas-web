@@ -25,6 +25,7 @@ import {
 } from '@/services/hooks'
 import { listScripts, getScript, saveScript, deleteScript } from '@/services/scripts'
 import { RuleBuilder } from '@/components/workspace/rule-builder'
+import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { PendingActionsPanel } from '@/components/workspace/pending-actions-panel'
 
 interface HooksPanelProps {
@@ -69,13 +70,9 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
     return () => { cancelled = true }
   }, [workspaceId])
 
-  // Esc leaves the maximized editor (unless a dialog/confirm has focus).
-  useEffect(() => {
-    if (!isMaximized) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsMaximized(false) }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [isMaximized])
+  // Esc leaves the maximized editor — via the shared overlay stack, so an
+  // overlay opened above it closes first.
+  useEscapeClose(() => setIsMaximized(false), isMaximized)
 
   const replay = async (run: HookRun) => {
     if (!confirm(`Replay ${run.handlerType} "${run.handler}" for ${run.event} (docs ${(run.docIds || []).join(', ')})?`)) return
