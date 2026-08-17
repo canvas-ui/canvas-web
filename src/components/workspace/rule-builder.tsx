@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Plus, Pencil, Trash2, Save, X, Braces, PlayCircle } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { Plus, Pencil, Trash2, Save, X, Braces, PlayCircle, FolderTree } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/use-toast'
 import { getRules, saveRules, backfillHook, type HookRule, type HookRuleAction } from '@/services/hooks'
 import { listScripts } from '@/services/scripts'
+import { LinkToCard, type LinkToTarget } from '@/components/menu/shared/LinkToCard'
 
 // Outlook-style rule builder: clickable conditions + predefined actions that
 // translate 1:1 into canvas.hook-rules/v1 rules in git/hooks/rules.json.
@@ -40,7 +42,7 @@ const CONDITION_FIELDS: Array<{ key: ConditionKey; label: string; hint: string }
   { key: 'subject', label: 'subject contains', hint: 'invoice' },
   { key: 'urlHost', label: 'website (host) is', hint: 'youtube.com' },
   { key: 'urlContains', label: 'URL contains', hint: '/watch?v=' },
-  { key: 'path', label: 'path starts with', hint: '/to-sort' },
+  { key: 'path', label: 'path starts with', hint: '/to-sort or backends:/github/owner/repo' },
   { key: 'mime', label: 'file type (mime) matches', hint: 'image/*' },
   { key: 'attachment', label: 'has attachment (mime) matching', hint: 'application/pdf — or * for any' },
 ]
@@ -411,6 +413,38 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
   const setField = <K extends keyof RuleForm>(key: K, value: RuleForm[K]) =>
     setForm((f) => (f ? { ...f, [key]: value } : f))
 
+  // Tree picker for path fields — browse the workspace's trees instead of
+  // guessing paths. Conditions may match anywhere incl. the backends mirror;
+  // link/unlink targets exclude it (read-only for rules).
+  const [picker, setPicker] = useState<{ target: 'condition' | 'action'; index: number } | null>(null)
+
+  // Actual-tree-name prefixes, matching the server's parseLinkTarget/inPath:
+  // bare = context, 'dir:' = the directory tree, '<name>:' = any other tree.
+  const prefixedPath = (path: string, ctx: LinkToTarget) =>
+    ctx.treeType === 'context' ? path : ctx.treeName === 'directory' ? `dir:${path}` : `${ctx.treeName}:${path}`
+
+  const applyPicked = (paths: string[], ctx: LinkToTarget) => {
+    if (!picker || !form || !paths.length) { setPicker(null); return }
+    const prefixed = paths.map((p) => prefixedPath(p, ctx))
+    if (picker.target === 'condition') {
+      // Multiple picks become engine-OR alternatives.
+      setField('conditions', form.conditions.map((c, j) => (j === picker.index ? { ...c, value: prefixed.join(' | ') } : c)))
+    } else {
+      setField('actions', form.actions.map((a, j) => (j === picker.index ? { ...a, a: prefixed.join(', ') } : a)))
+    }
+    setPicker(null)
+  }
+
+  const pickerButton = (target: 'condition' | 'action', index: number) => (
+    <Button
+      size="sm" variant="ghost" className="h-7 w-7 p-0 touch-target"
+      title="Browse trees for a path"
+      onClick={() => setPicker({ target, index })}
+    >
+      <FolderTree className="h-3.5 w-3.5" />
+    </Button>
+  )
+
   const selectClass = 'h-8 rounded-md border bg-background px-2 text-sm outline-none focus:ring-2 focus:ring-ring'
 
   return (
@@ -488,6 +522,7 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
                   value={row.value}
                   onChange={(e) => setField('conditions', form.conditions.map((c, j) => (j === i ? { ...c, value: e.target.value } : c)))}
                 />
+                {row.field === 'path' && pickerButton('condition', i)}
                 <Button size="sm" variant="ghost" className="h-7 w-7 p-0 touch-target" onClick={() => setField('conditions', form.conditions.filter((_, j) => j !== i))}>
                   <X className="h-3.5 w-3.5" />
                 </Button>
@@ -534,11 +569,13 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
                   </select>
                   {row.kind === 'link' && (<>
                     <Input className="h-8 w-64 font-mono text-sm" placeholder="/work/urgent or dir:/projects/x" title="Context-tree path by default; prefix with dir: for the directory tree, ctx: to be explicit. Comma-separate multiple paths." value={row.a} onChange={(e) => set({ a: e.target.value })} />
+                    {pickerButton('action', i)}
                     <Input className="h-8 w-44 font-mono text-sm" placeholder="tags (optional)" value={row.b} onChange={(e) => set({ b: e.target.value })} />
                   </>)}
-                  {row.kind === 'unlink' && (
+                  {row.kind === 'unlink' && (<>
                     <Input className="h-8 w-64 font-mono text-sm" placeholder="/inbox or dir:/staging" title="Remove (unlink) the item from these paths — it stays everywhere else. Comma-separate multiple paths." value={row.a} onChange={(e) => set({ a: e.target.value })} />
-                  )}
+                    {pickerButton('action', i)}
+                  </>)}
                   {row.kind === 'tag' && (
                     <Input className="h-8 w-64 font-mono text-sm" placeholder="urgent, follow-up" value={row.a} onChange={(e) => set({ a: e.target.value })} />
                   )}
@@ -601,6 +638,22 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
             <Button size="sm" variant="outline" onClick={() => setForm(null)}>Cancel</Button>
           </div>
         </div>
+      )}
+
+      {picker && createPortal(
+        <div className="fixed inset-0 z-picker flex items-center justify-center bg-scrim p-4 max-md:p-2">
+          <LinkToCard
+            fixedWorkspaceName={workspaceId}
+            // Conditions may match anywhere the doc lands (incl. the backends
+            // mirror); link/unlink targets exclude it — read-only for rules.
+            tabs={picker.target === 'condition' ? ['context', 'directory', 'backends'] : ['context', 'directory']}
+            title={picker.target === 'condition' ? 'Match items under…' : 'File into…'}
+            confirmLabel="Use path"
+            onConfirm={applyPicked}
+            onClose={() => setPicker(null)}
+          />
+        </div>,
+        window.document.body,
       )}
 
       <div className="border rounded-lg divide-y">

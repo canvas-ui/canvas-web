@@ -41,7 +41,10 @@ function LinkSelectionButton({ count }: { count: number }) {
   )
 }
 
-type CanvasUrlType = 'context' | 'canvas' | 'directory' | 'context-layer' | 'directory-layer'
+// The chip shows the ACTUAL tree name — 'backends' (or a custom tree) rather
+// than its generic 'directory' type — so `(string & {})` admits any tree name
+// while keeping autocomplete for the well-known ones.
+type CanvasUrlType = 'context' | 'canvas' | 'directory' | 'backends' | 'context-layer' | 'directory-layer' | (string & {})
 
 // The content-area address bar: a `[treeType]` chip that opens the tree drawer
 // (browse), plus an editable URL. Typing a path and pressing Enter navigates

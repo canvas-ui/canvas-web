@@ -1220,7 +1220,8 @@ export default function WorkspaceDetailPage() {
 
   const currentCanvas = (
     <DefaultCanvas
-      urlType={isLayerView ? (treeTypeForName(selectedTreeName) === 'directory' ? 'directory-layer' : 'context-layer') : (selectedNodeType === 'canvas' ? 'canvas' : treeTypeForName(selectedTreeName) === 'directory' ? 'directory' : 'context')}
+      // The chip names the ACTUAL tree ('backends', not its 'directory' type).
+      urlType={isLayerView ? (treeTypeForName(selectedTreeName) === 'directory' ? `${selectedTreeName}-layer` : 'context-layer') : (selectedNodeType === 'canvas' ? 'canvas' : treeTypeForName(selectedTreeName) === 'directory' ? selectedTreeName : 'context')}
       urlDisplay={urlDisplay}
       contextPath={selectedPath}
       treeName={selectedTreeName}
@@ -1735,7 +1736,7 @@ function SideWorkspaceCanvas({
         </button>
       )}
       <DefaultCanvas
-        urlType={isCanvas ? 'canvas' : treeType}
+        urlType={isCanvas ? 'canvas' : (treeType === 'directory' ? pane.treeName : 'context')}
         urlDisplay={urlDisplay}
         contextPath={pane.path}
         treeName={pane.treeName}

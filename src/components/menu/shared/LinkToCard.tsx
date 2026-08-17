@@ -38,6 +38,14 @@ interface LinkToCardProps {
   // Overrides the default B5-sibling sizing (85vh, 380px wide) — e.g. full
   // height for document-list's right-edge overlay usage.
   sizeClassName?: string
+  // Trees offered as tabs. Default keeps the original pair; pass
+  // ['context', 'directory', 'backends'] to also browse the read-only
+  // connector/storage mirror (folder creation is disabled there).
+  tabs?: TreeTab[]
+  // Header title + confirm button label overrides — for "pick a path" usages
+  // (rule builder) where "Link N documents" would mislead.
+  title?: string
+  confirmLabel?: string
 }
 
 // Merges the old TreePicker (workspace choice) and LinkToPanel (nice
@@ -45,7 +53,7 @@ interface LinkToCardProps {
 // WorkspaceList-styled row list, slide into the tree-with-tabs view. Renders
 // as a plain card — callers own positioning (inline sibling for B5Card,
 // fixed overlay for document-list's existing usage).
-export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceName, multiple = true, saving = false, sizeClassName }: LinkToCardProps) {
+export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceName, multiple = true, saving = false, sizeClassName, tabs = ['context', 'directory'], title, confirmLabel }: LinkToCardProps) {
   const [step, setStep] = useState<'workspace' | 'tree'>(fixedWorkspaceName ? 'tree' : 'workspace')
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   // Starts true whenever the workspace list will be fetched (no fixed
@@ -69,9 +77,12 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
   const [creatingFolder, setCreatingFolder] = useState(false)
   const rootRowMenu = useRowMenu('/', (e) => setRowMenu(e))
 
+  // The backends tree is a locked mirror — no user-created folders there.
+  const canCreateFolders = activeTab !== 'backends'
+
   const createFolder = async (parent: string, rawName: string) => {
     const name = rawName.trim().replace(/^\/+|\/+$/g, '')
-    if (!name || !workspaceName || creatingFolder) return
+    if (!name || !workspaceName || creatingFolder || !canCreateFolders) return
     setCreatingFolder(true)
     try {
       const path = `${parent === '/' ? '' : parent}/${name}`
@@ -144,7 +155,11 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
 
   const confirm = async () => {
     if (!workspaceName || selected.size === 0 || saving) return
-    await onConfirm(Array.from(selected), { workspaceName, treeName: activeTab === 'directory' ? 'directory' : DEFAULT_WORKSPACE_TREE_NAME, treeType: activeTab })
+    await onConfirm(Array.from(selected), {
+      workspaceName,
+      treeName: activeTab === 'context' ? DEFAULT_WORKSPACE_TREE_NAME : activeTab,
+      treeType: activeTab === 'context' ? 'context' : 'directory',
+    })
   }
 
   const count = documentCount ?? 1
@@ -154,7 +169,7 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
       <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
         <span className="flex items-center gap-2 text-sm font-medium">
           <Link2 className="h-4 w-4" />
-          {step === 'workspace' ? 'Link to…' : `Link ${count} document${count !== 1 ? 's' : ''} to…`}
+          {title ?? (step === 'workspace' ? 'Link to…' : `Link ${count} document${count !== 1 ? 's' : ''} to…`)}
         </span>
         <button type="button" onClick={onClose} disabled={saving} className="text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40" aria-label="Close">
           <X className="h-4 w-4" />
@@ -182,7 +197,7 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
                   <ChevronRight className="h-4 w-4 rotate-180" />
                 </button>
               )}
-              {(['context', 'directory'] as TreeTab[]).map(tab => (
+              {tabs.map(tab => (
                 <button
                   key={tab}
                   type="button"
@@ -239,7 +254,7 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
                     )}
                     onClick={rootRowMenu.guardClick(() => toggle('/'))}
                     title="/"
-                    {...rootRowMenu.handlers}
+                    {...(canCreateFolders ? rootRowMenu.handlers : {})}
                   >
                     <ChevronDown className="w-4 h-4 shrink-0 text-muted-foreground" />
                     <span className="flex-1 truncate font-medium">/</span>
@@ -261,7 +276,7 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
                           query={q}
                           selected={selected}
                           onToggle={toggle}
-                          onRowMenu={setRowMenu}
+                          onRowMenu={canCreateFolders ? setRowMenu : undefined}
                           createParent={createParent}
                           onCreateConfirm={createFolder}
                           onCreateCancel={() => setCreateParent(null)}
@@ -285,7 +300,7 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
             {selected.size} path{selected.size !== 1 ? 's' : ''} selected
           </span>
           <Button size="sm" onClick={confirm} disabled={selected.size === 0 || saving}>
-            {saving ? (<><Loader className="mr-1.5 h-3.5 w-3.5" />Linking…</>) : (<><Link2 className="mr-1 h-3.5 w-3.5" />Link</>)}
+            {saving ? (<><Loader className="mr-1.5 h-3.5 w-3.5" />Linking…</>) : (<><Link2 className="mr-1 h-3.5 w-3.5" />{confirmLabel ?? 'Link'}</>)}
           </Button>
         </div>
       )}

@@ -1,20 +1,24 @@
 import { useRef } from 'react'
-import { GitBranch, FolderTree } from 'lucide-react'
+import { GitBranch, FolderTree, HardDrive } from 'lucide-react'
 import type { TreeNode } from '@/types/workspace'
 
 // Shared between LinkToCard (pick destination paths) and PickDocumentsCard (browse
 // to a path, then pick documents within it) — both use the same workspace-list
 // step and tree-render step, only their leaf selection semantics differ.
 
-export type TreeTab = 'context' | 'directory'
+// 'backends' is the read-only connector/storage mirror tree — only shown when a
+// caller opts in via LinkToCard's `tabs` prop (e.g. the rule builder's picker).
+export type TreeTab = 'context' | 'directory' | 'backends'
 
 export const TAB_ICONS: Record<TreeTab, React.ReactNode> = {
   context: <GitBranch className="h-3.5 w-3.5" />,
   directory: <FolderTree className="h-3.5 w-3.5" />,
+  backends: <HardDrive className="h-3.5 w-3.5" />,
 }
 export const TAB_LABELS: Record<TreeTab, string> = {
   context: 'Context tree',
   directory: 'Directory tree',
+  backends: 'Backends tree',
 }
 
 export function buildPath(parent: string, name: string) {
