@@ -4,7 +4,7 @@ import { Plus, Pencil, Trash2, Save, X, Braces, PlayCircle, FolderTree } from 'l
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/use-toast'
-import { getRules, saveRules, backfillHook, type HookRule, type HookRuleAction } from '@/services/hooks'
+import { getRules, saveRules, backfillHook, getHooksMeta, type HookRule, type HookRuleAction } from '@/services/hooks'
 import { listScripts } from '@/services/scripts'
 import { LinkToCard, type LinkToTarget } from '@/components/menu/shared/LinkToCard'
 
@@ -18,14 +18,16 @@ interface RuleBuilderProps {
   onOpenJson?: () => void
 }
 
-const SCHEMA_OPTIONS = [
+// Fallback only — the builder prefers the workspace's LIVE schema list from
+// the hooks meta endpoint (what's actually in the DB, with counts).
+const SCHEMA_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: '', label: 'any item' },
   { value: 'email', label: 'an email' },
   { value: 'tab', label: 'a browser tab / link' },
   { value: 'note', label: 'a note' },
   { value: 'file', label: 'a file' },
-  { value: 'todo', label: 'a todo' },
-] as const
+  { value: 'todo', label: 'a todo / task' },
+]
 
 const EVENT_OPTIONS = [
   { value: 'document.inserted', label: 'arrives (is added)' },
@@ -183,7 +185,9 @@ function parseRule(rule: HookRule): RuleForm | null {
   const { event, schema, from, to, subject, path, mime, url, attachment, ...restWhen } = rule.when
   if (Object.keys(restWhen).length > 0) return null
   if (typeof event !== 'string' || !EVENT_OPTIONS.some((e) => e.value === event)) return null
-  if (schema !== undefined && (typeof schema !== 'string' || !SCHEMA_OPTIONS.some((s) => s.value === schema))) return null
+  // Any string schema round-trips (options come from the live DB list; older
+  // rules may carry short aliases) — only non-string shapes are JSON-only.
+  if (schema !== undefined && typeof schema !== 'string') return null
 
   const conditions: ConditionRow[] = []
   // string | string[] → one row; alternatives joined with ' | ' (engine OR)
@@ -278,7 +282,8 @@ function parseRule(rule: HookRule): RuleForm | null {
 function summarizeWhen(rule: HookRule): string {
   const parts: string[] = []
   const w = rule.when
-  const schemaLabel = SCHEMA_OPTIONS.find((s) => s.value === w.schema)?.label || (w.schema ? String(w.schema) : 'any item')
+  const schemaLabel = SCHEMA_OPTIONS.find((s) => s.value === w.schema)?.label
+    || (w.schema ? String(w.schema).replace(/^data\/schema\//, '') : 'any item')
   const eventLabel = EVENT_OPTIONS.find((e) => e.value === w.event)?.label || String(w.event)
   parts.push(`When ${schemaLabel} ${eventLabel}`)
   const fmt = (v: unknown) => (Array.isArray(v) ? v.join(' or ') : typeof v === 'object' ? JSON.stringify(v) : String(v))
@@ -349,6 +354,20 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
     listScripts(workspaceId).then((files) => setScripts(files.map((f) => f.path))).catch(() => setScripts([]))
   }, [workspaceId])
 
+  // Schema options from what's ACTUALLY in the workspace DB (with counts);
+  // the static list is only the fallback while loading / on error.
+  const [schemaOptions, setSchemaOptions] = useState(SCHEMA_OPTIONS)
+  useEffect(() => {
+    getHooksMeta(workspaceId).then((meta) => {
+      if (meta.schemas?.length) {
+        setSchemaOptions([
+          { value: '', label: 'any item' },
+          ...meta.schemas.map((s) => ({ value: s.id, label: `${s.name} (${s.count})` })),
+        ])
+      }
+    }).catch(() => {})
+  }, [workspaceId])
+
   const persist = async (next: HookRule[], toastTitle: string) => {
     setIsSaving(true)
     try {
@@ -393,7 +412,7 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
       const dry = await backfillHook(workspaceId, { ruleId: id, dryRun: true })
       const wouldFire = dry.results.filter((r) => r.matched).length
       if (!wouldFire) {
-        showToast({ title: 'Backfill', description: `No matches among ${dry.processed} existing documents (path conditions can't match during backfill).` })
+        showToast({ title: 'Backfill', description: `No matches among ${dry.processed} existing documents (conditions evaluate against each document's current tree placements).` })
         return
       }
       if (!confirm(`Rule "${id}" matches ${wouldFire} of ${dry.processed} existing documents. Run its actions on them now?`)) return
@@ -481,7 +500,10 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
             <label className="text-xs font-semibold text-muted-foreground">When…</label>
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <select className={selectClass} value={form.schema} onChange={(e) => setField('schema', e.target.value)}>
-                {SCHEMA_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                {schemaOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                {form.schema && !schemaOptions.some((o) => o.value === form.schema) && (
+                  <option value={form.schema}>{form.schema.replace(/^data\/schema\//, '')}</option>
+                )}
               </select>
               <select className={selectClass} value={form.event} onChange={(e) => setField('event', e.target.value)}>
                 {EVENT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}

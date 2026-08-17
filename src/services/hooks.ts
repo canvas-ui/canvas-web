@@ -317,6 +317,8 @@ export interface HooksMeta {
   actions: HookActionMeta[]
   classifier: { predicates: string[]; fields: string[] }
   contextApi: HookContextApiEntry[]
+  /** Schemas actually present in this workspace (live document counts). */
+  schemas?: Array<{ id: string; name: string; count: number }>
 }
 
 export async function getHooksMeta(workspaceId: string): Promise<HooksMeta> {
