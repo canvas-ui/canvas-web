@@ -253,10 +253,10 @@ export interface ContextShare {
 // Owner-only: the server rejects this for contexts shared *with* you, so
 // callers should treat a failure as "no shares to show" rather than an error.
 export async function listContextShares(contextId: string): Promise<ContextShare[]> {
-  const response = await api.get<ApiPayload<ContextShare[]>>(
+  const response = await api.get<ContextShare[]>(
     `${API_ROUTES.contexts}/${contextId}/shares`
   );
-  return Array.isArray(response?.payload) ? response.payload : [];
+  return Array.isArray(response) ? response : [];
 }
 
 export async function grantContextAccess(contextId: string, sharedWithUserId: string, accessLevel: string): Promise<{ message: string }> {
@@ -287,9 +287,10 @@ export async function revokeContextAccess(contextId: string, sharedWithUserId: s
 export async function getContextTree(id: string, ownerId?: string): Promise<TreeNode> {
   try {
     const endpoint = withOwnerId(`${API_ROUTES.contexts}/${id}/tree`, ownerId);
-    const response = await api.get<ApiPayload<TreeNode>>(endpoint);
-    if (response && response.payload) {
-      return response.payload;
+    // api.get already unwraps the envelope — the response IS the tree.
+    const response = await api.get<TreeNode>(endpoint);
+    if (response) {
+      return response;
     }
     throw new Error('Context tree data not found in API response');
   } catch (error) {
@@ -373,39 +374,39 @@ export async function pasteDocumentsToContext(contextId: string, path: string, d
 // ─── Context tree path operations ─────────────────────────────────────────────
 
 export async function insertContextPath(contextId: string, path: string, autoCreateLayers = true): Promise<boolean> {
-  const response = await api.post<ApiPayload<boolean>>(`${API_ROUTES.contexts}/${contextId}/tree/paths`, { path, autoCreateLayers })
-  return response.payload ?? true
+  const response = await api.post<boolean>(`${API_ROUTES.contexts}/${contextId}/tree/paths`, { path, autoCreateLayers })
+  return response ?? true
 }
 
 export async function removeContextPath(contextId: string, path: string, recursive = false): Promise<boolean> {
   const params = new URLSearchParams({ path, recursive: recursive.toString() })
-  const response = await api.delete<ApiPayload<boolean>>(`${API_ROUTES.contexts}/${contextId}/tree/paths?${params}`)
-  return response.payload ?? true
+  const response = await api.delete<boolean>(`${API_ROUTES.contexts}/${contextId}/tree/paths?${params}`)
+  return response ?? true
 }
 
 export async function updateContextPath(contextId: string, path: string, updates: Record<string, unknown>): Promise<boolean> {
-  const response = await api.patch<ApiPayload<boolean>>(`${API_ROUTES.contexts}/${contextId}/tree/paths`, { path, ...updates })
-  return response.payload ?? true
+  const response = await api.patch<boolean>(`${API_ROUTES.contexts}/${contextId}/tree/paths`, { path, ...updates })
+  return response ?? true
 }
 
 export async function moveContextPath(contextId: string, from: string, to: string, recursive = false): Promise<boolean> {
-  const response = await api.post<ApiPayload<boolean>>(`${API_ROUTES.contexts}/${contextId}/tree/paths/move`, { from, to, recursive })
-  return response.payload ?? true
+  const response = await api.post<boolean>(`${API_ROUTES.contexts}/${contextId}/tree/paths/move`, { from, to, recursive })
+  return response ?? true
 }
 
 export async function copyContextPath(contextId: string, from: string, to: string, recursive = false): Promise<boolean> {
-  const response = await api.post<ApiPayload<boolean>>(`${API_ROUTES.contexts}/${contextId}/tree/paths/copy`, { from, to, recursive })
-  return response.payload ?? true
+  const response = await api.post<boolean>(`${API_ROUTES.contexts}/${contextId}/tree/paths/copy`, { from, to, recursive })
+  return response ?? true
 }
 
 export async function mergeContextLayer(contextId: string, layerId: string, targetLayers: string[]): Promise<unknown> {
-  const response = await api.post<ApiPayload<unknown>>(`${API_ROUTES.contexts}/${contextId}/tree/layers/merge`, { layerId, targetLayers })
-  return response.payload
+  const response = await api.post<unknown>(`${API_ROUTES.contexts}/${contextId}/tree/layers/merge`, { layerId, targetLayers })
+  return response
 }
 
 export async function subtractContextLayer(contextId: string, layerId: string, targetLayers: string[]): Promise<unknown> {
-  const response = await api.post<ApiPayload<unknown>>(`${API_ROUTES.contexts}/${contextId}/tree/layers/subtract`, { layerId, targetLayers })
-  return response.payload
+  const response = await api.post<unknown>(`${API_ROUTES.contexts}/${contextId}/tree/layers/subtract`, { layerId, targetLayers })
+  return response
 }
 
 // Import new documents to context via workspace (since contexts use workspace documents API)
@@ -431,11 +432,11 @@ export async function importDocumentsToContext(workspaceId: string, contextPath:
 export async function insertDocumentsToContextById(contextId: string, documents: UnknownRecord[], features: string[] = []): Promise<number[]> {
   try {
     const docs = Array.isArray(documents) ? documents : [documents];
-    const response = await api.post<ApiPayload<number[]>>(
+    const response = await api.post<number[]>(
       `${API_ROUTES.contexts}/${contextId}/documents`,
       { documents: docs, features }
     );
-    return Array.isArray(response.payload) ? response.payload : [];
+    return Array.isArray(response) ? response : [];
   } catch (error) {
     console.error(`Failed to insert documents into context ${contextId}:`, error);
     throw error;
