@@ -96,7 +96,7 @@ export function ToolboxPanel() {
     <div
       style={isMobile ? undefined : { width }}
       className={cn(
-        'flex flex-col overflow-hidden border bg-card text-foreground',
+        'flex flex-col overflow-hidden border bg-card surface-glass text-foreground',
         // Mobile: full drawer over the scrim. Desktop: a resizable card that sits
         // as the right-most flex sibling (same chrome as the + AddPanel).
         isMobile

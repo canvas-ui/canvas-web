@@ -1,0 +1,163 @@
+/**
+ * Frost — frosted glass over a soft backdrop.
+ *
+ * Demonstrates the material axis: surfaces are translucent and blur whatever
+ * sits behind them (the desk gradient, or the user's wallpaper — this theme is
+ * at its best with one set). Translucency is pure palette work: every surface
+ * token carries alpha, and the runtime `@theme inline` bridge does the rest.
+ * Blur is the only part that needs element-level rules; those live at the
+ * bottom of this file and in the `--glass-backdrop` token consumed by the
+ * `surface-*` utilities — inert in every other theme.
+ *
+ * Deliberately NOT blurred: in-flow `bg-card` rows/tiles inside an already
+ * frosted sheet. A nested backdrop-filter cannot see through its parent's
+ * composited background, so it costs a GPU layer and changes nothing.
+ */
+
+[data-theme='frost'] {
+  --radius: 1rem;
+
+  /* The glass material. Consumed by surface-sheet/panel/panel-overlay and the
+     surface-glass utility; scrims get a lighter pass so the page behind a
+     modal reads as "behind" without being erased. */
+  --glass-backdrop: blur(18px) saturate(1.5);
+  --glass-scrim-backdrop: blur(8px);
+
+  /* Glass edges read through big soft shadows, not hard lines. */
+  --card-shadow: var(--shadow-elevation-2);
+}
+
+[data-theme='frost'][data-scheme='light'],
+[data-theme='frost'] [data-scheme='light'] {
+  color-scheme: light;
+
+  /* White glass on a pale grey-blue wall. */
+  --background: oklch(0.985 0.003 250 / 0.55);
+  --foreground: oklch(0.28 0.02 255);
+  --card: oklch(0.985 0.003 250 / 0.6);
+  --card-foreground: oklch(0.28 0.02 255);
+  /* Popovers float over arbitrary content — more opaque so text stays legible. */
+  --popover: oklch(0.985 0.005 250 / 0.82);
+  --popover-foreground: oklch(0.28 0.02 255);
+  --desk: oklch(0.92 0.008 250);
+  /* Built-in backdrop so the glass reads even before the user picks a
+     wallpaper. A user wallpaper (inline style on <html>) overrides this. */
+  --wallpaper-image: linear-gradient(160deg, oklch(0.95 0.012 250), oklch(0.88 0.022 245) 55%, oklch(0.83 0.032 238));
+
+  --primary: oklch(0.45 0.045 255);
+  --primary-foreground: oklch(0.985 0.003 250);
+  --secondary: oklch(0.6 0.055 230);
+  --secondary-foreground: oklch(0.985 0.003 250);
+  /* Alpha surfaces: hover/selection is a whiter pane of the same glass. */
+  --muted: oklch(0.45 0.02 255 / 0.1);
+  --muted-foreground: oklch(0.44 0.02 255);
+  --accent: oklch(1 0 0 / 0.55);
+  --accent-foreground: oklch(0.28 0.02 255);
+
+  --destructive: oklch(0.56 0.14 22);
+  --destructive-foreground: oklch(0.985 0.003 250);
+  --destructive-subtle: oklch(0.62 0.14 22 / 0.14);
+  --success: oklch(0.62 0.12 150);
+  --success-foreground: oklch(0.985 0.003 250);
+  --success-subtle: oklch(0.62 0.12 150 / 0.14);
+  --warning: oklch(0.72 0.12 70);
+  --warning-foreground: oklch(0.28 0.02 255);
+  --warning-subtle: oklch(0.72 0.12 70 / 0.16);
+  --info: oklch(0.6 0.09 240);
+  --info-foreground: oklch(0.985 0.003 250);
+  --info-subtle: oklch(0.6 0.09 240 / 0.14);
+
+  /* The bright top-edge catchlight of glass, not a drawn line. */
+  --border: oklch(1 0 0 / 0.55);
+  --input: oklch(0.4 0.02 255 / 0.35);
+  --ring: oklch(0.55 0.05 250);
+  /* Lighter than usual — the scrim blur does the separating. */
+  --scrim: oklch(0.3 0.02 255 / 0.25);
+  --scrim-foreground: oklch(1 0 0);
+
+  --shadow-color: oklch(0.35 0.03 255);
+  --shadow-strength: 0.14;
+}
+
+[data-theme='frost'][data-scheme='dark'],
+[data-theme='frost'] [data-scheme='dark'] {
+  color-scheme: dark;
+
+  /* Smoked glass in a slate-blue room. */
+  --background: oklch(0.31 0.025 255 / 0.5);
+  --foreground: oklch(0.95 0.008 250);
+  --card: oklch(0.33 0.025 255 / 0.52);
+  --card-foreground: oklch(0.95 0.008 250);
+  --popover: oklch(0.3 0.028 255 / 0.85);
+  --popover-foreground: oklch(0.95 0.008 250);
+  --desk: oklch(0.26 0.025 258);
+  --wallpaper-image: linear-gradient(160deg, oklch(0.42 0.04 260), oklch(0.31 0.045 265) 55%, oklch(0.24 0.04 272));
+
+  --primary: oklch(0.85 0.02 250);
+  --primary-foreground: oklch(0.26 0.03 258);
+  --secondary: oklch(0.68 0.05 235);
+  --secondary-foreground: oklch(0.22 0.025 258);
+  --muted: oklch(1 0 0 / 0.08);
+  --muted-foreground: oklch(0.78 0.015 250);
+  --accent: oklch(1 0 0 / 0.14);
+  --accent-foreground: oklch(0.95 0.008 250);
+
+  --destructive: oklch(0.64 0.15 22);
+  --destructive-foreground: oklch(0.98 0.005 250);
+  --destructive-subtle: oklch(0.64 0.15 22 / 0.2);
+  --success: oklch(0.72 0.14 150);
+  --success-foreground: oklch(0.22 0.025 258);
+  --success-subtle: oklch(0.72 0.14 150 / 0.18);
+  --warning: oklch(0.8 0.12 75);
+  --warning-foreground: oklch(0.22 0.025 258);
+  --warning-subtle: oklch(0.8 0.12 75 / 0.18);
+  --info: oklch(0.72 0.09 240);
+  --info-foreground: oklch(0.22 0.025 258);
+  --info-subtle: oklch(0.72 0.09 240 / 0.18);
+
+  --border: oklch(1 0 0 / 0.14);
+  --input: oklch(1 0 0 / 0.3);
+  --ring: oklch(0.8 0.04 250);
+  --scrim: oklch(0.2 0.03 260 / 0.45);
+  --scrim-foreground: oklch(1 0 0);
+
+  --shadow-color: oklch(0.12 0.02 260);
+  --shadow-strength: 0.5;
+}
+
+/* ── Blur placement ─────────────────────────────────────────────────────────
+   The surface-* utilities pick up --glass-backdrop by themselves; these rules
+   cover surfaces that (still) use raw color utilities:
+   - popovers/dropdowns (`bg-popover`) rendered over arbitrary content
+   - ad-hoc modal shells: a `bg-scrim` overlay with the dialog body as its
+     direct `bg-background`/`bg-card` child
+   - the scrim overlays themselves (`bg-scrim`), matching the `scrim` utility */
+
+[data-theme='frost'] .bg-popover,
+[data-theme='frost'] .bg-scrim > :is(.bg-background, .bg-card) {
+  -webkit-backdrop-filter: var(--glass-backdrop);
+  backdrop-filter: var(--glass-backdrop);
+}
+
+[data-theme='frost'] .bg-scrim {
+  -webkit-backdrop-filter: var(--glass-scrim-backdrop);
+  backdrop-filter: var(--glass-scrim-backdrop);
+}
+
+/* No backdrop-filter support (old WebViews): the blur can't carry legibility,
+   so the glass gets close to opaque instead. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  [data-theme='frost'][data-scheme='light'],
+  [data-theme='frost'] [data-scheme='light'] {
+    --background: oklch(0.985 0.003 250 / 0.94);
+    --card: oklch(0.985 0.003 250 / 0.94);
+    --popover: oklch(0.985 0.005 250 / 0.97);
+  }
+
+  [data-theme='frost'][data-scheme='dark'],
+  [data-theme='frost'] [data-scheme='dark'] {
+    --background: oklch(0.31 0.025 255 / 0.94);
+    --card: oklch(0.33 0.025 255 / 0.94);
+    --popover: oklch(0.3 0.028 255 / 0.97);
+  }
+}

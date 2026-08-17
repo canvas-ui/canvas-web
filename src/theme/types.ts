@@ -7,7 +7,7 @@
  */
 
 /** A named palette. Must match a `[data-theme='…']` block in ./css/themes/. */
-export type ThemeId = 'canvas' | 'nord' | 'contrast' | 'terminal'
+export type ThemeId = 'canvas' | 'nord' | 'contrast' | 'terminal' | 'frost'
 
 /** A resolved light/dark scheme — never 'system'; that is a preference. */
 export type ColorScheme = 'light' | 'dark'

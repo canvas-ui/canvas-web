@@ -32,6 +32,7 @@
 @import './themes/nord.css';
 @import './themes/contrast.css';
 @import './themes/terminal.css';
+@import './themes/frost.css';
 
 /* 3. Density. After the themes, because it is the user's explicit choice and
       must beat a theme's built-in geometry. */

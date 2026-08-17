@@ -24,12 +24,16 @@
   background-repeat: no-repeat;
 }
 
-/* A sheet of paper: the main content area and full-height panels. */
+/* A sheet of paper: the main content area and full-height panels.
+   --glass-backdrop is unset everywhere except glass themes (frost), where the
+   card color is translucent and the sheet blurs what's behind it. */
 @utility surface-sheet {
   background-color: var(--color-card);
   border-radius: var(--sheet-radius);
   box-shadow: var(--sheet-shadow);
   overflow: hidden;
+  -webkit-backdrop-filter: var(--glass-backdrop, none);
+  backdrop-filter: var(--glass-backdrop, none);
 }
 
 /* A docked or floating panel — drawers, side panels, the toolbox. */
@@ -37,6 +41,8 @@
   background-color: var(--color-card);
   border-radius: var(--panel-radius);
   box-shadow: var(--panel-shadow);
+  -webkit-backdrop-filter: var(--glass-backdrop, none);
+  backdrop-filter: var(--glass-backdrop, none);
 }
 
 /* Same panel, promoted over a scrim (mobile drawers). */
@@ -44,6 +50,18 @@
   background-color: var(--color-card);
   border-radius: var(--panel-radius);
   box-shadow: var(--panel-shadow-overlay);
+  -webkit-backdrop-filter: var(--glass-backdrop, none);
+  backdrop-filter: var(--glass-backdrop, none);
+}
+
+/* Opt a top-level container (menu panel, toolbox, modal body) into the glass
+   material. Inert in themes that don't set --glass-backdrop; carries no
+   background of its own — pair with bg-card / bg-background. Only for
+   surfaces sitting directly on the desk or an overlay: nested inside another
+   glass surface it costs a GPU layer and changes nothing. */
+@utility surface-glass {
+  -webkit-backdrop-filter: var(--glass-backdrop, none);
+  backdrop-filter: var(--glass-backdrop, none);
 }
 
 /* An interactive card that lifts on hover. */
@@ -73,6 +91,8 @@
   inset: 0;
   background-color: var(--color-scrim);
   animation: fade-in var(--duration-fast) var(--ease-decelerate);
+  -webkit-backdrop-filter: var(--glass-scrim-backdrop, none);
+  backdrop-filter: var(--glass-scrim-backdrop, none);
 }
 
 /* ── Accessibility ─────────────────────────────────────────────────────── */

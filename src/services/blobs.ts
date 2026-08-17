@@ -8,20 +8,13 @@ export interface BlobUploadResult {
   size: number
 }
 
-interface BlobUploadResponse {
-  payload: BlobUploadResult
-  message: string
-  status: string
-  statusCode: number
-}
-
 // Raw-bytes upload into a workspace's blob store (workspace:data). Returns a
 // stored:// URL usable as a document location — see src/transports/routes/workspaces/blobs.js.
+// api.post already unwraps the response envelope — the result IS the payload.
 export async function uploadWorkspaceBlob(workspaceName: string, file: File | Blob): Promise<BlobUploadResult> {
-  const response = await api.post<BlobUploadResponse>(
+  return api.post<BlobUploadResult>(
     `${API_ROUTES.workspaces}/${workspaceName}/blobs`,
     file,
     { headers: { 'Content-Type': 'application/octet-stream' } },
   )
-  return response.payload
 }

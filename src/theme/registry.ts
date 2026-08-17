@@ -33,6 +33,12 @@ export const THEMES: readonly ThemeMeta[] = [
     swatches: ['oklch(1 0 0)', 'oklch(0 0 0)', 'oklch(0.32 0.16 258)'],
   },
   {
+    id: 'frost',
+    name: 'Frosted Glass',
+    description: 'Translucent, blurred surfaces over a soft backdrop. Best with a wallpaper.',
+    swatches: ['oklch(0.92 0.008 250)', 'oklch(0.31 0.025 255)', 'oklch(0.55 0.05 250)'],
+  },
+  {
     id: 'terminal',
     name: 'Terminal',
     description: 'Monospaced and dense. Tighter rows and chrome for large displays.',

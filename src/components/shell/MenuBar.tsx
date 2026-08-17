@@ -166,7 +166,7 @@ export function MenuBar() {
           // Mobile: hidden by default; while open it floats as a slim rail
           // card anchored above the bottom-left toggle button.
           state.m0Open
-            ? 'max-md:fixed max-md:left-2 max-md:top-2 max-md:bottom-rail-stack max-md:z-rail max-md:h-auto max-md:rounded-xl max-md:bg-card max-md:shadow-elevation-5 max-md:animate-fade-in'
+            ? 'max-md:fixed max-md:left-2 max-md:top-2 max-md:bottom-rail-stack max-md:z-rail max-md:h-auto max-md:rounded-xl max-md:bg-card max-md:surface-glass max-md:shadow-elevation-5 max-md:animate-fade-in'
             : 'max-md:hidden',
         )}
       >

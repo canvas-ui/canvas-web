@@ -84,7 +84,7 @@ export function AddPanel() {
     <div
       style={isMobile ? undefined : { width }}
       className={cn(
-        'flex flex-col overflow-hidden rounded-xl border bg-card',
+        'flex flex-col overflow-hidden rounded-xl border bg-card surface-glass',
         // Mobile: M1/M2-style drawer next to the menubar, above everything
         // (incl. the z-50 toolbox FAB, which would otherwise cover the form's
         // bottom controls). Desktop: a resizable flex sibling that shrinks

@@ -84,7 +84,7 @@ export function MenuPanelArea() {
       <div
         style={state.m1Open && !mobileOverlay ? { width } : undefined}
         className={cn(
-          'flex-shrink-0 overflow-hidden bg-card',
+          'flex-shrink-0 overflow-hidden bg-card surface-glass',
           !isDragging && !mobileOverlay && 'transition-[width] duration-200 ease-out',
           state.m1Open ? 'rounded-xl shadow-elevation-2' : 'w-0',
           mobileOverlay
