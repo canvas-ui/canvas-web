@@ -1,5 +1,5 @@
 import { PageHeader } from '@/components/common/page-header'
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Icon } from "@iconify/react"
 import { generateNiceRandomHexColor, visibleAccentColor, onAccentTextClass } from "@/utils/color"
 import { LayerIconPicker } from "@/components/menu/shared/LayerIconPicker"
@@ -20,6 +20,11 @@ import {
   listWorkspaces,
   createWorkspace,
   importWorkspaceFromRemote,
+  IMPORT_PHASE_LABELS,
+  listRemoteWorkspaces,
+  addRemoteWorkspace,
+  removeRemoteWorkspace,
+  type RemoteWorkspaceRef,
   startWorkspace,
   stopWorkspace,
   updateWorkspace,
@@ -53,6 +58,7 @@ export default function WorkspacesPage() {
   const folderPick = useFolderSelection();
   const [showShared, setShowShared] = useState(false);
   const [showRemote, setShowRemote] = useState(false);
+  const [showOpenRemote, setShowOpenRemote] = useState(false);
   const [editingWorkspace, setEditingWorkspace] = useState<Workspace | null>(null)
   const { showToast } = useToast()
   const navigate = useNavigate()
@@ -348,7 +354,10 @@ export default function WorkspacesPage() {
               Open shared Workspace (local)…
             </Button>
             <Button variant="outline" onClick={() => setShowRemote(o => !o)} className="max-sm:hidden">
-              Add Remote…
+              Import remote…
+            </Button>
+            <Button variant="outline" onClick={() => setShowOpenRemote(o => !o)} className="max-sm:hidden">
+              Open remote…
             </Button>
             {!showCreate && (
               <Button onClick={() => setShowCreate(true)} className="max-sm:h-9 max-sm:w-9 max-sm:p-0" aria-label="Create workspace" title="Create workspace">
@@ -458,7 +467,11 @@ export default function WorkspacesPage() {
       {/* Open Shared Resource — behind the header toggle */}
       {showShared && <OpenSharedResource />}
 
-      {/* Add Remote Workspace — pulls a copy from another canvas-server */}
+      {/* Open remote — the workspace STAYS on its own server; we only keep a
+          validated reference to it until canvas-edge can serve it. */}
+      {showOpenRemote && <OpenRemoteWorkspace onClose={() => setShowOpenRemote(false)} />}
+
+      {/* Import (pull) — takes a full copy from another canvas-server */}
       {showRemote && (
         <AddRemoteWorkspace
           onImported={(ws) => {
@@ -632,6 +645,7 @@ function AddRemoteWorkspace({ onImported, onClose }: { onImported: (ws: Workspac
   const [url, setUrl] = useState('')
   const [token, setToken] = useState('')
   const [isImporting, setIsImporting] = useState(false)
+  const [phase, setPhase] = useState('')
 
   const handleImport = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -648,8 +662,11 @@ function AddRemoteWorkspace({ onImported, onClose }: { onImported: (ws: Workspac
     }
 
     setIsImporting(true)
+    setPhase('Starting…')
     try {
-      const ws = await importWorkspaceFromRemote(base, token.trim())
+      const ws = await importWorkspaceFromRemote(base, token.trim(), (job) => {
+        setPhase(IMPORT_PHASE_LABELS[job.phase] || job.phase)
+      })
       showToast({
         title: 'Success',
         description: `Workspace '${ws.label || ws.name}' imported from ${base}.`
@@ -661,11 +678,12 @@ function AddRemoteWorkspace({ onImported, onClose }: { onImported: (ws: Workspac
       showToast({ title: 'Error', description: message, variant: 'destructive' })
     } finally {
       setIsImporting(false)
+      setPhase('')
     }
   }
 
   return (
-    <FormPanel title="Add Remote Workspace" onClose={onClose}>
+    <FormPanel title="Import (pull) a remote Workspace" onClose={onClose}>
       <form onSubmit={handleImport} className="space-y-3">
         <div className="grid gap-2 md:grid-cols-3">
           <Input
@@ -684,9 +702,13 @@ function AddRemoteWorkspace({ onImported, onClose }: { onImported: (ws: Workspac
             {isImporting ? 'Importing…' : 'Import Workspace'}
           </Button>
         </div>
+        {isImporting && phase && (
+          <p className="text-sm text-muted-foreground">{phase}</p>
+        )}
         <p className="text-sm text-muted-foreground">
-          Pulls a full copy of the shared workspace from the remote canvas-server into this one.
-          The source workspace must be stopped on the remote side; large workspaces can take a while.
+          Pulls a full <strong>copy</strong> of the workspace from the remote canvas-server into this one,
+          where it then lives independently. The remote workspace is stopped while it is packed, and
+          large workspaces can take several minutes — progress is shown above.
         </p>
       </form>
     </FormPanel>
@@ -747,3 +769,140 @@ function OpenSharedResource() {
 
 
 
+
+
+/**
+ * "Open a remote workspace": the workspace stays on ITS server and we keep a
+ * validated reference to it here.
+ *
+ * Serving one for real — proxying reads and writes through to its own
+ * canvas-server — is canvas-edge's job, so a reference is deliberately a
+ * placeholder: it is stored and listed, but not openable. The server still
+ * validates the credentials against the remote before saving, so a reference
+ * that appears here is one that actually resolves.
+ */
+function OpenRemoteWorkspace({ onClose }: { onClose: () => void }) {
+  const { showToast } = useToast()
+  const [url, setUrl] = useState('')
+  const [token, setToken] = useState('')
+  const [isAdding, setIsAdding] = useState(false)
+  const [remotes, setRemotes] = useState<RemoteWorkspaceRef[]>([])
+
+  const refresh = useCallback(async () => {
+    try {
+      setRemotes(await listRemoteWorkspaces())
+    } catch {
+      setRemotes([])
+    }
+  }, [])
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void refresh() }, [refresh])
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault()
+    let base: string
+    try {
+      base = new URL(url.trim()).origin
+    } catch {
+      showToast({ title: 'Error', description: 'Invalid server URL', variant: 'destructive' })
+      return
+    }
+
+    setIsAdding(true)
+    try {
+      const ref = await addRemoteWorkspace(base, token.trim())
+      showToast({
+        title: 'Remote workspace added',
+        description: `'${ref.label}' on ${ref.url} is registered. Opening it lands with canvas-edge.`,
+      })
+      setUrl('')
+      setToken('')
+      await refresh()
+    } catch (err) {
+      const errorObj = err as { message?: string; payload?: { message?: string } } | null | undefined
+      showToast({
+        title: 'Error',
+        description: errorObj?.message || errorObj?.payload?.message || 'Failed to add remote workspace',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsAdding(false)
+    }
+  }
+
+  const handleRemove = async (ref: RemoteWorkspaceRef) => {
+    try {
+      await removeRemoteWorkspace(ref.id)
+      await refresh()
+    } catch (err) {
+      showToast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to remove remote workspace',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  return (
+    <FormPanel title="Open a remote Workspace" onClose={onClose}>
+      <form onSubmit={handleAdd} className="space-y-3">
+        <div className="grid gap-2 md:grid-cols-3">
+          <Input
+            placeholder="Server URL (e.g., https://my.canvas-server.tld)"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            disabled={isAdding}
+          />
+          <Input
+            placeholder="Workspace share token (canvas-...)"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            disabled={isAdding}
+          />
+          <Button type="submit" disabled={isAdding || !url.trim() || !token.trim()}>
+            {isAdding ? 'Checking…' : 'Add Remote'}
+          </Button>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Keeps the workspace on its own server and registers it here as a reference — nothing is
+          copied. The credentials are verified against the remote before it is saved.{' '}
+          <strong>Opening one is not live yet</strong>: it arrives with canvas-edge, which runs a
+          workspace as a self-contained instance. Use “Import remote…” if you want a local copy now.
+        </p>
+      </form>
+
+      {remotes.length > 0 && (
+        <ul className="mt-4 space-y-2 border-t pt-3">
+          {remotes.map(ref => (
+            <li key={ref.id} className="flex flex-col gap-2 rounded-md border p-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium">
+                  {ref.label}
+                  <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    remote
+                  </span>
+                </div>
+                <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">{ref.url}</div>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <Button type="button" variant="outline" size="sm" disabled title="Opening remote workspaces arrives with canvas-edge">
+                  Open
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleRemove(ref)}
+                  className="text-destructive hover:text-destructive"
+                >
+                  Remove
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </FormPanel>
+  )
+}

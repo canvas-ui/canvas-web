@@ -6,8 +6,8 @@
   "author": "Jozef Melich <me@idnc.sk>",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "node scripts/generate-color-fallbacks.mjs && tsc -b && vite build",
+    "dev": "canvas-wallpapers-copy public/wallpapers && vite",
+    "build": "canvas-wallpapers-copy public/wallpapers && node scripts/generate-color-fallbacks.mjs && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "build:fallbacks": "node scripts/generate-color-fallbacks.mjs",
@@ -16,6 +16,7 @@
   "dependencies": {
     "@augmentd-labs/canvas-api-client": "workspace:*",
     "@augmentd-labs/canvas-protocol": "workspace:*",
+    "@augmentd-labs/canvas-wallpapers": "workspace:*",
     "@codemirror/lang-javascript": "^6.2.5",
     "@codemirror/lang-json": "^6.0.2",
     "@codemirror/language": "^6.12.4",

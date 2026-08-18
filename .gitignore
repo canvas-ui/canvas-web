@@ -135,3 +135,6 @@ bower_components
 
 # Compiled binary addons (https://nodejs.org/api/addons.html)
 build/Release
+
+# Copied in from @augmentd-labs/canvas-wallpapers at dev/build time
+public/wallpapers/

@@ -151,20 +151,102 @@ export async function createWorkspace(payload: CreateWorkspacePayload): Promise<
   }
 }
 
-// Pull a workspace from another canvas-server using a workspace share token.
-// The server resolves the token remotely, exports the workspace there,
-// downloads the archive and imports it as a local workspace.
-export async function importWorkspaceFromRemote(url: string, token: string): Promise<Workspace> {
-  try {
-    const response = await api.post<Workspace>(
-      `${API_ROUTES.workspaces}/import`,
-      { url, token }
-    );
-    return response;
-  } catch (error) {
-    console.error('Failed to import workspace from remote:', error);
-    throw error;
+// ─── Remote workspaces ───────────────────────────────────────────────────────
+
+export type ImportPhase = 'resolving' | 'exporting' | 'downloading' | 'extracting' | 'loading' | 'done'
+
+export interface ImportJob {
+  id: string
+  status: 'running' | 'done' | 'failed'
+  phase: ImportPhase
+  received: number
+  total: number | null
+  result: Workspace | null
+  error: { message: string; code: string | null } | null
+}
+
+/** Human-readable label for an import phase, for progress UI. */
+export const IMPORT_PHASE_LABELS: Record<ImportPhase, string> = {
+  resolving: 'Resolving token on the remote server…',
+  exporting: 'Remote server is packing the workspace…',
+  downloading: 'Downloading archive…',
+  extracting: 'Extracting…',
+  loading: 'Validating and loading…',
+  done: 'Done',
+}
+
+export async function getImportJob(jobId: string): Promise<ImportJob> {
+  return api.get(`${API_ROUTES.workspaces}/import/jobs/${encodeURIComponent(jobId)}`)
+}
+
+/**
+ * Poll an import job to completion.
+ *
+ * Imports move GBs and run for minutes, which is why the server answers 202
+ * with a job instead of holding the request open — a request that long dies on
+ * Node's 5-minute requestTimeout or, sooner, on a reverse proxy's read timeout,
+ * and the browser reports it as an opaque network/CORS failure.
+ */
+export async function waitForImportJob(
+  jobId: string,
+  onProgress?: (job: ImportJob) => void,
+  { intervalMs = 1500, signal }: { intervalMs?: number; signal?: AbortSignal } = {},
+): Promise<Workspace> {
+  for (;;) {
+    if (signal?.aborted) throw new Error('Import tracking cancelled')
+    const job = await getImportJob(jobId)
+    onProgress?.(job)
+    if (job.status === 'done') {
+      if (!job.result) throw new Error('Import finished without returning a workspace')
+      return job.result
+    }
+    if (job.status === 'failed') throw new Error(job.error?.message || 'Import failed')
+    await new Promise(resolve => setTimeout(resolve, intervalMs))
   }
+}
+
+/**
+ * Pull a full copy of a workspace from another canvas-server using a workspace
+ * share token. The server exports it there, downloads, extracts and registers
+ * it; this returns once the resulting job completes.
+ */
+export async function importWorkspaceFromRemote(
+  url: string,
+  token: string,
+  onProgress?: (job: ImportJob) => void,
+): Promise<Workspace> {
+  const job = await api.post<ImportJob>(`${API_ROUTES.workspaces}/import`, { url, token })
+  return waitForImportJob(job.id, onProgress)
+}
+
+export interface RemoteWorkspaceRef {
+  id: string
+  type: 'remote-workspace'
+  status: 'remote'
+  url: string
+  workspaceId: string
+  workspaceName: string | null
+  label: string
+  permissions: string[]
+  addedAt: string
+  /** False until canvas-edge can serve a workspace that stays on its own server. */
+  openable: boolean
+}
+
+export async function listRemoteWorkspaces(): Promise<RemoteWorkspaceRef[]> {
+  return api.get(`${API_ROUTES.workspaces}/remotes`)
+}
+
+/**
+ * Register a reference to a workspace that STAYS on its own server. The server
+ * validates the token against the remote before storing anything.
+ */
+export async function addRemoteWorkspace(url: string, token: string, label?: string): Promise<RemoteWorkspaceRef> {
+  return api.post(`${API_ROUTES.workspaces}/remotes`, { url, token, ...(label ? { label } : {}) })
+}
+
+export async function removeRemoteWorkspace(id: string): Promise<void> {
+  await api.delete(`${API_ROUTES.workspaces}/remotes/${encodeURIComponent(id)}`)
 }
 
 // ─── Portability: export / import ────────────────────────────────────────────
@@ -226,11 +308,22 @@ export async function downloadWorkspaceExport(name: string): Promise<void> {
 export async function importWorkspaceFromFile(
   file: File,
   onProgress?: (fraction: number) => void,
+  onJobProgress?: (job: ImportJob) => void,
 ): Promise<Workspace> {
+  const job = await uploadWorkspaceArchive(file, onProgress)
+  // The bytes are up; extraction/validation/registration continue as a job.
+  return waitForImportJob(job.id, onJobProgress)
+}
+
+/** Streams the archive up and returns the import job the server started. */
+function uploadWorkspaceArchive(
+  file: File,
+  onProgress?: (fraction: number) => void,
+): Promise<ImportJob> {
   const token = localStorage.getItem('authToken')
   const url = `${API_URL}${API_ROUTES.workspaces}/import/upload?filename=${encodeURIComponent(file.name)}`
 
-  return new Promise<Workspace>((resolve, reject) => {
+  return new Promise<ImportJob>((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.open('POST', url, true)
     xhr.withCredentials = true
@@ -241,9 +334,10 @@ export async function importWorkspaceFromFile(
       if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total)
     }
     xhr.onload = () => {
-      let body: { payload?: Workspace; message?: string } | null = null
+      let body: { payload?: { job?: ImportJob }; message?: string } | null = null
       try { body = JSON.parse(xhr.responseText) } catch { /* non-JSON error body */ }
-      if (xhr.status >= 200 && xhr.status < 300 && body?.payload) resolve(body.payload)
+      const job = body?.payload?.job
+      if (xhr.status >= 200 && xhr.status < 300 && job) resolve(job)
       else reject(new Error(body?.message || `Import failed (HTTP ${xhr.status})`))
     }
     xhr.onerror = () => reject(new Error('Upload failed — the connection dropped'))

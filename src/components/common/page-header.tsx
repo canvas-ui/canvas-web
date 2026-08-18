@@ -44,7 +44,12 @@ export function PageHeader({
           line. Letting a two-button cluster share the title row squeezed the
           description into a 60px column — one word per line. On `sm` and up the
           natural order is title, actions, close. */}
-      <div className="flex min-w-0 flex-1 items-start gap-3">
+      {/* A min-width floor rather than min-w-0: without it this block shrinks
+          toward zero to make room for a wide actions cluster, and the title
+          collapses to one character per line instead of the actions wrapping
+          to their own row. Truncation still works — the inner block is the
+          min-w-0 one. */}
+      <div className="flex min-w-[14rem] flex-1 items-start gap-3">
         {(onBack || backTo) && (
           <button
             type="button"

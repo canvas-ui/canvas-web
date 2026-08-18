@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 // Mobile browsers (Android Chrome/WebView, PWAs) ship no inline PDF plugin —
 // a blob: iframe renders blank or force-downloads. iOS Safari "supports" PDF
@@ -104,16 +104,36 @@ function PdfJsPages({ blob, filename }: { blob: Blob; filename: string }) {
 }
 
 export function PdfViewer({ blob, blobUrl, filename, className = '' }: PdfViewerProps) {
+  // The iframe must carry NO sandbox attribute. Chrome's built-in PDF viewer is
+  // extension-backed rather than plain browser chrome, and it refuses to run in
+  // a sandboxed frame — the frame is blocked outright ("This page has been
+  // blocked by Chrome"). That holds for every token combination, including
+  // `allow-scripts allow-same-origin`, so there is no partial sandbox to fall
+  // back to; only desktop was affected because mobile takes the pdf.js path.
+  //
+  // What replaces the sandbox is the blob's own MIME type. A blob: URL typed
+  // application/pdf is always handed to the PDF viewer, so bytes that are
+  // secretly HTML fail to parse as a PDF instead of executing in our origin —
+  // the exact case the sandbox was defending against. The server-reported type
+  // is not trusted here: it is only re-typed upstream when generic, so a
+  // document served as text/html would otherwise still arrive as text/html.
+  const pdfUrl = useMemo(
+    () => (blob && blob.type !== 'application/pdf'
+      ? URL.createObjectURL(blob.slice(0, blob.size, 'application/pdf'))
+      : null),
+    [blob],
+  )
+  // Only the URL created just above is ours to revoke; blobUrl belongs to the
+  // hook that made it.
+  useEffect(() => () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl) }, [pdfUrl])
+
   if (hasUsableNativeViewer() || !blob) {
     // Fill the free height of the (definite-height) preview area; min-h keeps
     // it usable when the host isn't height-constrained. className goes on the
     // wrapper so callers can set their own height without fighting h-full.
     return (
       <div className={`min-h-[300px] ${className}`}>
-        {/* sandbox (no allow-scripts/allow-same-origin) is defence-in-depth:
-            even if a non-PDF blob reaches here it cannot execute or reach our
-            origin. The native PDF viewer is browser chrome, so it still renders. */}
-        <iframe src={blobUrl} sandbox="" className="h-full min-h-[300px] w-full rounded border" title={filename} />
+        <iframe src={pdfUrl ?? blobUrl} className="h-full min-h-[300px] w-full rounded border" title={filename} />
       </div>
     )
   }

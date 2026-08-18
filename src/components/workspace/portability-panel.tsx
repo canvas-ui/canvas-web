@@ -10,6 +10,8 @@ import {
   importWorkspaceFromFile,
   listWorkspaceExports,
   startWorkspace,
+  IMPORT_PHASE_LABELS,
+  type ImportJob,
   type WorkspaceExportArchive,
 } from '@/services/workspace'
 
@@ -47,7 +49,8 @@ export function WorkspacePortabilitySection({
   const [restarting, setRestarting] = useState(false)
   const [busyName, setBusyName] = useState<string | null>(null)
   const [uploadPct, setUploadPct] = useState<number | null>(null)
-  const [importPhase, setImportPhase] = useState<'uploading' | 'extracting' | null>(null)
+  const [importPhase, setImportPhase] = useState<'uploading' | 'server' | null>(null)
+  const [serverPhase, setServerPhase] = useState<string>('')
   const fileInput = useRef<HTMLInputElement>(null)
 
   const refresh = useCallback(async () => {
@@ -147,12 +150,17 @@ export function WorkspacePortabilitySection({
   const handleImport = async (file: File) => {
     setImportPhase('uploading')
     setUploadPct(0)
+    setServerPhase('')
     try {
-      const workspace = await importWorkspaceFromFile(file, (fraction) => {
-        setUploadPct(Math.round(fraction * 100))
-        // upload done, server is now extracting/validating/registering
-        if (fraction >= 1) setImportPhase('extracting')
-      })
+      const workspace = await importWorkspaceFromFile(
+        file,
+        (fraction) => {
+          setUploadPct(Math.round(fraction * 100))
+          // bytes are up; the server now works through its own phases
+          if (fraction >= 1) setImportPhase('server')
+        },
+        (job: ImportJob) => setServerPhase(IMPORT_PHASE_LABELS[job.phase] || job.phase),
+      )
       showToast({
         title: 'Workspace imported',
         description: `'${workspace.label || workspace.name}' was extracted, validated and loaded.`,
@@ -168,6 +176,7 @@ export function WorkspacePortabilitySection({
     } finally {
       setImportPhase(null)
       setUploadPct(null)
+      setServerPhase('')
       if (fileInput.current) fileInput.current.value = ''
     }
   }
@@ -279,8 +288,8 @@ export function WorkspacePortabilitySection({
           {importPhase === 'uploading' && (
             <span className="text-xs text-muted-foreground">Uploading… {uploadPct}%</span>
           )}
-          {importPhase === 'extracting' && (
-            <span className="text-xs text-muted-foreground">Extracting, validating and loading…</span>
+          {importPhase === 'server' && (
+            <span className="text-xs text-muted-foreground">{serverPhase || 'Extracting, validating and loading…'}</span>
           )}
         </div>
       </div>
