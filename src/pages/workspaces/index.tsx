@@ -345,7 +345,7 @@ export default function WorkspacesPage() {
         actions={
           <>
             <Button variant="outline" onClick={() => setShowShared(o => !o)} className="max-sm:hidden">
-              Open Shared…
+              Open shared Workspace (local)…
             </Button>
             <Button variant="outline" onClick={() => setShowRemote(o => !o)} className="max-sm:hidden">
               Add Remote…
@@ -734,7 +734,7 @@ function OpenSharedResource() {
 
   return (
     <div className="space-y-3">
-      <h2 className="text-xl font-semibold">Open Shared Resource</h2>
+      <h2 className="text-xl font-semibold">Open shared Workspace (local)</h2>
       <div className="grid gap-2 md:grid-cols-3">
         <Input placeholder="Shared URL (e.g., https://host/rest/v2/pub/workspaces/ID)" value={url} onChange={(e) => setUrl(e.target.value)} />
         <Input placeholder="Access token (canvas-...)" value={token} onChange={(e) => setToken(e.target.value)} />

@@ -51,6 +51,7 @@ import {
   type WorkspacePublicCanvasShare,
   type WorkspaceServicesStatus,
 } from '@/services/workspace'
+import { WorkspacePortabilitySection } from '@/components/workspace/portability-panel'
 import {
   listDevices,
   listWorkspaceDevices,
@@ -851,6 +852,9 @@ export default function WorkspaceSettingsPage() {
     if (tab !== activeTab) navigate(`/workspaces/${workspaceName}/settings/${activeTab}`, { replace: true })
   }, [tab, activeTab, workspaceName, navigate])
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
+  // Bumped by actions that change the workspace's runtime state (export stops
+  // it, import adds one) so the loader below re-reads it.
+  const [reloadKey, setReloadKey] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [isDestroying, setIsDestroying] = useState(false)
@@ -996,7 +1000,7 @@ export default function WorkspaceSettingsPage() {
       }
     }
     load()
-  }, [workspaceName, loadShares, loadRuntimeSettings, showToast])
+  }, [workspaceName, loadShares, loadRuntimeSettings, showToast, reloadKey])
 
   // Mirror "already loaded / in flight" into refs so the lazy tab loader below
   // keeps its run-once-per-visit semantics without depending on the very state
@@ -1236,6 +1240,13 @@ export default function WorkspaceSettingsPage() {
           <DefaultFoldersSection workspaceName={workspaceName!} />
 
           <WorkspaceUsageSection workspaceId={workspaceId} />
+
+          <WorkspacePortabilitySection
+            workspaceId={workspaceId}
+            workspaceName={workspace.label || workspace.name}
+            isActive={workspace.status === 'active'}
+            onChanged={() => setReloadKey(k => k + 1)}
+          />
 
           <section className="rounded-lg border border-destructive/30 p-4">
             <h2 className="mb-3 text-sm font-semibold text-destructive">Danger Zone</h2>

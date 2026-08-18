@@ -167,6 +167,96 @@ export async function importWorkspaceFromRemote(url: string, token: string): Pro
   }
 }
 
+// ─── Portability: export / import ────────────────────────────────────────────
+
+export interface WorkspaceExportArchive {
+  name: string
+  size: number
+  createdAt: string
+  url: string
+}
+
+/**
+ * Stop the workspace (when `stop`) and archive its folder into the user's
+ * Exports dir. Returns the archive, including whether the workspace was
+ * stopped to produce it — the caller decides whether to offer a restart.
+ */
+export async function exportWorkspace(id: string, opts: { stop?: boolean } = {}): Promise<WorkspaceExportArchive & { stoppedWorkspace: boolean }> {
+  return api.post(`${API_ROUTES.workspaces}/${id}/export`, { stop: opts.stop === true })
+}
+
+export async function listWorkspaceExports(id: string): Promise<WorkspaceExportArchive[]> {
+  return api.get(`${API_ROUTES.workspaces}/${id}/exports`)
+}
+
+/** Every archive in the user's Exports dir, whichever workspace produced it. */
+export async function listAllExports(): Promise<WorkspaceExportArchive[]> {
+  return api.get(`${API_ROUTES.workspaces}/exports`)
+}
+
+export async function deleteWorkspaceExport(name: string): Promise<void> {
+  await api.delete(`${API_ROUTES.workspaces}/exports/${encodeURIComponent(name)}`)
+}
+
+/**
+ * Download an archive to disk. Archives run to GBs, so this deliberately does
+ * NOT fetch into a Blob: it mints a short-lived HttpOnly cookie and then lets
+ * the browser navigate, which streams straight to disk with no token in the
+ * URL and no copy in memory.
+ */
+export async function downloadWorkspaceExport(name: string): Promise<void> {
+  await api.post(`${API_ROUTES.workspaces}/exports/ticket`)
+  const href = `${API_URL}${API_ROUTES.workspaces}/exports/${encodeURIComponent(name)}`
+  const a = document.createElement('a')
+  a.href = href
+  a.download = name
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}
+
+/**
+ * Import a workspace from the user's local drive: the file is streamed to the
+ * server as a raw body, landing in the user's own Exports dir (the client
+ * never names a path), then extracted, validated and registered.
+ *
+ * XMLHttpRequest rather than fetch — it is the only way to get upload progress,
+ * and a workspace archive is big enough that progress is not a nicety.
+ */
+export async function importWorkspaceFromFile(
+  file: File,
+  onProgress?: (fraction: number) => void,
+): Promise<Workspace> {
+  const token = localStorage.getItem('authToken')
+  const url = `${API_URL}${API_ROUTES.workspaces}/import/upload?filename=${encodeURIComponent(file.name)}`
+
+  return new Promise<Workspace>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', url, true)
+    xhr.withCredentials = true
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream')
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total)
+    }
+    xhr.onload = () => {
+      let body: { payload?: Workspace; message?: string } | null = null
+      try { body = JSON.parse(xhr.responseText) } catch { /* non-JSON error body */ }
+      if (xhr.status >= 200 && xhr.status < 300 && body?.payload) resolve(body.payload)
+      else reject(new Error(body?.message || `Import failed (HTTP ${xhr.status})`))
+    }
+    xhr.onerror = () => reject(new Error('Upload failed — the connection dropped'))
+    xhr.onabort = () => reject(new Error('Upload cancelled'))
+    xhr.send(file)
+  })
+}
+
+/** Import an archive already sitting in the user's Exports dir. */
+export async function importWorkspaceFromExport(name: string): Promise<Workspace> {
+  return api.post(`${API_ROUTES.workspaces}/import`, { export: name })
+}
+
 export async function startWorkspace(id: string): Promise<Workspace> {
   try {
     const response = await api.post<Workspace>(`${API_ROUTES.workspaces}/${id}/start`);
