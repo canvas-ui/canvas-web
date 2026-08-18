@@ -1,7 +1,19 @@
 import { useState } from 'react'
 import { Check, Monitor, Moon, Sun } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { loadWallpaper, saveWallpaper, WALLPAPER_FIT_OPTIONS, WALLPAPER_MAX_BYTES, type WallpaperSettings } from '@/lib/wallpaper'
+import {
+  builtinIdOf,
+  builtinRef,
+  builtinThumbUrl,
+  BUILTIN_WALLPAPERS,
+  loadWallpaper,
+  saveWallpaper,
+  wallpaperImageCss,
+  wallpaperSizeCss,
+  WALLPAPER_FIT_OPTIONS,
+  WALLPAPER_MAX_BYTES,
+  type WallpaperSettings,
+} from '@/lib/wallpaper'
 import {
   DENSITY_OPTIONS,
   SCHEME_OPTIONS,
@@ -127,8 +139,9 @@ export function AppearanceSettings() {
 }
 
 // ── Wallpaper ────────────────────────────────────────────────────────────────
-// Global desk background image (local-only preference, stored as a data URL
-// in localStorage — see lib/wallpaper.ts). No image = the theme's desk color.
+// Global desk background image (local-only preference — see lib/wallpaper.ts).
+// Either one of the built-ins we ship, or the user's own image; no image = the
+// theme's desk color.
 function WallpaperSection() {
   const [settings, setSettings] = useState(loadWallpaper)
   const [error, setError] = useState<string | null>(null)
@@ -158,19 +171,66 @@ function WallpaperSection() {
     reader.readAsDataURL(file)
   }
 
+  const isCustom = settings.image !== null && builtinIdOf(settings.image) === null
+  const previewImage = wallpaperImageCss(settings.image)
+
   return (
     <section>
       <SectionHeading
         title="Wallpaper"
         description="Background image for the desk behind all panels. Without one, the theme's desk color shows (the default)."
       />
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Live thumbnail of the current desk look */}
+
+      <div role="radiogroup" aria-label="Wallpaper" className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+        <WallpaperTile
+          label="None"
+          isActive={settings.image === null}
+          onSelect={() => update({ ...settings, image: null })}
+        >
+          {/* `surface-desk` carries the live wallpaper, which is exactly what
+              this tile must not show — it previews the bare desk color. */}
+          <span
+            className="flex size-full items-center justify-center surface-desk text-xs text-muted-foreground"
+            style={{ backgroundImage: 'none' }}
+          >
+            None
+          </span>
+        </WallpaperTile>
+
+        {BUILTIN_WALLPAPERS.map((wallpaper) => (
+          <WallpaperTile
+            key={wallpaper.id}
+            label={wallpaper.title}
+            title={`${wallpaper.title} — suits the ${wallpaper.scheme} scheme`}
+            isActive={builtinIdOf(settings.image) === wallpaper.id}
+            onSelect={() => update({ ...settings, image: builtinRef(wallpaper.id) })}
+          >
+            <img
+              src={builtinThumbUrl(wallpaper)}
+              alt=""
+              loading="lazy"
+              className="size-full object-cover"
+              style={{ backgroundColor: wallpaper.background }}
+            />
+          </WallpaperTile>
+        ))}
+
+        {isCustom && (
+          <WallpaperTile label="Your image" isActive onSelect={() => {}}>
+            <img src={settings.image ?? undefined} alt="" className="size-full object-cover" />
+          </WallpaperTile>
+        )}
+      </div>
+
+      <WallpaperCredits />
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        {/* Live thumbnail of the current desk look, including the fit mode */}
         <div
           className="h-20 w-32 shrink-0 rounded-md border surface-desk"
-          style={settings.image ? {
-            backgroundImage: `url("${settings.image}")`,
-            backgroundSize: settings.fit === 'fill' ? '100% 100%' : settings.fit === 'center' ? 'auto' : 'cover',
+          style={previewImage ? {
+            backgroundImage: previewImage,
+            backgroundSize: wallpaperSizeCss(settings.fit),
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
           } : undefined}
@@ -179,7 +239,7 @@ function WallpaperSection() {
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap gap-2">
             <label className="focus-ring inline-flex cursor-pointer items-center rounded-md border px-3 py-1.5 text-sm hover:bg-accent/50">
-              {settings.image ? 'Change image…' : 'Choose image…'}
+              {isCustom ? 'Change image…' : 'Use your own image…'}
               <input
                 type="file"
                 accept="image/*"
@@ -206,6 +266,73 @@ function WallpaperSection() {
         </div>
       </div>
     </section>
+  )
+}
+
+// Credit for wallpapers that aren't ours. The package's NOTICE carries the
+// full terms; this is the visible attribution that goes with the artwork.
+function WallpaperCredits() {
+  const credited = BUILTIN_WALLPAPERS.filter((wallpaper) => wallpaper.author !== 'Canvas')
+  if (credited.length === 0) return null
+
+  return (
+    <p className="mt-2 text-xs text-muted-foreground">
+      {credited.map((wallpaper, index) => (
+        <span key={wallpaper.id}>
+          {index > 0 && ' · '}
+          {wallpaper.title} © {wallpaper.author}
+          {wallpaper.source && (
+            <>
+              {' '}
+              <a
+                href={wallpaper.source}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="focus-ring underline underline-offset-2 hover:text-foreground"
+              >
+                {new URL(wallpaper.source).hostname}
+              </a>
+            </>
+          )}
+        </span>
+      ))}
+    </p>
+  )
+}
+
+function WallpaperTile({
+  label,
+  title,
+  isActive,
+  onSelect,
+  children,
+}: {
+  label: string
+  title?: string
+  isActive: boolean
+  onSelect: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={isActive}
+      aria-label={label}
+      title={title ?? label}
+      onClick={onSelect}
+      className={cn(
+        'focus-ring group relative aspect-video overflow-hidden rounded-md border transition-colors',
+        isActive ? 'border-primary ring-1 ring-primary' : 'border-border hover:border-muted-foreground/40',
+      )}
+    >
+      {children}
+      {isActive && (
+        <span className="absolute right-1 top-1 rounded-full bg-primary p-0.5 text-primary-foreground">
+          <Check className="size-3" />
+        </span>
+      )}
+    </button>
   )
 }
 
