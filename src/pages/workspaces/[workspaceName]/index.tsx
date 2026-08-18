@@ -686,6 +686,11 @@ export default function WorkspaceDetailPage() {
     const events = [
       'document.inserted', 'document.updated', 'document.removed', 'document.deleted',
       'document.removed.batch', 'document.deleted.batch',
+      // Membership. document.updated/removed also fire on a link/unlink, but
+      // only as deprecated aliases scheduled for removal — these are the ones
+      // that survive.
+      'document.linked', 'document.unlinked',
+      'document.linked.batch', 'document.unlinked.batch',
       'tree.document.inserted', 'tree.document.inserted.batch',
       'tree.document.removed', 'tree.document.removed.batch',
       'tree.document.deleted', 'tree.document.deleted.batch',

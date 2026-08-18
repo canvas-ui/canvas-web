@@ -386,6 +386,12 @@ export default function ContextDetailPage() {
       ['context.url.set', onUrlChanged], ['context:url:set', onUrlChanged],
       ['document.inserted', onDocumentChanged], ['document.updated', onDocumentChanged],
       ['document.removed', onDocumentChanged], ['document.removed.batch', onDocumentChanged],
+      // Membership events — the successors of the deprecated membership-only
+      // document.updated / document.removed forms this page relied on. This
+      // page has no tree.* subscription to fall back on, so without them a
+      // re-link would stop refreshing the list once those aliases go.
+      ['document.linked', onDocumentChanged], ['document.unlinked', onDocumentChanged],
+      ['document.linked.batch', onDocumentChanged], ['document.unlinked.batch', onDocumentChanged],
       ['document.deleted', onDocumentChanged], ['document.deleted.batch', onDocumentChanged],
     ];
     events.forEach(([ev, fn]) => socketService.on(ev, fn));

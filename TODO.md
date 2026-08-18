@@ -24,6 +24,11 @@
 
 - [ ] (deffered) Content area section should support tabs
 
+- [ ] Timelines panel: `crud:*` timelines are surfaced as dedicated toggles and
+      kept out of the deletable list — decide whether they also need an explicit
+      "system" badge. (Moved from canvas-synapsd/TODO.md 2026-08-18; the engine
+      side of the adaptive-quantum work is done, this is the leftover UI call.)
+
 ## Published JSON Schemas (moved from canvas/TODO.md)
 
 - [ ] Consume the server-published JSON Schemas and delete copied enums — the
