@@ -27,7 +27,11 @@ export function UrlPdfRenderer({ document: doc, className = '' }: RendererProps)
     const toTypedBlob = async (res: Response) => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const blob = await res.blob()
-      return blob.type ? blob : new Blob([blob], { type: 'application/pdf' })
+      // NEVER preserve the remote Content-Type. A blob: URL minted here carries
+      // OUR origin, so framing a text/html blob would run attacker script
+      // same-origin (readable localStorage.authToken). Force application/pdf:
+      // the browser renders it in the passive PDF viewer, never as HTML.
+      return new Blob([blob], { type: 'application/pdf' })
     }
 
     const viaProxy = () => {

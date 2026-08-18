@@ -110,7 +110,10 @@ export function PdfViewer({ blob, blobUrl, filename, className = '' }: PdfViewer
     // wrapper so callers can set their own height without fighting h-full.
     return (
       <div className={`min-h-[300px] ${className}`}>
-        <iframe src={blobUrl} className="h-full min-h-[300px] w-full rounded border" title={filename} />
+        {/* sandbox (no allow-scripts/allow-same-origin) is defence-in-depth:
+            even if a non-PDF blob reaches here it cannot execute or reach our
+            origin. The native PDF viewer is browser chrome, so it still renders. */}
+        <iframe src={blobUrl} sandbox="" className="h-full min-h-[300px] w-full rounded border" title={filename} />
       </div>
     )
   }
