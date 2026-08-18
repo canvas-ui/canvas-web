@@ -5,6 +5,14 @@ import type { QuickAddInitialData, QuickAddKind } from '@/components/home/quick-
 
 const SHARE_CACHE = 'share-target-inbox'
 
+// Keyed by the ?error= codes src/sw.ts redirects with, plus the local 'expired'
+// case for a token whose inbox entry is already gone.
+const SHARE_ERRORS: Record<string, string> = {
+  'too-large': 'That file is too large to share into Canvas. Upload it from the app instead.',
+  'stash-failed': "Canvas couldn't hold on to the shared file — device storage may be full. Try again, or upload it from the app.",
+  expired: 'Nothing shared, or the share expired.',
+}
+
 interface ShareMeta {
   title: string
   text: string
@@ -58,16 +66,24 @@ export default function ShareTargetPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const [resolved, setResolved] = useState<{ kind: QuickAddKind; data: QuickAddInitialData } | null>(null)
-  const [notFound, setNotFound] = useState(false)
+  const [failure, setFailure] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
     async function resolve() {
+      // The SW redirects here with ?error= when it could not stash the share at
+      // all (see src/sw.ts) — that is a different story from an expired token
+      // and deserves its own message, not a silent "nothing shared".
+      const error = searchParams.get('error')
+      if (error) {
+        setFailure(error)
+        return
+      }
       const token = searchParams.get('token')
       const r = token ? await readShareInbox(token) : null
       if (cancelled) return
       if (r) setResolved(r)
-      else setNotFound(true)
+      else setFailure('expired')
     }
     resolve()
     return () => { cancelled = true }
@@ -75,10 +91,17 @@ export default function ShareTargetPage() {
 
   const closeAndReturn = () => navigate('/home', { replace: true })
 
-  if (notFound) {
+  if (failure) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        Nothing shared, or the share expired.
+      <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+        <p className="text-sm text-muted-foreground">{SHARE_ERRORS[failure] ?? SHARE_ERRORS.expired}</p>
+        <button
+          type="button"
+          onClick={closeAndReturn}
+          className="text-sm font-medium text-primary underline underline-offset-4"
+        >
+          Go to Canvas
+        </button>
       </div>
     )
   }
