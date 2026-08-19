@@ -422,6 +422,7 @@
     --card: rgba(249, 250, 252, 0.6);
     --card-foreground: #222933;
     --popover: rgba(248, 250, 253, 0.82);
+    --native-popup: #f8fafd;
     --popover-foreground: #222933;
     --desk: #e1e5ea;
     --primary: #44576e;
@@ -459,6 +460,7 @@
     --card-foreground: #ebeff4;
     --popover: rgba(36, 47, 60, 0.85);
     --popover-foreground: #ebeff4;
+    --native-popup: #242f3c;
     --desk: #1c2430;
     --primary: #c4cfdb;
     --primary-foreground: #1b2433;

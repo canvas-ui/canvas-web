@@ -29,6 +29,17 @@
   --btn-font-weight: 500;
   --btn-border-width: 1px;
 
+  /* ── Native popup (select dropdown) ──────────────────────────────────── */
+  /* The `<select>` listbox is painted by the BROWSER, not by us, and setting an
+     author background on the control (our selects are `bg-transparent`) makes
+     Chrome stop using its own `color-scheme`-aware surface for the popup and
+     fall back to a light one — so a dark theme rendered light-grey option text
+     on a near-white list. These must therefore be OPAQUE: a translucent value
+     composites over that light fallback and washes out. Defaults track the
+     popover; only a theme with translucent surfaces needs to override. */
+  --native-popup: var(--popover);
+  --native-popup-foreground: var(--popover-foreground);
+
   /* ── Input ───────────────────────────────────────────────────────────── */
   --input-radius: var(--radius-md);
   --input-height: var(--control-height-md);

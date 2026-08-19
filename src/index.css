@@ -80,6 +80,18 @@
     outline-offset: var(--focus-ring-offset);
   }
 
+  /* Native `<select>` dropdowns. Same class of dark-mode tell as the scrollbar
+     below: the listbox is drawn by the browser, and because our selects carry
+     an author background (`bg-transparent`) Chrome stops honouring
+     `color-scheme` for the popup and paints it light — leaving the inherited
+     light foreground unreadable on it. Styling the options directly is the
+     only lever we have over that surface. */
+  option,
+  optgroup {
+    background-color: var(--native-popup);
+    color: var(--native-popup-foreground);
+  }
+
   /* Themed scrollbars — an unstyled scrollbar in a dark theme is a bright
      white gutter, which is the single most obvious dark-mode tell. */
   * {
