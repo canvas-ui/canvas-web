@@ -7,9 +7,11 @@ import { TagInput } from '@/components/toolbox/add/TagInput'
 import { tagsToFeatures, featuresToTags } from '@/components/toolbox/add/tags'
 import { updateWorkspaceDocument, listWorkspaceTagSuggestions } from '@/services/workspace'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
-import { NOTE_SCHEMA, LINK_SCHEMA, TAB_SCHEMA, TODO_SCHEMA } from '@/components/renderers/types'
+import { NOTE_SCHEMA, LINK_SCHEMA, TAB_SCHEMA, TODO_SCHEMA, IDENTITY_SCHEMA } from '@/components/renderers/types'
 import { DocumentGeoField } from '@/components/common/DocumentGeoField'
 import { TodoFields } from '@/components/toolbox/add/TodoFields'
+import { IdentityFields } from '@/components/toolbox/add/IdentityFields'
+import { useIdentityFields, identityFieldsFromDocument, buildIdentityData } from '@/components/toolbox/add/useIdentityFields'
 import { buildTodoData, isoToLocalInput, todayEndOfDayLocal, type TodoStatus } from '@/components/toolbox/add/useTodoFields'
 import type { Document, DocumentGeo } from '@/types/workspace'
 import { isEditableSchema } from './editable-schema'
@@ -33,6 +35,7 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
   const editable = isEditableSchema(doc.schema)
   const isNote = doc.schema === NOTE_SCHEMA
   const isTodo = doc.schema === TODO_SCHEMA
+  const isIdentity = doc.schema === IDENTITY_SCHEMA
   const { urlKey, titleKey } = urlTitleKeys(doc.schema)
 
   const [url, setUrl] = useState<string>(urlKey ? String(doc.data?.[urlKey] ?? '') : '')
@@ -43,6 +46,9 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
   const [status, setStatus] = useState<TodoStatus>((doc.data?.status as TodoStatus) ?? 'pending')
   const [priority, setPriority] = useState<number | ''>(typeof doc.data?.priority === 'number' ? doc.data.priority : '')
   const [due, setDue] = useState<string>(doc.data?.dueDate ? isoToLocalInput(String(doc.data.dueDate)) : todayEndOfDayLocal())
+  // Hooks cannot be conditional, so identity state is always created; it is
+  // only read (and only saved) on an identity document.
+  const identity = useIdentityFields(identityFieldsFromDocument(doc.data))
   const [comment, setComment] = useState<string>(String(doc.comment ?? ''))
   // Location is universal (like the comment), not schema-specific: a photo with
   // no EXIF fix is the main reason this exists. The patch below is sent only
@@ -50,9 +56,15 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
   const initialGeo = ((doc.metadata as Record<string, unknown> | undefined)?.geo as DocumentGeo | undefined) ?? null
   const [geo, setGeo] = useState<DocumentGeo | null>(initialGeo)
   const geoChanged = JSON.stringify(geo ?? null) !== JSON.stringify(initialGeo ?? null)
+  // Features live at the document's TOP LEVEL since synapsd v3 — reading them
+  // from `metadata` (where every add surface still WRITES them, and where
+  // Document.update still accepts them) always came back empty, so the form
+  // opened with no tags and saving replaced the real ones with []. Read both,
+  // newest home first.
+  const storedFeatures = (doc.features ?? (doc.metadata as Record<string, unknown>)?.features) as string[] | undefined
   const [tags, setTags] = useState<string[]>(
-    featuresToTags((doc.metadata as Record<string, unknown>)?.features as string[] | undefined).length
-      ? featuresToTags((doc.metadata as Record<string, unknown>)?.features as string[] | undefined)
+    featuresToTags(storedFeatures).length
+      ? featuresToTags(storedFeatures)
       : ((doc.data?.tags as string[] | undefined) ?? [])
   )
   const [suggestions, setSuggestions] = useState<string[]>([])
@@ -66,7 +78,12 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
 
   const urlValid = !urlKey || (() => { try { new URL(url.trim()); return true } catch { return false } })()
   // Non-editable schemas (photos/files) save comment-only, so they're always valid.
-  const canSave = !saving && (!editable ? true : (isTodo ? title.trim().length > 0 : (isNote ? content.trim().length > 0 : urlValid)))
+  const canSave = !saving && (!editable
+    ? true
+    : isIdentity ? (identity.displayName.trim().length > 0 && identity.emailValid)
+    : isTodo ? title.trim().length > 0
+    : isNote ? content.trim().length > 0
+    : urlValid)
 
   const handleSave = async () => {
     setSaving(true)
@@ -82,7 +99,14 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
       }
       // Only send data/metadata for editable schemas — sending `data` would
       // wholesale-replace it (BaseDocument.update), clobbering a photo/file's data.
-      if (isTodo) {
+      if (isIdentity) {
+        // Spread the stored data first: the form does not surface links,
+        // properties, timezone, locale or lastInteractionAt, and `data` is
+        // REPLACED wholesale server-side — dropping the spread would delete
+        // whatever a connector or the extraction pass wrote there.
+        payload.data = { ...doc.data, ...buildIdentityData(identity.values) }
+        payload.metadata = { features: tagsToFeatures(tags) }
+      } else if (isTodo) {
         // Preserve other data fields (e.g. completedAt) while updating the editable ones.
         payload.data = { ...doc.data, ...buildTodoData({ title, description, status, priority, due }) }
         payload.metadata = { features: tagsToFeatures(tags) }
@@ -125,6 +149,10 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
         </div>
       )}
 
+      {editable && isIdentity && (
+        <IdentityFields idPrefix="edit-identity" {...identity} emailValid={identity.emailValid} />
+      )}
+
       {editable && isTodo && (
         <TodoFields
           idPrefix="edit-todo"
@@ -136,7 +164,7 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
         />
       )}
 
-      {editable && !isTodo && (
+      {editable && !isTodo && !isIdentity && (
         <div className="space-y-1.5">
           <Label htmlFor="edit-title">Title</Label>
           <Input id="edit-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={isNote ? "Optional; defaults to today's date" : 'Optional display title'} />

@@ -299,13 +299,19 @@ export interface Document {
     // The document's own name, set by a rename through any surface. Distinct
     // from what each location calls the bytes — see getLocationFilename().
     filename?: string
-    // tag/<name> entries — see components/toolbox/add/tags.ts's tagsToFeatures
+    // DEPRECATED read path: synapsd v3 moved features to the document's own
+    // top-level `features[]` (see Document.update — it still ACCEPTS them under
+    // metadata on write, which is why every add surface still sends them here).
+    // Read from `Document.features`; this only ever sees a client-built object.
     features?: string[]
     geo?: DocumentGeo
     // GENERATED description (captioner output; `comment` stays human-authored).
     // Auto-folded into FTS + embedded as its own text-space chunk server-side.
     summary?: string
   }
+  // Asserted tags + derived facet keys, `tag/<name>` for user tags. Top-level
+  // since synapsd v3; the server never returns them under `metadata`.
+  features?: string[]
   locations?: Array<{ url: string; metadata?: Record<string, unknown> }>
   indexOptions: {
     checksumAlgorithms: string[]

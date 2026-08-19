@@ -1,15 +1,16 @@
-import { StickyNote, Link as LinkIcon, Upload, Camera, FileSearch, FolderPlus, ListTodo, type LucideIcon } from 'lucide-react'
+import { StickyNote, Link as LinkIcon, Upload, Camera, FileSearch, FolderPlus, ListTodo, User, type LucideIcon } from 'lucide-react'
 
 // Single source of truth for "what can be inserted" — the same entries, in
 // the same order, with the same labels and icons on every surface (home
 // quick-add stack, AddPanel picker, …), so users never relearn the pattern
 // from one screen to the next.
-export type InsertKind = 'note' | 'link' | 'todo' | 'file' | 'photo' | 'existing' | 'folder'
+export type InsertKind = 'note' | 'link' | 'todo' | 'identity' | 'file' | 'photo' | 'existing' | 'folder'
 
 export const INSERT_KINDS: { kind: InsertKind; label: string; icon: LucideIcon }[] = [
   { kind: 'note', label: 'Note', icon: StickyNote },
   { kind: 'link', label: 'Link', icon: LinkIcon },
   { kind: 'todo', label: 'Todo', icon: ListTodo },
+  { kind: 'identity', label: 'Identity', icon: User },
   { kind: 'file', label: 'File', icon: Upload },
   { kind: 'photo', label: 'Photo/Video', icon: Camera },
   { kind: 'existing', label: 'Existing document', icon: FileSearch },

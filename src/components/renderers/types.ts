@@ -15,6 +15,7 @@ export const TAB_SCHEMA = 'data/schema/tab'
 export const FILE_SCHEMA = 'data/schema/file'
 export const EMAIL_SCHEMA = 'data/schema/message/email'
 export const TODO_SCHEMA = 'data/schema/task'
+export const IDENTITY_SCHEMA = 'data/schema/identity'
 
 export type MimeKind = 'image' | 'audio' | 'video' | 'pdf' | 'text' | 'markdown' | 'binary'
 

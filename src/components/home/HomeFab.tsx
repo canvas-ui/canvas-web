@@ -8,6 +8,7 @@ import { type QuickAddKind, type QuickAddInitialData } from './quick-add-types'
 import { NoteCardBody } from './cards/NoteCardBody'
 import { LinkCardBody } from './cards/LinkCardBody'
 import { TodoCardBody } from './cards/TodoCardBody'
+import { IdentityCardBody } from './cards/IdentityCardBody'
 import { FileCardBody } from './cards/FileCardBody'
 import { PhotoCardBody } from './cards/PhotoCardBody'
 import { ExistingCardBody } from './cards/ExistingCardBody'
@@ -93,6 +94,7 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose, onCardsO
             case 'note': return <NoteCardBody key={c.id} onClose={onClose} initialData={c.initialData} />
             case 'link': return <LinkCardBody key={c.id} onClose={onClose} initialData={c.initialData} />
             case 'todo': return <TodoCardBody key={c.id} onClose={onClose} initialData={c.initialData} />
+            case 'identity': return <IdentityCardBody key={c.id} onClose={onClose} initialData={c.initialData} />
             case 'file': return <FileCardBody key={c.id} onClose={onClose} initialData={c.initialData} />
             case 'photo': return <PhotoCardBody key={c.id} onClose={onClose} />
             case 'existing': return <ExistingCardBody key={c.id} onClose={onClose} />

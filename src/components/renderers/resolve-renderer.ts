@@ -3,7 +3,7 @@ import { getLocationFilename } from '@/lib/document-display'
 import type { Document } from '@/types/workspace'
 import {
   classifyMime, youTubeVideoId,
-  NOTE_SCHEMA, EMAIL_SCHEMA, FILE_SCHEMA, LINK_SCHEMA, TAB_SCHEMA, TODO_SCHEMA,
+  NOTE_SCHEMA, EMAIL_SCHEMA, FILE_SCHEMA, LINK_SCHEMA, TAB_SCHEMA, TODO_SCHEMA, IDENTITY_SCHEMA,
   type RendererProps,
 } from './types'
 import { ImageRenderer, AudioRenderer, VideoRenderer, PdfRenderer } from './media'
@@ -14,6 +14,7 @@ import { isPdfUrl } from './pdf-url'
 import { LinkCardRenderer } from './LinkCardRenderer'
 import { TodoRenderer } from './TodoRenderer'
 import { EmailRenderer } from './EmailRenderer'
+import { IdentityRenderer } from './IdentityRenderer'
 import { BinaryFallback } from './BinaryFallback'
 
 // Central schema+mime → renderer mapping (replaces the ad-hoc if-chains that
@@ -25,6 +26,9 @@ export function resolveRenderer(document: Document): ComponentType<RendererProps
   if (schema === NOTE_SCHEMA) return MarkdownRenderer
   if (schema === TODO_SCHEMA) return TodoRenderer
   if (schema === EMAIL_SCHEMA) return EmailRenderer
+  // Subtypes (`data/schema/identity/person`) render the same way — the subtype
+  // axis is `data.type`, which the renderer already shows as a badge.
+  if (schema === IDENTITY_SCHEMA || schema.startsWith(`${IDENTITY_SCHEMA}/`)) return IdentityRenderer
   if (schema === TAB_SCHEMA || schema === LINK_SCHEMA) {
     const url = String(document.data?.url ?? document.data?.uri ?? '')
     if (youTubeVideoId(url)) return YouTubeEmbed

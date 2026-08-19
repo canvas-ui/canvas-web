@@ -3,6 +3,7 @@ import type { Document } from '@/types/workspace'
 const EMAIL_SCHEMA = 'data/schema/message/email'
 const TAB_SCHEMA = 'data/schema/tab'
 const TASK_SCHEMA = 'data/schema/task'
+const IDENTITY_SCHEMA = 'data/schema/identity'
 export const FILE_SCHEMA = 'data/schema/file'
 
 type DisplayIcon = 'file' | 'globe' | 'mail'
@@ -39,6 +40,45 @@ function formatEmailParty(value: unknown): string {
     return name || address
   }
   return ''
+}
+
+// "3 channels · 1 identifier" — the shape of what we hold on someone, which is
+// the thing you scan a contact list for. Counting beats listing: a person with
+// six addresses would otherwise blow the row width.
+function identityHoldings(data: Document['data']): string {
+  const channels = Array.isArray(data?.channels) ? data.channels.length : 0
+  const identifiers = Array.isArray(data?.identifiers) ? data.identifiers.length : 0
+  const orgs = Array.isArray(data?.organizations) ? data.organizations.length : 0
+  return [
+    channels ? `${channels} channel${channels !== 1 ? 's' : ''}` : '',
+    identifiers ? `${identifiers} identifier${identifiers !== 1 ? 's' : ''}` : '',
+    orgs ? `${orgs} organization${orgs !== 1 ? 's' : ''}` : '',
+  ].filter(Boolean).join(' · ')
+}
+
+// `data.name` on an identity is a STRUCTURED object ({given, family, …}), not a
+// string like on every other schema — passing it to truncate() would render a
+// literal "[object Object]". Compose it instead.
+function identityName(data: Document['data']): string {
+  const display = String(data?.displayName || '').trim()
+  if (display) return display
+  const n = data?.name
+  if (!n || typeof n !== 'object') return String(n || '').trim()
+  const parts = n as Record<string, unknown>
+  return [parts.prefix, parts.given, parts.middle, parts.family, parts.suffix]
+    .map((p) => String(p || '').trim()).filter(Boolean).join(' ')
+}
+
+// An identity's own address, whether it was set as `primaryEmail` or only ever
+// arrived as a primary email channel — the schema's getter reads both, and a
+// row that showed a blank because the value sat in the other field would look
+// like missing data.
+function identityEmail(data: Document['data']): string {
+  const direct = String(data?.primaryEmail || '').trim()
+  if (direct) return direct
+  const channels = Array.isArray(data?.channels) ? data.channels : []
+  const primary = channels.find((c) => c?.kind === 'email' && c?.primary) || channels.find((c) => c?.kind === 'email')
+  return String(primary?.value || '').trim()
 }
 
 function getTabTitle(url: string): string {
@@ -181,6 +221,19 @@ export function getDocumentDisplayInfo(document: Document): {
       preview: truncate(stripMarkdown(document.data.description || document.data.summary), 400),
       subtitle: [status, dueLabel ? `due ${dueLabel}` : ''].filter(Boolean).join(' · '),
       icon: 'file',
+      isExternal: false,
+      schemaLabel,
+    }
+  }
+
+  if (document.schema === IDENTITY_SCHEMA || document.schema.startsWith(`${IDENTITY_SCHEMA}/`)) {
+    const email = identityEmail(document.data)
+    const type = String(document.data.type || '').trim()
+    return {
+      title: truncate(identityName(document.data), 160) || `Identity ${document.id}`,
+      preview: truncate(identityHoldings(document.data), 140),
+      subtitle: [email, type].filter(Boolean).join(' · '),
+      icon: email ? 'mail' : 'file',
       isExternal: false,
       schemaLabel,
     }

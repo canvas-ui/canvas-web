@@ -67,6 +67,9 @@ const SPECS: Record<string, IconSpec> = {
   note: slot(StickyNote, 3),
   task: slot(CheckSquare, 5),
   message: slot(MessageSquare, 6),
+  // `contact` is the pre-3.0 name for the same thing; both keys resolve to the
+  // one identity hue so old rows don't change colour.
+  identity: slot(User, 2),
   contact: slot(User, 2),
   device: slot(Monitor, 10),
   application: slot(Package, 11),
