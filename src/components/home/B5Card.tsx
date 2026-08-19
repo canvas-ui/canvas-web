@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
-import { LinkToCard, type LinkToTarget } from '@/components/menu/shared/LinkToCard'
-import { pasteDocumentsToWorkspacePath } from '@/services/workspace'
+import { LinkToCard, type LinkToTarget, type LinkToRelation } from '@/components/menu/shared/LinkToCard'
+import { pasteDocumentsToWorkspacePath, createDocumentRelations } from '@/services/workspace'
+import { announceRelationsChanged } from '@/lib/relation-events'
 
 export type B5SaveTarget = LinkToTarget & { path: string }
 
@@ -30,6 +31,10 @@ interface B5CardProps {
   // rather than look like a floating quick-add card. Orientation toggle
   // (aspect-ratio only makes sense for the fixed-size card) is hidden.
   fillParent?: boolean
+  // Id of the document this card is showing, when it already exists — enables
+  // the picker's relations tab ("what does this point at") alongside the two
+  // path trees. Quick-add cards omit it: nothing exists to relate until Save.
+  relationSubjectId?: number
   children: ReactNode
 }
 
@@ -38,11 +43,12 @@ interface B5CardProps {
 // side) rather than a modal — it only portals to a fullscreen overlay while
 // explicitly maximized.
 export function B5Card({
-  title, icon: Icon, onClose, onSave, canSave = false, saving = false, successMessage = 'Saved', lockedWorkspaceName, fillParent = false, children,
+  title, icon: Icon, onClose, onSave, canSave = false, saving = false, successMessage = 'Saved', lockedWorkspaceName, fillParent = false, relationSubjectId, children,
 }: B5CardProps) {
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait')
   const [maximized, setMaximized] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [relationSaving, setRelationSaving] = useState(false)
   // Esc unwinds one layer at a time: picker first, then the maximized card.
   useEscapeClose(() => setPickerOpen(false), pickerOpen)
   useEscapeClose(() => setMaximized(false), maximized && !pickerOpen)
@@ -82,6 +88,24 @@ export function B5Card({
       onClose()
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to save')
+    }
+  }
+
+  // Relations branch of the same picker. Unlike a path link this does not
+  // close the card — the new edge shows up in the card's own Synapses tab, so
+  // dismissing it would hide the result of the action.
+  const handleRelation = async (relation: LinkToRelation) => {
+    if (!relationSubjectId || !lockedWorkspaceName || relation.targetIds.length === 0) return
+    setRelationSaving(true)
+    try {
+      await createDocumentRelations(lockedWorkspaceName, relationSubjectId, relation.predicate, relation.targetIds, relation.direction)
+      showSuccessToast(`Created ${relation.targetIds.length} relation${relation.targetIds.length !== 1 ? 's' : ''}`)
+      announceRelationsChanged()
+      setPickerOpen(false)
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to create relations')
+    } finally {
+      setRelationSaving(false)
     }
   }
 
@@ -165,12 +189,20 @@ export function B5Card({
     </div>
   )
 
+  // Relations are intra-workspace by construction (one edge plane per index),
+  // so the tab needs both a subject and a pinned workspace.
+  const canRelate = Boolean(relationSubjectId && lockedWorkspaceName)
+
   const picker = onSave && pickerOpen && (
     <LinkToCard
       onClose={() => setPickerOpen(false)}
       onConfirm={handleSelect}
       fixedWorkspaceName={lockedWorkspaceName}
-      saving={saving}
+      saving={saving || relationSaving}
+      tabs={canRelate ? ['context', 'directory', 'relations'] : ['context', 'directory']}
+      onConfirmRelation={canRelate ? handleRelation : undefined}
+      relationWorkspaceName={lockedWorkspaceName}
+      relationExcludeIds={canRelate ? new Set([relationSubjectId!]) : undefined}
       // fillParent hosts (side card) stretch the picker to the full column
       // height instead of the free-floating viewport-card sized card.
       sizeClassName={fillParent ? 'h-full max-h-full w-[min(380px,90vw)] max-md:h-full max-md:w-full max-md:shadow-elevation-5' : undefined}

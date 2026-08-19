@@ -3,6 +3,7 @@ import { Link2, Trash2 } from 'lucide-react'
 import { LinkToCard, type LinkToTarget, type LinkToRelation } from '@/components/menu/shared/LinkToCard'
 import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from '@/components/menu/shared/LinkToSidePanel'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
+import { announceRelationsChanged } from '@/lib/relation-events'
 import { pasteDocumentsToWorkspacePath, createDocumentRelations } from '@/services/workspace'
 
 // Auto-growing borderless textarea - the notepad body.
@@ -83,6 +84,7 @@ export function LinkDocOverlay({ documentId, workspaceName, onClose }: { documen
     try {
       await createDocumentRelations(workspaceName, documentId, predicate, targetIds, direction)
       showSuccessToast(`Related to ${targetIds.length} document${targetIds.length !== 1 ? 's' : ''}`)
+      announceRelationsChanged()
       onClose()
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to create relation')

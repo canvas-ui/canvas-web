@@ -42,6 +42,10 @@ export function DocumentSideCard() {
       canSave
       successMessage="Linked"
       lockedWorkspaceName={workspaceId}
+      // The document already exists here, so the picker gets its relations
+      // tab too — "where does this belong" and "what does this point at" are
+      // the same gesture, and the result lands in the Synapses tab below.
+      relationSubjectId={document.id}
       fillParent
     >
       <ObjectPropertiesCard document={document} workspaceId={workspaceId} onChanged={refresh} compact />
