@@ -63,16 +63,28 @@ export function TodoRow({ doc, workspaceId, readOnly, onChanged }: { doc: Docume
 
 // Task list over the canvas' context — every todo document, soonest due first
 // (the 'tasks' timeline; undated tasks trail). Checkboxes toggle completion.
-export function TodosWidget({ config, canvas }: WidgetProps) {
+export function TodosWidget({ config, setConfig, canvas }: WidgetProps) {
   const pageSize = typeof config.pageSize === 'number' ? config.pageSize : 50
   const [todos, setTodos] = useState<Document[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [hideDone, setHideDone] = useState(config.hideDone === true)
   const [reload, setReload] = useState(0)
   // Ticking a todo done mutates the document server-side, not the canvas config,
   // so it follows `interactive` (any authed view, incl. a read-only home tile),
   // not `readOnly`. Only the unauthenticated public share sets interactive=false.
   const readOnly = canvas.interactive === false
+
+  // "Hide done" is a property of the canvas, not of this session: on an editable
+  // canvas the toggle writes straight into the widget config (which marks the
+  // canvas dirty), so Save bakes it in and the frozen view — folder tile, public
+  // share — opens the way it was left. Read-only hosts have no Save to bake it
+  // into, so there the toggle falls back to a local, ephemeral override.
+  const configEditable = canvas.readOnly !== true
+  const [localHideDone, setLocalHideDone] = useState(config.hideDone === true)
+  const hideDone = configEditable ? config.hideDone === true : localHideDone
+  const setHideDone = (next: boolean) => {
+    if (configEditable) setConfig({ ...config, hideDone: next })
+    else setLocalHideDone(next)
+  }
 
   useEffect(() => {
     let cancelled = false

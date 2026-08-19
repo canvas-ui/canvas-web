@@ -5,6 +5,7 @@ import { ObjectPropertiesCard, type ObjectCardTab } from './ObjectPropertiesCard
 import { getDocumentDisplayInfo, getExternalUrl } from '@/lib/document-display'
 import { useToolboxOptional } from '@/components/toolbox/use-toolbox'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
+import { useLiveDocument } from '@/hooks/useLiveDocument'
 import { cn } from '@/lib/utils'
 import type { Document } from '@/types/workspace'
 
@@ -20,9 +21,12 @@ interface ObjectPropertiesModalProps {
 
 // Centered-modal host for the object properties card (list "view details" /
 // "edit" actions). The side-view host is DocumentSideCard.
-export function ObjectPropertiesModal({ document, isOpen, onClose, workspaceId, initialTab, initialEdit }: ObjectPropertiesModalProps) {
+export function ObjectPropertiesModal({ document: opened, isOpen, onClose, workspaceId, initialTab, initialEdit }: ObjectPropertiesModalProps) {
   const [fullscreen, setFullscreen] = useState(false)
   const toolbox = useToolboxOptional()
+  // `opened` is the list's snapshot — an edit saved inside the card never
+  // updates it, so re-read the document after every change and render that.
+  const { document, refresh } = useLiveDocument(workspaceId, opened)
   useEscapeClose(onClose, isOpen && !!document)
 
   if (!isOpen || !document) return null
@@ -98,6 +102,7 @@ export function ObjectPropertiesModal({ document, isOpen, onClose, workspaceId, 
             workspaceId={workspaceId ?? ''}
             initialTab={initialTab}
             initialEdit={initialEdit}
+            onChanged={refresh}
           />
         </div>
       </div>

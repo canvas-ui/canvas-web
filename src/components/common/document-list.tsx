@@ -1,9 +1,9 @@
 import { Document, TreeNode } from '@/types/workspace'
 import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, Play, Table as TableIcon, HardDrive, ArrowRightLeft } from 'lucide-react'
-import { LinkToCard, type LinkToTarget } from '@/components/menu/shared/LinkToCard'
+import { LinkToCard, type LinkToTarget, type LinkToRelation } from '@/components/menu/shared/LinkToCard'
 import { BackendActionCard } from '@/components/menu/shared/BackendActionCard'
 import { PickDocumentsCard } from '@/components/menu/shared/PickDocumentsCard'
-import { transferDocumentsToBackends, type BackendTransferMode } from '@/services/workspace'
+import { transferDocumentsToBackends, createDocumentRelations, type BackendTransferMode } from '@/services/workspace'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { useSideView } from '@/components/shell/use-side-view'
 import { useState, useCallback, useMemo, useEffect, useRef, useDeferredValue } from 'react'
@@ -22,6 +22,7 @@ import { useSortableData } from '@/components/ui/use-sortable-data'
 import { Button } from '@/components/ui/button'
 import { ContextMenuShell } from '@/components/common/context-menu-shell'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
+import { announceRelationsChanged } from '@/lib/relation-events'
 import { ObjectPropertiesModal } from '@/components/object-card/ObjectPropertiesModal'
 import { isEditableSchema } from '@/components/object-card/editable-schema'
 import { usePublicShareCode } from '@/components/renderers/public-share'
@@ -829,6 +830,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   const [selectedDocuments, setSelectedDocuments] = useState<Set<number>>(new Set())
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; documentIds: number[] } | null>(null)
   const [linkPanelIds, setLinkPanelIds] = useState<number[] | null>(null)
+  const [relationSaving, setRelationSaving] = useState(false)
   // Copy to / Move to / Delete from backend — the backend twin of the link panel.
   const [backendPanel, setBackendPanel] = useState<{ ids: number[]; mode: BackendTransferMode } | null>(null)
   const [backendSaving, setBackendSaving] = useState(false)
@@ -1044,6 +1046,27 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     if (selectedDocuments.has(documentId)) { targetIds = Array.from(selectedDocuments) } else { targetIds = [documentId]; setSelectedDocuments(new Set([documentId])) }
     setContextMenu({ x: event.clientX, y: event.clientY, documentIds: targetIds })
   }, [selectedDocuments])
+
+  // Relations branch of the same card: every selected document gets the picked
+  // edge to every picked target. Direction is an axis — 'in' flips which side
+  // is the subject, it does not change the predicate.
+  const handleRelationConfirm = useCallback(async (relation: LinkToRelation, documentIds: number[]) => {
+    if (documentIds.length === 0 || relation.targetIds.length === 0) return
+    setRelationSaving(true)
+    try {
+      for (const documentId of documentIds) {
+        await createDocumentRelations(workspaceId!, documentId, relation.predicate, relation.targetIds, relation.direction)
+      }
+      const edges = documentIds.length * relation.targetIds.length
+      showSuccessToast(`Created ${edges} relation${edges !== 1 ? 's' : ''}`)
+      announceRelationsChanged()
+      setLinkPanelIds(null)
+    } catch (error) {
+      showErrorToast(error instanceof Error ? error.message : 'Failed to create relations')
+    } finally {
+      setRelationSaving(false)
+    }
+  }, [workspaceId, showSuccessToast, showErrorToast])
 
   const handleLinkConfirm = useCallback(async (paths: string[], documentIds: number[], ctx?: LinkToTarget) => {
     if (!onPasteDocuments) return
@@ -1917,7 +1940,14 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
           <LinkToCard
             documentCount={linkPanelIds.length}
             fixedWorkspaceName={workspaceId}
+            // Relations sit beside the two trees: "where does this belong" and
+            // "what does this point at" are the same gesture for the user, and
+            // the selection is already in hand here.
+            tabs={['context', 'directory', 'relations']}
+            saving={relationSaving}
+            relationExcludeIds={new Set(linkPanelIds)}
             onConfirm={(paths, ctx) => handleLinkConfirm(paths, linkPanelIds, ctx)}
+            onConfirmRelation={(relation) => handleRelationConfirm(relation, linkPanelIds)}
             onClose={() => setLinkPanelIds(null)}
           />
         </div>,

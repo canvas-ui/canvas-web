@@ -10,6 +10,7 @@ import { getLocationFilename } from '@/lib/document-display'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { usePublicShareCode } from '@/components/renderers/public-share'
 import { DocumentEditForm } from './EditForm'
+import { DocumentRelationsSection } from './RelationsSection'
 import { isEditableSchema } from './editable-schema'
 import type { Document } from '@/types/workspace'
 
@@ -299,10 +300,9 @@ export function SynapsesTab({ document, workspaceId }: TabProps) {
           </div>
         )
       })}
-      <div>
-        <h3 className="mb-2 font-semibold">Documents</h3>
-        <p className="text-sm text-muted-foreground">Related documents: coming soon.</p>
-      </div>
+      {/* Typed doc<->doc edges — the other half of "what is this connected
+          to", alongside the tree placements above. */}
+      <DocumentRelationsSection document={document} workspaceId={workspaceId} />
     </div>
   )
 }

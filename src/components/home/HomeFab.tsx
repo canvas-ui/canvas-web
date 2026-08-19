@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useToolboxOptional } from '@/components/toolbox/use-toolbox'
 import { InsertMenu } from '@/components/common/insert-menu'
 import type { InsertKind } from '@/components/common/insert-kinds'
 import { type QuickAddKind, type QuickAddInitialData } from './quick-add-types'
@@ -38,6 +39,12 @@ function nextCardId() {
 
 export function HomeFab({ initialKind, initialData, onInitialCardClose, onCardsOpenChange }: HomeFabProps) {
   const [stackOpen, setStackOpen] = useState(false)
+  // Same rule as ToolboxFab: the toolbox and the + AddPanel dock as right-most
+  // columns inside the shell, and this button is `fixed right-6` — so while
+  // either is open it floats on top of their content and bottom-right controls.
+  // Optional because HomeFab also renders outside the shell (share-target).
+  const toolbox = useToolboxOptional()
+  const panelOpen = Boolean(toolbox?.state.t1Open || toolbox?.state.addOpen)
   const [openCards, setOpenCards] = useState<OpenCard[]>(() =>
     initialKind ? [{ id: 'initial', kind: initialKind, initialData }] : [],
   )
@@ -54,6 +61,10 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose, onCardsO
   useEffect(() => {
     onCardsOpenChangeRef.current?.(hasOpenCards)
   }, [hasOpenCards])
+
+  // Render-time reset: an expanded stack that gets hidden behind a panel must
+  // not pop back open expanded when the panel closes.
+  if (panelOpen && stackOpen) setStackOpen(false)
 
   const addCard = (kind: InsertKind) => {
     setOpenCards((prev) => [...prev, { id: nextCardId(), kind }])
@@ -107,6 +118,7 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose, onCardsO
           'pointer-events-none fixed right-6 z-40 flex flex-col items-end gap-2',
           'bottom-fab-inset md:bottom-[calc(var(--spacing-fab-inset)+5rem)]',
           openCards.length > 0 && 'max-md:hidden',
+          panelOpen && 'hidden',
         )}
       >
         <div

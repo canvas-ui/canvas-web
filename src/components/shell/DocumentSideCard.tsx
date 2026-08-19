@@ -5,6 +5,7 @@ import { NOTE_SCHEMA, TAB_SCHEMA, FILE_SCHEMA, EMAIL_SCHEMA } from '@/components
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { pasteDocumentsToWorkspacePath } from '@/services/workspace'
 import { useSideView } from './use-side-view'
+import { useLiveDocument } from '@/hooks/useLiveDocument'
 import type { Document } from '@/types/workspace'
 
 function iconFor(document: Document) {
@@ -20,8 +21,12 @@ function iconFor(document: Document) {
 // "Link To" in the header links this document into another location.
 export function DocumentSideCard() {
   const { entry, close } = useSideView()
-  if (!entry) return null
-  const { document, workspaceId } = entry
+  // Same staleness as the modal host: `entry.document` is the opening list's
+  // snapshot, so re-read it after an inline edit instead of rendering pre-edit
+  // values (header title included) until the card is re-opened.
+  const { document, refresh } = useLiveDocument(entry?.workspaceId, entry?.document ?? null)
+  if (!entry || !document) return null
+  const { workspaceId } = entry
 
   const onSave = async (target: B5SaveTarget) => {
     await pasteDocumentsToWorkspacePath(workspaceId, target.path, [document.id], target.treeName, target.treeType)
@@ -39,7 +44,7 @@ export function DocumentSideCard() {
       lockedWorkspaceName={workspaceId}
       fillParent
     >
-      <ObjectPropertiesCard document={document} workspaceId={workspaceId} compact />
+      <ObjectPropertiesCard document={document} workspaceId={workspaceId} onChanged={refresh} compact />
     </B5Card>
   )
 }

@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { GitBranch, FolderTree, HardDrive } from 'lucide-react'
+import { GitBranch, FolderTree, HardDrive, Share2 } from 'lucide-react'
 import type { TreeNode } from '@/types/workspace'
 
 // Shared between LinkToCard (pick destination paths) and PickDocumentsCard (browse
@@ -10,15 +10,23 @@ import type { TreeNode } from '@/types/workspace'
 // caller opts in via LinkToCard's `tabs` prop (e.g. the rule builder's picker).
 export type TreeTab = 'context' | 'directory' | 'backends'
 
-export const TAB_ICONS: Record<TreeTab, React.ReactNode> = {
+// 'relations' is not a tree at all — it is LinkToCard's fourth tab, where the
+// destination is another DOCUMENT (a typed synapsd edge) rather than a path.
+// It rides in the same tab strip because "where does this belong" and "what
+// does this point at" are the same gesture from the user's side.
+export type PickerTab = TreeTab | 'relations'
+
+export const TAB_ICONS: Record<PickerTab, React.ReactNode> = {
   context: <GitBranch className="h-3.5 w-3.5" />,
   directory: <FolderTree className="h-3.5 w-3.5" />,
   backends: <HardDrive className="h-3.5 w-3.5" />,
+  relations: <Share2 className="h-3.5 w-3.5" />,
 }
-export const TAB_LABELS: Record<TreeTab, string> = {
+export const TAB_LABELS: Record<PickerTab, string> = {
   context: 'Context tree',
   directory: 'Directory tree',
   backends: 'Backends tree',
+  relations: 'Relations',
 }
 
 export function buildPath(parent: string, name: string) {

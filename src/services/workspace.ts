@@ -50,6 +50,26 @@ function appendWorkspaceContext(params: URLSearchParams, contextSpec: string = '
   if (contextSpec) params.append('context', contextSpec)
 }
 
+/**
+ * The closed synapsd predicate registry (indexes/edges/predicates.js). Kept in
+ * sync by hand — it is append-only there, and the server echoes the live list
+ * on every relations read (`DocumentRelations.predicates`), which is what the
+ * pickers render. This constant is only the ordering/label fallback.
+ */
+export const RELATION_PREDICATES = [
+  'includes', 'references', 'derived-from', 'mentions', 'replies-to', 'depicts', 'authored-by',
+] as const
+export type RelationPredicate = (typeof RELATION_PREDICATES)[number]
+
+export interface RelFilter {
+  p: string
+  of: number
+  // Which adjacency axis to scan: 'out' = documents `of` points at,
+  // 'in' = documents pointing at `of`.
+  dir?: 'in' | 'out'
+  op?: 'anyOf' | 'allOf' | 'noneOf'
+}
+
 function appendAllOf(params: URLSearchParams, featureArray: string[] = []) {
   featureArray.filter(Boolean).forEach(feature => params.append('allOf', feature))
 }
@@ -71,6 +91,17 @@ function appendFilters(params: URLSearchParams, filterArray: string[] = []) {
 // explicit [] as "match nothing", which is never what a filter UI means.
 function appendIds(params: URLSearchParams, ids?: number[] | null) {
   for (const id of ids ?? []) params.append('ids', String(id))
+}
+
+// Graph-adjacency constraint, one hop from a known document. Serialized as the
+// server's repeatable `rel` token: `[+!]<predicate>:<documentId>[:in|:out]`,
+// with the same sigil trio as features (+ = allOf, ! = noneOf, bare = anyOf).
+// Direction is an AXIS, never a predicate name — hence the trailing `:in`.
+function appendRel(params: URLSearchParams, rel?: RelFilter[] | null) {
+  for (const r of rel ?? []) {
+    const sigil = r.op === 'allOf' ? '+' : r.op === 'noneOf' ? '!' : ''
+    params.append('rel', `${sigil}${r.p}:${r.of}:${r.dir ?? 'out'}`)
+  }
 }
 
 // Append the text-query stack as repeated ?q params (server AND-narrows them);
@@ -501,7 +532,7 @@ export async function getWorkspaceDocuments(
   id: string,
   contextSpec: string = '/',
   featureArray: string[] = [],
-  options: { limit?: number; offset?: number; page?: number; treeName?: string; treeType?: string; q?: string; queries?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[]; ids?: number[] | null; scope?: 'path' | 'workspace'; sortBy?: string; order?: 'asc' | 'desc'; applyCanvasSpec?: boolean; debug?: boolean; debugLimit?: number } = {}
+  options: { limit?: number; offset?: number; page?: number; treeName?: string; treeType?: string; q?: string; queries?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[]; rel?: RelFilter[]; ids?: number[] | null; scope?: 'path' | 'workspace'; sortBy?: string; order?: 'asc' | 'desc'; applyCanvasSpec?: boolean; debug?: boolean; debugLimit?: number } = {}
 ): Promise<DocumentsEnvelopeWithDebug> {
   try {
     const params = new URLSearchParams();
@@ -517,6 +548,7 @@ export async function getWorkspaceDocuments(
     appendAnyOf(params, options.anyOf)
     appendNoneOf(params, options.noneOf)
     appendFilters(params, options.filters)
+    appendRel(params, options.rel)
     appendIds(params, options.ids)
     if (options.limit !== undefined) params.append('limit', options.limit.toString());
     if (options.offset !== undefined) params.append('offset', options.offset.toString());
@@ -1003,6 +1035,17 @@ export interface DocumentLocationInfo {
   deletable: boolean
 }
 
+/**
+ * Re-read a single document by id. Detail hosts (properties modal / side card)
+ * are opened with a snapshot owned by the list behind them, which an inline
+ * edit does not update — they use this to pull the saved copy back.
+ */
+export async function getWorkspaceDocument(workspaceId: string, documentId: number | string): Promise<CanvasDocument> {
+  return await api.get<CanvasDocument>(
+    `${API_ROUTES.workspaces}/${workspaceId}/documents/${documentId}`
+  )
+}
+
 export async function getDocumentLocations(workspaceId: string, documentId: number | string): Promise<DocumentLocationInfo[]> {
   const response = await api.get<DocumentLocationInfo[]>(
     `${API_ROUTES.workspaces}/${workspaceId}/documents/${documentId}/locations`
@@ -1027,6 +1070,85 @@ export async function getDocumentMemberships(
     `${API_ROUTES.workspaces}/${workspaceId}/documents/${documentId}/memberships${qs}`
   )
   return response?.memberships || []
+}
+
+// ── Document relations (typed doc<->doc edges) ───────────────────────────────
+// The synapsd edge plane. Direction is an AXIS: `outgoing` holds edges where
+// this document is the subject, `incoming` where it is the object. There are
+// no inverse predicate names anywhere in the system.
+
+export interface DocumentRelationMeta {
+  // 'doc' = asserted (a person drew it); 'extractor:<name>' / 'agent:<id>' =
+  // derived by a pipeline, which the UI shows but does not offer to delete.
+  src: string
+  ts?: number
+  conf?: number
+}
+
+export interface DocumentRelation {
+  p: string
+  // Exactly one of these is set: `to` on an outgoing edge, `from` on an incoming one.
+  to?: number
+  from?: number
+  meta: DocumentRelationMeta | null
+  // The far side, resolved server-side. null when the target document is gone
+  // (edges to missing documents are legal) or beyond the resolve cap.
+  document?: CanvasDocument | null
+}
+
+export interface DocumentRelations {
+  documentId: number
+  // The live predicate registry from the server — render pickers from this.
+  predicates: string[]
+  outgoing: DocumentRelation[]
+  incoming: DocumentRelation[]
+}
+
+export async function getDocumentRelations(
+  workspaceId: string,
+  documentId: number | string,
+  options: { resolve?: boolean } = {}
+): Promise<DocumentRelations> {
+  const qs = options.resolve === false ? '?resolve=false' : ''
+  const response = await api.get<DocumentRelations>(
+    `${API_ROUTES.workspaces}/${workspaceId}/documents/${documentId}/relations${qs}`
+  )
+  return response ?? { documentId: Number(documentId), predicates: [...RELATION_PREDICATES], outgoing: [], incoming: [] }
+}
+
+/**
+ * Create `documentId --p--> to` (dir 'out', the default) or `to --p--> documentId`
+ * (dir 'in'). Idempotent — re-creating an existing edge is a no-op.
+ */
+export async function createDocumentRelations(
+  workspaceId: string,
+  documentId: number | string,
+  p: string,
+  to: readonly (number | string)[] | number | string,
+  dir: 'in' | 'out' = 'out'
+): Promise<boolean> {
+  await api.post<unknown>(
+    `${API_ROUTES.workspaces}/${workspaceId}/documents/${documentId}/relations`,
+    { p, to: Array.isArray(to) ? normalizeDocumentIds(to) : to, dir }
+  )
+  return true
+}
+
+export async function removeDocumentRelation(
+  workspaceId: string,
+  documentId: number | string,
+  p: string,
+  to: number | string,
+  dir: 'in' | 'out' = 'out'
+): Promise<boolean> {
+  await api.delete<unknown>(
+    `${API_ROUTES.workspaces}/${workspaceId}/documents/${documentId}/relations`,
+    {
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p, to, dir }),
+    }
+  )
+  return true
 }
 
 function buildContentApiPath(workspaceId: string, documentId: number | string, opts: { download?: boolean; url?: string } = {}): string {
