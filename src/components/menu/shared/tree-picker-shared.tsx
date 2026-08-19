@@ -1,15 +1,19 @@
 import { useEffect, useState } from 'react'
-import { ChevronRight, ChevronDown, CornerDownRight, Search } from 'lucide-react'
+import { ChevronRight, ChevronDown, CornerDownRight, Search, X } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import type { TreeNode, Document } from '@/types/workspace'
 import { getLayerStyle, DEFAULT_FOLDER_ICON, DEFAULT_CANVAS_ICON, DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style'
 import { visibleAccentColor } from '@/utils/color'
 import { cn } from '@/lib/utils'
-import { getCachedWorkspaceTreeByName, getCanvasPathDocuments, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
+import { getCachedWorkspaceTreeByName, getCanvasPathDocuments, getWorkspaceDocuments, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { DocumentIcon } from '@/components/common/DocumentIcon'
-import { buildPath, matchesSearch, useRowMenu, type TreeTab, type RowMenuEvent } from './tree-picker-utils'
+import { buildPath, matchesSearch, useRowMenu, TAB_ICONS, TAB_LABELS, type TreeTab, type RowMenuEvent } from './tree-picker-utils'
 // Workspace is a global type declared in src/types/api.d.ts
+
+// One page of documents in the picker. Deep enough that browsing a normal
+// folder needs no paging, and the search box covers anything past it.
+const DOC_PICK_LIMIT = 200
 
 // Inline "new folder" input rendered as a pseudo child row — Enter creates,
 // Escape/blur cancels.
@@ -200,10 +204,16 @@ export function WorkspaceListStep({
  * ambiguity the two steps exist to remove.
  */
 export function DocumentPathBrowser({
-  workspaceName, treeTab, selectedDocIds, onToggleDoc, onNavigate, excludeDocumentIds,
+  workspaceName, treeTab, onTreeTabChange, selectedDocIds, onToggleDoc, onNavigate, excludeDocumentIds,
 }: {
   workspaceName: string
   treeTab: TreeTab
+  // Hosts with their own tree tabs (PickDocumentsCard) pass this and stay in
+  // charge. Without it the picker renders its OWN tree switch — the relations
+  // tab has no outer tabs of its own, so otherwise there is nothing on screen
+  // saying which tree these folders come from, let alone a way to reach the
+  // directory tree.
+  onTreeTabChange?: (tab: TreeTab) => void
   selectedDocIds: Set<number>
   onToggleDoc: (id: number) => void
   // Fires on every path change — hosts use it to clear their selection.
@@ -220,15 +230,38 @@ export function DocumentPathBrowser({
   const [loadingTree, setLoadingTree] = useState(false)
   const [docs, setDocs] = useState<Document[]>([])
   const [loadingDocs, setLoadingDocs] = useState(false)
+  // Server-side document search inside the picked folder. NOT a client filter
+  // over `docs`: that list is one page deep, so filtering it would quietly fail
+  // to find anything past the first page — the case search exists for.
+  const [docQuery, setDocQuery] = useState('')
+  const [docSearch, setDocSearch] = useState('')
 
-  // Render-time reset: switching tree tabs restarts the browse at the root, so
-  // the doc list can never show results from a path of the previous tree.
-  const [lastTab, setLastTab] = useState(treeTab)
-  if (treeTab !== lastTab) {
-    setLastTab(treeTab)
+  // Own the tree when the host has no switch of its own.
+  const [ownTab, setOwnTab] = useState<TreeTab>(treeTab)
+  const activeTab = onTreeTabChange ? treeTab : ownTab
+  const setActiveTab = (tab: TreeTab) => {
+    setBrowsePath('/')
+    setStep('folder')
+    setDocQuery('')
+    setDocSearch('')
+    onNavigate?.('/')
+    if (onTreeTabChange) onTreeTabChange(tab); else setOwnTab(tab)
+  }
+
+  // Render-time reset: a host-driven tree change restarts the browse at the
+  // root, so the doc list can never show results from the previous tree.
+  const [lastTab, setLastTab] = useState(activeTab)
+  if (activeTab !== lastTab) {
+    setLastTab(activeTab)
     setBrowsePath('/')
     setStep('folder')
   }
+
+  // Debounce the typed query into the one that actually hits the server.
+  useEffect(() => {
+    const id = setTimeout(() => setDocSearch(docQuery.trim()), 300)
+    return () => clearTimeout(id)
+  }, [docQuery])
 
   useEffect(() => {
     let cancelled = false
@@ -236,7 +269,7 @@ export function DocumentPathBrowser({
     async function loadTree() {
       setLoadingTree(true)
       try {
-        const res = await getCachedWorkspaceTreeByName(workspaceName, treeTab)
+        const res = await getCachedWorkspaceTreeByName(workspaceName, activeTab)
         if (!cancelled) setTree(res)
       } catch {
         if (!cancelled) setTree(null)
@@ -247,19 +280,25 @@ export function DocumentPathBrowser({
 
     loadTree()
     return () => { cancelled = true }
-  }, [workspaceName, treeTab])
+  }, [workspaceName, activeTab])
 
   // Documents are only read on step 2 — browsing folders costs no document
   // fetches, and stepping back and forward re-reads (cheap, and always current).
   useEffect(() => {
     if (step !== 'documents') return
     let cancelled = false
-    const treeName = treeTab === 'directory' ? 'directory' : DEFAULT_WORKSPACE_TREE_NAME
+    const treeName = activeTab === 'directory' ? 'directory' : DEFAULT_WORKSPACE_TREE_NAME
+    const treeType = activeTab === 'context' ? 'context' : 'directory'
 
     async function loadDocs() {
       setLoadingDocs(true)
       try {
-        const res = await getCanvasPathDocuments(workspaceName, browsePath, treeName)
+        // Same server search the main document list runs, scoped to the folder
+        // that was picked in step 1 (the server widens a directory search to the
+        // subtree, which is what "find it under here" should mean).
+        const res = docSearch
+          ? await getWorkspaceDocuments(workspaceName, browsePath, [], { treeName, treeType, q: docSearch, limit: DOC_PICK_LIMIT })
+          : await getCanvasPathDocuments(workspaceName, browsePath, treeName, { limit: DOC_PICK_LIMIT })
         if (!cancelled) setDocs(res.payload || [])
       } catch {
         if (!cancelled) setDocs([])
@@ -270,7 +309,13 @@ export function DocumentPathBrowser({
 
     loadDocs()
     return () => { cancelled = true }
-  }, [workspaceName, treeTab, browsePath, step])
+  }, [workspaceName, activeTab, browsePath, step, docSearch])
+
+  // `ctx://` + `/work` would read `ctx:///work`; the rest of the app (rule
+  // builder scopes, the address bar) strips the leading slash, so root is a
+  // bare `ctx://`.
+  const scopeLabel = (path: string) =>
+    `${activeTab === 'directory' ? 'dir' : 'ctx'}://${path.replace(/^\/+/, '')}`
 
   const selectFolder = (path: string) => {
     setBrowsePath(path)
@@ -283,6 +328,29 @@ export function DocumentPathBrowser({
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="shrink-0 space-y-2 border-b bg-muted/30 px-3 py-2">
+          {/* Which tree these folders come from. The scheme prefix is the same
+              one the rule builder and the address bar use (ctx:// / dir://), so
+              the picker names its scope in the vocabulary the rest of the app
+              already speaks. Hidden when the host owns the switch. */}
+          {!onTreeTabChange && (
+            <div className="flex items-center gap-1 rounded-md border border-input p-0.5">
+              {(['context', 'directory'] as TreeTab[]).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setActiveTab(tab)}
+                  className={cn(
+                    'flex flex-1 items-center justify-center gap-1.5 rounded px-2 py-1 text-xs transition-colors',
+                    activeTab === tab ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                  )}
+                  title={`Browse the ${TAB_LABELS[tab].toLowerCase()}`}
+                >
+                  {TAB_ICONS[tab]}
+                  <span className="font-mono">{tab === 'directory' ? 'dir://' : 'ctx://'}</span>
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs text-muted-foreground">Step 1 of 2 · Pick a folder</span>
             <button
@@ -350,23 +418,49 @@ export function DocumentPathBrowser({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center gap-2 border-b bg-muted/30 px-3 py-2">
-        <button
-          type="button"
-          onClick={() => setStep('folder')}
-          className="inline-flex min-w-0 items-center gap-1 rounded-md px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          title="Back to folders"
-        >
-          <ChevronRight className="h-3.5 w-3.5 shrink-0 rotate-180" />
-          <span className="truncate font-mono">{browsePath}</span>
-        </button>
-        <span className="ml-auto shrink-0 text-xs text-muted-foreground">Step 2 of 2 · Pick a document</span>
+      <div className="shrink-0 space-y-2 border-b bg-muted/30 px-3 py-2">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setStep('folder')}
+            className="inline-flex min-w-0 items-center gap-1 rounded-md px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            title="Back to folders"
+          >
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 rotate-180" />
+            <span className="truncate font-mono">{scopeLabel(browsePath)}</span>
+          </button>
+          <span className="ml-auto shrink-0 text-xs text-muted-foreground">Step 2 of 2 · Pick a document</span>
+        </div>
+        {/* Server-side search, not a filter over the page below — see the
+            docSearch state. Scoped to the folder picked in step 1. */}
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Search documents in this folder…"
+            value={docQuery}
+            onChange={e => setDocQuery(e.target.value)}
+            className="w-full rounded-md border border-input bg-background py-1.5 pl-8 pr-7 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+          {docQuery && (
+            <button
+              type="button"
+              onClick={() => setDocQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              aria-label="Clear document search"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
       <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
         {loadingDocs ? (
           <div className="px-2 py-3 text-xs text-muted-foreground">Loading documents…</div>
         ) : offered.length === 0 ? (
-          <div className="px-2 py-3 text-xs text-muted-foreground">No documents in this folder.</div>
+          <div className="px-2 py-3 text-xs text-muted-foreground">
+            {docSearch ? `No documents match “${docSearch}” here.` : 'No documents in this folder.'}
+          </div>
         ) : (
           offered.map(doc => {
             const display = getDocumentDisplayInfo(doc)

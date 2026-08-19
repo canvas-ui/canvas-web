@@ -127,6 +127,7 @@ export function PickDocumentsCard({ onClose, onConfirm, fixedWorkspaceName, savi
               <DocumentPathBrowser
                 workspaceName={workspaceName}
                 treeTab={activeTab}
+                onTreeTabChange={setActiveTab}
                 selectedDocIds={selectedDocIds}
                 onToggleDoc={toggleDoc}
                 onNavigate={() => setSelectedDocIds(new Set())}
