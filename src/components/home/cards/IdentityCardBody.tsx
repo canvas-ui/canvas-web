@@ -27,6 +27,9 @@ export function IdentityCardBody({ onClose, initialData }: { onClose: () => void
       successMessage="Identity created"
     >
       <div className="flex h-full flex-col gap-4 p-4">
+        {/* No `workspaceName`: on home the destination workspace is not chosen
+            until Save (B5Card's own Link-To header), so there is nothing to
+            list organizations from — those rows stay free text here. */}
         <IdentityFields idPrefix="qa-identity" {...f} emailValid={f.emailValid} />
         <div className="space-y-1.5">
           <Label>Tags</Label>

@@ -5,7 +5,10 @@ import { Label } from '@/components/ui/label'
 import { LazyMarkdownEditor } from '@/components/common/lazy-editor'
 import { TagInput } from '@/components/toolbox/add/TagInput'
 import { tagsToFeatures, featuresToTags } from '@/components/toolbox/add/tags'
-import { updateWorkspaceDocument, listWorkspaceTagSuggestions } from '@/services/workspace'
+import {
+  updateWorkspaceDocument, listWorkspaceTagSuggestions,
+  getDocumentRelations, createDocumentRelations, removeDocumentRelation,
+} from '@/services/workspace'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { NOTE_SCHEMA, LINK_SCHEMA, TAB_SCHEMA, TODO_SCHEMA, IDENTITY_SCHEMA } from '@/components/renderers/types'
 import { DocumentGeoField } from '@/components/common/DocumentGeoField'
@@ -22,6 +25,32 @@ function urlTitleKeys(schema: string): { urlKey: string | null; titleKey: string
   if (schema === LINK_SCHEMA) return { urlKey: 'uri', titleKey: 'label' }
   if (schema === TAB_SCHEMA) return { urlKey: 'url', titleKey: 'title' }
   return { urlKey: null, titleKey: 'title' }
+}
+
+/**
+ * Bring the document's `member-of` edges in line with the organization rows.
+ *
+ * A DIFF, not a rewrite: only rows picked from the dropdown carry an
+ * identityId, and only edges this form is responsible for are touched — a
+ * `member-of` an extractor asserted later would still be dropped here, which is
+ * why the merge/extraction phase will want provenance-aware handling. Failures
+ * are logged, never thrown: the document itself is already saved.
+ */
+async function syncOrganizationEdges(workspaceId: string, documentId: number, organizations: { identityId?: number }[]) {
+  try {
+    const wanted = new Set(organizations.map((o) => o.identityId).filter(Boolean) as number[])
+    const current = await getDocumentRelations(workspaceId, documentId, { resolve: false })
+    const existing = new Set(current.outgoing.filter((r) => r.p === 'member-of').map((r) => r.to as number))
+
+    for (const id of wanted) {
+      if (!existing.has(id)) await createDocumentRelations(workspaceId, documentId, 'member-of', [id])
+    }
+    for (const id of existing) {
+      if (!wanted.has(id)) await removeDocumentRelation(workspaceId, documentId, 'member-of', id)
+    }
+  } catch (err) {
+    console.error('Failed to sync organization relations', err)
+  }
 }
 
 // Inline edit form for note/link/tab documents (ported from the old detail
@@ -129,6 +158,7 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
       // the rest of the object survive. null un-indexes it from the geo index.
       if (geoChanged) payload.metadata = { ...(payload.metadata ?? {}), geo }
       await updateWorkspaceDocument(workspaceId, payload)
+      if (isIdentity) await syncOrganizationEdges(workspaceId, doc.id, identity.values.organizations)
       showSuccessToast('Document updated')
       window.dispatchEvent(new CustomEvent('workspace:documents:refresh'))
       onClose()
@@ -150,7 +180,7 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
       )}
 
       {editable && isIdentity && (
-        <IdentityFields idPrefix="edit-identity" {...identity} emailValid={identity.emailValid} />
+        <IdentityFields idPrefix="edit-identity" workspaceName={workspaceId} {...identity} emailValid={identity.emailValid} />
       )}
 
       {editable && isTodo && (

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { tagsToFeatures } from './tags'
 import { submitDocuments, type AddTarget } from './useAddTarget'
+import { createDocumentRelations } from '@/services/workspace'
 import { IDENTITY_SCHEMA } from '@/components/renderers/types'
 
 const IDENTITY_SCHEMA_VERSION = '3.0'
@@ -43,6 +44,14 @@ export interface IdentifierRow {
 export interface OrganizationRow {
   name: string
   role?: string
+  /**
+   * The organization's own identity document, when the row was picked from the
+   * dropdown rather than typed. Saving creates a `member-of` EDGE to it — the
+   * edge is the queryable truth ("everyone at Acme" is `rel=member-of:<id>:in`);
+   * this id is only the form's round-trip pointer, and `name` only a display
+   * copy, so a row survives the org being renamed.
+   */
+  identityId?: number
 }
 
 export interface IdentityFieldValues {
@@ -91,7 +100,14 @@ export function buildIdentityData(fields: IdentityFieldValues): Record<string, u
       .map((i) => ({ ...i, type: i.type.trim(), identifier: i.identifier.trim(), provider: i.provider?.trim() || undefined }))
       .filter((i) => i.type && i.identifier),
     organizations: fields.organizations
-      .map((o) => ({ ...o, name: o.name.trim(), role: o.role?.trim() || undefined }))
+      .map(({ identityId, ...o }) => ({
+        ...o,
+        name: o.name.trim(),
+        role: o.role?.trim() || undefined,
+        // `identityId` is lifted out of the row and into metadata: the schema's
+        // organizationSchema is .strict() and has no field for it.
+        ...(identityId ? { metadata: { identityId } } : {}),
+      }))
       .filter((o) => o.name),
   }
 }
@@ -115,7 +131,32 @@ export function identityFieldsFromDocument(data: Record<string, unknown> | undef
     family: String(name.family || ''),
     channels: arr<ChannelRow>(d.channels),
     identifiers: arr<IdentifierRow>(d.identifiers),
-    organizations: arr<OrganizationRow>(d.organizations),
+    organizations: arr<Record<string, unknown>>(d.organizations).map((o) => ({
+      name: String(o.name || ''),
+      role: o.role ? String(o.role) : undefined,
+      identityId: Number((o.metadata as Record<string, unknown> | undefined)?.identityId) || undefined,
+    })),
+  }
+}
+
+/**
+ * `member-of` edges for every organization row that was picked from the
+ * dropdown. Runs AFTER the document exists (it needs the new id), and never
+ * fails the save: the identity itself is written, and a missing edge is
+ * recoverable from the Synapses tab — losing the whole identity to a failed
+ * edge write would not be.
+ */
+async function linkOrganizations(target: AddTarget, documentId: number | undefined, organizations: OrganizationRow[]) {
+  // Context-mode targets do not name a workspace; relations are workspace-scoped
+  // (one edge plane per index), so those rows stay plain `{name, role}`.
+  if (!documentId || !target || target.mode !== 'workspace') return
+  const linked = organizations.filter((o) => o.identityId)
+  for (const org of linked) {
+    try {
+      await createDocumentRelations(target.workspaceName, documentId, 'member-of', [org.identityId as number])
+    } catch (err) {
+      console.error('Failed to link organization', org.name, err)
+    }
   }
 }
 
@@ -152,7 +193,9 @@ export function useIdentityFields(initial?: Partial<IdentityFieldValues>) {
         ...(trimmedComment ? { comment: trimmedComment } : {}),
         metadata: { features: tagsToFeatures(tags) },
       }
-      return await submitDocuments(target, [doc])
+      const ids = await submitDocuments(target, [doc])
+      await linkOrganizations(target, ids[0], organizations)
+      return ids
     } finally {
       setSaving(false)
     }

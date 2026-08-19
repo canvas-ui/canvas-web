@@ -20,6 +20,9 @@ export type DocumentsEnvelopeWithDebug = DocumentsEnvelope & {
 // No local Workspace interface should be defined here.
 
 export const DEFAULT_WORKSPACE_TREE_NAME = 'context'
+// Duplicated from components/renderers/types.ts on purpose: services must not
+// import from components (the import boundary the /next work relies on).
+const IDENTITY_SCHEMA_KEY = 'data/schema/identity'
 export const BACKENDS_TREE_NAME = 'backends'
 
 // Tree type from a well-known tree name. The pre-created trees are 'context'
@@ -58,6 +61,8 @@ function appendWorkspaceContext(params: URLSearchParams, contextSpec: string = '
  */
 export const RELATION_PREDICATES = [
   'includes', 'references', 'derived-from', 'mentions', 'replies-to', 'depicts', 'authored-by',
+  // affiliation between two identities (person -> organization), synapsd 3.11.0
+  'member-of',
 ] as const
 export type RelationPredicate = (typeof RELATION_PREDICATES)[number]
 
@@ -1070,6 +1075,23 @@ export async function getDocumentMemberships(
     `${API_ROUTES.workspaces}/${workspaceId}/documents/${documentId}/memberships${qs}`
   )
   return response?.memberships || []
+}
+
+/**
+ * Every identity in the workspace of a given subtype, newest first.
+ *
+ * synapsd derives a bitmap per subtype from the schema registry's
+ * `subtypeField: 'data.type'`, so `data/schema/identity/organization` filters
+ * server-side — no fetch-everything-then-filter.
+ */
+export async function listWorkspaceIdentities(
+  workspaceId: string,
+  type?: 'person' | 'organization' | 'service' | 'bot',
+  limit = 500
+): Promise<CanvasDocument[]> {
+  const key = type ? `${IDENTITY_SCHEMA_KEY}/${type}` : IDENTITY_SCHEMA_KEY
+  const res = await getWorkspaceDocuments(workspaceId, '/', [key], { scope: 'workspace', limit })
+  return res.payload || []
 }
 
 // ── Document relations (typed doc<->doc edges) ───────────────────────────────

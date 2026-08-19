@@ -28,7 +28,7 @@ export function IdentityForm() {
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      <IdentityFields idPrefix="add-identity" {...f} emailValid={f.emailValid} />
+      <IdentityFields idPrefix="add-identity" workspaceName={state.activeWorkspaceName ?? undefined} {...f} emailValid={f.emailValid} />
 
       <div className="space-y-1.5">
         <Label>Tags</Label>

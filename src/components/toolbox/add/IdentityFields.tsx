@@ -1,7 +1,10 @@
-import { Plus, Trash2, Star } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Plus, Trash2, Star, Link2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { listWorkspaceIdentities } from '@/services/workspace'
+import { getDocumentDisplayInfo } from '@/lib/document-display'
 import {
   IDENTITY_TYPES, IDENTITY_TYPE_LABELS, CHANNEL_KINDS, IDENTIFIER_TYPES,
   type IdentityType, type ChannelRow, type IdentifierRow, type OrganizationRow,
@@ -64,8 +67,39 @@ function togglePrimary(rows: ChannelRow[], index: number): ChannelRow[] {
   return rows.map((r, i) => (r.kind === kind ? { ...r, primary: !wasPrimary && i === index } : r))
 }
 
+// Organizations already in the workspace, offered by the picker. Fetched once
+// per mount: the list is small (one bitmap-filtered read) and a form that
+// re-queried on every keystroke would be worse in every way.
+function useOrganizationOptions(workspaceName?: string) {
+  const [options, setOptions] = useState<{ id: number; name: string }[]>([])
+
+  useEffect(() => {
+    if (!workspaceName) return
+    let cancelled = false
+
+    async function load() {
+      try {
+        const docs = await listWorkspaceIdentities(workspaceName as string, 'organization')
+        if (!cancelled) setOptions(docs.map((d) => ({ id: d.id, name: getDocumentDisplayInfo(d).title })))
+      } catch {
+        // A failed lookup must not block hand-entry — the row falls back to
+        // free text, which is what it was before the picker existed.
+        if (!cancelled) setOptions([])
+      }
+    }
+
+    load()
+    return () => { cancelled = true }
+  }, [workspaceName])
+
+  return options
+}
+
 export interface IdentityFieldsProps {
   idPrefix: string
+  // Enables the organization picker (and therefore `member-of` edges). Absent
+  // on context-mode targets, which do not name a workspace.
+  workspaceName?: string
   displayName: string; setDisplayName: (v: string) => void
   type: IdentityType; setType: (v: IdentityType) => void
   primaryEmail: string; setPrimaryEmail: (v: string) => void
@@ -80,10 +114,12 @@ export interface IdentityFieldsProps {
 /** The identity field group — shared by the AddPanel form, the home quick-add
  *  card and the object card's edit form, so all three stay identical. */
 export function IdentityFields({
-  idPrefix, displayName, setDisplayName, type, setType, primaryEmail, setPrimaryEmail,
+  idPrefix, workspaceName, displayName, setDisplayName, type, setType, primaryEmail, setPrimaryEmail,
   given, setGiven, family, setFamily, channels, setChannels,
   identifiers, setIdentifiers, organizations, setOrganizations, emailValid = true,
 }: IdentityFieldsProps) {
+  const orgOptions = useOrganizationOptions(workspaceName)
+
   return (
     <>
       <div className="space-y-1.5">
@@ -201,8 +237,31 @@ export function IdentityFields({
       >
         {(row, update) => (
           <>
-            <Input value={row.name} onChange={(e) => update({ name: e.target.value })} placeholder="Acme Ltd" className="min-w-0 flex-1" />
-            <Input value={row.role ?? ''} onChange={(e) => update({ role: e.target.value })} placeholder="Role" className="w-32 shrink-0" />
+            {/* Picking an existing organization identity is what creates the
+                `member-of` edge on save; "Other…" keeps plain hand-entry for an
+                organization that has no identity document yet. */}
+            {orgOptions.length > 0 ? (
+              <select
+                value={row.identityId ? String(row.identityId) : ''}
+                onChange={(e) => {
+                  const picked = orgOptions.find((o) => String(o.id) === e.target.value)
+                  update(picked ? { identityId: picked.id, name: picked.name } : { identityId: undefined })
+                }}
+                className={cn(SELECT_CLASS, 'min-w-0 flex-1')}
+              >
+                <option value="">Other… (type a name)</option>
+                {orgOptions.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
+            ) : null}
+            {!row.identityId && (
+              <Input value={row.name} onChange={(e) => update({ name: e.target.value })} placeholder="Acme Ltd" className="min-w-0 flex-1" />
+            )}
+            {row.identityId && (
+              <span className="shrink-0 text-muted-foreground" title="Linked — saving relates this identity to that organization">
+                <Link2 className="h-3.5 w-3.5" />
+              </span>
+            )}
+            <Input value={row.role ?? ''} onChange={(e) => update({ role: e.target.value })} placeholder="Role" className="w-28 shrink-0" />
           </>
         )}
       </RowList>
