@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { Plus, Trash2, ArrowRight, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DocumentIcon } from '@/components/common/DocumentIcon'
 import { LinkToCard } from '@/components/menu/shared/LinkToCard'
+import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from '@/components/menu/shared/LinkToSidePanel'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { useDocumentModal } from '@/components/shell/use-document-modal'
@@ -187,12 +187,12 @@ export function DocumentRelationsSection({ document, workspaceId }: { document: 
             </div>
           )}
 
-      {/* Portal to <body>: the card is a fixed overlay and the object card can
-          sit inside a transformed ancestor (grid widget, animated drawer). */}
-      {picking && createPortal(
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-scrim p-4" onClick={() => !saving && setPicking(false)}>
-          <div onClick={(e) => e.stopPropagation()}>
+      {/* Same right-edge geometry as every other "Link to…" — z-picker (60)
+          puts it above the object card's own modal (z-dialog, 50). */}
+      {picking && (
+        <LinkToSidePanel onClose={() => { if (!saving) setPicking(false) }}>
             <LinkToCard
+              sizeClassName={LINK_TO_SIDE_SIZE}
               title="Relate to…"
               tabs={['relations']}
               fixedWorkspaceName={workspaceId}
@@ -217,9 +217,7 @@ export function DocumentRelationsSection({ document, workspaceId }: { document: 
                 }
               }}
             />
-          </div>
-        </div>,
-        window.document.body,
+        </LinkToSidePanel>
       )}
     </div>
   )

@@ -59,6 +59,11 @@ interface LinkToCardProps {
   // Required for the 'relations' tab. Called with the picked predicate, axis
   // and target document ids instead of onConfirm's paths.
   onConfirmRelation?: (relation: LinkToRelation, ctx: { workspaceName: string }) => void | Promise<void>
+  // Workspace the relation edges are written to. Relations are intra-workspace
+  // by construction (one edge plane per index), so this pins them to the source
+  // document's workspace even while the path tabs browse another one. Defaults
+  // to whatever workspace the card has selected.
+  relationWorkspaceName?: string
   // Live predicate registry from the server (a relations read echoes it); the
   // bundled constant is the fallback.
   relationPredicates?: string[]
@@ -76,7 +81,7 @@ interface LinkToCardProps {
 // WorkspaceList-styled row list, slide into the tree-with-tabs view. Renders
 // as a plain card — callers own positioning (inline sibling for B5Card,
 // fixed overlay for document-list's existing usage).
-export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceName, multiple = true, saving = false, sizeClassName, tabs = ['context', 'directory'], title, confirmLabel, onConfirmRelation, relationPredicates, relationExcludeIds }: LinkToCardProps) {
+export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceName, multiple = true, saving = false, sizeClassName, tabs = ['context', 'directory'], title, confirmLabel, onConfirmRelation, relationWorkspaceName, relationPredicates, relationExcludeIds }: LinkToCardProps) {
   const [step, setStep] = useState<'workspace' | 'tree'>(fixedWorkspaceName ? 'tree' : 'workspace')
   // Esc closes the card (all callers render it as an overlay); disabled while
   // a link is saving so it can't vanish mid-write.
@@ -205,7 +210,7 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
     if (isRelations) {
       await onConfirmRelation?.(
         { predicate, direction, targetIds: Array.from(selectedDocIds) },
-        { workspaceName },
+        { workspaceName: relationWorkspaceName ?? workspaceName },
       )
       return
     }
@@ -271,18 +276,22 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
               ))}
             </div>
 
-            <div className="shrink-0 border-b p-2">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder={isRelations ? 'Filter paths to browse…' : 'Search paths…'}
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                  className="w-full rounded-md border border-input bg-background py-2 pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                />
+            {/* Path search belongs to the tree tabs only — the relations tab
+                carries its own folder filter inside its step 1. */}
+            {!isRelations && (
+              <div className="shrink-0 border-b p-2">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder="Search paths…"
+                    value={query}
+                    onChange={e => setQuery(e.target.value)}
+                    className="w-full rounded-md border border-input bg-background py-2 pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Relations: the predicate + axis that the picked documents get
                 joined by. Direction is an AXIS in synapsd, so it is a control
@@ -335,11 +344,10 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
               </div>
             )}
 
-            {isRelations && workspaceName && (
+            {isRelations && (relationWorkspaceName ?? workspaceName) && (
               <DocumentPathBrowser
-                workspaceName={workspaceName}
+                workspaceName={(relationWorkspaceName ?? workspaceName) as string}
                 treeTab="context"
-                query={q}
                 selectedDocIds={selectedDocIds}
                 onToggleDoc={toggleDoc}
                 excludeDocumentIds={relationExcludeIds}

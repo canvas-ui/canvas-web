@@ -1,6 +1,7 @@
 import { Document, TreeNode } from '@/types/workspace'
 import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, Play, Table as TableIcon, HardDrive, ArrowRightLeft } from 'lucide-react'
 import { LinkToCard, type LinkToTarget, type LinkToRelation } from '@/components/menu/shared/LinkToCard'
+import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from '@/components/menu/shared/LinkToSidePanel'
 import { BackendActionCard } from '@/components/menu/shared/BackendActionCard'
 import { PickDocumentsCard } from '@/components/menu/shared/PickDocumentsCard'
 import { transferDocumentsToBackends, createDocumentRelations, type BackendTransferMode } from '@/services/workspace'
@@ -1933,11 +1934,12 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
         onImport={handleImport}
       />
 
-      {linkPanelIds && linkTree && createPortal(
-        // Dimmed modal — was an undimmed bottom-right float, which collided
-        // with the bottom-right toolbox FAB and any open B5Card.
-        <div className="fixed inset-0 z-picker flex items-center justify-center bg-scrim p-4 max-md:p-2">
+      {linkPanelIds && linkTree && (
+        // Side panel, not a centred modal: the modal covered the very list the
+        // selection lives in, so you could not see what you were linking.
+        <LinkToSidePanel onClose={() => setLinkPanelIds(null)}>
           <LinkToCard
+            sizeClassName={LINK_TO_SIDE_SIZE}
             documentCount={linkPanelIds.length}
             fixedWorkspaceName={workspaceId}
             // Relations sit beside the two trees: "where does this belong" and
@@ -1950,8 +1952,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
             onConfirmRelation={(relation) => handleRelationConfirm(relation, linkPanelIds)}
             onClose={() => setLinkPanelIds(null)}
           />
-        </div>,
-        window.document.body,
+        </LinkToSidePanel>
       )}
 
       {backendPanel && workspaceId && createPortal(

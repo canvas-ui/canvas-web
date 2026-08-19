@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { Plus, Pencil, Trash2, Save, X, Braces, PlayCircle, FolderTree } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -7,6 +6,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { getRules, saveRules, backfillHook, getHooksMeta, type HookRule, type HookRuleAction } from '@/services/hooks'
 import { listScripts } from '@/services/scripts'
 import { listBackends, type Backend } from '@/services/workspace'
+import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from '@/components/menu/shared/LinkToSidePanel'
 import { LinkToCard, type LinkToTarget } from '@/components/menu/shared/LinkToCard'
 
 // Outlook-style rule builder: clickable conditions + predefined actions that
@@ -786,9 +786,10 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
         </div>
       )}
 
-      {picker && createPortal(
-        <div className="fixed inset-0 z-picker flex items-center justify-center bg-scrim p-4 max-md:p-2">
+      {picker && (
+        <LinkToSidePanel onClose={() => setPicker(null)}>
           <LinkToCard
+            sizeClassName={LINK_TO_SIDE_SIZE}
             fixedWorkspaceName={workspaceId}
             // Conditions may match anywhere the doc lands (incl. the backends
             // mirror); link/unlink targets exclude it — read-only for rules.
@@ -798,8 +799,7 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
             onConfirm={applyPicked}
             onClose={() => setPicker(null)}
           />
-        </div>,
-        window.document.body,
+        </LinkToSidePanel>
       )}
 
       <div className="border rounded-lg divide-y">

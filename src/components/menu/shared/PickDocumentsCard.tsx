@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { X, Search, FileSearch, ChevronRight } from 'lucide-react'
+import { X, FileSearch, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Loader } from '@/components/ui/loader'
 import { cn } from '@/lib/utils'
@@ -37,10 +37,6 @@ export function PickDocumentsCard({ onClose, onConfirm, fixedWorkspaceName, savi
   const [loadingWorkspaces, setLoadingWorkspaces] = useState(!fixedWorkspaceName)
   const [workspaceName, setWorkspaceName] = useState<string | null>(fixedWorkspaceName ?? null)
   const [activeTab, setActiveTab] = useState<TreeTab>('context')
-  const [query, setQuery] = useState('')
-  const q = query.trim().toLowerCase()
-
-  const [browsePath, setBrowsePath] = useState('/')
   const [selectedDocIds, setSelectedDocIds] = useState<Set<number>>(new Set())
 
   // Show the list spinner again if the card ever switches from a fixed
@@ -59,7 +55,6 @@ export function PickDocumentsCard({ onClose, onConfirm, fixedWorkspaceName, savi
 
   const pickWorkspace = (name: string) => {
     setWorkspaceName(name)
-    setBrowsePath('/')
     setSelectedDocIds(new Set())
     setStep('browse')
   }
@@ -87,7 +82,7 @@ export function PickDocumentsCard({ onClose, onConfirm, fixedWorkspaceName, savi
       <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
         <span className="flex items-center gap-2 text-sm font-medium">
           <FileSearch className="h-4 w-4" />
-          {step === 'workspace' ? 'Add existing documents…' : `Browsing ${browsePath}`}
+          {step === 'workspace' ? 'Add existing documents…' : 'Pick documents…'}
         </span>
         <button type="button" onClick={onClose} disabled={saving} className="text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40" aria-label="Close">
           <X className="h-4 w-4" />
@@ -116,7 +111,7 @@ export function PickDocumentsCard({ onClose, onConfirm, fixedWorkspaceName, savi
                 <button
                   key={tab}
                   type="button"
-                  onClick={() => { setActiveTab(tab); setBrowsePath('/'); setSelectedDocIds(new Set()) }}
+                  onClick={() => { setActiveTab(tab); setSelectedDocIds(new Set()) }}
                   className={cn(
                     'flex items-center gap-1.5 rounded-t-md border-b-2 px-3 py-2 text-xs font-medium transition-colors',
                     activeTab === tab ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
@@ -128,27 +123,13 @@ export function PickDocumentsCard({ onClose, onConfirm, fixedWorkspaceName, savi
               ))}
             </div>
 
-            <div className="shrink-0 border-b p-2">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Search paths…"
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                  className="w-full rounded-md border border-input bg-background py-2 pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              </div>
-            </div>
-
             {workspaceName && (
               <DocumentPathBrowser
                 workspaceName={workspaceName}
                 treeTab={activeTab}
-                query={q}
                 selectedDocIds={selectedDocIds}
                 onToggleDoc={toggleDoc}
-                onNavigate={(path) => { setBrowsePath(path); setSelectedDocIds(new Set()) }}
+                onNavigate={() => setSelectedDocIds(new Set())}
               />
             )}
           </div>

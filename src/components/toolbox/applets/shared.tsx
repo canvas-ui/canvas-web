@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link2, Trash2 } from 'lucide-react'
-import { LinkToCard, type LinkToTarget } from '@/components/menu/shared/LinkToCard'
+import { LinkToCard, type LinkToTarget, type LinkToRelation } from '@/components/menu/shared/LinkToCard'
+import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from '@/components/menu/shared/LinkToSidePanel'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
-import { pasteDocumentsToWorkspacePath } from '@/services/workspace'
+import { pasteDocumentsToWorkspacePath, createDocumentRelations } from '@/services/workspace'
 
 // Auto-growing borderless textarea - the notepad body.
 export function GrowingTextarea({
@@ -69,9 +70,25 @@ export function ItemActions({ onLinkTo, onDelete }: { onLinkTo: () => void; onDe
 
 // Right-edge LinkToCard overlay - the same picker the document list uses,
 // unfixed workspace so the item can be linked anywhere.
-export function LinkDocOverlay({ documentId, onClose }: { documentId: number; onClose: () => void }) {
+export function LinkDocOverlay({ documentId, workspaceName, onClose }: { documentId: number; workspaceName?: string; onClose: () => void }) {
   const { showSuccessToast, showErrorToast } = useToastHelpers()
   const [saving, setSaving] = useState(false)
+
+  // Relations are edges inside ONE workspace's index, so the tab is offered
+  // only when the applet knows which workspace this document lives in — and it
+  // always writes there, whatever workspace the path tabs are browsing.
+  const relate = async ({ predicate, direction, targetIds }: LinkToRelation) => {
+    if (!workspaceName || !targetIds.length) return
+    setSaving(true)
+    try {
+      await createDocumentRelations(workspaceName, documentId, predicate, targetIds, direction)
+      showSuccessToast(`Related to ${targetIds.length} document${targetIds.length !== 1 ? 's' : ''}`)
+      onClose()
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to create relation')
+      setSaving(false)
+    }
+  }
 
   const confirm = async (paths: string[], t: LinkToTarget) => {
     if (!paths.length) return
@@ -89,10 +106,18 @@ export function LinkDocOverlay({ documentId, onClose }: { documentId: number; on
   }
 
   return (
-    <div className="fixed inset-0 z-panel flex items-stretch justify-end bg-scrim animate-fade-in" onClick={onClose}>
-      <div className="h-full p-2" onClick={(e) => e.stopPropagation()}>
-        <LinkToCard onClose={onClose} onConfirm={confirm} documentCount={1} saving={saving} sizeClassName="h-full w-[380px] max-w-[90vw]" />
-      </div>
-    </div>
+    <LinkToSidePanel onClose={onClose}>
+      <LinkToCard
+        onClose={onClose}
+        onConfirm={confirm}
+        documentCount={1}
+        saving={saving}
+        sizeClassName={LINK_TO_SIDE_SIZE}
+        tabs={workspaceName ? ['context', 'directory', 'relations'] : ['context', 'directory']}
+        relationWorkspaceName={workspaceName}
+        relationExcludeIds={new Set([documentId])}
+        onConfirmRelation={relate}
+      />
+    </LinkToSidePanel>
   )
 }

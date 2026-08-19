@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { ChevronDown, FolderSearch, RefreshCw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/ui/use-toast'
+import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from '@/components/menu/shared/LinkToSidePanel'
 import { LinkToCard } from '@/components/menu/shared/LinkToCard'
 import { InferdConfigEditor } from './inferd-config-editor'
 import {
@@ -367,9 +367,10 @@ function AdvancedFill({
         {running ? 'Queueing…' : 'Start fill'}
       </Button>
 
-      {picking && createPortal(
-        <div className="fixed inset-0 z-picker flex items-center justify-center bg-scrim p-4 max-md:p-2">
+      {picking && (
+        <LinkToSidePanel onClose={() => setPicking(false)}>
           <LinkToCard
+            sizeClassName={LINK_TO_SIDE_SIZE}
             fixedWorkspaceName={workspaceName}
             multiple={false}
             onClose={() => setPicking(false)}
@@ -383,8 +384,7 @@ function AdvancedFill({
               setPicking(false)
             }}
           />
-        </div>,
-        window.document.body,
+        </LinkToSidePanel>
       )}
     </Fold>
   )

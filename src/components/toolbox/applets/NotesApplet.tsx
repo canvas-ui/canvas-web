@@ -346,7 +346,7 @@ export function NotesApplet({ autoAdd = false }: AppletProps) {
       </div>
 
       {linkDocId !== null && (
-        <LinkDocOverlay documentId={linkDocId} onClose={() => setLinkDocId(null)} />
+        <LinkDocOverlay documentId={linkDocId} workspaceName={scope?.workspaceName} onClose={() => setLinkDocId(null)} />
       )}
     </div>
   )
