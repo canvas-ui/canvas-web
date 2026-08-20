@@ -23,18 +23,43 @@ import { API_ROUTES } from '@/config/api'
  * string instead of omitting the field blanks the secret — see `stripUnsetKeys`.
  */
 
-/** Provider implementations the server knows how to build. */
-export const INFERD_PROVIDER_TYPES = ['onnx', 'ollama', 'clip', 'blip', 'openai'] as const
+/**
+ * Provider implementations the server knows how to build.
+ *
+ * There is ONE remote type. Ollama, vLLM, TEI, infinity, LM Studio and OpenAI
+ * all speak the OpenAI embeddings dialect, so what separates them is a base URL,
+ * not a code path — `ollama` and `vllm` are built-in provider IDS of this type
+ * (see BUILTIN_PROVIDER_IDS), not types of their own.
+ */
+export const INFERD_PROVIDER_TYPES = ['onnx', 'clip', 'blip', 'openai'] as const
 export type InferdProviderType = (typeof INFERD_PROVIDER_TYPES)[number]
 
-/** Provider ids that exist without being declared, and can only be merged over. */
-export const BUILTIN_PROVIDER_IDS = ['onnx', 'ollama', 'clip', 'blip'] as const
+/**
+ * Provider ids that exist without being declared, and can only be merged over.
+ * `ollama` and `vllm` are type `openai` pre-pointed at the daemon's default
+ * loopback port, so using a local one is a space referencing the id.
+ */
+export const BUILTIN_PROVIDER_IDS = ['onnx', 'clip', 'blip', 'ollama', 'vllm'] as const
+
+/**
+ * One-click starting points for a NEW provider row. `openai` is here rather than
+ * in the built-ins because a hosted API is useless without a key — declaring it
+ * is the same act as typing the key.
+ */
+export const INFERD_PROVIDER_PRESETS: { id: string; baseUrl: string; label: string }[] = [
+  { id: 'openai', baseUrl: 'https://api.openai.com/v1', label: 'OpenAI' },
+  { id: 'vllm', baseUrl: 'http://127.0.0.1:8000/v1', label: 'vLLM' },
+  { id: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1', label: 'Ollama' },
+]
 
 export interface InferdProviderSpec {
   type?: InferdProviderType
   /** OpenAI-compatible endpoint (`openai` type). Fetched BY THE SERVER. */
   baseUrl?: string
-  /** Ollama host (`ollama` type). */
+  /**
+   * Legacy Ollama host. The server rewrites `{ type: 'ollama', host }` to the
+   * openai provider against that host, so nothing new should write this.
+   */
   host?: string
   cacheDir?: string
   /** Write-only. Absent on every GET; omit on PUT to keep the stored value. */

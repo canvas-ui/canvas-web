@@ -7,6 +7,7 @@ import { useToast } from '@/components/ui/use-toast'
 import {
   BUILTIN_PROVIDER_IDS,
   INFERD_PROVIDER_TYPES,
+  INFERD_PROVIDER_PRESETS,
   probeInferdModelCache,
   stripUnsetKeys,
   testInferdBackend,
@@ -73,7 +74,7 @@ const PROVIDER_SHAPE: Record<string, {
       key: 'baseUrl',
       label: 'Base URL',
       placeholder: 'http://gpu.local:8000/v1',
-      hint: 'OpenAI-compatible embeddings endpoint. A trailing /v1 is optional; both http://host:8000 and http://host:8000/v1 work. Use this type for anything fronting Ollama with an OpenAI-compatible API.',
+      hint: 'OpenAI-compatible embeddings endpoint — Ollama, vLLM, TEI, infinity, LM Studio and OpenAI itself all speak this. A trailing /v1 is optional; both http://host:8000 and http://host:8000/v1 work.',
     },
     apiKey: 'Sent as `Authorization: Bearer …`. Leave empty for servers that do not check it.',
     imageInput: true,
@@ -81,14 +82,17 @@ const PROVIDER_SHAPE: Record<string, {
     headers: true,
     where: spec => (spec.baseUrl as string) || 'no endpoint set',
   },
+  // Legacy: no longer a type anyone can pick, but a stored config may still say
+  // it until the server rewrites it on the next save. Kept so such a row renders
+  // its live field instead of collapsing to a blank card.
   ollama: {
     url: {
       key: 'host',
-      label: 'Host',
+      label: 'Host (legacy)',
       placeholder: 'http://127.0.0.1:11434',
-      hint: 'The Ollama daemon root. This speaks Ollama\'s native /api/embed, so do NOT append /v1. For an OpenAI-compatible proxy, switch the type to openai instead.',
+      hint: 'Written by an older version. Switch the type to openai — the host becomes the base URL and the /v1 suffix is added for you.',
     },
-    apiKey: 'Sent as `Authorization: Bearer …`. Only needed when Ollama sits behind an authenticating proxy.',
+    apiKey: 'Sent as `Authorization: Bearer …`.',
     where: spec => (spec.host as string) || 'http://127.0.0.1:11434',
   },
   onnx: {
@@ -546,14 +550,16 @@ export function InferdConfigEditor({
     setOpenRow(`space:${name}`)
   }
 
-  const addProvider = () => {
-    const id = newProviderId.trim()
+  const addProvider = (id: string, baseUrl?: string) => {
     if (!id) { return }
     if (providerIds.includes(id)) {
       showToast({ title: 'Backend exists', description: `'${id}' is already declared. Open it below to edit.`, variant: 'destructive' })
       return
     }
-    setDraft(prev => ({ ...prev, providers: { ...(prev.providers || {}), [id]: { type: 'openai' } } }))
+    setDraft(prev => ({
+      ...prev,
+      providers: { ...(prev.providers || {}), [id]: { type: 'openai', ...(baseUrl ? { baseUrl } : {}) } },
+    }))
     setNewProviderId('')
     setOpenRow(`provider:${id}`)
   }
@@ -940,6 +946,12 @@ export function InferdConfigEditor({
                         >
                           <option value="">{running.type ? `inherited: ${running.type}` : 'inherited'}</option>
                           {INFERD_PROVIDER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                          {/* A retired type still stored somewhere must remain
+                              selectable, or opening the row silently rewrites it
+                              to whatever the first option happens to be. */}
+                          {resolvedType && !INFERD_PROVIDER_TYPES.includes(resolvedType as never) && (
+                            <option value={resolvedType}>{resolvedType} (legacy)</option>
+                          )}
                         </select>
                         {shape?.note && <p className="text-[11px] text-muted-foreground">{shape.note}</p>}
                       </div>
@@ -1078,14 +1090,30 @@ export function InferdConfigEditor({
             <Input
               value={newProviderId}
               onChange={e => setNewProviderId(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addProvider() } }}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addProvider(newProviderId.trim()) } }}
               placeholder="new backend name (e.g. gpu)"
               className="h-8 w-full max-w-xs text-sm sm:w-auto"
             />
-            <Button type="button" size="sm" variant="ghost" onClick={addProvider}>
+            <Button type="button" size="sm" variant="ghost" onClick={() => addProvider(newProviderId.trim())}>
               <Plus className="mr-1.5 h-3.5 w-3.5" />
               Add backend
             </Button>
+            {/* Presets, because every remote backend is the same `openai` type
+                and only the URL differs — the id and endpoint are the whole
+                configuration for a local daemon. Already-declared ids drop out
+                so the row can't offer something that would just error. */}
+            {INFERD_PROVIDER_PRESETS.filter(p => !providerIds.includes(p.id)).map(preset => (
+              <Button
+                key={preset.id}
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => addProvider(preset.id, preset.baseUrl)}
+                title={`Add an openai-type backend '${preset.id}' pointed at ${preset.baseUrl}`}
+              >
+                {preset.label}
+              </Button>
+            ))}
           </div>
         )}
       </section>
