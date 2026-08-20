@@ -103,7 +103,7 @@ export function SchemaColumnsBoard({ documents, workspaceId, columns, onColumnsC
     // Snap-scrolling flex row: swipe (or scroll) horizontally column by
     // column; each column scrolls vertically on its own. h-full works because
     // the DefaultCanvas content pane has a definite height (flex-1 min-h-0).
-    <div ref={scrollRef} onScroll={updateMoreRight} className="flex h-full snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain pb-2 pr-2" data-testid="schema-columns-board">
+    <div ref={scrollRef} onScroll={updateMoreRight} className="flex h-full snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain pt-2 pb-2" data-testid="schema-columns-board">
         {columns.map((column) => {
           const filterText = (filterDrafts[column.id] ?? column.filter ?? '').toLowerCase()
           const columnDocuments = documents
@@ -202,7 +202,7 @@ export function SchemaColumnsBoard({ documents, workspaceId, columns, onColumnsC
             pointer-events pass through everywhere except the button, so the
             column resize handles beneath stay grabbable. */}
         {((!readOnly && addableColumns.length > 0) || moreRight) && (
-          <div className="pointer-events-none sticky right-0 z-20 -ml-7 flex h-full w-7 shrink-0 flex-col items-center bg-gradient-to-l from-background via-background/60 to-transparent py-1">
+          <div className="pointer-events-none sticky right-0 z-20 -ml-7 flex h-full w-7 shrink-0 flex-col items-end bg-gradient-to-l from-background via-background/60 to-transparent py-2">
             {!readOnly && addableColumns.length > 0 && (
               <div className="pointer-events-auto relative">
                 <button
@@ -210,12 +210,12 @@ export function SchemaColumnsBoard({ documents, workspaceId, columns, onColumnsC
                   onClick={() => setAddingColumn((v) => !v)}
                   title="Add column"
                   aria-label="Add column"
-                  className="flex h-6 w-6 items-center justify-center rounded-md border bg-background text-muted-foreground shadow-elevation-1 hover:bg-accent hover:text-foreground"
+                  className="flex h-7 w-6 items-center justify-center rounded-l-md border border-r-0 bg-background text-muted-foreground shadow-elevation-1 hover:bg-accent hover:text-foreground"
                 >
                   <Plus className="h-3.5 w-3.5" />
                 </button>
                 {addingColumn && (
-                  <div className="absolute right-0 top-7 w-44 rounded-lg border bg-background p-2 shadow-elevation-2">
+                  <div className="absolute right-0 top-8 w-44 rounded-lg border bg-background p-2 shadow-elevation-2">
                     <p className="px-2 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Add column</p>
                     {addableColumns.map((k) => (
                       <button
@@ -239,7 +239,7 @@ export function SchemaColumnsBoard({ documents, workspaceId, columns, onColumnsC
               </div>
             )}
             {moreRight && (
-              <ChevronRight className="my-auto h-4 w-4 text-muted-foreground/70" aria-label="More columns" />
+              <ChevronRight className="my-auto h-4 w-4 self-center text-muted-foreground/70" aria-label="More columns" />
             )}
           </div>
         )}
