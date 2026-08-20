@@ -145,6 +145,7 @@ registerWidget({
   name: 'Todos',
   icon: ListTodo,
   defaultSize: { w: 4, h: 6, minW: 3, minH: 3 },
+  mobileHeight: 0.6,
   defaultConfig: { pageSize: 50, hideDone: false },
   component: TodosWidget,
 })

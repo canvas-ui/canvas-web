@@ -37,5 +37,5 @@
  * look stuck until the drag ended (the drag releases the fill on mouse-up).
  */
 .canvas-grid-host .react-grid-item[data-fill~='h']:not(.resizing) {
-  height: calc(var(--canvas-host-h, 100%) - 24px) !important;
+  height: calc(var(--canvas-host-h, 100%) - 2 * var(--canvas-grid-gutter, 12px)) !important;
 }

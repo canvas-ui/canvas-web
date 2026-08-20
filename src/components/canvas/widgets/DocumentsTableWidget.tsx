@@ -96,6 +96,8 @@ registerWidget({
   name: 'Documents',
   icon: Table,
   defaultSize: { w: 8, h: 6, minW: 4, minH: 3 },
+  // Carries its own header, view toggle and pager before a single row shows.
+  mobileHeight: 0.9,
   defaultConfig: { pageSize: 50, viewMode: 'table' },
   component: DocumentsTableWidget,
 })

@@ -14,6 +14,7 @@ export function WidgetFrame({
   fill,
   onToggleFill,
   readOnly = false,
+  stacked = false,
   children,
 }: {
   title: string
@@ -28,6 +29,14 @@ export function WidgetFrame({
   fill?: { w: boolean; h: boolean }
   onToggleFill?: (axis: 'w' | 'h') => void
   readOnly?: boolean
+  /**
+   * The grid has collapsed to a single stacked column (phone). Everything the
+   * fill controls express — "hold this edge of the canvas" — is already true
+   * for every widget there, and the grid is neither draggable nor resizable, so
+   * the toggles are two dead 44px targets squeezing the title out of a 360px
+   * bar. Drop them and give the title the room.
+   */
+  stacked?: boolean
   children: ReactNode
 }) {
   const [maximized, setMaximized] = useState(false)
@@ -45,10 +54,14 @@ export function WidgetFrame({
           : 'flex flex-col h-full rounded-lg border bg-background overflow-hidden'
       }
     >
-      <div className="canvas-drag-handle flex items-center gap-2 px-2 py-1 border-b bg-muted/30 cursor-move select-none">
+      <div
+        className={`canvas-drag-handle flex items-center gap-2 px-2 py-1 border-b bg-muted/30 select-none ${
+          stacked ? '' : 'cursor-move'
+        }`}
+      >
         {Icon && <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
         <span className="text-xs font-medium truncate flex-1">{title}</span>
-        {!readOnly && onToggleFill && !maximized && (
+        {!readOnly && onToggleFill && !maximized && !stacked && (
           <>
             <FillToggle
               on={fill?.w === true}

@@ -71,6 +71,7 @@ registerWidget({
   name: 'Recent documents',
   icon: FileStack,
   defaultSize: { w: 4, h: 4, minW: 3, minH: 2 },
+  mobileHeight: 0.5,
   defaultConfig: { limit: 10 },
   component: RecentDocumentsWidget,
 })

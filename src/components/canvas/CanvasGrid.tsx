@@ -27,6 +27,11 @@ const COLS = 12
 const ROW_HEIGHT = 80
 const NARROW_ROW_HEIGHT = 40
 const GRID_MARGIN: [number, number] = [12, 12]
+// Tighter gutters once stacked: on a 360px phone the canvas sits inside the
+// page card, the grid host and the widget frame, and every one of those pays
+// its padding twice. 12px gutters cost 24px of the ~290px a widget actually
+// gets — enough to drop the gallery from two thumbnail columns to one.
+const NARROW_GRID_MARGIN: [number, number] = [8, 8]
 
 type CanvasLayoutItem = Layout & { fillW?: boolean; fillH?: boolean }
 
@@ -128,8 +133,7 @@ function applyFillLayout(layout: CanvasLayoutItem[], fills: FillMap, hostRows = 
 // the screen.
 const FILL_ROW_TOLERANCE_PX = 4
 
-function hostRowCapacity(height: number, rowHeight: number) {
-  const marginY = GRID_MARGIN[1]
+function hostRowCapacity(height: number, rowHeight: number, marginY = GRID_MARGIN[1]) {
   return Math.max(1, Math.ceil((height - marginY - FILL_ROW_TOLERANCE_PX) / (rowHeight + marginY)))
 }
 
@@ -141,13 +145,24 @@ const EDGE_SNAP_PX = 45
 // stacked column (widgets full-width, top-to-bottom by their grid position).
 const NARROW_WIDTH = 640
 
-function stackLayout(layout: CanvasLayoutItem[], fills: FillMap, hostRows = 0): CanvasLayoutItem[] {
+function stackLayout(
+  layout: CanvasLayoutItem[],
+  fills: FillMap,
+  hostRows = 0,
+  mobileRows?: (id: string) => number | undefined,
+): CanvasLayoutItem[] {
   // Run the same fill pass first so a filled widget sorts to the top here too
   // and claims the whole phone screen; the rest scrolls beneath it.
   const sorted = [...applyFillLayout(layout, fills, hostRows)].sort((a, b) => (a.y - b.y) || (a.x - b.x))
   let y = 0
   return sorted.map((item) => {
-    const h = Math.max(item.h, item.minH ?? 1)
+    // The saved row count is desktop geometry (see WidgetDef.mobileHeight): a
+    // widget that shared a row with a neighbour there is full-width here, so
+    // the number that mattered was its WIDTH, and its height was whatever was
+    // left. A widget that declares a mobile height gets that instead — a floor,
+    // never a cap, so a canvas whose author already made it tall stays tall.
+    const wanted = mobileRows?.(item.i) ?? 0
+    const h = Math.max(item.h, item.minH ?? 1, wanted)
     const stacked = { ...item, x: 0, w: COLS, y, h }
     y += h
     return stacked
@@ -242,11 +257,19 @@ export function CanvasGrid({
   const gridHostRef = useRef<HTMLDivElement>(null)
 
   const latest = useRef<CanvasState>(initial)
+  // How many rows a widget wants on a phone, from its registered mobileHeight
+  // (a fraction of the visible host). Rows, not pixels, because that is the
+  // currency react-grid-layout stacks and collides in.
+  const mobileRows = useCallback((id: string) => {
+    const fraction = getWidget(widgets[id]?.type ?? '')?.mobileHeight
+    if (!fraction || hostRows <= 0) return undefined
+    return Math.max(1, Math.round(hostRows * fraction))
+  }, [widgets, hostRows])
   // Narrow viewports (mobile) collapse to a stacked single column: the saved
   // 12-col layout is unusable there and widgets never filled the area.
   const displayLayout = useMemo(
-    () => (isNarrow ? stackLayout(layout, fills, hostRows) : applyFillLayout(layout, fills, hostRows)),
-    [layout, fills, isNarrow, hostRows],
+    () => (isNarrow ? stackLayout(layout, fills, hostRows, mobileRows) : applyFillLayout(layout, fills, hostRows)),
+    [layout, fills, isNarrow, hostRows, mobileRows],
   )
   const rowHeight = isNarrow ? NARROW_ROW_HEIGHT : ROW_HEIGHT
   const savedUiKey = useMemo(() => JSON.stringify(metadata?.ui ?? null), [metadata?.ui])
@@ -290,7 +313,11 @@ export function CanvasGrid({
       // stylesheet against this, not by the row grid, so it lands exactly on
       // the canvas edge instead of on the nearest whole row.
       host.style.setProperty('--canvas-host-h', `${height}px`)
-      if (height > 0) setHostRows(hostRowCapacity(height, narrow ? NARROW_ROW_HEIGHT : ROW_HEIGHT))
+      const margin = narrow ? NARROW_GRID_MARGIN : GRID_MARGIN
+      // The fill rule in canvas-grid.css sizes against the host minus its two
+      // gutters; publish which gutter is in play so the two never disagree.
+      host.style.setProperty('--canvas-grid-gutter', `${margin[1]}px`)
+      if (height > 0) setHostRows(hostRowCapacity(height, narrow ? NARROW_ROW_HEIGHT : ROW_HEIGHT, margin[1]))
     }
 
     measure()
@@ -492,15 +519,20 @@ export function CanvasGrid({
   return (
     <div className="flex flex-col h-full min-h-0">
       {editable && (
-      <div className="flex items-center gap-2 px-3 py-1.5 border-b shrink-0">
-        <div className="relative">
+      // One line, always: on a phone this bar wrapped into three (button,
+      // button, status) and ate ~120px of a 780px screen before the canvas
+      // itself began. The labels stay — they are what make the buttons legible
+      // — but they no longer get to wrap, and the status text is the part that
+      // yields (truncate + min-w-0).
+      <div className="flex items-center gap-2 px-2 py-1.5 border-b shrink-0 sm:px-3">
+        <div className="relative shrink-0">
           <button
             type="button"
             onClick={() => setMenuOpen((v) => !v)}
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs border rounded-md hover:bg-accent"
+            className="flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1 text-xs border rounded-md hover:bg-accent"
           >
             <Plus className="w-3.5 h-3.5" />
-            Add widget
+            Add<span className="hidden sm:inline"> widget</span>
           </button>
           {menuOpen && (
             <div className="absolute left-0 top-full mt-1 z-20 w-48 rounded-md border bg-popover shadow-elevation-2 py-1">
@@ -526,7 +558,7 @@ export function CanvasGrid({
           // toolbox "Save filters" button, so a dirty canvas is spottable at a
           // glance. Falls back to the neutral bordered look once saved/disabled.
           className={cn(
-            'flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md transition-colors disabled:opacity-50',
+            'flex shrink-0 items-center gap-1.5 whitespace-nowrap px-2.5 py-1 text-xs rounded-md transition-colors disabled:opacity-50',
             isDirty
               ? 'bg-primary text-primary-foreground hover:bg-primary'
               : 'border hover:bg-accent',
@@ -535,7 +567,7 @@ export function CanvasGrid({
           <Save className="w-3.5 h-3.5" />
           {isSaving ? 'Saving…' : 'Save'}
         </button>
-        <span className="text-xs text-muted-foreground">
+        <span className="min-w-0 truncate text-xs text-muted-foreground">
           {ids.length} widget{ids.length === 1 ? '' : 's'}
           {isDirty ? ' · unsaved' : ''}
           {saveError ? ` · ${saveError}` : ''}
@@ -564,7 +596,7 @@ export function CanvasGrid({
             layout={displayLayout}
             cols={COLS}
             rowHeight={rowHeight}
-            margin={GRID_MARGIN}
+            margin={isNarrow ? NARROW_GRID_MARGIN : GRID_MARGIN}
             isDraggable={editable && !isNarrow}
             isResizable={editable && !isNarrow}
             // Edge handles too (not just the SE corner): dragging the bottom
@@ -591,6 +623,7 @@ export function CanvasGrid({
                       title={def.name}
                       icon={def.icon}
                       readOnly={!editable}
+                      stacked={isNarrow}
                       onRemove={() => removeWidget(id)}
                       fill={fills[id] ?? NO_FILL}
                       onToggleFill={editable ? (axis) => toggleFill(id, axis) : undefined}
@@ -604,7 +637,7 @@ export function CanvasGrid({
                       />
                     </WidgetFrame>
                   ) : (
-                    <WidgetFrame title={`Unknown: ${entry.type}`} readOnly={!editable} onRemove={() => removeWidget(id)}>
+                    <WidgetFrame title={`Unknown: ${entry.type}`} readOnly={!editable} stacked={isNarrow} onRemove={() => removeWidget(id)}>
                       <div className="text-xs text-muted-foreground">This widget type is not available.</div>
                     </WidgetFrame>
                   )}

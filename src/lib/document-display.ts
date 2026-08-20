@@ -95,12 +95,18 @@ export function isImageFile(document: Document): boolean {
   return String(document.metadata?.contentType || '').startsWith('image/')
 }
 
+// Schemes whose path addresses a message in a mailbox rather than naming a
+// file: `imap://<account>/INBOX;UID=56909` is a slot, renumbered by the next
+// resync. Documents from those are named from their own fields instead.
+const ADDRESS_ONLY_SCHEME = /^(imaps?|pop3s?|mailto|graph|ews|news|nntp):/i
+
 // Basename of a location URL, for schemes where the path IS a name (file://
 // from `ws add`, https://, smb://). A `stored://` key is only sometimes one:
 // file-backed keys are the real workspace path, cacache/auto-generated keys are
 // content hashes — so a stored key must look like a filename to count.
 function nameBearingBasename(url?: string): string {
   if (!url) return ''
+  if (ADDRESS_ONLY_SCHEME.test(url)) return ''
   const afterScheme = url.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')
   const slash = afterScheme.indexOf('/')
   const key = slash >= 0 ? afterScheme.slice(slash + 1) : afterScheme
@@ -115,6 +121,17 @@ function nameBearingBasename(url?: string): string {
 // A name a person would recognise: has an extension and isn't a bare digest.
 function looksLikeFilename(base: string): boolean {
   return /\.[A-Za-z0-9]{1,12}$/.test(base) && !/^[a-f0-9]{16,}$/i.test(base.replace(/\.[^.]*$/, ''))
+}
+
+/**
+ * A document's human-authored note, trimmed, or '' when it has none.
+ *
+ * `comment` is top-level and never regenerated — distinct from
+ * `metadata.summary`, which is captioner output. Surfaces that show "what
+ * someone said about this" want this one, and only this one.
+ */
+export function getDocumentComment(document: Document): string {
+  return typeof document.comment === 'string' ? document.comment.trim() : ''
 }
 
 /**

@@ -84,6 +84,19 @@ export interface WidgetDef {
   name: string
   icon: LucideIcon
   defaultSize: WidgetSize
+  /**
+   * How much of the visible canvas this widget should claim once the grid
+   * collapses to a single stacked column (phones), as a fraction of the host
+   * height. Omitted = keep the saved row count.
+   *
+   * A saved layout is 12-column desktop geometry; its row count says how the
+   * widget related to its NEIGHBOURS, which is meaningless once every widget is
+   * full-width and stacked. Taken literally it produced 240px boxes whose own
+   * toolbar filled them — the content then lived in a nested scroller inside a
+   * scrolling page. So content-heavy widgets ask for a screenful here and the
+   * page scrolls widget by widget, which is how a phone is read anyway.
+   */
+  mobileHeight?: number
   defaultConfig?: WidgetConfig
   component: ComponentType<WidgetProps>
 }

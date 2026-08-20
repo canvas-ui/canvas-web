@@ -117,6 +117,32 @@
   }
 }
 
+/**
+ * A tile caption that yields to the picture on a mouse and stays put on a
+ * finger.
+ *
+ * `hover: hover` rather than a Tailwind `hover:` variant, because the two
+ * states have OPPOSITE defaults: a touch device has no gesture that could
+ * reveal a caption without also opening the image, so hiding it there would
+ * hide it forever. Mouse users get the clean photo wall and the caption on
+ * hover; touch users get the caption.
+ *
+ * Requires a `.group` ancestor (the tile).
+ */
+@utility caption-reveal {
+  opacity: 1;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+
+  @media (hover: hover) {
+    opacity: 0;
+
+    .group:hover &,
+    .group:focus-visible & {
+      opacity: 1;
+    }
+  }
+}
+
 /* The one true focus treatment. `:focus-visible` only, so pointer users never
    see it but keyboard users always do. */
 @utility focus-ring {

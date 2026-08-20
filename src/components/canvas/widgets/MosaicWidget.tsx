@@ -4,7 +4,7 @@ import { registerWidget } from '../widget-registry'
 import type { WidgetProps } from '../widget-types'
 import type { Document } from '@/types/workspace'
 import { useCanvasImages } from './useCanvasImages'
-import { ImageGridToolbar, ImageLightbox, ImageThumb } from './image-grid'
+import { ImageGridToolbar, ImageLightbox, ImageThumb, type CommentDisplay } from './image-grid'
 
 // Base grid unit (px). Column width ≈ this; a row is the same so a 1×1 tile is
 // roughly square and larger tiles stay proportional.
@@ -43,16 +43,31 @@ function tileSpan(doc: Document, index: number): { cols: number; rows: number } 
 // A justified, varied-cell photo wall over the canvas' context — the visually
 // prominent counterpart to the uniform Gallery. Shares search / timeline sort /
 // pagination / lightbox with it.
-export function MosaicWidget({ config, canvas }: WidgetProps) {
+export function MosaicWidget({ config, setConfig, canvas }: WidgetProps) {
   const pageSize = typeof config.pageSize === 'number' ? config.pageSize : 60
   const state = useCanvasImages(canvas, pageSize)
   const [lightbox, setLightbox] = useState<number | null>(null)
   const { images, isLoading, error, activeQueries } = state
+  // 'reveal', not 'caption': a mosaic earns its keep by being uninterrupted
+  // picture, and a permanent band across tiles of six different shapes is
+  // noise. On a mouse the note appears on hover; on a touch screen — where
+  // there is no hover to give — it stays visible, because the alternative is a
+  // comment nobody can ever see. Off entirely is one tap away, and a corner
+  // marker still says which pictures carry a note.
+  const comments: CommentDisplay = config.showComments === false ? 'off' : 'reveal'
+  const toggleComments = () => setConfig({ ...config, showComments: comments === 'off' })
 
   return (
     <div className="flex h-full flex-col">
       {/* See GalleryWidget: hide the authed/inert toolbar on read-only shares. */}
-      {!canvas.readOnly && <ImageGridToolbar workspaceId={canvas.workspaceId} state={state} />}
+      {!canvas.readOnly && (
+        <ImageGridToolbar
+          workspaceId={canvas.workspaceId}
+          state={state}
+          comments={comments}
+          onToggleComments={toggleComments}
+        />
+      )}
 
       <div className="flex-1 overflow-y-auto p-1">
         {error ? (
@@ -79,6 +94,7 @@ export function MosaicWidget({ config, canvas }: WidgetProps) {
                     doc={doc}
                     onClick={() => setLightbox(i)}
                     className="h-full"
+                    comments={comments}
                   />
                 </div>
               )
@@ -105,6 +121,7 @@ registerWidget({
   name: 'Mosaic',
   icon: LayoutDashboard,
   defaultSize: { w: 8, h: 7, minW: 4, minH: 4 },
-  defaultConfig: { pageSize: 60 },
+  mobileHeight: 0.9,
+  defaultConfig: { pageSize: 60, showComments: true },
   component: MosaicWidget,
 })

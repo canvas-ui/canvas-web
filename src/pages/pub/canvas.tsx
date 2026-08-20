@@ -237,41 +237,63 @@ export default function PublicCanvasPage() {
 
   return (
     <PublicShareContext.Provider value={code}>
-    <main className="min-h-screen bg-muted p-4 text-foreground md:p-10">
+    <main className="min-h-screen bg-muted p-2 text-foreground sm:p-4 md:p-10">
       <div className="mx-auto max-w-6xl">
         <Card className="bg-card shadow-elevation-3">
-          <CardHeader className="border-b">
-            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-              <div className="flex min-w-0 gap-4">
+          {/* The header is a masthead on a desktop and a title bar on a phone:
+              same elements, but the icon shrinks, the title drops a size, and
+              the live badge moves up beside the workspace name instead of
+              claiming a row of its own. Together with the stats below this is
+              what used to push the canvas itself off the first screen. */}
+          <CardHeader className="border-b p-3 sm:p-6">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
+              <div className="flex min-w-0 gap-3 sm:gap-4">
                 <div
-                  className="mt-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent text-primary"
+                  className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent text-primary sm:mt-1 sm:h-12 sm:w-12 sm:rounded-2xl"
                   style={payload.canvas.color ? { borderLeft: `4px solid ${payload.canvas.color}` } : undefined}
                 >
-                  <LayoutDashboard className="h-6 w-6 touch-target" />
+                  <LayoutDashboard className="h-5 w-5 sm:h-6 sm:w-6" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                    {payload.workspace.label || payload.workspace.name}
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-xs uppercase tracking-wide text-muted-foreground">
+                      {payload.workspace.label || payload.workspace.name}
+                    </span>
+                    <span className="flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground md:hidden">
+                      {isLive ? <Wifi className="h-3 w-3 text-success" /> : <WifiOff className="h-3 w-3 text-muted-foreground" />}
+                      {isLive ? 'Live' : 'Offline'}
+                    </span>
                   </div>
-                  <CardTitle className="mt-1 truncate text-3xl md:text-5xl">
+                  <CardTitle className="mt-0.5 truncate text-2xl sm:mt-1 sm:text-3xl md:text-5xl">
                     {payload.canvas.label || payload.canvas.name || 'Canvas'}
                   </CardTitle>
                   {payload.canvas.description && (
-                    <p className="mt-3 max-w-3xl text-base text-muted-foreground">
+                    <p className="mt-1.5 max-w-3xl text-sm text-muted-foreground sm:mt-3 sm:text-base">
                       {payload.canvas.description}
                     </p>
                   )}
                 </div>
               </div>
-              <div className="flex shrink-0 items-center gap-2 rounded-full border px-3 py-1 text-xs text-muted-foreground">
+              <div className="hidden shrink-0 items-center gap-2 rounded-full border px-3 py-1 text-xs text-muted-foreground md:flex">
                 {isLive ? <Wifi className="h-3.5 w-3.5 text-success" /> : <WifiOff className="h-3.5 w-3.5 text-muted-foreground" />}
                 {isLive ? 'Live' : 'Offline'}
               </div>
             </div>
           </CardHeader>
 
-          <CardContent className="space-y-6 p-6 md:p-8">
-            <section className="grid gap-3 md:grid-cols-4">
+          <CardContent className="space-y-4 p-3 sm:space-y-6 sm:p-6 md:p-8">
+            {/* Four stat CARDS are a desktop luxury: stacked on a phone they
+                cost ~380px before the canvas begins, to say three numbers. The
+                same facts collapse into one line there. */}
+            <section className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs text-muted-foreground md:hidden">
+              <span className="w-full truncate font-mono text-foreground">{payload.share.path}</span>
+              <span className="tabular-nums">{payload.stats.documentCount} docs</span>
+              {filteredDocuments.length !== payload.stats.documentCount && (
+                <span className="tabular-nums">· {filteredDocuments.length} shown</span>
+              )}
+              <span className="truncate">· {formatDate(payload.stats.refreshedAt)}</span>
+            </section>
+            <section className="hidden gap-3 md:grid md:grid-cols-4">
               <Stat label="Path" value={payload.share.path} mono />
               <Stat label="Documents" value={String(payload.stats.documentCount)} />
               <Stat label="Shown" value={String(filteredDocuments.length)} />
@@ -279,7 +301,11 @@ export default function PublicCanvasPage() {
             </section>
 
             {hasWidgets && (
-              <section id="content-area" className="rounded-2xl border overflow-hidden flex flex-col w-full h-viewport-pane min-h-[420px]">
+              // On a phone the canvas IS the page — a 420px floor next to a
+              // screenful of header left the widgets in a letterbox. Take most
+              // of the viewport there, and the usual pane height once there is
+              // a page around it.
+              <section id="content-area" className="flex w-full flex-col overflow-hidden rounded-2xl border h-viewport-card min-h-[420px] md:h-viewport-pane">
                 <CanvasGrid
                   key={JSON.stringify(canvasUi)}
                   workspaceId={payload.workspace.name}
@@ -412,7 +438,13 @@ export default function PublicCanvasPage() {
 
 function Stat({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="rounded-xl border bg-muted p-4">
+    // min-w-0 is load-bearing, not defensive: a grid item defaults to
+    // min-width:auto, and `truncate` sets white-space:nowrap — so this cell's
+    // min-content width is the FULL un-wrapped path, and the card (with it the
+    // page) grows to fit rather than truncating. That is what made the shared
+    // canvas scroll sideways and clip its widgets on a phone; the truncation
+    // only starts working once the item is allowed to shrink.
+    <div className="min-w-0 rounded-xl border bg-muted p-4">
       <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className={`mt-2 truncate text-lg font-semibold ${mono ? 'font-mono text-sm' : ''}`}>
         {value || '-'}
