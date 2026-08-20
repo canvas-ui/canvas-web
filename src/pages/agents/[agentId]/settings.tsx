@@ -16,14 +16,22 @@ import {
 import {
   deleteAgent,
   getAgent,
+  getAgentAccess,
   installAgentSkill,
   listAgentSkills,
   removeAgentSkill,
+  revokeAgentAccess,
+  rotateAgentAccessToken,
+  setAgentAccess,
   updateAgent,
   type Agent,
+  type AgentAccess,
+  type AgentBinding,
   type AgentSkill,
   type CreateAgentData,
 } from '@/services/agent'
+import { listContexts } from '@/services/context'
+import { listWorkspaces } from '@/services/workspace'
 
 const DEFAULT_MODELS: Record<string, string> = {
   anthropic: 'claude-3-5-sonnet-20241022',
@@ -67,6 +75,9 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 
 const TEXTAREA_CLASS =
   'w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-y'
+
+const SELECT_CLASS =
+  'w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring'
 
 // Agent settings, shaped exactly like workspace settings: the section list is
 // in M2, one section renders here, and the page owns the save action.
@@ -120,6 +131,24 @@ export default function AgentSettingsPage() {
   const [isSkillSaving, setIsSkillSaving] = useState(false)
   const [deletingSkill, setDeletingSkill] = useState<string | null>(null)
 
+  // Access / ACL — manages its own writes (bind/rotate/revoke apply
+  // immediately), like skills, so it stays outside the Save Changes payload.
+  const [access, setAccess] = useState<AgentAccess | null>(null)
+  // Derived rather than set in the effect (react-hooks/set-state-in-effect).
+  const [accessLoadedFor, setAccessLoadedFor] = useState<string | null>(null)
+  const [accessBusy, setAccessBusy] = useState(false)
+  // Token minted by bind/rotate — the server stores only the hash, so this is
+  // the single chance to copy it.
+  const [mintedToken, setMintedToken] = useState<string | null>(null)
+  const [bindType, setBindType] = useState<AgentBinding['type']>('context')
+  const [bindWorkspace, setBindWorkspace] = useState('')
+  const [bindPath, setBindPath] = useState('/')
+  const [bindContext, setBindContext] = useState('')
+  const [permRead, setPermRead] = useState(true)
+  const [permWrite, setPermWrite] = useState(false)
+  const [workspaceOptions, setWorkspaceOptions] = useState<Awaited<ReturnType<typeof listWorkspaces>>>([])
+  const [contextOptions, setContextOptions] = useState<Awaited<ReturnType<typeof listContexts>>>([])
+
   // Switching agents while settings are open resets to a loading state during
   // render, so the previous agent's values never show under the new name.
   const [loadingFor, setLoadingFor] = useState(agentId)
@@ -169,6 +198,33 @@ export default function AgentSettingsPage() {
     })
     return () => { cancelled = true }
   }, [agentId, selectEntity])
+
+  // Load the binding + picker options lazily when the Access tab opens.
+  useEffect(() => {
+    if (activeTab !== 'access' || !agent?.id) return
+    const forAgentId = agent.id
+    let cancelled = false
+    Promise.all([
+      getAgentAccess(agent.id).catch(() => null),
+      listWorkspaces().catch(() => []),
+      listContexts().catch(() => []),
+    ]).then(([acc, ws, ctxs]) => {
+      if (cancelled) return
+      setAccess(acc)
+      setWorkspaceOptions(ws)
+      setContextOptions(ctxs)
+      if (acc) {
+        setBindType(acc.binding.type)
+        setBindWorkspace(acc.binding.workspace || '')
+        setBindPath(acc.binding.path || '/')
+        setBindContext(acc.binding.context || '')
+        setPermRead(acc.permissions.includes('read'))
+        setPermWrite(acc.permissions.includes('write'))
+      }
+      setAccessLoadedFor(forAgentId)
+    })
+    return () => { cancelled = true }
+  }, [activeTab, agent?.id])
 
   const buildPayload = (): Partial<CreateAgentData> => {
     const compiled = buildSystemPrompt(idRole, idIdentity, idInstructions)
@@ -271,6 +327,83 @@ export default function AgentSettingsPage() {
     } finally {
       setDeletingSkill(null)
     }
+  }
+
+  const buildBindingSpec = (): AgentBinding | null => {
+    if (bindType === 'global') return { type: 'global' }
+    if (bindType === 'context') return bindContext ? { type: 'context', context: bindContext } : null
+    if (!bindWorkspace) return null
+    return bindType === 'path'
+      ? { type: 'path', workspace: bindWorkspace, path: bindPath.trim() || '/' }
+      : { type: 'workspace', workspace: bindWorkspace }
+  }
+
+  const handleBind = async () => {
+    if (!agent || accessBusy) return
+    const binding = buildBindingSpec()
+    const permissions: Array<'read' | 'write'> = []
+    if (permRead) permissions.push('read')
+    if (permWrite) permissions.push('write')
+    if (!binding || permissions.length === 0) {
+      showToast({ title: 'Invalid binding', description: 'Pick a scope target and at least one permission', variant: 'destructive' })
+      return
+    }
+    if (binding.type === 'global'
+      && !window.confirm(`Global scope lets this agent ${permWrite ? 'read and write' : 'read'} ALL your workspaces. Continue?`)) return
+    setAccessBusy(true)
+    try {
+      const result = await setAgentAccess(agent.id, { binding, permissions })
+      setAccess(result.access)
+      setMintedToken(result.token)
+      showToast({ title: 'Bound', description: 'Access bound — copy the token now, it is not shown again' })
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Bind failed', variant: 'destructive' })
+    } finally {
+      setAccessBusy(false)
+    }
+  }
+
+  const handleRotateToken = async () => {
+    if (!agent || accessBusy) return
+    setAccessBusy(true)
+    try {
+      const result = await rotateAgentAccessToken(agent.id)
+      setAccess(result.access)
+      setMintedToken(result.token)
+      showToast({ title: 'Rotated', description: 'New token minted — the previous one no longer works' })
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Rotate failed', variant: 'destructive' })
+    } finally {
+      setAccessBusy(false)
+    }
+  }
+
+  const handleRevokeAccess = async () => {
+    if (!agent || accessBusy) return
+    if (!window.confirm("Revoke this agent's canvas access? Its token stops working immediately.")) return
+    setAccessBusy(true)
+    try {
+      await revokeAgentAccess(agent.id)
+      setAccess(null)
+      setMintedToken(null)
+      showToast({ title: 'Revoked', description: 'Agent access removed' })
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Revoke failed', variant: 'destructive' })
+    } finally {
+      setAccessBusy(false)
+    }
+  }
+
+  const describeBinding = (binding: AgentBinding) => {
+    if (binding.type === 'global') return 'Global — all workspaces'
+    if (binding.type === 'context') {
+      const ctx = contextOptions.find(c => c.id === binding.context)
+      return `Context ${ctx ? `${ctx.id} (${ctx.url})` : binding.context} — follows the context live`
+    }
+    const ws = binding.workspaceName || binding.workspace
+    return binding.type === 'path'
+      ? `Workspace ${ws}, path ${binding.path || '/'}`
+      : `Workspace ${ws} (whole tree)`
   }
 
   if (isLoading) return <div className="p-6 text-sm text-muted-foreground">Loading...</div>
@@ -526,6 +659,112 @@ export default function AgentSettingsPage() {
                     <div className="font-mono text-xs text-muted-foreground">{server.command} {(server.args || []).join(' ')}</div>
                   </div>
                 ))}
+              </section>
+            </>
+          )}
+
+          {activeTab === 'access' && (
+            <>
+              <section className="space-y-3 rounded-lg border p-4">
+                <div>
+                  <h2 className="text-sm font-semibold">Canvas Access</h2>
+                  <p className="text-xs text-muted-foreground">
+                    The agent talks to canvas through its own scoped token; the server clamps every
+                    request to the binding. Bind, rotate and revoke apply immediately.
+                  </p>
+                </div>
+                {accessLoadedFor !== agent.id ? (
+                  <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Loading…</div>
+                ) : access ? (
+                  <div className="space-y-2 rounded-md border p-3">
+                    <div className="text-sm font-medium">{describeBinding(access.binding)}</div>
+                    <div className="text-xs text-muted-foreground">
+                      Permissions: {access.permissions.join(', ') || 'none'}
+                      {access.boundAt ? ` · bound ${new Date(access.boundAt).toLocaleString()}` : ''}
+                      {access.rotatedAt ? ` · token rotated ${new Date(access.rotatedAt).toLocaleString()}` : ''}
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <Button type="button" variant="outline" size="sm" disabled={accessBusy} onClick={handleRotateToken}>
+                        Rotate Token
+                      </Button>
+                      <Button type="button" variant="destructive" size="sm" disabled={accessBusy} onClick={handleRevokeAccess}>
+                        Revoke Access
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                    Unbound — this agent has no canvas access.
+                  </div>
+                )}
+                {mintedToken && (
+                  <div className="space-y-2 rounded-md border border-warning/50 bg-warning/10 p-3">
+                    <div className="text-xs font-medium">Agent token — shown once, store it now</div>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 truncate rounded bg-background px-2 py-1 font-mono text-xs">{mintedToken}</code>
+                      <Button type="button" variant="outline" size="sm" onClick={() => navigator.clipboard?.writeText(mintedToken)}>
+                        Copy
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setMintedToken(null)}>
+                        Dismiss
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      In-process agents receive it automatically (canvas.env); external runtimes
+                      (agentd) take it as CANVAS_TOKEN.
+                    </p>
+                  </div>
+                )}
+              </section>
+
+              <section className="space-y-4 rounded-lg border p-4">
+                <h2 className="text-sm font-semibold">{access ? 'Rebind' : 'Bind'}</h2>
+                <Field label="Scope" hint="Context bindings follow the context live; global spans all workspaces.">
+                  <select value={bindType} onChange={e => setBindType(e.target.value as AgentBinding['type'])} className={SELECT_CLASS}>
+                    <option value="context">Context (follows live)</option>
+                    <option value="workspace">Workspace</option>
+                    <option value="path">Workspace path</option>
+                    <option value="global">Global (all workspaces)</option>
+                  </select>
+                </Field>
+                {bindType === 'context' && (
+                  <Field label="Context">
+                    <select value={bindContext} onChange={e => setBindContext(e.target.value)} className={SELECT_CLASS}>
+                      <option value="">Select a context…</option>
+                      {contextOptions.map(ctx => (
+                        <option key={ctx.id} value={ctx.id}>{ctx.id} — {ctx.url}</option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+                {(bindType === 'workspace' || bindType === 'path') && (
+                  <Field label="Workspace">
+                    <select value={bindWorkspace} onChange={e => setBindWorkspace(e.target.value)} className={SELECT_CLASS}>
+                      <option value="">Select a workspace…</option>
+                      {workspaceOptions.map(ws => (
+                        <option key={ws.id} value={ws.name || ws.id}>{ws.label || ws.name}</option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+                {bindType === 'path' && (
+                  <Field label="Base path" hint="The agent is clamped to this subtree.">
+                    <Input value={bindPath} onChange={e => setBindPath(e.target.value)} placeholder="/work/projects/foo" />
+                  </Field>
+                )}
+                <Field label="Permissions">
+                  <div className="flex gap-4 text-sm">
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={permRead} onChange={e => setPermRead(e.target.checked)} /> read
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={permWrite} onChange={e => setPermWrite(e.target.checked)} /> write
+                    </label>
+                  </div>
+                </Field>
+                <Button type="button" disabled={accessBusy} onClick={handleBind}>
+                  {accessBusy ? 'Working…' : access ? 'Rebind & Mint Token' : 'Bind & Mint Token'}
+                </Button>
               </section>
             </>
           )}

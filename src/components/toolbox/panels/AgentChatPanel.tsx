@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Mic, Send, Square, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getAgent, getVoiceStatus, type Agent } from '@/services/agent'
+import { getAgent, getAgentAccess, getVoiceStatus, setAgentAccess, type Agent, type AgentAccess } from '@/services/agent'
+import { useToast } from '@/components/ui/use-toast'
+import { useToolboxOptional } from '../use-toolbox'
 import { useAgentPromptStream } from '@/hooks/useAgentPromptStream'
 import { useVoiceRecorder } from '@/hooks/useVoiceRecorder'
 import AgentAssistantExtras from '@/components/agent/AgentAssistantExtras'
@@ -15,6 +17,15 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
   const [agent, setAgent] = useState<Agent | null>(null)
   const [input, setInput] = useState('')
   const [voiceAvailable, setVoiceAvailable] = useState(false)
+  const [access, setAccess] = useState<AgentAccess | null>(null)
+  const [bindBusy, setBindBusy] = useState(false)
+  // Token minted by a rebind — shown exactly once (server stores only the hash).
+  const [mintedToken, setMintedToken] = useState<string | null>(null)
+  const { showToast } = useToast()
+  // Context hand-off: the toolbox knows which context the user is looking at.
+  const toolbox = useToolboxOptional()
+  const activeContextId = toolbox?.state.activeContextType === 'context' ? toolbox.state.activeContextId : null
+  const activeContextPath = toolbox?.state.activeContextPath ?? null
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const { messages, isStreaming, error, send, sendVoice, stop, clear } = useAgentPromptStream(agentId)
@@ -22,6 +33,7 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
 
   useEffect(() => {
     getAgent(agentId).then(setAgent).catch(() => {})
+    getAgentAccess(agentId).then(setAccess).catch(() => setAccess(null))
   }, [agentId])
 
   useEffect(() => {
@@ -35,6 +47,39 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
     if (messages.length === 0) return
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  const boundToActiveContext =
+    access?.binding.type === 'context' && Boolean(activeContextId) && access?.binding.context === activeContextId
+
+  const scopeLabel = !access
+    ? 'no canvas access'
+    : access.binding.type === 'global'
+      ? 'scope: global'
+      : access.binding.type === 'context'
+        ? (boundToActiveContext ? 'scoped to this context' : 'context-bound')
+        : `scope: ${access.binding.workspaceName || access.binding.workspace}${access.binding.type === 'path' ? `:${access.binding.path || '/'}` : ''}`
+
+  const handleBindToContext = async () => {
+    if (!activeContextId || bindBusy) return
+    const label = activeContextPath || activeContextId
+    if (!window.confirm(
+      `Bind "${agent?.label || agent?.name || agentId}" to the current context (${label})? ` +
+      'This mints a new canvas token and restarts the agent if it is running.'
+    )) return
+    setBindBusy(true)
+    try {
+      const result = await setAgentAccess(agentId, {
+        binding: { type: 'context', context: activeContextId },
+        permissions: ['read', 'write'],
+      })
+      setAccess(result.access)
+      setMintedToken(result.token)
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Bind failed', variant: 'destructive' })
+    } finally {
+      setBindBusy(false)
+    }
+  }
 
   const handleSend = async () => {
     const msg = input.trim()
@@ -71,9 +116,14 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
             style={{ backgroundColor: agent.color }}
           />
         )}
-        <span className="text-sm font-medium flex-1 truncate">
-          {agent?.label || agent?.name || agentId}
-        </span>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium truncate">
+            {agent?.label || agent?.name || agentId}
+          </div>
+          <div className="text-[10px] leading-tight text-muted-foreground truncate" title={scopeLabel}>
+            {scopeLabel}
+          </div>
+        </div>
         <button
           type="button"
           onClick={clear}
@@ -83,6 +133,44 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
           <Trash2 className="w-3.5 h-3.5" />
         </button>
       </div>
+
+      {/* Offer to scope the agent to the toolbox's context unless it already follows it */}
+      {activeContextId && !boundToActiveContext && (
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/40 text-xs shrink-0">
+          <span className="flex-1 truncate text-muted-foreground" title={activeContextPath || activeContextId}>
+            Toolbox context: {activeContextPath || activeContextId}
+          </span>
+          <button
+            type="button"
+            disabled={bindBusy}
+            onClick={handleBindToContext}
+            className="shrink-0 rounded border border-input px-2 py-1 hover:bg-accent disabled:opacity-50"
+          >
+            {bindBusy ? 'Binding…' : 'Bind to this context'}
+          </button>
+        </div>
+      )}
+      {mintedToken && (
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-warning/10 text-xs shrink-0">
+          <span className="shrink-0 text-muted-foreground">Token (shown once):</span>
+          <code className="flex-1 truncate font-mono">{mintedToken}</code>
+          <button
+            type="button"
+            onClick={() => navigator.clipboard?.writeText(mintedToken)}
+            className="shrink-0 rounded border border-input px-2 py-1 hover:bg-accent"
+          >
+            Copy
+          </button>
+          <button
+            type="button"
+            onClick={() => setMintedToken(null)}
+            className="shrink-0 rounded px-1.5 py-1 hover:bg-accent"
+            title="Dismiss"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">

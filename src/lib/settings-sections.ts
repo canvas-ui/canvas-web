@@ -4,6 +4,7 @@ import {
   Cpu,
   Database,
   HardDrive,
+  KeyRound,
   Link2,
   Monitor,
   Plug,
@@ -80,6 +81,7 @@ export type AgentSettingsTab =
   | 'provider'
   | 'models'
   | 'tools'
+  | 'access'
   | 'memory'
   | 'integrations'
 
@@ -88,6 +90,7 @@ export const AGENT_SETTINGS_SECTIONS: readonly SettingsSection<AgentSettingsTab>
   { id: 'provider', label: 'Provider', description: 'LLM provider and credentials', icon: Plug },
   { id: 'models', label: 'Models', description: 'Model and sampling parameters', icon: Cpu },
   { id: 'tools', label: 'Tools', description: 'Skills and MCP servers', icon: Wrench },
+  { id: 'access', label: 'Access / ACL', description: 'Canvas scope binding and agent token', icon: KeyRound },
   { id: 'memory', label: 'Memory', description: 'Memory engine', icon: Brain },
   { id: 'integrations', label: 'Integrations', description: 'Mail, chat, SQL, REST', icon: Boxes },
 ]
