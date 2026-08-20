@@ -18,3 +18,24 @@
   height: 100%;
   min-height: 0;
 }
+
+/* Fill = own the canvas on that axis.
+ *
+ * react-grid-layout writes width/height inline from the row/column grid, so a
+ * "full height" widget could only ever land on the nearest whole row — up to
+ * ~90px short of the canvas edge. An !important author rule outranks an inline
+ * declaration, so the stylesheet takes the height back and sizes it against
+ * --canvas-host-h, the host's measured pixel height (published by CanvasGrid's
+ * ResizeObserver). No row arithmetic, no neighbour math, exact to the edge.
+ *
+ * Only the height needs this. A full-width item already spans all 12 columns,
+ * which is exactly the container width minus its two gutters — pixel-exact
+ * without help.
+ *
+ * `:not(.resizing)` matters: while a resize handle is being dragged RGL drives
+ * the height inline frame by frame, and pinning it would make a filled widget
+ * look stuck until the drag ended (the drag releases the fill on mouse-up).
+ */
+.canvas-grid-host .react-grid-item[data-fill~='h']:not(.resizing) {
+  height: calc(var(--canvas-host-h, 100%) - 24px) !important;
+}
