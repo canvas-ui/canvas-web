@@ -17,6 +17,7 @@ import {
   deleteAgent,
   getAgent,
   getAgentAccess,
+  getAgentToolDefinitions,
   installAgentSkill,
   listAgentSkills,
   removeAgentSkill,
@@ -28,6 +29,7 @@ import {
   type AgentAccess,
   type AgentBinding,
   type AgentSkill,
+  type AgentToolDefinition,
   type CreateAgentData,
 } from '@/services/agent'
 import { listContexts } from '@/services/context'
@@ -149,6 +151,11 @@ export default function AgentSettingsPage() {
   const [workspaceOptions, setWorkspaceOptions] = useState<Awaited<ReturnType<typeof listWorkspaces>>>([])
   const [contextOptions, setContextOptions] = useState<Awaited<ReturnType<typeof listContexts>>>([])
 
+  // Runtime-injected tool definitions (read-only) + editable config.tools JSON.
+  const [toolDefs, setToolDefs] = useState<AgentToolDefinition[] | null>(null)
+  const [toolsJson, setToolsJson] = useState('{}')
+  const [toolsJsonError, setToolsJsonError] = useState<string | null>(null)
+
   // Switching agents while settings are open resets to a loading state during
   // render, so the previous agent's values never show under the new name.
   const [loadingFor, setLoadingFor] = useState(agentId)
@@ -184,6 +191,8 @@ export default function AgentSettingsPage() {
         setMainMaxTokens(conn.maxTokens ?? 4096)
         setMainTopP(conn.topP ?? 1.0)
       }
+      setToolsJson(JSON.stringify(a.config?.tools ?? {}, null, 2))
+      setToolsJsonError(null)
       setError(null)
       try {
         setSkills(await listAgentSkills(a.id))
@@ -201,18 +210,20 @@ export default function AgentSettingsPage() {
 
   // Load the binding + picker options lazily when the Access tab opens.
   useEffect(() => {
-    if (activeTab !== 'access' || !agent?.id) return
+    if ((activeTab !== 'access' && activeTab !== 'tools') || !agent?.id) return
     const forAgentId = agent.id
     let cancelled = false
     Promise.all([
       getAgentAccess(agent.id).catch(() => null),
       listWorkspaces().catch(() => []),
       listContexts().catch(() => []),
-    ]).then(([acc, ws, ctxs]) => {
+      getAgentToolDefinitions(agent.id).catch(() => null),
+    ]).then(([acc, ws, ctxs, defs]) => {
       if (cancelled) return
       setAccess(acc)
       setWorkspaceOptions(ws)
       setContextOptions(ctxs)
+      setToolDefs(defs ? defs.tools : [])
       if (acc) {
         setBindType(acc.binding.type)
         setBindWorkspace(acc.binding.workspace || '')
@@ -228,7 +239,17 @@ export default function AgentSettingsPage() {
 
   const buildPayload = (): Partial<CreateAgentData> => {
     const compiled = buildSystemPrompt(idRole, idIdentity, idInstructions)
+    let parsedTools: Record<string, unknown> | undefined
+    try {
+      const parsed: unknown = JSON.parse(toolsJson)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        parsedTools = parsed as Record<string, unknown>
+      }
+    } catch {
+      // Invalid JSON is surfaced inline in the Tools tab and simply omitted.
+    }
     return {
+      ...(parsedTools !== undefined ? { tools: parsedTools } : {}),
       name: idName.trim(),
       label: idLabel.trim(),
       description: idDescription.trim() || undefined,
@@ -413,7 +434,7 @@ export default function AgentSettingsPage() {
   const routeAgentId = encodeURIComponent(agent.name || agent.id)
   // Only the sections that hold form fields save; the rest are read-only or
   // manage their own writes (skills install immediately).
-  const savable = activeTab === 'identity' || activeTab === 'provider' || activeTab === 'models'
+  const savable = activeTab === 'identity' || activeTab === 'provider' || activeTab === 'models' || activeTab === 'tools'
 
   return (
     <div className="h-full min-h-0 overflow-y-auto">
@@ -569,6 +590,71 @@ export default function AgentSettingsPage() {
 
           {activeTab === 'tools' && (
             <>
+              <section className="space-y-3 rounded-lg border p-4">
+                <div>
+                  <h2 className="text-sm font-semibold">Runtime Tools</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Injected at start (pi defineTool): coding tools plus canvas tools scoped by the
+                    token binding (Access / ACL). Definitions live in the runtime — read-only here
+                    until the agent-runtime workspace lands.
+                  </p>
+                </div>
+                {toolDefs === null ? (
+                  <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Loading…</div>
+                ) : toolDefs.length === 0 ? (
+                  <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                    No tools resolved.
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {toolDefs.map(tool => (
+                      <details key={tool.name} className="rounded-md border px-3 py-2">
+                        <summary className="cursor-pointer text-sm">
+                          <code className="font-mono text-xs font-medium">{tool.name}</code>
+                          <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+                            {tool.source}
+                          </span>
+                        </summary>
+                        {tool.description && (
+                          <p className="mt-2 whitespace-pre-wrap text-xs text-muted-foreground">{tool.description}</p>
+                        )}
+                        {tool.parameters != null && (
+                          <pre className="mt-2 overflow-x-auto rounded bg-muted p-2 font-mono text-[11px]">
+                            {JSON.stringify(tool.parameters, null, 2)}
+                          </pre>
+                        )}
+                      </details>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  {access ? describeBinding(access.binding) : 'Unbound — no canvas tools are injected. Bind under Access / ACL.'}
+                </p>
+              </section>
+
+              <section className="space-y-3 rounded-lg border p-4">
+                <div>
+                  <h2 className="text-sm font-semibold">Tools Config</h2>
+                  <p className="text-xs text-muted-foreground">
+                    {'config.tools JSON, merged server-side — e.g. {"canvas": {"enabled": false}} gates the canvas tools. Saved with Save Changes.'}
+                  </p>
+                </div>
+                <textarea
+                  value={toolsJson}
+                  onChange={e => {
+                    setToolsJson(e.target.value)
+                    try {
+                      JSON.parse(e.target.value)
+                      setToolsJsonError(null)
+                    } catch (err) {
+                      setToolsJsonError(err instanceof Error ? err.message : 'Invalid JSON')
+                    }
+                  }}
+                  className={`${TEXTAREA_CLASS} min-h-[120px] font-mono text-xs`}
+                />
+                {toolsJsonError && <p className="text-xs text-destructive">Invalid JSON (not saved): {toolsJsonError}</p>}
+              </section>
+
               <section className="space-y-3 rounded-lg border p-4">
                 <div>
                   <h2 className="text-sm font-semibold">Skills</h2>

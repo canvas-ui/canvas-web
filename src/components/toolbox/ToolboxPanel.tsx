@@ -167,11 +167,16 @@ export function ToolboxPanel() {
       </div>
 
       <div className="relative flex min-h-0 flex-1 flex-col">
-        {t1View === 'home' && <HomePanel />}
-        {t1View === 'apps' && <AppsPanel />}
-        {t1View === 'tools' && <ToolsPanel />}
-        {t1View === 'agents' && <AgentsPanel />}
-        {t1View === 'notifications' && <NotificationsPanel />}
+        {/* Hidden (not unmounted, so scroll/filter state survives) under the
+            T2 overlay — translucent frosted themes would otherwise show the
+            list through the chat panel. */}
+        <div className={`flex min-h-0 flex-1 flex-col ${t2Open && t2AgentId ? 'invisible' : ''}`}>
+          {t1View === 'home' && <HomePanel />}
+          {t1View === 'apps' && <AppsPanel />}
+          {t1View === 'tools' && <ToolsPanel />}
+          {t1View === 'agents' && <AgentsPanel />}
+          {t1View === 'notifications' && <NotificationsPanel />}
+        </div>
 
         {/* T2 — agent chat overlay */}
         {t2Open && t2AgentId && (

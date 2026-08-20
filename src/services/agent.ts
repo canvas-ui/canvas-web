@@ -167,6 +167,7 @@ export interface Agent {
       user?: string;
     };
     memory?: string;
+    tools?: Record<string, unknown>;
     skills?: AgentSkill[];
     connectors?: {
       [key: string]: {
@@ -349,6 +350,7 @@ function normalizeAgentSessionMutationResult(payload: RawAgentSessionMutationPay
 
 // Agent creation data interface
 export interface CreateAgentData {
+  tools?: Record<string, unknown>;
   name: string;
   label?: string;
   description?: string;
@@ -701,6 +703,26 @@ export async function rotateAgentAccessToken(agentId: string): Promise<AgentAcce
 /** Revoke the binding and token entirely. */
 export async function revokeAgentAccess(agentId: string): Promise<void> {
   await api.delete(`${API_URL}/agents/${agentId}/access`);
+}
+
+// ─── Resolved tool definitions (runtime-injected; read-only view) ──────────
+
+export interface AgentToolDefinition {
+  name: string;
+  label?: string;
+  description?: string;
+  parameters?: unknown;
+  source: 'coding' | 'canvas' | string;
+}
+
+export interface AgentToolDefinitions {
+  tools: AgentToolDefinition[];
+  config: Record<string, unknown>;
+}
+
+export async function getAgentToolDefinitions(agentId: string): Promise<AgentToolDefinitions> {
+  const response = await api.get<AgentToolDefinitions>(`${API_URL}/agents/${agentId}/tools`);
+  return response || { tools: [], config: {} };
 }
 
 /**
