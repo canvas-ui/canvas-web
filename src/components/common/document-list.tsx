@@ -1,5 +1,5 @@
 import { Document, TreeNode } from '@/types/workspace'
-import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, Play, Table as TableIcon, HardDrive, ArrowRightLeft } from 'lucide-react'
+import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, ChevronDown, SlidersHorizontal, Play, Table as TableIcon, HardDrive, ArrowRightLeft } from 'lucide-react'
 import { LinkToCard, type LinkToTarget, type LinkToRelation } from '@/components/menu/shared/LinkToCard'
 import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from '@/components/menu/shared/LinkToSidePanel'
 import { BackendActionCard } from '@/components/menu/shared/BackendActionCard'
@@ -851,6 +851,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   const removeDocuments = isWorkspaceScope ? undefined : onRemoveDocuments
 
   const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null)
+  const [actionsOpen, setActionsOpen] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
   // The input is a buffer for the NEXT query to add to the stack (not a mirror of
@@ -1255,25 +1256,30 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
       onDrop={handleDrop}
     >
       <div className="border-b pb-3 mb-4 flex-shrink-0">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
+        {/* Two lines, label left / figures right at every width — stacking
+            these in one column ate four lines of vertical space on phones. */}
+        <div className="min-w-0 space-y-0.5">
+          <div className="flex items-baseline justify-between gap-2">
             <h3 className="font-semibold text-sm text-muted-foreground">Documents</h3>
-            <p className="text-xs text-muted-foreground mt-1 break-all">Context: <span className="font-mono">{contextPath}</span>{activeContextUrl && currentContextUrl && activeContextUrl !== currentContextUrl && (<span className="text-warning ml-2">(not yet active)</span>)}</p>
-            {selectedDocuments.size > 0 && (<p className="text-xs text-info mt-1">{selectedDocuments.size} document{selectedDocuments.size !== 1 ? 's' : ''} selected</p>)}
+            <p className="shrink-0 text-sm font-medium">
+              {searchQuery
+                ? `${filteredDocuments.length} of ${documents.length}`
+                : `${totalCount.toLocaleString()} document${totalCount !== 1 ? 's' : ''}`}
+            </p>
           </div>
-          <div className="shrink-0 sm:text-right">
-            {searchQuery ? (
-              <p className="text-sm font-medium">{filteredDocuments.length} of {documents.length} on this page</p>
-            ) : (
-              <>
-                <p className="text-sm font-medium">{totalCount.toLocaleString()} document{totalCount !== 1 ? 's' : ''}</p>
-                {totalCount > pageSize && (
-                  <p className="text-xs text-muted-foreground">
-                    Showing {Math.min((currentPage - 1) * pageSize + 1, totalCount)}–{Math.min(currentPage * pageSize, totalCount)}
-                  </p>
-                )}
-              </>
-            )}
+          <div className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
+            <p className="min-w-0 truncate">Context: <span className="font-mono">{contextPath}</span>{activeContextUrl && currentContextUrl && activeContextUrl !== currentContextUrl && (<span className="text-warning ml-2">(not yet active)</span>)}</p>
+            <p className="shrink-0">
+              {selectedDocuments.size > 0 && (
+                <span className="text-info">{selectedDocuments.size} selected</span>
+              )}
+              {selectedDocuments.size > 0 && (searchQuery || totalCount > pageSize) && <span className="mx-1">·</span>}
+              {searchQuery
+                ? 'on this page'
+                : totalCount > pageSize
+                  ? `Showing ${Math.min((currentPage - 1) * pageSize + 1, totalCount)}–${Math.min(currentPage * pageSize, totalCount)}`
+                  : null}
+            </p>
           </div>
         </div>
 
@@ -1302,6 +1308,29 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                   <Globe className="h-3.5 w-3.5" />
                   Whole workspace
                 </button>
+              </div>
+            )}
+            {/* Sits with the scope toggle rather than in the actions row: on a
+                phone that row collapses behind "Actions", and switching view is
+                a navigation control, not a bulk action. */}
+            {allowViewToggle && (
+              <div className="flex shrink-0 items-center rounded-md border p-0.5 touch-target">
+                {([
+                  ['table', TableIcon, 'Table view'],
+                  ['tile', LayoutGrid, 'Tile view'],
+                  ['card', LayoutList, 'Card view'],
+                ] as const).map(([mode, Icon, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => changeView(mode)}
+                    title={label}
+                    aria-pressed={view === mode}
+                    className={`rounded-sm p-1.5 transition-colors ${view === mode ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/50'}`}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </button>
+                ))}
               </div>
             )}
             <div className="relative flex-1 min-w-[12rem]">
@@ -1409,9 +1438,9 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
           // Wraps rather than overflowing: on a 360px screen this row is far
           // wider than the viewport, and it used to push the paging buttons
           // off the right edge with no way to scroll to them.
-          <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-3 border-t">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>Show:</span>
+          <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-3 border-t max-sm:flex-nowrap max-sm:gap-1">
+            <div className="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
+              <span className="max-sm:sr-only">Show:</span>
               <select
                 value={pageSize}
                 onChange={(e) => onPageSizeChange?.(Number(e.target.value))}
@@ -1425,14 +1454,14 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
               <span className="max-sm:sr-only">per page</span>
             </div>
 
-            <div className="flex items-center gap-2 max-sm:w-full max-sm:justify-center">
+            <div className="flex min-w-0 items-center gap-2 max-sm:gap-0.5">
               {/* Redundant with "Page N of M" beside the arrows, so it is the
                   first thing to go when space is tight. */}
               <span className="text-sm text-muted-foreground max-md:hidden">
                 Showing {Math.min((currentPage - 1) * pageSize + 1, totalCount)} - {Math.min(currentPage * pageSize, totalCount)} of {totalCount}
               </span>
 
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 max-sm:gap-0.5">
                 <Button
                   variant="outline"
                   size="sm"
@@ -1452,8 +1481,8 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
 
-                <span className="px-3 py-1 text-sm font-medium">
-                  Page {currentPage} of {Math.ceil(totalCount / pageSize)}
+                <span className="whitespace-nowrap px-3 py-1 text-sm font-medium max-sm:px-1 max-sm:text-xs">
+                  <span className="max-sm:sr-only">Page </span>{currentPage}<span className="max-sm:hidden"> of </span><span className="sm:hidden">/</span>{Math.ceil(totalCount / pageSize)}
                 </span>
 
                 <Button
@@ -1480,31 +1509,27 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
         )}
 
         {documents.length > 0 && (
-          <div className="flex items-center gap-2 mt-3 pt-3 border-t flex-wrap">
+          <div className="mt-3 pt-3 border-t">
+            {/* Phones: the bulk-action row is 3-4 lines of buttons that push the
+                actual documents below the fold, so it is opened on demand.
+                sm+ keeps it always visible. */}
+            <button
+              type="button"
+              onClick={() => setActionsOpen((v) => !v)}
+              aria-expanded={actionsOpen}
+              className="flex w-full items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-accent/50 sm:hidden"
+            >
+              <span className="flex items-center gap-1.5">
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                Actions{selectedDocuments.size > 0 ? ` (${selectedDocuments.size} selected)` : ''}
+              </span>
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${actionsOpen ? 'rotate-180' : ''}`} />
+            </button>
+            <div className={`flex items-center gap-2 flex-wrap ${actionsOpen ? 'max-sm:mt-2' : 'max-sm:hidden'}`}>
             {onServerSortChange && serverSort && workspaceId && (
               <div className="flex items-center gap-1.5">
                 <span className="text-xs text-muted-foreground">Sort</span>
                 <TimelineSortControl workspaceId={workspaceId} value={serverSort} onChange={onServerSortChange} />
-              </div>
-            )}
-            {allowViewToggle && (
-              <div className="flex items-center rounded-md border p-0.5 touch-target">
-                {([
-                  ['table', TableIcon, 'Table view'],
-                  ['tile', LayoutGrid, 'Tile view'],
-                  ['card', LayoutList, 'Card view'],
-                ] as const).map(([mode, Icon, label]) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => changeView(mode)}
-                    title={label}
-                    aria-pressed={view === mode}
-                    className={`rounded-sm p-1.5 transition-colors ${view === mode ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/50'}`}
-                  >
-                    <Icon className="h-4 w-4" />
-                  </button>
-                ))}
               </div>
             )}
             {/* Table view has a header select-all checkbox; card/tile views need this button. */}
@@ -1708,6 +1733,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                 Add existing…
               </Button>
             )}
+            </div>
           </div>
         )}
       </div>

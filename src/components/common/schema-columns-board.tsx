@@ -100,10 +100,14 @@ export function SchemaColumnsBoard({ documents, workspaceId, columns, onColumnsC
   const addableColumns = KNOWN_COLUMNS.filter((k) => !columns.some((c) => c.id === k.id))
 
   return (
-    // Snap-scrolling flex row: swipe (or scroll) horizontally column by
-    // column; each column scrolls vertically on its own. h-full works because
-    // the DefaultCanvas content pane has a definite height (flex-1 min-h-0).
-    <div ref={scrollRef} onScroll={updateMoreRight} className="flex h-full snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain pt-2 pb-2" data-testid="schema-columns-board">
+    // Positioning context for the right-edge rail, which lives outside the
+    // scroller so it stays pinned to the pane edge whether or not the columns
+    // overflow (sticky would collapse back next to the last column).
+    <div className="relative h-full">
+    {/* Snap-scrolling flex row: swipe (or scroll) horizontally column by
+        column; each column scrolls vertically on its own. h-full works because
+        the DefaultCanvas content pane has a definite height (flex-1 min-h-0). */}
+    <div ref={scrollRef} onScroll={updateMoreRight} className="flex h-full snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain p-2" data-testid="schema-columns-board">
         {columns.map((column) => {
           const filterText = (filterDrafts[column.id] ?? column.filter ?? '').toLowerCase()
           const columnDocuments = documents
@@ -195,14 +199,16 @@ export function SchemaColumnsBoard({ documents, workspaceId, columns, onColumnsC
             </div>
           )
         })}
+        </div>
 
-        {/* Right-edge indicator line: a slim gradient strip hosting the small
-            add-column button (top) and a chevron hint when more columns hide
-            beyond the edge. Net-zero layout width (-ml-7 + w-7) and
-            pointer-events pass through everywhere except the button, so the
-            column resize handles beneath stay grabbable. */}
+        {/* Right-edge rail: a slim gradient strip pinned to the pane's right
+            edge, hosting the add-column tab (top) and a chevron hint when more
+            columns hide beyond the edge. Overlay (absolute, outside the
+            scroller) so it never consumes scroll width, and pointer-events
+            pass through everywhere except the button so the column resize
+            handles beneath stay grabbable. */}
         {((!readOnly && addableColumns.length > 0) || moreRight) && (
-          <div className="pointer-events-none sticky right-0 z-20 -ml-7 flex h-full w-7 shrink-0 flex-col items-end bg-gradient-to-l from-background via-background/60 to-transparent py-2">
+          <div className="pointer-events-none absolute inset-y-0 right-0 z-20 flex w-7 flex-col items-end bg-gradient-to-l from-background via-background/60 to-transparent py-2">
             {!readOnly && addableColumns.length > 0 && (
               <div className="pointer-events-auto relative">
                 <button
