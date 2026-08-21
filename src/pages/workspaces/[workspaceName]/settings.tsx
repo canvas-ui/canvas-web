@@ -27,6 +27,7 @@ import {
   enableWorkspaceService,
   listBackends,
   addBackend,
+  testBackend,
   removeBackend,
   updateBackend,
   syncBackend,
@@ -155,7 +156,7 @@ function AddLocalFolderForm({ workspaceId, onAdded }: { workspaceId: string; onA
   }
 
   return (
-    <form onSubmit={submit} className="space-y-3 rounded-lg border p-4">
+    <form onSubmit={submit} className="w-full space-y-3 rounded-lg border p-4">
       <div className="flex items-center gap-2">
         <FolderPlus className="h-4 w-4 text-muted-foreground" />
         <h2 className="text-sm font-semibold">Add local folder</h2>
@@ -187,6 +188,111 @@ function AddLocalFolderForm({ workspaceId, onAdded }: { workspaceId: string; onA
       <div className="flex gap-2">
         <Button type="submit" size="sm" disabled={busy || !name.trim() || !path.trim()}>
           {busy ? 'Adding…' : 'Add folder'}
+        </Button>
+        <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => { reset(); setOpen(false) }}>
+          Cancel
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+// Mount a Google Drive folder as a remote data backend. Credentials are an
+// offline-access OAuth client + refresh token (same grant as the Calendar
+// connector, with the Drive scope); the server validates them against the API
+// before saving and never returns them in reads.
+function AddGoogleDriveForm({ workspaceId, onAdded }: { workspaceId: string; onAdded: () => Promise<void> | void }) {
+  const [open, setOpen] = useState(false)
+  const [form, setForm] = useState({ name: '', clientId: '', clientSecret: '', refreshToken: '', folderId: '' })
+  const [watch, setWatch] = useState(false)
+  const [readOnly, setReadOnly] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const { showToast } = useToast()
+
+  const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [key]: e.target.value }))
+  const reset = () => { setForm({ name: '', clientId: '', clientSecret: '', refreshToken: '', folderId: '' }); setWatch(false); setReadOnly(false) }
+  const valid = form.name.trim() && form.clientId.trim() && form.clientSecret.trim() && form.refreshToken.trim()
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!valid) return
+    setBusy(true)
+    try {
+      await addBackend(workspaceId, 'gdrive', {
+        name: form.name.trim(),
+        clientId: form.clientId.trim(),
+        clientSecret: form.clientSecret.trim(),
+        refreshToken: form.refreshToken.trim(),
+        folderId: form.folderId.trim() || 'root',
+        watch,
+        readOnly,
+      })
+      showToast({ title: 'Added', description: `${form.name.trim()} connected; initial scan running in the background` })
+      reset()
+      setOpen(false)
+      await onAdded()
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to add Google Drive backend', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
+        <Icon icon="mdi:google-drive" width={14} height={14} className="mr-2" />
+        Add Google Drive
+      </Button>
+    )
+  }
+
+  return (
+    <form onSubmit={submit} className="w-full space-y-3 rounded-lg border p-4">
+      <div className="flex items-center gap-2">
+        <Icon icon="mdi:google-drive" width={16} height={16} className="text-muted-foreground" />
+        <h2 className="text-sm font-semibold">Add Google Drive</h2>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Index a Drive folder (or the whole My Drive) as a remote data source. Files are hashed from Drive metadata,
+        uploads are queued through the workspace cache. Needs an OAuth client with the <code>drive</code> scope and an
+        offline-access refresh token — the same kind of credentials as the Google Calendar connector.
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-1">
+          <label className="text-xs font-medium">Name</label>
+          <Input value={form.name} onChange={set('name')} placeholder="Work Drive" required />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium">Folder id (empty = My Drive root)</label>
+          <Input value={form.folderId} onChange={set('folderId')} placeholder="1AbC…" className="font-mono" />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium">OAuth client id</label>
+          <Input value={form.clientId} onChange={set('clientId')} required className="font-mono" />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium">OAuth client secret</label>
+          <Input type="password" value={form.clientSecret} onChange={set('clientSecret')} required className="font-mono" autoComplete="off" />
+        </div>
+        <div className="space-y-1 sm:col-span-2">
+          <label className="text-xs font-medium">Refresh token</label>
+          <Input type="password" value={form.refreshToken} onChange={set('refreshToken')} required className="font-mono" autoComplete="off" />
+        </div>
+      </div>
+      <div className="flex items-center gap-6 text-[11px] text-muted-foreground">
+        <label className="flex items-center gap-1.5" title="Poll the Drive changes feed (every 60s) so edits made in Drive show up without a manual re-sync.">
+          watch
+          <Toggle checked={watch} onClick={() => setWatch((v) => !v)} />
+        </label>
+        <label className="flex items-center gap-1.5" title="Never delete files in this Drive. Destroy degrades to a reference drop.">
+          read-only
+          <Toggle checked={readOnly} onClick={() => setReadOnly((v) => !v)} />
+        </label>
+      </div>
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" disabled={busy || !valid}>
+          {busy ? 'Checking…' : 'Add Drive'}
         </Button>
         <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => { reset(); setOpen(false) }}>
           Cancel
@@ -1118,6 +1224,19 @@ export default function WorkspaceSettingsPage() {
     }
   }
 
+  // Connectivity probe for remote storage backends (capability-gated).
+  const testDataBackend = async (backend: Backend) => {
+    setBusyAction(`test:${backend.address}`)
+    try {
+      await testBackend(workspaceId, backend.driver, backend.address)
+      showToast({ title: 'Connected', description: `${backend.address}: credentials and root folder verified` })
+    } catch (err) {
+      showToast({ title: 'Connection failed', description: err instanceof Error ? err.message : 'Test failed', variant: 'destructive' })
+    } finally {
+      setBusyAction(null)
+    }
+  }
+
   // Stop an in-flight resync. Indexed files stay; a later Re-sync resumes
   // cheaply via the checksum cache, so stop + re-sync ≈ pause/resume.
   const stopResync = async (backend: Backend) => {
@@ -1313,13 +1432,16 @@ export default function WorkspaceSettingsPage() {
             const cfg = (backend.config || {}) as Record<string, unknown>
             const backendId = backend.address
             const device = (cfg.device || null) as { id?: string; name?: string } | null
-            // User-added local-folder mount: labelled, device-scoped, removable.
-            const isUserMount = backend.driver === 'file' && cfg.managed !== true && !DATA_BACKEND_LABELS[backendId]
+            // User-added mounts (local folder / Google Drive): labelled, removable.
+            const isGdrive = backend.driver === 'gdrive'
+            const isUserMount = (backend.driver === 'file' || isGdrive) && cfg.managed !== true && !DATA_BACKEND_LABELS[backendId]
             const copy = DATA_BACKEND_LABELS[backendId] || {
               title: (typeof cfg.label === 'string' && cfg.label) || backendId,
-              description: isUserMount
-                ? `Local folder${device?.name ? ` on ${device.name}` : ''}, indexed in place${backend.treePath ? ` and mirrored at ${backend.treePath}` : ''}.`
-                : 'Workspace data backend.',
+              description: isGdrive
+                ? `Google Drive${typeof cfg.account === 'string' && cfg.account && cfg.account !== cfg.label ? ` (${cfg.account})` : ''}, folder ${typeof cfg.folderId === 'string' && cfg.folderId ? cfg.folderId : 'root'}${backend.treePath ? `, mirrored at ${backend.treePath}` : ''}.`
+                : isUserMount
+                  ? `Local folder${device?.name ? ` on ${device.name}` : ''}, indexed in place${backend.treePath ? ` and mirrored at ${backend.treePath}` : ''}.`
+                  : 'Workspace data backend.',
             }
             const supported = cfg.supported !== false
             // Structural local store: workspace:data (managed blob target) can
@@ -1367,8 +1489,8 @@ export default function WorkspaceSettingsPage() {
                   {/* Two toggles and up to two buttons — on a phone they wrap
                       onto their own lines rather than crushing the title. */}
                   <div className="flex shrink-0 items-center gap-3 max-sm:w-full max-sm:flex-wrap">
-                    {backend.driver === 'file' && canToggle && (
-                      <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    {(backend.driver === 'file' || isGdrive) && canToggle && (
+                      <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground" title={isGdrive ? 'Poll the Drive changes feed so edits made in Drive show up without a manual re-sync.' : undefined}>
                         watch
                         <Toggle
                           checked={!!cfg.watch}
@@ -1389,6 +1511,12 @@ export default function WorkspaceSettingsPage() {
                     )}
                     {(backend.driver === 'file' || backend.driver === 'cacache') && supported && (
                       <BackendSizeButton workspaceId={workspaceId} backend={backend} />
+                    )}
+                    {backend.capabilities?.test && (
+                      <Button type="button" variant="outline" size="sm" disabled={busyAction === `test:${backendId}`} onClick={() => testDataBackend(backend)} title="Verify credentials and root folder">
+                        <Activity className="mr-2 h-3.5 w-3.5" />
+                        {busyAction === `test:${backendId}` ? 'Testing…' : 'Test'}
+                      </Button>
                     )}
                     {backend.capabilities?.sync && (backend.resyncing ? (
                       <Button
@@ -1458,7 +1586,10 @@ export default function WorkspaceSettingsPage() {
               </div>
             </div>
           </section>
-          <AddLocalFolderForm workspaceId={workspaceId} onAdded={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start">
+            <AddLocalFolderForm workspaceId={workspaceId} onAdded={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />
+            <AddGoogleDriveForm workspaceId={workspaceId} onAdded={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />
+          </div>
 
           {/* Trash is where deleted documents are held before they are purged
               from these same backends — it reads as one story with them. */}
