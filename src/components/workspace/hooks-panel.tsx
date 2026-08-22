@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Save, Trash2, RefreshCw, Power, PowerOff, GitBranch, BookOpen, History, RotateCcw, Maximize2, Minimize2, Inbox } from 'lucide-react'
+import { Plus, Save, Trash2, RefreshCw, Power, PowerOff, GitBranch, BookOpen, History, RotateCcw, Maximize2, Minimize2, Inbox, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CodeEditor } from '@/components/ui/code-editor'
@@ -19,6 +19,13 @@ import {
   listRuns,
   replayRun,
   listPendingActions,
+  runHook,
+  backfillHook,
+  hookEventOf,
+  getBackfillLimit,
+  setBackfillLimit,
+  clampBackfillLimit,
+  BACKFILL_MAX_LIMIT,
   type HookFile,
   type HooksMeta,
   type HookRun,
@@ -60,6 +67,16 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
   const [replayingId, setReplayingId] = useState<string | null>(null)
   const [isMaximized, setIsMaximized] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
+  const [runningPath, setRunningPath] = useState<string | null>(null)
+  // Backfill batch size (documents per pass), shared by rule backfills and
+  // hook runs; persisted per browser.
+  const [batchLimit, setBatchLimit] = useState<number>(() => getBackfillLimit())
+  const [batchLimitDraft, setBatchLimitDraft] = useState<string>(() => String(getBackfillLimit()))
+  const commitBatchLimit = () => {
+    const next = setBackfillLimit(clampBackfillLimit(batchLimitDraft))
+    setBatchLimit(next)
+    setBatchLimitDraft(String(next))
+  }
 
   // Badge count on the Pending tab; the panel keeps it fresh while open.
   useEffect(() => {
@@ -167,6 +184,39 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
       showToast({ title: enabled ? 'Disabled' : 'Enabled', description: next })
     } catch {
       showToast({ title: 'Error', description: `Failed to toggle ${path}`, variant: 'destructive' })
+    }
+  }
+
+  // Run a hook by hand. Document-shaped hooks (document.*) get a backfill —
+  // real documents, one run each, `batchLimit` of them; anything else
+  // (started, tree.*, …) gets one synthesized run via /hooks/run.
+  const run = async (path: string) => {
+    const event = hookEventOf(path)
+    if (!event) return
+    if (!isHookEnabled(path) && !confirm(`${path} is disabled. Run it anyway?`)) return
+    const documentShaped = event.startsWith('document.')
+    if (documentShaped && !confirm(`Run ${path} against up to ${batchLimit} existing documents (event ${event})?`)) return
+    setRunningPath(path)
+    try {
+      if (documentShaped) {
+        const res = await backfillHook(workspaceId, { hookFile: path, event, limit: batchLimit })
+        showToast({
+          title: 'Run finished',
+          description: `${res.processed} documents processed, ${res.failed} failed. Details in the Runs tab`,
+          ...(res.failed ? { variant: 'destructive' as const } : {}),
+        })
+      } else {
+        const res = await runHook(workspaceId, { hookFile: path, event })
+        showToast({
+          title: res.status === 'error' ? 'Run failed' : 'Run finished',
+          description: res.status === 'error' ? `${path}: ${res.error || 'see the Runs tab'}` : `${path} → ${res.status}${res.durationMs != null ? ` in ${res.durationMs}ms` : ''}`,
+          ...(res.status === 'error' ? { variant: 'destructive' as const } : {}),
+        })
+      }
+    } catch (error) {
+      showToast({ title: 'Run failed', description: error instanceof Error ? error.message : 'Unknown error', variant: 'destructive' })
+    } finally {
+      setRunningPath(null)
     }
   }
 
@@ -323,6 +373,25 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
               </Button>
             </>
           )}
+          {(section === 'rules' || section === 'hooks') && (
+            <label
+              className="flex items-center gap-1.5 text-xs text-muted-foreground"
+              title={`Documents per backfill / run pass (1–${BACKFILL_MAX_LIMIT}). Applies to rule backfills and manual hook runs.`}
+            >
+              Batch size
+              <Input
+                type="number"
+                min={1}
+                max={BACKFILL_MAX_LIMIT}
+                step={100}
+                value={batchLimitDraft}
+                onChange={(e) => setBatchLimitDraft(e.target.value)}
+                onBlur={commitBatchLimit}
+                onKeyDown={(e) => { if (e.key === 'Enter') { commitBatchLimit(); (e.target as HTMLInputElement).blur() } }}
+                className="h-7 w-20 px-2 text-xs"
+              />
+            </label>
+          )}
           {isFileSection && (
             <>
               <Button size="sm" variant="ghost" onClick={loadFiles} title="Reload">
@@ -346,6 +415,7 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
       {section === 'rules' && (
         <RuleBuilder
           workspaceId={workspaceId}
+          backfillLimit={batchLimit}
           onOpenJson={async () => {
             // Pre-create the file so a fresh workspace can jump straight into
             // JSON editing without a 404.
@@ -578,6 +648,18 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
                       )}
                     </span>
                     <div className="flex items-center">
+                      {section === 'hooks' && hookEventOf(file.path) && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 w-6 p-0 touch-target"
+                        title={hookEventOf(file.path)?.startsWith('document.') ? `Run against up to ${batchLimit} existing documents` : 'Run now'}
+                        disabled={runningPath !== null}
+                        onClick={(e) => { e.stopPropagation(); run(file.path) }}
+                      >
+                        <Play className={`h-3 w-3 ${runningPath === file.path ? 'animate-pulse' : ''}`} />
+                      </Button>
+                      )}
                       {section === 'hooks' && (
                       <Button
                         size="sm"
@@ -615,6 +697,27 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
               <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <span className="font-mono text-sm truncate">{selected}{isDirty ? ' •' : ''}</span>
                 <div className="flex items-center gap-1">
+                  {section === 'hooks' && hookEventOf(selected) && (
+                    <>
+                      <Button
+                        size="sm" variant="outline" className="h-8"
+                        title={isHookEnabled(selected) ? 'Disable this hook (renames it with a disabled- prefix)' : 'Enable this hook (strips the prefix)'}
+                        onClick={() => toggle(selected)}
+                      >
+                        {isHookEnabled(selected)
+                          ? <><Power className="mr-1.5 h-3.5 w-3.5" /> Enabled</>
+                          : <><PowerOff className="mr-1.5 h-3.5 w-3.5 text-muted-foreground" /> Disabled</>}
+                      </Button>
+                      <Button
+                        size="sm" variant="outline" className="h-8"
+                        title="Run this hook now"
+                        disabled={runningPath !== null || isDirty}
+                        onClick={() => run(selected)}
+                      >
+                        <Play className={`mr-1.5 h-3.5 w-3.5 ${runningPath === selected ? 'animate-pulse' : ''}`} /> Run
+                      </Button>
+                    </>
+                  )}
                   <Button size="sm" onClick={save} disabled={isSaving || !isDirty}>
                     <Save className="mr-2 h-4 w-4" /> Save
                   </Button>

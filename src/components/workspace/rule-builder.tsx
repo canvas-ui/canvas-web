@@ -17,6 +17,8 @@ interface RuleBuilderProps {
   workspaceId: string
   /** Open rules.json in the advanced editor (Hooks section). */
   onOpenJson?: () => void
+  /** Documents per backfill pass (see hooks.ts DEFAULT_BACKFILL_LIMIT). */
+  backfillLimit?: number
 }
 
 // Fallback only — the builder prefers the workspace's LIVE schema list from
@@ -374,7 +376,7 @@ function summarizeThen(rule: HookRule): string {
 
 // ── component ────────────────────────────────────────────────────────────────
 
-export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
+export function RuleBuilder({ workspaceId, onOpenJson, backfillLimit }: RuleBuilderProps) {
   const { showToast } = useToast()
   const [rules, setRules] = useState<HookRule[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -463,14 +465,14 @@ export function RuleBuilder({ workspaceId, onOpenJson }: RuleBuilderProps) {
   const backfillRule = async (id: string) => {
     setBackfillingId(id)
     try {
-      const dry = await backfillHook(workspaceId, { ruleId: id, dryRun: true })
+      const dry = await backfillHook(workspaceId, { ruleId: id, dryRun: true, limit: backfillLimit })
       const wouldFire = dry.results.filter((r) => r.matched).length
       if (!wouldFire) {
-        showToast({ title: 'Backfill', description: `No matches among ${dry.processed} existing documents (conditions evaluate against each document's current tree placements).` })
+        showToast({ title: 'Backfill', description: `No matches among ${dry.processed} existing documents (conditions evaluate against each document's current tree placements). Raise the batch size in the toolbar to cover more.` })
         return
       }
       if (!confirm(`Rule "${id}" matches ${wouldFire} of ${dry.processed} existing documents. Run its actions on them now?`)) return
-      const run = await backfillHook(workspaceId, { ruleId: id })
+      const run = await backfillHook(workspaceId, { ruleId: id, limit: backfillLimit })
       showToast({
         title: 'Backfill finished',
         description: `${run.matched} documents processed, ${run.failed} failed. Details in the Runs tab`,

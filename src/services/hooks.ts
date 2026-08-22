@@ -211,7 +211,7 @@ export interface HookRunActionResult {
 export interface HookRun {
   runId: string
   ts: string
-  trigger: 'event' | 'backfill' | 'replay'
+  trigger: 'event' | 'backfill' | 'replay' | 'manual' | 'approval'
   event: string
   eventId: string | null
   origin: string
@@ -266,7 +266,46 @@ export async function explainDocument(
   return res
 }
 
-// ── Backfill + replay ────────────────────────────────────────────────────────
+// ── Backfill + replay + manual run ───────────────────────────────────────────
+
+// Backfill batch size: how many existing documents one backfill/run pass
+// feeds to a rule or hook. The server default (100) keeps an accidental click
+// cheap; the hooks panel exposes the knob for deliberate bulk runs, persisted
+// per browser. Hard server ceiling: BACKFILL_MAX_LIMIT.
+export const DEFAULT_BACKFILL_LIMIT = 100
+export const BACKFILL_MAX_LIMIT = 10000
+const BACKFILL_LIMIT_KEY = 'canvas.hooks.backfillLimit'
+
+export function clampBackfillLimit(value: unknown): number {
+  const n = Math.floor(Number(value))
+  if (!Number.isFinite(n) || n < 1) return DEFAULT_BACKFILL_LIMIT
+  return Math.min(n, BACKFILL_MAX_LIMIT)
+}
+
+export function getBackfillLimit(): number {
+  try {
+    const raw = localStorage.getItem(BACKFILL_LIMIT_KEY)
+    return raw ? clampBackfillLimit(raw) : DEFAULT_BACKFILL_LIMIT
+  } catch {
+    return DEFAULT_BACKFILL_LIMIT
+  }
+}
+
+export function setBackfillLimit(value: number): number {
+  const next = clampBackfillLimit(value)
+  try { localStorage.setItem(BACKFILL_LIMIT_KEY, String(next)) } catch { /* private mode */ }
+  return next
+}
+
+// Event a hook file is bound to by its location: `{event}.js` or `{event}/x.js`.
+export function hookEventOf(path: string): string | null {
+  if (path.includes('/')) {
+    const dir = path.split('/')[0]
+    return dir === 'lib' || dir === 'rules' ? null : dir
+  }
+  if (path.endsWith('.js')) return path.replace(/\.js$/, '').replace(/^(?:example-|disabled-|_)/, '')
+  return null
+}
 
 export interface BackfillResult {
   target: { ruleId?: string; hookFile?: string }
@@ -283,6 +322,26 @@ export async function backfillHook(
   body: { ruleId?: string; hookFile?: string; event?: string; schema?: string; limit?: number; dryRun?: boolean },
 ): Promise<BackfillResult> {
   const res = await api.post<BackfillResult>(`${hooksBase(workspaceId)}/backfill`, body)
+  return res
+}
+
+export interface HookRunResult {
+  target: { hookFile: string }
+  event: string
+  status: 'ok' | 'error' | 'skipped' | 'held'
+  error?: string
+  durationMs?: number
+  runId?: string
+}
+
+// Run one JS hook by hand with a synthesized, document-less envelope
+// ({ workspaceId, manual: true, origin: 'manual' }). For structural hooks
+// (folder sync, housekeeping); document-shaped hooks go through backfillHook.
+export async function runHook(
+  workspaceId: string,
+  body: { hookFile: string; event?: string; payload?: Record<string, unknown> },
+): Promise<HookRunResult> {
+  const res = await api.post<HookRunResult>(`${hooksBase(workspaceId)}/run`, body)
   return res
 }
 
