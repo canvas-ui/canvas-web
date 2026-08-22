@@ -1,7 +1,7 @@
 import { useMenu } from '@/components/shell/use-menu'
 import { useIsMobile } from '@/hooks/use-mobile'
-import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Copy, Database, ExternalLink, FolderPlus, HardDrive, RefreshCw, Server, Square, Trash2, Unlink, Activity, Monitor, Link2, Check, X as XIcon, Pencil } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import { Button } from '@/components/ui/button'
@@ -945,6 +945,15 @@ function DbStatsTab({
 
 export default function WorkspaceSettingsPage() {
   const { workspaceName, tab } = useParams<{ workspaceName: string; tab?: string }>()
+  // ?addRulePath=backends:/workspace/home/foo&addRuleTarget=dir:/foo — deep
+  // link from the backends tree's "Add rule" context-menu item.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const addRulePath = searchParams.get('addRulePath')
+  const addRuleTarget = searchParams.get('addRuleTarget')
+  const prefillRule = useMemo(() => (addRulePath ? { path: addRulePath, target: addRuleTarget || 'dir:/' } : null), [addRulePath, addRuleTarget])
+  const clearRulePrefill = useCallback(() => {
+    setSearchParams((prev) => { prev.delete('addRulePath'); prev.delete('addRuleTarget'); return prev }, { replace: true })
+  }, [setSearchParams])
   const navigate = useNavigate()
   const { showToast } = useToast()
   // Tab is URL-driven (/workspaces/:name/settings/:tab); bare or invalid tab
@@ -1674,7 +1683,7 @@ export default function WorkspaceSettingsPage() {
 
       {activeTab === 'hooks' && (
         <section className="rounded-lg border p-4">
-          <HooksPanel workspaceId={workspaceId} />
+          <HooksPanel workspaceId={workspaceId} prefillRule={prefillRule} onPrefillConsumed={clearRulePrefill} />
         </section>
       )}
       </div>

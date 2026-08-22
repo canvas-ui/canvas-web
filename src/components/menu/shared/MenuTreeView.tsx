@@ -9,6 +9,7 @@ import {
   ChevronRight, ChevronDown,
   Plus, Trash2, Edit2, Copy, Scissors, Clipboard,
   Layers, LayoutDashboard, MoreHorizontal, Lock, Unlock, Eye, Share2, Palette, RefreshCw,
+  FolderSymlink, FolderTree,
 } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import { cn, isCoarsePointer } from '@/lib/utils'
@@ -50,6 +51,11 @@ export interface MenuTreeViewProps {
   onShareCanvas?: (path: string) => Promise<void>
   onLockLayer?: (layerId: string) => Promise<boolean>
   onResyncBackend?: (backendName: string) => Promise<boolean>
+  // Backends tree only: open the rule builder prefilled to file everything
+  // under this folder into the directory tree (recursive link rule), and run
+  // the folder-skeleton sync hook for this subtree.
+  onAddRule?: (path: string) => void
+  onSyncFolderTree?: (path: string) => Promise<boolean>
   // Writable file-backend folder ops (real fs dirs under /file/<addr> in the
   // backends tree).
   onCreateBackendFolder?: (parentPath: string, name: string) => Promise<boolean>
@@ -124,6 +130,8 @@ interface CtxMenuProps {
   onMerge?: MenuTreeViewProps['onMergeLayer']
   onSubtract?: MenuTreeViewProps['onSubtractLayer']
   onResyncBackend?: MenuTreeViewProps['onResyncBackend']
+  onAddRule?: MenuTreeViewProps['onAddRule']
+  onSyncFolderTree?: MenuTreeViewProps['onSyncFolderTree']
   onRenameBackendFolder?: MenuTreeViewProps['onRenameBackendFolder']
   onDeleteBackendFolder?: MenuTreeViewProps['onDeleteBackendFolder']
   onCopy: (path: string) => void
@@ -138,6 +146,7 @@ function CtxMenu({
   sourceLayer, targetLayers, clipboard,
   onStartInlineCreate, onChangeIcon, onNewCanvas, onShareCanvas, onRemove, onRename,
   onLock, onUnlock, onDestroy, onMerge, onSubtract, onResyncBackend,
+  onAddRule, onSyncFolderTree,
   onRenameBackendFolder, onDeleteBackendFolder,
   onCopy, onCut, onPaste,
   pastedDocumentIds, onPasteDocuments,
@@ -198,6 +207,22 @@ function CtxMenu({
           <>
             {item(<RefreshCw className="w-3 h-3" />, `Resync backend (${backendNameForPath(path, isBackendsTree)})`, async () => {
               await onResyncBackend(path)
+            })}
+            <div className="my-1 h-px bg-border" />
+          </>
+        )}
+
+        {/* Folder rules — backends tree only. "Add rule" opens the builder
+            prefilled with a recursive link of this folder into the directory
+            tree; "Sync folders" runs the skeleton hook for this subtree so
+            empty folders show up too. */}
+        {isBackendsTree && backendNameForPath(path, isBackendsTree) && (onAddRule || onSyncFolderTree) && (
+          <>
+            {onAddRule && item(<FolderSymlink className="w-3 h-3" />, 'Add rule: file into Directory…', async () => {
+              onAddRule(path)
+            })}
+            {onSyncFolderTree && item(<FolderTree className="w-3 h-3" />, 'Sync folders into Directory', async () => {
+              await onSyncFolderTree(path)
             })}
             <div className="my-1 h-px bg-border" />
           </>
@@ -660,6 +685,7 @@ function CardNode({
 
 export function MenuTreeView({
   root, treeName = 'context', isBackendsTree = false, selectedPath, pendingPath, onSelect, isLoading = false, readOnly = false,
+  onAddRule, onSyncFolderTree,
   rootLabel, contentPath, onShowContent, onOpenToSide,
   onInsertPath, onNewCanvas, onShareCanvas, onRemovePath, onRenamePath, onMovePath, onCopyPath,
   pastedDocumentIds, onPasteDocuments,
@@ -1129,6 +1155,8 @@ export function MenuTreeView({
           onMerge={!readOnly ? onMergeLayer : undefined}
           onSubtract={!readOnly ? onSubtractLayer : undefined}
           onResyncBackend={onResyncBackend}
+          onAddRule={onAddRule}
+          onSyncFolderTree={onSyncFolderTree}
           onRenameBackendFolder={onRenameBackendFolder}
           onDeleteBackendFolder={onDeleteBackendFolder}
           onCopy={path => {

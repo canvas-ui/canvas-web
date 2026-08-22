@@ -11,6 +11,8 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import { getWorkspace, getCachedWorkspaceTreeByName, invalidateWorkspaceTreeCache, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer, pasteDocumentsToWorkspacePath, createPublicCanvasShare, listBackends, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
 import type { Layer } from '@/services/workspace'
 import { useTreeOperations } from '@/hooks/useTreeOperations'
+import { listHooks, runHook, findBackendTreeSyncHook, splitBackendsPath, defaultMirrorTarget } from '@/services/hooks'
+import { useToast } from '@/components/ui/use-toast'
 import type { TreeNode } from '@/types/workspace'
 import socketService from '@/lib/socket'
 
@@ -258,6 +260,27 @@ export function WorkspaceM2() {
     setContentPath(path !== '/' ? path : null)
   }
 
+  const { showToast } = useToast()
+  // Folder-skeleton sync for one backends subtree: runs the shipped
+  // started/…backend-tree-sync.js hook by hand with the subtree as payload
+  // (backend + subdir → dir:/<rel>), so empty folders land in the directory
+  // tree even though no document ever passes through a rule for them.
+  const handleSyncFolderTree = useCallback(async (path: string): Promise<boolean> => {
+    if (!wsName) return false
+    const parts = splitBackendsPath(path)
+    if (!parts) throw new Error('Not a backend folder')
+    const hookFile = findBackendTreeSyncHook(await listHooks(wsName))
+    if (!hookFile) throw new Error('No backend-tree-sync hook in this workspace (git/hooks/started/). Recreate the seed hooks from Settings → Hooks.')
+    const res = await runHook(wsName, {
+      hookFile,
+      payload: { backend: parts.backend, subdir: parts.rel, target: defaultMirrorTarget(path) },
+    })
+    if (res.status === 'error') throw new Error(res.error || 'Sync failed')
+    showToast({ title: 'Folders synced', description: `${parts.backend}${parts.rel ? `/${parts.rel}` : ''} → ${defaultMirrorTarget(path)} (see Hooks → Runs)` })
+    refreshAll(wsName)
+    return true
+  }, [wsName, showToast, refreshAll])
+
   const ops = useTreeOperations({
     workspaceId: wsName ?? undefined,
     treeName: activeTab === 'layers' ? 'context' : activeTab,
@@ -447,6 +470,13 @@ export function WorkspaceM2() {
             rootLabel={wsName ?? undefined}
             searchQuery={searchQuery}
             resyncingPaths={activeTab === 'backends' ? resyncingPaths : undefined}
+            onAddRule={wsName && activeTab === 'backends' ? (path) => {
+              // Rule builder (settings → Hooks) prefilled: everything under this
+              // backends folder → the same folder in the directory tree, recursive.
+              const params = new URLSearchParams({ addRulePath: `backends:${path}`, addRuleTarget: defaultMirrorTarget(path) })
+              navigate(`/workspaces/${wsName}/settings/hooks?${params.toString()}`)
+            } : undefined}
+            onSyncFolderTree={wsName && activeTab === 'backends' ? handleSyncFolderTree : undefined}
             pastedDocumentIds={docClipboard?.documentIds}
             onPasteDocuments={wsName && activeTab !== 'backends' ? async (path, ids) => {
               // Ungated on the clipboard: also serves drag-and-drop from the

@@ -467,9 +467,17 @@ export default function WorkspacesPage() {
       {/* Open Shared Resource — behind the header toggle */}
       {showShared && <OpenSharedResource />}
 
-      {/* Open remote — the workspace STAYS on its own server; we only keep a
-          validated reference to it until canvas-edge can serve it. */}
-      {showOpenRemote && <OpenRemoteWorkspace onClose={() => setShowOpenRemote(false)} />}
+      {/* Open remote — the workspace STAYS on its own server; it shows up in
+          the list as name@host and every call is forwarded to it. */}
+      {showOpenRemote && (
+        <OpenRemoteWorkspace
+          onClose={() => setShowOpenRemote(false)}
+          onChanged={async () => {
+            try { setWorkspaces(sortByOrder((await listWorkspaces()) as Workspace[])) } catch { /* list keeps its last state */ }
+            window.dispatchEvent(new CustomEvent('workspaces:refresh'))
+          }}
+        />
+      )}
 
       {/* Import (pull) — takes a full copy from another canvas-server */}
       {showRemote && (
@@ -781,8 +789,9 @@ function OpenSharedResource() {
  * validates the credentials against the remote before saving, so a reference
  * that appears here is one that actually resolves.
  */
-function OpenRemoteWorkspace({ onClose }: { onClose: () => void }) {
+function OpenRemoteWorkspace({ onClose, onChanged }: { onClose: () => void; onChanged?: () => void }) {
   const { showToast } = useToast()
+  const navigate = useNavigate()
   const [url, setUrl] = useState('')
   const [token, setToken] = useState('')
   const [isAdding, setIsAdding] = useState(false)
@@ -814,11 +823,12 @@ function OpenRemoteWorkspace({ onClose }: { onClose: () => void }) {
       const ref = await addRemoteWorkspace(base, token.trim())
       showToast({
         title: 'Remote workspace added',
-        description: `'${ref.label}' on ${ref.url} is registered. Opening it lands with canvas-edge.`,
+        description: `'${ref.label}' is available as ${ref.address}.`,
       })
       setUrl('')
       setToken('')
       await refresh()
+      onChanged?.()
     } catch (err) {
       const errorObj = err as { message?: string; payload?: { message?: string } } | null | undefined
       showToast({
@@ -835,6 +845,7 @@ function OpenRemoteWorkspace({ onClose }: { onClose: () => void }) {
     try {
       await removeRemoteWorkspace(ref.id)
       await refresh()
+      onChanged?.()
     } catch (err) {
       showToast({
         title: 'Error',
@@ -865,10 +876,11 @@ function OpenRemoteWorkspace({ onClose }: { onClose: () => void }) {
           </Button>
         </div>
         <p className="text-sm text-muted-foreground">
-          Keeps the workspace on its own server and registers it here as a reference — nothing is
-          copied. The credentials are verified against the remote before it is saved.{' '}
-          <strong>Opening one is not live yet</strong>: it arrives with canvas-edge, which runs a
-          workspace as a self-contained instance. Use “Import remote…” if you want a local copy now.
+          Keeps the workspace on its own server and registers it here as{' '}
+          <code className="font-mono text-xs">name@host</code> — nothing is copied. Every call you make
+          to it is forwarded to the remote with the share token (its permissions apply); document content
+          and thumbnails are cached locally so they stay readable when the remote is offline. Use
+          “Import remote…” if you want an independent local copy instead.
         </p>
       </form>
 
@@ -883,10 +895,10 @@ function OpenRemoteWorkspace({ onClose }: { onClose: () => void }) {
                     remote
                   </span>
                 </div>
-                <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">{ref.url}</div>
+                <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">{ref.address} · {ref.remote.url}</div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <Button type="button" variant="outline" size="sm" disabled title="Opening remote workspaces arrives with canvas-edge">
+                <Button type="button" variant="outline" size="sm" onClick={() => navigate(`/workspaces/${ref.address}`)}>
                   Open
                 </Button>
                 <Button

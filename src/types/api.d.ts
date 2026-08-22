@@ -26,8 +26,22 @@ interface Workspace {
   ownerEmail?: string
   createdAt: string
   updatedAt: string
-  status: 'available' | 'not_found' | 'error' | 'active' | 'inactive' | 'removed' | 'destroyed'
+  status: 'available' | 'not_found' | 'error' | 'active' | 'inactive' | 'removed' | 'destroyed' | 'offline'
+  /** Why the status is what it is (remote workspaces: last transport error). */
+  statusMessage?: string | null
   type?: string
+  /** local = under the user's Workspaces dir; foreign-local = elsewhere on
+   *  this machine; remote = lives on another canvas-server (name is `name@host`). */
+  origin?: 'local' | 'foreign-local' | 'remote'
+  host?: string
+  isRemote?: boolean
+  remote?: {
+    url: string
+    workspaceId: string
+    workspaceName: string | null
+    permissions: string[]
+    addedAt: string | null
+  }
   isShared?: boolean
   sharedVia?: string | { accessLevel?: string; [key: string]: unknown }
   color?: string

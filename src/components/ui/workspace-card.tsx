@@ -33,6 +33,9 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onS
   const isNotFound = workspace.status === 'not_found';
   const isShared = workspace.isShared === true || workspace.type === 'shared';
   const sharedFrom = workspace.ownerEmail || workspace.owner;
+  // Lives on another canvas-server; "delete" only drops the local reference.
+  const isRemote = workspace.origin === 'remote';
+  const isOffline = workspace.status === 'offline';
 
   // Near-white workspace colors would vanish against the card background —
   // fall back to the neutral border in that case.
@@ -48,6 +51,7 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onS
       case 'available':
         return 'bg-muted-foreground';
       case 'error':
+      case 'offline':
         return 'bg-destructive';
       case 'not_found':
         return 'bg-muted-foreground';
@@ -72,6 +76,8 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onS
         return 'Removed';
       case 'destroyed':
         return 'Destroyed';
+      case 'offline':
+        return 'Offline';
       default:
         return workspace.status;
     }
@@ -98,8 +104,8 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onS
                 variant="outline"
                 size="icon"
                 onClick={() => onStart(workspace.name)}
-                title="Start Workspace"
-                disabled={isError || isNotFound}
+                title={isOffline ? `Remote unreachable${workspace.statusMessage ? `: ${workspace.statusMessage}` : ''}` : 'Start Workspace'}
+                disabled={isError || isNotFound || isOffline}
               >
                 <Play className="h-4 w-4" />
               </Button>
@@ -162,8 +168,8 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onS
                   <Button
                     variant="outline"
                     size="icon"
-                    title="Delete Workspace"
-                    disabled={isActive}
+                    title={isRemote ? 'Remove remote workspace reference' : 'Delete Workspace'}
+                    disabled={isActive && !isRemote}
                     className="text-destructive hover:text-destructive hover:bg-destructive/10"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -171,11 +177,22 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onS
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Delete Workspace</AlertDialogTitle>
+                    <AlertDialogTitle>{isRemote ? 'Remove remote workspace' : 'Delete Workspace'}</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Are you sure you want to delete the workspace "{workspace.label || workspace.name}"?
-                      <br /><br />
-                      <strong>This action cannot be undone.</strong> All data associated with this workspace, including documents, contexts, and configurations will be permanently removed.
+                      {isRemote ? (
+                        <>
+                          Remove the reference to "{workspace.label || workspace.name}" from this server?
+                          <br /><br />
+                          The workspace itself stays untouched on {workspace.remote?.url || workspace.host}; only the
+                          stored share token and the local cache entry are dropped.
+                        </>
+                      ) : (
+                        <>
+                          Are you sure you want to delete the workspace "{workspace.label || workspace.name}"?
+                          <br /><br />
+                          <strong>This action cannot be undone.</strong> All data associated with this workspace, including documents, contexts, and configurations will be permanently removed.
+                        </>
+                      )}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -187,7 +204,7 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onS
                       }}
                       className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     >
-                      Delete Workspace
+                      {isRemote ? 'Remove reference' : 'Delete Workspace'}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
@@ -207,6 +224,14 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onS
           {isUniverse && (
             <span className="ml-2 rounded-full bg-primary/10 px-2 py-1 text-xs text-primary">
               Universe
+            </span>
+          )}
+          {isRemote && (
+            <span
+              className="ml-2 rounded-full bg-info/10 px-2 py-1 text-xs text-info"
+              title={workspace.remote?.url ? `${workspace.remote.url} (${(workspace.remote.permissions || []).join(', ') || 'no permissions'})` : undefined}
+            >
+              Remote · {workspace.host}
             </span>
           )}
           {isShared && (

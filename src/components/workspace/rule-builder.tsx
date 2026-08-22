@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
-import { Plus, Pencil, Trash2, Save, X, Braces, PlayCircle, FolderTree } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Plus, Pencil, Trash2, Save, X, Braces, PlayCircle, FolderTree, FolderSymlink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/use-toast'
-import { getRules, saveRules, backfillHook, getHooksMeta, type HookRule, type HookRuleAction } from '@/services/hooks'
+import { getRules, saveRules, backfillHook, getHooksMeta, listRuns, ruleEvents, rulePaths, type HookRule, type HookRuleAction, type HookRun, type RulePrefill } from '@/services/hooks'
 import { listScripts } from '@/services/scripts'
 import { listBackends, type Backend } from '@/services/workspace'
 import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from '@/components/menu/shared/LinkToSidePanel'
@@ -19,6 +19,9 @@ interface RuleBuilderProps {
   onOpenJson?: () => void
   /** Documents per backfill pass (see hooks.ts DEFAULT_BACKFILL_LIMIT). */
   backfillLimit?: number
+  /** Open the form prefilled with a recursive folder rule (path → target). */
+  prefill?: RulePrefill | null
+  onPrefillConsumed?: () => void
 }
 
 // Fallback only — the builder prefers the workspace's LIVE schema list from
@@ -72,6 +75,9 @@ interface ActionRow {
   kind: ActionKey
   a: string // primary slot: link/unlink paths / tags / notify message / agent slug / script path
   b: string // secondary slot: link tags / agent prompt / store key template
+  // link/unlink: append the item's sub-path below the rule's "path starts
+  // with" prefix to every target (mirror a folder subtree 1:1).
+  recursive: boolean
   // store action: which backend the bytes must currently be on ('' = any other
   // than the target), and whether to move or copy them.
   storeFrom: string
@@ -89,14 +95,14 @@ interface ActionRow {
 }
 
 const emptyAction = (kind: ActionKey): ActionRow => ({
-  kind, a: '', b: '', storeFrom: '', storeMode: 'move', storeConflict: 'rename', keepLast: true,
+  kind, a: '', b: '', recursive: false, storeFrom: '', storeMode: 'move', storeConflict: 'rename', keepLast: true,
   notePath: '', noteTitle: '', filePath: '', fileBackend: 'home', fileInsert: '', notifyReply: false,
 })
 
 interface RuleForm {
   id: string | null // null = new (slug generated from description)
   description: string
-  event: string
+  events: string[] // at least one EVENT_OPTIONS value (engine ORs arrays)
   schema: string
   cascade: boolean // also run on items produced by other rules/hooks/agents
   approval: boolean // hold the actions in the pending queue for review instead of running
@@ -108,7 +114,7 @@ interface RuleForm {
 }
 
 const EMPTY_FORM: RuleForm = {
-  id: null, description: '', event: 'document.inserted', schema: '', cascade: false, approval: false,
+  id: null, description: '', events: ['document.inserted'], schema: '', cascade: false, approval: false,
   conditions: [], actions: [emptyAction('link')],
 }
 
@@ -124,7 +130,7 @@ const splitList = (value: string) => value.split(',').map((s) => s.trim()).filte
 // ── form → rule ──────────────────────────────────────────────────────────────
 
 function buildRule(form: RuleForm): HookRule {
-  const when: HookRule['when'] = { event: form.event }
+  const when: HookRule['when'] = { event: form.events.length === 1 ? form.events[0] : form.events }
   if (form.schema) when.schema = form.schema
 
   const multi: Partial<Record<string, string[]>> = {}
@@ -163,8 +169,9 @@ function buildRule(form: RuleForm): HookRule {
   const then: HookRuleAction[] = []
   for (const row of form.actions) {
     const a = row.a.trim(); const b = row.b.trim()
-    if (row.kind === 'link' && a) then.push({ action: 'link', paths: splitList(a), ...(b ? { tags: splitList(b) } : {}) })
-    if (row.kind === 'unlink' && a) then.push({ action: 'unlink', paths: splitList(a) })
+    const recursive = row.recursive ? { recursive: true } : {}
+    if (row.kind === 'link' && a) then.push({ action: 'link', paths: splitList(a), ...recursive, ...(b ? { tags: splitList(b) } : {}) })
+    if (row.kind === 'unlink' && a) then.push({ action: 'unlink', paths: splitList(a), ...recursive })
     if (row.kind === 'tag' && a) then.push({ action: 'tag', tags: splitList(a) })
     if (row.kind === 'store' && a) {
       then.push({
@@ -215,7 +222,8 @@ function buildRule(form: RuleForm): HookRule {
 function parseRule(rule: HookRule): RuleForm | null {
   const { event, schema, from, to, subject, path, mime, url, attachment, ...restWhen } = rule.when
   if (Object.keys(restWhen).length > 0) return null
-  if (typeof event !== 'string' || !EVENT_OPTIONS.some((e) => e.value === event)) return null
+  const events = Array.isArray(event) ? event : [event]
+  if (!events.length || !events.every((e) => typeof e === 'string' && EVENT_OPTIONS.some((o) => o.value === e))) return null
   // Any string schema round-trips (options come from the live DB list; older
   // rules may carry short aliases) — only non-string shapes are JSON-only.
   if (schema !== undefined && typeof schema !== 'string') return null
@@ -272,9 +280,9 @@ function parseRule(rule: HookRule): RuleForm | null {
     // rule-level checkbox, and re-emitting this action would strip the flag.
     if (act.approval !== undefined) return null
     if (act.action === 'link' && Array.isArray(act.paths)) {
-      actions.push({ ...emptyAction('link'), a: (act.paths as string[]).join(', '), b: Array.isArray(act.tags) ? (act.tags as string[]).join(', ') : '' })
+      actions.push({ ...emptyAction('link'), a: (act.paths as string[]).join(', '), b: Array.isArray(act.tags) ? (act.tags as string[]).join(', ') : '', recursive: act.recursive === true })
     } else if (act.action === 'unlink' && Array.isArray(act.paths)) {
-      actions.push({ ...emptyAction('unlink'), a: (act.paths as string[]).join(', ') })
+      actions.push({ ...emptyAction('unlink'), a: (act.paths as string[]).join(', '), recursive: act.recursive === true })
     } else if (act.action === 'tag' && Array.isArray(act.tags)) {
       actions.push({ ...emptyAction('tag'), a: (act.tags as string[]).join(', ') })
     } else if (act.action === 'notify' && typeof act.message === 'string') {
@@ -316,7 +324,7 @@ function parseRule(rule: HookRule): RuleForm | null {
   return {
     id: rule.id,
     description: rule.description || '',
-    event,
+    events: events as string[],
     schema: typeof schema === 'string' ? schema : '',
     cascade: rule.cascade === true,
     approval: rule.approval === true,
@@ -332,7 +340,7 @@ function summarizeWhen(rule: HookRule): string {
   const w = rule.when
   const schemaLabel = SCHEMA_OPTIONS.find((s) => s.value === w.schema)?.label
     || (w.schema ? String(w.schema).replace(/^data\/schema\//, '') : 'any item')
-  const eventLabel = EVENT_OPTIONS.find((e) => e.value === w.event)?.label || String(w.event)
+  const eventLabel = ruleEvents(rule).map((e) => EVENT_OPTIONS.find((o) => o.value === e)?.label || e).join(' or ')
   parts.push(`When ${schemaLabel} ${eventLabel}`)
   const fmt = (v: unknown) => (Array.isArray(v) ? v.join(' or ') : typeof v === 'object' ? JSON.stringify(v) : String(v))
   for (const key of ['from', 'to', 'subject', 'url', 'path', 'mime', 'attachment']) {
@@ -356,8 +364,8 @@ function summarizeOutput(a: Record<string, unknown>): string {
 
 function summarizeThen(rule: HookRule): string {
   return (rule.then || []).map((a) => {
-    if (a.action === 'link') return `file into ${(a.paths as string[])?.join(', ')}`
-    if (a.action === 'unlink') return `remove from ${(a.paths as string[])?.join(', ')}`
+    if (a.action === 'link') return `file into ${(a.paths as string[])?.join(', ')}${a.recursive === true ? ' (with sub-folders)' : ''}`
+    if (a.action === 'unlink') return `remove from ${(a.paths as string[])?.join(', ')}${a.recursive === true ? ' (with sub-folders)' : ''}`
     if (a.action === 'tag') return `tag ${(a.tags as string[])?.join(', ')}`
     if (a.action === 'notify') return 'notify me'
     if (a.action === 'delete') return 'delete from Canvas (keeps stored files/mail)'
@@ -374,11 +382,58 @@ function summarizeThen(rule: HookRule): string {
   }).join(' · ') || '(no actions)'
 }
 
+// ── folder rules (table view) ────────────────────────────────────────────────
+// A rule is a "folder rule" when it has a `path` condition and only files /
+// unfiles: source path · action · destination. It is still the same entry in
+// rules.json — the table is a projection, the builder/JSON stay the truth.
+
+interface FolderRuleRow { action: 'link' | 'unlink'; targets: string; recursive: boolean }
+
+function folderRuleRows(rule: HookRule): FolderRuleRow[] | null {
+  if (!rulePaths(rule).length || !rule.then?.length) return null
+  const rows: FolderRuleRow[] = []
+  for (const a of rule.then) {
+    if ((a.action !== 'link' && a.action !== 'unlink') || !Array.isArray(a.paths)) return null
+    rows.push({ action: a.action, targets: (a.paths as string[]).join(', '), recursive: a.recursive === true })
+  }
+  return rows
+}
+
+interface RunStat { count: number; errors: number; last: HookRun }
+
+function aggregateRuns(runs: HookRun[]): Record<string, RunStat> {
+  const out: Record<string, RunStat> = {}
+  for (const run of runs) {
+    if (run.handlerType !== 'rule') continue
+    const stat = (out[run.handler] ||= { count: 0, errors: 0, last: run })
+    stat.count++
+    if (run.status === 'error') stat.errors++
+    if (run.ts > stat.last.ts) stat.last = run
+  }
+  return out
+}
+
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  if (!Number.isFinite(diff) || diff < 0) return ''
+  const m = Math.floor(diff / 60000)
+  if (m < 1) return 'just now'
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 48) return `${h}h ago`
+  return `${Math.floor(h / 24)}d ago`
+}
+
 // ── component ────────────────────────────────────────────────────────────────
 
-export function RuleBuilder({ workspaceId, onOpenJson, backfillLimit }: RuleBuilderProps) {
+export function RuleBuilder({ workspaceId, onOpenJson, backfillLimit, prefill, onPrefillConsumed }: RuleBuilderProps) {
   const { showToast } = useToast()
   const [rules, setRules] = useState<HookRule[]>([])
+  // Per-rule run-log digest for the folder-rules table (count / last status).
+  const [runStats, setRunStats] = useState<Record<string, RunStat>>({})
+  const loadRunStats = (id: string) => {
+    listRuns(id, { limit: 500 }).then((runs) => setRunStats(aggregateRuns(runs))).catch(() => setRunStats({}))
+  }
   const [isLoading, setIsLoading] = useState(true)
   const [form, setForm] = useState<RuleForm | null>(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -398,7 +453,27 @@ export function RuleBuilder({ workspaceId, onOpenJson, backfillLimit }: RuleBuil
     void getRules(workspaceId)
       .then((r) => setRules(r))
       .finally(() => setIsLoading(false))
+    loadRunStats(workspaceId)
   }, [workspaceId])
+
+  // Prefilled folder rule from the backends tree ("Add rule: file into
+  // Directory…"): consumed once per distinct prefill, then handed back so the
+  // caller can drop it from the URL.
+  const consumedPrefill = useRef<string | null>(null)
+  useEffect(() => {
+    if (!prefill) return
+    const key = `${prefill.path} → ${prefill.target}`
+    if (consumedPrefill.current === key) return
+    consumedPrefill.current = key
+    setForm({
+      ...EMPTY_FORM,
+      description: `Mirror ${prefill.path} into ${prefill.target}`,
+      events: ['document.inserted', 'document.linked'],
+      conditions: [{ field: 'path', value: prefill.path }],
+      actions: [{ ...emptyAction('link'), a: prefill.target, recursive: true }],
+    })
+    onPrefillConsumed?.()
+  }, [prefill, onPrefillConsumed])
   useEffect(() => {
     listScripts(workspaceId).then((files) => setScripts(files.map((f) => f.path))).catch(() => setScripts([]))
   }, [workspaceId])
@@ -482,6 +557,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, backfillLimit }: RuleBuil
       showToast({ title: 'Backfill failed', description: error instanceof Error ? error.message : 'Unknown error', variant: 'destructive' })
     } finally {
       setBackfillingId(null)
+      loadRunStats(workspaceId)
     }
   }
 
@@ -522,6 +598,10 @@ export function RuleBuilder({ workspaceId, onOpenJson, backfillLimit }: RuleBuil
 
   const selectClass = 'h-8 rounded-md border bg-background px-2 text-sm outline-none focus:ring-2 focus:ring-ring'
 
+  const folderRules = rules.flatMap((rule) => { const rows = folderRuleRows(rule); return rows ? [{ rule, rows }] : [] })
+  const folderIds = new Set(folderRules.map((f) => f.rule.id))
+  const otherRules = rules.filter((r) => !folderIds.has(r.id))
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -561,9 +641,21 @@ export function RuleBuilder({ workspaceId, onOpenJson, backfillLimit }: RuleBuil
                   <option value={form.schema}>{form.schema.replace(/^data\/schema\//, '')}</option>
                 )}
               </select>
-              <select className={selectClass} value={form.event} onChange={(e) => setField('event', e.target.value)}>
-                {EVENT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
+              <span className="flex flex-wrap items-center gap-2 rounded-md border bg-background px-2 py-1.5 text-xs" title="Tick every event the rule should react to (any of them fires it).">
+                {EVENT_OPTIONS.map((o) => (
+                  <label key={o.value} className="flex cursor-pointer items-center gap-1">
+                    <input
+                      type="checkbox"
+                      checked={form.events.includes(o.value)}
+                      onChange={(e) => {
+                        const next = e.target.checked ? [...form.events, o.value] : form.events.filter((v) => v !== o.value)
+                        if (next.length) setField('events', next)
+                      }}
+                    />
+                    {o.label}
+                  </label>
+                ))}
+              </span>
               <label
                 className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer"
                 title="By default rules ignore items created by other rules, hooks or agents (so automations can't trigger each other in a loop). Tick to also react to those. A server-side depth limit still stops runaway chains."
@@ -649,10 +741,16 @@ export function RuleBuilder({ workspaceId, onOpenJson, backfillLimit }: RuleBuil
                     <Input className="h-8 w-64 font-mono text-sm" placeholder="/work/urgent or dir:/projects/x" title="Context-tree path by default; prefix with dir: for the directory tree, ctx: to be explicit. Comma-separate multiple paths." value={row.a} onChange={(e) => set({ a: e.target.value })} />
                     {pickerButton('action', i)}
                     <Input className="h-8 w-44 font-mono text-sm" placeholder="tags (optional)" value={row.b} onChange={(e) => set({ b: e.target.value })} />
+                    <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground" title="Keep the folder structure: the part of the item's path below the 'path starts with' prefix is appended to the target. backends:/workspace/home/foo/a/b → dir:/bar/a/b. Needs a 'path starts with' condition.">
+                      <input type="checkbox" checked={row.recursive} onChange={(e) => set({ recursive: e.target.checked })} /> with sub-folders
+                    </label>
                   </>)}
                   {row.kind === 'unlink' && (<>
                     <Input className="h-8 w-64 font-mono text-sm" placeholder="/inbox or dir:/staging" title="Remove (unlink) the item from these paths; it stays everywhere else. Comma-separate multiple paths." value={row.a} onChange={(e) => set({ a: e.target.value })} />
                     {pickerButton('action', i)}
+                    <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground" title="Keep the folder structure: the part of the item's path below the 'path starts with' prefix is appended to the target. backends:/workspace/home/foo/a/b → dir:/bar/a/b. Needs a 'path starts with' condition.">
+                      <input type="checkbox" checked={row.recursive} onChange={(e) => set({ recursive: e.target.checked })} /> with sub-folders
+                    </label>
                   </>)}
                   {row.kind === 'tag' && (
                     <Input className="h-8 w-64 font-mono text-sm" placeholder="urgent, follow-up" value={row.a} onChange={(e) => set({ a: e.target.value })} />
@@ -804,6 +902,71 @@ export function RuleBuilder({ workspaceId, onOpenJson, backfillLimit }: RuleBuil
         </LinkToSidePanel>
       )}
 
+      {!isLoading && folderRules.length > 0 && (
+        <div className="overflow-x-auto rounded-lg border">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 text-xs text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2 text-left font-medium" title="Rules with a 'path starts with' condition that only file / unfile items. Right-click a folder in the Backends tree to add one.">
+                  <FolderSymlink className="mr-1 inline h-3.5 w-3.5" />Folder rules
+                </th>
+                <th className="px-3 py-2 text-left font-medium">Action</th>
+                <th className="px-3 py-2 text-left font-medium">Destination</th>
+                <th className="px-3 py-2 text-left font-medium">Runs</th>
+                <th className="px-3 py-2" />
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {folderRules.map(({ rule, rows }) => {
+                const enabled = rule.enabled !== false
+                const stat = runStats[rule.id]
+                return (
+                  <tr key={rule.id} className={enabled ? '' : 'opacity-50'} title={`${rule.description || rule.id}\n${summarizeWhen(rule)}`}>
+                    <td className="px-3 py-2 align-top">
+                      <label className="flex cursor-pointer items-start gap-2">
+                        <input type="checkbox" className="mt-1" checked={enabled} onChange={() => toggleRule(rule.id)} disabled={isSaving} />
+                        <span className="min-w-0">
+                          <span className="block font-mono text-xs break-all">{rulePaths(rule).join(' | ')}</span>
+                          <span className="block text-xs text-muted-foreground">{ruleEvents(rule).map((e) => EVENT_OPTIONS.find((o) => o.value === e)?.label || e).join(' or ')}</span>
+                        </span>
+                      </label>
+                    </td>
+                    <td className="px-3 py-2 align-top text-xs whitespace-nowrap">
+                      {rows.map((r, i) => (
+                        <span key={i} className="block">{r.action === 'link' ? 'file into' : 'remove from'}{r.recursive ? ' (recursive)' : ''}</span>
+                      ))}
+                    </td>
+                    <td className="px-3 py-2 align-top font-mono text-xs">
+                      {rows.map((r, i) => <span key={i} className="block break-all">{r.targets}</span>)}
+                    </td>
+                    <td className="px-3 py-2 align-top text-xs whitespace-nowrap">
+                      {stat ? (
+                        <span className={stat.last.status === 'error' ? 'text-destructive' : 'text-muted-foreground'} title={stat.last.error || stat.last.skipReason || ''}>
+                          {stat.count}{stat.errors ? ` (${stat.errors} failed)` : ''} · last {stat.last.status} {relativeTime(stat.last.ts)}
+                        </span>
+                      ) : <span className="text-muted-foreground">—</span>}
+                    </td>
+                    <td className="px-3 py-2 align-top">
+                      <div className="flex items-center justify-end">
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 touch-target" title="Backfill: apply this rule to existing documents (dry-run first)" disabled={backfillingId !== null} onClick={() => backfillRule(rule.id)}>
+                          <PlayCircle className={`h-3.5 w-3.5 ${backfillingId === rule.id ? 'animate-pulse' : ''}`} />
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 touch-target" title="Edit rule" onClick={() => { const parsed = parseRule(rule); if (parsed) setForm(parsed); else onOpenJson?.() }}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive touch-target" onClick={() => deleteRule(rule.id)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       <div className="border rounded-lg divide-y">
         {isLoading ? (
           <p className="p-3 text-sm text-muted-foreground">Loading…</p>
@@ -812,8 +975,10 @@ export function RuleBuilder({ workspaceId, onOpenJson, backfillLimit }: RuleBuil
             No rules yet. Create one, e.g. “when an email arrives and the sender contains
             <span className="font-mono"> boss@</span>, file it into <span className="font-mono">/work/urgent</span> and notify me”.
           </p>
+        ) : otherRules.length === 0 ? (
+          <p className="p-3 text-sm text-muted-foreground">All rules are folder rules (table above).</p>
         ) : (
-          rules.map((rule) => {
+          otherRules.map((rule) => {
             const editable = parseRule(rule) !== null
             const enabled = rule.enabled !== false
             return (

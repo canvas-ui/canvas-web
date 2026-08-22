@@ -29,6 +29,7 @@ import {
   type HookFile,
   type HooksMeta,
   type HookRun,
+  type RulePrefill,
 } from '@/services/hooks'
 import { listScripts, getScript, saveScript, deleteScript } from '@/services/scripts'
 import { RuleBuilder } from '@/components/workspace/rule-builder'
@@ -37,6 +38,9 @@ import { PendingActionsPanel } from '@/components/workspace/pending-actions-pane
 
 interface HooksPanelProps {
   workspaceId: string
+  /** Open the rule builder with a folder rule prefilled (backends-tree context menu → Add rule). */
+  prefillRule?: RulePrefill | null
+  onPrefillConsumed?: () => void
 }
 
 type Section = 'pending' | 'rules' | 'hooks' | 'scripts' | 'runs'
@@ -46,9 +50,16 @@ const NEW_SCRIPT_TEMPLATE = `#!/usr/bin/env bash
 set -euo pipefail
 `
 
-export function HooksPanel({ workspaceId }: HooksPanelProps) {
+export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed }: HooksPanelProps) {
   const { showToast } = useToast()
   const [section, setSection] = useState<Section>('rules')
+  // A prefill always lands in the Rules section, whatever was open before
+  // (prev-value-in-state: the caller memoizes the prefill object).
+  const [prevPrefill, setPrevPrefill] = useState(prefillRule)
+  if (prefillRule !== prevPrefill) {
+    setPrevPrefill(prefillRule)
+    if (prefillRule) setSection('rules')
+  }
   const [showReference, setShowReference] = useState(false)
   const [files, setFiles] = useState<HookFile[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -416,6 +427,8 @@ export function HooksPanel({ workspaceId }: HooksPanelProps) {
         <RuleBuilder
           workspaceId={workspaceId}
           backfillLimit={batchLimit}
+          prefill={prefillRule}
+          onPrefillConsumed={onPrefillConsumed}
           onOpenJson={async () => {
             // Pre-create the file so a fresh workspace can jump straight into
             // JSON editing without a 404.

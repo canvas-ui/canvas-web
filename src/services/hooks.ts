@@ -108,8 +108,55 @@ export interface HookRule {
   editable?: string[]
   /** Expire undecided proposals after e.g. '24h', '15m' or ms. */
   ttl?: string | number
-  when: { event: string; [key: string]: unknown }
+  /** `event` is one name or an array (any-of). */
+  when: { event: string | string[]; [key: string]: unknown }
   then: HookRuleAction[]
+}
+
+/** Event names a rule listens to (normalizes the string | string[] shape). */
+export function ruleEvents(rule: HookRule): string[] {
+  const e = rule.when?.event
+  return Array.isArray(e) ? e.map(String) : e ? [String(e)] : []
+}
+
+/** `when.path` of a rule as a list ('' when the rule has no path condition). */
+export function rulePaths(rule: HookRule): string[] {
+  const p = rule.when?.path
+  return Array.isArray(p) ? p.map(String) : typeof p === 'string' ? [p] : []
+}
+
+// ── Folder rules (backends mirror → directory tree) ─────────────────────────
+// A backends-tree path is /<driver>/<address>/<rel> (workspace:home mounts at
+// /workspace/home, device mounts at /device/<device>/<mount>). Splitting it
+// gives the backend name the hook needs and the folder below the mount.
+
+export interface BackendsPathParts { backend: string; rel: string }
+
+export function splitBackendsPath(path: string): BackendsPathParts | null {
+  const parts = String(path || '').split('/').filter(Boolean)
+  if (parts[0] === 'workspace' && parts.length >= 2) return { backend: `workspace:${parts[1]}`, rel: parts.slice(2).join('/') }
+  if (parts[0] === 'device') return parts.length >= 3 ? { backend: parts[2], rel: parts.slice(3).join('/') } : null
+  return parts.length >= 2 ? { backend: parts[1], rel: parts.slice(2).join('/') } : null
+}
+
+/** Default directory-tree target mirroring a backends-tree folder 1:1 below the mount: /workspace/home/foo → dir:/foo. */
+export function defaultMirrorTarget(backendsPath: string): string {
+  const parts = splitBackendsPath(backendsPath)
+  return `dir:/${parts?.rel || ''}`
+}
+
+/** Prefill for the rule builder's "file this folder into…" flow (context menu on a backends-tree node). */
+export interface RulePrefill {
+  /** Tree-qualified source prefix, e.g. `backends:/workspace/home/foo`. */
+  path: string
+  /** Link target, e.g. `dir:/foo`. */
+  target: string
+}
+
+/** The shipped folder-skeleton sync hook (started/…backend-tree-sync.js), enabled copy first; null when the workspace has none. */
+export function findBackendTreeSyncHook(files: HookFile[]): string | null {
+  const candidates = files.filter((f) => f.path.startsWith('started/') && f.path.includes('backend-tree-sync'))
+  return candidates.find((f) => isHookEnabled(f.path))?.path ?? candidates[0]?.path ?? null
 }
 
 export const RULES_PATH = 'rules.json'

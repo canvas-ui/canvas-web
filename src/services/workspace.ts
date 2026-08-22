@@ -255,17 +255,27 @@ export async function importWorkspaceFromRemote(
   return waitForImportJob(job.id, onProgress)
 }
 
+/**
+ * A workspace that stays on another canvas-server, registered here as a
+ * regular workspace entry named `<name>@<host>` (origin 'remote'). Every
+ * /workspaces/<address>/* call is forwarded to the remote by the server.
+ */
 export interface RemoteWorkspaceRef {
   id: string
-  type: 'remote-workspace'
-  status: 'remote'
-  url: string
-  workspaceId: string
-  workspaceName: string | null
+  /** `<name>@<host>` — the identifier to use in routes and API calls. */
+  name: string
+  address: string
   label: string
-  permissions: string[]
-  addedAt: string
-  /** False until canvas-edge can serve a workspace that stays on its own server. */
+  host: string
+  origin: 'remote'
+  status: string
+  remote: {
+    url: string
+    workspaceId: string
+    workspaceName: string | null
+    permissions: string[]
+    addedAt: string | null
+  }
   openable: boolean
 }
 
