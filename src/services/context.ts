@@ -389,9 +389,17 @@ export async function updateContextPath(contextId: string, path: string, updates
   return response ?? true
 }
 
-export async function moveContextPath(contextId: string, from: string, to: string, recursive = false): Promise<boolean> {
-  const response = await api.post<boolean>(`${API_ROUTES.contexts}/${contextId}/tree/paths/move`, { from, to, recursive })
+export async function moveContextPath(contextId: string, from: string, to: string, recursive = false, options: { mergeDown?: boolean } = {}): Promise<boolean> {
+  const response = await api.post<boolean>(`${API_ROUTES.contexts}/${contextId}/tree/paths/move`, { from, to, recursive, ...(options.mergeDown ? { mergeDown: true } : {}) })
   return response ?? true
+}
+
+export async function mergeDownContextPath(contextId: string, path: string): Promise<unknown> {
+  return await api.post<unknown>(`${API_ROUTES.contexts}/${contextId}/tree/paths/merge-down`, { path })
+}
+
+export async function subtractDownContextPath(contextId: string, path: string): Promise<unknown> {
+  return await api.post<unknown>(`${API_ROUTES.contexts}/${contextId}/tree/paths/subtract-down`, { path })
 }
 
 export async function copyContextPath(contextId: string, from: string, to: string, recursive = false): Promise<boolean> {

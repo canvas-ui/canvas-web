@@ -9,7 +9,7 @@ import {
   ChevronRight, ChevronDown,
   Plus, Trash2, Edit2, Copy, Scissors, Clipboard,
   Layers, LayoutDashboard, MoreHorizontal, Lock, Unlock, Eye, Share2, Palette, RefreshCw,
-  FolderSymlink, FolderTree,
+  FolderSymlink, FolderTree, ArrowDownToLine, ArrowUpFromLine,
 } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import { cn, isCoarsePointer } from '@/lib/utils'
@@ -46,7 +46,7 @@ export interface MenuTreeViewProps {
   onNewCanvas?: (parentPath: string) => void
   onRemovePath?: (path: string, recursive?: boolean, purge?: boolean, destroy?: boolean) => Promise<boolean>
   onRenamePath?: (fromPath: string, newName: string) => Promise<boolean>
-  onMovePath?: (from: string, to: string, recursive?: boolean, sourceTreeName?: string, targetTreeName?: string) => Promise<boolean>
+  onMovePath?: (from: string, to: string, recursive?: boolean, sourceTreeName?: string, targetTreeName?: string, options?: { mergeDown?: boolean }) => Promise<boolean>
   onCopyPath?: (from: string, to: string, recursive?: boolean, sourceTreeName?: string, targetTreeName?: string) => Promise<boolean>
   onShareCanvas?: (path: string) => Promise<void>
   onLockLayer?: (layerId: string) => Promise<boolean>
@@ -65,6 +65,11 @@ export interface MenuTreeViewProps {
   onDestroyLayer?: (layerId: string) => Promise<boolean>
   onMergeLayer?: (layerId: string, targetLayers: string[]) => Promise<unknown>
   onSubtractLayer?: (layerId: string, targetLayers: string[]) => Promise<unknown>
+  // Path-scoped: leaf layer of `path` → its ancestors on that path. Context
+  // trees only; source/targets are derived server-side so they can't be
+  // swapped by clicking in the wrong order.
+  onMergeDown?: (path: string) => Promise<unknown>
+  onSubtractDown?: (path: string) => Promise<unknown>
   onUpdateNode?: (path: string, updates: { metadata?: LayerMetadata }) => Promise<boolean>
   searchQuery?: string
   pastedDocumentIds?: number[]
@@ -129,6 +134,8 @@ interface CtxMenuProps {
   onDestroy?: MenuTreeViewProps['onDestroyLayer']
   onMerge?: MenuTreeViewProps['onMergeLayer']
   onSubtract?: MenuTreeViewProps['onSubtractLayer']
+  onMergeDown?: MenuTreeViewProps['onMergeDown']
+  onSubtractDown?: MenuTreeViewProps['onSubtractDown']
   onResyncBackend?: MenuTreeViewProps['onResyncBackend']
   onAddRule?: MenuTreeViewProps['onAddRule']
   onSyncFolderTree?: MenuTreeViewProps['onSyncFolderTree']
@@ -145,7 +152,7 @@ function CtxMenu({
   x, y, node, path, isBackendsTree, onClose, onShowContent, onOpenToSide,
   sourceLayer, targetLayers, clipboard,
   onStartInlineCreate, onChangeIcon, onNewCanvas, onShareCanvas, onRemove, onRename,
-  onLock, onUnlock, onDestroy, onMerge, onSubtract, onResyncBackend,
+  onLock, onUnlock, onDestroy, onMerge, onSubtract, onMergeDown, onSubtractDown, onResyncBackend,
   onAddRule, onSyncFolderTree,
   onRenameBackendFolder, onDeleteBackendFolder,
   onCopy, onCut, onPaste,
@@ -153,6 +160,9 @@ function CtxMenu({
 }: CtxMenuProps) {
 
   const canMergeSubtract = sourceLayer && targetLayers.size > 0 && sourceLayer.path === path
+  // Root has no bitmap, canvases are views, top-level paths have no ancestors.
+  const canPathBitmapOps = !isBackendsTree && (onMergeDown || onSubtractDown)
+    && path !== '/' && node.type !== 'canvas' && path.split('/').filter(Boolean).length > 1
   const hasLayerSel = sourceLayer && targetLayers.size > 0 && (
     sourceLayer.path === path || targetLayers.has(path)
   )
@@ -380,17 +390,33 @@ function CtxMenu({
           </>
         )}
 
-        {/* Layer: merge / subtract */}
+        {/* Layer: path-scoped merge / subtract (no multi-select needed). The
+            leaf of THIS path is the source, its ancestors the targets. */}
+        {canPathBitmapOps && (
+          <>
+            <div className="my-1 h-px bg-border" />
+            {onMergeDown && item(<ArrowDownToLine className="w-3 h-3" />, 'Merge down (into ancestors)', async () => {
+              if (!confirm(`Merge "${node.label || node.name}" into every layer above it on\n${path}\n\nAfter this, ${path} lists its documents.`)) return
+              await onMergeDown(path)
+            })}
+            {onSubtractDown && item(<ArrowUpFromLine className="w-3 h-3" />, 'Subtract from ancestors', async () => {
+              if (!confirm(`Remove "${node.label || node.name}"'s documents from every layer above it on\n${path}\n\nUndo of "Merge down". Documents an ancestor holds for other reasons are removed from it too.`)) return
+              await onSubtractDown(path)
+            })}
+          </>
+        )}
+
+        {/* Layer: merge / subtract into an explicit ⌃-click selection */}
         {canMergeSubtract && (
           <>
             <div className="my-1 h-px bg-border" />
-            {onMerge && item(<Layers className="w-3 h-3" />, 'Merge into targets', async () => {
-              const tgtIds = Array.from(targetLayers.values())
-              await onMerge(node.id, tgtIds)
+            {onMerge && item(<Layers className="w-3 h-3" />, `Merge this layer into ${targetLayers.size} selected`, async () => {
+              if (!confirm(`Merge "${path}" (source) INTO:\n${Array.from(targetLayers.keys()).join('\n')}\n\nThe selected layers gain this layer's documents. This layer is unchanged.`)) return
+              await onMerge(node.id, Array.from(targetLayers.values()))
             })}
-            {onSubtract && item(<Layers className="w-3 h-3" />, 'Subtract from targets', async () => {
-              const tgtIds = Array.from(targetLayers.values())
-              await onSubtract(node.id, tgtIds)
+            {onSubtract && item(<Layers className="w-3 h-3" />, `Subtract this layer from ${targetLayers.size} selected`, async () => {
+              if (!confirm(`Subtract "${path}" (source) FROM:\n${Array.from(targetLayers.keys()).join('\n')}\n\nThe selected layers lose this layer's documents. This layer is unchanged.`)) return
+              await onSubtract(node.id, Array.from(targetLayers.values()))
             })}
           </>
         )}
@@ -399,7 +425,7 @@ function CtxMenu({
           <>
             <div className="my-1 h-px bg-border" />
             <div className="px-3 py-1.5 text-[10px] text-muted-foreground italic">
-              Right-click the source layer to merge/subtract
+              This is a target. Right-click the source ({sourceLayer?.path}) to merge/subtract
             </div>
           </>
         )}
@@ -690,6 +716,7 @@ export function MenuTreeView({
   onInsertPath, onNewCanvas, onShareCanvas, onRemovePath, onRenamePath, onMovePath, onCopyPath,
   pastedDocumentIds, onPasteDocuments,
   onLockLayer, onUnlockLayer, onDestroyLayer, onMergeLayer, onSubtractLayer,
+  onMergeDown, onSubtractDown,
   onResyncBackend,
   onCreateBackendFolder, onRenameBackendFolder, onDeleteBackendFolder,
   onUpdateNode,
@@ -731,6 +758,11 @@ export function MenuTreeView({
   const [dragOverPath, setDragOverPath] = useState<string | null>(null)
   const [isCopyDrag, setIsCopyDrag] = useState(false)
   const [copyModeSticky, setCopyModeSticky] = useState(false)
+  // Context trees: when on, a drag-MOVE also merges the moved layer into its
+  // new ancestors (server: movePath { mergeDown }). Off by default — a plain
+  // move leaves bitmaps alone, by design.
+  const [mergeDownOnMove, setMergeDownOnMove] = useState(false)
+  const mergeDownOnMoveRef = useRef(false)
   const draggedPathRef = useRef<string | null>(null)
   const draggedTreeRef = useRef<string>(treeName)
   const isCopyRef = useRef(false)
@@ -865,12 +897,13 @@ export function MenuTreeView({
       if (isCopy && onCopyPath) {
         await onCopyPath(src, targetPath, isRecursive, sourceTreeName, treeName)
       } else if (!isCopy && onMovePath) {
-        await onMovePath(src, targetPath, isRecursive, sourceTreeName, treeName)
+        const mergeDown = mergeDownOnMoveRef.current && !isBackendsTree && Boolean(onMergeDown)
+        await onMovePath(src, targetPath, isRecursive, sourceTreeName, treeName, mergeDown ? { mergeDown } : undefined)
       }
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err))
     }
-  }, [isValidPathDrop, onCopyPath, onMovePath, onPasteDocuments, treeName])
+  }, [isValidPathDrop, onCopyPath, onMovePath, onPasteDocuments, treeName, isBackendsTree, onMergeDown])
 
   const q = searchQuery.toLowerCase().trim()
 
@@ -1045,6 +1078,21 @@ export function MenuTreeView({
           >
             {copyModeSticky ? 'Drag → Copy' : 'Drag → Move'}
           </button>
+          {onMergeDown && !isBackendsTree && !copyModeSticky && (
+            <button
+              type="button"
+              onClick={() => setMergeDownOnMove(v => { mergeDownOnMoveRef.current = !v; return !v })}
+              title="When moving a layer, also merge it into its new ancestors so the new path lists its documents"
+              className={cn(
+                'ml-1 px-2 py-0.5 rounded-full border transition-colors select-none',
+                mergeDownOnMove
+                  ? 'border-info bg-info/15 text-info dark:text-info'
+                  : 'border-border text-muted-foreground hover:bg-muted',
+              )}
+            >
+              {mergeDownOnMove ? '+ merge down' : 'merge down: off'}
+            </button>
+          )}
         </div>
       )}
       {hasSelection && (
@@ -1154,6 +1202,8 @@ export function MenuTreeView({
           onDestroy={!readOnly ? onDestroyLayer : undefined}
           onMerge={!readOnly ? onMergeLayer : undefined}
           onSubtract={!readOnly ? onSubtractLayer : undefined}
+          onMergeDown={!readOnly ? onMergeDown : undefined}
+          onSubtractDown={!readOnly ? onSubtractDown : undefined}
           onResyncBackend={onResyncBackend}
           onAddRule={onAddRule}
           onSyncFolderTree={onSyncFolderTree}

@@ -10,12 +10,14 @@ import { useCallback } from 'react'
 import {
   insertContextPath, removeContextPath, moveContextPath, copyContextPath,
   mergeContextLayer, subtractContextLayer, updateContextPath,
+  mergeDownContextPath, subtractDownContextPath,
 } from '@/services/context'
 import type { LayerMetadata } from '@/types/workspace'
 import { presetStylePatch } from '@/lib/layer-style'
 import {
   insertWorkspacePath, removeWorkspacePath, moveWorkspacePath, copyWorkspacePath,
   mergeWorkspaceLayer, subtractWorkspaceLayer,
+  mergeDownWorkspacePath, subtractDownWorkspacePath,
   lockWorkspaceLayer, unlockWorkspaceLayer, destroyWorkspaceLayer,
   updateWorkspacePath,
   syncBackend,
@@ -95,11 +97,30 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     return result
   }, [contextId, workspaceId, wsTree, refresh])
 
-  const onMovePath = useCallback(async (from: string, to: string, recursive = false, sourceTreeName = wsTree, targetTreeName = wsTree): Promise<boolean> => {
+  const onMovePath = useCallback(async (from: string, to: string, recursive = false, sourceTreeName = wsTree, targetTreeName = wsTree, options: { mergeDown?: boolean } = {}): Promise<boolean> => {
     let result: boolean
-    if (contextId) result = await moveContextPath(contextId, from, to, recursive)
-    else if (workspaceId) result = await moveWorkspacePath(workspaceId, from, to, recursive, sourceTreeName, targetTreeName)
+    if (contextId) result = await moveContextPath(contextId, from, to, recursive, options)
+    else if (workspaceId) result = await moveWorkspacePath(workspaceId, from, to, recursive, sourceTreeName, targetTreeName, options)
     else return false
+    refresh()
+    return result
+  }, [contextId, workspaceId, wsTree, refresh])
+
+  // Path-scoped bitmap ops: leaf of `path` → its ancestors. Context trees only.
+  const onMergeDown = useCallback(async (path: string): Promise<unknown> => {
+    let result: unknown
+    if (contextId) result = await mergeDownContextPath(contextId, path)
+    else if (workspaceId) result = await mergeDownWorkspacePath(workspaceId, path, wsTree)
+    else return null
+    refresh()
+    return result
+  }, [contextId, workspaceId, wsTree, refresh])
+
+  const onSubtractDown = useCallback(async (path: string): Promise<unknown> => {
+    let result: unknown
+    if (contextId) result = await subtractDownContextPath(contextId, path)
+    else if (workspaceId) result = await subtractDownWorkspacePath(workspaceId, path, wsTree)
+    else return null
     refresh()
     return result
   }, [contextId, workspaceId, wsTree, refresh])
@@ -222,6 +243,8 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     onInsertPath, onRemovePath, onRenamePath, onMovePath, onCopyPath,
     onUpdateNode,
     onMergeLayer, onSubtractLayer,
+    onMergeDown: !isDirectoryTree ? onMergeDown : undefined,
+    onSubtractDown: !isDirectoryTree ? onSubtractDown : undefined,
     onLockLayer: workspaceId ? onLockLayer : undefined,
     onUnlockLayer: workspaceId ? onUnlockLayer : undefined,
     onDestroyLayer: workspaceId && !isDirectoryTree ? onDestroyLayer : undefined,

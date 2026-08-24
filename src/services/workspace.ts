@@ -793,11 +793,22 @@ export async function removeWorkspacePath(workspaceId: string, path: string, rec
   }
 }
 
-export async function moveWorkspacePath(workspaceId: string, fromPath: string, toPath: string, recursive = false, treeName = DEFAULT_WORKSPACE_TREE_NAME, targetTreeName?: string): Promise<boolean> {
+export interface MovePathOptions {
+  // Context trees: OR the moved layer into its new ancestors so the destination
+  // path reads its documents right away (server → ContextTree.mergeDown).
+  mergeDown?: boolean
+}
+
+export async function moveWorkspacePath(workspaceId: string, fromPath: string, toPath: string, recursive = false, treeName = DEFAULT_WORKSPACE_TREE_NAME, targetTreeName?: string, options: MovePathOptions = {}): Promise<boolean> {
   try {
     await api.patch<unknown>(
       getWorkspaceTreePathRoute(workspaceId, treeName, fromPath),
-      { to: toPath, recursive, ...(targetTreeName && targetTreeName !== treeName ? { targetTreeNameOrTreeId: targetTreeName } : {}) }
+      {
+        to: toPath,
+        recursive,
+        ...(options.mergeDown ? { mergeDown: true } : {}),
+        ...(targetTreeName && targetTreeName !== treeName ? { targetTreeNameOrTreeId: targetTreeName } : {}),
+      }
     );
     return true;
   } catch (error) {
@@ -895,6 +906,26 @@ export async function destroyWorkspaceLayer(workspaceId: string, layerId: string
 export async function mergeWorkspaceLayer(workspaceId: string, layerId: string, targetLayers: string[], treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<unknown> {
   const res = await api.post<unknown>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/layers/merge`, { layerId, targetLayers })
   return res
+}
+
+export interface PathBitmapOpResult {
+  path: string
+  source: string
+  targets: string[]
+  affected: string[]
+}
+
+// "Merge down": OR the leaf layer of `path` into every ancestor on that path
+// (source/targets derived server-side — no way to get them backwards).
+export async function mergeDownWorkspacePath(workspaceId: string, path: string, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<PathBitmapOpResult | null> {
+  const res = await api.post<{ data?: PathBitmapOpResult }>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/paths/merge-down`, { path })
+  return res?.data ?? null
+}
+
+// Inverse of mergeDown: AND-NOT the leaf's bitmap out of every ancestor.
+export async function subtractDownWorkspacePath(workspaceId: string, path: string, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<PathBitmapOpResult | null> {
+  const res = await api.post<{ data?: PathBitmapOpResult }>(`${API_ROUTES.workspaces}/${workspaceId}/trees/${encodeURIComponent(treeName)}/paths/subtract-down`, { path })
+  return res?.data ?? null
 }
 
 export async function subtractWorkspaceLayer(workspaceId: string, layerId: string, targetLayers: string[], treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<unknown> {

@@ -1434,7 +1434,10 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
         </div>
 
         {/* Pagination Controls */}
-        {onPageChange && totalCount > pageSize && (
+        {/* The page-size select is useful before there is a second page (it
+            is how you ASK for more per request), so the row shows whenever
+            there is anything to page; the arrows stay disabled on one page. */}
+        {onPageChange && totalCount > 0 && (
           // Wraps rather than overflowing: on a 360px screen this row is far
           // wider than the viewport, and it used to push the paging buttons
           // off the right edge with no way to scroll to them.
