@@ -115,6 +115,7 @@ type ToolboxAction =
       contextType: ActiveContextType
       contextPath: string | null
     }
+  | { type: 'SET_CONTEXT_SCOPE'; workspaceName: string | null; contextPath: string | null; treeId: string | null }
   | { type: 'SET_FILTERS'; filters: ToolboxFilters }
   | { type: 'SET_SAVED_FILTERS'; savedFilters: ToolboxFilters | null; savedSearchQuery?: string | null }
   | { type: 'SET_SAVING'; isSaving: boolean }
@@ -211,6 +212,25 @@ function toolboxReducer(state: ToolboxState, action: ToolboxAction): ToolboxStat
         activeContextPath: action.contextPath,
         // A drawn map area is view-specific — drop it when navigating away.
         geoSelection: null,
+      }
+    // A `/contexts/:id` route carries no workspace or tree path in its URL —
+    // the context's own record carries both. Without this the workspace-scoped
+    // lists (feature bitmaps, timelines) never load and the Features/Timeline
+    // tabs render empty, hiding filters that are in fact active on the context;
+    // and the timeline rail's density scopes to the workspace root instead of
+    // the context's path. `activeTreeName` holds the context's tree ID here —
+    // every consumer passes it as the API's `treeNameOrTreeId`, which resolves
+    // either form.
+    case 'SET_CONTEXT_SCOPE':
+      if (state.activeContextType !== 'context') return state
+      if (state.activeWorkspaceName === action.workspaceName
+        && state.activeContextPath === action.contextPath
+        && state.activeTreeName === action.treeId) return state
+      return {
+        ...state,
+        activeWorkspaceName: action.workspaceName,
+        activeContextPath: action.contextPath,
+        activeTreeName: action.treeId,
       }
     case 'SET_FILTERS':
       return {
@@ -453,8 +473,13 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
 
   // ── Load filters when canvas/context/session changes ──────────────────────
 
+  // Canvas layer / regular layer. A `/contexts/:id` route is handled by the
+  // effect below instead — its saved filters are keyed by context id alone, and
+  // it must NOT fall through to the session-filter branch here (that would
+  // overwrite the context's own saved view).
   useEffect(() => {
-    const { activeContextType, activeCanvasId, activeContextId, activeWorkspaceName, activeTreeName, activeContextPath } = state
+    const { activeContextType, activeCanvasId, activeWorkspaceName, activeTreeName, activeContextPath } = state
+    if (activeContextType === 'context') return
 
     if (activeContextType === 'canvas' && activeCanvasId && activeWorkspaceName && activeContextPath) {
       getCachedWorkspaceTreeByName(activeWorkspaceName, activeTreeName || DEFAULT_WORKSPACE_TREE_NAME).then(res => {
@@ -464,25 +489,50 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
       }).catch(() => {
         dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: null, savedSearchQuery: null })
       })
-    } else if (activeContextType === 'context' && activeContextId) {
-      getContext(activeContextId).then(ctx => {
-        const metadata = (ctx as Context & { metadata?: Record<string, unknown> }).metadata
-        const saved = extractToolboxFilters(metadata)
-        dispatch({
-          type: 'SET_SAVED_FILTERS',
-          savedFilters: saved,
-          savedSearchQuery: typeof metadata?.toolboxSearchQuery === 'string' ? metadata.toolboxSearchQuery : null,
-        })
-      }).catch(() => {
-        dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: null, savedSearchQuery: null })
-      })
     } else {
       // Regular layer — restore session filters
       const session = loadSessionFilters()
       dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: session, savedSearchQuery: null })
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.activeCanvasId, state.activeContextId, state.activeContextPath, state.activeContextType, state.activeTreeName, state.activeWorkspaceName])
+  }, [state.activeCanvasId, state.activeContextPath, state.activeContextType, state.activeTreeName, state.activeWorkspaceName])
+
+  // Context route (`/contexts/:id`). Deliberately keyed by the context id only:
+  // the fetched record is also what names the context's workspace, so depending
+  // on `activeWorkspaceName` here would re-run this effect on its own dispatch
+  // and re-clobber in-flight filter edits with the saved view.
+  useEffect(() => {
+    const { activeContextType, activeContextId } = state
+    if (activeContextType !== 'context' || !activeContextId) return
+    let cancelled = false
+
+    getContext(activeContextId).then(ctx => {
+      if (cancelled) return
+      const metadata = (ctx as Context & { metadata?: Record<string, unknown> }).metadata
+      const saved = extractToolboxFilters(metadata)
+      // The URL carries neither workspace nor tree path — take both from the
+      // context record so the workspace-scoped lists (feature bitmaps,
+      // timelines) load, the Features/Timeline tabs show what is filtering the
+      // view, and the timeline density is scoped to the context's own path.
+      dispatch({
+        type: 'SET_CONTEXT_SCOPE',
+        workspaceName: ctx.workspaceName || ctx.workspaceId || null,
+        contextPath: ctx.path || '/',
+        treeId: ctx.treeId || null,
+      })
+      dispatch({
+        type: 'SET_SAVED_FILTERS',
+        savedFilters: saved,
+        savedSearchQuery: typeof metadata?.toolboxSearchQuery === 'string' ? metadata.toolboxSearchQuery : null,
+      })
+    }).catch(() => {
+      if (cancelled) return
+      dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: null, savedSearchQuery: null })
+    })
+
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.activeContextId, state.activeContextType])
 
   // ── Auto-save session filters when not in canvas/context mode ────────────
 
@@ -707,9 +757,13 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const { features: f, timeline: tl, geo, lens } = state.filters
+  // customRanges counts too: a drawn/typed date range narrows the view exactly
+  // like a quick filter, so leaving it out hid both the "filters are active"
+  // indicator and the Clear button while the range was still filtering.
   const hasActiveFilters =
     f.allOf.length > 0 || f.anyOf.length > 0 || f.noneOf.length > 0 ||
-    tl.quickFilter !== null || (tl.selectedTimelines?.length ?? 0) > 0 ||
+    tl.quickFilter !== null || (tl.customRanges?.length ?? 0) > 0 ||
+    (tl.selectedTimelines?.length ?? 0) > 0 ||
     geo.bbox !== null || lens.gps !== null || lens.ids !== null
 
   return (

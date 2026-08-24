@@ -61,7 +61,7 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
 
   const handleBindToContext = async () => {
     if (!activeContextId || bindBusy) return
-    const label = activeContextPath || activeContextId
+    const label = activeContextId || activeContextPath
     if (!window.confirm(
       `Bind "${agent?.label || agent?.name || agentId}" to the current context (${label})? ` +
       'This mints a new canvas token and restarts the agent if it is running.'
@@ -137,8 +137,8 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
       {/* Offer to scope the agent to the toolbox's context unless it already follows it */}
       {activeContextId && !boundToActiveContext && (
         <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/40 text-xs shrink-0">
-          <span className="flex-1 truncate text-muted-foreground" title={activeContextPath || activeContextId}>
-            Toolbox context: {activeContextPath || activeContextId}
+          <span className="flex-1 truncate text-muted-foreground" title={activeContextId || activeContextPath || undefined}>
+            Toolbox context: {activeContextId || activeContextPath}
           </span>
           <button
             type="button"

@@ -185,7 +185,14 @@ function FeaturesTab() {
     )
   }
 
-  if (!availableBitmaps.length) {
+  // Any key that is CURRENTLY filtering the view is listed even when the
+  // workspace's bitmap list does not carry it (a saved view whose bitmap was
+  // since deleted, or a list that failed to load) — otherwise an active filter
+  // is invisible here and there is no row to switch it back off.
+  const activeKeys = [...filters.features.allOf, ...filters.features.anyOf, ...filters.features.noneOf]
+  const listKeys = [...new Set([...availableBitmaps, ...activeKeys])]
+
+  if (!listKeys.length) {
     return (
       <div className="p-4 text-xs text-muted-foreground text-center py-10">
         No feature bitmaps found
@@ -194,7 +201,7 @@ function FeaturesTab() {
   }
 
   const q = search.trim().toLowerCase()
-  const filtered = q ? availableBitmaps.filter(k => k.toLowerCase().includes(q)) : availableBitmaps
+  const filtered = q ? listKeys.filter(k => k.toLowerCase().includes(q)) : listKeys
   // Pull the document-type schemas out into the prominent picker; group the rest.
   const schemaKeys = filtered.filter(k => k.startsWith(ABSTRACTION_PREFIX)).sort((a, b) => {
     const order = Object.keys(SCHEMA_META)
