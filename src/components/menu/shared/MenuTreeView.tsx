@@ -227,16 +227,16 @@ function CtxMenu({
           </>
         )}
 
-        {/* Folder rules — backends tree only. "Add rule" opens the builder
+        {/* Folder rules — backends tree only. "Create … rule" opens the builder
             prefilled with a recursive link of this folder into the directory
             tree; "Sync folders" runs the skeleton hook for this subtree so
             empty folders show up too. */}
         {isBackendsTree && backendNameForPath(path, isBackendsTree) && (onAddRule || onSyncFolderTree || onAddStoreRule) && (
           <>
-            {onAddRule && item(<FolderSymlink className="w-3 h-3" />, 'Add rule: file into Directory…', async () => {
+            {onAddRule && item(<FolderSymlink className="w-3 h-3" />, 'Create mirror rule…', async () => {
               onAddRule(path)
             })}
-            {onAddStoreRule && fileBackendTarget(path, isBackendsTree) && item(<HardDrive className="w-3 h-3" />, 'Add rule: store files here…', async () => {
+            {onAddStoreRule && fileBackendTarget(path, isBackendsTree) && item(<HardDrive className="w-3 h-3" />, 'Create storage rule…', async () => {
               onAddStoreRule(path)
             })}
             {onSyncFolderTree && item(<FolderTree className="w-3 h-3" />, 'Sync folders into Directory', async () => {
@@ -245,12 +245,12 @@ function CtxMenu({
             <div className="my-1 h-px bg-border" />
           </>
         )}
-        {/* Storage rule from a context/directory folder: "files filed here
+        {/* Storage rule from a context/directory folder ("Create rule…"): "files filed here
             keep their bytes on a real backend" (default workspace:home,
             mirroring this path). */}
         {!isBackendsTree && onAddStoreRule && path !== '/' && (
           <>
-            {item(<HardDrive className="w-3 h-3" />, 'Add rule: store files filed here on…', async () => {
+            {item(<HardDrive className="w-3 h-3" />, 'Create rule…', async () => {
               onAddStoreRule(path)
             })}
             <div className="my-1 h-px bg-border" />

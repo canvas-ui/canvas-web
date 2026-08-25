@@ -2,7 +2,7 @@ import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { useCallback, useRef, useState } from 'react'
 import { X, StickyNote, Link as LinkIcon, Upload, Camera, Plus, Pencil, FileSearch, FolderPlus, ListTodo, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useIsMobile } from '@/hooks/use-mobile'
+import { useIsTooNarrowToDock } from '@/hooks/use-mobile'
 import { InsertMenu } from '@/components/common/insert-menu'
 import { useToolbox } from './use-toolbox'
 import { type AddKind } from './toolbox-context'
@@ -35,7 +35,9 @@ export function AddPanel() {
   const { state, openAdd, closeAdd } = useToolbox()
   useEscapeClose(closeAdd, state.addOpen)
   const { addOpen, addKind, editDocument } = state
-  const isMobile = useIsMobile()
+  // Drawer vs docked card: what matters is whether the content column
+  // survives docking, not whether this is a phone-shaped viewport.
+  const asDrawer = useIsTooNarrowToDock()
   const [width, setWidth] = useState(DEFAULT_WIDTH)
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
 
@@ -80,23 +82,23 @@ export function AddPanel() {
   return (
     <>
       {/* Mobile scrim — same treatment as the M1/M2 menu drawer */}
-      {isMobile && (
+      {asDrawer && (
         <div className="fixed inset-0 z-panel-scrim bg-scrim animate-fade-in" onClick={closeAdd} aria-hidden />
       )}
     <div
-      style={isMobile ? undefined : { width }}
+      style={asDrawer ? undefined : { width }}
       className={cn(
         'flex flex-col overflow-hidden rounded-xl border bg-card surface-glass',
         // Mobile: M1/M2-style drawer next to the menubar, above everything
         // (incl. the z-50 toolbox FAB, which would otherwise cover the form's
         // bottom controls). Desktop: a resizable flex sibling that shrinks
         // the main content.
-        isMobile
+        asDrawer
           ? 'fixed bottom-2 left-2 right-2 top-2 z-panel shadow-elevation-5 animate-fade-in'
           : 'relative shrink-0 shadow-elevation-3',
       )}
     >
-      {!isMobile && (
+      {!asDrawer && (
         <div
           onMouseDown={onDragStart}
           className="absolute left-0 top-0 bottom-0 z-10 w-1 cursor-col-resize transition-colors hover:bg-primary/20"

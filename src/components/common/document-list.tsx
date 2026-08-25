@@ -507,7 +507,14 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
         <TableCell className="w-12">
           <DocumentIcon document={document} chip />
         </TableCell>
-        <TableCell className="font-medium max-w-xs">
+        {/* `w-full max-w-0`: a table cell sizes to its MIN-CONTENT width, and
+            `truncate` (white-space: nowrap) makes that the full title string —
+            which pushed the table past a phone's viewport and clipped the
+            Actions column off-screen. max-w-0 lets the cell shrink; w-full then
+            hands it whatever the fixed-width columns leave over. Below md
+            only: from md up the other columns reappear and the old auto layout
+            (max-w-xs) is what keeps them all readable. */}
+        <TableCell className="font-medium w-full max-w-0 md:w-auto md:max-w-xs">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="truncate" title={display.title}>{display.title}</span>
@@ -1794,13 +1801,17 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                     title="Select all on this page"
                   />
                 </TableHead>
-                <SortableTableHead label="Type" sortKey="type" sort={sort} onSort={toggleSort} className="w-12" />
-                <SortableTableHead label="Title" sortKey="title" sort={sort} onSort={toggleSort} />
+                {/* Below md the header labels for the two icon-only columns are
+                    screen-reader-only: "Type" and "Actions" are each wider than
+                    the column they head, and that width comes straight out of
+                    the title. */}
+                <SortableTableHead label={<span className="max-md:sr-only">Type</span>} sortKey="type" sort={sort} onSort={toggleSort} className="w-12" />
+                <SortableTableHead label="Title" sortKey="title" sort={sort} onSort={toggleSort} className="w-full max-w-0 md:w-auto md:max-w-none" />
                 <SortableTableHead label="Schema" sortKey="schema" sort={sort} onSort={toggleSort} className="hidden md:table-cell" />
                 <SortableTableHead label="ID" sortKey="id" sort={sort} onSort={toggleSort} className="hidden lg:table-cell" />
                 <TableHead className="hidden lg:table-cell">Checksum</TableHead>
                 <SortableTableHead label="Created" sortKey="created" sort={sort} onSort={toggleSort} className="hidden sm:table-cell" />
-                <TableHead>Actions</TableHead>
+                <TableHead className="w-12 md:w-auto"><span className="max-md:sr-only">Actions</span></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

@@ -1261,7 +1261,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, backfillLimit, prefill, o
           <div className="space-y-4">
             <div className="rounded-xl border border-dashed p-6 text-center">
               <p className="text-base font-medium">No rules yet</p>
-              <p className="mt-1 text-sm text-muted-foreground">Pick a starting point below, or right-click a folder in the tree and choose “Add rule…”.</p>
+              <p className="mt-1 text-sm text-muted-foreground">Pick a starting point below, or right-click a folder in the tree and choose “Create rule…”.</p>
             </div>
             {gallery}
           </div>

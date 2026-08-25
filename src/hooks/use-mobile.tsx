@@ -12,6 +12,9 @@ export const MOBILE_BREAKPOINT = 768
 
 const MOBILE_QUERY = `(max-width: ${MOBILE_BREAKPOINT - 1}px)`
 
+/** Matches `--breakpoint-lg` in src/theme/css/layout.css. See useIsTooNarrowToDock. */
+export const DOCK_BREAKPOINT = 1024
+
 /**
  * Subscribe/snapshot pair for a media query, cached per query string.
  *
@@ -67,6 +70,24 @@ function storeFor(query: string) {
 export function useIsMobile(): boolean {
   const store = storeFor(MOBILE_QUERY)
   return useSyncExternalStore(store.subscribe, store.getSnapshot, () => false)
+}
+
+/**
+ * True when the viewport is too narrow to dock a side panel BESIDE the content.
+ *
+ * `useIsMobile` answers "is this a phone-shaped viewport", which is the right
+ * question for a full-screen drawer but the wrong one for the docked toolbox /
+ * add panel. Those are ~420px flex siblings sitting next to a 48px rail and,
+ * when it is open, a 280px menu panel. A landscape phone (a P30 is 780x360)
+ * clears the `md` breakpoint by 12px, so the shell laid all of that out side by
+ * side and the content column collapsed to nothing — the page text squeezed
+ * into a sliver on the left, or vanished entirely.
+ *
+ * Docking is only worth it when the content keeps a readable column of its own,
+ * so these panels go full-drawer below `lg` rather than below `md`.
+ */
+export function useIsTooNarrowToDock(): boolean {
+  return useMediaQuery(`(max-width: ${DOCK_BREAKPOINT - 1}px)`)
 }
 
 /** Same contract as useIsMobile, for an arbitrary media query. */

@@ -2,7 +2,7 @@ import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { LayoutGrid, SlidersHorizontal, Brain, Bell, X, Maximize2, Minimize2, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useIsMobile } from '@/hooks/use-mobile'
+import { useIsTooNarrowToDock } from '@/hooks/use-mobile'
 import { useToolbox } from './use-toolbox'
 import { type T1View } from './toolbox-context'
 import { HomePanel } from './panels/HomePanel'
@@ -24,8 +24,14 @@ const TABS: Array<{ view: Exclude<T1View, null>; icon: LucideIcon; label: string
 const DEFAULT_WIDTH = 420
 const MIN_WIDTH = 340
 const WIDTH_KEY = 'toolbox:width'
+// The content column keeps this much room whatever the panel is dragged to —
+// a saved width from a wide monitor must not squeeze the page to nothing when
+// the same profile is opened on a small laptop or a tablet.
+const MIN_CONTENT_WIDTH = 360
+const RAIL_WIDTH = 48
 const clampWidth = (w: number) => {
-  const max = typeof window !== 'undefined' ? Math.round(window.innerWidth * 0.7) : 1200
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1600
+  const max = Math.max(MIN_WIDTH, Math.min(Math.round(vw * 0.7), vw - RAIL_WIDTH - MIN_CONTENT_WIDTH))
   return Math.max(MIN_WIDTH, Math.min(w, max))
 }
 const halfScreen = () => (typeof window !== 'undefined' ? Math.round(window.innerWidth / 2) : 720)
@@ -41,7 +47,9 @@ export function ToolboxPanel() {
   useEscapeClose(closeT1, state.t1Open && !state.t2Open)
   useEscapeClose(closeT2, state.t2Open)
   const { t1Open, t1View, t2Open, t2AgentId, activeAccentColor } = state
-  const isMobile = useIsMobile()
+  // Drawer vs docked card: what matters is whether the content column
+  // survives docking, not whether this is a phone-shaped viewport.
+  const asDrawer = useIsTooNarrowToDock()
 
   const [width, setWidth] = useState<number>(() => {
     const raw = typeof window !== 'undefined' ? Number(localStorage.getItem(WIDTH_KEY)) : NaN
@@ -90,22 +98,22 @@ export function ToolboxPanel() {
   return (
     <>
       {/* Mobile scrim — same treatment as the AddPanel / M1-M2 drawers. */}
-      {isMobile && (
+      {asDrawer && (
         <div className="fixed inset-0 z-panel-scrim bg-scrim animate-fade-in" onClick={closeT1} aria-hidden />
       )}
     <div
-      style={isMobile ? undefined : { width }}
+      style={asDrawer ? undefined : { width }}
       className={cn(
         'flex flex-col overflow-hidden border bg-card surface-glass text-foreground',
         // Mobile: full drawer over the scrim. Desktop: a resizable card that sits
         // as the right-most flex sibling (same chrome as the + AddPanel).
-        isMobile
+        asDrawer
           ? 'fixed bottom-2 left-2 right-2 top-2 z-panel rounded-2xl shadow-elevation-5 animate-fade-in'
           : 'relative shrink-0 rounded-xl shadow-elevation-3',
       )}
     >
       {/* Resize handle — desktop only, on the left (content-facing) edge. */}
-      {!isMobile && (
+      {!asDrawer && (
         <div
           onMouseDown={onDragStart}
           className="absolute left-0 top-0 z-20 h-full w-1.5 cursor-col-resize hover:bg-primary/20"
@@ -144,7 +152,7 @@ export function ToolboxPanel() {
           ))}
         </div>
         <div className="flex items-center gap-0.5">
-          {!isMobile && (
+          {!asDrawer && (
             <button
               type="button"
               onClick={toggleWide}
