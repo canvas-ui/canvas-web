@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Plus, Save, Trash2, RefreshCw, Power, PowerOff, GitBranch, BookOpen, History, RotateCcw, Maximize2, Minimize2, Inbox, Play, Sparkles, Terminal, SlidersHorizontal } from 'lucide-react'
+import { Fragment, useEffect, useState } from 'react'
+import { Plus, Save, Trash2, RefreshCw, Power, PowerOff, GitBranch, BookOpen, History, RotateCcw, Maximize2, Minimize2, Inbox, Play, Sparkles, Terminal, SlidersHorizontal, ScrollText, X, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CodeEditor } from '@/components/ui/code-editor'
@@ -18,6 +18,7 @@ import {
   getHooksMeta,
   generateHook,
   listRuns,
+  getRun,
   replayRun,
   listPendingActions,
   runHook,
@@ -43,6 +44,10 @@ interface HooksPanelProps {
   workspaceId: string
   /** Section to open with (deep link: settings/hooks?section=runs). */
   initialSection?: Section
+  /** Runs section: filter to one handler (rule id / hook path) — `?handler=`. */
+  initialRunsHandler?: string
+  /** Runs section: open this run's details on load — `?run=<runId>`. */
+  initialRunId?: string
   /** Open the rule builder with a folder rule prefilled (backends-tree context menu → Add rule). */
   prefillRule?: RulePrefill | null
   onPrefillConsumed?: () => void
@@ -54,7 +59,7 @@ const NEW_SCRIPT_TEMPLATE = `#!/usr/bin/env bash
 set -euo pipefail
 `
 
-export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed, initialSection }: HooksPanelProps) {
+export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed, initialSection, initialRunsHandler, initialRunId }: HooksPanelProps) {
   const { showToast } = useToast()
   const [section, setSection] = useState<Section>(initialSection ?? 'rules')
   // A prefill always lands in the Rules section, whatever was open before
@@ -79,6 +84,23 @@ export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed, initia
   const [isCreating, setIsCreating] = useState(false)
   const [runs, setRuns] = useState<HookRun[]>([])
   const [runsFailedOnly, setRunsFailedOnly] = useState(false)
+  // Runs filtered to one rule / hook (from a rule card's "ran N×" or ?handler=).
+  const [runsHandler, setRunsHandler] = useState<string | null>(initialRunsHandler || null)
+  // Expanded run (execution trace), fetched on demand from GET /runs/:runId.
+  const [openRun, setOpenRun] = useState<{ runId: string; run: HookRun | null; error?: string } | null>(
+    initialRunId ? { runId: initialRunId, run: null } : null,
+  )
+  const toggleRun = (runId: string) => {
+    setOpenRun((cur) => (cur?.runId === runId ? null : { runId, run: null }))
+  }
+  useEffect(() => {
+    if (!openRun || openRun.run || openRun.error) return
+    let cancelled = false
+    getRun(workspaceId, openRun.runId)
+      .then((run) => { if (!cancelled) setOpenRun((cur) => (cur?.runId === run.runId ? { runId: run.runId, run } : cur)) })
+      .catch((err) => { if (!cancelled) setOpenRun((cur) => (cur?.runId === openRun.runId ? { ...cur, error: err instanceof Error ? err.message : 'Failed to load run' } : cur)) })
+    return () => { cancelled = true }
+  }, [workspaceId, openRun])
   const [replayingId, setReplayingId] = useState<string | null>(null)
   const [isMaximized, setIsMaximized] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
@@ -133,7 +155,7 @@ export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed, initia
     if (section === 'runs') {
       try {
         setIsLoading(true)
-        setRuns(await listRuns(workspaceId, { limit: 100, failed: runsFailedOnly || undefined }))
+        setRuns(await listRuns(workspaceId, { limit: 100, failed: runsFailedOnly || undefined, handler: runsHandler || undefined }))
       } catch {
         showToast({ title: 'Error', description: 'Failed to load hook runs', variant: 'destructive' })
       } finally {
@@ -152,7 +174,7 @@ export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed, initia
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { loadFiles() }, [workspaceId, section, runsFailedOnly])
+  useEffect(() => { loadFiles() }, [workspaceId, section, runsFailedOnly, runsHandler])
 
   const switchSection = (next: Section) => {
     if (next === section) return
@@ -361,6 +383,16 @@ export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed, initia
         <div className="flex flex-wrap items-center justify-end gap-2">
           {section === 'runs' && (
             <>
+              {runsHandler && (
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 rounded-full border bg-muted/50 px-2.5 py-1 font-mono text-xs hover:bg-muted"
+                  title="Showing runs of this rule / hook only — click to clear"
+                  onClick={() => setRunsHandler(null)}
+                >
+                  {runsHandler} <X className="h-3 w-3" />
+                </button>
+              )}
               <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
                 <input type="checkbox" checked={runsFailedOnly} onChange={(e) => setRunsFailedOnly(e.target.checked)} />
                 failed only
@@ -394,6 +426,7 @@ export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed, initia
         <RuleBuilder
           workspaceId={workspaceId}
           backfillLimit={batchLimit}
+          onShowRuns={(handler) => { setRunsHandler(handler); switchSection('runs') }}
           prefill={prefillRule}
           onPrefillConsumed={onPrefillConsumed}
           onOpenJson={async () => {
@@ -434,7 +467,8 @@ export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed, initia
               </thead>
               <tbody>
                 {runs.map((run) => (
-                  <tr key={run.runId} className="border-b last:border-0 align-top hover:bg-muted/40">
+                  <Fragment key={run.runId}>
+                  <tr className="border-b last:border-0 align-top hover:bg-muted/40">
                     <td className="px-3 py-1.5 whitespace-nowrap text-xs text-muted-foreground" title={run.ts}>
                       {new Date(run.ts).toLocaleString()}
                     </td>
@@ -472,7 +506,15 @@ export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed, initia
                         </span>
                       ))}
                     </td>
-                    <td className="px-2 py-1.5">
+                    <td className="px-2 py-1.5 whitespace-nowrap">
+                      <Button
+                        size="sm" variant="ghost" className="h-6 px-1.5 touch-target"
+                        title={run.traceLines ? `Execution log (${run.traceLines} lines)` : 'Execution log'}
+                        onClick={() => toggleRun(run.runId)}
+                      >
+                        <ScrollText className="h-3.5 w-3.5" />
+                        <ChevronDown className={`ml-0.5 h-3 w-3 transition-transform ${openRun?.runId === run.runId ? 'rotate-180' : ''}`} />
+                      </Button>
                       {run.handlerType !== 'dispatch' && (
                         <Button
                           size="sm" variant="ghost" className="h-6 w-6 p-0 touch-target"
@@ -485,6 +527,14 @@ export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed, initia
                       )}
                     </td>
                   </tr>
+                  {openRun?.runId === run.runId && (
+                    <tr className="border-b last:border-0 bg-muted/30">
+                      <td colSpan={7} className="px-3 py-2">
+                        <RunDetails state={openRun} />
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -772,6 +822,54 @@ export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed, initia
           is arbitrary but git needs one). Pushes hot-reload hooks.
         </span>
       </p>
+    </div>
+  )
+}
+
+
+// Execution log of one run: the trace lines the handler wrote (agent prompt
+// and reply, notify delivery, where a store/download landed), plus the
+// per-action outcomes and the triggering envelope.
+function RunDetails({ state }: { state: { runId: string; run: HookRun | null; error?: string } }) {
+  if (state.error) return <p className="text-xs text-destructive">{state.error}</p>
+  if (!state.run) return <p className="text-xs text-muted-foreground">Loading…</p>
+  const run = state.run
+  const levelClass: Record<string, string> = {
+    error: 'text-destructive',
+    warn: 'text-warning',
+    info: 'text-foreground',
+    debug: 'text-muted-foreground',
+  }
+  return (
+    <div className="space-y-2 text-xs">
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
+        <span>run <span className="font-mono">{run.runId}</span></span>
+        <span>trigger <span className="font-mono">{run.trigger}</span></span>
+        {run.eventId && <span>event <span className="font-mono">{run.eventId}</span></span>}
+        <span>{run.durationMs} ms</span>
+      </div>
+      {run.actions && run.actions.length > 0 && (
+        <ol className="space-y-0.5 font-mono">
+          {run.actions.map((a, i) => (
+            <li key={i} className={a.status === 'error' ? 'text-destructive' : a.status === 'skipped' ? 'text-muted-foreground' : ''}>
+              {i + 1}. {a.action} → {a.status}{a.error ? ` — ${a.error}` : ''}
+            </li>
+          ))}
+        </ol>
+      )}
+      {run.trace && run.trace.length > 0 ? (
+        <pre className="max-h-96 overflow-auto rounded-md border bg-background p-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-all">
+          {run.trace.map((line, i) => (
+            <span key={i} className={`block ${levelClass[line.level] || ''}`}>
+              <span className="text-muted-foreground">+{String(line.t).padStart(5, ' ')}ms </span>
+              <span className="uppercase text-muted-foreground">{line.level.padEnd(5, ' ')} </span>
+              {line.msg}
+            </span>
+          ))}
+        </pre>
+      ) : (
+        <p className="text-muted-foreground">No execution log recorded for this run{run.error ? '' : ' (older runs predate tracing)'}.</p>
+      )}
     </div>
   )
 }

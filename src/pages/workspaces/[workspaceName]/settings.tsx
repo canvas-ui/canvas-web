@@ -952,6 +952,8 @@ export default function WorkspaceSettingsPage() {
   // ?section=runs|hooks|scripts|pending deep-links a Hooks panel section.
   const sectionParam = searchParams.get('section')
   const hooksSection = (['pending', 'rules', 'hooks', 'scripts', 'runs'] as const).find((s) => s === sectionParam)
+  const runsHandlerParam = searchParams.get('handler') || undefined
+  const runIdParam = searchParams.get('run') || undefined
   const addRuleKind = searchParams.get('addRuleKind')
   const addRulePath = searchParams.get('addRulePath')
   const addRuleTarget = searchParams.get('addRuleTarget')
@@ -1699,7 +1701,7 @@ export default function WorkspaceSettingsPage() {
 
       {activeTab === 'hooks' && (
         <section className="rounded-lg border p-4">
-          <HooksPanel workspaceId={workspaceId} prefillRule={prefillRule} onPrefillConsumed={clearRulePrefill} initialSection={hooksSection} />
+          <HooksPanel workspaceId={workspaceId} prefillRule={prefillRule} onPrefillConsumed={clearRulePrefill} initialSection={hooksSection} initialRunsHandler={runsHandlerParam} initialRunId={runIdParam} />
         </section>
       )}
       </div>

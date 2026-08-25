@@ -284,6 +284,13 @@ export interface HookRunActionResult {
   error?: string
 }
 
+/** One line of a run's execution trace (see run-log.js createRunTrace). */
+export interface HookTraceLine {
+  t: number // ms since the run started
+  level: 'debug' | 'info' | 'warn' | 'error'
+  msg: string
+}
+
 export interface HookRun {
   runId: string
   ts: string
@@ -298,10 +305,19 @@ export interface HookRun {
   docIds: number[]
   durationMs: number
   status: 'ok' | 'error' | 'skipped'
+  /** Full trace — only on GET /runs/:runId; the list carries traceLines instead. */
+  trace?: HookTraceLine[]
+  traceLines?: number
   error?: string
   skipReason?: string
   actions?: HookRunActionResult[]
   outputTail?: string
+}
+
+/** One run with its execution trace (what the agent was asked/answered, where files landed). */
+export async function getRun(workspaceId: string, runId: string): Promise<HookRun> {
+  const res = await api.get<HookRun>(`${hooksBase(workspaceId)}/runs/${encodeURIComponent(runId)}`)
+  return res
 }
 
 export async function listRuns(

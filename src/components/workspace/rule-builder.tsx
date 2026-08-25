@@ -26,6 +26,8 @@ interface RuleBuilderProps {
   workspaceId: string
   /** Open rules.json in the advanced editor (Hooks section). */
   onOpenJson?: () => void
+  /** Show the Runs section filtered to one rule (its execution log). */
+  onShowRuns?: (handler: string) => void
   /** Documents per backfill pass (see hooks.ts DEFAULT_BACKFILL_LIMIT). */
   backfillLimit?: number
   /** Open the form prefilled from a tree context menu (mirror / store rule). */
@@ -687,7 +689,7 @@ function IconBadge({ icon: Icon, tone, size = 'md' }: { icon: LucideIcon; tone: 
 
 // ── component ────────────────────────────────────────────────────────────────
 
-export function RuleBuilder({ workspaceId, onOpenJson, backfillLimit, prefill, onPrefillConsumed }: RuleBuilderProps) {
+export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit, prefill, onPrefillConsumed }: RuleBuilderProps) {
   const { showToast } = useToast()
   const [rules, setRules] = useState<HookRule[]>([])
   const [runStats, setRunStats] = useState<Record<string, RunStat>>({})
@@ -917,9 +919,14 @@ export function RuleBuilder({ workspaceId, onOpenJson, backfillLimit, prefill, o
           )}
           <p className="text-xs text-muted-foreground">
             {stat ? (
-              <span className={stat.last.status === 'error' ? 'text-destructive' : ''} title={stat.last.error || stat.last.skipReason || ''}>
+              <button
+                type="button"
+                className={cn('underline-offset-2 hover:underline', stat.last.status === 'error' && 'text-destructive', !onShowRuns && 'cursor-default hover:no-underline')}
+                title={onShowRuns ? 'Show this rule\'s run log' : (stat.last.error || stat.last.skipReason || '')}
+                onClick={() => onShowRuns?.(rule.id)}
+              >
                 ran {stat.count}×{stat.errors ? ` (${stat.errors} failed)` : ''} · last {stat.last.status} {relativeTime(stat.last.ts)}
-              </span>
+              </button>
             ) : 'not run yet'}
           </p>
         </div>
