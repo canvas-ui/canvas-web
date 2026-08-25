@@ -11,7 +11,7 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import { getWorkspace, getCachedWorkspaceTreeByName, invalidateWorkspaceTreeCache, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer, pasteDocumentsToWorkspacePath, createPublicCanvasShare, listBackends, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
 import type { Layer } from '@/services/workspace'
 import { useTreeOperations } from '@/hooks/useTreeOperations'
-import { listHooks, runHook, findBackendTreeSyncHook, splitBackendsPath, defaultMirrorTarget } from '@/services/hooks'
+import { listHooks, runHook, findBackendTreeSyncHook, splitBackendsPath, defaultMirrorTarget, defaultStoreFolder, rulePrefillParams, type RulePrefill } from '@/services/hooks'
 import { useToast } from '@/components/ui/use-toast'
 import type { TreeNode } from '@/types/workspace'
 import socketService from '@/lib/socket'
@@ -477,6 +477,16 @@ export function WorkspaceM2() {
               navigate(`/workspaces/${wsName}/settings/hooks?${params.toString()}`)
             } : undefined}
             onSyncFolderTree={wsName && activeTab === 'backends' ? handleSyncFolderTree : undefined}
+            onAddStoreRule={wsName ? (path) => {
+              // Storage rule prefilled from either side: a backends folder is
+              // the DESTINATION (backend + folder below its root); a context /
+              // directory folder is the CONDITION, mirrored 1:1 below the
+              // default backend's root.
+              const prefill: RulePrefill = activeTab === 'backends'
+                ? (() => { const parts = splitBackendsPath(path); return { kind: 'store', storeTo: parts?.backend || '', storeFolder: parts?.rel || '' } })()
+                : { kind: 'store', path: `${activeTab === 'directory' ? 'dir' : 'ctx'}:${path}`, storeFolder: defaultStoreFolder(path) }
+              navigate(`/workspaces/${wsName}/settings/hooks?${rulePrefillParams(prefill).toString()}`)
+            } : undefined}
             pastedDocumentIds={docClipboard?.documentIds}
             onPasteDocuments={wsName && activeTab !== 'backends' ? async (path, ids) => {
               // Ungated on the clipboard: also serves drag-and-drop from the

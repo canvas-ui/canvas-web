@@ -9,8 +9,7 @@ import {
   ChevronRight, ChevronDown,
   Plus, Trash2, Edit2, Copy, Scissors, Clipboard,
   Layers, LayoutDashboard, MoreHorizontal, Lock, Unlock, Eye, Share2, Palette, RefreshCw,
-  FolderSymlink, FolderTree, ArrowDownToLine, ArrowUpFromLine,
-} from 'lucide-react'
+  FolderSymlink, FolderTree, ArrowDownToLine, ArrowUpFromLine, HardDrive } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import { cn, isCoarsePointer } from '@/lib/utils'
 import type { TreeNode, LayerMetadata } from '@/types/workspace'
@@ -56,6 +55,11 @@ export interface MenuTreeViewProps {
   // the folder-skeleton sync hook for this subtree.
   onAddRule?: (path: string) => void
   onSyncFolderTree?: (path: string) => Promise<boolean>
+  // Any tree: open the rule builder prefilled with a storage rule — files
+  // filed under this folder keep their bytes on a real backend (context /
+  // directory trees: this path is the condition; backends tree: this folder
+  // is the destination).
+  onAddStoreRule?: (path: string) => void
   // Writable file-backend folder ops (real fs dirs under /file/<addr> in the
   // backends tree).
   onCreateBackendFolder?: (parentPath: string, name: string) => Promise<boolean>
@@ -139,6 +143,7 @@ interface CtxMenuProps {
   onResyncBackend?: MenuTreeViewProps['onResyncBackend']
   onAddRule?: MenuTreeViewProps['onAddRule']
   onSyncFolderTree?: MenuTreeViewProps['onSyncFolderTree']
+  onAddStoreRule?: MenuTreeViewProps['onAddStoreRule']
   onRenameBackendFolder?: MenuTreeViewProps['onRenameBackendFolder']
   onDeleteBackendFolder?: MenuTreeViewProps['onDeleteBackendFolder']
   onCopy: (path: string) => void
@@ -153,7 +158,7 @@ function CtxMenu({
   sourceLayer, targetLayers, clipboard,
   onStartInlineCreate, onChangeIcon, onNewCanvas, onShareCanvas, onRemove, onRename,
   onLock, onUnlock, onDestroy, onMerge, onSubtract, onMergeDown, onSubtractDown, onResyncBackend,
-  onAddRule, onSyncFolderTree,
+  onAddRule, onSyncFolderTree, onAddStoreRule,
   onRenameBackendFolder, onDeleteBackendFolder,
   onCopy, onCut, onPaste,
   pastedDocumentIds, onPasteDocuments,
@@ -226,13 +231,27 @@ function CtxMenu({
             prefilled with a recursive link of this folder into the directory
             tree; "Sync folders" runs the skeleton hook for this subtree so
             empty folders show up too. */}
-        {isBackendsTree && backendNameForPath(path, isBackendsTree) && (onAddRule || onSyncFolderTree) && (
+        {isBackendsTree && backendNameForPath(path, isBackendsTree) && (onAddRule || onSyncFolderTree || onAddStoreRule) && (
           <>
             {onAddRule && item(<FolderSymlink className="w-3 h-3" />, 'Add rule: file into Directory…', async () => {
               onAddRule(path)
             })}
+            {onAddStoreRule && fileBackendTarget(path, isBackendsTree) && item(<HardDrive className="w-3 h-3" />, 'Add rule: store files here…', async () => {
+              onAddStoreRule(path)
+            })}
             {onSyncFolderTree && item(<FolderTree className="w-3 h-3" />, 'Sync folders into Directory', async () => {
               await onSyncFolderTree(path)
+            })}
+            <div className="my-1 h-px bg-border" />
+          </>
+        )}
+        {/* Storage rule from a context/directory folder: "files filed here
+            keep their bytes on a real backend" (default workspace:home,
+            mirroring this path). */}
+        {!isBackendsTree && onAddStoreRule && path !== '/' && (
+          <>
+            {item(<HardDrive className="w-3 h-3" />, 'Add rule: store files filed here on…', async () => {
+              onAddStoreRule(path)
             })}
             <div className="my-1 h-px bg-border" />
           </>
@@ -711,7 +730,7 @@ function CardNode({
 
 export function MenuTreeView({
   root, treeName = 'context', isBackendsTree = false, selectedPath, pendingPath, onSelect, isLoading = false, readOnly = false,
-  onAddRule, onSyncFolderTree,
+  onAddRule, onSyncFolderTree, onAddStoreRule,
   rootLabel, contentPath, onShowContent, onOpenToSide,
   onInsertPath, onNewCanvas, onShareCanvas, onRemovePath, onRenamePath, onMovePath, onCopyPath,
   pastedDocumentIds, onPasteDocuments,
@@ -1207,6 +1226,7 @@ export function MenuTreeView({
           onResyncBackend={onResyncBackend}
           onAddRule={onAddRule}
           onSyncFolderTree={onSyncFolderTree}
+          onAddStoreRule={onAddStoreRule}
           onRenameBackendFolder={onRenameBackendFolder}
           onDeleteBackendFolder={onDeleteBackendFolder}
           onCopy={path => {

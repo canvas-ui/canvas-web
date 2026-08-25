@@ -15,6 +15,7 @@ import { PageHeader } from '@/components/common/page-header'
 import { WORKSPACE_SETTINGS_SECTIONS, resolveWorkspaceSettingsTab, type WorkspaceSettingsTab } from '@/lib/settings-sections'
 import { InferdSettingsPanel } from '@/components/workspace/inferd-settings-panel'
 import { HooksPanel } from '@/components/workspace/hooks-panel'
+import type { RulePrefill } from '@/services/hooks'
 import { TrashPanel } from '@/components/workspace/trash-panel'
 import { ConnectorsSection } from '@/components/settings/ConnectorsSection'
 import { ImapMailboxesPanel } from '@/components/workspace/imap-mailboxes-panel'
@@ -948,11 +949,23 @@ export default function WorkspaceSettingsPage() {
   // ?addRulePath=backends:/workspace/home/foo&addRuleTarget=dir:/foo — deep
   // link from the backends tree's "Add rule" context-menu item.
   const [searchParams, setSearchParams] = useSearchParams()
+  const addRuleKind = searchParams.get('addRuleKind')
   const addRulePath = searchParams.get('addRulePath')
   const addRuleTarget = searchParams.get('addRuleTarget')
-  const prefillRule = useMemo(() => (addRulePath ? { path: addRulePath, target: addRuleTarget || 'dir:/' } : null), [addRulePath, addRuleTarget])
+  const addRuleStoreTo = searchParams.get('addRuleStoreTo')
+  const addRuleStoreFolder = searchParams.get('addRuleStoreFolder')
+  const prefillRule = useMemo<RulePrefill | null>(() => {
+    if (addRuleKind === 'store') {
+      if (!addRulePath && !addRuleStoreTo && !addRuleStoreFolder) return null
+      return { kind: 'store', path: addRulePath || '', storeTo: addRuleStoreTo || '', storeFolder: addRuleStoreFolder || '' }
+    }
+    return addRulePath ? { kind: 'mirror', path: addRulePath, target: addRuleTarget || 'dir:/' } : null
+  }, [addRuleKind, addRulePath, addRuleTarget, addRuleStoreTo, addRuleStoreFolder])
   const clearRulePrefill = useCallback(() => {
-    setSearchParams((prev) => { prev.delete('addRulePath'); prev.delete('addRuleTarget'); return prev }, { replace: true })
+    setSearchParams((prev) => {
+      for (const key of ['addRuleKind', 'addRulePath', 'addRuleTarget', 'addRuleStoreTo', 'addRuleStoreFolder']) prev.delete(key)
+      return prev
+    }, { replace: true })
   }, [setSearchParams])
   const navigate = useNavigate()
   const { showToast } = useToast()

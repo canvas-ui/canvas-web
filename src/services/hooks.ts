@@ -145,12 +145,39 @@ export function defaultMirrorTarget(backendsPath: string): string {
   return `dir:/${parts?.rel || ''}`
 }
 
-/** Prefill for the rule builder's "file this folder into…" flow (context menu on a backends-tree node). */
+/**
+ * Prefill for the rule builder, produced by tree context menus.
+ *  - `mirror` (default): file everything under a backends-tree folder into
+ *    the directory tree (recursive link) — `path` + `target`.
+ *  - `store`: keep the bytes of files filed under `path` on a real storage
+ *    backend (`storeTo`) in `storeFolder`, sub-folders kept.
+ */
 export interface RulePrefill {
-  /** Tree-qualified source prefix, e.g. `backends:/workspace/home/foo`. */
-  path: string
-  /** Link target, e.g. `dir:/foo`. */
-  target: string
+  kind?: 'mirror' | 'store'
+  /** Tree-qualified source prefix, e.g. `backends:/workspace/home/foo` or `ctx:/projects/canvas/UI`. */
+  path?: string
+  /** Link target, e.g. `dir:/foo` (mirror). */
+  target?: string
+  /** Storage backend address, e.g. `workspace:home` (store); empty = builder picks the default. */
+  storeTo?: string
+  /** Folder below the backend root, e.g. `Projects/Canvas/UI` (store). */
+  storeFolder?: string
+}
+
+/** Query-string form of a prefill (settings/hooks?addRule…), the inverse of the settings page's parser. */
+export function rulePrefillParams(prefill: RulePrefill): URLSearchParams {
+  const params = new URLSearchParams()
+  if (prefill.kind && prefill.kind !== 'mirror') params.set('addRuleKind', prefill.kind)
+  if (prefill.path) params.set('addRulePath', prefill.path)
+  if (prefill.target) params.set('addRuleTarget', prefill.target)
+  if (prefill.storeTo) params.set('addRuleStoreTo', prefill.storeTo)
+  if (prefill.storeFolder) params.set('addRuleStoreFolder', prefill.storeFolder)
+  return params
+}
+
+/** Folder on a backend that mirrors a tree path 1:1: `/projects/canvas/UI` → `projects/canvas/UI`. */
+export function defaultStoreFolder(treePath: string): string {
+  return String(treePath || '').replace(/^[a-z]+:/i, '').split('/').filter(Boolean).join('/')
 }
 
 /** The shipped folder-skeleton sync hook (started/…backend-tree-sync.js), enabled copy first; null when the workspace has none. */

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Plus, Save, Trash2, RefreshCw, Power, PowerOff, GitBranch, BookOpen, History, RotateCcw, Maximize2, Minimize2, Inbox, Play } from 'lucide-react'
+import { Plus, Save, Trash2, RefreshCw, Power, PowerOff, GitBranch, BookOpen, History, RotateCcw, Maximize2, Minimize2, Inbox, Play, Sparkles, Terminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CodeEditor } from '@/components/ui/code-editor'
+import { TabBar } from '@/components/ui/tabs'
 import { useToast } from '@/components/ui/use-toast'
 import { API_URL } from '@/config/api'
 import {
@@ -325,54 +326,22 @@ export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed }: Hook
             commits to the workspace git repo.
           </p>
         </div>
-        <div className="flex shrink-0 gap-2 max-sm:-mx-1 max-sm:overflow-x-auto max-sm:px-1 max-sm:pb-1 scrollbar-none">
-          <div className="flex shrink-0 rounded-md border">
-            <Button
-              size="sm"
-              variant={section === 'pending' ? 'secondary' : 'ghost'}
-              className="rounded-r-none"
-              onClick={() => switchSection('pending')}
-            >
-              <Inbox className="mr-1 h-3.5 w-3.5" /> Pending
-              {pendingCount > 0 && (
-                <span className="ml-1.5 rounded-full bg-warning/20 px-1.5 py-0.5 text-[10px] font-semibold text-warning dark:text-warning">
-                  {pendingCount}
-                </span>
-              )}
-            </Button>
-            <Button
-              size="sm"
-              variant={section === 'rules' ? 'secondary' : 'ghost'}
-              className="rounded-none"
-              onClick={() => switchSection('rules')}
-            >
-              Rules
-            </Button>
-            <Button
-              size="sm"
-              variant={section === 'hooks' ? 'secondary' : 'ghost'}
-              className="rounded-none"
-              onClick={() => switchSection('hooks')}
-            >
-              Hooks
-            </Button>
-            <Button
-              size="sm"
-              variant={section === 'scripts' ? 'secondary' : 'ghost'}
-              className="rounded-none"
-              onClick={() => switchSection('scripts')}
-            >
-              Scripts
-            </Button>
-            <Button
-              size="sm"
-              variant={section === 'runs' ? 'secondary' : 'ghost'}
-              className="rounded-l-none"
-              onClick={() => switchSection('runs')}
-            >
-              <History className="mr-1 h-3.5 w-3.5" /> Runs
-            </Button>
+        <div className="flex min-w-0 flex-col gap-2 sm:shrink-0 sm:flex-row sm:items-center">
+          <div className="w-full min-w-0 sm:w-auto">
+            <TabBar<Section>
+              className="border-b-0"
+              active={section}
+              onChange={switchSection}
+              tabs={[
+                { id: 'pending', label: pendingCount > 0 ? `Pending (${pendingCount})` : 'Pending', icon: Inbox },
+                { id: 'rules', label: 'Rules', icon: Sparkles },
+                { id: 'hooks', label: 'Hooks', icon: GitBranch },
+                { id: 'scripts', label: 'Scripts', icon: Terminal },
+                { id: 'runs', label: 'Runs', icon: History },
+              ]}
+            />
           </div>
+          <div className="flex items-center gap-2">
           {section === 'runs' && (
             <>
               <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
@@ -416,6 +385,7 @@ export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed }: Hook
               </Button>
             </>
           )}
+          </div>
         </div>
       </div>
 
