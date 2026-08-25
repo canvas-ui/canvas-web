@@ -17,6 +17,10 @@ export const EMAIL_SCHEMA = 'data/schema/message/email'
 export const TODO_SCHEMA = 'data/schema/task'
 export const IDENTITY_SCHEMA = 'data/schema/identity'
 
+export function schemaLeaf(schema: string, parent: string): string {
+  return schema.startsWith(`${parent}/`) ? schema.slice(parent.length + 1) : ''
+}
+
 export type MimeKind = 'image' | 'audio' | 'video' | 'pdf' | 'text' | 'markdown' | 'binary'
 
 // Filename extension → concrete MIME. Used both to classify a document whose

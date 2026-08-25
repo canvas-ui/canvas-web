@@ -1121,9 +1121,8 @@ export async function getDocumentMemberships(
 /**
  * Every identity in the workspace of a given subtype, newest first.
  *
- * synapsd derives a bitmap per subtype from the schema registry's
- * `subtypeField: 'data.type'`, so `data/schema/identity/organization` filters
- * server-side — no fetch-everything-then-filter.
+ * Closed-enum children are registered schema ids, so
+ * `data/schema/identity/organization` filters server-side — no fetch-everything-then-filter.
  */
 export async function listWorkspaceIdentities(
   workspaceId: string,

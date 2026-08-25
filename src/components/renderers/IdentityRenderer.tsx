@@ -1,6 +1,6 @@
 import { Mail, Phone, MessageSquare, Globe, Link as LinkIcon, Building2, Fingerprint, Star } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { RendererProps } from './types'
+import { IDENTITY_SCHEMA, schemaLeaf, type RendererProps } from './types'
 
 // Channel kinds we have a glyph for; anything else (the schema lets a connector
 // invent one) falls back to the generic message icon rather than being hidden.
@@ -85,7 +85,7 @@ export function IdentityRenderer({ document, className }: RendererProps) {
   const tags = asArray<string>(data.tags)
 
   const displayName = String(data.displayName || '').trim()
-  const type = String(data.type || '').trim()
+  const type = schemaLeaf(document.schema, IDENTITY_SCHEMA)
   const primaryEmail = String(data.primaryEmail || '').trim()
   const name = (data.name && typeof data.name === 'object' ? data.name : {}) as Record<string, unknown>
   const fullName = [name.prefix, name.given, name.middle, name.family, name.suffix]

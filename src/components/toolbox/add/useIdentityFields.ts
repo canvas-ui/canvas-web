@@ -2,12 +2,11 @@ import { useState } from 'react'
 import { tagsToFeatures } from './tags'
 import { submitDocuments, type AddTarget } from './useAddTarget'
 import { createDocumentRelations } from '@/services/workspace'
-import { IDENTITY_SCHEMA } from '@/components/renderers/types'
+import { IDENTITY_SCHEMA, schemaLeaf } from '@/components/renderers/types'
 
 const IDENTITY_SCHEMA_VERSION = '3.0'
 
-// Mirrors synapsd Identity.js `data.type` (the subtype axis — it is `type`, not
-// `kind`, because `kind` is a reserved facet namespace).
+// Mirrors synapsd Identity.js — the type is the schema-id leaf, not a payload field.
 export const IDENTITY_TYPES = ['person', 'organization', 'service', 'bot'] as const
 export type IdentityType = (typeof IDENTITY_TYPES)[number]
 
@@ -92,7 +91,6 @@ export function buildIdentityData(fields: IdentityFieldValues): Record<string, u
 
   return {
     displayName: fields.displayName.trim(),
-    type: fields.type,
     ...(email ? { primaryEmail: email } : {}),
     ...(given || family ? { name: { ...(given ? { given } : {}), ...(family ? { family } : {}) } } : {}),
     channels,
@@ -118,11 +116,11 @@ export function buildIdentityData(fields: IdentityFieldValues): Record<string, u
  * everything the form does not surface (links, properties, timezone, locale,
  * lastInteractionAt) is left in `data` untouched by the caller's spread.
  */
-export function identityFieldsFromDocument(data: Record<string, unknown> | undefined): Partial<IdentityFieldValues> {
-  const d = data ?? {}
+export function identityFieldsFromDocument(doc: { schema?: string; data?: Record<string, unknown> } | undefined): Partial<IdentityFieldValues> {
+  const d = doc?.data ?? {}
   const name = (d.name && typeof d.name === 'object' ? d.name : {}) as Record<string, unknown>
   const arr = <T,>(v: unknown): T[] => (Array.isArray(v) ? v as T[] : [])
-  const type = String(d.type || 'person')
+  const type = schemaLeaf(String(doc?.schema || ''), IDENTITY_SCHEMA)
   return {
     displayName: String(d.displayName || ''),
     type: (IDENTITY_TYPES as readonly string[]).includes(type) ? type as IdentityType : 'person',
@@ -187,7 +185,7 @@ export function useIdentityFields(initial?: Partial<IdentityFieldValues>) {
     try {
       const trimmedComment = comment.trim()
       const doc = {
-        schema: IDENTITY_SCHEMA,
+        schema: `${IDENTITY_SCHEMA}/${values.type}`,
         schemaVersion: IDENTITY_SCHEMA_VERSION,
         data: buildIdentityData(values),
         ...(trimmedComment ? { comment: trimmedComment } : {}),

@@ -64,7 +64,7 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
   const editable = isEditableSchema(doc.schema)
   const isNote = doc.schema === NOTE_SCHEMA
   const isTodo = doc.schema === TODO_SCHEMA
-  const isIdentity = doc.schema === IDENTITY_SCHEMA
+  const isIdentity = doc.schema === IDENTITY_SCHEMA || doc.schema.startsWith(`${IDENTITY_SCHEMA}/`)
   const { urlKey, titleKey } = urlTitleKeys(doc.schema)
 
   const [url, setUrl] = useState<string>(urlKey ? String(doc.data?.[urlKey] ?? '') : '')
@@ -77,7 +77,7 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
   const [due, setDue] = useState<string>(doc.data?.dueDate ? isoToLocalInput(String(doc.data.dueDate)) : todayEndOfDayLocal())
   // Hooks cannot be conditional, so identity state is always created; it is
   // only read (and only saved) on an identity document.
-  const identity = useIdentityFields(identityFieldsFromDocument(doc.data))
+  const identity = useIdentityFields(identityFieldsFromDocument(doc))
   const [comment, setComment] = useState<string>(String(doc.comment ?? ''))
   // Location is universal (like the comment), not schema-specific: a photo with
   // no EXIF fix is the main reason this exists. The patch below is sent only
@@ -133,7 +133,9 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
         // properties, timezone, locale or lastInteractionAt, and `data` is
         // REPLACED wholesale server-side — dropping the spread would delete
         // whatever a connector or the extraction pass wrote there.
-        payload.data = { ...doc.data, ...buildIdentityData(identity.values) }
+        const { type: _type, ...rest } = (doc.data ?? {}) as Record<string, unknown>
+        payload.schema = `${IDENTITY_SCHEMA}/${identity.values.type}`
+        payload.data = { ...rest, ...buildIdentityData(identity.values) }
         payload.metadata = { features: tagsToFeatures(tags) }
       } else if (isTodo) {
         // Preserve other data fields (e.g. completedAt) while updating the editable ones.

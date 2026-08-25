@@ -1,9 +1,9 @@
 import type { Document } from '@/types/workspace'
+import { IDENTITY_SCHEMA, schemaLeaf } from '@/components/renderers/types'
 
 const EMAIL_SCHEMA = 'data/schema/message/email'
 const TAB_SCHEMA = 'data/schema/tab'
 const TASK_SCHEMA = 'data/schema/task'
-const IDENTITY_SCHEMA = 'data/schema/identity'
 export const FILE_SCHEMA = 'data/schema/file'
 
 type DisplayIcon = 'file' | 'globe' | 'mail'
@@ -245,7 +245,7 @@ export function getDocumentDisplayInfo(document: Document): {
 
   if (document.schema === IDENTITY_SCHEMA || document.schema.startsWith(`${IDENTITY_SCHEMA}/`)) {
     const email = identityEmail(document.data)
-    const type = String(document.data.type || '').trim()
+    const type = schemaLeaf(document.schema, IDENTITY_SCHEMA)
     return {
       title: truncate(identityName(document.data), 160) || `Identity ${document.id}`,
       preview: truncate(identityHoldings(document.data), 140),

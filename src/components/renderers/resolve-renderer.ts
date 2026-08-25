@@ -26,8 +26,8 @@ export function resolveRenderer(document: Document): ComponentType<RendererProps
   if (schema === NOTE_SCHEMA) return MarkdownRenderer
   if (schema === TODO_SCHEMA) return TodoRenderer
   if (schema === EMAIL_SCHEMA) return EmailRenderer
-  // Subtypes (`data/schema/identity/person`) render the same way — the subtype
-  // axis is `data.type`, which the renderer already shows as a badge.
+  // Subtypes (`data/schema/identity/person`) render the same way — the leaf
+  // is the schema id, which the renderer shows as a badge.
   if (schema === IDENTITY_SCHEMA || schema.startsWith(`${IDENTITY_SCHEMA}/`)) return IdentityRenderer
   if (schema === TAB_SCHEMA || schema === LINK_SCHEMA) {
     const url = String(document.data?.url ?? document.data?.uri ?? '')
