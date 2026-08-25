@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Save, Trash2, RefreshCw, Power, PowerOff, GitBranch, BookOpen, History, RotateCcw, Maximize2, Minimize2, Inbox, Play, Sparkles, Terminal } from 'lucide-react'
+import { Plus, Save, Trash2, RefreshCw, Power, PowerOff, GitBranch, BookOpen, History, RotateCcw, Maximize2, Minimize2, Inbox, Play, Sparkles, Terminal, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CodeEditor } from '@/components/ui/code-editor'
@@ -320,7 +320,7 @@ export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed }: Hook
     // menu/toolbox panels can halve — a viewport breakpoint says "desktop" while
     // the actual column is 600px. The header lays out against ITS OWN width.
     <div className="@container space-y-4">
-      {/* The controls (five tabs + batch size) only move up beside the blurb
+      {/* The controls (five tabs) only move up beside the blurb
           when the column is genuinely wide. They also stay SHRINKABLE: as a
           `shrink-0` sibling of a `min-w-0` text column, flexbox squeezed the
           blurb to one word per line and let the tab row overlap it. The TabBar
@@ -360,25 +360,6 @@ export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed }: Hook
                 <RefreshCw className="h-4 w-4" />
               </Button>
             </>
-          )}
-          {(section === 'rules' || section === 'hooks') && (
-            <label
-              className="flex items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground"
-              title={`Documents per backfill / run pass (1–${BACKFILL_MAX_LIMIT}). Applies to rule backfills and manual hook runs.`}
-            >
-              Batch size
-              <Input
-                type="number"
-                min={1}
-                max={BACKFILL_MAX_LIMIT}
-                step={100}
-                value={batchLimitDraft}
-                onChange={(e) => setBatchLimitDraft(e.target.value)}
-                onBlur={commitBatchLimit}
-                onKeyDown={(e) => { if (e.key === 'Enter') { commitBatchLimit(); (e.target as HTMLInputElement).blur() } }}
-                className="h-7 w-20 px-2 text-xs"
-              />
-            </label>
           )}
           {isFileSection && (
             <>
@@ -736,6 +717,31 @@ export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed }: Hook
           )}
         </div>
       </div>
+      )}
+
+      {/* Backfill batch size sits with the sections that use it (rule "Apply",
+          manual hook runs) rather than in the header, where it read as a
+          global control and crowded the tab row. */}
+      {(section === 'rules' || section === 'hooks') && (
+        <label
+          className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground"
+          title={`1–${BACKFILL_MAX_LIMIT}. Raise it when "Apply to existing items" reports fewer matches than you expect.`}
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+          <span>Apply / run in batches of</span>
+          <Input
+            type="number"
+            min={1}
+            max={BACKFILL_MAX_LIMIT}
+            step={100}
+            value={batchLimitDraft}
+            onChange={(e) => setBatchLimitDraft(e.target.value)}
+            onBlur={commitBatchLimit}
+            onKeyDown={(e) => { if (e.key === 'Enter') { commitBatchLimit(); (e.target as HTMLInputElement).blur() } }}
+            className="h-7 w-20 px-2 text-xs"
+          />
+          <span>documents per pass — the rule "Apply" button and manual hook runs stop after that many.</span>
+        </label>
       )}
 
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
