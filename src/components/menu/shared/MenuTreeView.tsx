@@ -9,7 +9,7 @@ import {
   ChevronRight, ChevronDown,
   Plus, Trash2, Edit2, Copy, Scissors, Clipboard,
   Layers, LayoutDashboard, MoreHorizontal, Lock, Unlock, Eye, Share2, Palette, RefreshCw,
-  FolderSymlink, FolderTree, ArrowDownToLine, ArrowUpFromLine, HardDrive } from 'lucide-react'
+  FolderSymlink, FolderTree, ArrowDownToLine, ArrowUpFromLine, HardDrive, Download } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import { cn, isCoarsePointer } from '@/lib/utils'
 import type { TreeNode, LayerMetadata } from '@/types/workspace'
@@ -59,7 +59,7 @@ export interface MenuTreeViewProps {
   // filed under this folder keep their bytes on a real backend (context /
   // directory trees: this path is the condition; backends tree: this folder
   // is the destination).
-  onAddStoreRule?: (path: string) => void
+  onAddStoreRule?: (path: string, kind?: 'store' | 'download') => void
   // Writable file-backend folder ops (real fs dirs under /file/<addr> in the
   // backends tree).
   onCreateBackendFolder?: (parentPath: string, name: string) => Promise<boolean>
@@ -252,6 +252,9 @@ function CtxMenu({
           <>
             {item(<HardDrive className="w-3 h-3" />, 'Create rule…', async () => {
               onAddStoreRule(path)
+            })}
+            {item(<Download className="w-3 h-3" />, 'Create download rule…', async () => {
+              onAddStoreRule(path, 'download')
             })}
             <div className="my-1 h-px bg-border" />
           </>

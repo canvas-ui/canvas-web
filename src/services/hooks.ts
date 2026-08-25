@@ -151,9 +151,11 @@ export function defaultMirrorTarget(backendsPath: string): string {
  *    the directory tree (recursive link) — `path` + `target`.
  *  - `store`: keep the bytes of files filed under `path` on a real storage
  *    backend (`storeTo`) in `storeFolder`, sub-folders kept.
+ *  - `download`: fetch what links filed under `path` point at into
+ *    `storeFolder` on `storeTo`.
  */
 export interface RulePrefill {
-  kind?: 'mirror' | 'store'
+  kind?: 'mirror' | 'store' | 'download'
   /** Tree-qualified source prefix, e.g. `backends:/workspace/home/foo` or `ctx:/projects/canvas/UI`. */
   path?: string
   /** Link target, e.g. `dir:/foo` (mirror). */

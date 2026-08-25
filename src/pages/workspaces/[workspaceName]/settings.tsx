@@ -955,9 +955,9 @@ export default function WorkspaceSettingsPage() {
   const addRuleStoreTo = searchParams.get('addRuleStoreTo')
   const addRuleStoreFolder = searchParams.get('addRuleStoreFolder')
   const prefillRule = useMemo<RulePrefill | null>(() => {
-    if (addRuleKind === 'store') {
+    if (addRuleKind === 'store' || addRuleKind === 'download') {
       if (!addRulePath && !addRuleStoreTo && !addRuleStoreFolder) return null
-      return { kind: 'store', path: addRulePath || '', storeTo: addRuleStoreTo || '', storeFolder: addRuleStoreFolder || '' }
+      return { kind: addRuleKind, path: addRulePath || '', storeTo: addRuleStoreTo || '', storeFolder: addRuleStoreFolder || '' }
     }
     return addRulePath ? { kind: 'mirror', path: addRulePath, target: addRuleTarget || 'dir:/' } : null
   }, [addRuleKind, addRulePath, addRuleTarget, addRuleStoreTo, addRuleStoreFolder])

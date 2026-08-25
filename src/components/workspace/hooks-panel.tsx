@@ -316,9 +316,17 @@ export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed }: Hook
   const gitUrl = `${API_URL}/workspaces/${workspaceId}/git`
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
+    // @container: this panel lives inside the settings column, which the docked
+    // menu/toolbox panels can halve — a viewport breakpoint says "desktop" while
+    // the actual column is 600px. The header lays out against ITS OWN width.
+    <div className="@container space-y-4">
+      {/* The controls (five tabs + batch size) only move up beside the blurb
+          when the column is genuinely wide. They also stay SHRINKABLE: as a
+          `shrink-0` sibling of a `min-w-0` text column, flexbox squeezed the
+          blurb to one word per line and let the tab row overlap it. The TabBar
+          scrolls horizontally instead. */}
+      <div className="flex flex-col gap-3 @3xl:flex-row @3xl:items-start @3xl:justify-between">
+        <div className="min-w-0 @3xl:min-w-[18rem] @3xl:flex-1">
           <h3 className="text-lg font-medium">Automation</h3>
           <p className="text-sm text-muted-foreground">
             Rules are simple click-to-build automations (Outlook-style). Hooks are their
@@ -326,8 +334,8 @@ export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed }: Hook
             commits to the workspace git repo.
           </p>
         </div>
-        <div className="flex min-w-0 flex-col gap-2 sm:shrink-0 sm:flex-row sm:items-center">
-          <div className="w-full min-w-0 sm:w-auto">
+        <div className="flex min-w-0 flex-col gap-2 @3xl:max-w-[60%] @3xl:flex-row @3xl:items-center">
+          <div className="w-full min-w-0 @3xl:w-auto">
             <TabBar<Section>
               className="border-b-0"
               active={section}
@@ -355,7 +363,7 @@ export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed }: Hook
           )}
           {(section === 'rules' || section === 'hooks') && (
             <label
-              className="flex items-center gap-1.5 text-xs text-muted-foreground"
+              className="flex items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground"
               title={`Documents per backfill / run pass (1–${BACKFILL_MAX_LIMIT}). Applies to rule backfills and manual hook runs.`}
             >
               Batch size

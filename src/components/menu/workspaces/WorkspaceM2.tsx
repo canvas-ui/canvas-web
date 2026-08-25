@@ -477,14 +477,14 @@ export function WorkspaceM2() {
               navigate(`/workspaces/${wsName}/settings/hooks?${params.toString()}`)
             } : undefined}
             onSyncFolderTree={wsName && activeTab === 'backends' ? handleSyncFolderTree : undefined}
-            onAddStoreRule={wsName ? (path) => {
+            onAddStoreRule={wsName ? (path, kind: 'store' | 'download' = 'store') => {
               // Storage rule prefilled from either side: a backends folder is
               // the DESTINATION (backend + folder below its root); a context /
               // directory folder is the CONDITION, mirrored 1:1 below the
               // default backend's root.
               const prefill: RulePrefill = activeTab === 'backends'
-                ? (() => { const parts = splitBackendsPath(path); return { kind: 'store', storeTo: parts?.backend || '', storeFolder: parts?.rel || '' } })()
-                : { kind: 'store', path: `${activeTab === 'directory' ? 'dir' : 'ctx'}:${path}`, storeFolder: defaultStoreFolder(path) }
+                ? (() => { const parts = splitBackendsPath(path); return { kind, storeTo: parts?.backend || '', storeFolder: parts?.rel || '' } })()
+                : { kind, path: `${activeTab === 'directory' ? 'dir' : 'ctx'}:${path}`, storeFolder: kind === 'download' ? 'Downloads' : defaultStoreFolder(path) }
               navigate(`/workspaces/${wsName}/settings/hooks?${rulePrefillParams(prefill).toString()}`)
             } : undefined}
             pastedDocumentIds={docClipboard?.documentIds}

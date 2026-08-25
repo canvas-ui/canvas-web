@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
-  Plus, Pencil, Trash2, Save, X, Braces, PlayCircle, FolderTree, FolderSymlink, HardDrive, Image, Mail, Globe, Bot,
-  Sparkles, Tag, Bell, Terminal, Trash, ChevronDown, ArrowRight, Loader2,
+  Plus, Pencil, Trash2, Save, X, Braces, PlayCircle, FolderTree, FolderSymlink, HardDrive, Image, Mail, Bot,
+  Sparkles, Tag, Bell, Terminal, Trash, ChevronDown, ArrowRight, Loader2, Download,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -64,10 +64,11 @@ const CONDITION_FIELDS: Array<{ key: ConditionKey; label: string; hint: string }
   { key: 'attachment', label: 'has an attachment of type', hint: 'application/pdf, or * for any' },
 ]
 
-type ActionKey = 'link' | 'unlink' | 'tag' | 'store' | 'unstore' | 'notify' | 'agent' | 'script' | 'delete' | 'destroy'
+type ActionKey = 'link' | 'unlink' | 'tag' | 'store' | 'download' | 'unstore' | 'notify' | 'agent' | 'script' | 'delete' | 'destroy'
 
 const ACTION_FIELDS: Array<{ key: ActionKey; label: string; icon: LucideIcon; tone: string }> = [
   { key: 'store', label: 'keep the file on a storage backend', icon: HardDrive, tone: 'text-sky-600 dark:text-sky-400 bg-sky-500/10' },
+  { key: 'download', label: 'download what the link points at', icon: Download, tone: 'text-rose-600 dark:text-rose-400 bg-rose-500/10' },
   { key: 'link', label: 'file it into a folder', icon: FolderSymlink, tone: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10' },
   { key: 'unlink', label: 'remove it from a folder', icon: FolderSymlink, tone: 'text-amber-600 dark:text-amber-400 bg-amber-500/10' },
   { key: 'tag', label: 'add tags', icon: Tag, tone: 'text-violet-600 dark:text-violet-400 bg-violet-500/10' },
@@ -84,6 +85,16 @@ const actionMeta = (key: string) => ACTION_FIELDS.find((a) => a.key === key) || 
 type StoreName = 'keep' | 'title' | 'dated' | 'custom'
 const TITLE_NAME = '{{title}}{{ext}}'
 const DATED_NAME = '{{YYYY}}/{{MM}}/{{YYYY}}{{MM}}{{DD}}_{{HH}}{{mm}}{{ss}}{{ext}}'
+type DownloadKind = 'auto' | 'image' | 'video' | 'arxiv' | 'page' | 'website'
+const DOWNLOAD_KINDS: Array<{ value: DownloadKind; label: string; hint: string }> = [
+  { value: 'auto', label: 'whatever it is (auto)', hint: 'arXiv → the PDF · YouTube, Vimeo, TikTok… → the video · image / video / PDF links → the file · anything else → the page.' },
+  { value: 'image', label: 'the file itself (image, PDF, …)', hint: 'Fetches the bytes the URL serves.' },
+  { value: 'video', label: 'the video (yt-dlp)', hint: 'Best video + audio, merged. Needs yt-dlp on the server.' },
+  { value: 'arxiv', label: 'the arXiv paper (PDF)', hint: 'Works for abs/ and pdf/ links.' },
+  { value: 'page', label: 'the page with its images & styles', hint: 'One page, offline-readable (wget --page-requisites).' },
+  { value: 'website', label: 'the whole website (mirror)', hint: 'Follows links on the same site up to the chosen depth.' },
+]
+
 const STORE_NAME_OPTIONS: Array<{ value: StoreName; label: string }> = [
   { value: 'keep', label: 'keep the original file name' },
   { value: 'title', label: 'use the item title as file name' },
@@ -105,6 +116,10 @@ interface ActionRow {
   storeName: StoreName
   storeMode: 'move' | 'copy'
   storeConflict: 'rename' | 'error' | 'overwrite'
+  // download action
+  dlKind: DownloadKind
+  dlDepth: string // website mirror depth
+  dlTags: string // tags for the downloaded file (comma-separated)
   // unstore action: keep the last remaining copy (guard, on by default).
   keepLast: boolean
   // output pipeline (agent reply / script stdout):
@@ -117,7 +132,8 @@ interface ActionRow {
 }
 
 const emptyAction = (kind: ActionKey): ActionRow => ({
-  kind, a: '', b: '', recursive: false, storeFrom: '', storeFolder: '', storeName: 'keep', storeMode: 'move', storeConflict: 'rename', keepLast: true,
+  kind, a: '', b: '', recursive: false, storeFrom: '', storeFolder: '', storeName: 'keep', storeMode: 'move', storeConflict: 'rename',
+  dlKind: 'auto', dlDepth: '2', dlTags: '', keepLast: true,
   notePath: '', noteTitle: '', filePath: '', fileBackend: 'home', fileInsert: '', notifyReply: false,
 })
 
@@ -199,12 +215,12 @@ const RECIPES: Recipe[] = [
     }),
   },
   {
-    id: 'links', title: 'Collect links from a website', icon: Globe, tone: 'text-pink-600 dark:text-pink-400 bg-pink-500/10',
-    blurb: 'Tabs and links from a site are filed into a folder and tagged.',
-    build: () => ({
-      ...EMPTY_FORM, description: 'Links from …', schema: 'tab',
-      conditions: [{ field: 'urlHost', value: '' }],
-      actions: [{ ...emptyAction('link'), a: '/media/to-watch', b: '' }],
+    id: 'download', title: 'Download what links point at', icon: Download, tone: 'text-rose-600 dark:text-rose-400 bg-rose-500/10',
+    blurb: 'Bookmarks filed into a folder are fetched for real — images, videos (yt-dlp), arXiv papers, a page or a whole website — saved to a folder and filed next to the link.',
+    build: ({ backend }) => ({
+      ...EMPTY_FORM, description: 'Download what links point at', schema: 'tab', events: ['document.inserted', 'document.linked'],
+      conditions: [{ field: 'path', value: '' }],
+      actions: [{ ...emptyAction('download'), a: backend, storeFolder: 'Downloads', recursive: true }],
     }),
   },
   {
@@ -280,6 +296,20 @@ function buildRule(form: RuleForm): HookRule {
         ...recursive,
         ...(key ? { key } : {}),
         onConflict: row.storeConflict,
+      })
+    }
+    if (row.kind === 'download') {
+      const folder = row.storeFolder.trim().replace(/^\/+|\/+$/g, '')
+      const depth = Number(row.dlDepth)
+      then.push({
+        action: 'download',
+        to: a || 'workspace:home',
+        ...(folder ? { folder } : {}),
+        ...recursive,
+        ...(row.dlKind !== 'auto' ? { kind: row.dlKind } : {}),
+        ...(b ? { insert: splitList(b) } : {}),
+        ...(row.dlTags.trim() ? { tags: splitList(row.dlTags) } : {}),
+        ...(row.dlKind === 'website' && Number.isFinite(depth) && depth > 0 && depth !== 2 ? { depth } : {}),
       })
     }
     if (row.kind === 'unstore' && a) {
@@ -393,6 +423,23 @@ function parseRule(rule: HookRule): RuleForm | null {
         storeMode: act.mode === 'copy' ? 'copy' : 'move',
         storeConflict: act.onConflict === 'error' || act.onConflict === 'overwrite' ? act.onConflict : 'rename',
       })
+    } else if (act.action === 'download') {
+      const known = new Set(['action', 'to', 'folder', 'recursive', 'kind', 'insert', 'tags', 'depth'])
+      if (Object.keys(act).some((k) => !known.has(k))) return null
+      const kind = typeof act.kind === 'string' ? act.kind : 'auto'
+      if (!DOWNLOAD_KINDS.some((k) => k.value === kind)) return null
+      const insert = Array.isArray(act.insert) ? act.insert : typeof act.insert === 'string' ? [act.insert] : []
+      if (!insert.every((p) => typeof p === 'string')) return null
+      actions.push({
+        ...emptyAction('download'),
+        a: typeof act.to === 'string' ? act.to : 'workspace:home',
+        b: (insert as string[]).join(', '),
+        storeFolder: typeof act.folder === 'string' ? act.folder : '',
+        recursive: act.recursive === true,
+        dlKind: kind as DownloadKind,
+        dlDepth: typeof act.depth === 'number' ? String(act.depth) : '2',
+        dlTags: Array.isArray(act.tags) ? (act.tags as string[]).join(', ') : '',
+      })
     } else if (act.action === 'unstore' && (typeof act.from === 'string' || Array.isArray(act.from))) {
       const first = (v: unknown) => (Array.isArray(v) ? String(v[0] ?? '') : typeof v === 'string' ? v : '')
       actions.push({ ...emptyAction('unstore'), a: first(act.from), b: first(act.ifOn), keepLast: act.keepLast !== false })
@@ -465,6 +512,12 @@ function summarizeAction(a: HookRuleAction): string {
     const name = a.key === TITLE_NAME ? ', named by title' : a.key === DATED_NAME ? ', by date' : typeof a.key === 'string' && a.key ? `, as ${a.key}` : ''
     return `${a.mode === 'copy' ? 'copy' : 'move'} the file to ${a.to}${folder}${a.recursive === true ? ' (sub-folders kept)' : ''}${name}`
   }
+  if (a.action === 'download') {
+    const what = DOWNLOAD_KINDS.find((k) => k.value === (a.kind || 'auto'))
+    const folder = typeof a.folder === 'string' && a.folder ? `/${a.folder}` : ''
+    const where = Array.isArray(a.insert) && a.insert.length ? `, filed at ${a.insert.join(', ')}` : ', filed next to the link'
+    return `download ${what?.value === 'auto' ? 'the link (auto-detected)' : what?.label || a.kind} to ${a.to || 'workspace:home'}${folder}${a.recursive === true ? ' (sub-folders kept)' : ''}${where}`
+  }
   if (a.action === 'unstore') return `delete the file from ${Array.isArray(a.from) ? a.from.join(', ') : a.from}${a.ifOn ? ` once it is on ${Array.isArray(a.ifOn) ? a.ifOn.join(', ') : a.ifOn}` : ''}`
   if (a.action === 'notify') return 'notify me'
   if (a.action === 'delete') return 'delete from Canvas (keeps stored files/mail)'
@@ -519,6 +572,17 @@ function preferredBackend(backends: Backend[]): string {
 
 // Form for a tree context-menu prefill (mirror / store rule).
 function formFromPrefill(prefill: RulePrefill): RuleForm {
+  if (prefill.kind === 'download') {
+    const where = prefill.path ? ` filed under ${prefill.path.replace(/^(ctx|dir):/, '')}` : ''
+    return {
+      ...EMPTY_FORM,
+      description: `Download links${where}`,
+      schema: 'tab',
+      events: ['document.inserted', 'document.linked'],
+      conditions: [{ field: 'path', value: prefill.path || '' }],
+      actions: [{ ...emptyAction('download'), a: prefill.storeTo || '', storeFolder: prefill.storeFolder || 'Downloads', recursive: true }],
+    }
+  }
   if (prefill.kind === 'store') {
     const where = prefill.path ? ` filed under ${prefill.path.replace(/^(ctx|dir):/, '')}` : ''
     return {
@@ -682,8 +746,8 @@ export function RuleBuilder({ workspaceId, onOpenJson, backfillLimit, prefill, o
         setBackends(writable)
         const fallback = preferredBackend(writable)
         if (fallback) {
-          setForm((f) => (f && f.actions.some((a) => a.kind === 'store' && !a.a)
-            ? { ...f, actions: f.actions.map((a) => (a.kind === 'store' && !a.a ? { ...a, a: fallback } : a)) }
+          setForm((f) => (f && f.actions.some((a) => (a.kind === 'store' || a.kind === 'download') && !a.a)
+            ? { ...f, actions: f.actions.map((a) => ((a.kind === 'store' || a.kind === 'download') && !a.a ? { ...a, a: fallback } : a)) }
             : f))
         }
       })
@@ -798,7 +862,9 @@ export function RuleBuilder({ workspaceId, onOpenJson, backfillLimit, prefill, o
       setField('conditions', form.conditions.map((c, j) => (j === picker.index ? { ...c, value: prefixed.join(' | ') } : c)))
     } else {
       const prefixed = paths.map((p) => prefixedPath(p, ctx))
-      setField('actions', form.actions.map((a, j) => (j === picker.index ? { ...a, a: prefixed.join(', ') } : a)))
+      setField('actions', form.actions.map((a, j) => (j === picker.index
+        ? (a.kind === 'download' ? { ...a, b: prefixed.join(', ') } : { ...a, a: prefixed.join(', ') })
+        : a)))
     }
     setPicker(null)
   }
@@ -888,7 +954,10 @@ export function RuleBuilder({ workspaceId, onOpenJson, backfillLimit, prefill, o
         <h3 className="text-base font-semibold">What should happen automatically?</h3>
         {choosing && <Button size="sm" variant="ghost" onClick={() => setChoosing(false)}><X className="mr-1 h-4 w-4" /> Close</Button>}
       </div>
-      <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Column count follows the CONTAINER, not the viewport: with the settings
+          menu docked, `lg:grid-cols-3` gave three ~200px cards whose text wrapped
+          to one word per line. auto-fill only adds a column when one fits. */}
+      <div className="grid min-w-0 grid-cols-[repeat(auto-fill,minmax(min(100%,17rem),1fr))] gap-3">
         {RECIPES.map((r) => (
           <button
             key={r.id} type="button" onClick={() => openRecipe(r)}
@@ -1145,6 +1214,51 @@ export function RuleBuilder({ workspaceId, onOpenJson, backfillLimit, prefill, o
                         </div>
                       </details>
                       <p className="text-xs text-muted-foreground">Moves the stored bytes only — the item keeps its id, tags and every folder it is filed in.</p>
+                    </div>
+                  )}
+
+                  {row.kind === 'download' && (
+                    <div className="space-y-4">
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <Field label="Download" hint={DOWNLOAD_KINDS.find((k) => k.value === row.dlKind)?.hint}>
+                          <select className={selectClass} value={row.dlKind} onChange={(e) => set({ dlKind: e.target.value as DownloadKind })}>
+                            {DOWNLOAD_KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
+                          </select>
+                        </Field>
+                        {row.dlKind === 'website' ? (
+                          <Field label="Mirror depth" hint="How many link hops to follow on the same site (1–5).">
+                            <Input type="number" min={1} max={5} className={cn(inputClass, 'sm:max-w-32')} value={row.dlDepth} onChange={(e) => set({ dlDepth: e.target.value })} />
+                          </Field>
+                        ) : <div className="hidden sm:block" />}
+                        <Field label="Storage backend" hint="Where the downloaded file's bytes should live.">
+                          {backendSelect(row.a, (v) => set({ a: v }), 'workspace:home (default)')}
+                        </Field>
+                        <Field label="Folder on that backend" hint="Relative to the backend root.">
+                          <div className="flex gap-2">
+                            <Input className={cn(inputClass, 'font-mono')} placeholder="Downloads" value={row.storeFolder} onChange={(e) => set({ storeFolder: e.target.value })} />
+                            {browseButton('storeFolder', i, 'Browse storage backends')}
+                          </div>
+                        </Field>
+                        <Field label="File the download under" hint="Leave empty to file it in the same folder(s) as the link. Comma-separate several.">
+                          <div className="flex gap-2">
+                            <Input className={cn(inputClass, 'font-mono')} placeholder="same folders as the link" value={row.b} onChange={(e) => set({ b: e.target.value })} />
+                            {browseButton('action', i)}
+                          </div>
+                        </Field>
+                        <Field label="Tags for the download" hint="Optional, comma-separated.">
+                          <Input className={cn(inputClass, 'font-mono')} placeholder="downloaded, custom/paper" value={row.dlTags} onChange={(e) => set({ dlTags: e.target.value })} />
+                        </Field>
+                      </div>
+                      <Toggle
+                        checked={row.recursive} onChange={(v) => set({ recursive: v })}
+                        label="Keep sub-folders"
+                        hint={hasPathCondition ? 'A link filed under …/folder/a/b is downloaded into Folder/a/b.' : 'Add an "is under the folder" condition to mirror sub-folders.'}
+                        disabled={!hasPathCondition}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        The link stays as it is; the download becomes a new file item next to it. Each link is downloaded once per rule.
+                        Videos need <span className="font-mono">yt-dlp</span>, pages and websites <span className="font-mono">wget</span> on the server.
+                      </p>
                     </div>
                   )}
 
