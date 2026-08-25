@@ -37,23 +37,26 @@ import { RuleBuilder } from '@/components/workspace/rule-builder'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { PendingActionsPanel } from '@/components/workspace/pending-actions-panel'
 
+type Section = 'pending' | 'rules' | 'hooks' | 'scripts' | 'runs'
+
 interface HooksPanelProps {
   workspaceId: string
+  /** Section to open with (deep link: settings/hooks?section=runs). */
+  initialSection?: Section
   /** Open the rule builder with a folder rule prefilled (backends-tree context menu → Add rule). */
   prefillRule?: RulePrefill | null
   onPrefillConsumed?: () => void
 }
 
-type Section = 'pending' | 'rules' | 'hooks' | 'scripts' | 'runs'
 
 const NEW_SCRIPT_TEMPLATE = `#!/usr/bin/env bash
 # Called from a hook via: spawn('bash', [script, ...args])
 set -euo pipefail
 `
 
-export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed }: HooksPanelProps) {
+export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed, initialSection }: HooksPanelProps) {
   const { showToast } = useToast()
-  const [section, setSection] = useState<Section>('rules')
+  const [section, setSection] = useState<Section>(initialSection ?? 'rules')
   // A prefill always lands in the Rules section, whatever was open before
   // (prev-value-in-state: the caller memoizes the prefill object).
   const [prevPrefill, setPrevPrefill] = useState(prefillRule)
@@ -320,7 +323,7 @@ export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed }: Hook
     // menu/toolbox panels can halve — a viewport breakpoint says "desktop" while
     // the actual column is 600px. The header lays out against ITS OWN width.
     <div className="@container space-y-4">
-      {/* The controls (five tabs) only move up beside the blurb
+      {/* The tabs only move up beside the blurb
           when the column is genuinely wide. They also stay SHRINKABLE: as a
           `shrink-0` sibling of a `min-w-0` text column, flexbox squeezed the
           blurb to one word per line and let the tab row overlap it. The TabBar
@@ -349,7 +352,13 @@ export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed }: Hook
               ]}
             />
           </div>
-          <div className="flex items-center gap-2">
+        </div>
+      </div>
+
+      {/* Per-section controls live UNDER the header — in the tab row they
+          fought the blurb for width and got clipped with the tabs. */}
+      {(section === 'runs' || isFileSection) && (
+        <div className="flex flex-wrap items-center justify-end gap-2">
           {section === 'runs' && (
             <>
               <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
@@ -357,26 +366,25 @@ export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed }: Hook
                 failed only
               </label>
               <Button size="sm" variant="ghost" onClick={loadFiles} title="Reload">
-                <RefreshCw className="h-4 w-4" />
+                <RefreshCw className="mr-1.5 h-4 w-4" /> Reload
               </Button>
             </>
           )}
           {isFileSection && (
             <>
               <Button size="sm" variant="ghost" onClick={loadFiles} title="Reload">
-                <RefreshCw className="h-4 w-4" />
+                <RefreshCw className="mr-1.5 h-4 w-4" /> Reload
               </Button>
               <Button size="sm" variant="ghost" onClick={toggleReference} title="Hook context API & classifier reference">
-                <BookOpen className="h-4 w-4" />
+                <BookOpen className="mr-1.5 h-4 w-4" /> Reference
               </Button>
               <Button size="sm" variant="outline" onClick={openWizard}>
                 <Plus className="mr-2 h-4 w-4" /> {section === 'hooks' ? 'New Hook' : 'New Script'}
               </Button>
             </>
           )}
-          </div>
         </div>
-      </div>
+      )}
 
       {section === 'pending' && (
         <PendingActionsPanel workspaceId={workspaceId} onPendingCount={setPendingCount} />
@@ -456,6 +464,13 @@ export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed }: Hook
                           {run.actions.map((a) => `${a.action}:${a.status}`).join(' ')}
                         </span>
                       )}
+                      {/* Why an action failed or did nothing — an agent that is
+                          not running, no messaging channel, a doc-less event. */}
+                      {run.actions?.filter((a) => a.error).map((a, i) => (
+                        <span key={i} className={`block break-all font-mono ${a.status === 'error' ? 'text-destructive/80' : 'text-muted-foreground'}`}>
+                          {a.action}: {a.error}
+                        </span>
+                      ))}
                     </td>
                     <td className="px-2 py-1.5">
                       {run.handlerType !== 'dispatch' && (

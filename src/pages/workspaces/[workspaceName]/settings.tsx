@@ -949,6 +949,9 @@ export default function WorkspaceSettingsPage() {
   // ?addRulePath=backends:/workspace/home/foo&addRuleTarget=dir:/foo — deep
   // link from the backends tree's "Add rule" context-menu item.
   const [searchParams, setSearchParams] = useSearchParams()
+  // ?section=runs|hooks|scripts|pending deep-links a Hooks panel section.
+  const sectionParam = searchParams.get('section')
+  const hooksSection = (['pending', 'rules', 'hooks', 'scripts', 'runs'] as const).find((s) => s === sectionParam)
   const addRuleKind = searchParams.get('addRuleKind')
   const addRulePath = searchParams.get('addRulePath')
   const addRuleTarget = searchParams.get('addRuleTarget')
@@ -1696,7 +1699,7 @@ export default function WorkspaceSettingsPage() {
 
       {activeTab === 'hooks' && (
         <section className="rounded-lg border p-4">
-          <HooksPanel workspaceId={workspaceId} prefillRule={prefillRule} onPrefillConsumed={clearRulePrefill} />
+          <HooksPanel workspaceId={workspaceId} prefillRule={prefillRule} onPrefillConsumed={clearRulePrefill} initialSection={hooksSection} />
         </section>
       )}
       </div>
