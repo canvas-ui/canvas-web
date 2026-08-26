@@ -219,14 +219,35 @@ async function main() {
     }
   }
 
+  // SCREENSHOT_LATENCY=<ms> adds round-trip latency to every request — the
+  // production front answers in ~2s, and races that never show on a local
+  // server (an edit landing while a hydrating fetch is still in flight) do.
+  const latency = Number(process.env.SCREENSHOT_LATENCY || 0);
+  if (latency > 0) {
+    await send('Network.enable');
+    await send('Network.emulateNetworkConditions', { offline: false, latency, downloadThroughput: -1, uploadThroughput: -1 });
+  }
+
   for (const route of opts.routes) {
     await send('Page.navigate', { url: `${opts.base}${route}` });
-    await sleep(opts.wait);
+    await sleep(Number(process.env.SCREENSHOT_WAIT || opts.wait));
     if (opts.scrollTo) {
       await send('Runtime.evaluate', {
         expression: `document.querySelector(${JSON.stringify(opts.scrollTo)})?.scrollIntoView({block:'start'})`,
       });
       await sleep(600);
+    }
+    // Optional JS to run once the route has settled, before the shot — open a
+    // drawer, click a tab, dump state. SCREENSHOT_EVAL='document.querySelector(...).click()'
+    // Its (awaited) result is printed, so an expression that returns text is a probe.
+    if (process.env.SCREENSHOT_EVAL) {
+      const { result: ev } = await send('Runtime.evaluate', {
+        expression: `(async () => { ${process.env.SCREENSHOT_EVAL} })()`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      if (ev?.value !== undefined) { console.log('eval:', typeof ev.value === 'string' ? ev.value : JSON.stringify(ev.value)); }
+      await sleep(1500);
     }
     // Horizontal overflow is the classic phone bug and is easy to miss by eye.
     const { result } = await send('Runtime.evaluate', {

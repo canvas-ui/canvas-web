@@ -117,7 +117,10 @@ type ToolboxAction =
     }
   | { type: 'SET_CONTEXT_SCOPE'; workspaceName: string | null; contextPath: string | null; treeId: string | null }
   | { type: 'SET_FILTERS'; filters: ToolboxFilters }
-  | { type: 'SET_SAVED_FILTERS'; savedFilters: ToolboxFilters | null; savedSearchQuery?: string | null }
+  // `hydrating`: the saved view arrived from an async fetch. Edits made while
+  // it was in flight are the user's latest intent — keep them, and only
+  // re-baseline what "dirty" means. A save (not hydrating) replaces outright.
+  | { type: 'SET_SAVED_FILTERS'; savedFilters: ToolboxFilters | null; savedSearchQuery?: string | null; hydrating?: boolean }
   | { type: 'SET_SAVING'; isSaving: boolean }
   | { type: 'SET_BITMAPS'; keys: string[] }
   | { type: 'SET_BITMAPS_LOADING'; loading: boolean }
@@ -201,7 +204,15 @@ function toolboxReducer(state: ToolboxState, action: ToolboxAction): ToolboxStat
       return (state.mapDocuments === action.documents && state.mapWorkspaceId === action.workspaceId)
         ? state
         : { ...state, mapDocuments: action.documents, mapWorkspaceId: action.workspaceId }
-    case 'SET_NAVIGATION':
+    case 'SET_NAVIGATION': {
+      // A different canvas/context is a different saved view. Its filters
+      // arrive from an async fetch (~2s on a slow front); until then the
+      // toolbox must not keep showing — or fetching documents with, or
+      // saving onto the new view — the PREVIOUS view's filters, and edits
+      // made on the previous view do not carry over as "dirty" here.
+      const sameView = state.activeContextType === action.contextType
+        && state.activeContextId === action.contextId
+        && state.activeCanvasId === action.canvasId
       return {
         ...state,
         activeWorkspaceName: action.workspaceName,
@@ -212,7 +223,9 @@ function toolboxReducer(state: ToolboxState, action: ToolboxAction): ToolboxStat
         activeContextPath: action.contextPath,
         // A drawn map area is view-specific — drop it when navigating away.
         geoSelection: null,
+        ...(sameView ? {} : { filters: DEFAULT_TOOLBOX_FILTERS, savedFilters: null, savedSearchQuery: null, isDirty: false }),
       }
+    }
     // A `/contexts/:id` route carries no workspace or tree path in its URL —
     // the context's own record carries both. Without this the workspace-scoped
     // lists (feature bitmaps, timelines) never load and the Features/Timeline
@@ -240,14 +253,22 @@ function toolboxReducer(state: ToolboxState, action: ToolboxAction): ToolboxStat
           ? isDirtyCheck(action.filters, state.savedFilters)
           : false,
       }
-    case 'SET_SAVED_FILTERS':
+    case 'SET_SAVED_FILTERS': {
+      // A hydrate that lands after the user already changed something must
+      // not undo that change — the toggle they just made is the newer intent.
+      // Reproduced with ~1.5s request latency: toggle a feature right after
+      // navigating into a context, and the context's saved (empty) view
+      // arrived a moment later and silently switched it back off.
+      const keepEdits = action.hydrating === true && state.isDirty
+      const filters = keepEdits ? state.filters : (action.savedFilters ?? DEFAULT_TOOLBOX_FILTERS)
       return {
         ...state,
         savedFilters: action.savedFilters,
         savedSearchQuery: action.savedSearchQuery ?? null,
-        filters: action.savedFilters ?? DEFAULT_TOOLBOX_FILTERS,
-        isDirty: false,
+        filters,
+        isDirty: keepEdits ? isDirtyCheck(filters, action.savedFilters) : false,
       }
+    }
     case 'SET_SAVING':
       return { ...state, isSaving: action.isSaving }
     case 'SET_BITMAPS':
@@ -485,9 +506,9 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
       getCachedWorkspaceTreeByName(activeWorkspaceName, activeTreeName || DEFAULT_WORKSPACE_TREE_NAME).then(res => {
         const node = findTreeNode(res, activeContextPath)
         const saved = extractToolboxFilters(node?.metadata)
-        dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: saved, savedSearchQuery: node?.querySpec?.query ?? null })
+        dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: saved, savedSearchQuery: node?.querySpec?.query ?? null, hydrating: true })
       }).catch(() => {
-        dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: null, savedSearchQuery: null })
+        dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: null, savedSearchQuery: null, hydrating: true })
       })
     } else {
       // Regular layer — restore session filters
@@ -524,10 +545,11 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
         type: 'SET_SAVED_FILTERS',
         savedFilters: saved,
         savedSearchQuery: typeof metadata?.toolboxSearchQuery === 'string' ? metadata.toolboxSearchQuery : null,
+        hydrating: true,
       })
     }).catch(() => {
       if (cancelled) return
-      dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: null, savedSearchQuery: null })
+      dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: null, savedSearchQuery: null, hydrating: true })
     })
 
     return () => { cancelled = true }
