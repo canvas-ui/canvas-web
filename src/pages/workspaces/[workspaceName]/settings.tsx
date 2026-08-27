@@ -20,6 +20,7 @@ import { TrashPanel } from '@/components/workspace/trash-panel'
 import { ConnectorsSection } from '@/components/settings/ConnectorsSection'
 import { ImapMailboxesPanel } from '@/components/workspace/imap-mailboxes-panel'
 import { TokenManager } from '@/components/workspace/token-manager'
+import { MembersManager } from '@/components/workspace/members-manager'
 import { useToast } from '@/components/ui/use-toast'
 import { isQueryDebugEnabled, setQueryDebugEnabled } from '@/lib/query-debug'
 import { generateNiceRandomHexColor, visibleAccentColor } from '@/utils/color'
@@ -1406,6 +1407,14 @@ export default function WorkspaceSettingsPage() {
 
       {activeTab === 'shares' && (
         <div className="space-y-4">
+          <section className="rounded-lg border p-4">
+            <div className="mb-3">
+              <h2 className="text-sm font-semibold">Members</h2>
+              <p className="text-xs text-muted-foreground">Share this workspace with teammates by e-mail or with a whole directory group. It shows up in their workspace list on this server.</p>
+            </div>
+            <MembersManager workspaceId={workspaceId} />
+          </section>
+
           <section className="space-y-3 rounded-lg border p-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>

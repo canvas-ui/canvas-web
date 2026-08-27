@@ -43,7 +43,8 @@ interface Workspace {
     addedAt: string | null
   }
   isShared?: boolean
-  sharedVia?: string | { accessLevel?: string; [key: string]: unknown }
+  /** How a shared workspace reached this user (e-mail or directory-group grant). */
+  sharedVia?: string | { type?: 'user' | 'group'; principal?: string; permissions?: string[]; accessLevel?: string; [key: string]: unknown }
   color?: string
   icon?: string | null
   order?: number | null

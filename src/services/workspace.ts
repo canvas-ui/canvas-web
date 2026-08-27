@@ -1976,3 +1976,57 @@ export async function emptyTrash(
   )
   return response
 }
+
+// ─── Members: e-mail / directory-group shares (team workspaces) ─────────────
+
+export type WorkspacePermission = 'read' | 'write' | 'admin'
+
+export interface WorkspaceMember {
+  type: 'user' | 'group'
+  /** e-mail (user) or directory group DN / CN (group) */
+  principal: string
+  permissions: WorkspacePermission[]
+  description?: string
+  grantedAt?: string
+  grantedBy?: string | null
+  updatedAt?: string
+  /** users only: false when the e-mail has no account here yet (share applies at first sign-in) */
+  userExists?: boolean
+}
+
+export interface WorkspaceMembersResponse {
+  owner: string
+  isOwner: boolean
+  /** false for the universe workspace, which can never be shared */
+  shareable: boolean
+  members: WorkspaceMember[]
+}
+
+const memberPath = (workspaceId: string, type: 'user' | 'group', principal: string) =>
+  `${API_ROUTES.workspaces}/${workspaceId}/members/${encodeURIComponent(`${type}:${principal}`)}`
+
+export async function listWorkspaceMembers(workspaceId: string): Promise<WorkspaceMembersResponse> {
+  return api.get(`${API_ROUTES.workspaces}/${workspaceId}/members`)
+}
+
+export async function grantWorkspaceMember(
+  workspaceId: string,
+  who: { email: string } | { group: string },
+  permissions: WorkspacePermission[],
+  description?: string,
+): Promise<WorkspaceMember> {
+  return api.post(`${API_ROUTES.workspaces}/${workspaceId}/members`, { ...who, permissions, ...(description ? { description } : {}) })
+}
+
+export async function updateWorkspaceMember(
+  workspaceId: string,
+  type: 'user' | 'group',
+  principal: string,
+  permissions: WorkspacePermission[],
+): Promise<WorkspaceMember> {
+  return api.put(memberPath(workspaceId, type, principal), { permissions })
+}
+
+export async function revokeWorkspaceMember(workspaceId: string, type: 'user' | 'group', principal: string): Promise<void> {
+  await api.delete(memberPath(workspaceId, type, principal))
+}

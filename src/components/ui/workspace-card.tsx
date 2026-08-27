@@ -33,6 +33,10 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onS
   const isNotFound = workspace.status === 'not_found';
   const isShared = workspace.isShared === true || workspace.type === 'shared';
   const sharedFrom = workspace.ownerEmail || workspace.owner;
+  const sharedVia = typeof workspace.sharedVia === 'object' && workspace.sharedVia ? workspace.sharedVia : null;
+  const sharedPermissions = sharedVia?.permissions || [];
+  const sharedLevel = sharedPermissions.includes('admin') ? 'admin' : sharedPermissions.includes('write') ? 'read/write' : 'read-only';
+  const sharedHow = sharedVia?.type === 'group' ? `via group ${sharedVia.principal}` : sharedVia?.type === 'user' ? 'shared with you' : '';
   // Lives on another canvas-server; "delete" only drops the local reference.
   const isRemote = workspace.origin === 'remote';
   const isOffline = workspace.status === 'offline';
@@ -148,8 +152,8 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onS
               </Button>
             )}
 
-            {/* Edit Button */}
-            {onEdit && !isUniverse && (
+            {/* Edit Button — owner only; a shared workspace is edited by its owner */}
+            {onEdit && !isUniverse && !isShared && (
               <Button
                 variant="outline"
                 size="icon"
@@ -161,8 +165,8 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onS
               </Button>
             )}
 
-            {/* Destroy/Delete Button - enabled when workspace is stopped */}
-            {onDestroy && !isUniverse && (
+            {/* Destroy/Delete Button - enabled when workspace is stopped; never for a workspace shared with you */}
+            {onDestroy && !isUniverse && !isShared && (
               <AlertDialog open={isDestroyDialogOpen} onOpenChange={setIsDestroyDialogOpen}>
                 <AlertDialogTrigger asChild>
                   <Button
@@ -235,8 +239,11 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onS
             </span>
           )}
           {isShared && (
-            <span className="ml-2 rounded-full bg-info/10 px-2 py-1 text-xs text-info">
-              Shared
+            <span
+              className="ml-2 rounded-full bg-info/10 px-2 py-1 text-xs text-info"
+              title={[sharedHow, `${sharedLevel} access`].filter(Boolean).join(' · ')}
+            >
+              Shared · {sharedLevel}
             </span>
           )}
         </div>
