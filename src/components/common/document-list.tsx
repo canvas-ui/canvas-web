@@ -1,5 +1,5 @@
 import { Document, TreeNode } from '@/types/workspace'
-import { File, Calendar, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, ChevronDown, SlidersHorizontal, Play, Table as TableIcon, HardDrive, ArrowRightLeft } from 'lucide-react'
+import { File, Calendar, CalendarDays, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, ChevronDown, SlidersHorizontal, Play, Table as TableIcon, HardDrive, ArrowRightLeft } from 'lucide-react'
 import { LinkToCard, type LinkToTarget, type LinkToRelation } from '@/components/menu/shared/LinkToCard'
 import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from '@/components/menu/shared/LinkToSidePanel'
 import { BackendActionCard } from '@/components/menu/shared/BackendActionCard'
@@ -33,6 +33,7 @@ import { DocumentIcon } from '@/components/common/DocumentIcon'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { TimelineSortControl } from '@/components/canvas/widgets/sort-control'
 import type { ToolboxSort } from '@/types/workspace'
+import { groupByDate } from '@/lib/date-groups'
 
 interface DocumentListProps {
   documents: Document[]
@@ -818,6 +819,45 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
   )
 }
 
+// Sticky band header for the Explorer-style date grouping. Reads as a divider,
+// not as a row: it must not compete with the documents under it. The chevron
+// collapses the band; the checkbox selects/deselects everything in it (Explorer
+// selects a whole group when you click its header).
+function DateGroupHeader({ label, count, collapsed, allSelected, someSelected, onToggle, onSelectAll }: {
+  label: string
+  count: number
+  collapsed: boolean
+  allSelected: boolean
+  someSelected: boolean
+  onToggle: () => void
+  onSelectAll: (selected: boolean) => void
+}) {
+  return (
+    <div className="sticky top-0 z-10 -mx-1 mb-2 flex items-center gap-2 bg-background/95 px-1 py-1.5 backdrop-blur-sm">
+      <input
+        type="checkbox"
+        className={`h-3.5 w-3.5 cursor-pointer accent-primary ${allSelected || someSelected ? '' : 'reveal-on-hover'}`}
+        checked={allSelected}
+        ref={(el) => { if (el) el.indeterminate = someSelected && !allSelected }}
+        onChange={(e) => onSelectAll(e.target.checked)}
+        title={`Select everything in "${label}"`}
+        onClick={(e) => e.stopPropagation()}
+      />
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={!collapsed}
+        className="flex min-w-0 items-center gap-1.5 text-left text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ChevronRight className={`h-3.5 w-3.5 shrink-0 transition-transform ${collapsed ? '' : 'rotate-90'}`} />
+        <span className="truncate text-xs font-semibold uppercase tracking-wide">{label}</span>
+        <span className="shrink-0 text-xs font-normal tabular-nums opacity-70">{count}</span>
+      </button>
+      <div className="h-px flex-1 bg-border" />
+    </div>
+  )
+}
+
 export function DocumentList({ documents, isLoading, contextPath, treeName, workspaceId, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, onSelectionChange, pastedDocumentIds, viewMode = 'card', allowViewToggle = false, activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQueries = [], onBackendSearch, onRemoveBackendQuery, serverSort, onServerSortChange, scope = 'path', onScopeChange, canSaveChanges = false, isSavingChanges = false, onSaveChanges, linkTree }: DocumentListProps) {
   // View switcher (table/tile/card). Only active when allowViewToggle; the
   // chosen view is remembered in localStorage. Widgets that hardcode viewMode
@@ -834,6 +874,30 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   const changeView = useCallback((v: 'card' | 'table' | 'tile') => {
     setStoredView(v)
     try { localStorage.setItem('doclist:view', v) } catch { /* ignore */ }
+  }, [])
+  // Explorer-style date bands (Today / Yesterday / Earlier this week / …) over
+  // the tile and card views. On by default: the folders that hurt are the big
+  // dynamic ones (Downloads, an inbox), and there the bands are the difference
+  // between scanning and scrolling. Remembered like the view choice.
+  const [groupDates, setGroupDates] = useState<boolean>(() => {
+    try { return localStorage.getItem('doclist:groupdates') !== 'off' } catch { return true }
+  })
+  const toggleGroupDates = useCallback(() => {
+    setGroupDates(prev => {
+      const next = !prev
+      try { localStorage.setItem('doclist:groupdates', next ? 'on' : 'off') } catch { /* ignore */ }
+      return next
+    })
+  }, [])
+  // Collapsed bands are per-session and keyed by band, not by folder: "I don't
+  // care about last year" holds while you walk the tree.
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  const toggleGroup = useCallback((key: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key); else next.add(key)
+      return next
+    })
   }, [])
   const [selectedDocuments, setSelectedDocuments] = useState<Set<number>>(new Set())
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; documentIds: number[] } | null>(null)
@@ -1032,6 +1096,31 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     created: (d: Document) => Date.parse(d.createdAt) || 0,
   }), [])
   const { sorted: sortedDocuments, sort, toggleSort } = useSortableData(filteredDocuments, sortAccessors)
+
+  // Which date the bands mean. The list arrives in the server's timeline order,
+  // so the bands must read the same clock: sorting by the "updated" timeline
+  // bands by updatedAt, everything else (created, content, domain timelines)
+  // falls back to createdAt — the only other date the document itself carries.
+  const groupDateOf = useCallback((doc: Document) => {
+    const raw = serverSort?.sortBy === 'crud:updated' ? doc.updatedAt : doc.createdAt
+    const ts = Date.parse(raw ?? '')
+    return Number.isNaN(ts) ? null : ts
+  }, [serverSort?.sortBy])
+  const dateGroups = useMemo(
+    () => groupByDate(filteredDocuments, groupDateOf, serverSort?.order === 'asc' ? 'asc' : 'desc'),
+    [filteredDocuments, groupDateOf, serverSort?.order],
+  )
+  // A single band is no band at all — it just costs a header row.
+  const showDateGroups = groupDates && dateGroups.length > 1
+
+  // Band header checkbox: additive, like ctrl-clicking every tile in the band.
+  const selectGroup = useCallback((ids: number[], selected: boolean) => {
+    setSelectedDocuments(prev => {
+      const next = new Set(prev)
+      for (const id of ids) { if (selected) next.add(id); else next.delete(id) }
+      return next
+    })
+  }, [])
 
   const handleDocumentSelect = useCallback((documentId: number, isSelected: boolean, isCtrlClick: boolean) => {
     setSelectedDocuments(prev => {
@@ -1244,6 +1333,32 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     }
   }, [onImportDocuments, contextPath])
 
+  // Wraps a view's item renderer in the date bands. With grouping off (or only
+  // one band present) it renders the flat list it was given, so the tile and
+  // card branches have a single code path either way.
+  const renderBands = (renderItems: (docs: Document[]) => React.ReactNode): React.ReactNode => {
+    if (!showDateGroups) return renderItems(filteredDocuments)
+    return dateGroups.map(group => {
+      const collapsed = collapsedGroups.has(group.key)
+      const ids = group.items.map(doc => doc.id)
+      const selectedInGroup = ids.reduce((n, id) => n + (selectedDocuments.has(id) ? 1 : 0), 0)
+      return (
+        <section key={group.key} className="group mb-4">
+          <DateGroupHeader
+            label={group.label}
+            count={group.items.length}
+            collapsed={collapsed}
+            allSelected={selectedInGroup === ids.length}
+            someSelected={selectedInGroup > 0}
+            onToggle={() => toggleGroup(group.key)}
+            onSelectAll={(selected) => selectGroup(ids, selected)}
+          />
+          {!collapsed && renderItems(group.items)}
+        </section>
+      )
+    })
+  }
+
   if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -1339,6 +1454,19 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                   </button>
                 ))}
               </div>
+            )}
+            {/* Date bands on/off. Only offered for the two views that carry
+                them — the table has its own column sorting and stays flat. */}
+            {allowViewToggle && view !== 'table' && (
+              <button
+                type="button"
+                onClick={toggleGroupDates}
+                title={groupDates ? 'Grouping by date — click for a flat list' : 'Group by date (Today, Yesterday, …)'}
+                aria-pressed={groupDates}
+                className={`touch-target shrink-0 rounded-md border p-1.5 transition-colors ${groupDates ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/50'}`}
+              >
+                <CalendarDays className="h-4 w-4" />
+              </button>
             )}
             <div className="relative flex-1 min-w-[12rem]">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -1779,12 +1907,17 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
         <div className="flex-1 overflow-y-auto" onContextMenu={handleEmptyAreaRightClick}>
           {/* Masonry via CSS columns: image tiles keep their natural aspect,
               so column heights interleave into a 500px-style mosaic. Wide
-              columns (fewer per row) make photos read big, like a feed. */}
-          <div className="columns-[300px] gap-3 pr-2">
-            {filteredDocuments.map((document) => (
-              <DocumentTile key={document.id} document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onRemoveDocument={removeDocument} onDeleteDocument={onDeleteDocument} onLinkDocument={canLink ? (id) => setLinkPanelIds([id]) : undefined} onOpenToSide={openToSide} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
-            ))}
-          </div>
+              columns (fewer per row) make photos read big, like a feed.
+              Grouped: one masonry per date band — a single set of columns
+              spanning the bands would let a tall tile from Today flow past
+              Yesterday's header. */}
+          {renderBands((docs) => (
+            <div className="columns-[300px] gap-3 pr-2">
+              {docs.map((document) => (
+                <DocumentTile key={document.id} document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onRemoveDocument={removeDocument} onDeleteDocument={onDeleteDocument} onLinkDocument={canLink ? (id) => setLinkPanelIds([id]) : undefined} onOpenToSide={openToSide} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
+              ))}
+            </div>
+          ))}
         </div>
       ) : view === 'table' ? (
         <div className="flex-1 overflow-y-auto" onContextMenu={handleEmptyAreaRightClick}>
@@ -1823,13 +1956,15 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto" onContextMenu={handleEmptyAreaRightClick}>
-          <div className="space-y-3 pr-2">
-            {filteredDocuments.map((document) => (
-              <div key={document.id} onContextMenu={(e) => { e.stopPropagation(); handleDocumentRightClick(e, document.id); }}>
-                <DocumentRow document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onRemoveDocument={removeDocument} onDeleteDocument={onDeleteDocument} onLinkDocument={canLink ? (id) => setLinkPanelIds([id]) : undefined} onOpenToSide={openToSide} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
-              </div>
-            ))}
-          </div>
+          {renderBands((docs) => (
+            <div className="space-y-3 pr-2">
+              {docs.map((document) => (
+                <div key={document.id} onContextMenu={(e) => { e.stopPropagation(); handleDocumentRightClick(e, document.id); }}>
+                  <DocumentRow document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onRemoveDocument={removeDocument} onDeleteDocument={onDeleteDocument} onLinkDocument={canLink ? (id) => setLinkPanelIds([id]) : undefined} onOpenToSide={openToSide} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
       )}
 
