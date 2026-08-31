@@ -24,11 +24,22 @@ export function TodoRenderer({ document: doc, workspaceId, className = '' }: Ren
   const status = t.status ?? 'pending'
   const overdue = isOverdue(t)
 
+  // The checkbox renders from the document, which only changes once the write
+  // lands — so a tick shows nothing at all until then. The button carries its
+  // own spinner to acknowledge the click, and a failed write has to say so:
+  // for a connector-backed task the write goes to GitHub and can be rejected
+  // (revoked token, missing scope), and silently leaving the box unticked
+  // looks like a click that never registered.
   const toggle = async () => {
     if (isPublic || busy) return
     setBusy(true)
-    try { await setTodoStatus(workspaceId, doc, done ? 'pending' : 'completed') }
-    finally { setBusy(false) }
+    try {
+      await setTodoStatus(workspaceId, doc, done ? 'pending' : 'completed')
+    } catch {
+      // The API layer already reports the failure (handleApiError → toast) —
+      // catching here is what stops it becoming an unhandled rejection and
+      // leaves the checkbox showing the source's real state, not the click's.
+    } finally { setBusy(false) }
   }
 
   return (
@@ -42,7 +53,7 @@ export function TodoRenderer({ document: doc, workspaceId, className = '' }: Ren
           title={done ? 'Mark not done' : 'Mark done'}
           className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${done ? 'border-success bg-success text-success-foreground' : 'border-input hover:border-success'} ${isPublic ? 'cursor-default opacity-70' : ''}`}
         >
-          {done && <Check className="h-3.5 w-3.5" />}
+          {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : done && <Check className="h-3.5 w-3.5" />}
         </button>
         <div className="min-w-0 flex-1">
           <div className={`font-medium leading-tight ${done ? 'text-muted-foreground line-through' : ''}`}>

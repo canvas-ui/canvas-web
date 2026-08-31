@@ -57,10 +57,14 @@ function TodoItem({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saveSeq = useRef(0)
 
-  const persist = useCallback(async (next: { title: string; description: string; status: TodoStatus; due: string }) => {
-    if (!updateWorkspace) return
+  // Resolves true when the write landed. The checkbox is optimistic, so it
+  // needs the answer: a task synced from a connector is written to its source
+  // first and the source can refuse (revoked token, missing scope), and a tick
+  // left standing over a failed write is a lie about what the source holds.
+  const persist = useCallback(async (next: { title: string; description: string; status: TodoStatus; due: string }): Promise<boolean> => {
+    if (!updateWorkspace) return false
     // A todo without a title fails schema-side; keep the last titled save.
-    if (!next.title.trim()) return
+    if (!next.title.trim()) return false
     const seq = ++saveSeq.current
     setSaveState('saving')
     try {
@@ -83,12 +87,14 @@ function TodoItem({
         data,
         metadata: doc.metadata,
       })
-      if (seq !== saveSeq.current) return
+      if (seq !== saveSeq.current) return true
       baseline.current = { title: next.title, description: next.description }
       setSaveState('saved')
       setTimeout(() => setSaveState((s) => (s === 'saved' ? 'idle' : s)), 1500)
+      return true
     } catch {
       if (seq === saveSeq.current) setSaveState('error')
+      return false
     }
   }, [doc.id, doc.schema, doc.schemaVersion, doc.data, doc.metadata, updateWorkspace])
 
@@ -107,10 +113,14 @@ function TodoItem({
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
 
   const toggleDone = useCallback(async () => {
+    const previous = itemStatus
     const next: TodoStatus = itemStatus === 'completed' ? 'pending' : 'completed'
     setItemStatus(next)
-    await persist({ title, description, status: next, due })
-    onStatusSaved(doc.id, next)
+    if (await persist({ title, description, status: next, due })) {
+      onStatusSaved(doc.id, next)
+    } else {
+      setItemStatus(previous) // the write never landed — put the tick back
+    }
   }, [itemStatus, persist, title, description, due, doc.id, onStatusSaved])
 
   // Due changes write through immediately (like the checkbox) — the picker is

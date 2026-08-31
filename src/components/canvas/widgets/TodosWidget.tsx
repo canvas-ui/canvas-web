@@ -24,11 +24,20 @@ export function TodoRow({ doc, workspaceId, readOnly, onChanged }: { doc: Docume
   // the checkbox keeps its own quick-toggle and stops the row from also opening.
   const { activationProps, stopRowActivation } = useDocumentActivation(doc, workspaceId)
 
+  // The tick only becomes visible once the write lands, so the checkbox shows
+  // its own spinner meanwhile — and a rejected write (a connector task the
+  // source refused) has to surface, or the box just quietly stays as it was.
   const toggle = async () => {
     if (readOnly || busy) return
     setBusy(true)
-    try { await setTodoStatus(workspaceId, doc, done ? 'pending' : 'completed'); onChanged() }
-    finally { setBusy(false) }
+    try {
+      await setTodoStatus(workspaceId, doc, done ? 'pending' : 'completed')
+      onChanged()
+    } catch {
+      // The API layer already reports the failure (handleApiError → toast) —
+      // catching here is what stops it becoming an unhandled rejection and
+      // leaves the checkbox showing the source's real state, not the click's.
+    } finally { setBusy(false) }
   }
 
   return (
@@ -45,7 +54,7 @@ export function TodoRow({ doc, workspaceId, readOnly, onChanged }: { doc: Docume
         title={done ? 'Mark not done' : 'Mark done'}
         className={`canvas-no-drag mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${done ? 'border-success bg-success text-success-foreground' : 'border-input hover:border-success'} ${readOnly ? 'cursor-default opacity-70' : ''}`}
       >
-        {done && <Check className="h-3 w-3" />}
+        {busy ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : done && <Check className="h-3 w-3" />}
       </button>
       <div className="min-w-0 flex-1">
         <div className={`truncate text-sm ${done ? 'text-muted-foreground line-through' : ''}`}>{t.title || `Todo ${doc.id}`}</div>
