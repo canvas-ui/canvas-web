@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ListTodo, Check, CalendarClock, Flag } from 'lucide-react'
+import { ListTodo, Check, CalendarClock, Flag, Loader2 } from 'lucide-react'
 import { registerWidget } from '../widget-registry'
 import type { WidgetProps } from '../widget-types'
 import type { Document } from '@/types/workspace'
@@ -7,12 +7,16 @@ import { TODO_SCHEMA } from '@/components/renderers/types'
 import { TODO_STATUS_LABELS } from '@/components/toolbox/add/useTodoFields'
 import { todoData, TODO_STATUS_STYLE, isOverdue, formatDue, setTodoStatus } from '@/lib/todo'
 import { useDocumentActivation } from '../useDocumentActivation'
+import { useMirrorSaveState } from '@/lib/remote-mirror'
 
 const TODO_FEATURE = 'data/schema/task'
 
 export function TodoRow({ doc, workspaceId, readOnly, onChanged }: { doc: Document; workspaceId: string; readOnly: boolean; onChanged: () => void }) {
   const t = todoData(doc)
   const [busy, setBusy] = useState(false)
+  // A connector-synced task is written to its source before the mirror moves —
+  // the row dims and names the source instead of appearing to do nothing.
+  const { replicating, label: replicatingLabel } = useMirrorSaveState(doc)
   const done = t.status === 'completed'
   const status = t.status ?? 'pending'
   const overdue = isOverdue(t)
@@ -31,12 +35,12 @@ export function TodoRow({ doc, workspaceId, readOnly, onChanged }: { doc: Docume
     <div
       {...activationProps}
       title="Open details"
-      className="canvas-no-drag flex cursor-pointer items-start gap-2.5 rounded-md border bg-card px-2.5 py-2 transition-colors hover:bg-accent/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className={`canvas-no-drag flex cursor-pointer items-start gap-2.5 rounded-md border bg-card px-2.5 py-2 transition-colors hover:bg-accent/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${replicating ? 'opacity-60' : ''}`}
     >
       <button
         type="button"
         onClick={(e) => { stopRowActivation(e); toggle() }}
-        disabled={readOnly || busy}
+        disabled={readOnly || busy || replicating}
         aria-pressed={done}
         title={done ? 'Mark not done' : 'Mark done'}
         className={`canvas-no-drag mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${done ? 'border-success bg-success text-success-foreground' : 'border-input hover:border-success'} ${readOnly ? 'cursor-default opacity-70' : ''}`}
@@ -54,6 +58,11 @@ export function TodoRow({ doc, workspaceId, readOnly, onChanged }: { doc: Docume
           )}
           {typeof t.priority === 'number' && (
             <span className="inline-flex items-center gap-0.5 text-muted-foreground"><Flag className="h-3 w-3" />P{t.priority}</span>
+          )}
+          {replicating && (
+            <span className="inline-flex items-center gap-1 text-muted-foreground" role="status">
+              <Loader2 className="h-3 w-3 animate-spin" />{replicatingLabel}
+            </span>
           )}
         </div>
       </div>

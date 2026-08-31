@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { useAppletTarget, type AppletTarget } from './use-applet-target'
 import { submitDocuments, describeTarget } from '../add/useAddTarget'
 import { updateWorkspaceDocument } from '@/services/workspace'
+import { useMirrorSaveState } from '@/lib/remote-mirror'
 import { TODO_SCHEMA } from '@/components/renderers/types'
 import {
   buildTodoData, isoToLocalInput, localInputToISO, todayEndOfDayLocal,
@@ -49,6 +50,9 @@ function TodoItem({
   // about the timezone (ISO in storage, wall clock in the control).
   const [due, setDue] = useState<string>(isoToLocalInput(doc.data?.dueDate as string | undefined))
   const [saveState, setSaveState] = useState<'idle' | 'dirty' | 'saving' | 'saved' | 'error'>('idle')
+  // A connector-synced task saves via its source, which is slow enough that a
+  // bare spinner reads as a stall — name the source it is waiting on.
+  const { replicating, label: replicatingLabel } = useMirrorSaveState(doc)
   const baseline = useRef({ title: String(doc.data?.title ?? ''), description: String(doc.data?.description ?? '') })
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saveSeq = useRef(0)
@@ -143,6 +147,7 @@ function TodoItem({
         </span>
         <span className="flex items-center gap-1 text-[10px] text-muted-foreground/70">
           {saveState === 'saving' && <Loader2 className="inline h-3 w-3 animate-spin" />}
+          {replicating && <span className="whitespace-nowrap">{replicatingLabel}</span>}
           {saveState === 'saved' && <Check className="inline h-3 w-3 text-success" />}
           {saveState === 'dirty' && '·'}
           {saveState === 'error' && <span className="text-destructive">save failed</span>}

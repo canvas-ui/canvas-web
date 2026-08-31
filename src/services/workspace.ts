@@ -2,6 +2,7 @@ import type { ResponseEnvelope } from '@augmentd-labs/canvas-protocol';
 import { API_ROUTES, API_URL } from '@/config/api';
 import { api } from '@/lib/api';
 import type { Document as CanvasDocument, TreeNode, TimelineInfo, TimelineQueryInterval, TimelineQueryOptions } from '@/types/workspace';
+import { beginDocumentSave, endDocumentSave } from '@/lib/remote-mirror'
 
 // Document lists stay enveloped: their pagination counts (count/totalCount)
 // live on the envelope, not in the payload. Every other call in this file
@@ -999,14 +1000,24 @@ export interface DestroyResult {
   failed: { id: number; reason: string }[]
 }
 
+// Updating a document that mirrors a remote object (a synced GitHub issue, a
+// calendar event) goes to that source before it touches the local index, so
+// the call can take a second or more. The in-flight registry is marked here —
+// the single place every surface's edit funnels through — so renderers can dim
+// the item and say what it is waiting for. See lib/remote-mirror.ts.
 export async function updateWorkspaceDocument(
   workspaceId: string,
   document: { id: number; schema: string; schemaVersion: string; data?: Record<string, unknown>; metadata?: Record<string, unknown>; comment?: string }
 ): Promise<boolean> {
-  await api.put<unknown>(
-    `${API_ROUTES.workspaces}/${workspaceId}/documents`,
-    { documents: [document] }
-  )
+  beginDocumentSave(document.id)
+  try {
+    await api.put<unknown>(
+      `${API_ROUTES.workspaces}/${workspaceId}/documents`,
+      { documents: [document] }
+    )
+  } finally {
+    endDocumentSave(document.id)
+  }
   return true
 }
 

@@ -18,6 +18,7 @@ import { useIdentityFields, identityFieldsFromDocument, buildIdentityData } from
 import { buildTodoData, isoToLocalInput, todayEndOfDayLocal, type TodoStatus } from '@/components/toolbox/add/useTodoFields'
 import type { Document, DocumentGeo } from '@/types/workspace'
 import { isEditableSchema } from './editable-schema'
+import { useMirrorSaveState } from '@/lib/remote-mirror'
 
 // Per-schema field mapping for the url/title pair. Legacy links store these as
 // uri/label; tabs use url/title. Notes have no url.
@@ -98,6 +99,9 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
   )
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
+  // Saving a connector-synced document goes out to its source first; say so on
+  // the button rather than leaving a generic 'Saving…' hanging for a second.
+  const { replicating, mirror } = useMirrorSaveState(doc)
 
   useEffect(() => {
     let cancelled = false
@@ -235,7 +239,9 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
 
       <div className="flex justify-end gap-2 pt-2">
         <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>Cancel</Button>
-        <Button size="sm" onClick={handleSave} disabled={!canSave}>{saving ? 'Saving…' : 'Save changes'}</Button>
+        <Button size="sm" onClick={handleSave} disabled={!canSave}>
+          {saving ? (replicating ? `Replicating to ${mirror!.label}…` : 'Saving…') : 'Save changes'}
+        </Button>
       </div>
     </div>
   )

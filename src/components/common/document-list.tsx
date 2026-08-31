@@ -1,5 +1,5 @@
 import { Document, TreeNode } from '@/types/workspace'
-import { File, Calendar, CalendarDays, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, ChevronDown, SlidersHorizontal, Play, Table as TableIcon, HardDrive, ArrowRightLeft } from 'lucide-react'
+import { File, Calendar, CalendarDays, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, ChevronDown, SlidersHorizontal, Play, Table as TableIcon, HardDrive, ArrowRightLeft, Loader2 } from 'lucide-react'
 import { LinkToCard, type LinkToTarget, type LinkToRelation } from '@/components/menu/shared/LinkToCard'
 import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from '@/components/menu/shared/LinkToSidePanel'
 import { BackendActionCard } from '@/components/menu/shared/BackendActionCard'
@@ -26,6 +26,7 @@ import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { announceRelationsChanged } from '@/lib/relation-events'
 import { ObjectPropertiesModal } from '@/components/object-card/ObjectPropertiesModal'
 import { isEditableSchema } from '@/components/object-card/editable-schema'
+import { useMirrorSaveState } from '@/lib/remote-mirror'
 import { usePublicShareCode } from '@/components/renderers/public-share'
 import { useDocumentThumbnail } from '@/components/renderers/useDocumentThumbnail'
 import { useDocumentStreamSrc } from '@/components/renderers/useDocumentBlobUrl'
@@ -424,12 +425,32 @@ function DocumentActionSheet({ document, open, onClose, onViewDetails, onEdit, o
   )
 }
 
+/*
+ * A document synced from a connector is written to its SOURCE before the local
+ * mirror moves — a GitHub round trip, not a local save — so a row can sit in
+ * flight for a second or more. Rows dim while that happens and this names what
+ * they are waiting on; without it the list just looks unresponsive.
+ */
+function ReplicatingBadge({ document }: { document: Document }) {
+  const { replicating, label } = useMirrorSaveState(document)
+  if (!replicating) return null
+  return (
+    <span
+      role="status"
+      className="inline-flex shrink-0 items-center gap-1 rounded-full border bg-muted/60 px-2 py-0.5 text-[11px] font-normal text-muted-foreground"
+    >
+      <Loader2 className="h-3 w-3 animate-spin" />{label}
+    </span>
+  )
+}
+
 function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemoveDocument, onDeleteDocument, onLinkDocument, onOpenToSide, onRightClick, onDragStart }: DocumentTableRowProps) {
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [detailEdit, setDetailEdit] = useState(false)
   const [actionSheet, setActionSheet] = useState(false)
   const isPublicShare = usePublicShareCode() != null
   const isEditable = isEditableSchema(document.schema)
+  const { replicating } = useMirrorSaveState(document)
 
   const isTabDocument = document.schema === 'data/schema/tab'
   const tabUrl = isTabDocument ? document.data.url : null
@@ -490,7 +511,7 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
   return (
     <>
       <TableRow
-        className={`cursor-pointer ${isSelected ? 'bg-info-subtle hover:bg-info-subtle' : 'hover:bg-muted/50'}`}
+        className={`cursor-pointer transition-opacity ${replicating ? 'opacity-60' : ''} ${isSelected ? 'bg-info-subtle hover:bg-info-subtle' : 'hover:bg-muted/50'}`}
         onClick={handleDocumentClick}
         onMouseDown={handleMouseDown}
         onContextMenu={handleRightClick}
@@ -520,6 +541,7 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
             <div className="flex items-center gap-2">
               <span className="truncate" title={display.title}>{display.title}</span>
               {display.isExternal && (<ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />)}
+              <ReplicatingBadge document={document} />
             </div>
             {display.subtitle && (
               <div className="truncate text-xs text-muted-foreground" title={display.subtitle}>{display.subtitle}</div>
@@ -567,6 +589,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
   const isPublicShare = usePublicShareCode() != null
   const isTabDocument = document.schema === 'data/schema/tab'
   const isEditable = isEditableSchema(document.schema)
+  const { replicating } = useMirrorSaveState(document)
   const tabUrl = isTabDocument ? document.data.url : null
   const display = getDocumentDisplayInfo(document)
   const isImage = isImageDocument(document)
@@ -613,7 +636,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
   return (
     <>
       <div
-        className={`border rounded-lg p-4 transition-colors cursor-pointer ${isSelected ? 'bg-info-subtle border-info ring-1 ring-info' : ''} ${isTabDocument && !isSelected ? 'hover:bg-info-subtle hover:border-info' : !isSelected ? 'hover:bg-accent/50' : ''}`}
+        className={`border rounded-lg p-4 transition cursor-pointer ${replicating ? 'opacity-60' : ''} ${isSelected ? 'bg-info-subtle border-info ring-1 ring-info' : ''} ${isTabDocument && !isSelected ? 'hover:bg-info-subtle hover:border-info' : !isSelected ? 'hover:bg-accent/50' : ''}`}
         onClick={handleDocumentClick}
         onMouseDown={handleMouseDown}
         onContextMenu={handleRightClick}
@@ -638,6 +661,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
               <h4 className="font-medium truncate min-w-0 flex-1 max-w-[640px]" title={display.title}>{display.title}</h4>
               {display.isExternal && (<ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />)}
               <span className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded border flex-shrink-0">{display.schemaLabel}</span>
+              <ReplicatingBadge document={document} />
             </div>
 
             {display.subtitle && (<p className="text-xs text-muted-foreground mb-2 truncate" title={display.subtitle}>{display.subtitle}</p>)}
@@ -737,6 +761,7 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
   // text tile (title + clamped body, or just title + status subtitle) instead
   // of a giant icon. Files keep the icon tile.
   const isTextTile = !hasThumb && document.schema !== 'data/schema/file' && !!(display.preview || display.subtitle)
+  const { replicating } = useMirrorSaveState(document)
   // 768px render keeps the larger (300px column, retina) photo tiles crisp.
   const { blobUrl, loading } = useDocumentThumbnail(workspaceId ?? '', document.id, 768, { enabled: hasThumb, blobFallback: isImage })
 
@@ -750,7 +775,7 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
   return (
     <>
       <div
-        className={`group relative mb-3 flex break-inside-avoid flex-col overflow-hidden rounded-lg border transition-shadow cursor-pointer hover:shadow-elevation-2 ${isSelected ? 'ring-2 ring-info border-info' : ''}`}
+        className={`group relative mb-3 flex break-inside-avoid flex-col overflow-hidden rounded-lg border transition cursor-pointer hover:shadow-elevation-2 ${replicating ? 'opacity-60' : ''} ${isSelected ? 'ring-2 ring-info border-info' : ''}`}
         onClick={handleClick}
         onContextMenu={handleRightClick}
         draggable
