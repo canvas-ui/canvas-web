@@ -105,7 +105,12 @@ export function useMenuUrlSync(_state: MenuState, dispatch: React.Dispatch<MenuA
     // resize across the breakpoint, which is not what SYNC_FROM_URL means.)
     const mobile = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`).matches
     dispatch({ type: 'SYNC_FROM_URL', section, entityId, m2View, mobile })
-  }, [location.pathname, dispatch])
+    // Keyed on location.key, not pathname: re-selecting the already-current
+    // tree node navigates to the SAME pathname (mobile back button reopens the
+    // drawer without changing the URL), and the drawer must still close. Every
+    // navigate() call gets a fresh key, so this fires once per navigation; the
+    // reducer's unchanged-guard makes same-state dispatches a no-op.
+  }, [location.key, location.pathname, dispatch])
 
   // State → URL: navigate when entity selection changes from menu interaction
   const navigateToEntity = useCallback((path: string) => {
