@@ -48,12 +48,42 @@ export function useAddTarget(): AddTarget {
   }, [activeContextType, activeContextId, activeWorkspaceName, activeTreeName, activeContextPath])
 }
 
+// Tree lists barely change while an upload batch runs; memoize briefly so a
+// 50-file queue inserting per-file doesn't refetch the trees 50 times.
+const treeListCache = new Map<string, { at: number; promise: ReturnType<typeof listWorkspaceTrees> }>()
+const TREE_LIST_TTL_MS = 15_000
+
+function listWorkspaceTreesCached(workspaceName: string): ReturnType<typeof listWorkspaceTrees> {
+  const hit = treeListCache.get(workspaceName)
+  if (hit && Date.now() - hit.at < TREE_LIST_TTL_MS) return hit.promise
+  const promise = listWorkspaceTrees(workspaceName)
+  promise.catch(() => treeListCache.delete(workspaceName))
+  treeListCache.set(workspaceName, { at: Date.now(), promise })
+  return promise
+}
+
+// Fire the list-reload event workspace mode relies on (context mode refreshes
+// via socket events). Split out so per-file callers (the upload queue) can
+// suppress it per insert and emit once when the batch settles.
+export function notifyWorkspaceDocumentsChanged(target: AddTarget): void {
+  if (target?.mode !== 'workspace') return
+  window.dispatchEvent(
+    new CustomEvent('workspace:documents:refresh', {
+      detail: { workspaceName: target.workspaceName, treeName: target.treeName, path: target.path },
+    }),
+  )
+}
+
 // A document carries its own tags inside metadata.features, so submission is the same
 // shape for both targets. Workspace mode additionally fires a refresh event so the
 // open list reloads immediately (context mode refreshes via socket events).
 // Returns the created document ids — callers linking to additional paths
 // (multi-select Save/Link To) reuse the first id instead of re-creating.
-export async function submitDocuments(target: AddTarget, documents: Record<string, unknown>[]): Promise<number[]> {
+export async function submitDocuments(
+  target: AddTarget,
+  documents: Record<string, unknown>[],
+  opts: { refresh?: boolean } = {},
+): Promise<number[]> {
   if (!target) throw new Error('No active workspace or context to add to')
 
   if (target.mode === 'workspace') {
@@ -62,7 +92,7 @@ export async function submitDocuments(target: AddTarget, documents: Record<strin
     // throws "Tree is not a context tree").
     let treeType = target.treeType
     try {
-      const trees = await listWorkspaceTrees(target.workspaceName)
+      const trees = await listWorkspaceTreesCached(target.workspaceName)
       const match = trees.find((t) => t?.name === target.treeName || t?.id === target.treeName)
       if (match?.type === 'directory' || match?.type === 'context') treeType = match.type
     } catch {
@@ -76,12 +106,8 @@ export async function submitDocuments(target: AddTarget, documents: Record<strin
       target.treeName,
       treeType,
     )
-    if (ids.length) {
-      window.dispatchEvent(
-        new CustomEvent('workspace:documents:refresh', {
-          detail: { workspaceName: target.workspaceName, treeName: target.treeName, path: target.path },
-        }),
-      )
+    if (ids.length && opts.refresh !== false) {
+      notifyWorkspaceDocumentsChanged(target)
     }
     return ids
   }
