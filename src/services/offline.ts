@@ -7,6 +7,7 @@ import {
   setPinned,
   unpinExcept,
   pinScopeId,
+  normalizePinPath,
   type PinScope,
 } from '@/lib/offline'
 
@@ -34,9 +35,16 @@ export interface PinProgress {
   bytes: number
 }
 
+export interface PinScopeTarget {
+  workspaceRef: string
+  path: string
+  /** Which virtual tree of the workspace the path lives in. */
+  treeName: string
+  treeType: 'context' | 'directory'
+}
+
 export async function warmPinScope(
-  workspaceRef: string,
-  path: string,
+  { workspaceRef, path, treeName, treeType }: PinScopeTarget,
   onProgress?: (p: PinProgress) => void,
 ): Promise<PinScope> {
   const settings = await getOfflineSettings()
@@ -45,13 +53,15 @@ export async function warmPinScope(
     throw new Error(`Workspace "${workspaceRef}" is excluded from offline caching`)
   }
 
-  const id = pinScopeId(workspaceRef, path)
-  const normalizedPath = id.slice(workspaceRef.length + 1)
+  const id = pinScopeId(workspaceRef, treeName, path)
+  const normalizedPath = normalizePinPath(path)
   const previous = await getPinScope(id)
 
   // The listing itself rides through the SW's network-first API cache, so the
   // workspace view for this path renders offline as a side effect.
-  const envelope = await getWorkspaceDocuments(workspaceRef, normalizedPath, [], { limit: 10000 })
+  const envelope = await getWorkspaceDocuments(workspaceRef, normalizedPath, [], {
+    limit: 10000, treeName, treeType,
+  })
   const docs = envelope.payload ?? []
   const fileDocs = docs.filter((d) => d.schema === FILE_SCHEMA)
 
@@ -89,6 +99,8 @@ export async function warmPinScope(
   const scope: PinScope = {
     id,
     workspaceRef,
+    treeName,
+    treeType,
     path: normalizedPath,
     urls,
     bytes,

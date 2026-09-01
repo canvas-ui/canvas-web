@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Check, HardDriveDownload, Pin, RefreshCw, Trash2, Loader2, X, Ban } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { LinkToCard, type LinkToTarget } from '@/components/menu/shared/LinkToCard'
+import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from '@/components/menu/shared/LinkToSidePanel'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
 import {
   GIB,
@@ -18,8 +19,8 @@ import {
   type OfflineSettings as Settings,
   type OfflineUsage,
 } from '@/lib/offline'
-import { warmPinScope, type PinProgress } from '@/services/offline'
-import { listWorkspaces } from '@/services/workspace'
+import { warmPinScope, type PinProgress, type PinScopeTarget } from '@/services/offline'
+import { listWorkspaces, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
 
 const BUDGET_OPTIONS = [
   { label: '1 GB', bytes: 1 * GIB },
@@ -27,8 +28,6 @@ const BUDGET_OPTIONS = [
   { label: '4 GB', bytes: 4 * GIB },
   { label: '8 GB', bytes: 8 * GIB },
 ]
-
-const selectClass = 'h-9 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-50'
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
@@ -50,8 +49,7 @@ export function OfflineSettings() {
   const [scopes, setScopes] = useState<PinScope[]>([])
   const [warming, setWarming] = useState<Record<string, PinProgress>>({})
   const [clearing, setClearing] = useState(false)
-  const [newWorkspace, setNewWorkspace] = useState('')
-  const [newPath, setNewPath] = useState('/')
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   const refresh = useCallback(() => {
     getOfflineSettings().then(setSettings).catch(() => {})
@@ -101,16 +99,16 @@ export function OfflineSettings() {
     }
   }
 
-  const handleWarm = async (workspaceRef: string, path: string) => {
-    const id = pinScopeId(workspaceRef, path)
+  const handleWarm = async (target: PinScopeTarget) => {
+    const id = pinScopeId(target.workspaceRef, target.treeName, target.path)
     setWarming((w) => ({ ...w, [id]: { done: 0, total: 0, bytes: 0 } }))
     try {
-      const scope = await warmPinScope(workspaceRef, path, (p) =>
+      const scope = await warmPinScope(target, (p) =>
         setWarming((w) => ({ ...w, [id]: p })))
       showSuccessToast(
         scope.truncated
           ? `Pinned ${formatBytes(scope.bytes)} — stopped at the size budget`
-          : `Pinned ${scope.id} (${formatBytes(scope.bytes)})`,
+          : `Pinned ${scope.workspaceRef}:/${scope.path} (${formatBytes(scope.bytes)})`,
       )
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to pin')
@@ -123,11 +121,23 @@ export function OfflineSettings() {
     }
   }
 
-  const handleAddScope = () => {
-    if (!newWorkspace) return
-    void handleWarm(newWorkspace, newPath.trim() || '/')
-    setNewPath('/')
+  // LinkToCard confirms with the picked path(s) + workspace/tree — the same
+  // picker every other path-choosing surface uses (rule builder, Link to…).
+  const handlePicked = (paths: string[], ctx: LinkToTarget) => {
+    setPickerOpen(false)
+    for (const path of paths) {
+      void handleWarm({ workspaceRef: ctx.workspaceName, path, treeName: ctx.treeName, treeType: ctx.treeType })
+    }
   }
+
+  // Scopes saved before trees were recorded (web ≤2.7.69) default to the
+  // context tree on re-warm.
+  const rewarmTarget = (scope: PinScope): PinScopeTarget => ({
+    workspaceRef: scope.workspaceRef,
+    path: scope.path,
+    treeName: scope.treeName || DEFAULT_WORKSPACE_TREE_NAME,
+    treeType: scope.treeType || 'context',
+  })
 
   const handleRemoveScope = async (id: string) => {
     await removePinScope(id)
@@ -222,28 +232,10 @@ export function OfflineSettings() {
               title="Pinned scopes"
               description="A pinned scope — a workspace, or one of its tree paths — is downloaded up front and never evicted. Scopes resolve fresh on every re-warm, so moved contexts and reorganized trees are picked up; documents that left a scope return to normal eviction."
             />
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <select
-                className={selectClass}
-                value={newWorkspace}
-                onChange={(e) => setNewWorkspace(e.target.value)}
-                aria-label="Workspace to pin"
-              >
-                <option value="">Select workspace…</option>
-                {workspaces.map((name) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-              <Input
-                value={newPath}
-                onChange={(e) => setNewPath(e.target.value)}
-                placeholder="/path (optional, / = whole workspace)"
-                className="h-9 w-56"
-                aria-label="Tree path to pin"
-              />
-              <Button size="sm" onClick={handleAddScope} disabled={!newWorkspace || !!Object.keys(warming).length}>
+            <div className="mb-3">
+              <Button size="sm" onClick={() => setPickerOpen(true)} disabled={!!Object.keys(warming).length}>
                 <Pin className="mr-1.5 h-3.5 w-3.5" />
-                Pin
+                Pin a path…
               </Button>
             </div>
             <ul className="space-y-1">
@@ -256,6 +248,9 @@ export function OfflineSettings() {
                   >
                     <span className="flex-1 truncate font-mono text-xs sm:text-sm">
                       {scope.workspaceRef}://{scope.path.replace(/^\//, '')}
+                      {scope.treeName && scope.treeName !== DEFAULT_WORKSPACE_TREE_NAME && (
+                        <span className="ml-1.5 rounded bg-muted px-1 py-0.5 font-sans text-[10px] text-muted-foreground">{scope.treeName}</span>
+                      )}
                     </span>
                     {progress ? (
                       <span className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -270,7 +265,7 @@ export function OfflineSettings() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleWarm(scope.workspaceRef, scope.path)}
+                          onClick={() => handleWarm(rewarmTarget(scope))}
                           aria-label={`Re-warm ${scope.id}`}
                           title="Re-warm: re-resolve the scope and download anything new"
                         >
@@ -320,6 +315,20 @@ export function OfflineSettings() {
             </ul>
           </section>
         </>
+      )}
+
+      {pickerOpen && (
+        <LinkToSidePanel onClose={() => setPickerOpen(false)}>
+          <LinkToCard
+            sizeClassName={LINK_TO_SIDE_SIZE}
+            multiple={false}
+            tabs={['context', 'directory']}
+            title="Pin for offline…"
+            confirmLabel="Pin path"
+            onConfirm={handlePicked}
+            onClose={() => setPickerOpen(false)}
+          />
+        </LinkToSidePanel>
       )}
     </div>
   )

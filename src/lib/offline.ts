@@ -59,10 +59,13 @@ export interface CacheEntry {
 // previous warm un-pins documents that left the subtree, so a dissolved
 // /projects/foo tree stops holding bytes hostage on the next warm.
 export interface PinScope {
-  /** `${workspaceRef}:${path}` — stable id for the scope definition. */
+  /** `${workspaceRef}:${treeName}:${path}` — stable id for the scope definition. */
   id: string
   workspaceRef: string
-  /** Context-tree path prefix; '/' pins the whole workspace. */
+  /** Which of the workspace's virtual trees the path lives in ('context' default). */
+  treeName: string
+  treeType: 'context' | 'directory'
+  /** Tree path prefix; '/' pins the whole tree. */
   path: string
   urls: string[]
   bytes: number
@@ -71,9 +74,13 @@ export interface PinScope {
   truncated?: boolean
 }
 
-export function pinScopeId(workspaceRef: string, path: string): string {
+export function normalizePinPath(path: string): string {
   const normalized = path.startsWith('/') ? path : `/${path}`
-  return `${workspaceRef}:${normalized.replace(/\/+$/, '') || '/'}`
+  return normalized.replace(/\/+$/, '') || '/'
+}
+
+export function pinScopeId(workspaceRef: string, treeName: string, path: string): string {
+  return `${workspaceRef}:${treeName}:${normalizePinPath(path)}`
 }
 
 // ─── Minimal promisified IndexedDB ──────────────────────────────────────────
