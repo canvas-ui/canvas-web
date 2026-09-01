@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState, useCallback } from 'react'
 import { ToastProvider, ToastViewport, Toast, ToastTitle, ToastDescription, ToastClose } from './toast'
 import { ToastContext, type ToastType } from './use-toast'
+import { isNetworkErrorMessage } from '@/lib/connectivity'
 
 export function ToastContainer({ children }: { children?: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastType[]>([])
@@ -9,6 +10,15 @@ export function ToastContainer({ children }: { children?: React.ReactNode }) {
   const recentToastKeys = useRef<Set<string>>(new Set())
 
   const showToast = useCallback((toast: Omit<ToastType, 'id'>) => {
+    // Network-layer failures are reported ONCE by the connectivity transition
+    // toast (App.tsx). Component catch-blocks all over the app forward the
+    // API's network-error message verbatim via their own showToast calls, so
+    // the suppression has to live here, at the single choke point — and
+    // unconditionally, because connectivity state can flip between a parallel
+    // request's success and this toast being raised.
+    if (isNetworkErrorMessage(toast.description) || isNetworkErrorMessage(toast.title)) {
+      return
+    }
     const key = `${toast.title}:${toast.description ?? ''}`
     // If we already displayed the exact same toast very recently, skip it
     if (recentToastKeys.current.has(key)) {

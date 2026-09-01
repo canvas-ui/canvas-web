@@ -255,7 +255,7 @@ async function requestJson<T>(
         // user. The connectivity module coalesces this into one transition
         // that App.tsx reports once. Callers still get a rejection.
         console.warn(`API: network failure for ${method} ${endpoint}`);
-        throw new Error('Network error: The server might be unavailable or CORS might be misconfigured. Please check your connection and try again.');
+        throw new Error('Network error: server unreachable. Check your connection and try again.');
       }
     }
 

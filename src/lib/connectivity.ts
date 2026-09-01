@@ -33,6 +33,16 @@ export function reportNetworkSuccess(): void {
   set(false)
 }
 
+// The one message api.ts throws for network-layer failures (no HTTP response
+// at all). Toast surfaces drop anything carrying it: offline every request
+// fails identically, and the transition toast in App.tsx already said it once.
+// Matched anywhere, not anchored — components wrap it ("Failed to load X: …").
+const NETWORK_ERROR_MESSAGE_RE = /Network error:/i
+
+export function isNetworkErrorMessage(text: string | undefined | null): boolean {
+  return text != null && NETWORK_ERROR_MESSAGE_RE.test(text)
+}
+
 export function onConnectivityChange(listener: Listener): () => void {
   listeners.add(listener)
   return () => { listeners.delete(listener) }
