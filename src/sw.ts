@@ -7,6 +7,7 @@ import {
   recordEntry,
   touchEntry,
   evictToBudget,
+  workspaceRefFromPath,
   type OfflineSettings,
 } from '@/lib/offline'
 
@@ -61,9 +62,20 @@ const API_EXCLUDE_RE = /^\/rest\/v2\/(auth|admin|ping|events)\b/
 let settingsMemo: { at: number; value: OfflineSettings } | null = null
 async function offlineSettings(): Promise<OfflineSettings> {
   if (settingsMemo && Date.now() - settingsMemo.at < 10_000) return settingsMemo.value
-  const value = await getOfflineSettings().catch(() => ({ enabled: false, budgetBytes: 0 }))
+  const value = await getOfflineSettings().catch(
+    () => ({ enabled: false, budgetBytes: 0, excludedWorkspaces: [] }),
+  )
   settingsMemo = { at: Date.now(), value }
   return value
+}
+
+// Per-workspace opt-out ("never cache my test workspace"): workspace-scoped
+// requests for an excluded ref bypass caching entirely — no put, and no serve
+// from a cache that may predate the exclusion. Non-workspace routes
+// (contexts, users, …) are unaffected.
+function isExcluded(settings: OfflineSettings, pathname: string): boolean {
+  const ref = workspaceRefFromPath(pathname)
+  return ref !== null && settings.excludedWorkspaces.includes(ref)
 }
 
 self.addEventListener('message', (event) => {
@@ -109,7 +121,7 @@ function isServerPath(pathname: string): boolean {
 // budget enforced in the background (waitUntil keeps the SW alive for it).
 async function handleContent(event: FetchEvent, request: Request): Promise<Response> {
   const settings = await offlineSettings()
-  if (!settings.enabled) return fetch(request)
+  if (!settings.enabled || isExcluded(settings, new URL(request.url).pathname)) return fetch(request)
 
   const cache = await caches.open(CONTENT_CACHE)
   const hit = await cache.match(request.url, { ignoreVary: true })
@@ -143,7 +155,7 @@ async function handleContent(event: FetchEvent, request: Request): Promise<Respo
 // exists only for when the server is unreachable.
 async function handleApi(event: FetchEvent, request: Request): Promise<Response> {
   const settings = await offlineSettings()
-  if (!settings.enabled) return fetch(request)
+  if (!settings.enabled || isExcluded(settings, new URL(request.url).pathname)) return fetch(request)
 
   try {
     const res = await fetch(request)

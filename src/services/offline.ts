@@ -1,22 +1,26 @@
 import { API_ROUTES } from '@/config/api'
-import { getContext, getContextDocuments, getContextTree } from './context'
-import { fetchDocumentBlob, fetchDocumentThumbnail } from './workspace'
+import { getWorkspaceDocuments, fetchDocumentBlob, fetchDocumentThumbnail } from './workspace'
 import {
   getOfflineSettings,
-  saveContextPin,
+  getPinScope,
+  savePinScope,
   setPinned,
-  type ContextPin,
+  unpinExcept,
+  pinScopeId,
+  type PinScope,
 } from '@/lib/offline'
 
-// Pin a context for offline: warm every file-backed document's bytes (plus the
-// small list-row thumbnail) through the normal fetch paths, so the service
-// worker caches them, then flag the URLs as pinned (exempt from LRU).
+// Warm (or re-warm) a pin scope: a workspace, or a subtree of its context
+// tree. The scope is resolved FRESH on every warm — contexts are movable and
+// tree paths are ad-hoc by design, so the durable pin identity is
+// workspace(+path), never a context id or a frozen URL list. Documents that
+// left the subtree since the last warm are un-pinned via the URL-set diff
+// (unless another scope still claims them); newly linked ones get warmed and
+// pinned. Re-warming an unchanged scope is cheap: every content URL is
+// immutable, so the fetches below are cache hits.
 //
-// The context's own JSON (getContext, tree, document list) rides through the
-// SW's network-first API cache as a side effect of the calls below, so the
-// context page renders offline too. Fetches here use the same
-// `workspaceName || workspaceId` ref the context page hands its renderers —
-// the cache is URL-keyed, so the warm URL must be the view URL.
+// Path semantics ride on the server's context selector: a path is the AND of
+// its layers, so `context=/notes` matches the whole /notes subtree.
 
 const WARM_CONCURRENCY = 3
 const FILE_SCHEMA = 'data/schema/file'
@@ -30,20 +34,25 @@ export interface PinProgress {
   bytes: number
 }
 
-export async function pinContextForOffline(
-  contextId: string,
+export async function warmPinScope(
+  workspaceRef: string,
+  path: string,
   onProgress?: (p: PinProgress) => void,
-): Promise<ContextPin> {
+): Promise<PinScope> {
   const settings = await getOfflineSettings()
   if (!settings.enabled) throw new Error('Enable the offline cache first')
+  if (settings.excludedWorkspaces.includes(workspaceRef)) {
+    throw new Error(`Workspace "${workspaceRef}" is excluded from offline caching`)
+  }
 
-  const ctx = await getContext(contextId)
-  const wsRef = ctx.workspaceName || ctx.workspaceId
-  if (!wsRef) throw new Error('Context has no bound workspace')
+  const id = pinScopeId(workspaceRef, path)
+  const normalizedPath = id.slice(workspaceRef.length + 1)
+  const previous = await getPinScope(id)
 
-  // Warm the tree alongside the list (both are what the page opens with).
-  await getContextTree(contextId).catch(() => {})
-  const docs = await getContextDocuments(contextId, [], [], { limit: 10000 })
+  // The listing itself rides through the SW's network-first API cache, so the
+  // workspace view for this path renders offline as a side effect.
+  const envelope = await getWorkspaceDocuments(workspaceRef, normalizedPath, [], { limit: 10000 })
+  const docs = envelope.payload ?? []
   const fileDocs = docs.filter((d) => d.schema === FILE_SCHEMA)
 
   const urls: string[] = []
@@ -62,14 +71,14 @@ export async function pinContextForOffline(
       // then blow the origin quota anyway.
       if (bytes >= settings.budgetBytes * 0.9) { truncated = true; return }
       try {
-        const { blob } = await fetchDocumentBlob(wsRef, doc.id)
+        const { blob } = await fetchDocumentBlob(workspaceRef, doc.id)
         bytes += blob.size
-        urls.push(`${API_ROUTES.workspaces}/${wsRef}/documents/${doc.id}/content`)
+        urls.push(`${API_ROUTES.workspaces}/${workspaceRef}/documents/${doc.id}/content`)
         try {
-          await fetchDocumentThumbnail(wsRef, doc.id, THUMB_SIZE)
-          urls.push(`${API_ROUTES.workspaces}/${wsRef}/documents/${doc.id}/thumbnail?size=${THUMB_SIZE}`)
+          await fetchDocumentThumbnail(workspaceRef, doc.id, THUMB_SIZE)
+          urls.push(`${API_ROUTES.workspaces}/${workspaceRef}/documents/${doc.id}/thumbnail?size=${THUMB_SIZE}`)
         } catch { /* not thumbnailable */ }
-      } catch { /* unreadable doc — skip, don't kill the pin */ }
+      } catch { /* unreadable doc — skip, don't kill the warm */ }
       done += 1
       onProgress?.({ done, total, bytes })
     }
@@ -77,14 +86,25 @@ export async function pinContextForOffline(
   await Promise.all(Array.from({ length: Math.min(WARM_CONCURRENCY, fileDocs.length) }, worker))
 
   await setPinned(urls, true)
-  const pin: ContextPin = {
-    contextId,
-    label: ctx.url || ctx.id,
+  const scope: PinScope = {
+    id,
+    workspaceRef,
+    path: normalizedPath,
     urls,
     bytes,
-    pinnedAt: Date.now(),
+    warmedAt: Date.now(),
     ...(truncated ? { truncated: true } : {}),
   }
-  await saveContextPin(pin)
-  return pin
+  await savePinScope(scope)
+
+  // Reconcile: URLs from the previous warm that this resolution no longer
+  // contains have left the subtree — release them to the LRU (unless another
+  // scope still claims them). Saved first so unpinExcept sees the new list.
+  if (previous) {
+    const current = new Set(urls)
+    const departed = previous.urls.filter((u) => !current.has(u))
+    if (departed.length) await unpinExcept(departed)
+  }
+
+  return scope
 }

@@ -24,10 +24,20 @@ export const API_CACHE = 'offline-api-v1'
 export interface OfflineSettings {
   enabled: boolean
   budgetBytes: number
+  // Workspace refs (names/ids as they appear in request paths) whose traffic
+  // is never cached — "don't offline my test workspace". Checked in the SW.
+  excludedWorkspaces: string[]
 }
 
 export const GIB = 1024 * 1024 * 1024
-export const DEFAULT_OFFLINE_SETTINGS: OfflineSettings = { enabled: false, budgetBytes: 4 * GIB }
+export const DEFAULT_OFFLINE_SETTINGS: OfflineSettings = { enabled: false, budgetBytes: 4 * GIB, excludedWorkspaces: [] }
+
+// The workspace ref out of an API pathname, for the exclusion check. Null for
+// non-workspace routes (contexts, users, …) — exclusions don't apply there.
+export function workspaceRefFromPath(pathname: string): string | null {
+  const match = pathname.match(/^\/rest\/v2\/workspaces\/([^/?#]+)/)
+  return match ? decodeURIComponent(match[1]) : null
+}
 // Keep API JSON from silently crowding out blobs: entry-capped, not byte-capped.
 export const API_CACHE_MAX_ENTRIES = 1000
 
@@ -41,20 +51,38 @@ export interface CacheEntry {
   pinned: boolean
 }
 
-export interface ContextPin {
-  contextId: string
-  label: string
+// A pinned offline scope: a workspace, or a subtree of its context tree.
+// Deliberately NOT a context — contexts are movable by design (their URL is
+// the thing that changes), and tree paths are ad-hoc; the durable identity a
+// user pins is "this workspace" or "this workspace under this path". The URL
+// list is a *resolution*, refreshed on every re-warm: the diff against the
+// previous warm un-pins documents that left the subtree, so a dissolved
+// /projects/foo tree stops holding bytes hostage on the next warm.
+export interface PinScope {
+  /** `${workspaceRef}:${path}` — stable id for the scope definition. */
+  id: string
+  workspaceRef: string
+  /** Context-tree path prefix; '/' pins the whole workspace. */
+  path: string
   urls: string[]
   bytes: number
-  pinnedAt: number
+  warmedAt: number
   /** Warming stopped early because the pin approached the byte budget. */
   truncated?: boolean
+}
+
+export function pinScopeId(workspaceRef: string, path: string): string {
+  const normalized = path.startsWith('/') ? path : `/${path}`
+  return `${workspaceRef}:${normalized.replace(/\/+$/, '') || '/'}`
 }
 
 // ─── Minimal promisified IndexedDB ──────────────────────────────────────────
 
 const DB_NAME = 'canvas-offline'
-const DB_VERSION = 1
+// v2: context pins (keyPath contextId) became pin scopes (keyPath id). Old
+// pins are dropped — they were cache hints, the bytes stay — but their pinned
+// flags on entries are cleared so nothing is LRU-exempt without a live scope.
+const DB_VERSION = 2
 
 let dbPromise: Promise<IDBDatabase> | null = null
 
@@ -62,11 +90,23 @@ function openDb(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise
   dbPromise = new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION)
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = (event) => {
       const db = req.result
       if (!db.objectStoreNames.contains('config')) db.createObjectStore('config')
       if (!db.objectStoreNames.contains('entries')) db.createObjectStore('entries', { keyPath: 'url' })
-      if (!db.objectStoreNames.contains('pins')) db.createObjectStore('pins', { keyPath: 'contextId' })
+      if (event.oldVersion >= 1 && db.objectStoreNames.contains('pins')) {
+        db.deleteObjectStore('pins')
+        const entriesStore = req.transaction!.objectStore('entries')
+        const cursorReq = entriesStore.openCursor()
+        cursorReq.onsuccess = () => {
+          const cursor = cursorReq.result
+          if (!cursor) return
+          const entry = cursor.value as CacheEntry
+          if (entry.pinned) cursor.update({ ...entry, pinned: false })
+          cursor.continue()
+        }
+      }
+      if (!db.objectStoreNames.contains('scopes')) db.createObjectStore('scopes', { keyPath: 'id' })
     }
     req.onsuccess = () => {
       // A version bump elsewhere (new tab with newer code) closes us; drop the
@@ -236,21 +276,35 @@ export async function getOfflineUsage(): Promise<OfflineUsage> {
 export async function clearOfflineCaches(): Promise<void> {
   await Promise.all([caches.delete(CONTENT_CACHE), caches.delete(API_CACHE)])
   await idbClear('entries')
-  await idbClear('pins')
+  await idbClear('scopes')
 }
 
-// ─── Context pins ───────────────────────────────────────────────────────────
+// ─── Pin scopes ─────────────────────────────────────────────────────────────
 
-export async function listContextPins(): Promise<ContextPin[]> {
-  return idbGetAll<ContextPin>('pins')
+export async function listPinScopes(): Promise<PinScope[]> {
+  return idbGetAll<PinScope>('scopes')
 }
 
-export async function saveContextPin(pin: ContextPin): Promise<void> {
-  await idbPut('pins', pin)
+export async function getPinScope(id: string): Promise<PinScope | undefined> {
+  return idbGet<PinScope>('scopes', id)
 }
 
-export async function removeContextPin(contextId: string): Promise<void> {
-  const pin = await idbGet<ContextPin>('pins', contextId)
-  if (pin?.urls.length) await setPinned(pin.urls, false)
-  await idbDelete('pins', contextId)
+export async function savePinScope(scope: PinScope): Promise<void> {
+  await idbPut('scopes', scope)
+}
+
+export async function removePinScope(id: string): Promise<void> {
+  const scope = await idbGet<PinScope>('scopes', id)
+  await idbDelete('scopes', id)
+  if (scope?.urls.length) await unpinExcept(scope.urls)
+}
+
+// Unpin URLs unless a surviving scope still claims them — overlapping scopes
+// (universe:/ and universe:/notes) share URLs, and removing or re-warming one
+// must not strip the other's pins.
+export async function unpinExcept(urls: string[]): Promise<void> {
+  const scopes = await idbGetAll<PinScope>('scopes')
+  const stillClaimed = new Set(scopes.flatMap((s) => s.urls))
+  const toUnpin = urls.filter((u) => !stillClaimed.has(u))
+  if (toUnpin.length) await setPinned(toUnpin, false)
 }

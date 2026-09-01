@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Check, HardDriveDownload, Pin, PinOff, Trash2, Loader2 } from 'lucide-react'
+import { Check, HardDriveDownload, Pin, RefreshCw, Trash2, Loader2, X, Ban } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
 import {
@@ -9,16 +10,16 @@ import {
   evictToBudget,
   getOfflineSettings,
   getOfflineUsage,
-  listContextPins,
-  removeContextPin,
+  listPinScopes,
+  removePinScope,
   setOfflineSettings,
-  type ContextPin,
+  pinScopeId,
+  type PinScope,
   type OfflineSettings as Settings,
   type OfflineUsage,
 } from '@/lib/offline'
-import { pinContextForOffline, type PinProgress } from '@/services/offline'
-// `Context` is ambient (src/types/api.d.ts).
-import { listContexts } from '@/services/context'
+import { warmPinScope, type PinProgress } from '@/services/offline'
+import { listWorkspaces } from '@/services/workspace'
 
 const BUDGET_OPTIONS = [
   { label: '1 GB', bytes: 1 * GIB },
@@ -26,6 +27,8 @@ const BUDGET_OPTIONS = [
   { label: '4 GB', bytes: 4 * GIB },
   { label: '8 GB', bytes: 8 * GIB },
 ]
+
+const selectClass = 'h-9 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-50'
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
@@ -43,21 +46,25 @@ export function OfflineSettings() {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [usage, setUsage] = useState<OfflineUsage | null>(null)
   const [persisted, setPersisted] = useState<boolean | null>(null)
-  const [contexts, setContexts] = useState<Context[]>([])
-  const [pins, setPins] = useState<ContextPin[]>([])
+  const [workspaces, setWorkspaces] = useState<string[]>([])
+  const [scopes, setScopes] = useState<PinScope[]>([])
   const [warming, setWarming] = useState<Record<string, PinProgress>>({})
   const [clearing, setClearing] = useState(false)
+  const [newWorkspace, setNewWorkspace] = useState('')
+  const [newPath, setNewPath] = useState('/')
 
   const refresh = useCallback(() => {
     getOfflineSettings().then(setSettings).catch(() => {})
     getOfflineUsage().then(setUsage).catch(() => {})
-    listContextPins().then(setPins).catch(() => {})
+    listPinScopes().then((s) => setScopes(s.sort((a, b) => a.id.localeCompare(b.id)))).catch(() => {})
     navigator.storage?.persisted?.().then(setPersisted).catch(() => {})
   }, [])
 
   useEffect(() => {
     refresh()
-    listContexts().then(setContexts).catch(() => {})
+    listWorkspaces()
+      .then((ws) => setWorkspaces(ws.map((w) => w.name).filter(Boolean).sort()))
+      .catch(() => {})
   }, [refresh])
 
   const apply = async (next: Settings) => {
@@ -73,6 +80,14 @@ export function OfflineSettings() {
     evictToBudget(next.budgetBytes).then(refresh).catch(() => {})
   }
 
+  const toggleWorkspaceExcluded = (name: string) => {
+    if (!settings) return
+    const excluded = settings.excludedWorkspaces.includes(name)
+      ? settings.excludedWorkspaces.filter((w) => w !== name)
+      : [...settings.excludedWorkspaces, name]
+    void apply({ ...settings, excludedWorkspaces: excluded })
+  }
+
   const handleClear = async () => {
     setClearing(true)
     try {
@@ -86,41 +101,47 @@ export function OfflineSettings() {
     }
   }
 
-  const handlePin = async (ctx: Context) => {
-    setWarming((w) => ({ ...w, [ctx.id]: { done: 0, total: 0, bytes: 0 } }))
+  const handleWarm = async (workspaceRef: string, path: string) => {
+    const id = pinScopeId(workspaceRef, path)
+    setWarming((w) => ({ ...w, [id]: { done: 0, total: 0, bytes: 0 } }))
     try {
-      const pin = await pinContextForOffline(ctx.id, (p) =>
-        setWarming((w) => ({ ...w, [ctx.id]: p })))
+      const scope = await warmPinScope(workspaceRef, path, (p) =>
+        setWarming((w) => ({ ...w, [id]: p })))
       showSuccessToast(
-        pin.truncated
-          ? `Pinned ${formatBytes(pin.bytes)} — stopped at the size budget`
-          : `Pinned ${ctx.url || ctx.id} (${formatBytes(pin.bytes)})`,
+        scope.truncated
+          ? `Pinned ${formatBytes(scope.bytes)} — stopped at the size budget`
+          : `Pinned ${scope.id} (${formatBytes(scope.bytes)})`,
       )
     } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to pin context')
+      showErrorToast(err instanceof Error ? err.message : 'Failed to pin')
     } finally {
       setWarming((w) => {
-        const { [ctx.id]: _done, ...rest } = w
+        const { [id]: _done, ...rest } = w
         return rest
       })
       refresh()
     }
   }
 
-  const handleUnpin = async (contextId: string) => {
-    await removeContextPin(contextId)
+  const handleAddScope = () => {
+    if (!newWorkspace) return
+    void handleWarm(newWorkspace, newPath.trim() || '/')
+    setNewPath('/')
+  }
+
+  const handleRemoveScope = async (id: string) => {
+    await removePinScope(id)
     refresh()
   }
 
   if (!settings) return null
-  const pinById = new Map(pins.map((p) => [p.contextId, p]))
 
   return (
     <div className="space-y-8">
       <section>
         <SectionHeading
           title="Offline cache"
-          description="Keep documents you open (and contexts you pin) readable without a connection. Cached on this device only; least-recently-used files are evicted when the size budget fills. Video streaming is not cached."
+          description="Keep documents you open (and scopes you pin) readable without a connection. Cached on this device only; least-recently-used files are evicted when the size budget fills. Video streaming is not cached."
         />
         <div className="flex flex-col gap-4">
           <button
@@ -195,50 +216,110 @@ export function OfflineSettings() {
       </section>
 
       {settings.enabled && (
-        <section>
-          <SectionHeading
-            title="Pinned contexts"
-            description="Pinned contexts are downloaded up front and never evicted. Browse a context once while online for its lists to work offline; pinning covers the file contents."
-          />
-          <ul className="space-y-1">
-            {contexts.map((ctx) => {
-              const pin = pinById.get(ctx.id)
-              const progress = warming[ctx.id]
-              return (
-                <li
-                  key={ctx.id}
-                  className="flex items-center gap-3 rounded-md border border-input px-3 py-2 text-sm"
-                >
-                  <span className="flex-1 truncate">{ctx.url || ctx.id}</span>
-                  {progress ? (
-                    <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      {progress.total > 0 ? `${progress.done}/${progress.total} · ${formatBytes(progress.bytes)}` : 'listing…'}
+        <>
+          <section>
+            <SectionHeading
+              title="Pinned scopes"
+              description="A pinned scope — a workspace, or one of its tree paths — is downloaded up front and never evicted. Scopes resolve fresh on every re-warm, so moved contexts and reorganized trees are picked up; documents that left a scope return to normal eviction."
+            />
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <select
+                className={selectClass}
+                value={newWorkspace}
+                onChange={(e) => setNewWorkspace(e.target.value)}
+                aria-label="Workspace to pin"
+              >
+                <option value="">Select workspace…</option>
+                {workspaces.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+              <Input
+                value={newPath}
+                onChange={(e) => setNewPath(e.target.value)}
+                placeholder="/path (optional, / = whole workspace)"
+                className="h-9 w-56"
+                aria-label="Tree path to pin"
+              />
+              <Button size="sm" onClick={handleAddScope} disabled={!newWorkspace || !!Object.keys(warming).length}>
+                <Pin className="mr-1.5 h-3.5 w-3.5" />
+                Pin
+              </Button>
+            </div>
+            <ul className="space-y-1">
+              {scopes.map((scope) => {
+                const progress = warming[scope.id]
+                return (
+                  <li
+                    key={scope.id}
+                    className="flex items-center gap-3 rounded-md border border-input px-3 py-2 text-sm"
+                  >
+                    <span className="flex-1 truncate font-mono text-xs sm:text-sm">
+                      {scope.workspaceRef}://{scope.path.replace(/^\//, '')}
                     </span>
-                  ) : pin ? (
-                    <>
-                      <span className="text-xs text-muted-foreground">
-                        {formatBytes(pin.bytes)}{pin.truncated ? ' (partial)' : ''}
+                    {progress ? (
+                      <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        {progress.total > 0 ? `${progress.done}/${progress.total} · ${formatBytes(progress.bytes)}` : 'listing…'}
                       </span>
-                      <Button variant="ghost" size="sm" onClick={() => handleUnpin(ctx.id)} aria-label={`Unpin ${ctx.url || ctx.id}`}>
-                        <PinOff className="h-3.5 w-3.5" />
-                      </Button>
-                    </>
-                  ) : (
-                    <Button variant="ghost" size="sm" onClick={() => handlePin(ctx)} aria-label={`Pin ${ctx.url || ctx.id}`}>
-                      <Pin className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
+                    ) : (
+                      <>
+                        <span className="text-xs text-muted-foreground">
+                          {formatBytes(scope.bytes)}{scope.truncated ? ' (partial)' : ''}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleWarm(scope.workspaceRef, scope.path)}
+                          aria-label={`Re-warm ${scope.id}`}
+                          title="Re-warm: re-resolve the scope and download anything new"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleRemoveScope(scope.id)} aria-label={`Unpin ${scope.id}`}>
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
+                    )}
+                  </li>
+                )
+              })}
+              {scopes.length === 0 && (
+                <li className="rounded-md border border-dashed border-input px-3 py-4 text-center text-sm text-muted-foreground">
+                  Nothing pinned — everything relies on browse-caching and LRU
                 </li>
-              )
-            })}
-            {contexts.length === 0 && (
-              <li className="rounded-md border border-dashed border-input px-3 py-4 text-center text-sm text-muted-foreground">
-                No contexts yet
-              </li>
-            )}
-          </ul>
-        </section>
+              )}
+            </ul>
+          </section>
+
+          <section>
+            <SectionHeading
+              title="Workspace caching"
+              description="Excluded workspaces are never cached — not even as you browse — and are not served from cache."
+            />
+            <ul className="space-y-1">
+              {workspaces.map((name) => {
+                const excluded = settings.excludedWorkspaces.includes(name)
+                return (
+                  <li
+                    key={name}
+                    className="flex items-center gap-3 rounded-md border border-input px-3 py-2 text-sm"
+                  >
+                    <span className={cn('flex-1 truncate', excluded && 'text-muted-foreground line-through')}>{name}</span>
+                    {excluded && <Ban className="h-3.5 w-3.5 text-muted-foreground" />}
+                    <Button
+                      variant={excluded ? 'outline' : 'ghost'}
+                      size="sm"
+                      onClick={() => toggleWorkspaceExcluded(name)}
+                    >
+                      {excluded ? 'Include' : 'Exclude'}
+                    </Button>
+                  </li>
+                )
+              })}
+            </ul>
+          </section>
+        </>
       )}
     </div>
   )
