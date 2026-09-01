@@ -177,7 +177,11 @@ async function handleApi(event: FetchEvent, request: Request): Promise<Response>
     const hit = await cache.match(request.url, { ignoreVary: true })
     if (hit) {
       event.waitUntil(touchEntry(request.url).catch(() => {}))
-      return hit
+      // Stamp the fallback so the app's connectivity tracking doesn't read a
+      // cache-served success as "server reachable" (lib/connectivity.ts).
+      const headers = new Headers(hit.headers)
+      headers.set('X-Canvas-Offline', 'fallback')
+      return new Response(hit.body, { status: hit.status, statusText: hit.statusText, headers })
     }
     throw err
   }

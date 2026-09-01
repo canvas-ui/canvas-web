@@ -2,6 +2,7 @@ import { CanvasApiClient, CanvasError, isNetworkError } from '@augmentd-labs/can
 import { isWorkspaceNotActive, type ResponseEnvelope } from '@augmentd-labs/canvas-protocol'
 import { API_URL } from '@/config/api'
 import { handleApiError } from './error-handler'
+import { reportNetworkFailure, reportNetworkSuccess } from './connectivity'
 
 // JSON transport comes from the shared workspace client on its DEFAULT
 // unwrapping semantics: api.get/post/... resolve to the envelope's payload,
@@ -126,7 +127,15 @@ const webFetch: typeof fetch = (input, init = {}) => {
   // Always include credentials for cookie support (historical behavior).
   return fetch(input, { ...init, credentials: 'include' }).then((response) => {
     console.log(`API Response: ${input}`, { status: response.status, ok: response.ok });
+    // Connectivity is judged HERE, on the raw response: a service-worker
+    // cache fallback is stamped X-Canvas-Offline and must not count as the
+    // server being reachable, while any real HTTP response (even a 4xx) does.
+    if (response.headers.get('x-canvas-offline') === 'fallback') reportNetworkFailure();
+    else reportNetworkSuccess();
     return response;
+  }, (err) => {
+    reportNetworkFailure();
+    throw err;
   });
 }
 
@@ -240,10 +249,13 @@ async function requestJson<T>(
       }
 
       if (isNetworkError(error) || /fetch failed|failed to fetch/i.test(error.message)) {
-        console.error(`API Error: CORS error or network failure for ${endpoint}`);
-        const networkError = new Error('Network error: The server might be unavailable or CORS might be misconfigured. Please check your connection and try again.');
-        handleApiError(networkError, `${method} ${endpoint}`);
-        throw networkError;
+        // No HTTP response at all: offline, server down, or (rarely) CORS.
+        // Deliberately NOT routed through handleApiError — offline, every
+        // uncached call fails identically and a toast per request swamps the
+        // user. The connectivity module coalesces this into one transition
+        // that App.tsx reports once. Callers still get a rejection.
+        console.warn(`API: network failure for ${method} ${endpoint}`);
+        throw new Error('Network error: The server might be unavailable or CORS might be misconfigured. Please check your connection and try again.');
       }
     }
 
