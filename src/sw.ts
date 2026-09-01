@@ -1,5 +1,14 @@
 /// <reference lib="webworker" />
 import { cleanupOutdatedCaches, matchPrecache, precacheAndRoute } from 'workbox-precaching'
+import {
+  CONTENT_CACHE,
+  API_CACHE,
+  getOfflineSettings,
+  recordEntry,
+  touchEntry,
+  evictToBudget,
+  type OfflineSettings,
+} from '@/lib/offline'
 
 declare let self: ServiceWorkerGlobalScope
 
@@ -34,12 +43,53 @@ const SHARE_INBOX_TTL_MS = 24 * 60 * 60 * 1000
 // already-authenticated SPA — ShareTargetPage reads it back and uploads
 // through the normal client-side flow (uploadWorkspaceBlob), same as a
 // manual FAB upload.
+// ─── Offline cache (opt-in, Settings → Offline) ─────────────────────────────
+// Strategies (see src/lib/offline.ts for the storage/LRU model):
+//   content/thumbnail GETs  cache-first — the endpoint is immutable per URL
+//   other /rest/v2 GETs     network-first, cached copy only when unreachable
+// Video/audio streaming (Range + cookie-ticket) is deliberately passed
+// through uncached — see the header comment in lib/offline.ts.
+
+// Document bytes and server thumbnails. `download=1` is a user-initiated save
+// (don't burn cache on it); a Range header means a media element is streaming.
+const CONTENT_RE = /^\/rest\/v2\/workspaces\/[^/]+\/documents\/[^/]+\/(content|thumbnail)$/
+// Never serve stale auth, admin or realtime endpoints from cache.
+const API_EXCLUDE_RE = /^\/rest\/v2\/(auth|admin|ping|events)\b/
+
+// One settings read per request would hammer IDB; the toggle changing a few
+// seconds late is fine.
+let settingsMemo: { at: number; value: OfflineSettings } | null = null
+async function offlineSettings(): Promise<OfflineSettings> {
+  if (settingsMemo && Date.now() - settingsMemo.at < 10_000) return settingsMemo.value
+  const value = await getOfflineSettings().catch(() => ({ enabled: false, budgetBytes: 0 }))
+  settingsMemo = { at: Date.now(), value }
+  return value
+}
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'OFFLINE_SETTINGS_CHANGED') settingsMemo = null
+})
+
 self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
   if (request.method === 'POST' && url.pathname === '/share-target') {
     event.respondWith(handleShareTarget(request))
     return
+  }
+  if (request.method === 'GET' && url.origin === self.location.origin && url.pathname.startsWith('/rest/v2/')) {
+    if (
+      CONTENT_RE.test(url.pathname) &&
+      !url.searchParams.has('download') &&
+      !request.headers.has('range')
+    ) {
+      event.respondWith(handleContent(event, request))
+      return
+    }
+    if (!API_EXCLUDE_RE.test(url.pathname) && !CONTENT_RE.test(url.pathname)) {
+      event.respondWith(handleApi(event, request))
+      return
+    }
   }
   // Navigation fallback. Without this every GET navigation — including the 303
   // target below — needs the network even though index.html is precached, so a
@@ -53,6 +103,72 @@ self.addEventListener('fetch', (event) => {
 
 function isServerPath(pathname: string): boolean {
   return pathname.startsWith('/rest/') || pathname.startsWith('/dav/') || pathname.startsWith('/.well-known/')
+}
+
+// Cache-first for immutable document bytes. Misses are cached and the LRU
+// budget enforced in the background (waitUntil keeps the SW alive for it).
+async function handleContent(event: FetchEvent, request: Request): Promise<Response> {
+  const settings = await offlineSettings()
+  if (!settings.enabled) return fetch(request)
+
+  const cache = await caches.open(CONTENT_CACHE)
+  const hit = await cache.match(request.url, { ignoreVary: true })
+  if (hit) {
+    event.waitUntil(touchEntry(request.url).catch(() => {}))
+    return hit
+  }
+
+  const res = await fetch(request)
+  if (res.ok && res.status === 200) {
+    const clone = res.clone()
+    event.waitUntil((async () => {
+      try {
+        await cache.put(request.url, clone)
+        // Content-Length is absent on chunked responses; read the cached copy
+        // for the true size so the LRU ledger stays honest.
+        const size = Number(res.headers.get('content-length')) ||
+          (await (await cache.match(request.url))?.blob())?.size || 0
+        await recordEntry(request.url, 'content', size)
+        await evictToBudget(settings.budgetBytes)
+      } catch (err) {
+        // QuotaExceededError etc. — the response already went to the page.
+        console.warn('[sw] offline content cache put failed', err)
+      }
+    })())
+  }
+  return res
+}
+
+// Network-first for API JSON: the live answer always wins; the cached copy
+// exists only for when the server is unreachable.
+async function handleApi(event: FetchEvent, request: Request): Promise<Response> {
+  const settings = await offlineSettings()
+  if (!settings.enabled) return fetch(request)
+
+  try {
+    const res = await fetch(request)
+    if (res.ok && res.status === 200) {
+      const clone = res.clone()
+      event.waitUntil((async () => {
+        try {
+          const cache = await caches.open(API_CACHE)
+          await cache.put(request.url, clone)
+          await recordEntry(request.url, 'api', Number(res.headers.get('content-length')) || 0)
+        } catch (err) {
+          console.warn('[sw] offline api cache put failed', err)
+        }
+      })())
+    }
+    return res
+  } catch (err) {
+    const cache = await caches.open(API_CACHE)
+    const hit = await cache.match(request.url, { ignoreVary: true })
+    if (hit) {
+      event.waitUntil(touchEntry(request.url).catch(() => {}))
+      return hit
+    }
+    throw err
+  }
 }
 
 async function handleNavigation(request: Request): Promise<Response> {

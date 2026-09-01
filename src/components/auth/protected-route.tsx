@@ -1,6 +1,6 @@
 import { Navigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { getCurrentUser, isAuthenticated } from '@/services/auth'
+import { getCurrentUser, isAuthenticated, isNetworkAuthError, hasPlausibleSession } from '@/services/auth'
 import { api } from '@/lib/api'
 import { Loader } from '@/components/ui/loader'
 
@@ -33,6 +33,14 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
         }
       } catch (error) {
         console.error('Authentication check failed:', error)
+        // Offline / server unreachable is not an auth verdict. If the stored
+        // credential is still plausible (present, not expired), let the app
+        // render — the next successful request or socket reconnect gets the
+        // real verdict, and a genuine 401 then redirects via handle401.
+        if (isNetworkAuthError(error)) {
+          setAuthState(hasPlausibleSession() ? 'authenticated' : 'unauthenticated')
+          return
+        }
         // Clear token on any authentication error
         if (error instanceof Error && error.message.includes('Authentication required')) {
           console.log('Clearing invalid token from ProtectedRoute')

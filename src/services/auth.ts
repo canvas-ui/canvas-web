@@ -115,6 +115,11 @@ export async function logoutUser(): Promise<void> {
     socketService.disconnect();
     api.clearAuthToken();
     console.error('Logout had issues, but token was cleared:', error);
+  } finally {
+    // The offline cache is keyed by URL, not by account — an explicit logout
+    // must not leave this user's documents readable to the next login on the
+    // same browser profile. Fire-and-forget: logout must never block on it.
+    void import('@/lib/offline').then(({ clearOfflineCaches }) => clearOfflineCaches()).catch(() => {});
   }
 }
 
@@ -131,9 +136,34 @@ export async function registerUser(name: string, email: string, password: string
   }
 }
 
+// Offline / server-unreachable failures carry this prefix (lib/api.ts wraps
+// them). They are NOT an auth verdict — the token may be perfectly valid.
+export function isNetworkAuthError(error: unknown): boolean {
+  return error instanceof Error && /^Network error/i.test(error.message);
+}
+
+// Can the stored credential plausibly still be valid, judged without the
+// server? Used by ProtectedRoute when the auth check fails on network error:
+// offline must degrade to "unverified", never to a forced logout.
+export function hasPlausibleSession(): boolean {
+  const token = localStorage.getItem('authToken');
+  if (!token) return false;
+  // API tokens carry no client-readable expiry — presence is all we can check.
+  if (token.startsWith('canvas-')) return true;
+  try {
+    return jwtDecode<TokenPayload>(token).exp * 1000 > Date.now();
+  } catch {
+    return false;
+  }
+}
+
 export function getCurrentUserFromToken(): { id: string; email: string; userType: string } | null {
   const token = localStorage.getItem('authToken');
   if (!token) return null;
+  // An API token is not a JWT: there is no identity to decode, but it is a
+  // valid credential — clearing it here (the old behavior, via the catch
+  // below) silently logged out API-token sessions.
+  if (token.startsWith('canvas-')) return null;
 
   try {
     const decoded = jwtDecode<TokenPayload>(token);
@@ -181,28 +211,26 @@ export async function getCurrentUser(): Promise<UserProfile | null> {
   } catch (error) {
     console.error('Failed to get current user:', error);
 
-    // Handle the specific case where user exists in token but not in database
-    if (error instanceof Error &&
-        (error.message.includes('USER_NOT_FOUND_IN_DATABASE') ||
-         error.message.includes('Your session is invalid'))) {
-      console.warn('User token is valid but user not found in database - clearing authentication');
-      api.clearAuthToken();
-      socketService.disconnect();
-      return null;
+    // Offline / server unreachable: rethrow so the caller can distinguish
+    // "cannot verify right now" from "not authenticated". The old code cleared
+    // the token here, which is why every disconnect looked like a forced
+    // logout — the 7-day JWT was fine, the client was deleting it.
+    if (isNetworkAuthError(error)) {
+      throw error;
     }
 
-    // Handle authentication errors (401 responses)
+    // Definitive auth verdicts from the server: clear the credential.
     if (error instanceof Error &&
-        (error.message.includes('Authentication required') ||
-         error.message.includes('user account no longer exists') ||
-         error.message.includes('Network error'))) {
+        (error.message.includes('USER_NOT_FOUND_IN_DATABASE') ||
+         error.message.includes('Your session is invalid') ||
+         error.message.includes('Authentication required') ||
+         error.message.includes('user account no longer exists'))) {
       console.warn('Authentication error detected, clearing token:', error.message);
       api.clearAuthToken();
       socketService.disconnect();
       return null;
     }
 
-    console.error('Failed to get current user:', error);
     return null;
   }
 }
