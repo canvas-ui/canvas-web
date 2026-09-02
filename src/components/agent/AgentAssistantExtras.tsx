@@ -1,4 +1,5 @@
 import { type AgentResponseMetadata } from '@/services/agent'
+import { MarkdownView } from '@/components/common/markdown-view'
 
 interface AgentAssistantExtrasProps {
   reasoning?: string
@@ -52,9 +53,10 @@ export function AgentAssistantExtras({
           <summary className={`cursor-pointer font-medium text-foreground ${compact ? 'text-[11px]' : 'text-xs'}`}>
             Reasoning
           </summary>
-          <div className={`mt-1 whitespace-pre-wrap text-foreground ${compact ? 'text-[11px]' : 'text-xs'}`}>
-            {reasoning}
-          </div>
+          <MarkdownView
+            content={reasoning}
+            className={`mt-1 text-foreground ${compact ? 'text-[11px]' : 'text-xs'}`}
+          />
         </details>
       )}
       {metaParts.length > 0 && (

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { StreamingChatMessage } from '@/hooks/useAgentSocket';
 import { Wifi, WifiOff, Radio, Cpu } from 'lucide-react';
 import AgentAssistantExtras from './AgentAssistantExtras';
+import { MarkdownView } from '@/components/common/markdown-view';
 
 interface StreamingChatMessageProps {
   message: StreamingChatMessage;
@@ -84,8 +85,10 @@ export function StreamingChatMessageComponent({
           metadata={message.role === 'assistant' ? message.metadata : undefined}
           isStreaming={isStreaming && !message.isComplete}
         />
-        <div className="whitespace-pre-wrap text-sm">
-          {displayedContent}
+        <div className="text-sm">
+          {message.role === 'assistant'
+            ? <MarkdownView content={displayedContent} />
+            : <span className="whitespace-pre-wrap break-words">{displayedContent}</span>}
           {isStreaming && !message.isComplete && (
             <span className={`inline-block w-2 ${showCursor ? 'bg-current' : 'bg-transparent'}`}>
               |

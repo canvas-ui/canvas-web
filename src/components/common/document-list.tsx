@@ -25,7 +25,7 @@ import { ContextMenuShell } from '@/components/common/context-menu-shell'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { announceRelationsChanged } from '@/lib/relation-events'
 import { ObjectPropertiesModal } from '@/components/object-card/ObjectPropertiesModal'
-import { isEditableSchema } from '@/components/object-card/editable-schema'
+import { isEditableDocument } from '@/components/object-card/editable-schema'
 import { useMirrorSaveState } from '@/lib/remote-mirror'
 import { usePublicShareCode } from '@/components/renderers/public-share'
 import { useDocumentThumbnail } from '@/components/renderers/useDocumentThumbnail'
@@ -449,7 +449,7 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
   const [detailEdit, setDetailEdit] = useState(false)
   const [actionSheet, setActionSheet] = useState(false)
   const isPublicShare = usePublicShareCode() != null
-  const isEditable = isEditableSchema(document.schema)
+  const isEditable = isEditableDocument(document)
   const { replicating } = useMirrorSaveState(document)
 
   const isTabDocument = document.schema === 'data/schema/tab'
@@ -595,7 +595,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
   const [actionSheet, setActionSheet] = useState(false)
   const isPublicShare = usePublicShareCode() != null
   const isTabDocument = document.schema === 'data/schema/tab'
-  const isEditable = isEditableSchema(document.schema)
+  const isEditable = isEditableDocument(document)
   const { replicating } = useMirrorSaveState(document)
   const tabUrl = isTabDocument ? document.data.url : null
   const display = getDocumentDisplayInfo(document)

@@ -3,7 +3,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { useToolbox } from '../use-toolbox'
-import { LazyMarkdownEditor as MarkdownEditor } from '@/components/common/lazy-editor'
+import { DocumentBodyEditor } from '@/components/common/DocumentBodyEditor'
 import { TagInput } from './TagInput'
 import { useEditNoteFields } from './useEditNoteFields'
 import { useTagSuggestions } from './useTagSuggestions'
@@ -58,7 +58,7 @@ export function EditNoteFormBody({ doc, workspaceId, onCancel, onSaved, showSucc
       <div className="flex flex-1 flex-col gap-1.5">
         <Label>Body</Label>
         <div className="flex-1">
-          <MarkdownEditor value={f.content} onChange={f.setContent} placeholder="Write your note…" />
+          <DocumentBodyEditor kind="markdown" value={f.content} onChange={f.setContent} placeholder="Write your note…" />
         </div>
       </div>
 

@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
+import { TableKit } from '@tiptap/extension-table'
+import { TaskList, TaskItem } from '@tiptap/extension-list'
 import { getMarkdown } from '@/lib/tiptap-markdown'
 import './md-editor.css'
 import {
@@ -101,12 +103,20 @@ export function MarkdownEditor({ value, onChange, placeholder }: MarkdownEditorP
       // StarterKit bundles the Link extension since tiptap v3 — configure it
       // here instead of registering @tiptap/extension-link a second time.
       StarterKit.configure({ link: { openOnClick: false, autolink: true } }),
+      // Nodes the markdown a user opens can contain. ProseMirror DROPS what its
+      // schema has no node for, so without these a GFM table opened here came
+      // back as one run-on paragraph and `- [ ]` came back escaped — losing the
+      // content on save. tiptap-markdown already ships the matching markdown
+      // serializers; they only activate once the nodes exist.
+      TableKit.configure({ table: { resizable: false } }),
+      TaskList,
+      TaskItem.configure({ nested: true }),
       Markdown.configure({ html: false, transformPastedText: true }),
     ],
     content: value,
     editorProps: {
       attributes: {
-        class: 'canvas-no-drag md-editor-content min-h-[8rem] px-3 py-2 text-sm outline-none',
+        class: 'canvas-no-drag markdown-body md-editor-content min-h-[8rem] px-3 py-2 text-sm outline-none',
         'data-placeholder': placeholder ?? '',
       },
     },

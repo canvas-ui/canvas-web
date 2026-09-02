@@ -5,6 +5,7 @@ import { usePublicShareCode } from './public-share'
 import { TODO_STATUS_LABELS } from '@/components/toolbox/add/useTodoFields'
 import { todoData, TODO_STATUS_STYLE, isOverdue, formatDue, setTodoStatus } from '@/lib/todo'
 import { useMirrorSaveState } from '@/lib/remote-mirror'
+import { MarkdownView } from '@/components/common/markdown-view'
 
 // Task card for todo documents — completion checkbox (toggles status), status
 // badge, due date (highlighted when overdue), priority and description. The
@@ -70,7 +71,7 @@ export function TodoRenderer({ document: doc, workspaceId, className = '' }: Ren
               <span className="inline-flex items-center gap-1 text-muted-foreground"><Flag className="h-3 w-3" />P{t.priority}</span>
             )}
           </div>
-          {t.description && <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">{t.description}</p>}
+          {t.description && <MarkdownView content={String(t.description)} className="mt-2 text-sm text-muted-foreground" />}
           {replicating && (
             <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
               <Loader2 className="h-3 w-3 animate-spin" />{replicatingLabel}

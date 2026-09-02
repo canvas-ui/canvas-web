@@ -1,4 +1,4 @@
-import { LazyNoteViewer } from '@/components/common/lazy-editor'
+import { MarkdownView } from '@/components/common/markdown-view'
 import { useDocumentBlobUrl } from './useDocumentBlobUrl'
 import { NOTE_SCHEMA, type RendererProps } from './types'
 
@@ -13,7 +13,7 @@ export function PlaintextRenderer({ workspaceId, document, className = '' }: Ren
 }
 
 // Markdown — notes render their inline data.content, markdown FILES fetch the
-// blob text first. Both go through the tiptap NoteViewer (same look as notes).
+// blob text first. Both go through the shared MarkdownView.
 export function MarkdownRenderer({ workspaceId, document, className = '' }: RendererProps) {
   const isNote = document.schema === NOTE_SCHEMA
   const { text, error, loading } = useDocumentBlobUrl(workspaceId, document.id, { mode: 'text', enabled: !isNote })
@@ -23,7 +23,7 @@ export function MarkdownRenderer({ workspaceId, document, className = '' }: Rend
       <div className={`space-y-3 ${className}`}>
         {document.data?.title ? <h3 className="text-lg font-semibold">{String(document.data.title)}</h3> : null}
         <div className="rounded-md border border-input bg-transparent">
-          <LazyNoteViewer content={String(document.data?.content ?? '')} />
+          <MarkdownView content={String(document.data?.content ?? '')} className="px-3 py-2 text-sm" />
         </div>
       </div>
     )
@@ -33,7 +33,7 @@ export function MarkdownRenderer({ workspaceId, document, className = '' }: Rend
   if (loading || text == null) return <p className="text-sm text-muted-foreground">Loading...</p>
   return (
     <div className={`rounded-md border border-input bg-transparent overflow-auto max-h-viewport-pane ${className}`}>
-      <LazyNoteViewer content={text} />
+      <MarkdownView content={text} className="px-3 py-2 text-sm" />
     </div>
   )
 }

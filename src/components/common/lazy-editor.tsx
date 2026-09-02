@@ -7,7 +7,6 @@ import { lazy, Suspense } from 'react'
 const MarkdownEditorImpl = lazy(() =>
   import('@/components/toolbox/add/MarkdownEditor').then((m) => ({ default: m.MarkdownEditor }))
 )
-const NoteViewerImpl = lazy(() => import('@/components/common/NoteViewer'))
 
 const editorFallback = (
   <div className="rounded-md border border-input p-3 text-sm text-muted-foreground">Loading editor…</div>
@@ -17,14 +16,6 @@ export function LazyMarkdownEditor(props: { value: string; onChange: (markdown: 
   return (
     <Suspense fallback={editorFallback}>
       <MarkdownEditorImpl {...props} />
-    </Suspense>
-  )
-}
-
-export function LazyNoteViewer({ content }: { content: string }) {
-  return (
-    <Suspense fallback={editorFallback}>
-      <NoteViewerImpl content={content} />
     </Suspense>
   )
 }

@@ -7,6 +7,7 @@ import { useToolboxOptional } from '../use-toolbox'
 import { useAgentPromptStream } from '@/hooks/useAgentPromptStream'
 import { useVoiceRecorder } from '@/hooks/useVoiceRecorder'
 import AgentAssistantExtras from '@/components/agent/AgentAssistantExtras'
+import { MarkdownView } from '@/components/common/markdown-view'
 
 interface AgentChatPanelProps {
   agentId: string
@@ -183,7 +184,7 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
           <div
             key={i}
             className={cn(
-              'text-sm rounded-lg px-3 py-2 max-w-[85%] whitespace-pre-wrap break-words',
+              'text-sm rounded-lg px-3 py-2 max-w-[85%] break-words',
               msg.role === 'user'
                 ? 'ml-auto bg-foreground text-background'
                 : 'mr-auto bg-muted text-foreground',
@@ -195,7 +196,9 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
               isStreaming={!msg.isComplete}
               compact
             />
-            {msg.content || (!msg.isComplete && msg.role === 'assistant' ? '…' : '')}
+            {msg.role === 'assistant'
+              ? <MarkdownView content={msg.content || (!msg.isComplete ? '…' : '')} />
+              : <span className="whitespace-pre-wrap">{msg.content}</span>}
           </div>
         ))}
         {(error || recorderError) && (

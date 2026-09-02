@@ -1,60 +1,11 @@
-/* Minimal content styling for the TipTap markdown editor (no typography plugin). */
-.md-editor-content {
-  line-height: 1.6;
-}
+/* Editor-only chrome. The content typography is shared with the read-only
+ * viewer — the editor element carries `markdown-body` too. */
+@import '../../common/markdown.css';
+
 .md-editor-content:focus {
   outline: none;
 }
-.md-editor-content p {
-  margin: 0.25rem 0;
-}
-.md-editor-content h1 {
-  font-size: 1.25rem;
-  font-weight: 700;
-  margin: 0.5rem 0 0.25rem;
-}
-.md-editor-content h2 {
-  font-size: 1.1rem;
-  font-weight: 700;
-  margin: 0.5rem 0 0.25rem;
-}
-.md-editor-content ul,
-.md-editor-content ol {
-  margin: 0.25rem 0;
-  padding-left: 1.25rem;
-}
-.md-editor-content ul {
-  list-style: disc;
-}
-.md-editor-content ol {
-  list-style: decimal;
-}
-.md-editor-content code {
-  background: var(--color-muted);
-  border-radius: 0.25rem;
-  padding: 0.1rem 0.3rem;
-  font-size: 0.85em;
-}
-.md-editor-content pre {
-  background: var(--color-muted);
-  border-radius: 0.375rem;
-  padding: 0.5rem 0.75rem;
-  overflow-x: auto;
-}
-.md-editor-content pre code {
-  background: transparent;
-  padding: 0;
-}
-.md-editor-content a {
-  color: var(--color-primary);
-  text-decoration: underline;
-}
-.md-editor-content blockquote {
-  border-left: 3px solid var(--color-border);
-  padding-left: 0.75rem;
-  color: var(--color-muted-foreground);
-  margin: 0.25rem 0;
-}
+
 /* Placeholder via data attribute when empty */
 .md-editor-content p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);

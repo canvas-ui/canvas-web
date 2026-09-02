@@ -3,7 +3,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { useToolbox } from '../use-toolbox'
-import { LazyMarkdownEditor as MarkdownEditor } from '@/components/common/lazy-editor'
+import { DocumentBodyEditor } from '@/components/common/DocumentBodyEditor'
 import { TagInput } from './TagInput'
 import { useAddTarget, describeTarget } from './useAddTarget'
 import { useNoteFields } from './useNoteFields'
@@ -44,7 +44,7 @@ export function NoteForm() {
 
       <div className="space-y-1.5">
         <Label>Body</Label>
-        <MarkdownEditor value={f.content} onChange={f.setContent} placeholder="Write your note…" />
+        <DocumentBodyEditor kind="markdown" value={f.content} onChange={f.setContent} placeholder="Write your note…" />
       </div>
 
       <div className="space-y-1.5">

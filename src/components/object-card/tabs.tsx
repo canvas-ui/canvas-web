@@ -11,7 +11,7 @@ import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { usePublicShareCode } from '@/components/renderers/public-share'
 import { DocumentEditForm } from './EditForm'
 import { DocumentRelationsSection } from './RelationsSection'
-import { isEditableSchema } from './editable-schema'
+import { isEditableDocument } from './editable-schema'
 import { LazySketchEditor } from '@/components/editors/sketch-lazy'
 import { DRAWING_SCHEMA } from '@/components/renderers/types'
 import type { Document } from '@/types/workspace'
@@ -30,7 +30,7 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
   // Every non-public document is editable — at minimum the universal comment
   // section; schema-specific fields (url/title/body) render only for note/link/tab.
   const canEdit = !isPublic
-  const [editing, setEditing] = useState(initialEdit && isEditableSchema(document.schema))
+  const [editing, setEditing] = useState(initialEdit && isEditableDocument(document))
   // Drawings get a real content editor (full-viewport Excalidraw overlay) on
   // top of the metadata form — "Edit" alone would only offer comment/tags.
   const isDrawing = document.schema === DRAWING_SCHEMA
@@ -40,7 +40,7 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
   const [lastResetKey, setLastResetKey] = useState(resetKey)
   if (resetKey !== lastResetKey) {
     setLastResetKey(resetKey)
-    setEditing(initialEdit && isEditableSchema(document.schema))
+    setEditing(initialEdit && isEditableDocument(document))
   }
 
   if (editing && canEdit) {

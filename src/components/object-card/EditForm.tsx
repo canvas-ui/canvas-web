@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { LazyMarkdownEditor } from '@/components/common/lazy-editor'
+import { DocumentBodyEditor } from '@/components/common/DocumentBodyEditor'
 import { TagInput } from '@/components/toolbox/add/TagInput'
 import { tagsToFeatures, featuresToTags } from '@/components/toolbox/add/tags'
 import {
@@ -18,6 +18,9 @@ import { useIdentityFields, identityFieldsFromDocument, buildIdentityData } from
 import { buildTodoData, isoToLocalInput, todayEndOfDayLocal, type TodoStatus } from '@/components/toolbox/add/useTodoFields'
 import type { Document, DocumentGeo } from '@/types/workspace'
 import { isEditableSchema } from './editable-schema'
+import { documentBodyKind, isTextBackedFile, textFileTooLarge, MAX_EDITABLE_TEXT_BYTES } from '@/lib/text-document'
+import { useDocumentBlobUrl } from '@/components/renderers/useDocumentBlobUrl'
+import { saveTextFileContent } from '@/services/text-documents'
 import { useMirrorSaveState } from '@/lib/remote-mirror'
 
 // Per-schema field mapping for the url/title pair. Legacy links store these as
@@ -64,6 +67,12 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
   // including photos/files that are otherwise not editable.
   const editable = isEditableSchema(doc.schema)
   const isNote = doc.schema === NOTE_SCHEMA
+  // A markdown/text FILE edits its body exactly like a note does — same
+  // wrapper, same Save button — except the body lives in a blob, so it is
+  // fetched here and written back as new bytes (services/text-documents).
+  const isTextFile = isTextBackedFile(doc)
+  const bodyKind = documentBodyKind(doc) ?? 'markdown'
+  const bodyTooLarge = isTextFile && textFileTooLarge(doc)
   const isTodo = doc.schema === TODO_SCHEMA
   const isIdentity = doc.schema === IDENTITY_SCHEMA || doc.schema.startsWith(`${IDENTITY_SCHEMA}/`)
   const { urlKey, titleKey } = urlTitleKeys(doc.schema)
@@ -97,6 +106,20 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
       ? featuresToTags(storedFeatures)
       : ((doc.data?.tags as string[] | undefined) ?? [])
   )
+  // Whole file, not the renderer's 200k preview slice: a truncated read that
+  // gets saved back would silently cut the file in half.
+  const fileBody = useDocumentBlobUrl(workspaceId, doc.id, {
+    mode: 'text',
+    enabled: isTextFile && !bodyTooLarge,
+    maxTextLength: MAX_EDITABLE_TEXT_BYTES,
+    version: doc.checksumArray?.[0] ?? null,
+  })
+  const [bodyLoadedFor, setBodyLoadedFor] = useState<string | null>(null)
+  const bodyKey = `${doc.id}:${doc.checksumArray?.[0] ?? ''}`
+  if (isTextFile && fileBody.text != null && bodyLoadedFor !== bodyKey) {
+    setBodyLoadedFor(bodyKey)
+    setContent(fileBody.text)
+  }
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   // Saving a connector-synced document goes out to its source first; say so on
@@ -111,7 +134,9 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
 
   const urlValid = !urlKey || (() => { try { new URL(url.trim()); return true } catch { return false } })()
   // Non-editable schemas (photos/files) save comment-only, so they're always valid.
-  const canSave = !saving && (!editable
+  const canSave = !saving && (isTextFile
+    ? !bodyTooLarge && fileBody.text != null && !fileBody.loading
+    : !editable
     ? true
     : isIdentity ? (identity.displayName.trim().length > 0 && identity.emailValid)
     : isTodo ? title.trim().length > 0
@@ -121,6 +146,18 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
   const handleSave = async () => {
     setSaving(true)
     try {
+      // Blob-backed body: new bytes first, then the same universal fields
+      // (comment/geo) every other document saves.
+      if (isTextFile) {
+        await saveTextFileContent(workspaceId, doc, content, {
+          comment: comment.trim(),
+          ...(geoChanged ? { metadata: { geo } } : {}),
+        })
+        showSuccessToast('Document updated')
+        window.dispatchEvent(new CustomEvent('workspace:documents:refresh'))
+        onClose()
+        return
+      }
       const payload: {
         id: number; schema: string; schemaVersion: string
         comment: string; data?: Record<string, unknown>; metadata?: Record<string, unknown>
@@ -207,10 +244,25 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
         </div>
       )}
 
-      {editable && isNote && (
+      {(isNote || isTextFile) && (
         <div className="space-y-1.5">
           <Label>Body</Label>
-          <LazyMarkdownEditor value={content} onChange={setContent} placeholder="Write your note…" />
+          {bodyTooLarge ? (
+            <p className="text-xs text-muted-foreground">
+              This file is too large to edit here ({'>'}{Math.round(MAX_EDITABLE_TEXT_BYTES / 1000)} kB) — download it instead.
+            </p>
+          ) : isTextFile && fileBody.error ? (
+            <p className="text-xs text-destructive">{fileBody.error}</p>
+          ) : isTextFile && fileBody.text == null ? (
+            <p className="text-xs text-muted-foreground">Loading content…</p>
+          ) : (
+            <DocumentBodyEditor
+              kind={isNote ? 'markdown' : bodyKind}
+              value={content}
+              onChange={setContent}
+              placeholder={isNote ? 'Write your note…' : undefined}
+            />
+          )}
         </div>
       )}
 
