@@ -13,13 +13,14 @@ import { submitDocuments, type AddTarget } from '../add/useAddTarget'
 import { buildDrawingDocument, DRAWING_SCHEMA_VERSION } from './sketch-doc'
 import { DRAWING_SCHEMA } from '@/components/renderers/types'
 import type { Document } from '@/types/workspace'
-import type { AppletScope } from './use-applet-docs'
 
 interface SketchEditorProps {
   // null → new sketch; a Drawing document → edit its scene in place.
   doc: Document | null
-  scope: AppletScope
-  target: AddTarget
+  // Where the preview blob uploads (and, for updates, where the doc lives).
+  workspaceName: string
+  // Insert destination — required only when creating (doc == null).
+  target?: AddTarget
   onSaved: () => void
   onClose: () => void
 }
@@ -43,7 +44,7 @@ function parseScene(doc: Document | null): ExcalidrawInitialDataState | null {
 // inline column is a launcher, not a canvas). Lazy-loaded: this file pulls
 // the whole Excalidraw chunk, so nothing imports it statically except via
 // React.lazy (see SketchApplet).
-export default function SketchEditor({ doc, scope, target, onSaved, onClose }: SketchEditorProps) {
+export default function SketchEditor({ doc, workspaceName, target, onSaved, onClose }: SketchEditorProps) {
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null)
   const [title, setTitle] = useState(String(doc?.data?.title ?? ''))
   const [saving, setSaving] = useState(false)
@@ -77,11 +78,11 @@ export default function SketchEditor({ doc, scope, target, onSaved, onClose }: S
         files,
         mimeType: 'image/png',
       })
-      const preview = await uploadWorkspaceBlob(scope.workspaceName, png)
+      const preview = await uploadWorkspaceBlob(workspaceName, png)
 
       if (doc) {
         const body = buildDrawingDocument(sceneJson, checksum, preview, { title })
-        await updateWorkspaceDocument(scope.workspaceName, {
+        await updateWorkspaceDocument(workspaceName, {
           id: doc.id,
           schema: DRAWING_SCHEMA,
           schemaVersion: DRAWING_SCHEMA_VERSION,
@@ -91,6 +92,7 @@ export default function SketchEditor({ doc, scope, target, onSaved, onClose }: S
           locations: body.locations as Array<{ url: string; metadata?: Record<string, unknown> }>,
         })
       } else {
+        if (!target) throw new Error('No destination to save the sketch to')
         await submitDocuments(target, [buildDrawingDocument(sceneJson, checksum, preview, { title })])
       }
       showSuccessToast(doc ? 'Sketch updated' : 'Sketch saved')
@@ -100,7 +102,7 @@ export default function SketchEditor({ doc, scope, target, onSaved, onClose }: S
     } finally {
       setSaving(false)
     }
-  }, [doc, scope.workspaceName, target, title, onSaved, showSuccessToast, showErrorToast])
+  }, [doc, workspaceName, target, title, onSaved, showSuccessToast, showErrorToast])
 
   return (
     <div className="fixed inset-0 z-fullscreen flex flex-col bg-background">

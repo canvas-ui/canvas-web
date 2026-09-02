@@ -5,9 +5,14 @@ import { DEFAULT_TIMELINE_SORT, type TimelineSort } from './useTimelineOptions'
 import { useCanvasQueries } from './useCanvasQueries'
 
 const FILE_SCHEMA = 'data/schema/file'
+const DRAWING_SCHEMA = 'data/schema/drawing'
 
 export function isImageDoc(doc: Document): boolean {
-  return doc.schema === FILE_SCHEMA && String(doc.metadata?.contentType || '').startsWith('image/')
+  // Drawings tick data/mime/image server-side too (mime bitmaps derive from
+  // metadata.contentType regardless of schema) — keep the client fallback in
+  // agreement or sketches vanish from the grid after the fetch.
+  return (doc.schema === FILE_SCHEMA || doc.schema === DRAWING_SCHEMA)
+    && String(doc.metadata?.contentType || '').startsWith('image/')
 }
 
 // Modality-level MIME presence bitmap: every image doc carries it, so the

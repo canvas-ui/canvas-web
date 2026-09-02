@@ -1,5 +1,5 @@
-import { useEffect, useState, type ReactNode } from 'react'
-import { Copy, Download, Trash2, Database, HardDrive, Mail, Globe, FileQuestion, Pencil } from 'lucide-react'
+import { Suspense, useEffect, useState, type ReactNode } from 'react'
+import { Copy, Download, Trash2, Database, HardDrive, Mail, Globe, FileQuestion, Pencil, Brush } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DocumentRenderer } from '@/components/renderers/registry'
 import {
@@ -12,6 +12,8 @@ import { usePublicShareCode } from '@/components/renderers/public-share'
 import { DocumentEditForm } from './EditForm'
 import { DocumentRelationsSection } from './RelationsSection'
 import { isEditableSchema } from './editable-schema'
+import { LazySketchEditor } from '@/components/editors/sketch-lazy'
+import { DRAWING_SCHEMA } from '@/components/renderers/types'
 import type { Document } from '@/types/workspace'
 
 interface TabProps {
@@ -29,6 +31,10 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
   // section; schema-specific fields (url/title/body) render only for note/link/tab.
   const canEdit = !isPublic
   const [editing, setEditing] = useState(initialEdit && isEditableSchema(document.schema))
+  // Drawings get a real content editor (full-viewport Excalidraw overlay) on
+  // top of the metadata form — "Edit" alone would only offer comment/tags.
+  const isDrawing = document.schema === DRAWING_SCHEMA
+  const [sketchOpen, setSketchOpen] = useState(false)
   // Render-time state reset: switching documents re-seeds the edit mode.
   const resetKey = `${document.id}:${initialEdit}`
   const [lastResetKey, setLastResetKey] = useState(resetKey)
@@ -64,10 +70,29 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
               <Download className="mr-1 h-3 w-3" /> Download
             </Button>
           )}
+          {isDrawing && (
+            <Button variant="outline" size="sm" onClick={() => setSketchOpen(true)}>
+              <Brush className="mr-1 h-3 w-3" /> Edit sketch
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
             <Pencil className="mr-1 h-3 w-3" /> Edit
           </Button>
         </div>
+      )}
+      {sketchOpen && (
+        <Suspense fallback={
+          <div className="fixed inset-0 z-fullscreen flex items-center justify-center bg-background">
+            <p className="text-sm text-muted-foreground">Loading sketch editor…</p>
+          </div>
+        }>
+          <LazySketchEditor
+            doc={document}
+            workspaceName={workspaceId}
+            onSaved={() => { setSketchOpen(false); onChanged?.() }}
+            onClose={() => setSketchOpen(false)}
+          />
+        </Suspense>
       )}
       <div className="min-h-0 flex-1 overflow-auto">
         <DocumentRenderer workspaceId={workspaceId} document={document} />

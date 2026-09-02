@@ -33,7 +33,7 @@ export function ImageThumb({ workspaceId, doc, onClick, className = 'aspect-squa
   className?: string
   comments?: CommentDisplay
 }) {
-  const { blobUrl, error, loading } = useDocumentThumbnail(workspaceId, doc.id, 512)
+  const { blobUrl, error, loading } = useDocumentThumbnail(workspaceId, doc.id, 512, { version: doc.checksumArray?.[0] ?? null })
   const title = getLocationFilename(doc) || `image-${doc.id}`
   const comment = getDocumentComment(doc)
   const showComment = comment !== '' && comments !== 'off'
@@ -97,7 +97,7 @@ export function ImageLightbox({ workspaceId, docs, index, onClose, onNavigate }:
   onNavigate: (next: number) => void
 }) {
   const doc = docs[index]
-  const { blobUrl, error, loading } = useDocumentBlobUrl(workspaceId, doc.id)
+  const { blobUrl, error, loading } = useDocumentBlobUrl(workspaceId, doc.id, { version: doc.checksumArray?.[0] ?? null })
   const title = getLocationFilename(doc) || `image-${doc.id}`
   const comment = getDocumentComment(doc)
   // While the picture is zoomed the whole surface belongs to the gesture: the

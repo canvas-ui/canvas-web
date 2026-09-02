@@ -28,7 +28,7 @@ async function fetchPublicThumbnail(code: string, documentId: number | string, s
   return { blob: await res.blob(), mime }
 }
 
-async function fetchPublicBlob(code: string, documentId: number | string, opts: { url?: string } = {}): Promise<{ blob: Blob; mime: string }> {
+async function fetchPublicBlob(code: string, documentId: number | string, opts: { url?: string; version?: string | null } = {}): Promise<{ blob: Blob; mime: string }> {
   const res = await fetch(publicDocumentContentUrl(code, documentId, opts))
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const mime = res.headers.get('content-type') || 'application/octet-stream'
@@ -56,7 +56,7 @@ export function useDocumentContent(workspaceId: string) {
   const code = usePublicShareCode()
   return {
     isPublic: code != null,
-    fetchBlob: (documentId: number | string, opts: { url?: string } = {}) =>
+    fetchBlob: (documentId: number | string, opts: { url?: string; version?: string | null } = {}) =>
       code ? fetchPublicBlob(code, documentId, opts) : fetchDocumentBlob(workspaceId, documentId, opts),
     fetchThumbnail: (documentId: number | string, size = 256, version?: string | null) =>
       code ? fetchPublicThumbnail(code, documentId, size) : fetchDocumentThumbnail(workspaceId, documentId, size, version),

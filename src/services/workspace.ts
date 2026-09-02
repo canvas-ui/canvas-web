@@ -1231,8 +1231,11 @@ export async function removeDocumentRelation(
   return true
 }
 
-function buildContentApiPath(workspaceId: string, documentId: number | string, opts: { download?: boolean; url?: string } = {}): string {
+function buildContentApiPath(workspaceId: string, documentId: number | string, opts: { download?: boolean; url?: string; version?: string | null } = {}): string {
   const params = new URLSearchParams()
+  // Cache identity for mutable-content docs (drawings): the offline SW keys
+  // its content cache on the full URL, so the checksum in the URL rolls it.
+  if (opts.version) params.set('v', opts.version)
   if (opts.download) params.set('download', '1')
   // Target a specific location/attachment URL (must belong to the document).
   if (opts.url) params.set('url', opts.url)
@@ -1260,7 +1263,7 @@ export async function fetchDocumentThumbnail(workspaceId: string, documentId: nu
  * to drop into <img>, <audio>, <video>, <iframe>. Caller is responsible for
  * calling URL.revokeObjectURL when the URL is no longer needed.
  */
-export async function fetchDocumentBlob(workspaceId: string, documentId: number | string, opts: { url?: string } = {}): Promise<{ blob: Blob; mime: string }> {
+export async function fetchDocumentBlob(workspaceId: string, documentId: number | string, opts: { url?: string; version?: string | null } = {}): Promise<{ blob: Blob; mime: string }> {
   const token = localStorage.getItem('authToken')
   const res = await fetch(buildContentApiPath(workspaceId, documentId, opts), {
     headers: token ? { Authorization: `Bearer ${token}` } : {},

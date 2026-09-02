@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react'
+import { Suspense, useState } from 'react'
 import { Brush, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
@@ -9,17 +9,11 @@ import type { AppletProps } from './registry'
 import { useAppletTarget } from './use-applet-target'
 import { useAppletDocs, formatCreated, type AppletScope } from './use-applet-docs'
 
-// Excalidraw lazy-loads fonts at runtime; without an asset path it reaches
-// for the esm.sh CDN, which the CSP blocks. The fonts ship with the app
-// (vite.config.ts excalidrawAssets → /excalidraw/fonts/). Set HERE, not in
-// SketchEditor: import hoisting runs Excalidraw's font registration before
-// any statement in the module that imports it.
-declare global { interface Window { EXCALIDRAW_ASSET_PATH?: string | string[] } }
-window.EXCALIDRAW_ASSET_PATH = '/excalidraw/'
-
 // The editor pulls the whole Excalidraw chunk — load it only when someone
-// actually opens a sketch (the grid below costs nothing).
-const SketchEditor = lazy(() => import('./SketchEditor'))
+// actually opens a sketch (the grid below costs nothing). Shared with the
+// document modal's "Edit sketch" (editors/sketch-lazy.ts, which also owns the
+// EXCALIDRAW_ASSET_PATH invariant).
+import { LazySketchEditor } from '@/components/editors/sketch-lazy'
 
 function SketchTile({ doc, scope, onOpen, onRemove }: {
   doc: Document
@@ -107,9 +101,9 @@ export function SketchApplet({ autoAdd }: AppletProps) {
             <p className="text-sm text-muted-foreground">Loading sketch editor…</p>
           </div>
         }>
-          <SketchEditor
+          <LazySketchEditor
             doc={editing === 'new' ? null : editing}
-            scope={scope}
+            workspaceName={scope.workspaceName}
             target={target}
             onSaved={() => { setEditing(null); void reload() }}
             onClose={() => setEditing(null)}

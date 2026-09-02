@@ -13,6 +13,9 @@ interface Options {
   // one (missing / application/octet-stream). <video>/<audio> won't decode a
   // typeless blob, so a `.mp4` served as octet-stream must be re-typed.
   typeHint?: string
+  // Content checksum as cache identity — mutable-content docs (drawings)
+  // roll to a fresh URL per edit (offline SW caches content URLs cache-first).
+  version?: string | null
 }
 
 interface State {
@@ -33,10 +36,10 @@ const idleState = (loading: boolean): State => ({ blobUrl: null, blob: null, tex
 export function useDocumentBlobUrl(
   workspaceId: string,
   documentId: number | string,
-  { url, mode = 'blob', enabled = true, maxTextLength = 200_000, typeHint }: Options = {},
+  { url, mode = 'blob', enabled = true, maxTextLength = 200_000, typeHint, version = null }: Options = {},
 ): State {
   const { isPublic, fetchBlob } = useDocumentContent(workspaceId)
-  const fetchKey = `${isPublic ? 'pub' : 'ws'}:${workspaceId}:${documentId}:${url ?? ''}:${mode}:${enabled}:${typeHint ?? ''}`
+  const fetchKey = `${isPublic ? 'pub' : 'ws'}:${workspaceId}:${documentId}:${url ?? ''}:${mode}:${enabled}:${typeHint ?? ''}:${version ?? ''}`
   const [state, setState] = useState<State>(idleState(enabled))
   // Render-time reset when the fetch target changes (no setState-in-effect).
   const [lastKey, setLastKey] = useState(fetchKey)
@@ -50,7 +53,7 @@ export function useDocumentBlobUrl(
     let cancelled = false
     let createdUrl: string | null = null
 
-    fetchBlob(documentId, url ? { url } : {})
+    fetchBlob(documentId, { ...(url ? { url } : {}), ...(version ? { version } : {}) })
       .then(async ({ blob, mime }) => {
         if (cancelled) return
         if (mode === 'text') {

@@ -455,6 +455,11 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
   const isTabDocument = document.schema === 'data/schema/tab'
   const tabUrl = isTabDocument ? document.data.url : null
   const display = getDocumentDisplayInfo(document)
+  // Same preview pipeline as the card/tile views: images (incl. drawings) and
+  // PDFs get a small thumbnail in the Type cell, everything else the icon.
+  const isImage = isImageDocument(document)
+  const hasThumb = isImage || isPdfDocument(document)
+  const { blobUrl: cellThumbUrl } = useDocumentThumbnail(workspaceId ?? '', document.id, 128, { enabled: hasThumb, blobFallback: isImage, version: document.checksumArray?.[0] ?? null })
 
   const handleDragStart = (e: React.DragEvent) => {
     onDragStart?.(e, document.id);
@@ -527,7 +532,9 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
           />
         </TableCell>
         <TableCell className="w-12">
-          <DocumentIcon document={document} chip />
+          {cellThumbUrl
+            ? <img src={cellThumbUrl} alt="" className="h-8 w-8 rounded-md border object-cover" />
+            : <DocumentIcon document={document} chip />}
         </TableCell>
         {/* `w-full max-w-0`: a table cell sizes to its MIN-CONTENT width, and
             `truncate` (white-space: nowrap) makes that the full title string —
@@ -596,7 +603,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
   const hasThumb = isImage || isPdfDocument(document)
   // Small row preview — 128px render is plenty for a 56px square. Raw PDF
   // bytes can't render in an <img>, so PDFs skip the full-bytes fallback.
-  const { blobUrl: rowThumbUrl, loading: rowThumbLoading } = useDocumentThumbnail(workspaceId ?? '', document.id, 128, { enabled: hasThumb, blobFallback: isImage })
+  const { blobUrl: rowThumbUrl, loading: rowThumbLoading } = useDocumentThumbnail(workspaceId ?? '', document.id, 128, { enabled: hasThumb, blobFallback: isImage, version: document.checksumArray?.[0] ?? null })
 
   const handleDragStart = (e: React.DragEvent) => {
     onDragStart?.(e, document.id);
@@ -709,7 +716,8 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
 }
 
 function isImageDocument(document: Document): boolean {
-  return document.schema === 'data/schema/file'
+  // Drawings carry their rendered PNG preview exactly like an image file.
+  return (document.schema === 'data/schema/file' || document.schema === 'data/schema/drawing')
     && String(document.metadata?.contentType || '').startsWith('image/')
 }
 
@@ -763,7 +771,7 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
   const isTextTile = !hasThumb && document.schema !== 'data/schema/file' && !!(display.preview || display.subtitle)
   const { replicating } = useMirrorSaveState(document)
   // 768px render keeps the larger (300px column, retina) photo tiles crisp.
-  const { blobUrl, loading } = useDocumentThumbnail(workspaceId ?? '', document.id, 768, { enabled: hasThumb, blobFallback: isImage })
+  const { blobUrl, loading } = useDocumentThumbnail(workspaceId ?? '', document.id, 768, { enabled: hasThumb, blobFallback: isImage, version: document.checksumArray?.[0] ?? null })
 
   const handleClick = (e: React.MouseEvent) => {
     const isCtrlClick = e.ctrlKey || e.metaKey
