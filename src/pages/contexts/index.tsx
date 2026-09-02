@@ -31,6 +31,7 @@ import socketService from "@/lib/socket"
 import { listContexts, createContext, deleteContext } from "@/services/context"
 import { listWorkspaces } from "@/services/workspace"
 import { logAndExtractError } from "@/lib/error-utils"
+import { PathPickerField } from "@/components/menu/shared/PathPickerField"
 
 // Using global Workspace type from types/api.d.ts
 
@@ -466,12 +467,20 @@ export default function ContextsPage() {
             <label htmlFor="url" className="block text-sm font-medium mb-1">
               Context URL
             </label>
-            <Input
+            <PathPickerField
               id="url"
               value={newContextUrl}
-              onChange={(e) => setNewContextUrl(e.target.value)}
+              onChange={setNewContextUrl}
               placeholder="e.g., /project/path/resource"
               disabled={isCreating}
+              pickerTitle="Context URL path…"
+              onPickTarget={(path, ctx) => {
+                // One pick fills the whole form: path, workspace and tree.
+                setNewContextUrl(path)
+                setNewContextTreeType(ctx.treeType)
+                const ws = workspaces.find((w) => w.name === ctx.workspaceName || w.id === ctx.workspaceName)
+                if (ws) setSelectedWorkspaceId(ws.id)
+              }}
             />
           </div>
           <div className="grid gap-4 md:grid-cols-2">
@@ -479,12 +488,14 @@ export default function ContextsPage() {
               <label htmlFor="baseUrl" className="block text-sm font-medium mb-1">
                 Base URL (Optional)
               </label>
-              <Input
+              <PathPickerField
                 id="baseUrl"
                 value={newContextBaseUrl}
-                onChange={(e) => setNewContextBaseUrl(e.target.value)}
-              placeholder="e.g., /base/path"
+                onChange={setNewContextBaseUrl}
+                format="path"
+                placeholder="e.g., /base/path"
                 disabled={isCreating}
+                pickerTitle="Base path…"
               />
             </div>
             <div>
@@ -679,11 +690,12 @@ export default function ContextsPage() {
               <label htmlFor="edit-context-url" className="block text-sm font-medium mb-1">
                 Context URL
               </label>
-              <Input
+              <PathPickerField
                 id="edit-context-url"
                 value={editingContext.url}
-                onChange={(e) => setEditingContext(prev => prev ? {...prev, url: e.target.value} : null)}
+                onChange={(v) => setEditingContext(prev => prev ? {...prev, url: v} : null)}
                 placeholder="workspace://path or /path"
+                pickerTitle="Context URL path…"
               />
               <p className="text-sm text-muted-foreground mt-1">
                 Use format: workspace://path or /path for current workspace
@@ -693,11 +705,13 @@ export default function ContextsPage() {
               <label htmlFor="edit-base-url" className="block text-sm font-medium mb-1">
                 Base URL (optional)
               </label>
-              <Input
+              <PathPickerField
                 id="edit-base-url"
                 value={editingContext.baseUrl || ''}
-                onChange={(e) => setEditingContext(prev => prev ? {...prev, baseUrl: e.target.value || null} : null)}
+                onChange={(v) => setEditingContext(prev => prev ? {...prev, baseUrl: v || null} : null)}
+                format="path"
                 placeholder="/base/path"
+                pickerTitle="Base path…"
               />
               <p className="text-sm text-muted-foreground mt-1">
                 Restricts context navigation to this base path

@@ -16,6 +16,7 @@ import { listScripts } from '@/services/scripts'
 import { listBackends, type Backend } from '@/services/workspace'
 import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from '@/components/menu/shared/LinkToSidePanel'
 import { LinkToCard, type LinkToTarget } from '@/components/menu/shared/LinkToCard'
+import { PathPickerField } from '@/components/menu/shared/PathPickerField'
 
 // Rule builder: recipes → a sentence-style form ("when … then …") that
 // translates 1:1 into canvas.hook-rules/v1 rules in git/hooks/rules.json.
@@ -1096,7 +1097,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                   <p className="text-sm font-medium">What to do with the {label}</p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Field label="Save as a note at" hint="Context path by default, dir:/path for the directory tree.">
-                      <Input className={cn(inputClass, 'font-mono')} placeholder="/notes/summaries (optional)" value={row.notePath} onChange={(e) => set({ notePath: e.target.value })} />
+                      <PathPickerField inputClassName={inputClass} placeholder="/notes/summaries (optional)" value={row.notePath} onChange={(v) => set({ notePath: v })} fixedWorkspaceName={workspaceId} pickerTitle="Save note under…" onPickTarget={(path, ctx) => set({ notePath: ctx.treeType === 'directory' ? `dir:${path}` : path })} />
                     </Field>
                     {row.notePath.trim() && (
                       <Field label="Note title">
@@ -1114,7 +1115,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                         </select>
                       </Field>
                       <Field label="Also file the saved file under" hint="Index it as a document at this tree path.">
-                        <Input className={cn(inputClass, 'font-mono')} placeholder="/path (optional)" value={row.fileInsert} onChange={(e) => set({ fileInsert: e.target.value })} />
+                        <PathPickerField inputClassName={inputClass} placeholder="/path (optional)" value={row.fileInsert} onChange={(v) => set({ fileInsert: v })} fixedWorkspaceName={workspaceId} tabs={['context']} pickerTitle="File under…" onPickTarget={(path) => set({ fileInsert: path })} />
                       </Field>
                     </>)}
                   </div>
