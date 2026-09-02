@@ -3,7 +3,7 @@ import { getLocationFilename } from '@/lib/document-display'
 import type { Document } from '@/types/workspace'
 import {
   classifyMime, youTubeVideoId,
-  NOTE_SCHEMA, EMAIL_SCHEMA, FILE_SCHEMA, LINK_SCHEMA, TAB_SCHEMA, TODO_SCHEMA, IDENTITY_SCHEMA,
+  NOTE_SCHEMA, EMAIL_SCHEMA, FILE_SCHEMA, DRAWING_SCHEMA, LINK_SCHEMA, TAB_SCHEMA, TODO_SCHEMA, IDENTITY_SCHEMA,
   type RendererProps,
 } from './types'
 import { ImageRenderer, AudioRenderer, VideoRenderer, PdfRenderer } from './media'
@@ -24,6 +24,8 @@ import { BinaryFallback } from './BinaryFallback'
 export function resolveRenderer(document: Document): ComponentType<RendererProps> | null {
   const schema = document.schema
   if (schema === NOTE_SCHEMA) return MarkdownRenderer
+  // A drawing's rendered preview IS its stored blob — image pipeline applies.
+  if (schema === DRAWING_SCHEMA) return ImageRenderer
   if (schema === TODO_SCHEMA) return TodoRenderer
   if (schema === EMAIL_SCHEMA) return EmailRenderer
   // Subtypes (`data/schema/identity/person`) render the same way — the leaf

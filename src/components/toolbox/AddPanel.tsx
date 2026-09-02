@@ -1,6 +1,10 @@
 import { useEscapeClose } from '@/hooks/useEscapeClose'
+import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { sketchEditor } from '@/components/editors/registry'
+import { useAddTarget } from './add/useAddTarget'
 import { useCallback, useRef, useState } from 'react'
-import { X, StickyNote, Link as LinkIcon, Upload, Camera, Plus, Pencil, FileSearch, FolderPlus, ListTodo, User } from 'lucide-react'
+import { X, StickyNote, Link as LinkIcon, Upload, Camera, Brush, Plus, Pencil, FileSearch, FolderPlus, ListTodo, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useIsTooNarrowToDock } from '@/hooks/use-mobile'
 import { InsertMenu } from '@/components/common/insert-menu'
@@ -25,6 +29,7 @@ const TITLES: Record<AddKind, { label: string; icon: typeof StickyNote }> = {
   link: { label: 'New Link', icon: LinkIcon },
   todo: { label: 'New Todo', icon: ListTodo },
   identity: { label: 'New Identity', icon: User },
+  sketch: { label: 'New Sketch', icon: Brush },
   file: { label: 'Add Files', icon: Upload },
   photo: { label: 'Photo/Video', icon: Camera },
   existing: { label: 'Add Existing', icon: FileSearch },
@@ -35,6 +40,17 @@ export function AddPanel() {
   const { state, openAdd, closeAdd } = useToolbox()
   useEscapeClose(closeAdd, state.addOpen)
   const { addOpen, addKind, editDocument } = state
+  const target = useAddTarget()
+  const navigate = useNavigate()
+
+  // Sketching needs the full viewport, not a side panel: picking Sketch
+  // hands off to the standalone editor surface bound to the current target
+  // (see components/editors/registry.ts).
+  useEffect(() => {
+    if (!addOpen || addKind !== 'sketch') return
+    closeAdd()
+    navigate(sketchEditor.createUrl(target))
+  }, [addOpen, addKind, target, closeAdd, navigate])
   // Drawer vs docked card: what matters is whether the content column
   // survives docking, not whether this is a phone-shaped viewport.
   const asDrawer = useIsTooNarrowToDock()

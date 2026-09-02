@@ -1,8 +1,9 @@
 import type { ComponentType } from 'react'
-import { ListTodo, ScanEye, StickyNote, type LucideIcon } from 'lucide-react'
+import { Brush, ListTodo, ScanEye, StickyNote, type LucideIcon } from 'lucide-react'
 import { NotesApplet } from './NotesApplet'
 import { TodosApplet } from './TodosApplet'
 import { LensApplet } from './LensApplet'
+import { SketchApplet } from './SketchApplet'
 
 // Applets are small self-contained apps hosted by the toolbox Apps tab, the
 // standalone /apps/<id> route, and eventually the tauri desktop shell - keep
@@ -49,6 +50,14 @@ export const APPLETS: AppletDescriptor[] = [
     modes: ['context'],
     description: 'Todos in the current context, done items hidden by default',
     Component: TodosApplet,
+  },
+  {
+    id: 'sketch',
+    label: 'Sketch',
+    icon: Brush,
+    modes: ['context'],
+    description: 'Quick-sketch into the current context; tap a sketch to keep editing',
+    Component: SketchApplet,
   },
   {
     id: 'lens',

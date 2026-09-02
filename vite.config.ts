@@ -1,5 +1,5 @@
 import path from "path"
-import { readFileSync } from 'node:fs'
+import { readFileSync, cpSync } from 'node:fs'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -29,12 +29,31 @@ const devProxy = proxyTarget
 // directly rather than imported so tsconfig needs no resolveJsonModule.
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
 
+// Excalidraw resolves its runtime assets (lazy-loaded fonts) against
+// window.EXCALIDRAW_ASSET_PATH (set in SketchEditor.tsx to /excalidraw/);
+// without it the library falls back to the esm.sh CDN, which our CSP blocks.
+// Ship the fonts with the app instead — copied out of the installed package
+// so they always match the bundled version. ~14MB on disk, loaded lazily by
+// the browser per font family, and excluded from the SW precache (the
+// injectManifest globPatterns don't match woff2).
+function excalidrawAssets() {
+  return {
+    name: 'excalidraw-assets',
+    closeBundle() {
+      const src = new URL('./node_modules/@excalidraw/excalidraw/dist/prod/fonts', import.meta.url)
+      const dest = new URL('./dist/excalidraw/fonts', import.meta.url)
+      cpSync(src, dest, { recursive: true })
+    },
+  }
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   server: { proxy: devProxy },
   plugins: [
     react(),
+    excalidrawAssets(),
     // Tailwind v4 runs as a Vite plugin, not a PostCSS pass — there is no
     // tailwind.config.js. Design tokens are declared in CSS under
     // src/theme/css/, which is what makes them swappable at runtime.

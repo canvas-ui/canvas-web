@@ -1,7 +1,7 @@
 {
   "name": "canvas-web",
   "private": true,
-  "version": "2.7.73",
+  "version": "2.8.0",
   "license": "AGPL-3.0-or-later",
   "author": "Jozef Melich <me@idnc.sk>",
   "type": "module",
@@ -22,6 +22,7 @@
     "@codemirror/language": "^6.12.4",
     "@codemirror/legacy-modes": "^6.5.3",
     "@codemirror/state": "^6.7.1",
+    "@excalidraw/excalidraw": "^0.18.1",
     "@iconify/react": "^6.0.2",
     "@radix-ui/react-alert-dialog": "^1.1.23",
     "@radix-ui/react-avatar": "^1.2.6",

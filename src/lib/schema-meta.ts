@@ -1,4 +1,4 @@
-import { FileText, StickyNote, ListTodo, Globe, Mail, Link as LinkIcon, User, Tag as TagIcon, type LucideIcon } from 'lucide-react'
+import { FileText, StickyNote, ListTodo, Globe, Mail, Link as LinkIcon, User, Brush, Tag as TagIcon, type LucideIcon } from 'lucide-react'
 
 // Friendly label + icon per known document-type (`data/schema/*`) schema.
 // Shared by the toolbox Features picker and the map filter (pin icons), so a
@@ -14,6 +14,7 @@ export const SCHEMA_META: Record<string, { label: string; icon: LucideIcon }> = 
   'data/schema/message/email': { label: 'Emails', icon: Mail },
   'data/schema/link': { label: 'Links', icon: LinkIcon },
   'data/schema/identity': { label: 'Identities', icon: User },
+  'data/schema/drawing': { label: 'Sketches', icon: Brush },
 }
 
 export function schemaMeta(key: string): { label: string; icon: LucideIcon } {

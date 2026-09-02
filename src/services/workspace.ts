@@ -1007,7 +1007,14 @@ export interface DestroyResult {
 // the item and say what it is waiting for. See lib/remote-mirror.ts.
 export async function updateWorkspaceDocument(
   workspaceId: string,
-  document: { id: number; schema: string; schemaVersion: string; data?: Record<string, unknown>; metadata?: Record<string, unknown>; comment?: string }
+  document: {
+    id: number; schema: string; schemaVersion: string;
+    data?: Record<string, unknown>; metadata?: Record<string, unknown>; comment?: string;
+    // Blob-backed documents whose content moves on edit (drawings) replace
+    // their identity + preview location in the same PUT.
+    checksumArray?: string[];
+    locations?: Array<{ url: string; metadata?: Record<string, unknown> }>;
+  }
 ): Promise<boolean> {
   beginDocumentSave(document.id)
   try {
@@ -1233,10 +1240,14 @@ function buildContentApiPath(workspaceId: string, documentId: number | string, o
   return `${API_ROUTES.workspaces}/${workspaceId}/documents/${documentId}/content${qs ? `?${qs}` : ''}`
 }
 
-/** Authed fetch of the on-demand server thumbnail (image and PDF docs). */
-export async function fetchDocumentThumbnail(workspaceId: string, documentId: number | string, size = 256): Promise<{ blob: Blob; mime: string }> {
+/** Authed fetch of the on-demand server thumbnail (image and PDF docs).
+ * `version` (the doc's content checksum) goes into the URL so mutable-content
+ * documents (drawings) get a fresh cache identity per edit — the offline SW
+ * caches content URLs cache-first, keyed on the full URL. */
+export async function fetchDocumentThumbnail(workspaceId: string, documentId: number | string, size = 256, version?: string | null): Promise<{ blob: Blob; mime: string }> {
   const token = localStorage.getItem('authToken')
-  const res = await fetch(`${API_ROUTES.workspaces}/${workspaceId}/documents/${documentId}/thumbnail?size=${size}`, {
+  const v = version ? `&v=${encodeURIComponent(version)}` : ''
+  const res = await fetch(`${API_ROUTES.workspaces}/${workspaceId}/documents/${documentId}/thumbnail?size=${size}${v}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)

@@ -115,3 +115,10 @@ export async function sha256File(file: Blob, onProgress?: (fraction: number) => 
   }
   return hasher.digestHex()
 }
+
+/** sha256 hex of a UTF-8 string (small payloads — scene JSON, manifests). */
+export async function sha256Text(text: string): Promise<string> {
+  const bytes = new TextEncoder().encode(text)
+  const digest = await crypto.subtle.digest('SHA-256', bytes)
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}

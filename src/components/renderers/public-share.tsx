@@ -58,8 +58,8 @@ export function useDocumentContent(workspaceId: string) {
     isPublic: code != null,
     fetchBlob: (documentId: number | string, opts: { url?: string } = {}) =>
       code ? fetchPublicBlob(code, documentId, opts) : fetchDocumentBlob(workspaceId, documentId, opts),
-    fetchThumbnail: (documentId: number | string, size = 256) =>
-      code ? fetchPublicThumbnail(code, documentId, size) : fetchDocumentThumbnail(workspaceId, documentId, size),
+    fetchThumbnail: (documentId: number | string, size = 256, version?: string | null) =>
+      code ? fetchPublicThumbnail(code, documentId, size) : fetchDocumentThumbnail(workspaceId, documentId, size, version),
     download: (documentId: number | string, filename: string, opts: { url?: string } = {}) =>
       code ? downloadPublicDocument(code, documentId, filename, opts) : downloadDocument(workspaceId, documentId, filename, opts),
     // Direct, range-streamable src for <video>/<audio>. Public shares hit the

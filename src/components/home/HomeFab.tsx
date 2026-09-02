@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { sketchEditor } from '@/components/editors/registry'
 import { Plus, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToolboxOptional } from '@/components/toolbox/use-toolbox'
@@ -67,7 +69,16 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose, onCardsO
   // not pop back open expanded when the panel closes.
   if (panelOpen && stackOpen) setStackOpen(false)
 
+  const navigate = useNavigate()
+
   const addCard = (kind: InsertKind) => {
+    // Sketching needs the full viewport — hand off to the standalone editor
+    // surface (its own binding picker aims the save; home has no path focus).
+    if (kind === 'sketch') {
+      setStackOpen(false)
+      navigate(sketchEditor.createUrl(null))
+      return
+    }
     setOpenCards((prev) => [...prev, { id: nextCardId(), kind }])
     setStackOpen(false)
   }
@@ -98,6 +109,7 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose, onCardsO
             case 'file': return <FileCardBody key={c.id} onClose={onClose} initialData={c.initialData} />
             case 'photo': return <PhotoCardBody key={c.id} onClose={onClose} />
             case 'existing': return <ExistingCardBody key={c.id} onClose={onClose} />
+            case 'sketch': return null // handed off to /apps/sketch in addCard
             // 'folder' is omitted from the home stack — folders are created
             // inside the Link to… destination tree instead.
             case 'folder': return null

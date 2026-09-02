@@ -43,7 +43,9 @@ function MediaShell({ error, loading, children }: { error: string | null; loadin
 
 export function ImageRenderer({ workspaceId, document: doc, className = '' }: RendererProps) {
   // Downscaled preview (falls back to full bytes only if no thumbnail exists).
-  const { blobUrl, error, loading } = useDocumentThumbnail(workspaceId, doc.id, IMAGE_PREVIEW_SIZE)
+  // Content checksum as cache version: immutable files keep a stable key,
+  // editable previews (drawings) roll to a fresh URL per edit.
+  const { blobUrl, error, loading } = useDocumentThumbnail(workspaceId, doc.id, IMAGE_PREVIEW_SIZE, { version: doc.checksumArray?.[0] ?? null })
   const { fetchBlob } = useDocumentContent(workspaceId)
   const filename = getLocationFilename(doc) || `document-${doc.id}`
   const [downloading, setDownloading] = useState(false)

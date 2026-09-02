@@ -16,10 +16,10 @@ export function useDocumentThumbnail(
   workspaceId: string,
   documentId: number | string,
   size = 256,
-  { enabled = true, blobFallback = true }: { enabled?: boolean; blobFallback?: boolean } = {},
+  { enabled = true, blobFallback = true, version = null }: { enabled?: boolean; blobFallback?: boolean; version?: string | null } = {},
 ): State {
   const { isPublic, fetchBlob, fetchThumbnail } = useDocumentContent(workspaceId)
-  const fetchKey = `${isPublic ? 'pub' : 'ws'}:${workspaceId}:${documentId}:${size}:${enabled}`
+  const fetchKey = `${isPublic ? 'pub' : 'ws'}:${workspaceId}:${documentId}:${size}:${enabled}:${version ?? ''}`
   const [state, setState] = useState<State>({ blobUrl: null, error: null, loading: enabled })
   const [lastKey, setLastKey] = useState(fetchKey)
   if (fetchKey !== lastKey) {
@@ -32,7 +32,7 @@ export function useDocumentThumbnail(
     let cancelled = false
     let createdUrl: string | null = null
 
-    fetchThumbnail(documentId, size)
+    fetchThumbnail(documentId, size, version)
       .catch((e) => { if (!blobFallback) throw e; return fetchBlob(documentId) }) // fallback: full-size bytes
       .then(({ blob }) => {
         if (cancelled) return

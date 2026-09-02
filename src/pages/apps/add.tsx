@@ -12,6 +12,10 @@ export default function QuickAddPage() {
   const { kind } = useParams()
   const navigate = useNavigate()
 
+  // Sketch has a standalone full-viewport surface instead of a B5 card.
+  if (kind === 'sketch') {
+    return <Navigate to="/apps/sketch?add=1" replace />
+  }
   if (!kind || !KINDS.includes(kind as QuickAddKind)) {
     return <Navigate to="/home" replace />
   }
