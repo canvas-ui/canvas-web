@@ -97,7 +97,7 @@ export function SketchApplet({ autoAdd }: AppletProps) {
 
       {editing && scope && (
         <Suspense fallback={
-          <div className="fixed inset-0 z-fullscreen flex items-center justify-center bg-background">
+          <div className="fixed inset-0 z-fullscreen flex items-center justify-center bg-background surface-glass">
             <p className="text-sm text-muted-foreground">Loading sketch editor…</p>
           </div>
         }>
@@ -112,7 +112,7 @@ export function SketchApplet({ autoAdd }: AppletProps) {
       )}
       {editing && !scope && (
         // Binding still resolving (context → workspace lookup) — rare, brief.
-        <div className="fixed inset-0 z-fullscreen flex items-center justify-center bg-background">
+        <div className="fixed inset-0 z-fullscreen flex items-center justify-center bg-background surface-glass">
           <p className="text-sm text-muted-foreground">Resolving destination…</p>
         </div>
       )}

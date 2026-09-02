@@ -105,7 +105,7 @@ export default function SketchEditor({ doc, workspaceName, target, onSaved, onCl
   }, [doc, workspaceName, target, title, onSaved, showSuccessToast, showErrorToast])
 
   return (
-    <div className="fixed inset-0 z-fullscreen flex flex-col bg-background">
+    <div className="fixed inset-0 z-fullscreen flex flex-col bg-background surface-glass">
       <div className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
         <Button variant="ghost" size="sm" onClick={onClose} aria-label="Back">
           <ArrowLeft className="h-4 w-4" />
