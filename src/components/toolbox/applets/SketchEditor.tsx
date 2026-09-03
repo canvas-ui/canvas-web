@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { Excalidraw, exportToBlob, serializeAsJSON } from '@excalidraw/excalidraw'
 import type { ExcalidrawImperativeAPI, ExcalidrawInitialDataState } from '@excalidraw/excalidraw/types'
-import { Save } from 'lucide-react'
+import { Save, Sun, Moon } from 'lucide-react'
 import '@excalidraw/excalidraw/index.css'
 import { Button } from '@/components/ui/button'
 import { EditorOverlay } from '@/components/editors/EditorOverlay'
@@ -13,6 +13,7 @@ import { updateWorkspaceDocument } from '@/services/workspace'
 import { submitDocuments, type AddTarget } from '../add/useAddTarget'
 import { buildDrawingDocument, DRAWING_SCHEMA_VERSION } from './sketch-doc'
 import { DRAWING_SCHEMA } from '@/components/renderers/types'
+import { appScheme, readSketchTheme, writeSketchTheme } from './sketch-theme'
 import type { Document } from '@/types/workspace'
 
 interface SketchEditorProps {
@@ -55,14 +56,17 @@ export default function SketchEditor({ doc, workspaceName, target, onSaved, onCl
 
   const initialData = useMemo(() => parseScene(doc), [doc])
 
-  // Follow the app theme. The palette id lives in data-theme ('frost', …) and
-  // the resolved light/dark in data-scheme — reading data-theme here meant the
-  // canvas ignored the app's scheme and always fell back to the OS preference.
-  const dark = useMemo(() => {
-    const scheme = document.documentElement.getAttribute('data-scheme')
-    if (scheme === 'dark') return true
-    if (scheme === 'light') return false
-    return window.matchMedia('(prefers-color-scheme: dark)').matches
+  // Canvas theme, with an override the user keeps. The app scheme is only the
+  // DEFAULT: a light canvas on a dark app is a deliberate choice — paper reads
+  // like paper — so the toggle is remembered across sketches and sessions.
+  const [canvasTheme, setCanvasTheme] = useState<'light' | 'dark'>(() => readSketchTheme() ?? appScheme())
+
+  const toggleCanvasTheme = useCallback(() => {
+    setCanvasTheme((prev) => {
+      const next = prev === 'dark' ? 'light' : 'dark'
+      writeSketchTheme(next)
+      return next
+    })
   }, [])
 
   const handleSave = useCallback(async () => {
@@ -122,16 +126,26 @@ export default function SketchEditor({ doc, workspaceName, target, onSaved, onCl
         />
       }
       actions={
-        <Button size="sm" onClick={handleSave} disabled={saving}>
-          <Save className="mr-1.5 h-4 w-4" />
-          {saving ? 'Saving…' : 'Save'}
-        </Button>
+        <>
+          <Button
+            variant="ghost" size="sm"
+            onClick={toggleCanvasTheme}
+            title={canvasTheme === 'dark' ? 'Light canvas' : 'Dark canvas'}
+            aria-label={canvasTheme === 'dark' ? 'Switch to a light canvas' : 'Switch to a dark canvas'}
+          >
+            {canvasTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
+          <Button size="sm" onClick={handleSave} disabled={saving}>
+            <Save className="mr-1.5 h-4 w-4" />
+            {saving ? 'Saving…' : 'Save'}
+          </Button>
+        </>
       }
     >
       <Excalidraw
         excalidrawAPI={(api) => { apiRef.current = api }}
         initialData={initialData ?? undefined}
-        theme={dark ? 'dark' : 'light'}
+        theme={canvasTheme}
       />
     </EditorOverlay>
   )
