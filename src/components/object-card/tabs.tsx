@@ -1,10 +1,13 @@
 import { Suspense, useEffect, useState, type ReactNode } from 'react'
-import { Copy, Download, Trash2, Database, HardDrive, Mail, Globe, FileQuestion, Pencil, Brush, PenLine } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { Copy, Download, Trash2, Database, HardDrive, Mail, Globe, FileQuestion, Pencil, Brush, PenLine, ArrowRight } from 'lucide-react'
+import { BackendActionCard, type BackendTransferConfirmOptions } from '@/components/menu/shared/BackendActionCard'
 import { Button } from '@/components/ui/button'
 import { DocumentRenderer } from '@/components/renderers/registry'
 import {
   getDocumentLocations, getDocumentMemberships, destroyWorkspaceDocuments, downloadDocument,
-  type DocumentLocationInfo, type DocumentTreeMembership,
+  transferDocumentsToBackends,
+  type DocumentLocationInfo, type DocumentTreeMembership, type BackendTransferMode,
 } from '@/services/workspace'
 import { getLocationFilename } from '@/lib/document-display'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
@@ -383,6 +386,9 @@ export function BackendsTab({ document, workspaceId, onChanged }: TabProps) {
   const [busyUrl, setBusyUrl] = useState<string | null>(null)
   // URL awaiting the "last location" decision (remove index entry vs keep it).
   const [confirmLastUrl, setConfirmLastUrl] = useState<string | null>(null)
+  // "Copy to… / Move to…" card — same card the document list uses, for one doc.
+  const [transferMode, setTransferMode] = useState<BackendTransferMode | null>(null)
+  const [transferSaving, setTransferSaving] = useState(false)
 
   // Render-time reset when the target document changes.
   const fetchKey = `${workspaceId}:${document.id}`
@@ -435,6 +441,35 @@ export function BackendsTab({ document, workspaceId, onChanged }: TabProps) {
     }
   }
 
+  const transfer = async (backends: string[], mode: BackendTransferMode, options: BackendTransferConfirmOptions) => {
+    setTransferSaving(true)
+    try {
+      const result = await transferDocumentsToBackends(workspaceId, [document.id], {
+        to: backends,
+        mode,
+        keepDocument: options.keepDocument,
+        folder: options.folder,
+        filename: options.filename,
+        onConflict: options.onConflict,
+      })
+      const outcome = result.successful[0]
+      if (!outcome) throw new Error(result.failed[0]?.reason || 'Transfer failed')
+      const landed = outcome.transfers?.flatMap(t => t.state === 'unchanged' ? [] : [t.backend]) ?? []
+      const where = backends.join(', ')
+      if (mode === 'delete') showSuccessToast(`Deleted from ${where}`)
+      else if (landed.length === 0) showSuccessToast(`Nothing to do — already on ${where}`)
+      else showSuccessToast(`${mode === 'move' ? 'Moved to' : 'Copied to'} ${landed.join(', ')}${outcome.transfers?.some(t => t.state === 'pending') ? ' (pending sync)' : ''}`)
+      window.dispatchEvent(new CustomEvent('workspace:documents:refresh'))
+      setTransferMode(null)
+      onChanged?.()
+      reload()
+    } catch (e) {
+      showErrorToast(e instanceof Error ? e.message : String(e))
+    } finally {
+      setTransferSaving(false)
+    }
+  }
+
   const onRemoveClick = (loc: DocumentLocationInfo) => {
     const isLast = (locations?.length ?? 0) <= 1
     if (isLast) { setConfirmLastUrl(loc.url); return }
@@ -462,8 +497,17 @@ export function BackendsTab({ document, workspaceId, onChanged }: TabProps) {
         <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">json</span>
       </div>
 
-      {isJsonDoc && (
-        <p className="text-sm text-muted-foreground">No byte locations; this object lives only in the workspace database.</p>
+      {isJsonDoc ? (
+        <p className="text-sm text-muted-foreground">No byte locations; this object lives only in the workspace database, so there is no file data to copy or move.</p>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setTransferMode('copy')} title="Copy the file data to another storage backend (keeps the existing copies)">
+            <Copy className="mr-1 h-3.5 w-3.5" /> Copy to…
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setTransferMode('move')} title="Move the file data to another storage backend (source released once the copy is durable)">
+            <ArrowRight className="mr-1 h-3.5 w-3.5" /> Move to…
+          </Button>
+        </div>
       )}
 
       {locations.map((loc) => {
@@ -519,6 +563,21 @@ export function BackendsTab({ document, workspaceId, onChanged }: TabProps) {
           </div>
         )
       })}
+
+      {transferMode && createPortal(
+        <div className="fixed inset-0 z-picker flex items-center justify-center bg-scrim p-4 max-md:p-2">
+          <BackendActionCard
+            workspaceId={workspaceId}
+            documentCount={1}
+            initialMode={transferMode}
+            defaultFilename={filename}
+            saving={transferSaving}
+            onConfirm={transfer}
+            onClose={() => { if (!transferSaving) setTransferMode(null) }}
+          />
+        </div>,
+        window.document.body,
+      )}
     </div>
   )
 }

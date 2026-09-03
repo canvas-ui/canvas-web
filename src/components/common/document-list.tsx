@@ -2,7 +2,7 @@ import { Document, TreeNode } from '@/types/workspace'
 import { File, Calendar, CalendarDays, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, ChevronDown, SlidersHorizontal, Play, Table as TableIcon, HardDrive, ArrowRightLeft, Loader2 } from 'lucide-react'
 import { LinkToCard, type LinkToTarget, type LinkToRelation } from '@/components/menu/shared/LinkToCard'
 import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from '@/components/menu/shared/LinkToSidePanel'
-import { BackendActionCard } from '@/components/menu/shared/BackendActionCard'
+import { BackendActionCard, type BackendTransferConfirmOptions } from '@/components/menu/shared/BackendActionCard'
 import { PickDocumentsCard } from '@/components/menu/shared/PickDocumentsCard'
 import { transferDocumentsToBackends, createDocumentRelations, type BackendTransferMode } from '@/services/workspace'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
@@ -22,7 +22,7 @@ import {
 import { useSortableData } from '@/components/ui/use-sortable-data'
 import { Button } from '@/components/ui/button'
 import { ContextMenuShell } from '@/components/common/context-menu-shell'
-import { getDocumentDisplayInfo } from '@/lib/document-display'
+import { getDocumentDisplayInfo, getLocationFilename } from '@/lib/document-display'
 import { announceRelationsChanged } from '@/lib/relation-events'
 import { ObjectPropertiesModal } from '@/components/object-card/ObjectPropertiesModal'
 import { isEditableDocument } from '@/components/object-card/editable-schema'
@@ -1217,7 +1217,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   const handleBackendTransfer = useCallback(async (
     backends: string[],
     mode: BackendTransferMode,
-    options: { keepDocument: boolean },
+    options: BackendTransferConfirmOptions,
   ) => {
     if (!workspaceId || !backendPanel) return
     setBackendSaving(true)
@@ -1226,6 +1226,9 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
         to: backends,
         mode,
         keepDocument: options.keepDocument,
+        folder: options.folder,
+        filename: options.filename,
+        onConflict: options.onConflict,
       })
       // A document already living on the target is a no-op, not a transfer —
       // counting it as done would make a repeat click look like work happened.
@@ -2169,6 +2172,9 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
             workspaceId={workspaceId}
             documentCount={backendPanel.ids.length}
             initialMode={backendPanel.mode}
+            defaultFilename={backendPanel.ids.length === 1
+              ? getLocationFilename(documents.find(d => d.id === backendPanel.ids[0]) ?? ({} as Document))
+              : ''}
             saving={backendSaving}
             onConfirm={handleBackendTransfer}
             onClose={() => { if (!backendSaving) setBackendPanel(null) }}

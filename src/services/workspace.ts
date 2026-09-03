@@ -1072,11 +1072,27 @@ export interface BackendTransferResult {
  * Partial success is normal (a document already living on the target fails
  * alone), so callers must report `failed` rather than assume all-or-nothing.
  */
+export type BackendTransferConflict = 'error' | 'rename' | 'overwrite'
+
+export interface BackendTransferOptions {
+  to: string[]
+  mode?: BackendTransferMode
+  keepDocument?: boolean
+  // copy/move onto path-keyed backends (see BackendCapabilities.paths):
+  // backend-relative folder and, for a single document, the name on arrival.
+  // Omitted → backend root, the document's own filename + extension.
+  folder?: string
+  filename?: string
+  onConflict?: BackendTransferConflict
+}
+
 export async function transferDocumentsToBackends(
   workspaceId: string,
   documentIds: readonly (string | number)[],
-  options: { to: string[]; mode?: BackendTransferMode; keepDocument?: boolean }
+  options: BackendTransferOptions
 ): Promise<BackendTransferResult> {
+  const folder = options.folder?.trim().replace(/^\/+|\/+$/g, '')
+  const filename = options.filename?.trim()
   const response = await api.post<BackendTransferResult>(
     `${API_ROUTES.workspaces}/${workspaceId}/documents/transfer`,
     {
@@ -1084,9 +1100,19 @@ export async function transferDocumentsToBackends(
       to: options.to,
       mode: options.mode ?? 'copy',
       ...(options.keepDocument ? { keepDocument: true } : {}),
+      ...(folder ? { folder } : {}),
+      ...(filename ? { filename } : {}),
+      ...(options.onConflict ? { onConflict: options.onConflict } : {}),
     }
   )
   return response
+}
+
+// Does a transfer onto this backend take a folder + filename? Server flag
+// first; older servers without it are judged by driver.
+export function backendKeepsPaths(backend: Backend): boolean {
+  if (typeof backend.capabilities?.paths === 'boolean') return backend.capabilities.paths
+  return backend.kind === 'storage' && backend.driver !== 'cacache'
 }
 
 // ── Document sub-resources (object properties card) ─────────────────────────
@@ -1431,6 +1457,9 @@ export interface BackendCapabilities {
   deleteObject: boolean;
   // Connectors: write-back (create/update/delete remote objects) enabled.
   write?: boolean;
+  // Objects live under person-chosen paths (directory share, drive): a
+  // transfer there takes a folder + filename. False for the hash-keyed blob store.
+  paths?: boolean;
 }
 
 export interface BackendContainer {
@@ -1629,6 +1658,16 @@ function matchBackendByTreePath(path: string, backends?: Backend[]): { backend: 
     if (clean.startsWith(backend.treePath + '/')) return { backend, key: clean.slice(backend.treePath.length + 1) };
   }
   return null;
+}
+
+// Any storage backend node (file, gdrive, …) → its (driver, address, key);
+// null outside the backends tree. What a folder picker for transfers needs,
+// where backendFolderTarget's file-only filter is too narrow.
+export function backendTreeTarget(path: string, backends?: Backend[]): { driver: string; address: string; key: string } | null {
+  const match = matchBackendByTreePath(path, backends)
+  if (match) return { driver: match.backend.driver, address: match.backend.address, key: match.key }
+  const fallback = backendFolderTarget(path)
+  return fallback ? { ...fallback, driver: backends?.find(b => b.address === fallback.address)?.driver || fallback.driver } : null
 }
 
 // Parse a backends-tree /file/<address>/<sub…> node to its folder target.

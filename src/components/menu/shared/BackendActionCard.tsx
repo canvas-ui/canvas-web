@@ -1,10 +1,21 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { X, HardDrive, Database, Copy, ArrowRight, Trash2, Cloud, AlertTriangle } from 'lucide-react'
+import { X, HardDrive, Database, Copy, ArrowRight, Trash2, Cloud, AlertTriangle, FolderTree } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Loader } from '@/components/ui/loader'
 import { cn } from '@/lib/utils'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
-import { listBackends, type Backend, type BackendTransferMode } from '@/services/workspace'
+import { useToastHelpers } from '@/hooks/useToastHelpers'
+import {
+  listBackends,
+  backendKeepsPaths,
+  backendTreeTarget,
+  type Backend,
+  type BackendTransferMode,
+  type BackendTransferConflict,
+} from '@/services/workspace'
+import { LinkToCard } from './LinkToCard'
+import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from './LinkToSidePanel'
 
 const MODES: Array<{ mode: BackendTransferMode; label: string; icon: ReactNode }> = [
   { mode: 'copy', label: 'Copy to', icon: <Copy className="h-3.5 w-3.5" /> },
@@ -12,15 +23,35 @@ const MODES: Array<{ mode: BackendTransferMode; label: string; icon: ReactNode }
   { mode: 'delete', label: 'Delete from', icon: <Trash2 className="h-3.5 w-3.5" /> },
 ]
 
+export interface BackendTransferConfirmOptions {
+  keepDocument: boolean
+  // Placement on path-keyed backends (folder relative to the backend root;
+  // filename only for a single document). Empty → root / the document's own name.
+  folder: string
+  filename: string
+  onConflict: BackendTransferConflict
+}
+
 export interface BackendActionCardProps {
   workspaceId: string
   documentCount: number
   initialMode?: BackendTransferMode
-  onConfirm: (backends: string[], mode: BackendTransferMode, options: { keepDocument: boolean }) => void | Promise<void>
+  // Name the single document currently goes by — prefills the filename field
+  // so the transfer lands under it rather than a blob-store hash key.
+  defaultFilename?: string
+  onConfirm: (backends: string[], mode: BackendTransferMode, options: BackendTransferConfirmOptions) => void | Promise<void>
   onClose: () => void
   saving?: boolean
   sizeClassName?: string
 }
+
+const CONFLICT_OPTIONS: Array<{ value: BackendTransferConflict; label: string }> = [
+  { value: 'rename', label: 'Rename mine (file-1.ext)' },
+  { value: 'overwrite', label: 'Overwrite the existing file' },
+  { value: 'error', label: 'Skip the document' },
+]
+
+const selectClass = 'h-9 w-full rounded-md border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring disabled:opacity-50'
 
 function backendIcon(backend: Backend) {
   if (backend.driver === 'cacache') return Database
@@ -40,17 +71,25 @@ export function BackendActionCard({
   workspaceId,
   documentCount,
   initialMode = 'copy',
+  defaultFilename = '',
   onConfirm,
   onClose,
   saving = false,
   sizeClassName,
 }: BackendActionCardProps) {
-  useEscapeClose(onClose, !saving)
+  const { showErrorToast } = useToastHelpers()
+  const [browsing, setBrowsing] = useState(false)
+  // The folder picker is a second overlay on top of this card; Escape must
+  // close the picker first, not the card underneath it.
+  useEscapeClose(onClose, !saving && !browsing)
   const [mode, setMode] = useState<BackendTransferMode>(initialMode)
   const [backends, setBackends] = useState<Backend[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [keepDocument, setKeepDocument] = useState(false)
+  const [folder, setFolder] = useState('')
+  const [filename, setFilename] = useState(defaultFilename)
+  const [onConflict, setOnConflict] = useState<BackendTransferConflict>('rename')
 
   useEffect(() => {
     let cancelled = false
@@ -101,9 +140,35 @@ export function BackendActionCard({
     })
   }
 
+  // Selected targets that address objects by path: only they take a folder
+  // and a filename — the blob store keeps its content-hash key regardless.
+  const pathTargets = useMemo(
+    () => (backends || []).filter(b => selected.has(b.address) && backendKeepsPaths(b)),
+    [backends, selected],
+  )
+  const showDestination = mode !== 'delete' && pathTargets.length > 0
+
+  // A pick in the backends tree names both the backend and the folder inside
+  // it, so it also (re)selects the backend — one gesture instead of two.
+  const pickFolder = (paths: string[]) => {
+    setBrowsing(false)
+    const target = backendTreeTarget(paths[0] || '', backends || [])
+    const backend = target ? (backends || []).find(b => b.address === target.address) : null
+    if (!target || !backend) { showErrorToast('Pick a folder inside a storage backend'); return }
+    if (isDisabled(backend)) { showErrorToast(`${backend.address} is ${isDisabled(backend)}`); return }
+    if (!backendKeepsPaths(backend)) { showErrorToast(`${backend.address} does not keep folders — objects are stored by content`); return }
+    setFolder(target.key)
+    setSelected(prev => (single ? new Set([target.address]) : new Set([...prev, target.address])))
+  }
+
   const confirm = async () => {
     if (selected.size === 0 || saving) return
-    await onConfirm([...selected], mode, { keepDocument })
+    await onConfirm([...selected], mode, {
+      keepDocument,
+      folder: showDestination ? folder.trim() : '',
+      filename: showDestination && documentCount === 1 ? filename.trim() : '',
+      onConflict,
+    })
   }
 
   const count = documentCount
@@ -226,6 +291,66 @@ export function BackendActionCard({
           </label>
         )}
 
+        {showDestination && (
+          <div className="mt-3 space-y-2 rounded-md border px-3 py-2">
+            <p className="text-xs font-medium">
+              Destination on {pathTargets.map(b => (b.config?.label as string) || b.address).join(', ')}
+            </p>
+            <div className="space-y-1">
+              <label htmlFor="backend-transfer-folder" className="text-[11px] text-muted-foreground">Folder (relative to the backend root)</label>
+              <div className="flex gap-1.5">
+                <Input
+                  id="backend-transfer-folder"
+                  value={folder}
+                  onChange={e => setFolder(e.target.value)}
+                  placeholder="/"
+                  disabled={saving}
+                  className="h-9 font-mono text-xs"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9 shrink-0"
+                  onClick={() => setBrowsing(true)}
+                  disabled={saving}
+                  aria-label="Browse backend folders"
+                  title="Browse…"
+                >
+                  <FolderTree className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            {documentCount === 1 ? (
+              <div className="space-y-1">
+                <label htmlFor="backend-transfer-filename" className="text-[11px] text-muted-foreground">File name</label>
+                <Input
+                  id="backend-transfer-filename"
+                  value={filename}
+                  onChange={e => setFilename(e.target.value)}
+                  placeholder={defaultFilename || 'keeps the document\'s own name'}
+                  disabled={saving}
+                  className="h-9 font-mono text-xs"
+                />
+              </div>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">Each document keeps its own file name and extension.</p>
+            )}
+            <div className="space-y-1">
+              <label htmlFor="backend-transfer-conflict" className="text-[11px] text-muted-foreground">If a different file already has that name</label>
+              <select
+                id="backend-transfer-conflict"
+                className={selectClass}
+                value={onConflict}
+                onChange={e => setOnConflict(e.target.value as BackendTransferConflict)}
+                disabled={saving}
+              >
+                {CONFLICT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+          </div>
+        )}
+
         {mode === 'move' && selectable.length > 0 && (
           <p className="px-1 pt-2 text-[11px] text-muted-foreground">
             The source copy is released only once the destination write is durable.
@@ -259,6 +384,21 @@ export function BackendActionCard({
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
           <span>Deletes the file data from the selected backends. Copies on other backends are untouched.</span>
         </div>
+      )}
+
+      {browsing && (
+        <LinkToSidePanel onClose={() => setBrowsing(false)}>
+          <LinkToCard
+            sizeClassName={LINK_TO_SIDE_SIZE}
+            multiple={false}
+            tabs={['backends']}
+            fixedWorkspaceName={workspaceId}
+            title="Pick a destination folder…"
+            confirmLabel="Use folder"
+            onConfirm={pickFolder}
+            onClose={() => setBrowsing(false)}
+          />
+        </LinkToSidePanel>
       )}
     </div>
   )
