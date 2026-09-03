@@ -12,7 +12,7 @@ const editorFallback = (
   <div className="rounded-md border border-input p-3 text-sm text-muted-foreground">Loading editor…</div>
 )
 
-export function LazyMarkdownEditor(props: { value: string; onChange: (markdown: string) => void; placeholder?: string }) {
+export function LazyMarkdownEditor(props: { value: string; onChange: (markdown: string) => void; placeholder?: string; fill?: boolean }) {
   return (
     <Suspense fallback={editorFallback}>
       <MarkdownEditorImpl {...props} />

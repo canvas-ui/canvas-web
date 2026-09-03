@@ -9,6 +9,37 @@
   word-break: break-word;
 }
 
+/* Long-form reading (a note body, a markdown file) — bigger type, more air and
+ * a measure that does not run to a 3xl modal's edge. Chat bubbles and card
+ * previews keep the compact `.markdown-body` defaults. */
+.markdown-body.markdown-doc {
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  max-width: 74ch;
+}
+.markdown-doc > p,
+.markdown-doc > ul,
+.markdown-doc > ol,
+.markdown-doc > pre,
+.markdown-doc > blockquote,
+.markdown-doc > table {
+  margin-bottom: 1.1em;
+}
+.markdown-doc h1,
+.markdown-doc h2,
+.markdown-doc h3,
+.markdown-doc h4,
+.markdown-doc h5,
+.markdown-doc h6 {
+  margin: 1.9em 0 0.7em;
+}
+.markdown-doc pre {
+  padding: 0.85em 1em;
+}
+.markdown-doc li {
+  margin: 0.35em 0;
+}
+
 /* Vertical rhythm: every block gets top margin except the first one. */
 .markdown-body > *:first-child {
   margin-top: 0;
@@ -18,7 +49,7 @@
 }
 
 .markdown-body p {
-  margin: 0 0 0.85em;
+  margin: 0 0 0.9em;
 }
 
 .markdown-body h1,
@@ -29,7 +60,7 @@
 .markdown-body h6 {
   font-weight: 600;
   line-height: 1.3;
-  margin: 1.6em 0 0.6em;
+  margin: 1.7em 0 0.65em;
 }
 .markdown-body h1 {
   font-size: 1.8em;

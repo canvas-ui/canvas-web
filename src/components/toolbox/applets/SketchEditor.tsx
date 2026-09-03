@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { Excalidraw, exportToBlob, serializeAsJSON } from '@excalidraw/excalidraw'
 import type { ExcalidrawImperativeAPI, ExcalidrawInitialDataState } from '@excalidraw/excalidraw/types'
-import { ArrowLeft, Save } from 'lucide-react'
+import { Save } from 'lucide-react'
 import '@excalidraw/excalidraw/index.css'
 import { Button } from '@/components/ui/button'
+import { EditorOverlay } from '@/components/editors/EditorOverlay'
 import { Input } from '@/components/ui/input'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { sha256Text } from '@/lib/sha256'
@@ -23,6 +24,8 @@ interface SketchEditorProps {
   target?: AddTarget
   onSaved: () => void
   onClose: () => void
+  /** Leave the canvas for the document's metadata form. */
+  onDetails?: () => void
 }
 
 // Excalidraw scene parsing: `data.scene` is stored as the canonical
@@ -44,7 +47,7 @@ function parseScene(doc: Document | null): ExcalidrawInitialDataState | null {
 // inline column is a launcher, not a canvas). Lazy-loaded: this file pulls
 // the whole Excalidraw chunk, so nothing imports it statically except via
 // React.lazy (see SketchApplet).
-export default function SketchEditor({ doc, workspaceName, target, onSaved, onClose }: SketchEditorProps) {
+export default function SketchEditor({ doc, workspaceName, target, onSaved, onClose, onDetails }: SketchEditorProps) {
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null)
   const [title, setTitle] = useState(String(doc?.data?.title ?? ''))
   const [saving, setSaving] = useState(false)
@@ -52,11 +55,13 @@ export default function SketchEditor({ doc, workspaceName, target, onSaved, onCl
 
   const initialData = useMemo(() => parseScene(doc), [doc])
 
-  // Follow the app theme (data-theme on <html>; absent = system preference).
+  // Follow the app theme. The palette id lives in data-theme ('frost', …) and
+  // the resolved light/dark in data-scheme — reading data-theme here meant the
+  // canvas ignored the app's scheme and always fell back to the OS preference.
   const dark = useMemo(() => {
-    const t = document.documentElement.getAttribute('data-theme')
-    if (t === 'dark') return true
-    if (t === 'light') return false
+    const scheme = document.documentElement.getAttribute('data-scheme')
+    if (scheme === 'dark') return true
+    if (scheme === 'light') return false
     return window.matchMedia('(prefers-color-scheme: dark)').matches
   }, [])
 
@@ -105,30 +110,29 @@ export default function SketchEditor({ doc, workspaceName, target, onSaved, onCl
   }, [doc, workspaceName, target, title, onSaved, showSuccessToast, showErrorToast])
 
   return (
-    <div className="fixed inset-0 z-fullscreen flex flex-col bg-background surface-glass">
-      <div className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
-        <Button variant="ghost" size="sm" onClick={onClose} aria-label="Back">
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
+    <EditorOverlay
+      onClose={onClose}
+      onDetails={onDetails}
+      title={
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Sketch title (optional)"
           className="h-8 max-w-xs"
         />
-        <div className="flex-1" />
+      }
+      actions={
         <Button size="sm" onClick={handleSave} disabled={saving}>
           <Save className="mr-1.5 h-4 w-4" />
           {saving ? 'Saving…' : 'Save'}
         </Button>
-      </div>
-      <div className="min-h-0 flex-1">
-        <Excalidraw
-          excalidrawAPI={(api) => { apiRef.current = api }}
-          initialData={initialData ?? undefined}
-          theme={dark ? 'dark' : 'light'}
-        />
-      </div>
-    </div>
+      }
+    >
+      <Excalidraw
+        excalidrawAPI={(api) => { apiRef.current = api }}
+        initialData={initialData ?? undefined}
+        theme={dark ? 'dark' : 'light'}
+      />
+    </EditorOverlay>
   )
 }

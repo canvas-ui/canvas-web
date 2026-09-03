@@ -22,6 +22,8 @@ interface MarkdownEditorProps {
   value: string
   onChange: (markdown: string) => void
   placeholder?: string
+  /** Fill the host's height instead of the default resizable 8rem–70vh box. */
+  fill?: boolean
 }
 
 function ToolbarButton({
@@ -97,7 +99,7 @@ function Toolbar({ editor }: { editor: Editor }) {
 
 // TipTap WYSIWYG editor that reads/writes markdown via the tiptap-markdown extension.
 // `onChange` always receives a markdown string (stored in note.data.content).
-export function MarkdownEditor({ value, onChange, placeholder }: MarkdownEditorProps) {
+export function MarkdownEditor({ value, onChange, placeholder, fill = false }: MarkdownEditorProps) {
   const editor = useEditor({
     extensions: [
       // StarterKit bundles the Link extension since tiptap v3 — configure it
@@ -139,12 +141,18 @@ export function MarkdownEditor({ value, onChange, placeholder }: MarkdownEditorP
   if (!editor) return null
 
   return (
-    <div className="rounded-md border border-input bg-transparent focus-within:ring-1 focus-within:ring-ring">
+    <div className={cn(
+      'rounded-md border border-input bg-transparent focus-within:ring-1 focus-within:ring-ring',
+      fill && 'flex h-full min-h-0 flex-col',
+    )}>
       <Toolbar editor={editor} />
       {/* resize-y needs a scroll container; the ProseMirror div stretches to
           fill it so clicks below short content still focus the editor. */}
       <div
-        className="resize-y overflow-y-auto min-h-[8rem] max-h-[70vh] flex flex-col [&>div]:flex-1 [&_.ProseMirror]:h-full"
+        className={cn(
+          'overflow-y-auto flex flex-col [&>div]:flex-1 [&_.ProseMirror]:h-full',
+          fill ? 'min-h-0 flex-1' : 'resize-y min-h-[8rem] max-h-[70vh]',
+        )}
         onClick={() => editor.chain().focus().run()}
       >
         <EditorContent editor={editor} />

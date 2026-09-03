@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useState, type ReactNode } from 'react'
-import { Copy, Download, Trash2, Database, HardDrive, Mail, Globe, FileQuestion, Pencil, Brush } from 'lucide-react'
+import { Copy, Download, Trash2, Database, HardDrive, Mail, Globe, FileQuestion, Pencil, Brush, PenLine } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DocumentRenderer } from '@/components/renderers/registry'
 import {
@@ -13,7 +13,9 @@ import { DocumentEditForm } from './EditForm'
 import { DocumentRelationsSection } from './RelationsSection'
 import { isEditableDocument } from './editable-schema'
 import { LazySketchEditor } from '@/components/editors/sketch-lazy'
-import { DRAWING_SCHEMA } from '@/components/renderers/types'
+import { LazyTextDocumentEditor } from '@/components/editors/text-lazy'
+import { DRAWING_SCHEMA, NOTE_SCHEMA } from '@/components/renderers/types'
+import { isTextBackedFile } from '@/lib/text-document'
 import type { Document } from '@/types/workspace'
 
 interface TabProps {
@@ -35,6 +37,10 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
   // top of the metadata form — "Edit" alone would only offer comment/tags.
   const isDrawing = document.schema === DRAWING_SCHEMA
   const [sketchOpen, setSketchOpen] = useState(false)
+  // Notes, markdown files and text files open in the same kind of full
+  // surface a sketch does — "Edit" alone would only offer comment/tags.
+  const hasTextEditor = document.schema === NOTE_SCHEMA || isTextBackedFile(document)
+  const [textEditorOpen, setTextEditorOpen] = useState(false)
   // Render-time state reset: switching documents re-seeds the edit mode.
   const resetKey = `${document.id}:${initialEdit}`
   const [lastResetKey, setLastResetKey] = useState(resetKey)
@@ -75,6 +81,11 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
               <Brush className="mr-1 h-3 w-3" /> Edit sketch
             </Button>
           )}
+          {hasTextEditor && (
+            <Button variant="outline" size="sm" onClick={() => setTextEditorOpen(true)}>
+              <PenLine className="mr-1 h-3 w-3" /> Open editor
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
             <Pencil className="mr-1 h-3 w-3" /> Edit
           </Button>
@@ -91,6 +102,22 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
             workspaceName={workspaceId}
             onSaved={() => { setSketchOpen(false); onChanged?.() }}
             onClose={() => setSketchOpen(false)}
+            onDetails={() => { setSketchOpen(false); setEditing(true) }}
+          />
+        </Suspense>
+      )}
+      {textEditorOpen && (
+        <Suspense fallback={
+          <div className="fixed inset-0 z-fullscreen flex items-center justify-center bg-background surface-glass">
+            <p className="text-sm text-muted-foreground">Loading editor…</p>
+          </div>
+        }>
+          <LazyTextDocumentEditor
+            doc={document}
+            workspaceName={workspaceId}
+            onSaved={() => { setTextEditorOpen(false); onChanged?.() }}
+            onClose={() => setTextEditorOpen(false)}
+            onDetails={() => { setTextEditorOpen(false); setEditing(true) }}
           />
         </Suspense>
       )}

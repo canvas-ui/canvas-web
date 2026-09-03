@@ -23,7 +23,7 @@ export function MarkdownRenderer({ workspaceId, document, className = '' }: Rend
       <div className={`space-y-3 ${className}`}>
         {document.data?.title ? <h3 className="text-lg font-semibold">{String(document.data.title)}</h3> : null}
         <div className="rounded-md border border-input bg-transparent">
-          <MarkdownView content={String(document.data?.content ?? '')} className="px-3 py-2 text-sm" />
+          <MarkdownView content={String(document.data?.content ?? '')} className="markdown-doc px-4 py-3" />
         </div>
       </div>
     )
@@ -33,7 +33,7 @@ export function MarkdownRenderer({ workspaceId, document, className = '' }: Rend
   if (loading || text == null) return <p className="text-sm text-muted-foreground">Loading...</p>
   return (
     <div className={`rounded-md border border-input bg-transparent overflow-auto max-h-viewport-pane ${className}`}>
-      <MarkdownView content={text} className="px-3 py-2 text-sm" />
+      <MarkdownView content={text} className="markdown-doc px-4 py-3" />
     </div>
   )
 }
