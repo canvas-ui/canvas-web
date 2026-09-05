@@ -8,6 +8,7 @@ import {
   Link2,
   Monitor,
   Plug,
+  RefreshCw,
   Server,
   Settings2,
   Users,
@@ -30,6 +31,7 @@ export type WorkspaceSettingsTab =
   | 'data'
   | 'db'
   | 'devices'
+  | 'sync'
   | 'services'
   | 'shares'
   | 'hooks'
@@ -39,6 +41,7 @@ export const WORKSPACE_SETTINGS_SECTIONS: readonly SettingsSection<WorkspaceSett
   { id: 'data', label: 'Data Backends', description: 'Sources, disk usage, trash', icon: HardDrive },
   { id: 'db', label: 'Database', description: 'Index, search tuning, embeddings', icon: Database },
   { id: 'devices', label: 'Devices', description: 'Linked devices', icon: Monitor },
+  { id: 'sync', label: 'Sync', description: 'Device mirrors and conflicts', icon: RefreshCw },
   { id: 'services', label: 'Services', description: 'Connectors, Git, WebDAV, IMAP', icon: Server },
   { id: 'shares', label: 'Shares / ACL', description: 'Public links and access', icon: Link2 },
   { id: 'hooks', label: 'Hooks', description: 'Event-driven automation', icon: Webhook },

@@ -17,6 +17,7 @@ import { InferdSettingsPanel } from '@/components/workspace/inferd-settings-pane
 import { HooksPanel } from '@/components/workspace/hooks-panel'
 import type { RulePrefill } from '@/services/hooks'
 import { TrashPanel } from '@/components/workspace/trash-panel'
+import { SyncPanel } from '@/components/workspace/sync-panel'
 import { ConnectorsSection } from '@/components/settings/ConnectorsSection'
 import { ImapMailboxesPanel } from '@/components/workspace/imap-mailboxes-panel'
 import { TokenManager } from '@/components/workspace/token-manager'
@@ -1672,6 +1673,12 @@ export default function WorkspaceSettingsPage() {
           onUnlink={handleUnlinkDevice}
           onUpdate={handleUpdateDevice}
         />
+      )}
+
+      {activeTab === 'sync' && (
+        <section className="rounded-lg border p-4">
+          <SyncPanel workspaceId={workspaceId} workspaceUuid={workspace?.id} />
+        </section>
       )}
 
       {activeTab === 'services' && (

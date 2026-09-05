@@ -1,5 +1,6 @@
 import { API_ROUTES } from '@/config/api'
 import { api } from '@/lib/api'
+import type { MirrorStatus } from '@/services/sync'
 
 export interface Device {
   deviceId: string
@@ -10,6 +11,10 @@ export interface Device {
   type?: string
   createdAt?: string
   updatedAt?: string
+  lastSeen?: string
+  // Workspaces this device keeps in sync (reported by the device itself),
+  // keyed by workspace id.
+  mirrors?: Record<string, MirrorStatus>
 }
 
 export interface WorkspaceDevice {
@@ -32,6 +37,11 @@ export async function listDevices(): Promise<Device[]> {
 export async function updateDevice(deviceId: string, patch: { name?: string; description?: string }): Promise<Device> {
   const res = await api.patch<Device>(`${API_ROUTES.devices}/${encodeURIComponent(deviceId)}`, patch)
   return res
+}
+
+/** Revoke a device: its tokens and its registry record (mirrors included). */
+export async function removeDevice(deviceId: string): Promise<void> {
+  await api.delete<unknown>(`${API_ROUTES.devices}/${encodeURIComponent(deviceId)}`)
 }
 
 export async function listWorkspaceDevices(workspaceId: string): Promise<WorkspaceDevice[]> {
