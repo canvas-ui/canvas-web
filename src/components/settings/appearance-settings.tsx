@@ -14,6 +14,7 @@ import {
   WALLPAPER_MAX_BYTES,
   type WallpaperSettings,
 } from '@/lib/wallpaper'
+import { LAYOUT_OPTIONS, setLayoutMode, useLayoutMode } from '@/lib/layout-mode'
 import {
   DENSITY_OPTIONS,
   SCHEME_OPTIONS,
@@ -37,6 +38,7 @@ const SCHEME_ICONS: Record<SchemePreference, typeof Sun> = {
 export function AppearanceSettings() {
   const { theme, scheme, density, resolvedScheme, setTheme, setScheme, setDensity, reset } =
     useTheme()
+  const layout = useLayoutMode()
 
   return (
     <div className="space-y-8">
@@ -120,6 +122,25 @@ export function AppearanceSettings() {
         />
         <p className="mt-2 text-xs text-muted-foreground">
           {DENSITY_OPTIONS.find((option) => option.id === density)?.description}
+        </p>
+      </section>
+
+      <section>
+        <SectionHeading
+          title="Layout"
+          description="How menus and content share the screen. Device-local, like the wallpaper."
+        />
+        <SegmentedControl
+          options={LAYOUT_OPTIONS.map((option) => ({
+            id: option.id,
+            label: option.name,
+            title: option.description,
+          }))}
+          value={layout}
+          onChange={setLayoutMode}
+        />
+        <p className="mt-2 text-xs text-muted-foreground">
+          {LAYOUT_OPTIONS.find((option) => option.id === layout)?.description}
         </p>
       </section>
 

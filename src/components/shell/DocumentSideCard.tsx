@@ -4,7 +4,7 @@ import { ObjectPropertiesCard } from '@/components/object-card/ObjectPropertiesC
 import { NOTE_SCHEMA, TAB_SCHEMA, FILE_SCHEMA, EMAIL_SCHEMA } from '@/components/renderers/types'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { pasteDocumentsToWorkspacePath } from '@/services/workspace'
-import { useSideView } from './use-side-view'
+import { useSideView, type SideViewEntry } from './use-side-view'
 import { useLiveDocument } from '@/hooks/useLiveDocument'
 import type { Document } from '@/types/workspace'
 
@@ -19,8 +19,12 @@ function iconFor(document: Document) {
 // "Open to the side" host for the unified object properties card, reusing
 // B5Card as the chrome (fillParent — matches ContentArea's height). Save /
 // "Link To" in the header links this document into another location.
-export function DocumentSideCard() {
-  const { entry, close } = useSideView()
+// Props override the context: the strip layout mounts one card per document
+// canvas and owns the entries itself (components/shell/strip).
+export function DocumentSideCard({ entry: entryProp, onClose }: { entry?: SideViewEntry; onClose?: () => void } = {}) {
+  const sideView = useSideView()
+  const entry = entryProp ?? sideView.entry
+  const close = onClose ?? sideView.close
   // Same staleness as the modal host: `entry.document` is the opening list's
   // snapshot, so re-read it after an inline edit instead of rendering pre-edit
   // values (header title included) until the card is re-opened.

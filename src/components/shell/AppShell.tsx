@@ -11,8 +11,15 @@ import { LensFeedProvider } from '@/components/toolbox/lens-feed-context'
 import { LensFeedWidget } from '@/components/toolbox/LensFeedWidget'
 import { SideViewProvider } from './side-view-context'
 import { DocumentModalProvider } from './document-modal-context'
+import { useLayoutMode } from '@/lib/layout-mode'
+import { CanvasRowProvider } from './strip/canvas-row-context'
+import { StripShell } from './strip/StripShell'
 
 export function AppShell() {
+  // Settings > Appearance > Layout. 'strip' is the experimental column strip
+  // (components/shell/strip); everything below the providers is swapped, the
+  // providers and routes are shared.
+  const layout = useLayoutMode()
   return (
     <MenuProvider>
       <AgentSessionProvider>
@@ -23,6 +30,9 @@ export function AppShell() {
           <LensFeedProvider>
           <SideViewProvider>
             <DocumentModalProvider>
+            {layout === 'strip' ? (
+              <CanvasRowProvider><StripShell /></CanvasRowProvider>
+            ) : (<>
             {/* h-viewport (not h-screen) so the shell tracks the real visible height
                 when mobile browser chrome expands/collapses */}
             <div className="flex h-viewport w-full overflow-hidden surface-desk gap-shell p-shell">
@@ -42,6 +52,7 @@ export function AppShell() {
             <MobileMenuToggle />
             {/* A running feed with no panel showing it collapses to here. */}
             <LensFeedWidget />
+            </>)}
             </DocumentModalProvider>
           </SideViewProvider>
           </LensFeedProvider>

@@ -19,7 +19,8 @@ const DEFAULT_WIDTH = 280
 const MIN_WIDTH = 220
 const MAX_WIDTH = 560
 
-function M2Content() {
+// Exported: the strip layout renders the same M2 surface as its own column.
+export function M2Content() {
   const { state } = useMenu()
   const { activeSection, m2View } = state
 

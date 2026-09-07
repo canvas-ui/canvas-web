@@ -7,6 +7,7 @@ import { M2Header } from '@/components/menu/shared/M2Header'
 import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style'
 import { MenuTreeView } from '@/components/menu/shared/MenuTreeView'
 import { useMenu } from '@/components/shell/use-menu'
+import { useCanvasRow } from '@/components/shell/strip/use-canvas-row'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { getWorkspace, getCachedWorkspaceTreeByName, invalidateWorkspaceTreeCache, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer, pasteDocumentsToWorkspacePath, createPublicCanvasShare, listBackends, listWorkspacePins, pinWorkspacePath, unpinWorkspacePin, reorderWorkspacePins, workspacePinKey as pinKey, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
 import type { Layer, WorkspacePin } from '@/services/workspace'
@@ -59,6 +60,7 @@ const tabForTree = (treeName: string, layerId?: string | null): TreeTab =>
 
 export function WorkspaceM2() {
   const { state, closeM2, openM2 } = useMenu()
+  const canvasRow = useCanvasRow()
   const isMobile = useIsMobile()
   const wsName = state.selectedEntityId
   const navigate = useNavigate()
@@ -426,8 +428,11 @@ export function WorkspaceM2() {
     setStayOnPins(true)
     setSelectedPath(pin.path)
     setContentPath(null)
-    navigate(buildWorkspaceUrl(wsName, pin.path, pin.tree))
-  }, [wsName, navigate])
+    const url = buildWorkspaceUrl(wsName, pin.path, pin.tree)
+    // Strip layout: a pin is a task container — its own row of canvases.
+    if (canvasRow) { canvasRow.activateRow(`pin:${wsName}:${pin.id}`, pin.label || pin.name || pin.path, url); return }
+    navigate(url)
+  }, [wsName, navigate, canvasRow])
 
   const activeTree = activeTab === 'context' ? contextTree
     : activeTab === 'directory' ? directoryTree
@@ -470,10 +475,11 @@ export function WorkspaceM2() {
 
   const handleOpenToSide = useCallback((path: string, treeName: string) => {
     if (!wsName) return
+    if (canvasRow) { canvasRow.openCanvas({ kind: 'route', location: buildWorkspaceUrl(wsName, path, treeName) }); return }
     window.dispatchEvent(new CustomEvent('workspace:open-to-side', {
       detail: { workspaceName: wsName, treeName, path },
     }))
-  }, [wsName])
+  }, [wsName, canvasRow])
 
   const handleShareCanvas = useCallback(async (path: string) => {
     if (!wsName) return
@@ -632,6 +638,7 @@ export function WorkspaceM2() {
             root={activeTree}
             treeName={activeTab}
             isBackendsTree={activeTab === 'backends'}
+            onShiftSelect={canvasRow ? (path) => handleOpenToSide(path, treeNameForTab(activeTab)) : undefined}
             selectedPath={selectedPath}
             contentPath={contentPath}
             onSelect={handlePathSelect}

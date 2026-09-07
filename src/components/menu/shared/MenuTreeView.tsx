@@ -39,6 +39,8 @@ export interface MenuTreeViewProps {
   contentPath?: string | null
   onShowContent?: (path: string, layerId?: string) => void
   onOpenToSide?: (path: string, treeName: string) => void
+  // Shift+click on a node (strip layout: open as a second canvas to the right).
+  onShiftSelect?: (path: string) => void
   onInsertPath?: (path: string, autoCreateLayers?: boolean) => Promise<boolean>
   // Canvases are created through the content-area form (it carries the view
   // capture and needs the room); the tree only points at the parent path.
@@ -536,6 +538,7 @@ interface CardNodeProps {
   searchQuery: string
   inlineCreateParent: string | null
   onSelect: (path: string) => void
+  onShiftSelect?: (path: string) => void
   onShowContent?: (path: string) => void
   onCtrl: (path: string, id: string) => void
   onCtxMenu: (e: React.MouseEvent, path: string, node: TreeNode) => void
@@ -559,7 +562,7 @@ function CardNode({
   node, parentPath, depth, isLast, selectedPath, pendingPath, contentPath, readOnly,
   sourceLayer, targetLayers, clipboard, searchQuery,
   inlineCreateParent,
-  onSelect, onShowContent, onCtrl, onCtxMenu,
+  onSelect, onShiftSelect, onShowContent, onCtrl, onCtxMenu,
   onConfirmCreate, onCancelCreate, onOpenPicker, styleOverrides,
   dragOverPath, isCopyDrag, onDragStart, onDragEnter, onDragOver, onDragLeave, onDragEnd, onDrop,
   resyncingPaths,
@@ -587,6 +590,7 @@ function CardNode({
 
   const handleClick = (e: React.MouseEvent) => {
     if (e.ctrlKey || e.metaKey) { onCtrl(path, node.id); return }
+    if (e.shiftKey && onShiftSelect) { onShiftSelect(path); return }
     onSelect(path)
   }
 
@@ -720,6 +724,7 @@ function CardNode({
               searchQuery={searchQuery}
               inlineCreateParent={inlineCreateParent}
               onSelect={onSelect}
+              onShiftSelect={onShiftSelect}
               onShowContent={onShowContent}
               onCtrl={onCtrl}
               onCtxMenu={onCtxMenu}
@@ -749,7 +754,7 @@ function CardNode({
 export function MenuTreeView({
   root, treeName = 'context', isBackendsTree = false, selectedPath, pendingPath, onSelect, isLoading = false, readOnly = false,
   onAddRule, onSyncFolderTree, onAddStoreRule,
-  rootLabel, contentPath, onShowContent, onOpenToSide,
+  rootLabel, contentPath, onShowContent, onOpenToSide, onShiftSelect,
   onInsertPath, onNewCanvas, onShareCanvas, onRemovePath, onRenamePath, onMovePath, onCopyPath,
   pastedDocumentIds, onPasteDocuments,
   onLockLayer, onUnlockLayer, onDestroyLayer, onMergeLayer, onSubtractLayer,
@@ -1085,7 +1090,7 @@ export function MenuTreeView({
     selectedPath, pendingPath, contentPath, readOnly,
     sourceLayer, targetLayers, clipboard, searchQuery: q,
     inlineCreateParent,
-    onSelect, onShowContent, onCtrl: handleCtrl, onCtxMenu: openCtxMenu,
+    onSelect, onShiftSelect, onShowContent, onCtrl: handleCtrl, onCtxMenu: openCtxMenu,
     onConfirmCreate: handleConfirmCreate, onCancelCreate: handleCancelCreate,
     onOpenPicker: onUpdateNode ? openPicker : undefined,
     styleOverrides,

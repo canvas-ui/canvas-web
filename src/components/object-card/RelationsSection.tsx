@@ -7,6 +7,8 @@ import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from '@/components/menu/shared/Lin
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { useDocumentModal } from '@/components/shell/use-document-modal'
+import { useSideView } from '@/components/shell/use-side-view'
+import { useCanvasRow } from '@/components/shell/strip/use-canvas-row'
 import {
   getDocumentRelations,
   createDocumentRelations,
@@ -30,6 +32,8 @@ function RelationRow({
   removing: boolean
 }) {
   const { open } = useDocumentModal()
+  const sideView = useSideView()
+  const canvasRow = useCanvasRow()
   const otherId = direction === 'out' ? relation.to : relation.from
   const doc = relation.document ?? null
   // Absence of a meta row IS the asserted-edge convention (synapsd synthesizes
@@ -46,7 +50,7 @@ function RelationRow({
       {doc ? (
         <button
           type="button"
-          onClick={() => open(doc as Document, workspaceId)}
+          onClick={() => (canvasRow ? sideView.open(doc as Document, workspaceId) : open(doc as Document, workspaceId))}
           className="min-w-0 flex-1 truncate text-left hover:underline"
           title={`Open document ${otherId}`}
         >

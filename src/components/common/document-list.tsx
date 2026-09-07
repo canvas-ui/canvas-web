@@ -7,6 +7,7 @@ import { PickDocumentsCard } from '@/components/menu/shared/PickDocumentsCard'
 import { transferDocumentsToBackends, createDocumentRelations, type BackendTransferMode } from '@/services/workspace'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { useSideView } from '@/components/shell/use-side-view'
+import { useCanvasRow } from '@/components/shell/strip/use-canvas-row'
 import { useState, useCallback, useMemo, useEffect, useRef, useDeferredValue } from 'react'
 import { createPortal } from 'react-dom'
 import Fuse from 'fuse.js'
@@ -445,6 +446,7 @@ function ReplicatingBadge({ document }: { document: Document }) {
 }
 
 function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemoveDocument, onDeleteDocument, onLinkDocument, onOpenToSide, onRightClick, onDragStart }: DocumentTableRowProps) {
+  const canvasRow = useCanvasRow()
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [detailEdit, setDetailEdit] = useState(false)
   const [actionSheet, setActionSheet] = useState(false)
@@ -478,6 +480,8 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
 
   const handleDocumentClick = (e: React.MouseEvent) => {
     const isCtrlClick = e.ctrlKey || e.metaKey
+    // Strip layout: Shift+click opens the document as a canvas to the right.
+    if (e.shiftKey && canvasRow && onOpenToSide) { onOpenToSide(document); return }
     if (onSelect) {
       if (isCtrlClick) {
         // For ctrl+click, toggle selection state
@@ -590,6 +594,7 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
 }
 
 function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocument, onDeleteDocument, onLinkDocument, onOpenToSide, onRightClick, onDragStart }: DocumentRowProps) {
+  const canvasRow = useCanvasRow()
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [detailEdit, setDetailEdit] = useState(false)
   const [actionSheet, setActionSheet] = useState(false)
@@ -617,6 +622,8 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
 
   const handleDocumentClick = (e: React.MouseEvent) => {
     const isCtrlClick = e.ctrlKey || e.metaKey
+    // Strip layout: Shift+click opens the document as a canvas to the right.
+    if (e.shiftKey && canvasRow && onOpenToSide) { onOpenToSide(document); return }
     if (onSelect) {
       if (isCtrlClick) {
         // For ctrl+click, toggle selection state
@@ -756,6 +763,7 @@ function TileVideoPreview({ workspaceId, documentId, fallback }: { workspaceId: 
 // icon tile (everything else). Mirrors DocumentRow's click/selection/right-click
 // behavior. Sized for a responsive auto-fill grid, so it reads on mobile too.
 function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSide, onRightClick, onDragStart }: DocumentRowProps) {
+  const canvasRow = useCanvasRow()
   const [showDetailModal, setShowDetailModal] = useState(false)
   const isTabDocument = document.schema === 'data/schema/tab'
   const tabUrl = isTabDocument ? document.data.url : null
@@ -775,6 +783,8 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
 
   const handleClick = (e: React.MouseEvent) => {
     const isCtrlClick = e.ctrlKey || e.metaKey
+    // Strip layout: Shift+click opens the document as a canvas to the right.
+    if (e.shiftKey && canvasRow && onOpenToSide) { onOpenToSide(document); return }
     if (onSelect) onSelect(document.id, isCtrlClick ? !isSelected : true, isCtrlClick)
     if (!isCtrlClick) { if (isTabDocument && tabUrl) { window.open(tabUrl, '_blank', 'noopener,noreferrer') } else { setShowDetailModal(true) } }
   }

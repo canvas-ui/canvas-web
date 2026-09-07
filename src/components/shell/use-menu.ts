@@ -1,6 +1,7 @@
 import { createContext, useContext, useCallback, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { MOBILE_BREAKPOINT } from '@/hooks/use-mobile'
+import { loadLayoutMode } from '@/lib/layout-mode'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -103,7 +104,8 @@ export function useMenuUrlSync(_state: MenuState, dispatch: React.Dispatch<MenuA
     // needs the value imperatively, not as reactive state. (useIsMobile is now
     // correct on first render, but subscribing here would re-dispatch on every
     // resize across the breakpoint, which is not what SYNC_FROM_URL means.)
-    const mobile = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`).matches
+    // The strip layout has no drawers — its columns stay put on a phone too.
+    const mobile = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`).matches && loadLayoutMode() !== 'strip'
     dispatch({ type: 'SYNC_FROM_URL', section, entityId, m2View, mobile })
     // Keyed on location.key, not pathname: re-selecting the already-current
     // tree node navigates to the SAME pathname (mobile back button reopens the
