@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
+import { isBare, isFullBleed } from '../route-chrome'
 import { Outlet, useLocation } from 'react-router-dom'
 import { Maximize2, Minimize2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -37,6 +38,44 @@ import './strip.css'
 
 const EDITABLE = 'input, textarea, select, [contenteditable=""], [contenteditable="true"]'
 
+// Snappy focus switch: ease-in-out-expo over a fixed duration, driven by
+// hand so the easing is ours (scrollIntoView's "smooth" is the browser's
+// slow ease and it also scrolls ancestors vertically — that was the bounce).
+const FOCUS_MS = 420
+const easeInOutExpo = (t: number): number =>
+  t <= 0 ? 0 : t >= 1 ? 1 : t < 0.5 ? Math.pow(2, 20 * t - 10) / 2 : (2 - Math.pow(2, -20 * t + 10)) / 2
+
+function tweenScrollLeft(el: HTMLElement, target: number, onDone?: () => void): () => void {
+  const from = el.scrollLeft
+  const delta = target - from
+  if (Math.abs(delta) < 1) { onDone?.(); return () => {} }
+  // Snap points would fight the tween mid-flight; suspend them until it lands.
+  const snap = el.style.scrollSnapType
+  el.style.scrollSnapType = 'none'
+  const start = performance.now()
+  let raf = 0
+  const step = (now: number) => {
+    const t = Math.min(1, (now - start) / FOCUS_MS)
+    el.scrollLeft = from + delta * easeInOutExpo(t)
+    if (t < 1) raf = requestAnimationFrame(step)
+    else { el.style.scrollSnapType = snap; onDone?.() }
+  }
+  raf = requestAnimationFrame(step)
+  return () => { cancelAnimationFrame(raf); el.style.scrollSnapType = snap }
+}
+
+/** scrollLeft that brings `col` fully into the scroller with the least movement. */
+function targetScrollLeft(scroller: HTMLElement, col: HTMLElement): number {
+  const gap = parseFloat(getComputedStyle(scroller).gap) || 0
+  const left = col.offsetLeft - scroller.offsetLeft
+  const right = left + col.offsetWidth
+  const viewL = scroller.scrollLeft
+  const viewR = viewL + scroller.clientWidth
+  if (left < viewL) return Math.max(0, left - gap)
+  if (right > viewR) return right + gap - scroller.clientWidth
+  return viewL
+}
+
 function M1List({ section }: { section: ReturnType<typeof useMenu>['state']['activeSection'] }) {
   if (section === 'contexts') return <ContextList />
   if (section === 'workspaces') return <WorkspaceList />
@@ -62,10 +101,12 @@ interface CanvasFrameProps {
   onFocus: (id: string) => void
   onToggleExpanded: (id: string) => void
   onClose?: (id: string) => void
+  /** Row label chip (task container) — shown on the main canvas when rows > 1. */
+  badge?: string
   children: ReactNode
 }
 
-function CanvasFrame({ id, title, expanded, focused, onFocus, onToggleExpanded, onClose, children }: CanvasFrameProps) {
+function CanvasFrame({ id, title, expanded, focused, onFocus, onToggleExpanded, onClose, badge, children }: CanvasFrameProps) {
   return (
     <section
       data-strip-col={id}
@@ -74,6 +115,7 @@ function CanvasFrame({ id, title, expanded, focused, onFocus, onToggleExpanded, 
       aria-label={title}
     >
       <header className="strip-canvas-bar">
+        {badge && <span className="strip-row-label">{badge}</span>}
         <span className="strip-canvas-title" title={title}>{title}</span>
         <button
           type="button"
@@ -85,7 +127,7 @@ function CanvasFrame({ id, title, expanded, focused, onFocus, onToggleExpanded, 
           {expanded ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
         </button>
         {onClose && (
-          <button type="button" className="strip-canvas-btn" title="Close canvas" onClick={() => onClose(id)}>
+          <button type="button" className="strip-canvas-btn" title={badge ? 'Close row' : 'Close canvas'} onClick={() => onClose(id)}>
             <X className="size-3.5" />
           </button>
         )}
@@ -95,25 +137,40 @@ function CanvasFrame({ id, title, expanded, focused, onFocus, onToggleExpanded, 
   )
 }
 
-function RowCanvases({ row, pathname }: { row: CanvasRow; pathname: string }) {
+// Detail pages manage their own scroll + padding (same rule as ContentArea);
+// everything else gets the page padding so settings & co. sit aligned.
+function pageClass(pathname: string): string {
+  return cn('relative flex-1 min-h-0 min-w-0 overflow-auto', !isFullBleed(pathname) && !isBare(pathname) && 'p-page')
+}
+
+function RowCanvases({ row, pathname, rowLabel, onCloseRow }: { row: CanvasRow; pathname: string; rowLabel?: string; onCloseRow?: () => void }) {
   const rowApi = useCanvasRow()!
   const { focus, setFocus, toggleExpanded, closeCanvas, navigateCanvas } = rowApi
   const onNavigate = useCallback((id: string) => (next: string) => navigateCanvas(id, next), [navigateCanvas])
+  // The bare desk `/` is no canvas — the strip shows menus only until
+  // something is opened (the Outlet still mounts DeskPage, invisibly).
+  const hasMain = pathname !== '/'
   return (
     <>
-      <CanvasFrame
-        id={MAIN_COLUMN}
-        title={titleOf(null, pathname)}
-        expanded={row.mainExpanded}
-        focused={focus === MAIN_COLUMN}
-        onFocus={setFocus}
-        onToggleExpanded={toggleExpanded}
-      >
-        {/* id: maximized canvas widgets portal into #content-area, same as classic */}
-        <main id="content-area" className="relative flex-1 min-h-0 min-w-0 overflow-auto">
-          <Outlet />
-        </main>
-      </CanvasFrame>
+      {hasMain ? (
+        <CanvasFrame
+          id={MAIN_COLUMN}
+          title={titleOf(null, pathname)}
+          expanded={row.mainExpanded}
+          focused={focus === MAIN_COLUMN}
+          onFocus={setFocus}
+          onToggleExpanded={toggleExpanded}
+          badge={rowLabel}
+          onClose={onCloseRow}
+        >
+          {/* id: maximized canvas widgets portal into #content-area, same as classic */}
+          <main id="content-area" className={pageClass(pathname)}>
+            <Outlet />
+          </main>
+        </CanvasFrame>
+      ) : (
+        <div hidden><Outlet /></div>
+      )}
       {row.entries.map((entry) => (
         <CanvasFrame
           key={entry.id}
@@ -126,7 +183,7 @@ function RowCanvases({ row, pathname }: { row: CanvasRow; pathname: string }) {
           onClose={closeCanvas}
         >
           {entry.kind === 'route' ? (
-            <div className="relative flex-1 min-h-0 min-w-0 overflow-auto">
+            <div className={pageClass(entry.location.split('?')[0])}>
               <CanvasRouter location={entry.location} onNavigate={onNavigate(entry.id)} />
             </div>
           ) : (
@@ -194,8 +251,10 @@ export function StripShell() {
   // Focus → scroll the column into view (nearest edge, so a new canvas on
   // the right slides in without throwing the rest of the strip away).
   useEffect(() => {
-    const el = scrollerRef.current?.querySelector<HTMLElement>(`[data-strip-col="${CSS.escape(focus)}"]`)
-    el?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' })
+    const scroller = scrollerRef.current
+    const el = scroller?.querySelector<HTMLElement>(`[data-strip-col="${CSS.escape(focus)}"]`)
+    if (!scroller || !el) return
+    return tweenScrollLeft(scroller, targetScrollLeft(scroller, el))
   }, [focus, rows, activeRow])
 
   const columns = useCallback((): string[] => {
@@ -203,10 +262,10 @@ export function StripShell() {
     return [
       ...(state.m1Open ? ['m1'] : []),
       ...(state.m2Open ? ['m2'] : []),
-      MAIN_COLUMN,
+      ...(pathname !== '/' ? [MAIN_COLUMN] : []),
       ...(row ? row.entries.map((e) => e.id) : []),
     ]
-  }, [rows, activeRow, state.m1Open, state.m2Open])
+  }, [rows, activeRow, state.m1Open, state.m2Open, pathname])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -255,18 +314,15 @@ export function StripShell() {
           <div className="strip-rows" style={{ transform: `translateY(${-activeRow * 100}%)` }}>
             {rows.map((row, i) => (
               <div key={row.key} className={cn('strip-row', i === activeRow && 'strip-row--active')}>
-                {rows.length > 1 && (
-                  <div className="strip-row-head">
-                    <span className="strip-row-label">{row.label}</span>
-                    {i > 0 && i === activeRow && (
-                      <button type="button" className="strip-canvas-btn" title="Close row" onClick={() => closeRow(row.key)}>
-                        <X className="size-3.5" />
-                      </button>
-                    )}
-                  </div>
-                )}
                 <div className="strip-row-canvases">
-                  {i === activeRow ? <RowCanvases row={row} pathname={pathname} /> : <GhostRow row={row} />}
+                  {i === activeRow ? (
+                    <RowCanvases
+                      row={row}
+                      pathname={pathname}
+                      rowLabel={rows.length > 1 ? row.label : undefined}
+                      onCloseRow={i > 0 ? () => closeRow(row.key) : undefined}
+                    />
+                  ) : <GhostRow row={row} />}
                 </div>
               </div>
             ))}

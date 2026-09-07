@@ -75,6 +75,7 @@ export function ContextList() {
                 <div
                   key={`${ctx.userId || 'u'}-${ctx.id}`}
                   {...rowProps(index)}
+                  data-active={isActive || undefined}
                   className={cn(
                     'group relative rounded-md py-2.5 pl-3 pr-7 transition-all shadow-elevation-1',
                     isWorkspaceActive

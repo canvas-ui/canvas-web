@@ -84,6 +84,7 @@ export function WorkspacePinsTab({ pins, isLoading, searchQuery = '', activeKey,
             key={pin.id}
             role="button"
             tabIndex={0}
+            data-active={isActive || undefined}
             draggable={!q}
             onDragStart={e => {
               e.dataTransfer.setData(PIN_DRAG_TYPE, pin.id)

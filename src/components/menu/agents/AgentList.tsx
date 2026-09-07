@@ -92,6 +92,7 @@ export function AgentList() {
               return (
                 <div
                   key={agent.id}
+                  data-active={isActive || undefined}
                   className={cn(
                     'group relative rounded-md px-3 py-2.5 cursor-pointer transition-all shadow-elevation-1 hover:shadow',
                     isActive ? 'bg-accent shadow' : 'bg-card hover:bg-accent/50',

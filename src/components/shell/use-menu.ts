@@ -87,10 +87,12 @@ export function sectionFromPath(pathname: string): { section: MenuSection; entit
   return { section: null, entityId: null, m2View: null }
 }
 
-export function useMenuUrlSync(_state: MenuState, dispatch: React.Dispatch<MenuAction>) {
+export function useMenuUrlSync(state: MenuState, dispatch: React.Dispatch<MenuAction>) {
   const location = useLocation()
   const navigate = useNavigate()
   const isInternalNav = useRef(false)
+  const stateRef = useRef(state)
+  useEffect(() => { stateRef.current = state }, [state])
 
   // URL → State: when the URL changes externally (browser back/forward, direct nav)
   useEffect(() => {
@@ -98,7 +100,16 @@ export function useMenuUrlSync(_state: MenuState, dispatch: React.Dispatch<MenuA
       isInternalNav.current = false
       return
     }
-    const { section, entityId, m2View } = sectionFromPath(location.pathname)
+    let { section, entityId, m2View } = sectionFromPath(location.pathname)
+    // Strip layout: menus are columns, not a drawer that yields to the page.
+    // A section-less page (Appearance, Devices, About, …) keeps whatever M1/M2
+    // was open — only the bare desk `/` clears them.
+    if (section === null && location.pathname !== '/' && loadLayoutMode() === 'strip') {
+      const s = stateRef.current
+      section = s.activeSection
+      entityId = s.selectedEntityId
+      m2View = s.m2View
+    }
     // Read the breakpoint at dispatch time rather than from a hook: this runs
     // inside an effect that must produce one dispatch per navigation, so it
     // needs the value imperatively, not as reactive state. (useIsMobile is now

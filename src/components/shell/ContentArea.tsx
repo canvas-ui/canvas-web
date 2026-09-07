@@ -2,15 +2,7 @@ import { Outlet, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { useSideView } from './use-side-view'
 import { DocumentSideCard } from './DocumentSideCard'
-import { isBare } from './route-chrome'
-
-// Detail views (canvas, file-manager, agent chat, settings) manage their own
-// full-height scroll + padding, so the sheet stays flush for them.
-function isFullBleed(pathname: string): boolean {
-  const [section, entity] = pathname.split('/').filter(Boolean)
-  return ['contexts', 'workspaces', 'agents'].includes(section) && Boolean(entity)
-}
-
+import { isBare, isFullBleed } from './route-chrome'
 
 // Shared mobile "drawer" treatment — same prominence as the M1/M2 menu panel
 // overlay (floating card over a scrim, elevation-8). Spans from left-2 since

@@ -9,7 +9,9 @@
   display: flex;
   gap: var(--spacing-shell);
   overflow-x: auto;
-  overflow-y: hidden;
+  /* clip, not hidden: nothing (focus(), scrollIntoView) may scroll the
+     strip vertically — rows move by transform only */
+  overflow-y: clip;
   scroll-snap-type: x proximity;
   scrollbar-width: none;
   /* Horizontal overscroll must not trigger browser back/forward on a swipe */
@@ -25,24 +27,29 @@
   display: flex;
   flex-direction: column;
   scroll-snap-align: start;
-  border-radius: var(--panel-radius);
-  transition: outline-color var(--duration-fast) var(--ease-standard);
-  outline: 1px solid transparent;
 }
 
-/* Menus are part of the desk. A faint tint keeps list text legible over a
-   wallpaper; the elevation belongs to the active item, not the column. */
+/* Menus are part of the desk: square, no panel surface, no outline. A faint
+   tint keeps list text legible over a wallpaper. */
 .strip-menu-col {
   background-color: color-mix(in srgb, var(--color-card) 40%, transparent);
   -webkit-backdrop-filter: var(--glass-backdrop, none);
   backdrop-filter: var(--glass-backdrop, none);
 }
-.strip-col--focused {
-  outline-color: color-mix(in srgb, var(--color-ring) 45%, transparent);
-}
 
-/* The active workspace lifts off the background (WorkspaceList sets data-active). */
-.strip-shell [data-active] {
+/* Menu items are written ON the surface: no card, no shadow. Activating one
+   (data-active — workspace/context/agent rows, pin tiles, tree nodes) raises
+   it into a shadowed card. */
+.strip-menu-col :is(.shadow-elevation-1, .shadow-elevation-3):not([data-active]) {
+  box-shadow: none;
+  background-color: transparent;
+  border-color: transparent;
+}
+.strip-menu-col :is(.shadow-elevation-1, .shadow-elevation-3):not([data-active]):hover {
+  background-color: color-mix(in srgb, var(--color-card) 55%, transparent);
+}
+.strip-menu-col [data-active] {
+  background-color: var(--color-card);
   box-shadow: var(--shadow-elevation-4);
   transform: translateY(-1px);
 }
@@ -61,18 +68,16 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
 }
-.strip-row-head {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  height: 1.5rem;
-  padding: 0 0.5rem;
-  font-size: 0.75rem;
-  color: var(--color-muted-foreground);
+.strip-row-label {
+  flex: 0 0 auto;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  background-color: var(--color-accent);
+  color: var(--color-foreground);
 }
-.strip-row-label { font-weight: 600; }
 .strip-row-canvases {
   flex: 1 1 auto;
   min-height: 0;
@@ -100,11 +105,14 @@
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  height: 1.75rem;
-  padding: 0 0.25rem 0 0.75rem;
-  font-size: 0.75rem;
-  color: var(--color-muted-foreground);
-  border-bottom: 1px solid var(--color-border);
+  /* h-12 + 3px bottom border = the M1/M2 header bars, so the line runs at
+     one height across every column of the strip */
+  height: 3rem;
+  padding: 0 0.5rem 0 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-foreground);
+  border-bottom: 3px solid var(--color-border);
   flex: 0 0 auto;
 }
 .strip-canvas-title {

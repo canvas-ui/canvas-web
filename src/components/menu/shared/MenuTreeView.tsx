@@ -612,6 +612,7 @@ function CardNode({
       />
 
       <div
+        data-active={isSelected || undefined}
         className={cn(
           'group relative flex min-h-10 items-center gap-2 rounded-md px-3 py-2 cursor-pointer transition-all select-none overflow-hidden',
           'shadow-elevation-3 hover:shadow-elevation-4 text-sm',
@@ -1158,6 +1159,7 @@ export function MenuTreeView({
 
       {/* Root "/" node — always shown, children indented below */}
       <div
+        data-active={(selectedPath === '/' && !contentPath) || undefined}
         className={cn(
           'group relative flex min-h-10 items-center gap-2 rounded-md px-3 py-2 cursor-pointer transition-all select-none',
           'shadow-elevation-3 hover:shadow-elevation-4 text-sm',
