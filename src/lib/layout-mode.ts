@@ -75,3 +75,75 @@ function subscribe(fn: () => void): () => void {
 export function useLayoutMode(): LayoutMode {
   return useSyncExternalStore(subscribe, loadLayoutMode, () => 'classic')
 }
+
+// ── Strip navigation keys ──────────────────────────────────────────────────
+// Which modifier the arrow keys need to walk the strip. Bare arrows collide
+// with everything a page does with them (lists, grids, text), so a modifier
+// is the default; the choices are what a browser leaves free.
+
+export type LayoutNavModifier = 'shift' | 'alt' | 'ctrl' | 'none'
+
+export const LAYOUT_NAV_OPTIONS: Array<{ id: LayoutNavModifier; name: string; description: string }> = [
+  { id: 'shift', name: 'Shift + arrows', description: 'Shift with an arrow key moves between columns and rows.' },
+  { id: 'alt', name: 'Alt + arrows', description: 'Alt with an arrow key. Some browsers use Alt+Left/Right for history.' },
+  { id: 'ctrl', name: 'Ctrl + arrows', description: 'Ctrl (Cmd on macOS) with an arrow key.' },
+  { id: 'none', name: 'Bare arrows', description: 'Plain arrow keys, except while typing in a field.' },
+]
+
+const NAV_KEY = 'canvas:layout-nav'
+
+function readNav(): LayoutNavModifier {
+  try {
+    const v = localStorage.getItem(NAV_KEY)
+    return v === 'alt' || v === 'ctrl' || v === 'none' ? v : 'shift'
+  } catch {
+    return 'shift'
+  }
+}
+
+let currentNav: LayoutNavModifier = readNav()
+const navListeners = new Set<() => void>()
+
+export function loadLayoutNavModifier(): LayoutNavModifier {
+  return currentNav
+}
+
+export function setLayoutNavModifier(mod: LayoutNavModifier): void {
+  try {
+    if (mod === 'shift') localStorage.removeItem(NAV_KEY)
+    else localStorage.setItem(NAV_KEY, mod)
+  } catch {
+    /* keep in memory */
+  }
+  currentNav = mod
+  for (const fn of navListeners) fn()
+}
+
+function subscribeNav(fn: () => void): () => void {
+  navListeners.add(fn)
+  const onStorage = (e: StorageEvent) => {
+    if (e.key !== NAV_KEY && e.key !== null) return
+    currentNav = readNav()
+    fn()
+  }
+  window.addEventListener('storage', onStorage)
+  return () => {
+    navListeners.delete(fn)
+    window.removeEventListener('storage', onStorage)
+  }
+}
+
+export function useLayoutNavModifier(): LayoutNavModifier {
+  return useSyncExternalStore(subscribeNav, loadLayoutNavModifier, () => 'shift')
+}
+
+/** True when the event carries exactly the configured modifier (and no other). */
+export function matchesNavModifier(e: KeyboardEvent, mod: LayoutNavModifier): boolean {
+  const ctrl = e.ctrlKey || e.metaKey
+  switch (mod) {
+    case 'shift': return e.shiftKey && !e.altKey && !ctrl
+    case 'alt': return e.altKey && !e.shiftKey && !ctrl
+    case 'ctrl': return ctrl && !e.shiftKey && !e.altKey
+    case 'none': return !e.shiftKey && !e.altKey && !ctrl
+  }
+}

@@ -49,9 +49,22 @@
   background-color: color-mix(in srgb, var(--color-card) 55%, transparent);
 }
 .strip-menu-col [data-active] {
-  background-color: var(--color-card);
+  /* raised AND colored: the selection tint on the lifted card */
+  background-color: var(--color-accent);
   box-shadow: var(--shadow-elevation-4);
   transform: translateY(-1px);
+}
+
+/* Inside a canvas card the page's own pane framing (padding, rounded border)
+   is redundant — the context/address panel sits flush under the view tabs. */
+.strip-canvas [data-canvas-panes] {
+  padding: 0;
+  gap: 0;
+  background-color: transparent;
+}
+.strip-canvas [data-canvas-pane] {
+  border-radius: 0;
+  border-width: 0;
 }
 
 /* Rows of canvases: stacked vertically, translated to the active one. */

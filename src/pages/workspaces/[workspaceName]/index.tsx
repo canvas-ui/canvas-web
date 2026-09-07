@@ -1512,8 +1512,11 @@ export default function WorkspaceDetailPage() {
 
       {/* Canvas — dual-pane is pure local focus; the left pane stays URL-bound,
           the right is self-contained, so switching focus never refetches. */}
-      <div className="flex-1 min-h-0 flex gap-2 p-2 bg-muted/20">
+      {/* data-canvas-panes / data-canvas-pane: hooks for the strip layout,
+          which flattens this framing (its card already frames the page). */}
+      <div data-canvas-panes className="flex-1 min-h-0 flex gap-2 p-2 bg-muted/20">
         <div
+          data-canvas-pane
           className={cn(
             'flex-1 min-w-0 rounded-lg border bg-background overflow-hidden',
             sidePane && (focusedPane === 'left' ? 'ring-2 ring-primary' : 'ring-1 ring-primary/20'),

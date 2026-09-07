@@ -14,7 +14,7 @@ import {
   WALLPAPER_MAX_BYTES,
   type WallpaperSettings,
 } from '@/lib/wallpaper'
-import { LAYOUT_OPTIONS, setLayoutMode, useLayoutMode } from '@/lib/layout-mode'
+import { LAYOUT_NAV_OPTIONS, LAYOUT_OPTIONS, setLayoutMode, setLayoutNavModifier, useLayoutMode, useLayoutNavModifier } from '@/lib/layout-mode'
 import {
   DENSITY_OPTIONS,
   SCHEME_OPTIONS,
@@ -39,6 +39,7 @@ export function AppearanceSettings() {
   const { theme, scheme, density, resolvedScheme, setTheme, setScheme, setDensity, reset } =
     useTheme()
   const layout = useLayoutMode()
+  const layoutNav = useLayoutNavModifier()
 
   return (
     <div className="space-y-8">
@@ -142,6 +143,24 @@ export function AppearanceSettings() {
         <p className="mt-2 text-xs text-muted-foreground">
           {LAYOUT_OPTIONS.find((option) => option.id === layout)?.description}
         </p>
+        {layout === 'strip' && (
+          <div className="mt-4">
+            <p className="mb-2 text-sm font-medium">Navigation keys</p>
+            <SegmentedControl
+              options={LAYOUT_NAV_OPTIONS.map((option) => ({
+                id: option.id,
+                label: option.name,
+                title: option.description,
+              }))}
+              value={layoutNav}
+              onChange={setLayoutNavModifier}
+            />
+            <p className="mt-2 text-xs text-muted-foreground">
+              {LAYOUT_NAV_OPTIONS.find((option) => option.id === layoutNav)?.description}
+              {' '}Left and right walk the columns, up and down switch pin rows.
+            </p>
+          </div>
+        )}
       </section>
 
       <WallpaperSection />

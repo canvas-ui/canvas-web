@@ -3,6 +3,7 @@ import { isBare, isFullBleed } from '../route-chrome'
 import { Outlet, useLocation } from 'react-router-dom'
 import { Maximize2, Minimize2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { matchesNavModifier, useLayoutNavModifier } from '@/lib/layout-mode'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { MenuBar, MobileMenuToggle } from '../MenuBar'
@@ -216,6 +217,7 @@ export function StripShell() {
   const rowApi = useCanvasRow()!
   const { rows, activeRow, focus, setFocus, moveRow, closeRow } = rowApi
   const { pathname } = useLocation()
+  const navMod = useLayoutNavModifier()
   const scrollerRef = useRef<HTMLDivElement>(null)
 
   useEscapeClose(closeM1, state.m1Open && !state.m2Open)
@@ -269,8 +271,11 @@ export function StripShell() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.isComposing) return
+      if (e.defaultPrevented || e.isComposing || !e.key.startsWith('Arrow')) return
+      if (!matchesNavModifier(e, navMod)) return
       const target = e.target as HTMLElement | null
+      // Text fields keep their arrows (Shift+arrow selects, Ctrl+arrow jumps
+      // words); dialogs keep theirs too.
       if (target?.closest(EDITABLE) || target?.closest('[role="dialog"]')) return
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         const cols = columns()
@@ -286,7 +291,7 @@ export function StripShell() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [columns, focus, setFocus, moveRow, rows.length])
+  }, [columns, focus, setFocus, moveRow, rows.length, navMod])
 
   return (
     <>
