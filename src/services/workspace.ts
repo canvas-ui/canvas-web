@@ -1,7 +1,7 @@
 import type { ResponseEnvelope } from '@augmentd-labs/canvas-protocol';
 import { API_ROUTES, API_URL } from '@/config/api';
 import { api } from '@/lib/api';
-import type { Document as CanvasDocument, TreeNode, TimelineInfo, TimelineQueryInterval, TimelineQueryOptions } from '@/types/workspace';
+import type { Document as CanvasDocument, TreeNode, LayerMetadata, TimelineInfo, TimelineQueryInterval, TimelineQueryOptions } from '@/types/workspace';
 import { beginDocumentSave, endDocumentSave } from '@/lib/remote-mirror'
 
 // Document lists stay enveloped: their pagination counts (count/totalCount)
@@ -872,6 +872,53 @@ export interface Layer {
   color: string | null;
   locked?: boolean;
   lockedBy?: string[];
+}
+
+// ─── Pins ────────────────────────────────────────────────────────────────────
+// Per-workspace pinned tree paths (task containers), server-persisted in
+// workspace.json and shared by every client. Resolved on read: label / color /
+// icon come from the live layer; `resolvable` is false when the folder is gone
+// (null on a stopped workspace).
+
+export interface WorkspacePin {
+  id: string
+  tree: string
+  path: string
+  layerId?: string | null
+  label?: string | null
+  createdAt?: string
+  /** Last path segment (always present). */
+  name?: string
+  description?: string | null
+  type?: string | null
+  color?: string | null
+  icon?: string | null
+  metadata?: LayerMetadata
+  locked?: boolean
+  resolvable?: boolean | null
+}
+
+const pinsBase = (workspaceId: string) => `${API_ROUTES.workspaces}/${workspaceId}/pins`
+
+/** A pin is unique on tree + path — the key the UI matches tree rows against. */
+export const workspacePinKey = (tree: string, path: string) => `${tree}\0${path}`
+
+export async function listWorkspacePins(workspaceId: string): Promise<WorkspacePin[]> {
+  const res = await api.get<WorkspacePin[]>(pinsBase(workspaceId))
+  return Array.isArray(res) ? res : []
+}
+
+export async function pinWorkspacePath(workspaceId: string, path: string, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<WorkspacePin> {
+  return api.post<WorkspacePin>(pinsBase(workspaceId), { path, tree: treeName })
+}
+
+export async function unpinWorkspacePin(workspaceId: string, pinId: string): Promise<void> {
+  await api.delete(`${pinsBase(workspaceId)}/${encodeURIComponent(pinId)}`)
+}
+
+export async function reorderWorkspacePins(workspaceId: string, order: string[]): Promise<WorkspacePin[]> {
+  const res = await api.patch<WorkspacePin[]>(`${pinsBase(workspaceId)}/order`, { order })
+  return Array.isArray(res) ? res : []
 }
 
 export async function listWorkspaceLayers(workspaceId: string, treeName = DEFAULT_WORKSPACE_TREE_NAME): Promise<Layer[]> {

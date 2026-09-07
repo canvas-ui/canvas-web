@@ -9,7 +9,7 @@ import {
   ChevronRight, ChevronDown,
   Plus, Trash2, Edit2, Copy, Scissors, Clipboard,
   Layers, LayoutDashboard, MoreHorizontal, Lock, Unlock, Eye, Share2, Palette, RefreshCw,
-  FolderSymlink, FolderTree, ArrowDownToLine, ArrowUpFromLine, HardDrive, Download } from 'lucide-react'
+  FolderSymlink, FolderTree, ArrowDownToLine, ArrowUpFromLine, HardDrive, Download, Pin, PinOff } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import { cn, isCoarsePointer } from '@/lib/utils'
 import type { TreeNode, LayerMetadata } from '@/types/workspace'
@@ -75,6 +75,10 @@ export interface MenuTreeViewProps {
   onMergeDown?: (path: string) => Promise<unknown>
   onSubtractDown?: (path: string) => Promise<unknown>
   onUpdateNode?: (path: string, updates: { metadata?: LayerMetadata }) => Promise<boolean>
+  // Workspace pins (task containers): the menu shows Pin / Unpin for any
+  // folder when both are given. `isPathPinned` decides which one.
+  isPathPinned?: (path: string) => boolean
+  onTogglePin?: (path: string, node: TreeNode) => Promise<void>
   searchQuery?: string
   pastedDocumentIds?: number[]
   onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
@@ -151,6 +155,8 @@ interface CtxMenuProps {
   onPaste: (target: string) => Promise<void>
   pastedDocumentIds?: number[]
   onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
+  isPinned?: boolean
+  onTogglePin?: () => Promise<void>
 }
 
 function CtxMenu({
@@ -162,6 +168,7 @@ function CtxMenu({
   onRenameBackendFolder, onDeleteBackendFolder,
   onCopy, onCut, onPaste,
   pastedDocumentIds, onPasteDocuments,
+  isPinned, onTogglePin,
 }: CtxMenuProps) {
 
   const canMergeSubtract = sourceLayer && targetLayers.size > 0 && sourceLayer.path === path
@@ -301,6 +308,14 @@ function CtxMenu({
             <LayoutDashboard className="w-3 h-3 text-primary" />
             New canvas here…
           </button>
+        )}
+
+        {/* Pin / Unpin — the folder joins the workspace's Pins tab (M2) as a
+            task-container tile. Any folder, any tree; not the root. */}
+        {path !== '/' && onTogglePin && item(
+          isPinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />,
+          isPinned ? 'Unpin' : 'Pin',
+          async () => { await onTogglePin() },
         )}
 
         {path !== '/' && onChangeIcon && (
@@ -742,6 +757,8 @@ export function MenuTreeView({
   onResyncBackend,
   onCreateBackendFolder, onRenameBackendFolder, onDeleteBackendFolder,
   onUpdateNode,
+  isPathPinned,
+  onTogglePin,
   searchQuery = '',
   resyncingPaths,
 }: MenuTreeViewProps) {
@@ -1245,6 +1262,8 @@ export function MenuTreeView({
           onPaste={handlePaste}
           pastedDocumentIds={pastedDocumentIds}
           onPasteDocuments={onPasteDocuments}
+          isPinned={isPathPinned ? isPathPinned(ctxMenu.path) : false}
+          onTogglePin={onTogglePin ? () => onTogglePin(ctxMenu.path, ctxMenu.node) : undefined}
         />
       )}
 

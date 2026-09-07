@@ -21,6 +21,10 @@ export interface WebuiConfig {
   home?: {
     pinnedCanvases?: PinnedCanvas[]
   }
+  /** Workspace M2 panel: the user's tab order (first tab = default). */
+  m2?: {
+    tabOrder?: string[]
+  }
   [key: string]: unknown
 }
 

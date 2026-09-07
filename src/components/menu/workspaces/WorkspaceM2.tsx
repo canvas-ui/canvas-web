@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { Settings, ExternalLink, GitBranch, FolderTree, Layers, LayoutDashboard, Search, Lock, Unlock, Edit2, Trash2, Database } from 'lucide-react'
+import { Settings, ExternalLink, GitBranch, FolderTree, Layers, LayoutDashboard, Search, Lock, Unlock, Edit2, Trash2, Database, Pin } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { buildWorkspaceUrl, parseWorkspacePathFromUrl } from '@/utils/url-params'
@@ -8,21 +8,34 @@ import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style'
 import { MenuTreeView } from '@/components/menu/shared/MenuTreeView'
 import { useMenu } from '@/components/shell/use-menu'
 import { useIsMobile } from '@/hooks/use-mobile'
-import { getWorkspace, getCachedWorkspaceTreeByName, invalidateWorkspaceTreeCache, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer, pasteDocumentsToWorkspacePath, createPublicCanvasShare, listBackends, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
-import type { Layer } from '@/services/workspace'
+import { getWorkspace, getCachedWorkspaceTreeByName, invalidateWorkspaceTreeCache, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer, pasteDocumentsToWorkspacePath, createPublicCanvasShare, listBackends, listWorkspacePins, pinWorkspacePath, unpinWorkspacePin, reorderWorkspacePins, workspacePinKey as pinKey, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
+import type { Layer, WorkspacePin } from '@/services/workspace'
+import { getWebuiConfig, putWebuiConfig, type WebuiConfig } from '@/services/user-config'
+import { WorkspacePinsTab } from './WorkspacePinsTab'
 import { useTreeOperations } from '@/hooks/useTreeOperations'
 import { listHooks, runHook, findBackendTreeSyncHook, splitBackendsPath, defaultMirrorTarget, defaultStoreFolder, rulePrefillParams, type RulePrefill } from '@/services/hooks'
 import { useToast } from '@/components/ui/use-toast'
 import type { TreeNode } from '@/types/workspace'
 import socketService from '@/lib/socket'
 
-type TreeTab = 'context' | 'layers' | 'directory' | 'backends'
+type TreeTab = 'pins' | 'context' | 'layers' | 'directory' | 'backends'
 type TreeDataTab = 'context' | 'directory' | 'backends'
 
-// Display order: Context tree, Context layers, Directory tree, Backends tree.
-const TAB_ORDER: TreeTab[] = ['context', 'layers', 'directory', 'backends']
+// Default display order: Pins, Context tree, Context layers, Directory tree,
+// Backends tree. The user can drag the tabs into their own order; it is kept
+// in the per-user webui config (m2.tabOrder) and the FIRST tab is the one the
+// panel opens on when the URL says nothing about a tree.
+const DEFAULT_TAB_ORDER: TreeTab[] = ['pins', 'context', 'layers', 'directory', 'backends']
+const isTreeTab = (v: unknown): v is TreeTab => typeof v === 'string' && (DEFAULT_TAB_ORDER as string[]).includes(v)
+// Stored orders may predate a tab (or carry a removed one): keep the known
+// ones in the stored order, append the rest in default order.
+const sanitizeTabOrder = (stored: unknown): TreeTab[] => {
+  const seen = Array.isArray(stored) ? stored.filter(isTreeTab).filter((t, i, a) => a.indexOf(t) === i) : []
+  return [...seen, ...DEFAULT_TAB_ORDER.filter(t => !seen.includes(t))]
+}
 
 const TAB_ICONS: Record<TreeTab, React.ReactNode> = {
+  pins: <Pin className="w-3.5 h-3.5" />,
   context: <GitBranch className="w-3.5 h-3.5" />,
   layers: <Layers className="w-3.5 h-3.5" />,
   directory: <FolderTree className="w-3.5 h-3.5" />,
@@ -30,11 +43,16 @@ const TAB_ICONS: Record<TreeTab, React.ReactNode> = {
 }
 
 const TAB_LABELS: Record<TreeTab, string> = {
+  pins: 'Pins',
   context: 'Context tree',
   layers: 'Context layers',
   directory: 'Directory tree',
   backends: 'Backends tree',
 }
+
+// The tree a tab's paths live in (pins/layers act on the context tree).
+const treeNameForTab = (tab: TreeTab): string =>
+  tab === 'directory' || tab === 'backends' ? tab : DEFAULT_WORKSPACE_TREE_NAME
 
 const tabForTree = (treeName: string, layerId?: string | null): TreeTab =>
   layerId ? 'layers' : treeName === 'directory' ? 'directory' : treeName === 'backends' ? 'backends' : 'context'
@@ -50,7 +68,10 @@ export function WorkspaceM2() {
   const { treeName: urlTree, path: urlPath } = parseWorkspacePathFromUrl(location.pathname)
   const urlIsLayer = new URLSearchParams(location.search).get('layer') === '1'
   const urlLayerId = new URLSearchParams(location.search).get('layerId')
-  const initialTab: TreeTab = tabForTree(urlTree, urlLayerId)
+  // A bare /workspaces/<name> carries no tree — that's where the user's own
+  // first tab applies; an explicit tree/path/layer in the URL always wins.
+  const urlHasTreeSignal = /\/trees\/|\/path(\/|$)/.test(location.pathname) || !!urlLayerId
+  const initialTab: TreeTab = urlHasTreeSignal ? tabForTree(urlTree, urlLayerId) : DEFAULT_TAB_ORDER[0]
 
   const [wsLabel, setWsLabel] = useState<string | null>(null)
   const [wsId, setWsId] = useState<string | null>(null)
@@ -72,6 +93,59 @@ export function WorkspaceM2() {
   const [contentPath, setContentPath] = useState<string | null>(urlIsLayer && urlPath !== '/' ? urlPath : null)
   const [searchQuery, setSearchQuery] = useState('')
   const [docClipboard, setDocClipboard] = useState<{ documentIds: number[]; operation: 'copy' | 'cut' } | null>(null)
+  const [pins, setPins] = useState<WorkspacePin[]>([])
+  const [isLoadingPins, setIsLoadingPins] = useState(false)
+  // Opening a pin navigates; the URL sync below would then jump to the tree
+  // tab of the target — this flag keeps the Pins tab in front for that hop.
+  const [stayOnPins, setStayOnPins] = useState(false)
+  // Once the user picks a tab by hand the stored default no longer applies.
+  const [tabTouched, setTabTouched] = useState(false)
+
+  // Tab order: per-user, server-persisted (webui config). Loaded once; the
+  // whole config doc is kept so a save merges instead of clobbering siblings.
+  const [tabOrder, setTabOrder] = useState<TreeTab[]>(DEFAULT_TAB_ORDER)
+  const webuiConfigRef = useRef<WebuiConfig | null>(null)
+  // Mount-time snapshot: the stored default only applies to the tab the panel
+  // OPENED on (URL without a tree); later URL changes are the sync below.
+  const applyStoredDefault = !urlHasTreeSignal
+  useEffect(() => {
+    let cancelled = false
+    getWebuiConfig()
+      .then(cfg => {
+        if (cancelled) return
+        webuiConfigRef.current = cfg
+        const order = sanitizeTabOrder(cfg?.m2?.tabOrder)
+        setTabOrder(order)
+        if (applyStoredDefault) setActiveTab(prev => (prev === DEFAULT_TAB_ORDER[0] ? order[0] : prev))
+      })
+      .catch(() => { if (!cancelled) webuiConfigRef.current = {} })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const saveTabOrder = useCallback(async (next: TreeTab[]) => {
+    const prev = tabOrder
+    setTabOrder(next)
+    const base = webuiConfigRef.current ?? {}
+    const cfg: WebuiConfig = { ...base, m2: { ...(base.m2 ?? {}), tabOrder: next } }
+    webuiConfigRef.current = cfg
+    try { await putWebuiConfig(cfg) } catch { webuiConfigRef.current = base; setTabOrder(prev) }
+  }, [tabOrder])
+
+  // Tab drag-to-reorder (native HTML5, same as ContentViewTabs).
+  const [dragTab, setDragTab] = useState<TreeTab | null>(null)
+  const [dropTab, setDropTab] = useState<{ id: TreeTab; before: boolean } | null>(null)
+  const endTabDrag = () => { setDragTab(null); setDropTab(null) }
+  const handleTabDrop = () => {
+    if (dragTab && dropTab && dragTab !== dropTab.id) {
+      const next = tabOrder.filter(t => t !== dragTab)
+      const idx = next.indexOf(dropTab.id)
+      if (idx >= 0) {
+        next.splice(dropTab.before ? idx : idx + 1, 0, dragTab)
+        if (next.some((t, i) => t !== tabOrder[i])) void saveTabOrder(next)
+      }
+    }
+    endTabDrag()
+  }
 
   useEffect(() => {
     const handler = (e: CustomEvent) => setDocClipboard(e.detail ?? null)
@@ -100,6 +174,17 @@ export function WorkspaceM2() {
       // tree unavailable
     } finally {
       setLoading(false)
+    }
+  }, [])
+
+  const loadPins = useCallback(async (name: string) => {
+    setIsLoadingPins(true)
+    try {
+      setPins(await listWorkspacePins(name))
+    } catch {
+      // pins unavailable (older server) — the tab just stays empty
+    } finally {
+      setIsLoadingPins(false)
     }
   }, [])
 
@@ -137,6 +222,7 @@ export function WorkspaceM2() {
         if (ctxRes.status === 'fulfilled') setContextTree(ctxRes.value)
         if (dirRes.status === 'fulfilled') setDirectoryTree(dirRes.value)
         if (beRes.status === 'fulfilled') setBackendsTree(beRes.value)
+        loadPins(name)
       } finally {
         if (!cancelled) {
           setIsLoadingContext(false)
@@ -156,14 +242,16 @@ export function WorkspaceM2() {
 
     loadAll()
     return () => { cancelled = true }
-  }, [wsName])
+  }, [wsName, loadPins])
 
   const refreshAll = useCallback((name: string) => {
     loadTree(name, 'context', true)
     loadTree(name, 'directory', true)
     loadTree(name, 'backends', true)
     loadLayers(name)
-  }, [loadTree, loadLayers])
+    // Pins resolve label/color/icon from the live tree — re-read with it.
+    loadPins(name)
+  }, [loadTree, loadLayers, loadPins])
 
   const handleRefresh = useCallback(() => {
     if (wsName) refreshAll(wsName)
@@ -233,14 +321,23 @@ export function WorkspaceM2() {
     }
     socketService.on('backend.resync.changed', onResync)
 
+    // Pins changed by any client (CLI, desktop, another tab) — only the pin
+    // list moves, the trees are untouched.
+    const onPins = (payload: { workspaceId?: string }) => {
+      if (payload?.workspaceId && wsId && payload.workspaceId !== wsId) return
+      loadPins(wsName)
+    }
+    socketService.on('pins.changed', onPins)
+
     return () => {
       if (timer) clearTimeout(timer)
       channels.forEach(ch => socketService.emit('unsubscribe', { channel: ch }))
       offConnect?.()
       events.forEach(ev => socketService.off(ev, refreshSoon))
       socketService.off('backend.resync.changed', onResync)
+      socketService.off('pins.changed', onPins)
     }
-  }, [wsName, wsId, refreshAll])
+  }, [wsName, wsId, refreshAll, loadPins])
 
   // Sync active tab and selected path when URL pathname changes externally.
   // Runs during render (prev-value-in-state) — initialised to null so the
@@ -254,8 +351,14 @@ export function WorkspaceM2() {
     // A selected layer (layerId param) keeps us on the Layers tab — otherwise the
     // pathname-only derivation would kick us back to the context tree.
     const layerId = new URLSearchParams(location.search).get('layerId')
-    const tab: TreeTab = tabForTree(tree, layerId)
-    setActiveTab(tab)
+    const hasSignal = /\/trees\/|\/path(\/|$)/.test(location.pathname) || !!layerId
+    if (stayOnPins) {
+      setStayOnPins(false)
+    } else if (hasSignal || tabTouched) {
+      setActiveTab(hasSignal ? tabForTree(tree, layerId) : activeTab)
+    } else {
+      setActiveTab(tabOrder[0])
+    }
     setSelectedPath(path)
     setContentPath(path !== '/' ? path : null)
   }
@@ -283,9 +386,48 @@ export function WorkspaceM2() {
 
   const ops = useTreeOperations({
     workspaceId: wsName ?? undefined,
-    treeName: activeTab === 'layers' ? 'context' : activeTab,
+    treeName: treeNameForTab(activeTab),
     onRefresh: handleRefresh,
   })
+
+  // ── Pins ──
+  const pinnedKeys = new Set(pins.map(p => pinKey(p.tree, p.path)))
+  const activeTreeName = treeNameForTab(activeTab)
+  const isPathPinned = useCallback((path: string) => pinnedKeys.has(pinKey(activeTreeName, path)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pins, activeTreeName])
+  const handleTogglePin = useCallback(async (path: string) => {
+    if (!wsName) return
+    const existing = pins.find(p => pinKey(p.tree, p.path) === pinKey(activeTreeName, path))
+    if (existing) await unpinWorkspacePin(wsName, existing.id)
+    else await pinWorkspacePath(wsName, path, activeTreeName)
+    await loadPins(wsName)
+  }, [wsName, pins, activeTreeName, loadPins])
+  const handleUnpin = useCallback(async (pin: WorkspacePin) => {
+    if (!wsName) return
+    setPins(prev => prev.filter(p => p.id !== pin.id))
+    try { await unpinWorkspacePin(wsName, pin.id) } finally { await loadPins(wsName) }
+  }, [wsName, loadPins])
+  const handleMovePin = useCallback(async (id: string, beforeId: string | null) => {
+    if (!wsName) return
+    const moved = pins.find(p => p.id === id)
+    if (!moved) return
+    const without = pins.filter(p => p.id !== id)
+    const at = beforeId === null ? without.length : without.findIndex(p => p.id === beforeId)
+    if (at === -1) return
+    const next = [...without.slice(0, at), moved, ...without.slice(at)]
+    if (next.every((p, i) => p === pins[i])) return
+    setPins(next)
+    try { setPins(await reorderWorkspacePins(wsName, next.map(p => p.id))) }
+    catch (err) { await loadPins(wsName); throw err }
+  }, [wsName, pins, loadPins])
+  const handleOpenPin = useCallback((pin: WorkspacePin) => {
+    if (!wsName) return
+    setStayOnPins(true)
+    setSelectedPath(pin.path)
+    setContentPath(null)
+    navigate(buildWorkspaceUrl(wsName, pin.path, pin.tree))
+  }, [wsName, navigate])
 
   const activeTree = activeTab === 'context' ? contextTree
     : activeTab === 'directory' ? directoryTree
@@ -297,6 +439,7 @@ export function WorkspaceM2() {
     : false
 
   const handleTabChange = (tab: TreeTab) => {
+    setTabTouched(true)
     setActiveTab(tab)
     setSelectedPath('/')
     setContentPath(null)
@@ -306,7 +449,7 @@ export function WorkspaceM2() {
   const handlePathSelect = (path: string) => {
     setContentPath(null)
     setSelectedPath(path)
-    const treeName = activeTab === 'layers' ? DEFAULT_WORKSPACE_TREE_NAME : activeTab
+    const treeName = treeNameForTab(activeTab)
     // Path is the URL truth — leaf type / canvas id are derived from the path
     // by the workspace page itself. No type-specific query params here.
     navigate(buildWorkspaceUrl(wsName!, path, treeName))
@@ -315,7 +458,7 @@ export function WorkspaceM2() {
   const handleShowContent = useCallback((path: string, layerId?: string) => {
     setSelectedPath(path)
     setContentPath(path)
-    const treeName = activeTab === 'layers' ? DEFAULT_WORKSPACE_TREE_NAME : activeTab
+    const treeName = treeNameForTab(activeTab)
     const uiParams = new URLSearchParams()
     uiParams.set('layer', '1')
     // Resolve the single layer's own bitmap (same as picking it in the layers
@@ -334,7 +477,7 @@ export function WorkspaceM2() {
 
   const handleShareCanvas = useCallback(async (path: string) => {
     if (!wsName) return
-    const treeName = activeTab === 'layers' ? DEFAULT_WORKSPACE_TREE_NAME : activeTab
+    const treeName = treeNameForTab(activeTab)
     const share = await createPublicCanvasShare(wsName, path, treeName)
     const url = `${window.location.origin}${share.url}`
     await navigator.clipboard?.writeText(url)
@@ -386,22 +529,47 @@ export function WorkspaceM2() {
         }
       />
 
-      {/* Tab bar — icon only */}
+      {/* Tab bar — icon only, drag to reorder (first tab = default) */}
       <div className="flex border-b border-border shrink-0">
-        {TAB_ORDER.map(tab => (
+        {tabOrder.map(tab => (
           <button
             key={tab}
             type="button"
             onClick={() => handleTabChange(tab)}
-            title={TAB_LABELS[tab]}
+            title={`${TAB_LABELS[tab]} — drag to reorder; the first tab opens by default`}
+            aria-label={TAB_LABELS[tab]}
+            draggable
+            onDragStart={e => {
+              e.dataTransfer.setData('text/plain', tab)
+              e.dataTransfer.effectAllowed = 'move'
+              setDragTab(tab)
+            }}
+            onDragEnd={endTabDrag}
+            onDragOver={e => {
+              if (!dragTab || dragTab === tab) return
+              e.preventDefault()
+              e.dataTransfer.dropEffect = 'move'
+              const rect = e.currentTarget.getBoundingClientRect()
+              const before = e.clientX < rect.left + rect.width / 2
+              setDropTab(prev => (prev?.id === tab && prev.before === before ? prev : { id: tab, before }))
+            }}
+            onDrop={e => { e.preventDefault(); handleTabDrop() }}
             className={cn(
-              'flex-1 flex items-center justify-center py-2 transition-colors',
+              'relative flex-1 flex items-center justify-center py-2 transition-colors',
               activeTab === tab
                 ? 'text-foreground border-b-2 border-foreground -mb-px'
                 : 'text-muted-foreground hover:text-foreground',
+              dragTab === tab && 'opacity-40',
+              dropTab?.id === tab && dropTab.before && 'shadow-[inset_2px_0_0_0_hsl(var(--primary))]',
+              dropTab?.id === tab && !dropTab.before && 'shadow-[inset_-2px_0_0_0_hsl(var(--primary))]',
             )}
           >
             {TAB_ICONS[tab]}
+            {tab === 'pins' && pins.length > 0 && (
+              <span className="absolute top-1 right-[calc(50%-14px)] min-w-[14px] h-[14px] px-0.5 rounded-full bg-primary text-primary-foreground text-[9px] leading-[14px] text-center font-medium">
+                {pins.length}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -412,7 +580,7 @@ export function WorkspaceM2() {
           <Search className="w-3 h-3 shrink-0 text-muted-foreground" />
           <input
             className="flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground min-w-0"
-            placeholder={activeTab === 'layers' ? 'Search layers…' : 'Search paths…'}
+            placeholder={activeTab === 'layers' ? 'Search layers…' : activeTab === 'pins' ? 'Search pins…' : 'Search paths…'}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />
@@ -420,7 +588,17 @@ export function WorkspaceM2() {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {activeTab === 'layers' ? (
+        {activeTab === 'pins' ? (
+          <WorkspacePinsTab
+            pins={pins}
+            isLoading={isLoadingPins}
+            searchQuery={searchQuery}
+            activeKey={pinKey(urlTree, urlPath)}
+            onOpen={handleOpenPin}
+            onUnpin={handleUnpin}
+            onMove={handleMovePin}
+          />
+        ) : activeTab === 'layers' ? (
           <LayersList
             layers={filteredLayers}
             isLoading={isLoadingLayers}
@@ -488,6 +666,8 @@ export function WorkspaceM2() {
               navigate(`/workspaces/${wsName}/settings/hooks?${rulePrefillParams(prefill).toString()}`)
             } : undefined}
             pastedDocumentIds={docClipboard?.documentIds}
+            isPathPinned={activeTab !== 'backends' ? isPathPinned : undefined}
+            onTogglePin={wsName && activeTab !== 'backends' ? handleTogglePin : undefined}
             onPasteDocuments={wsName && activeTab !== 'backends' ? async (path, ids) => {
               // Ungated on the clipboard: also serves drag-and-drop from the
               // content area (no prior "Copy" involved). The backends tree is
