@@ -52,11 +52,15 @@
   --card-shadow: var(--shadow-elevation-1);
 
   /* ── Sheet — the "page" surfaces float on the desk ───────────────────── */
-  --sheet-radius: var(--radius-xl);
+  /* Square by default (2026-09-07): shell surfaces — sheet, panels, the
+     toolbox — sit on the desk with no corner radius; the elevation alone
+     separates them. Controls keep their own radii above. A theme may still
+     override these two. */
+  --sheet-radius: 0;
   --sheet-shadow: var(--shadow-elevation-2);
 
   /* ── Panel — docked drawers and side panels ──────────────────────────── */
-  --panel-radius: var(--radius-xl);
+  --panel-radius: 0;
   --panel-shadow: var(--shadow-elevation-4);
   --panel-shadow-overlay: var(--shadow-elevation-5);
 

@@ -109,7 +109,7 @@ export function ToolboxPanel() {
         // as the right-most flex sibling (same chrome as the + AddPanel).
         asDrawer
           ? 'fixed bottom-2 left-2 right-2 top-2 z-panel rounded-2xl shadow-elevation-5 animate-fade-in'
-          : 'relative shrink-0 rounded-xl shadow-elevation-3',
+          : 'relative shrink-0 rounded-[var(--panel-radius)] shadow-elevation-3',
       )}
     >
       {/* Resize handle — desktop only, on the left (content-facing) edge. */}

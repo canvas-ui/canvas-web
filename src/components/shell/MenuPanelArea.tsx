@@ -87,7 +87,7 @@ export function MenuPanelArea() {
         className={cn(
           'flex-shrink-0 overflow-hidden bg-card surface-glass',
           !isDragging && !mobileOverlay && 'transition-[width] duration-200 ease-out',
-          state.m1Open ? 'rounded-xl shadow-elevation-2' : 'w-0',
+          state.m1Open ? 'rounded-[var(--panel-radius)] shadow-elevation-2' : 'w-0',
           mobileOverlay
             // Left offset is derived, not hardcoded: the rail is 2.75/3/3.5rem
             // depending on density, so a fixed `left-16` closed the gap to zero
