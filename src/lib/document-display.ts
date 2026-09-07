@@ -118,9 +118,11 @@ function nameBearingBasename(url?: string): string {
   return decoded
 }
 
-// A name a person would recognise: has an extension and isn't a bare digest.
+// A name a person would recognise: anything but a content digest (all-hex,
+// bare or with a suffix). An extension is not required — `README`, `Makefile`,
+// `TeamStructure` are names.
 function looksLikeFilename(base: string): boolean {
-  return /\.[A-Za-z0-9]{1,12}$/.test(base) && !/^[a-f0-9]{16,}$/i.test(base.replace(/\.[^.]*$/, ''))
+  return base.length > 0 && !/^[a-f0-9]{12,}$/i.test(base) && !/^[a-f0-9]{16,}\.[A-Za-z0-9]{1,12}$/i.test(base)
 }
 
 /**
