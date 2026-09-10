@@ -104,7 +104,7 @@
   height: 100%;
   min-height: 0;
   width: calc(var(--strip-h, 70vh) / 1.41421356);
-  min-width: 20rem;
+  min-width: min(20rem, var(--strip-w, 100vw));
   max-width: var(--strip-w, 100vw);
   display: flex;
   flex-direction: column;
@@ -118,14 +118,13 @@
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  /* h-12 + 3px bottom border = the M1/M2 header bars, so the line runs at
-     one height across every column of the strip */
+  /* Shared 48px header baseline with menus and document cards. */
   height: 3rem;
   padding: 0 0.5rem 0 1rem;
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--color-foreground);
-  border-bottom: 3px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
   flex: 0 0 auto;
 }
 .strip-canvas-title {
@@ -174,7 +173,14 @@
 @media (max-width: 767px) {
   .strip-scroller { scroll-snap-type: x mandatory; }
   .strip-col, .strip-canvas, .strip-canvas--wide {
-    width: calc(100vw - 1rem);
+    width: var(--strip-w, calc(100vw - 1rem));
     min-width: 0;
   }
+}
+
+/* The strip is the only document surface; its content fills the same box. */
+.strip-document-card > :first-child { padding-inline: 1rem 0.5rem; }
+.strip-canvas-body { min-width: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .strip-canvas, .strip-rows { transition: none; }
 }

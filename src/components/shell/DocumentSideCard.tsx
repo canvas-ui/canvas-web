@@ -21,7 +21,7 @@ function iconFor(document: Document) {
 // "Link To" in the header links this document into another location.
 // Props override the context: the strip layout mounts one card per document
 // canvas and owns the entries itself (components/shell/strip).
-export function DocumentSideCard({ entry: entryProp, onClose }: { entry?: SideViewEntry; onClose?: () => void } = {}) {
+export function DocumentSideCard({ entry: entryProp, onClose, frame }: { entry?: SideViewEntry; onClose?: () => void; frame?: { expanded: boolean; onToggleExpanded: () => void } } = {}) {
   const sideView = useSideView()
   const entry = entryProp ?? sideView.entry
   const close = onClose ?? sideView.close
@@ -50,6 +50,7 @@ export function DocumentSideCard({ entry: entryProp, onClose }: { entry?: SideVi
       // tab too — "where does this belong" and "what does this point at" are
       // the same gesture, and the result lands in the Synapses tab below.
       relationSubjectId={document.id}
+      frame={frame}
       fillParent
     >
       <ObjectPropertiesCard document={document} workspaceId={workspaceId} onChanged={refresh} compact />

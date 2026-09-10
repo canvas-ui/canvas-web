@@ -457,6 +457,7 @@ export function WorkspaceM2() {
     const treeName = treeNameForTab(activeTab)
     // Path is the URL truth — leaf type / canvas id are derived from the path
     // by the workspace page itself. No type-specific query params here.
+    canvasRow?.setFocus('main')
     navigate(buildWorkspaceUrl(wsName!, path, treeName))
   }
 
@@ -470,8 +471,9 @@ export function WorkspaceM2() {
     // tab) instead of the path-AND read. Context-tree only — the directory tree
     // already shows per-folder layers and doesn't offer this action.
     if (layerId) uiParams.set('layerId', layerId)
+    canvasRow?.setFocus('main')
     navigate(`${buildWorkspaceUrl(wsName!, path, treeName)}?${uiParams.toString()}`)
-  }, [wsName, activeTab, navigate])
+  }, [wsName, activeTab, navigate, canvasRow])
 
   const handleOpenToSide = useCallback((path: string, treeName: string) => {
     if (!wsName) return

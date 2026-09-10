@@ -72,7 +72,7 @@ export function CanvasRowProvider({ children }: { children: ReactNode }) {
     // beside A, not at the far end of the row.
     const at = row.entries.findIndex((e) => e.id === focusRef.current)
     const entries = row.entries.slice()
-    entries.splice(at >= 0 ? at + 1 : entries.length, 0, created)
+    entries.splice(at >= 0 ? at + 1 : 0, 0, created)
     updateActive((r) => ({ ...r, entries }))
     focusRef.current = created.id
     setFocus(created.id)

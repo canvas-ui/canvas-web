@@ -47,6 +47,11 @@ const easeInOutExpo = (t: number): number =>
   t <= 0 ? 0 : t >= 1 ? 1 : t < 0.5 ? Math.pow(2, 20 * t - 10) / 2 : (2 - Math.pow(2, -20 * t + 10)) / 2
 
 function tweenScrollLeft(el: HTMLElement, target: number, onDone?: () => void): () => void {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    el.scrollLeft = target
+    onDone?.()
+    return () => {}
+  }
   const from = el.scrollLeft
   const delta = target - from
   if (Math.abs(delta) < 1) { onDone?.(); return () => {} }
@@ -68,7 +73,9 @@ function tweenScrollLeft(el: HTMLElement, target: number, onDone?: () => void): 
 /** scrollLeft that brings `col` fully into the scroller with the least movement. */
 function targetScrollLeft(scroller: HTMLElement, col: HTMLElement): number {
   const gap = parseFloat(getComputedStyle(scroller).gap) || 0
-  const left = col.offsetLeft - scroller.offsetLeft
+  // Rows are transformed, so their children have a different offsetParent.
+  // Viewport rectangles put menus and canvases in the same coordinate space.
+  const left = col.getBoundingClientRect().left - scroller.getBoundingClientRect().left + scroller.scrollLeft
   const right = left + col.offsetWidth
   const viewL = scroller.scrollLeft
   const viewR = viewL + scroller.clientWidth
@@ -104,10 +111,11 @@ interface CanvasFrameProps {
   onClose?: (id: string) => void
   /** Row label chip (task container) — shown on the main canvas when rows > 1. */
   badge?: string
+  contentHeader?: boolean
   children: ReactNode
 }
 
-function CanvasFrame({ id, title, expanded, focused, onFocus, onToggleExpanded, onClose, badge, children }: CanvasFrameProps) {
+function CanvasFrame({ id, title, expanded, focused, onFocus, onToggleExpanded, onClose, badge, contentHeader, children }: CanvasFrameProps) {
   return (
     <section
       data-strip-col={id}
@@ -115,7 +123,7 @@ function CanvasFrame({ id, title, expanded, focused, onFocus, onToggleExpanded, 
       onPointerDownCapture={() => onFocus(id)}
       aria-label={title}
     >
-      <header className="strip-canvas-bar">
+      {!contentHeader && <header className="strip-canvas-bar">
         {badge && <span className="strip-row-label">{badge}</span>}
         <span className="strip-canvas-title" title={title}>{title}</span>
         <button
@@ -132,7 +140,7 @@ function CanvasFrame({ id, title, expanded, focused, onFocus, onToggleExpanded, 
             <X className="size-3.5" />
           </button>
         )}
-      </header>
+      </header>}
       <div className="strip-canvas-body">{children}</div>
     </section>
   )
@@ -181,6 +189,7 @@ function RowCanvases({ row, pathname, rowLabel, onCloseRow }: { row: CanvasRow; 
           focused={focus === entry.id}
           onFocus={setFocus}
           onToggleExpanded={toggleExpanded}
+          contentHeader={entry.kind === 'document'}
           onClose={closeCanvas}
         >
           {entry.kind === 'route' ? (
@@ -189,7 +198,7 @@ function RowCanvases({ row, pathname, rowLabel, onCloseRow }: { row: CanvasRow; 
             </div>
           ) : (
             <div className="flex flex-1 min-h-0 min-w-0 items-stretch">
-              <DocumentSideCard entry={entry} onClose={() => closeCanvas(entry.id)} />
+              <DocumentSideCard entry={entry} onClose={() => closeCanvas(entry.id)} frame={{ expanded: !!entry.expanded, onToggleExpanded: () => toggleExpanded(entry.id) }} />
             </div>
           )}
         </CanvasFrame>
@@ -240,6 +249,12 @@ export function StripShell() {
 
   // Menu transitions move the focus: opening M2 focuses it ("focusing it into
   // the view"), closing a layer hands focus back to the column left of it.
+  const wasM1 = useRef(state.m1Open)
+  useEffect(() => {
+    if (state.m1Open && !wasM1.current && !state.m2Open) setFocus('m1')
+    wasM1.current = state.m1Open
+  }, [state.m1Open, state.m2Open, setFocus])
+
   const wasM2 = useRef(state.m2Open)
   useEffect(() => {
     if (state.m2Open && !wasM2.current) setFocus('m2')
@@ -257,7 +272,7 @@ export function StripShell() {
     const el = scroller?.querySelector<HTMLElement>(`[data-strip-col="${CSS.escape(focus)}"]`)
     if (!scroller || !el) return
     return tweenScrollLeft(scroller, targetScrollLeft(scroller, el))
-  }, [focus, rows, activeRow])
+  }, [focus, rows, activeRow, state.m1Open, state.m2Open])
 
   const columns = useCallback((): string[] => {
     const row = rows[activeRow]

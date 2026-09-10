@@ -31,6 +31,8 @@ interface B5CardProps {
   // rather than look like a floating quick-add card. Orientation toggle
   // (aspect-ratio only makes sense for the fixed-size card) is hidden.
   fillParent?: boolean
+  /** A strip owns the surface and expansion; this card supplies its single header. */
+  frame?: { expanded: boolean; onToggleExpanded: () => void }
   // Id of the document this card is showing, when it already exists — enables
   // the picker's relations tab ("what does this point at") alongside the two
   // path trees. Quick-add cards omit it: nothing exists to relate until Save.
@@ -43,7 +45,7 @@ interface B5CardProps {
 // side) rather than a modal — it only portals to a fullscreen overlay while
 // explicitly maximized.
 export function B5Card({
-  title, icon: Icon, onClose, onSave, canSave = false, saving = false, successMessage = 'Saved', lockedWorkspaceName, fillParent = false, relationSubjectId, children,
+  title, icon: Icon, onClose, onSave, canSave = false, saving = false, successMessage = 'Saved', lockedWorkspaceName, fillParent = false, relationSubjectId, frame, children,
 }: B5CardProps) {
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait')
   const [maximized, setMaximized] = useState(false)
@@ -67,7 +69,7 @@ export function B5Card({
   // (which re-mounts the inline card) doesn't replay it. The full-height side
   // card slides in via its own container, so it opts out entirely.
   const [entered, setEntered] = useState(false)
-  const animateIn = !fillParent && !maximized && !entered
+  const animateIn = !fillParent && !maximized && !frame && !entered
 
   // Scroll the newly-inserted picker into view — it's a real flex sibling
   // (pushes the next card right, doesn't overlap it), which in a long
@@ -124,15 +126,36 @@ export function B5Card({
           ? { aspectRatio: '0.707 / 1', height: 'calc(var(--viewport-h) * 0.85)', width: 'auto', maxWidth: 'min(90vw, 100%)', flexShrink: 0 }
           : { aspectRatio: '1 / 0.707', width: 'min(90vw, 900px)', maxWidth: '100%', height: 'auto', maxHeight: 'calc(var(--viewport-h) * 0.85)', flexShrink: 0 }
 
+  // Relations are intra-workspace by construction (one edge plane per index),
+  // so the tab needs both a subject and a pinned workspace.
+  const canRelate = Boolean(relationSubjectId && lockedWorkspaceName)
+
+  const picker = onSave && pickerOpen && (
+    <LinkToCard
+      onClose={() => setPickerOpen(false)}
+      onConfirm={handleSelect}
+      fixedWorkspaceName={lockedWorkspaceName}
+      saving={saving || relationSaving}
+      tabs={canRelate ? ['context', 'directory', 'relations'] : ['context', 'directory']}
+      onConfirmRelation={canRelate ? handleRelation : undefined}
+      relationWorkspaceName={lockedWorkspaceName}
+      relationExcludeIds={canRelate ? new Set([relationSubjectId!]) : undefined}
+      // fillParent hosts (side card) stretch the picker to the full column
+      // height instead of the free-floating viewport-card sized card.
+      sizeClassName={frame ? 'h-full max-h-full w-full min-w-0 rounded-none border-0 shadow-none' : fillParent ? 'h-full max-h-full w-[min(380px,90vw)] max-md:h-full max-md:w-full max-md:shadow-elevation-5' : undefined}
+    />
+  )
+
   const card = (
     <div
-      style={cardStyle}
+      style={frame ? { width: '100%', height: '100%', minWidth: 0 } : cardStyle}
       onAnimationEnd={(e) => {
         if (animateIn && e.target === e.currentTarget) setEntered(true)
       }}
       className={cn(
-        'flex flex-col overflow-hidden rounded-2xl border bg-card shadow-elevation-4 transition-[width,height]',
-        fillParent && !maximized && 'w-full md:w-[min(560px,90vw)]',
+        'flex flex-col overflow-hidden',
+        frame ? 'strip-document-card' : 'rounded-2xl border bg-card shadow-elevation-4 transition-[width,height]',
+        fillParent && !maximized && !frame && 'w-full md:w-[min(560px,90vw)]',
         mobileFullScreen && 'fixed inset-2 z-40 shadow-elevation-5',
         animateIn && 'animate-card-in',
       )}
@@ -161,17 +184,17 @@ export function B5Card({
           )}
           <button
             type="button"
-            onClick={() => setMaximized((m) => !m)}
+            onClick={() => frame ? frame.onToggleExpanded() : setMaximized((m) => !m)}
             className={cn(
               'rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
               // Already full-screen on mobile; keep Restore reachable if a
               // desktop-maximized window shrinks below the breakpoint.
-              !maximized && 'max-md:hidden',
+              !maximized && !frame && 'max-md:hidden',
             )}
-            aria-label={maximized ? 'Restore' : 'Maximize'}
-            title={maximized ? 'Restore' : 'Maximize'}
+            aria-label={frame ? (frame.expanded ? 'Card size' : 'Expand to full width') : maximized ? 'Restore' : 'Maximize'}
+            title={frame ? (frame.expanded ? 'Card size' : 'Expand to full width') : maximized ? 'Restore' : 'Maximize'}
           >
-            {maximized ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            {(frame?.expanded ?? maximized) ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </button>
           <button
             type="button"
@@ -185,28 +208,8 @@ export function B5Card({
         </div>
       </div>
 
-      <div className={cn('flex-1 overflow-y-auto', maximized && 'mx-auto w-full max-w-3xl')}>{children}</div>
+      <div className={cn('flex-1 overflow-y-auto', maximized && 'mx-auto w-full max-w-3xl')}>{frame && picker ? picker : children}</div>
     </div>
-  )
-
-  // Relations are intra-workspace by construction (one edge plane per index),
-  // so the tab needs both a subject and a pinned workspace.
-  const canRelate = Boolean(relationSubjectId && lockedWorkspaceName)
-
-  const picker = onSave && pickerOpen && (
-    <LinkToCard
-      onClose={() => setPickerOpen(false)}
-      onConfirm={handleSelect}
-      fixedWorkspaceName={lockedWorkspaceName}
-      saving={saving || relationSaving}
-      tabs={canRelate ? ['context', 'directory', 'relations'] : ['context', 'directory']}
-      onConfirmRelation={canRelate ? handleRelation : undefined}
-      relationWorkspaceName={lockedWorkspaceName}
-      relationExcludeIds={canRelate ? new Set([relationSubjectId!]) : undefined}
-      // fillParent hosts (side card) stretch the picker to the full column
-      // height instead of the free-floating viewport-card sized card.
-      sizeClassName={fillParent ? 'h-full max-h-full w-[min(380px,90vw)] max-md:h-full max-md:w-full max-md:shadow-elevation-5' : undefined}
-    />
   )
 
   if (maximized) {
@@ -230,7 +233,7 @@ export function B5Card({
     // over a scrim instead.
     <>
       {card}
-      {picker && (
+      {!frame && picker && (
         <>
           <div
             className="fixed inset-0 z-card bg-scrim animate-fade-in md:hidden"
