@@ -361,7 +361,7 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
                 <>
                   <div
                     className={cn(
-                      'group relative flex min-h-10 items-center gap-2 rounded-md px-3 py-2 cursor-pointer transition-all select-none text-sm shadow-elevation-1 hover:shadow',
+                      'group relative flex min-h-11 items-center gap-2 rounded-md px-3 py-2.5 cursor-pointer transition-all select-none text-sm shadow-elevation-1 hover:shadow',
                       'before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1.5 before:transition-colors',
                       selected.has('/')
                         ? 'bg-primary/[0.08] hover:bg-primary/[0.12] before:bg-primary'

@@ -15,8 +15,6 @@
  */
 
 [data-theme='frost'] {
-  --radius: 1rem;
-
   /* The glass material. Consumed by surface-sheet/panel/panel-overlay and the
      surface-glass utility; scrims get a lighter pass so the page behind a
      modal reads as "behind" without being erased. */

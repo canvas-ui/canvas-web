@@ -495,7 +495,7 @@ function InlineCreateInput({ onConfirm, onCancel, placeholder = 'folder name…'
   }
 
   return (
-    <div className="flex min-h-10 items-center gap-2 rounded-md px-3 py-2 bg-card ring-1 ring-primary/50 shadow-elevation-3 text-sm font-medium">
+    <div className="flex min-h-11 items-center gap-2 rounded-md px-3 py-2.5 bg-card ring-1 ring-primary/50 shadow-elevation-3 text-sm font-medium">
       <ChevronRight className="w-4 h-4 opacity-0 shrink-0" />
       <input
         ref={inputRef}
@@ -600,11 +600,11 @@ function CardNode({
         className="pointer-events-none absolute top-0 w-px bg-border"
         style={{
           left: `-${TREE_BRANCH_GUTTER / 2}px`,
-          bottom: isLast ? '50%' : 0,
+          ...(isLast ? { height: '1.375rem' } : { bottom: 0 }),
         }}
       />
       <div
-        className="pointer-events-none absolute top-5 h-px bg-border"
+        className="pointer-events-none absolute top-[1.375rem] h-px bg-border"
         style={{
           left: `-${TREE_BRANCH_GUTTER / 2}px`,
           width: `${TREE_BRANCH_GUTTER / 2}px`,
@@ -614,7 +614,7 @@ function CardNode({
       <div
         data-active={isSelected || undefined}
         className={cn(
-          'group relative flex min-h-10 items-center gap-2 rounded-md px-3 py-2 cursor-pointer transition-all select-none overflow-hidden',
+          'group relative flex min-h-11 items-center gap-2 rounded-md px-3 py-2.5 cursor-pointer transition-all select-none overflow-hidden',
           'shadow-elevation-3 hover:shadow-elevation-4 text-sm',
           'before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1.5 before:transition-colors',
           isSource && 'ring-1 ring-info/40 bg-info/10 before:bg-info',
@@ -1161,7 +1161,7 @@ export function MenuTreeView({
       <div
         data-active={(selectedPath === '/' && !contentPath) || undefined}
         className={cn(
-          'group relative flex min-h-10 items-center gap-2 rounded-md px-3 py-2 cursor-pointer transition-all select-none',
+          'group relative flex min-h-11 items-center gap-2 rounded-md px-3 py-2.5 cursor-pointer transition-all select-none',
           'shadow-elevation-3 hover:shadow-elevation-4 text-sm',
           selectedPath === '/' && !contentPath ? 'bg-primary/[0.06]' : 'bg-card hover:bg-primary/[0.04]',
           dragOverPath === '/' && !readOnly && !isCopyDrag && 'ring-2 ring-info bg-info-subtle/50',

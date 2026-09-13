@@ -10,7 +10,7 @@ attributes and all selectable at runtime:
 
 | Attribute       | Values                                        | What it controls                          |
 | --------------- | --------------------------------------------- | ----------------------------------------- |
-| `data-theme`    | `canvas` `nord` `contrast` `terminal`         | Palette, shape, typography, geometry      |
+| `data-theme`    | `canvas` `nord` `contrast` `terminal` `frost` `halflife` | Palette, shape, typography, geometry      |
 | `data-scheme`   | `light` `dark`                                | Which half of the active theme applies    |
 | `data-density`  | `auto` `compact` `comfortable` `touch`        | Control heights, row heights, spacing     |
 

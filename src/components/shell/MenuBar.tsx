@@ -112,6 +112,7 @@ export function MobileMenuToggle() {
       // Sized by the rail-width token (not a fixed w-12) so toggle and rail
       // read as one aligned column at every density - compact/touch change
       // the rail width and a hardcoded 3rem toggle drifts off-center.
+      data-shell="rail"
       className="fixed bottom-rail-inset left-2 z-nav flex h-rail w-rail items-center justify-center rounded-full bg-foreground text-background shadow-elevation-4 md:hidden"
     >
       {state.m0Open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -161,6 +162,7 @@ export function MenuBar() {
         <div className="fixed inset-0 z-nav-scrim bg-scrim animate-fade-in md:hidden" onClick={closeM0} aria-hidden />
       )}
       <div
+        data-shell="rail"
         className={cn(
           'flex flex-col items-center w-rail h-full bg-transparent shrink-0',
           // Mobile: hidden by default; while open it floats as a slim rail

@@ -23,7 +23,7 @@
         try {
           var stored = localStorage.getItem('canvas.ui.theme')
           var prefs = stored ? JSON.parse(stored) : {}
-          var themes = ['canvas', 'nord', 'contrast', 'terminal']
+          var themes = ['canvas', 'nord', 'contrast', 'terminal', 'frost', 'halflife']
           var theme = themes.indexOf(prefs.theme) !== -1 ? prefs.theme : 'canvas'
           // Default is light (see DEFAULT_PREFERENCES); the OS preference is
           // only consulted when the user explicitly picked 'system'.

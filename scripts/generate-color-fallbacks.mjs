@@ -48,6 +48,7 @@ const SOURCES = [
   'themes/contrast.css',
   'themes/terminal.css',
   'themes/frost.css',
+  'themes/halflife.css',
   'data-palette.css',
 ]
 
