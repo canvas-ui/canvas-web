@@ -15,6 +15,8 @@ export interface MirrorStatus {
   failed?: number
   conflicts?: number
   skipped?: number
+  reverted?: number
+  direction?: 'bi' | 'pull' | 'push'
   state?: string
   lastSync?: string
   lastError?: string | null
@@ -33,6 +35,24 @@ export interface WorkspaceMirror {
   mirror: MirrorStatus
   head: number | null
   lag: number | null
+  /** Replica policy (workspace.json `replicas`): whether this device counts toward "protected". */
+  replica?: { role: 'full' | 'cache'; required: boolean }
+  /** Documents whose current version this device does not hold yet (null = not computed). */
+  behind?: number | null
+  held?: number | null
+}
+
+export interface ProtectionSummary {
+  backend: string
+  required: string[]
+  total: number
+  unversioned: number
+  protected: number | null
+  unprotected: number | null
+  partial: boolean
+  replicas: Record<string, { behind: number; held: number; required: boolean; reportedAt?: number | null }>
+  oldestUnprotected: Array<{ key: string; docId: number; version: number; mtime?: number | null; size?: number | null }>
+  policy: Array<{ device: string; role: 'full' | 'cache'; required: boolean }>
 }
 
 export interface SyncConflict {
@@ -71,6 +91,15 @@ export async function listMirrors(workspaceId: string): Promise<WorkspaceMirror[
 
 export async function forgetMirror(workspaceId: string, deviceId: string): Promise<void> {
   await api.delete<unknown>(`${ws(workspaceId)}/mirrors/${encodeURIComponent(deviceId)}`)
+}
+
+export async function getProtection(workspaceId: string, sample = 10): Promise<ProtectionSummary> {
+  return api.get<ProtectionSummary>(`${ws(workspaceId)}/mirrors/protection?sample=${sample}`)
+}
+
+export async function setReplicaPolicy(workspaceId: string, deviceId: string, patch: { required?: boolean; role?: 'full' | 'cache' }): Promise<{ device: string; role: 'full' | 'cache'; required: boolean }> {
+  const res = await api.patch<{ replica: { device: string; role: 'full' | 'cache'; required: boolean } }>(`${ws(workspaceId)}/mirrors/${encodeURIComponent(deviceId)}`, patch)
+  return res.replica
 }
 
 export async function listSyncConflicts(workspaceId: string): Promise<SyncConflict[]> {

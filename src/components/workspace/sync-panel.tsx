@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Laptop, RefreshCw, Trash2 } from 'lucide-react'
+import { AlertTriangle, Laptop, RefreshCw, ShieldCheck, ShieldAlert, Trash2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/use-toast'
 import { socketService } from '@/lib/socket'
 import {
   forgetMirror,
+  getProtection,
   listMirrors,
   listSyncConflicts,
   resolveSyncConflict,
+  setReplicaPolicy,
   type ConflictResolution,
+  type ProtectionSummary,
   type SyncConflict,
   type WorkspaceMirror,
 } from '@/services/sync'
@@ -23,6 +26,10 @@ import {
  * always keeps the filename; here the user decides what happens to the other
  * one, and every choice carries the original's tags, relations and placements
  * over to whatever survives (canvas-server docs/sync.md).
+ *
+ * Protection (docs/durable-workspaces.md): a device marked *required* is a
+ * replica that must hold a document's current version before the document
+ * counts as protected. "Behind" is how many documents it still lacks.
  */
 
 const formatDate = (d?: string | number | null) => {
@@ -41,10 +48,13 @@ const formatBytes = (n?: number | null) => {
 
 const shortSha = (sha?: string | null) => (sha ? sha.slice(0, 12) : '—')
 
-function MirrorRow({ mirror, now, busy, onForget }: { mirror: WorkspaceMirror; now: number; busy: boolean; onForget: () => void }) {
+function MirrorRow({ mirror, now, busy, onForget, onRequired }: { mirror: WorkspaceMirror; now: number; busy: boolean; onForget: () => void; onRequired: (required: boolean) => void }) {
   const m = mirror.mirror
   // `now` is captured when the list was loaded (render must stay pure).
   const stale = mirror.lastSeen ? now - new Date(mirror.lastSeen).getTime() > 10 * 60 * 1000 : true
+  const isCache = mirror.replica?.role === 'cache' || m.client === 'fuse'
+  const required = mirror.replica?.required === true
+  const direction = m.direction || (m.client === 'fuse' ? 'bi' : undefined)
   return (
     <div className="rounded-lg border p-3">
       <div className="flex items-start justify-between gap-3">
@@ -54,6 +64,12 @@ function MirrorRow({ mirror, now, busy, onForget }: { mirror: WorkspaceMirror; n
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm font-medium">{mirror.name || mirror.deviceId}</span>
               {m.client && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-mono uppercase">{m.client}</span>}
+              {direction && (
+                <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-mono" title={direction === 'pull' ? 'Backup target: the hub is the only writer' : direction === 'push' ? 'One-shot import: local is the only writer' : 'Both ways'}>
+                  {direction === 'pull' ? '⇣ pull' : direction === 'push' ? '⇡ push' : '⇅ bi'}
+                </span>
+              )}
+              {required && <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-mono text-emerald-700 dark:text-emerald-300" title="Counts toward protection">required</span>}
               <span className={`rounded px-1.5 py-0.5 text-[10px] font-mono ${stale ? 'bg-muted text-muted-foreground' : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'}`}>
                 {m.state || (stale ? 'offline' : 'online')}
               </span>
@@ -65,16 +81,55 @@ function MirrorRow({ mirror, now, busy, onForget }: { mirror: WorkspaceMirror; n
               {(m.failed ?? 0) > 0 && <span className="text-destructive">failed {m.failed}</span>}
               {(m.conflicts ?? 0) > 0 && <span className="text-amber-600 dark:text-amber-400">conflicts {m.conflicts}</span>}
               {(m.skipped ?? 0) > 0 && <span>skipped {m.skipped}</span>}
+              {(m.reverted ?? 0) > 0 && <span title="Local edits parked in .workspace/conflicts and replaced by the hub version">reverted {m.reverted}</span>}
+              {mirror.behind != null && <span title="Documents whose current version this device does not hold yet" className={mirror.behind > 0 && required ? 'text-amber-600 dark:text-amber-400' : ''}>behind {mirror.behind}</span>}
               <span>last sync {formatDate(m.lastSync)}</span>
               <span>seen {formatDate(mirror.lastSeen)}</span>
               {m.prefixes && m.prefixes.length > 0 && <span className="font-mono">{m.prefixes.join(', ')}</span>}
             </div>
             {m.lastError && <p className="mt-1 text-[11px] text-destructive">{m.lastError}</p>}
+            <label className={`mt-2 flex items-center gap-2 text-[11px] ${isCache ? 'text-muted-foreground' : ''}`} title={isCache ? 'A cache never counts toward protection' : 'A document is protected once every required replica holds its current version'}>
+              <input type="checkbox" className="h-3 w-3" checked={required} disabled={busy || isCache} onChange={e => onRequired(e.target.checked)} />
+              required for protection
+            </label>
           </div>
         </div>
         <Button type="button" variant="ghost" size="sm" onClick={onForget} disabled={busy} title="Forget this mirror record (the device is not revoked)">
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
+      </div>
+    </div>
+  )
+}
+
+function ProtectionCard({ p }: { p: ProtectionSummary }) {
+  const none = p.required.length === 0
+  const exposed = p.unprotected ?? 0
+  const Icon = none || exposed > 0 ? ShieldAlert : ShieldCheck
+  const tone = none ? 'text-muted-foreground' : exposed > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-300'
+  return (
+    <div className="rounded-lg border p-3">
+      <div className="flex items-start gap-3">
+        <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${tone}`} />
+        <div className="min-w-0 flex-1 text-[11px]">
+          {none ? (
+            <p className="text-sm">No replica is marked <span className="font-medium">required</span> yet — nothing is counted as protected. Tick it on the device that must hold every document (the backup).</p>
+          ) : (
+            <p className="text-sm">
+              <span className={`font-medium ${tone}`}>{p.protected ?? 0} of {p.total - p.unversioned}</span> documents are held at their current version by every required replica
+              {exposed > 0 && <span className={tone}> · {exposed} not yet</span>}
+              {p.partial && <span className="text-muted-foreground"> (first {p.total} checked)</span>}
+            </p>
+          )}
+          {p.oldestUnprotected.length > 0 && (
+            <ul className="mt-1 space-y-0.5 font-mono text-muted-foreground">
+              {p.oldestUnprotected.slice(0, 5).map(o => (
+                <li key={`${o.docId}:${o.key}`} className="truncate" title={`document ${o.docId} v${o.version}`}>{o.key} <span className="opacity-70">· {formatDate(o.mtime)}</span></li>
+              ))}
+              {p.oldestUnprotected.length > 5 && <li>… and {p.oldestUnprotected.length - 5} more</li>}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -133,6 +188,7 @@ export function SyncPanel({ workspaceId, workspaceUuid }: { workspaceId: string;
   const { showToast } = useToast()
   const [mirrors, setMirrors] = useState<WorkspaceMirror[]>([])
   const [conflicts, setConflicts] = useState<SyncConflict[]>([])
+  const [protection, setProtection] = useState<ProtectionSummary | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [loadedAt, setLoadedAt] = useState(0)
@@ -142,9 +198,10 @@ export function SyncPanel({ workspaceId, workspaceUuid }: { workspaceId: string;
     if (!workspaceId) return
     if (!quiet) setIsLoading(true)
     try {
-      const [m, c] = await Promise.all([listMirrors(workspaceId), listSyncConflicts(workspaceId)])
+      const [m, c, p] = await Promise.all([listMirrors(workspaceId), listSyncConflicts(workspaceId), getProtection(workspaceId).catch(() => null)])
       setMirrors(m)
       setConflicts(c)
+      setProtection(p)
       setLoadedAt(Date.now())
     } catch (err) {
       if (!quiet) showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to load sync state', variant: 'destructive' })
@@ -193,6 +250,19 @@ export function SyncPanel({ workspaceId, workspaceUuid }: { workspaceId: string;
     }
   }
 
+  const handleRequired = async (deviceId: string, required: boolean) => {
+    setBusy(`mirror:${deviceId}`)
+    try {
+      const replica = await setReplicaPolicy(workspaceId, deviceId, { required })
+      setMirrors(prev => prev.map(m => (m.deviceId === deviceId ? { ...m, replica: { role: replica.role, required: replica.required } } : m)))
+      setProtection(await getProtection(workspaceId).catch(() => null))
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to update replica policy', variant: 'destructive' })
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const handleResolve = async (conflict: SyncConflict, keep: ConflictResolution) => {
     setBusy(`conflict:${conflict.docId}`)
     try {
@@ -230,8 +300,9 @@ export function SyncPanel({ workspaceId, workspaceUuid }: { workspaceId: string;
         </div>
       ) : (
         <div className="space-y-2">
+          {protection && <ProtectionCard p={protection} />}
           {mirrors.map(m => (
-            <MirrorRow key={m.deviceId} mirror={m} now={loadedAt} busy={busy === `mirror:${m.deviceId}`} onForget={() => handleForget(m.deviceId)} />
+            <MirrorRow key={m.deviceId} mirror={m} now={loadedAt} busy={busy === `mirror:${m.deviceId}`} onForget={() => handleForget(m.deviceId)} onRequired={required => handleRequired(m.deviceId, required)} />
           ))}
         </div>
       )}
