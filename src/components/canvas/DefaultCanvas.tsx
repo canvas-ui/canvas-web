@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { LayoutDashboard, BookMarked, Share2, Unlink, Save, Trash2, Plus, Link2, FolderTree, Pin, PinOff } from 'lucide-react'
 import { Document, TreeNode } from '@/types/workspace'
-import { DocumentList } from '@/components/common/document-list'
+import { DocumentList, type FolderEntry } from '@/components/common/document-list'
 import type { DocumentPasteOptions } from '@/components/common/document-list'
 import { useToolbox } from '@/components/toolbox/use-toolbox'
 
@@ -220,6 +220,9 @@ interface DefaultCanvasProps {
    * document list, so anything meant to sit beside it belongs here.
    */
   contentBanner?: ReactNode
+  // Directory-tree folders shown above the documents (file-manager style).
+  folders?: FolderEntry[]
+  onOpenFolder?: (path: string) => void
 }
 
 export function DefaultCanvas({
@@ -276,6 +279,8 @@ export function DefaultCanvas({
   selectedCount = 0,
   children,
   contentBanner,
+  folders,
+  onOpenFolder,
 }: DefaultCanvasProps) {
   const isCanvas = urlType === 'canvas'
 
@@ -397,6 +402,8 @@ export function DefaultCanvas({
         <DocumentList
           documents={documents}
           isLoading={isLoading}
+          folders={folders}
+          onOpenFolder={onOpenFolder}
           contextPath={contextPath}
           treeName={treeName}
           workspaceId={workspaceId}

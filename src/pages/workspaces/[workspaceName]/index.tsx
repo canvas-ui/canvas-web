@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { Filter } from 'lucide-react';
+import type { FolderEntry } from '@/components/common/document-list';
 import { Icon } from '@iconify/react';
 import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style';
 import { visibleAccentColor } from '@/utils/color';
@@ -58,6 +59,34 @@ import { useQueryDebug, type QueryDebugData } from '@/lib/query-debug';
 import { QueryDebugPanel } from '@/components/common/query-debug-panel';
 import { cn } from '@/lib/utils';
 import socketService from '@/lib/socket';
+
+// File-manager folders for the content view of a directory tree: the node's
+// children (already client-side in the tree JSON) plus a ".." parent entry.
+// Context trees are layer intersections, not containers — no folders there.
+function folderEntriesForPath(tree: TreeNode | null, path: string): FolderEntry[] {
+  if (!tree) return [];
+  const segments = path.split('/').filter(Boolean);
+  let node: TreeNode | null = tree;
+  for (const seg of segments) {
+    node = node?.children?.find(c => c.name === seg) ?? null;
+    if (!node) return [];
+  }
+  const base = segments.length ? `/${segments.join('/')}` : '';
+  const entries: FolderEntry[] = (node.children ?? [])
+    .filter(child => child.type !== 'canvas')
+    .map(child => ({
+      name: child.name,
+      path: `${base}/${child.name}`,
+      label: child.label,
+      color: child.color,
+      childCount: child.children?.length ?? 0,
+    }))
+    .sort((a, b) => (a.label || a.name).localeCompare(b.label || b.name, undefined, { numeric: true, sensitivity: 'base' }));
+  if (segments.length > 0) {
+    entries.unshift({ name: '..', path: segments.length > 1 ? `/${segments.slice(0, -1).join('/')}` : '/', isParent: true });
+  }
+  return entries;
+}
 
 type WorkspaceSidePane = {
   treeName: string;
@@ -241,6 +270,13 @@ export default function WorkspaceDetailPage() {
     return node;
   }, [tree, selectedPath, isLayerView]);
   const selectedNodeType = selectedNode?.type === 'canvas' ? 'canvas' : null;
+  // Folders only make sense on a directory tree, in path scope, without a
+  // server query (a query lists matches across the subtree, not a folder).
+  const contentFolders = useMemo<FolderEntry[]>(() => {
+    if (isLayerView || docScope === 'workspace' || serverSearchQueries.length > 0) return [];
+    if (treeTypeForName(selectedTreeName) !== 'directory') return [];
+    return folderEntriesForPath(tree, selectedPath);
+  }, [tree, selectedPath, selectedTreeName, isLayerView, docScope, serverSearchQueries]);
 
   // ── Content-area views (tabs) ──────────────────────────────────────────
   // A tree path is a layer — the "task container" — and its named views live
@@ -1255,6 +1291,8 @@ export default function WorkspaceDetailPage() {
       selectedCount={leftSelection.length}
       onUrlClick={() => openM2Drawer('workspaces', 'detail', workspaceName ?? null)}
       onUrlSubmit={(p) => navigate(buildWorkspaceUrl(workspaceName!, sanitizeUrlPath('/' + p), selectedTreeName))}
+      folders={contentFolders}
+      onOpenFolder={(p) => navigate(buildWorkspaceUrl(workspaceName!, sanitizeUrlPath(p), selectedTreeName))}
       scope={docScope}
       onScopeChange={setDocScope}
       pastedDocumentIds={clipboard?.documentIds}
@@ -1537,6 +1575,7 @@ export default function WorkspaceDetailPage() {
             setClipboard={setClipboard}
             onFocus={() => setFocusedPane('right')}
             onSelectionChange={setRightSelection}
+            onNavigate={(path) => setSidePane(prev => (prev ? { ...prev, path, viewId: undefined } : prev))}
             onClose={() => {
               setSidePane(null);
               setFocusedPane('left');
@@ -1568,6 +1607,7 @@ function SideWorkspaceCanvas({
   setClipboard,
   onFocus,
   onSelectionChange,
+  onNavigate,
   onClose,
 }: {
   workspaceName: string;
@@ -1577,6 +1617,8 @@ function SideWorkspaceCanvas({
   setClipboard: (clipboard: WorkspaceClipboard | null) => void;
   onFocus: () => void;
   onSelectionChange?: (documentIds: number[]) => void;
+  // Folder rows re-point the pane at another path of the same tree.
+  onNavigate?: (path: string) => void;
   onClose?: () => void;
 }) {
   const { showToast } = useToast();
@@ -1589,6 +1631,10 @@ function SideWorkspaceCanvas({
   const treeType: 'context' | 'directory' = treeTypeForName(pane.treeName);
   const selectedNode = findTreeNode(tree, pane.path);
   const isCanvas = selectedNode?.type === 'canvas';
+  const paneFolders = useMemo<FolderEntry[]>(
+    () => (treeType === 'directory' ? folderEntriesForPath(tree, pane.path) : []),
+    [tree, pane.path, treeType],
+  );
   // Tab pinned side-by-side: resolve the named view from the layer metadata.
   // Board edits stay read-only here — the primary pane owns persistence.
   const paneView = pane.viewId
@@ -1793,6 +1839,8 @@ function SideWorkspaceCanvas({
         onSelectionChange={onSelectionChange}
         pastedDocumentIds={clipboard?.documentIds}
         linkTree={tree}
+        folders={paneFolders}
+        onOpenFolder={onNavigate}
         canvasInfo={isCanvas ? {
           label: selectedNode?.label,
           description: selectedNode?.description,

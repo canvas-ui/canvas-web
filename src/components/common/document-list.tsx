@@ -1,5 +1,5 @@
 import { Document, TreeNode } from '@/types/workspace'
-import { File, Calendar, CalendarDays, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, ChevronDown, SlidersHorizontal, Play, Table as TableIcon, HardDrive, ArrowRightLeft, Loader2 } from 'lucide-react'
+import { File, Calendar, CalendarDays, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, ChevronDown, SlidersHorizontal, Play, Table as TableIcon, HardDrive, ArrowRightLeft, Loader2, Folder, FolderOpen, CornerLeftUp } from 'lucide-react'
 import { LinkToCard, type LinkToTarget, type LinkToRelation } from '@/components/menu/shared/LinkToCard'
 import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from '@/components/menu/shared/LinkToSidePanel'
 import { BackendActionCard, type BackendTransferConfirmOptions } from '@/components/menu/shared/BackendActionCard'
@@ -87,6 +87,27 @@ interface DocumentListProps {
   // When provided, enables "Link to…" — links selected documents to chosen tree
   // paths (via onPasteDocuments with move:false). Hidden when absent.
   linkTree?: TreeNode | null
+  // File-manager folders rendered ABOVE the documents (directory trees). The
+  // caller derives them from the tree it already holds — synapsd keeps folders
+  // and documents as separate primitives on purpose, so the list composes them
+  // here, exactly like the WebDAV/FUSE renderers do. Hidden while a local
+  // search query is typed (folders are not searched).
+  folders?: FolderEntry[]
+  // Navigate the content area to a folder (also used by the ".." parent row).
+  onOpenFolder?: (path: string) => void
+}
+
+export interface FolderEntry {
+  name: string
+  path: string
+  label?: string
+  color?: string | null
+  // Number of child folders — shown as a hint so an empty-looking folder
+  // that only holds subfolders is not mistaken for an empty one.
+  childCount?: number
+  // The synthetic parent entry (".."), rendered first. Dropping documents on
+  // it links them into the parent folder like any other folder entry.
+  isParent?: boolean
 }
 
 export interface DocumentPasteOptions {
@@ -866,6 +887,107 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
 // not as a row: it must not compete with the documents under it. The chevron
 // collapses the band; the checkbox selects/deselects everything in it (Explorer
 // selects a whole group when you click its header).
+// Shared drop handling for folder entries: the same `application/json`
+// document payload the tree accepts, linked into the folder via the paste
+// handler (move:false — mirrors the tree drop; Cut+Paste is the explicit move).
+function useFolderDrop(folder: FolderEntry, onPasteDocuments?: DocumentListProps['onPasteDocuments'], contextPath?: string, treeName?: string) {
+  const [over, setOver] = useState(false)
+  const hasDocPayload = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes('application/json')
+  const onDragOver = (e: React.DragEvent) => {
+    if (!onPasteDocuments || !hasDocPayload(e)) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'link'
+    if (!over) setOver(true)
+  }
+  const onDragLeave = () => setOver(false)
+  const onDrop = async (e: React.DragEvent) => {
+    setOver(false)
+    if (!onPasteDocuments || !hasDocPayload(e)) return
+    e.preventDefault()
+    e.stopPropagation()
+    let payload: { type?: string; documentIds?: number[]; sourcePath?: string; sourceTreeName?: string } | null = null
+    try { payload = JSON.parse(e.dataTransfer.getData('application/json')) } catch { payload = null }
+    if (payload?.type !== 'document' || !Array.isArray(payload.documentIds) || payload.documentIds.length === 0) return
+    try {
+      await onPasteDocuments(folder.path, payload.documentIds, { move: false, sourcePath: payload.sourcePath ?? contextPath, sourceTreeName: payload.sourceTreeName ?? treeName })
+    } catch { /* toast raised by the caller */ }
+  }
+  return { over, onDragOver, onDragLeave, onDrop }
+}
+
+function FolderIcon({ folder, className = 'h-4 w-4' }: { folder: FolderEntry; className?: string }) {
+  if (folder.isParent) return <CornerLeftUp className={`${className} text-muted-foreground`} />
+  const style = folder.color ? { color: folder.color } : undefined
+  return <Folder className={`${className} ${folder.color ? '' : 'text-warning'}`} style={style} />
+}
+
+const folderTitle = (folder: FolderEntry) => folder.isParent ? 'Parent folder' : (folder.label && folder.label !== folder.name ? `${folder.label} (${folder.name})` : folder.name)
+
+// Card + tile views: a wrapped strip of folder chips above the documents.
+function FolderChip({ folder, onOpen, onPasteDocuments, contextPath, treeName }: { folder: FolderEntry; onOpen?: (path: string) => void; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string }) {
+  const drop = useFolderDrop(folder, onPasteDocuments, contextPath, treeName)
+  return (
+    <button
+      type="button"
+      title={folderTitle(folder)}
+      onClick={() => onOpen?.(folder.path)}
+      onDragOver={drop.onDragOver}
+      onDragLeave={drop.onDragLeave}
+      onDrop={drop.onDrop}
+      className={`group flex min-w-0 max-w-full items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm transition-colors hover:bg-accent ${drop.over ? 'ring-2 ring-info border-info bg-accent' : ''} ${folder.isParent ? 'text-muted-foreground' : ''}`}
+    >
+      <span className="relative shrink-0">
+        <FolderIcon folder={folder} className="h-4 w-4 group-hover:hidden" />
+        {folder.isParent ? <CornerLeftUp className="hidden h-4 w-4 group-hover:block" /> : <FolderOpen className="hidden h-4 w-4 group-hover:block" style={folder.color ? { color: folder.color } : undefined} />}
+      </span>
+      <span className="truncate">{folder.isParent ? '..' : (folder.label || folder.name)}</span>
+      {!folder.isParent && !!folder.childCount && (
+        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{folder.childCount}</span>
+      )}
+    </button>
+  )
+}
+
+function FolderStrip({ folders, onOpen, onPasteDocuments, contextPath, treeName }: { folders: FolderEntry[]; onOpen?: (path: string) => void; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string }) {
+  if (folders.length === 0) return null
+  return (
+    <div className="mb-3 flex flex-wrap gap-2 pr-2" onContextMenu={(e) => e.stopPropagation()}>
+      {folders.map((folder) => (
+        <FolderChip key={folder.path} folder={folder} onOpen={onOpen} onPasteDocuments={onPasteDocuments} contextPath={contextPath} treeName={treeName} />
+      ))}
+    </div>
+  )
+}
+
+// Table view: folders as leading rows, Explorer style. The cells line up with
+// the document columns (checkbox / type / title / schema / id / checksum /
+// created / actions) so the eye reads one list.
+function FolderTableRow({ folder, onOpen, onPasteDocuments, contextPath, treeName }: { folder: FolderEntry; onOpen?: (path: string) => void; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string }) {
+  const drop = useFolderDrop(folder, onPasteDocuments, contextPath, treeName)
+  return (
+    <TableRow
+      className={`cursor-pointer ${drop.over ? 'bg-accent ring-1 ring-inset ring-info' : ''} ${folder.isParent ? 'text-muted-foreground' : ''}`}
+      onClick={() => onOpen?.(folder.path)}
+      onContextMenu={(e) => e.stopPropagation()}
+      onDragOver={drop.onDragOver}
+      onDragLeave={drop.onDragLeave}
+      onDrop={drop.onDrop}
+      title={folderTitle(folder)}
+    >
+      <TableCell className="w-10" />
+      <TableCell className="w-12"><FolderIcon folder={folder} /></TableCell>
+      <TableCell className="w-full max-w-0 md:w-auto md:max-w-none">
+        <span className="block truncate font-medium">{folder.isParent ? '..' : (folder.label || folder.name)}</span>
+      </TableCell>
+      <TableCell className="hidden md:table-cell text-xs text-muted-foreground">{folder.isParent ? '' : 'Folder'}</TableCell>
+      <TableCell className="hidden lg:table-cell" />
+      <TableCell className="hidden lg:table-cell" />
+      <TableCell className="hidden sm:table-cell text-xs text-muted-foreground">{!folder.isParent && !!folder.childCount ? `${folder.childCount} subfolder${folder.childCount === 1 ? '' : 's'}` : ''}</TableCell>
+      <TableCell className="w-12 md:w-auto" />
+    </TableRow>
+  )
+}
+
 function DateGroupHeader({ label, count, collapsed, allSelected, someSelected, onToggle, onSelectAll }: {
   label: string
   count: number
@@ -901,7 +1023,7 @@ function DateGroupHeader({ label, count, collapsed, allSelected, someSelected, o
   )
 }
 
-export function DocumentList({ documents, isLoading, contextPath, treeName, workspaceId, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, onSelectionChange, pastedDocumentIds, viewMode = 'card', allowViewToggle = false, activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQueries = [], onBackendSearch, onRemoveBackendQuery, serverSort, onServerSortChange, scope = 'path', onScopeChange, canSaveChanges = false, isSavingChanges = false, onSaveChanges, linkTree }: DocumentListProps) {
+export function DocumentList({ documents, isLoading, contextPath, treeName, workspaceId, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, onSelectionChange, pastedDocumentIds, viewMode = 'card', allowViewToggle = false, activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQueries = [], onBackendSearch, onRemoveBackendQuery, serverSort, onServerSortChange, scope = 'path', onScopeChange, canSaveChanges = false, isSavingChanges = false, onSaveChanges, linkTree, folders, onOpenFolder }: DocumentListProps) {
   // View switcher (table/tile/card). Only active when allowViewToggle; the
   // chosen view is remembered in localStorage. Widgets that hardcode viewMode
   // leave the toggle off and pin their view.
@@ -1128,6 +1250,14 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     const searchResults = fuse.search(deferredQuery)
     return searchResults.map(result => result.item)
   }, [documents, deferredQuery, fuse])
+
+  // Folders are not searched: a typed query narrows to documents only.
+  const visibleFolders = useMemo<FolderEntry[]>(() => {
+    if (!folders || folders.length === 0 || deferredQuery.trim()) return []
+    return folders
+  }, [folders, deferredQuery])
+  const hasFolders = visibleFolders.length > 0
+  const folderStripProps = { folders: visibleFolders, onOpen: onOpenFolder, onPasteDocuments, contextPath, treeName }
 
   // Column sort for the table view
   const sortAccessors = useMemo(() => ({
@@ -1922,7 +2052,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
         )}
       </div>
 
-      {filteredDocuments.length === 0 ? (
+      {filteredDocuments.length === 0 && !hasFolders ? (
         <div className="flex-1 flex items-center justify-center" onContextMenu={handleEmptyAreaRightClick}>
           <div className="text-center space-y-2">
             <File className="h-12 w-12 text-muted-foreground/50 mx-auto" />
@@ -1957,6 +2087,10 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
               Grouped: one masonry per date band — a single set of columns
               spanning the bands would let a tall tile from Today flow past
               Yesterday's header. */}
+          <FolderStrip {...folderStripProps} />
+          {filteredDocuments.length === 0 && (
+            <p className="py-6 text-center text-xs text-muted-foreground">No documents in this folder</p>
+          )}
           {renderBands((docs) => (
             <div className="columns-[300px] gap-3 pr-2">
               {docs.map((document) => (
@@ -1994,6 +2128,9 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
               </TableRow>
             </TableHeader>
             <TableBody>
+              {visibleFolders.map((folder) => (
+                <FolderTableRow key={folder.path} folder={folder} onOpen={onOpenFolder} onPasteDocuments={onPasteDocuments} contextPath={contextPath} treeName={treeName} />
+              ))}
               {sortedDocuments.map((document) => (
                 <DocumentTableRow key={document.id} document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onRemoveDocument={removeDocument} onDeleteDocument={onDeleteDocument} onLinkDocument={canLink ? (id) => setLinkPanelIds([id]) : undefined} onOpenToSide={openToSide} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
               ))}
@@ -2002,6 +2139,10 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto" onContextMenu={handleEmptyAreaRightClick}>
+          <FolderStrip {...folderStripProps} />
+          {filteredDocuments.length === 0 && (
+            <p className="py-6 text-center text-xs text-muted-foreground">No documents in this folder</p>
+          )}
           {renderBands((docs) => (
             <div className="space-y-3 pr-2">
               {docs.map((document) => (
