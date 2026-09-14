@@ -574,6 +574,17 @@ function CardNode({
   const [expanded, setExpanded] = useState(() =>
     selectedPath !== '/' && (selectedPath === path || selectedPath.startsWith(path + '/'))
   )
+  // Follow the selection: navigating from the content view (folder rows,
+  // address bar, back/forward) must reveal the selected node, so expand every
+  // ancestor whenever the selection moves below this node. Never auto-collapse —
+  // a branch the user opened stays open.
+  // (State adjusted during render on a prop change — the React-sanctioned
+  // form; an effect would paint one collapsed frame first.)
+  const [seenSelectedPath, setSeenSelectedPath] = useState(selectedPath)
+  if (seenSelectedPath !== selectedPath) {
+    setSeenSelectedPath(selectedPath)
+    if (selectedPath !== '/' && selectedPath.startsWith(path + '/')) setExpanded(true)
+  }
 
   if (searchQuery && !nodeMatchesSearch(node, parentPath, searchQuery)) return null
 

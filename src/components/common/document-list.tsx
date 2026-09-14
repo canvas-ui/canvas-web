@@ -948,6 +948,50 @@ function FolderChip({ folder, onOpen, onPasteDocuments, contextPath, treeName }:
   )
 }
 
+// Tile view: folders as proper tiles in a responsive grid, so they read at the
+// same weight as the photo/text tiles below them instead of as small chips.
+function FolderTile({ folder, onOpen, onPasteDocuments, contextPath, treeName }: { folder: FolderEntry; onOpen?: (path: string) => void; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string }) {
+  const drop = useFolderDrop(folder, onPasteDocuments, contextPath, treeName)
+  const iconStyle = folder.color ? { color: folder.color } : undefined
+  return (
+    <button
+      type="button"
+      title={folderTitle(folder)}
+      onClick={() => onOpen?.(folder.path)}
+      onDragOver={drop.onDragOver}
+      onDragLeave={drop.onDragLeave}
+      onDrop={drop.onDrop}
+      className={`group flex min-w-0 flex-col items-center gap-1.5 rounded-lg border px-2 py-3 text-sm transition hover:bg-accent hover:shadow-elevation-2 ${drop.over ? 'ring-2 ring-info border-info bg-accent' : ''} ${folder.isParent ? 'text-muted-foreground' : ''}`}
+    >
+      <span className="relative flex h-14 w-14 items-center justify-center">
+        {folder.isParent ? (
+          <CornerLeftUp className="h-10 w-10" strokeWidth={1.5} />
+        ) : (
+          <>
+            <Folder className={`h-14 w-14 group-hover:hidden ${folder.color ? '' : 'text-warning'}`} strokeWidth={1.25} fill="currentColor" fillOpacity={0.18} style={iconStyle} />
+            <FolderOpen className={`hidden h-14 w-14 group-hover:block ${folder.color ? '' : 'text-warning'}`} strokeWidth={1.25} fill="currentColor" fillOpacity={0.18} style={iconStyle} />
+          </>
+        )}
+      </span>
+      <span className="w-full truncate text-center font-medium">{folder.isParent ? '..' : (folder.label || folder.name)}</span>
+      {!folder.isParent && !!folder.childCount && (
+        <span className="text-[11px] tabular-nums text-muted-foreground">{folder.childCount} subfolder{folder.childCount === 1 ? '' : 's'}</span>
+      )}
+    </button>
+  )
+}
+
+function FolderTileGrid({ folders, onOpen, onPasteDocuments, contextPath, treeName }: { folders: FolderEntry[]; onOpen?: (path: string) => void; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string }) {
+  if (folders.length === 0) return null
+  return (
+    <div className="mb-4 grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3 pr-2" onContextMenu={(e) => e.stopPropagation()}>
+      {folders.map((folder) => (
+        <FolderTile key={folder.path} folder={folder} onOpen={onOpen} onPasteDocuments={onPasteDocuments} contextPath={contextPath} treeName={treeName} />
+      ))}
+    </div>
+  )
+}
+
 function FolderStrip({ folders, onOpen, onPasteDocuments, contextPath, treeName }: { folders: FolderEntry[]; onOpen?: (path: string) => void; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string }) {
   if (folders.length === 0) return null
   return (
@@ -2087,7 +2131,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
               Grouped: one masonry per date band — a single set of columns
               spanning the bands would let a tall tile from Today flow past
               Yesterday's header. */}
-          <FolderStrip {...folderStripProps} />
+          <FolderTileGrid {...folderStripProps} />
           {filteredDocuments.length === 0 && (
             <p className="py-6 text-center text-xs text-muted-foreground">No documents in this folder</p>
           )}
