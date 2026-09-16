@@ -18,7 +18,7 @@ export const LAYOUT_OPTIONS: Array<{ id: LayoutMode; name: string; description: 
   { id: 'classic', name: 'Classic', description: 'Menu panel on the left, one content sheet.' },
   {
     id: 'strip',
-    name: 'Canvas strip',
+    name: 'Canvas strip (beta)',
     description:
       'Experimental. Menus and canvases side by side in a strip you walk with the arrow keys or a swipe. Shift+click opens a second canvas to the right; pins open their own row.',
   },

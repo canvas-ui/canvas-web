@@ -12,6 +12,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { useNavigate } from 'react-router-dom'
 import { LayerIconPicker } from '@/components/menu/shared/LayerIconPicker'
 import { DEFAULT_WORKSPACE_ICON, type LayerStyle } from '@/lib/layer-style'
+import { recallWorkspacePath, workspaceResumeUrl } from '@/lib/last-path'
 
 function StatusDot({ status }: { status: string }) {
   const color =
@@ -72,6 +73,10 @@ export function WorkspaceList() {
   const handleSelect = (ws: Workspace) => {
     selectEntity(ws.name)
     openM2('detail', ws.name)
+    // Resume where the user left this workspace instead of leaving the content
+    // sheet on the previous workspace's path. Desktop only: on a phone the
+    // navigation would close the M2 drawer that just opened.
+    if (!isMobile && recallWorkspacePath(ws.name)) navigate(workspaceResumeUrl(ws.name))
   }
 
   const handleStart = async (e: React.MouseEvent, ws: Workspace) => {

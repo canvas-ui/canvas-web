@@ -14,6 +14,7 @@ import { WorkspaceCard } from "@/components/ui/workspace-card"
 import { useNavigate } from "react-router-dom"
 import { useCreatePanel } from "@/hooks/use-create-panel"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { workspaceResumeUrl } from "@/lib/last-path"
 import { useMenu } from "@/components/shell/use-menu"
 import { useSocket } from "@/hooks/useSocket"
 import {
@@ -326,7 +327,7 @@ export default function WorkspacesPage() {
   }
 
   const handleEnterWorkspace = (workspaceName: string) => {
-    navigate(`/workspaces/${workspaceName}`)
+    navigate(workspaceResumeUrl(workspaceName))
   }
 
   // Drag a card to reorder; sequential order values are persisted for the

@@ -9,6 +9,7 @@ import { MenuTreeView } from '@/components/menu/shared/MenuTreeView'
 import { useMenu } from '@/components/shell/use-menu'
 import { useCanvasRow } from '@/components/shell/strip/use-canvas-row'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { workspaceResumeUrl } from '@/lib/last-path'
 import { getWorkspace, getCachedWorkspaceTreeByName, invalidateWorkspaceTreeCache, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer, pasteDocumentsToWorkspacePath, createPublicCanvasShare, listBackends, listWorkspacePins, pinWorkspacePath, unpinWorkspacePin, reorderWorkspacePins, workspacePinKey as pinKey, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
 import type { Layer, WorkspacePin } from '@/services/workspace'
 import { getWebuiConfig, putWebuiConfig, type WebuiConfig } from '@/services/user-config'
@@ -510,7 +511,7 @@ export function WorkspaceM2() {
           <div className="flex items-center gap-0.5">
             <button
               type="button"
-              onClick={() => navigate(`/workspaces/${wsName}`)}
+              onClick={() => wsName && navigate(workspaceResumeUrl(wsName))}
               className="flex items-center justify-center w-8 h-8 rounded hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors"
               title="Open workspace"
             >

@@ -50,6 +50,7 @@ import {
 } from '@/services/workspace';
 import { Document, TreeNode, buildDatetimeFilters, buildGeoFilters, buildLensFilters, DEFAULT_TOOLBOX_SORT } from '@/types/workspace';
 import { sanitizeUrlPath, buildWorkspaceUrl, parseWorkspacePathFromUrl } from '@/utils/url-params';
+import { rememberWorkspacePath } from '@/lib/last-path';
 import { docInGeoSelection } from '@/utils/geo';
 import { useToolbox } from '@/components/toolbox/use-toolbox';
 import { useCanvasPins } from '@/components/home/use-canvas-pins';
@@ -270,6 +271,18 @@ export default function WorkspaceDetailPage() {
     return node;
   }, [tree, selectedPath, isLayerView]);
   const selectedNodeType = selectedNode?.type === 'canvas' ? 'canvas' : null;
+  // Remember where the user is so opening this workspace again resumes here
+  // (see lib/last-path). Only positions that exist in the loaded tree are
+  // recorded — a stale path from a deleted folder must not become sticky.
+  // `tree` lags a workspace/tree switch (it is replaced, not cleared), so the
+  // loader stamps which workspace+tree the current JSON belongs to.
+  const loadedTreeKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!workspaceName || !tree || isLayerView) return;
+    if (loadedTreeKeyRef.current !== `${workspaceName}/${selectedTreeName}`) return;
+    if (selectedPath !== '/' && !selectedNode) return;
+    rememberWorkspacePath(workspaceName, selectedTreeName, selectedPath);
+  }, [workspaceName, tree, isLayerView, selectedPath, selectedNode, selectedTreeName]);
   // Folders only make sense on a directory tree, in path scope, without a
   // server query (a query lists matches across the subtree, not a folder).
   const contentFolders = useMemo<FolderEntry[]>(() => {
@@ -859,7 +872,7 @@ export default function WorkspaceDetailPage() {
     const loadTree = (force = false) => {
       if (force) invalidateWorkspaceTreeCache(workspaceName, selectedTreeName);
       getCachedWorkspaceTreeByName(workspaceName, selectedTreeName, { force })
-        .then(res => { if (!cancelled) setTree(res); })
+        .then(res => { if (!cancelled) { loadedTreeKeyRef.current = `${workspaceName}/${selectedTreeName}`; setTree(res); } })
         .catch(() => { if (!cancelled) setTree(null); });
     };
 
