@@ -629,20 +629,33 @@ function CardNode({
   const plain = !isSource && !isTarget
   const solidSelected = plain && isSelected
   const mix = (color: string, pct: number) => `color-mix(in oklab, ${color} ${pct}%, var(--card))`
+  // Overlays are relative to whatever the row ended up as, so they hold at any
+  // depth and in both schemes (a fixed mix with --card vanished in dark mode).
+  const veil = (pct: number) => `color-mix(in oklab, currentColor ${pct}%, transparent)`
+  // Contrast is the hierarchy. Every level steps the shade, so a whole subtree
+  // reads as one block set apart from its parent's siblings; the open parent is
+  // a touch stronger than its children and acts as the block's header. A
+  // coloured subtree shades with its colour, an uncoloured one with the
+  // foreground. Steps are coarse on purpose — 2-3% was invisible on dark.
+  const level = Math.min(depth, 5)
+  const isOpenParent = shouldExpand && !!hasChildren
+  const shade = effectiveColor
+    ? Math.min(16 + level * 7 + (isOpenParent ? 10 : 0) + (onSelectedRoute ? 6 : 0), 46)
+    : Math.min(level * 8 + (isOpenParent ? 9 : 0) + (onSelectedRoute ? 5 : 0) + (isPending ? 3 : 0), 40)
   // Opaque on purpose: sticky parents slide over their children.
   const accordionBg = solidSelected ? 'var(--primary)'
-    : isSource ? mix('var(--info)', 14)
-    : isTarget ? mix('var(--warning)', 14)
-    : node.locked ? mix('var(--warning)', 16)
-    : mix('var(--foreground)', Math.min(depth, 5) * 2.5 + (onSelectedRoute ? 6 : 0) + (isPending ? 3 : 0))
+    : isSource ? mix('var(--info)', 22)
+    : isTarget ? mix('var(--warning)', 22)
+    : node.locked ? mix('var(--warning)', 20 + level * 4)
+    : mix(effectiveColor || 'var(--foreground)', shade)
   const sticks = accordion && shouldExpand && hasChildren && depth < ACCORDION_STICKY_DEPTH
 
   const accordionRow = (
     <div
       data-active={isSelected || undefined}
       className={cn(
-        'group relative flex cursor-pointer select-none items-stretch overflow-hidden border-b border-border/60 text-sm',
-        'after:pointer-events-none after:absolute after:inset-0 after:bg-foreground/0 after:transition-colors hover:after:bg-foreground/[0.05]',
+        'group relative flex cursor-pointer select-none items-stretch overflow-hidden text-sm',
+        'after:pointer-events-none after:absolute after:inset-0 after:bg-foreground/0 after:transition-colors hover:after:bg-foreground/[0.07]',
         solidSelected ? 'text-primary-foreground' : 'text-foreground',
         isSource && 'ring-1 ring-inset ring-info/40',
         isTarget && !isSource && 'ring-1 ring-inset ring-warning/40',
@@ -652,6 +665,7 @@ function CardNode({
       style={{
         height: ACCORDION_ROW_H,
         background: accordionBg,
+        borderBottom: `1px solid ${veil(14)}`,
         ...(sticks ? { position: 'sticky' as const, top: depth * ACCORDION_ROW_H, zIndex: 20 - depth } : {}),
       }}
       draggable={!readOnly}
@@ -668,7 +682,7 @@ function CardNode({
       {trail.length > 0 && (
         <span className="flex shrink-0 gap-px" aria-hidden>
           {trail.map((color, i) => (
-            <span key={i} className="w-[3px]" style={{ background: color || 'var(--border)' }} />
+            <span key={i} className="w-[3px]" style={{ background: color || veil(28) }} />
           ))}
         </span>
       )}
@@ -678,19 +692,17 @@ function CardNode({
         const swatchStyle = style.color
           ? { background: style.color }
           : inheritedColor
-            ? { background: mix(inheritedColor, 26) }
-            : { background: solidSelected ? 'transparent' : mix('var(--foreground)', 6) }
+            ? { background: `color-mix(in oklab, ${inheritedColor} 45%, transparent)` }
+            : { background: veil(10) }
         const iconEl = (
           <Icon
             icon={style.icon || (isCanvas ? DEFAULT_CANVAS_ICON : DEFAULT_FOLDER_ICON)}
             width={18}
             height={18}
-            color={!style.color && inheritedColor && !solidSelected ? inheritedColor : undefined}
             className={cn(
               'shrink-0',
               style.color ? onAccentTextClass(style.color)
-                : solidSelected ? 'text-primary-foreground'
-                : !inheritedColor && (isCanvas ? 'text-primary' : 'text-muted-foreground'),
+                : solidSelected ? 'text-primary-foreground' : 'text-foreground/80',
             )}
           />
         )
@@ -733,14 +745,22 @@ function CardNode({
         </button>
       )}
 
-      {/* Expand target on the right, a full touch target; the row body navigates. */}
+      {/* Expand handle on the right: a full touch target with its own surface,
+          so it reads as a control apart from the row body (which navigates). */}
       <button
         type="button"
-        className={cn('relative z-[1] flex w-11 shrink-0 items-center justify-center opacity-70 hover:opacity-100', !hasChildren && inlineCreateParent !== path && 'invisible')}
+        className={cn(
+          'relative z-[1] flex w-12 shrink-0 cursor-pointer items-center justify-center transition-colors',
+          'bg-[color-mix(in_oklab,currentColor_9%,transparent)] hover:bg-[color-mix(in_oklab,currentColor_24%,transparent)] active:bg-[color-mix(in_oklab,currentColor_32%,transparent)]',
+          !hasChildren && inlineCreateParent !== path && 'invisible',
+        )}
+        style={{ borderLeft: `1px solid ${veil(16)}` }}
         aria-label={shouldExpand ? 'Collapse' : 'Expand'}
+        aria-expanded={shouldExpand}
+        title={shouldExpand ? 'Collapse' : 'Expand'}
         onClick={e => { e.stopPropagation(); setExpanded(v => !v) }}
       >
-        {shouldExpand ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        {shouldExpand ? <ChevronDown className="h-5 w-5" strokeWidth={2.25} /> : <ChevronRight className="h-5 w-5" strokeWidth={2.25} />}
       </button>
     </div>
   )
