@@ -14,6 +14,7 @@ import {
   WALLPAPER_MAX_BYTES,
   type WallpaperSettings,
 } from '@/lib/wallpaper'
+import { TREE_STYLE_OPTIONS, setTreeStyle, useTreeStyle } from '@/lib/tree-style'
 import { LAYOUT_NAV_OPTIONS, LAYOUT_OPTIONS, setLayoutMode, setLayoutNavModifier, useLayoutMode, useLayoutNavModifier } from '@/lib/layout-mode'
 import {
   DENSITY_OPTIONS,
@@ -39,6 +40,7 @@ export function AppearanceSettings() {
   const { theme, scheme, density, resolvedScheme, setTheme, setScheme, setDensity, reset } =
     useTheme()
   const layout = useLayoutMode()
+  const treeStyle = useTreeStyle()
   const layoutNav = useLayoutNavModifier()
 
   return (
@@ -161,6 +163,25 @@ export function AppearanceSettings() {
             </p>
           </div>
         )}
+      </section>
+
+      <section>
+        <SectionHeading
+          title="Tree style"
+          description="How workspace and context trees are drawn in the menu. Device-local."
+        />
+        <SegmentedControl
+          options={TREE_STYLE_OPTIONS.map((option) => ({
+            id: option.id,
+            label: option.name,
+            title: option.description,
+          }))}
+          value={treeStyle}
+          onChange={setTreeStyle}
+        />
+        <p className="mt-2 text-xs text-muted-foreground">
+          {TREE_STYLE_OPTIONS.find((option) => option.id === treeStyle)?.description}
+        </p>
       </section>
 
       <WallpaperSection />

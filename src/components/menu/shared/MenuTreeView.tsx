@@ -20,6 +20,8 @@ import {
 import { LayerIconPicker } from './LayerIconPicker'
 import { ContextMenuShell } from '@/components/common/context-menu-shell'
 import { findTreeNodeByPath } from '@/services/workspace'
+import { useTreeAccordion } from '@/lib/tree-style'
+import { onAccentTextClass } from '@/utils/color'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -94,6 +96,11 @@ type Clip = { mode: ClipboardMode; path: string; treeName: string }
 type LayerRef = { path: string; id: string }
 
 const TREE_BRANCH_GUTTER = 22
+// Accordion style (lib/tree-style): fixed row height so open parents can stack
+// as sticky headers at `depth * ACCORDION_ROW_H`. Capped — four stuck rows is
+// already 176px of a phone viewport.
+const ACCORDION_ROW_H = 44
+const ACCORDION_STICKY_DEPTH = 4
 
 // Backends-tree nodes follow the anchor-first grammar:
 //   /workspace/<store>/<sub…>        workspace-anchored file stores (→ address workspace:<store>)
@@ -556,6 +563,11 @@ interface CardNodeProps {
   onDragEnd: () => void
   onDrop: (path: string, e: React.DragEvent) => void
   resyncingPaths?: Set<string>
+  // Accordion style: full-width rows, no indent. `trail` is one entry per
+  // ancestor (outermost first) — that ancestor's effective colour or null —
+  // and draws the depth rail; its last non-null entry is the inherited colour.
+  accordion?: boolean
+  trail?: ReadonlyArray<string | null>
 }
 
 function CardNode({
@@ -565,7 +577,7 @@ function CardNode({
   onSelect, onShiftSelect, onShowContent, onCtrl, onCtxMenu,
   onConfirmCreate, onCancelCreate, onOpenPicker, styleOverrides,
   dragOverPath, isCopyDrag, onDragStart, onDragEnter, onDragOver, onDragLeave, onDragEnd, onDrop,
-  resyncingPaths,
+  resyncingPaths, accordion = false, trail = [],
 }: CardNodeProps) {
 
   const path = buildPath(parentPath, node.name)
@@ -605,8 +617,137 @@ function CardNode({
     onSelect(path)
   }
 
+  // ── Accordion style ───────────────────────────────────────────────────────
+  // Colour is an indicator, not a fill: most layers are uncoloured, so the row
+  // itself stays neutral (a tint that steps with depth) and colour lives in the
+  // swatch around the icon plus the depth rail. The selected row is the only
+  // solid one; the open route to it is tinted a step stronger than its siblings.
+  const inheritedColor = [...trail].reverse().find(Boolean) ?? null
+  const effectiveColor = style.color || inheritedColor
+  const childTrail = accordion ? [...trail, effectiveColor] : trail
+  const onSelectedRoute = selectedPath !== '/' && selectedPath.startsWith(path + '/')
+  const plain = !isSource && !isTarget
+  const solidSelected = plain && isSelected
+  const mix = (color: string, pct: number) => `color-mix(in oklab, ${color} ${pct}%, var(--card))`
+  // Opaque on purpose: sticky parents slide over their children.
+  const accordionBg = solidSelected ? 'var(--primary)'
+    : isSource ? mix('var(--info)', 14)
+    : isTarget ? mix('var(--warning)', 14)
+    : node.locked ? mix('var(--warning)', 16)
+    : mix('var(--foreground)', Math.min(depth, 5) * 2.5 + (onSelectedRoute ? 6 : 0) + (isPending ? 3 : 0))
+  const sticks = accordion && shouldExpand && hasChildren && depth < ACCORDION_STICKY_DEPTH
+
+  const accordionRow = (
+    <div
+      data-active={isSelected || undefined}
+      className={cn(
+        'group relative flex cursor-pointer select-none items-stretch overflow-hidden border-b border-border/60 text-sm',
+        'after:pointer-events-none after:absolute after:inset-0 after:bg-foreground/0 after:transition-colors hover:after:bg-foreground/[0.05]',
+        solidSelected ? 'text-primary-foreground' : 'text-foreground',
+        isSource && 'ring-1 ring-inset ring-info/40',
+        isTarget && !isSource && 'ring-1 ring-inset ring-warning/40',
+        dragOverPath === path && !readOnly && !isCopyDrag && 'ring-2 ring-inset ring-info',
+        dragOverPath === path && !readOnly && isCopyDrag && 'ring-2 ring-inset ring-success',
+      )}
+      style={{
+        height: ACCORDION_ROW_H,
+        background: accordionBg,
+        ...(sticks ? { position: 'sticky' as const, top: depth * ACCORDION_ROW_H, zIndex: 20 - depth } : {}),
+      }}
+      draggable={!readOnly}
+      onClick={handleClick}
+      onContextMenu={e => { if (!readOnly) { e.preventDefault(); onCtxMenu(e, path, node) } }}
+      onDragStart={e => { if (!readOnly) onDragStart(path, e) }}
+      onDragEnter={e => { if (!readOnly) onDragEnter(path, e) }}
+      onDragOver={e => { if (!readOnly) onDragOver(path, e) }}
+      onDragLeave={e => onDragLeave(path, e)}
+      onDragEnd={() => onDragEnd()}
+      onDrop={e => { if (!readOnly) onDrop(path, e) }}
+    >
+      {/* Depth rail: one stripe per ancestor, in that ancestor's colour. */}
+      {trail.length > 0 && (
+        <span className="flex shrink-0 gap-px" aria-hidden>
+          {trail.map((color, i) => (
+            <span key={i} className="w-[3px]" style={{ background: color || 'var(--border)' }} />
+          ))}
+        </span>
+      )}
+
+      {/* Colour swatch + icon. Own colour is solid, an inherited one is a wash. */}
+      {(() => {
+        const swatchStyle = style.color
+          ? { background: style.color }
+          : inheritedColor
+            ? { background: mix(inheritedColor, 26) }
+            : { background: solidSelected ? 'transparent' : mix('var(--foreground)', 6) }
+        const iconEl = (
+          <Icon
+            icon={style.icon || (isCanvas ? DEFAULT_CANVAS_ICON : DEFAULT_FOLDER_ICON)}
+            width={18}
+            height={18}
+            color={!style.color && inheritedColor && !solidSelected ? inheritedColor : undefined}
+            className={cn(
+              'shrink-0',
+              style.color ? onAccentTextClass(style.color)
+                : solidSelected ? 'text-primary-foreground'
+                : !inheritedColor && (isCanvas ? 'text-primary' : 'text-muted-foreground'),
+            )}
+          />
+        )
+        const cls = 'flex w-10 shrink-0 items-center justify-center'
+        return onOpenPicker ? (
+          <button
+            type="button"
+            className={cls}
+            style={swatchStyle}
+            title="Change icon"
+            onClick={e => {
+              if (isCoarsePointer()) return // bubbles to the row → select
+              e.stopPropagation(); onOpenPicker(e, path, node)
+            }}
+            onContextMenu={e => { e.preventDefault(); e.stopPropagation(); onOpenPicker(e, path, node) }}
+          >
+            {iconEl}
+          </button>
+        ) : <span className={cls} style={swatchStyle}>{iconEl}</span>
+      })()}
+
+      <span
+        className={cn('min-w-0 flex-1 self-center truncate px-2.5', isSelected || onSelectedRoute ? 'font-semibold' : 'font-medium')}
+        title={node.description || undefined}
+      >
+        {node.label || node.name}
+      </span>
+
+      {resyncingPaths?.has(path) && (
+        <RefreshCw className="mr-1 h-3.5 w-3.5 shrink-0 animate-spin self-center opacity-70" aria-label="Indexing" />
+      )}
+
+      {!readOnly && (
+        <button
+          type="button"
+          className="reveal-on-hover shrink-0 self-center rounded p-1 hover:bg-foreground/10"
+          onClick={e => { e.stopPropagation(); onCtxMenu(e, path, node) }}
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </button>
+      )}
+
+      {/* Expand target on the right, a full touch target; the row body navigates. */}
+      <button
+        type="button"
+        className={cn('relative z-[1] flex w-11 shrink-0 items-center justify-center opacity-70 hover:opacity-100', !hasChildren && inlineCreateParent !== path && 'invisible')}
+        aria-label={shouldExpand ? 'Collapse' : 'Expand'}
+        onClick={e => { e.stopPropagation(); setExpanded(v => !v) }}
+      >
+        {shouldExpand ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+      </button>
+    </div>
+  )
+
   return (
     <div className="relative">
+      {accordion ? accordionRow : (<>
       <div
         className="pointer-events-none absolute top-0 w-px bg-border"
         style={{
@@ -710,9 +851,10 @@ function CardNode({
           </button>
         )}
       </div>
+      </>)}
 
       {shouldExpand && (hasChildren || inlineCreateParent === path) && (
-        <div className="ml-[22px] mt-2 mb-1 space-y-1.5">
+        <div className={accordion ? undefined : 'ml-[22px] mt-2 mb-1 space-y-1.5'}>
           {inlineCreateParent === path && (
             <InlineCreateInput
               onConfirm={name => onConfirmCreate(path, name)}
@@ -753,6 +895,8 @@ function CardNode({
               onDragEnd={onDragEnd}
               onDrop={onDrop}
               resyncingPaths={resyncingPaths}
+              accordion={accordion}
+              trail={childTrail}
             />
           ))}
         </div>
@@ -779,6 +923,7 @@ export function MenuTreeView({
   searchQuery = '',
   resyncingPaths,
 }: MenuTreeViewProps) {
+  const accordion = useTreeAccordion()
 
   const [clipboard, setClipboard] = useState<Clip | null>(null)
   const [sourceLayer, setSourceLayer] = useState<LayerRef | null>(null)
@@ -1099,6 +1244,7 @@ export function MenuTreeView({
 
   // Shared props for CardNode
   const cardProps = {
+    accordion,
     selectedPath, pendingPath, contentPath, readOnly,
     sourceLayer, targetLayers, clipboard, searchQuery: q,
     inlineCreateParent,
@@ -1213,7 +1359,7 @@ export function MenuTreeView({
       </div>
 
       {/* Children indented under root */}
-      <div className="ml-[22px] mt-1.5 space-y-1.5">
+      <div className={accordion ? 'mt-1.5 border-t border-border/60' : 'ml-[22px] mt-1.5 space-y-1.5'}>
         {inlineCreateParent === '/' && (
           <InlineCreateInput
             onConfirm={name => handleConfirmCreate('/', name)}
