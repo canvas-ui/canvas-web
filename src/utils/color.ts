@@ -103,5 +103,12 @@ export const onAccentTextClass = (accent?: string): string => {
   return lum !== null && lum > 0.5 ? 'text-black/45' : 'text-white/80';
 };
 
+// Full-strength variant for body text on a (near-)solid user colour — the
+// helper above is tuned for small glyphs and is too faint for a label.
+export const onAccentSolidTextClass = (accent: string): string => {
+  const lum = relativeLuminance(accent);
+  return lum !== null && lum > 0.45 ? 'text-black' : 'text-white';
+};
+
 // Re-export helpers in case we want them elsewhere
 export { randomInt, generateRandomHsl, hslToHex };

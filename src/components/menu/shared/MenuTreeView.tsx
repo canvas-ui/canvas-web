@@ -21,7 +21,7 @@ import { LayerIconPicker } from './LayerIconPicker'
 import { ContextMenuShell } from '@/components/common/context-menu-shell'
 import { findTreeNodeByPath } from '@/services/workspace'
 import { useTreeAccordion } from '@/lib/tree-style'
-import { onAccentTextClass } from '@/utils/color'
+import { onAccentTextClass, onAccentSolidTextClass } from '@/utils/color'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -639,15 +639,27 @@ function CardNode({
   // foreground. Steps are coarse on purpose — 2-3% was invisible on dark.
   const level = Math.min(depth, 5)
   const isOpenParent = shouldExpand && !!hasChildren
-  const shade = effectiveColor
-    ? Math.min(16 + level * 7 + (isOpenParent ? 10 : 0) + (onSelectedRoute ? 6 : 0), 46)
-    : Math.min(level * 8 + (isOpenParent ? 9 : 0) + (onSelectedRoute ? 5 : 0) + (isPending ? 3 : 0), 40)
+  // Two clearly different strengths, not a nudge:
+  //  • an OPEN node is the header of its block — near-solid in its own colour
+  //    (or a strong neutral), with text flipped against that colour;
+  //  • everything below it is a low wash of the PARENT's colour, so the block
+  //    reads as one body even when a child has a colour of its own (that one
+  //    shows in the child's swatch, and takes over once the child is opened).
+  const washColor = depth > 0 && inheritedColor ? inheritedColor : effectiveColor
+  const headerSolid = plain && !solidSelected && !node.locked && isOpenParent
+  const washShade = washColor
+    ? Math.min(12 + level * 5 + (onSelectedRoute ? 6 : 0), 34)
+    : Math.min(level * 7 + (onSelectedRoute ? 5 : 0) + (isPending ? 3 : 0), 30)
   // Opaque on purpose: sticky parents slide over their children.
   const accordionBg = solidSelected ? 'var(--primary)'
     : isSource ? mix('var(--info)', 22)
     : isTarget ? mix('var(--warning)', 22)
     : node.locked ? mix('var(--warning)', 20 + level * 4)
-    : mix(effectiveColor || 'var(--foreground)', shade)
+    : headerSolid ? (effectiveColor ? mix(effectiveColor, 84) : mix('var(--foreground)', 38))
+    : mix(washColor || 'var(--foreground)', washShade)
+  const accordionText = solidSelected ? 'text-primary-foreground'
+    : headerSolid && effectiveColor ? onAccentSolidTextClass(effectiveColor)
+    : 'text-foreground'
   const sticks = accordion && shouldExpand && hasChildren && depth < ACCORDION_STICKY_DEPTH
 
   const accordionRow = (
@@ -656,7 +668,7 @@ function CardNode({
       className={cn(
         'group relative flex cursor-pointer select-none items-stretch overflow-hidden text-sm',
         'after:pointer-events-none after:absolute after:inset-0 after:bg-foreground/0 after:transition-colors hover:after:bg-foreground/[0.07]',
-        solidSelected ? 'text-primary-foreground' : 'text-foreground',
+        accordionText,
         isSource && 'ring-1 ring-inset ring-info/40',
         isTarget && !isSource && 'ring-1 ring-inset ring-warning/40',
         dragOverPath === path && !readOnly && !isCopyDrag && 'ring-2 ring-inset ring-info',
@@ -702,7 +714,7 @@ function CardNode({
             className={cn(
               'shrink-0',
               style.color ? onAccentTextClass(style.color)
-                : solidSelected ? 'text-primary-foreground' : 'text-foreground/80',
+                : solidSelected ? 'text-primary-foreground' : headerSolid ? 'text-current' : 'text-foreground/80',
             )}
           />
         )
@@ -725,7 +737,7 @@ function CardNode({
       })()}
 
       <span
-        className={cn('min-w-0 flex-1 self-center truncate px-2.5', isSelected || onSelectedRoute ? 'font-semibold' : 'font-medium')}
+        className={cn('min-w-0 flex-1 self-center truncate px-2.5', isSelected || onSelectedRoute || isOpenParent ? 'font-semibold' : 'font-medium')}
         title={node.description || undefined}
       >
         {node.label || node.name}
