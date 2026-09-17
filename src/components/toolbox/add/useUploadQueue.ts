@@ -42,6 +42,8 @@ export interface UploadSummary {
   resumed: number
   failed: number
   total: number
+  /** Ids of the documents created (or resumed) in this run. */
+  docIds: number[]
 }
 
 const UPLOAD_CONCURRENCY = 3
@@ -197,6 +199,7 @@ export function useUploadQueue(): UseUploadQueue {
       resumed: finals.filter((it) => it.status === 'done' && it.resumed).length,
       failed: finals.filter((it) => it.status === 'error').length,
       total: finals.length,
+      docIds: finals.flatMap((it) => (it.status === 'done' && it.docId != null ? [it.docId] : [])),
     }
   }, [patch])
 

@@ -1,5 +1,5 @@
 import { Document, TreeNode } from '@/types/workspace'
-import { File, Calendar, CalendarDays, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, ChevronDown, SlidersHorizontal, Play, Table as TableIcon, HardDrive, ArrowRightLeft, Loader2, Folder, FolderOpen, CornerLeftUp } from 'lucide-react'
+import { File, Calendar, CalendarDays, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, ChevronDown, SlidersHorizontal, Play, Table as TableIcon, HardDrive, ArrowRightLeft, Loader2, Folder, FolderOpen, CornerLeftUp, Plus } from 'lucide-react'
 import { LinkToCard, type LinkToTarget, type LinkToRelation } from '@/components/menu/shared/LinkToCard'
 import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from '@/components/menu/shared/LinkToSidePanel'
 import { BackendActionCard, type BackendTransferConfirmOptions } from '@/components/menu/shared/BackendActionCard'
@@ -35,6 +35,7 @@ import { DocumentIcon } from '@/components/common/DocumentIcon'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { TimelineSortControl } from '@/components/canvas/widgets/sort-control'
 import type { ToolboxSort } from '@/types/workspace'
+import { useToolboxOptional } from '@/components/toolbox/use-toolbox'
 import { groupByDate } from '@/lib/date-groups'
 
 interface DocumentListProps {
@@ -1111,6 +1112,17 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   const [selectedDocuments, setSelectedDocuments] = useState<Set<number>>(new Set())
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; documentIds: number[] } | null>(null)
   const [linkPanelIds, setLinkPanelIds] = useState<number[] | null>(null)
+  // "Add related document…": opens the add panel with the selection as the
+  // relation targets of whatever gets created (see toolbox add/RelationFields).
+  // Optional provider: the list also renders on public shares without a shell.
+  const toolbox = useToolboxOptional()
+  const canAddRelated = Boolean(toolbox && workspaceId)
+  const addRelated = useCallback((ids: number[]) => {
+    if (!toolbox || !workspaceId) return
+    const picked = ids.map(id => documents.find(d => d.id === id)).filter((d): d is Document => !!d)
+    if (picked.length === 0) return
+    toolbox.openAddRelated({ workspaceName: workspaceId, documents: picked })
+  }, [toolbox, workspaceId, documents])
   const [relationSaving, setRelationSaving] = useState(false)
   // Copy to / Move to / Delete from backend — the backend twin of the link panel.
   const [backendPanel, setBackendPanel] = useState<{ ids: number[]; mode: BackendTransferMode } | null>(null)
@@ -1452,6 +1464,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
       case 'copy': onCopyDocuments?.(documentIds); break
       case 'cut': onCutDocuments?.(documentIds); break
       case 'link-to': setLinkPanelIds(documentIds); setContextMenu(null); return
+      case 'add-related': addRelated(documentIds); setContextMenu(null); return
       case 'remove':
         if (documentIds.length === 1) onRemoveDocument?.(documentIds[0])
         else onRemoveDocuments?.(documentIds)
@@ -1507,7 +1520,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     }
     setContextMenu(null)
     setSelectedDocuments(new Set())
-  }, [onCopyDocuments, onCutDocuments, onRemoveDocument, onRemoveDocuments, onDeleteDocument, onDeleteDocuments, onDestroyDocument, onDestroyDocuments, documents])
+  }, [onCopyDocuments, onCutDocuments, onRemoveDocument, onRemoveDocuments, onDeleteDocument, onDeleteDocuments, onDestroyDocument, onDestroyDocuments, documents, addRelated])
 
   const handleEmptyAreaRightClick = useCallback((event: React.MouseEvent) => {
     // Right-clicks inside a portaled dialog bubble here via the React tree —
@@ -1956,6 +1969,19 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                   </Button>
                 )}
 
+                {canAddRelated && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => addRelated(Array.from(selectedDocuments))}
+                    className="flex items-center gap-2"
+                    title="Create a new document related to the selected ones"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add related… ({selectedDocuments.size})
+                  </Button>
+                )}
+
                 {canUseBackends && (
                   <Button
                     variant="outline"
@@ -2220,6 +2246,12 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
               <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('link-to', contextMenu.documentIds)}>
                 <Link2 className="h-3 w-3" />
                 Link to… {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
+              </button>
+            )}
+            {canAddRelated && (
+              <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('add-related', contextMenu.documentIds)}>
+                <Plus className="h-3 w-3" />
+                Add related document… {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
               </button>
             )}
             {contextMenu.documentIds.length === 1 && (

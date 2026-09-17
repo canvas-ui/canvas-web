@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { useToolbox } from '../use-toolbox'
+import { useRelationFields } from './useRelationFields'
+import { RelationFields } from './RelationFields'
 import { useAddTarget, describeTarget, resolveUploadWorkspace } from './useAddTarget'
 import { useFileFields, buildFileDocument } from './useFileFields'
 import { FileMetaFields } from './FileMetaFields'
@@ -70,8 +72,9 @@ function ProgressBar({ item }: { item: UploadItem }) {
 // the OS for the camera (mobile) or restricts the picker to media (desktop).
 // Upload plumbing is identical either way.
 export function FileForm({ capture = false }: { capture?: boolean } = {}) {
-  const { closeAdd } = useToolbox()
+  const { closeAdd, state } = useToolbox()
   const target = useAddTarget()
+  const rel = useRelationFields(target, state.addRelateTo)
   const { showSuccessToast, showErrorToast } = useToastHelpers()
 
   const inputRef = useRef<HTMLInputElement>(null)
@@ -123,9 +126,11 @@ export function FileForm({ capture = false }: { capture?: boolean } = {}) {
       const geo = await meta.geotag.capture()
       const summary = await queue.start(target, (blob, file) =>
         buildFileDocument(blob, file, { tags: meta.tags, comment: meta.comment, geo }))
+      const relFailed = await rel.write(summary.docIds)
       if (summary.failed === 0) {
         const resumedNote = summary.resumed ? ` (${summary.resumed} already uploaded)` : ''
-        showSuccessToast(`${summary.done} file(s) uploaded${resumedNote}`)
+        const relNote = relFailed ? '; some relations failed' : ''
+        showSuccessToast(`${summary.done} file(s) uploaded${resumedNote}${relNote}`)
         closeAdd()
       } else {
         showErrorToast(`${summary.failed} of ${summary.total} file(s) failed — retry keeps what already made it`)
@@ -210,6 +215,8 @@ export function FileForm({ capture = false }: { capture?: boolean } = {}) {
       )}
 
       <FileMetaFields fields={meta} idPrefix="file" multiple={items.length > 1} />
+
+      <RelationFields f={rel} idPrefix="file" />
 
       <p className="text-xs text-muted-foreground">{describeTarget(target)}</p>
 

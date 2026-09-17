@@ -8,12 +8,15 @@ import { useAddTarget, describeTarget } from './useAddTarget'
 import { useLinkFields } from './useLinkFields'
 import { useTagSuggestions } from './useTagSuggestions'
 import { GeotagToggle } from './GeotagToggle'
+import { useRelationFields } from './useRelationFields'
+import { RelationFields } from './RelationFields'
 
 export function LinkForm() {
   const { closeAdd, state } = useToolbox()
   const target = useAddTarget()
   const { showSuccessToast, showErrorToast } = useToastHelpers()
   const f = useLinkFields()
+  const rel = useRelationFields(target, state.addRelateTo)
   const suggestions = useTagSuggestions(state.activeWorkspaceName)
 
   const canSave = !!target && f.canSave
@@ -21,8 +24,9 @@ export function LinkForm() {
   const handleSave = async () => {
     if (!target) return
     try {
-      await f.save(target)
-      showSuccessToast('Link created')
+      const ids = await f.save(target)
+      const failed = await rel.write(ids)
+      showSuccessToast(failed ? 'Link created; some relations failed' : 'Link created')
       closeAdd()
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to create link')
@@ -61,6 +65,8 @@ export function LinkForm() {
       </div>
 
       <GeotagToggle geotag={f.geotag} idPrefix="link-geotag" />
+
+      <RelationFields f={rel} idPrefix="link" />
 
       <p className="text-xs text-muted-foreground">{describeTarget(target)}</p>
 

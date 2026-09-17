@@ -36,6 +36,11 @@ export type ActiveContextType = 'canvas' | 'context' | null
 export type AddKind = 'note' | 'link' | 'todo' | 'identity' | 'sketch' | 'file' | 'photo' | 'existing' | 'folder'
 export type { WorkspaceDocument }
 
+export interface RelateSeed {
+  workspaceName: string
+  documents: WorkspaceDocument[]
+}
+
 export interface ToolboxState {
   t1Open: boolean
   t1View: T1View
@@ -50,6 +55,10 @@ export interface ToolboxState {
   // Add panel — slim creation section next to main content
   addOpen: boolean
   addKind: AddKind | null
+  // Documents the new document should be related to — seeded by "Add related
+  // document…" on a selection. The forms turn it into pending relation rows;
+  // the edges are written once the new id exists (see add/useRelationFields).
+  addRelateTo: RelateSeed | null
   // Edit mode — document being edited in the add panel
   editDocument: WorkspaceDocument | null
   editWorkspaceId: string | null
@@ -98,7 +107,9 @@ type ToolboxAction =
   | { type: 'CLOSE_T1' }
   | { type: 'OPEN_T2_AGENT'; agentId: string }
   | { type: 'CLOSE_T2' }
-  | { type: 'OPEN_ADD'; kind: AddKind | null }
+  // relateTo: undefined keeps the current seed (picking a kind from the
+  // picker), null clears it (a fresh open), a value replaces it.
+  | { type: 'OPEN_ADD'; kind: AddKind | null; relateTo?: RelateSeed | null }
   | { type: 'CLOSE_ADD' }
   | { type: 'OPEN_EDIT'; document: WorkspaceDocument; workspaceId: string }
   | { type: 'SET_TOOLS_TAB'; tab: ToolsTab }
@@ -149,6 +160,7 @@ const initialState: ToolboxState = {
   t2AgentId: null,
   addOpen: false,
   addKind: null,
+  addRelateTo: null,
   editDocument: null,
   editWorkspaceId: null,
   activeContextPath: null,
@@ -187,11 +199,18 @@ function toolboxReducer(state: ToolboxState, action: ToolboxAction): ToolboxStat
     case 'CLOSE_T2':
       return { ...state, t2Open: false, t2AgentId: null }
     case 'OPEN_ADD':
-      return { ...state, addOpen: true, addKind: action.kind, editDocument: null, editWorkspaceId: null }
+      return {
+        ...state,
+        addOpen: true,
+        addKind: action.kind,
+        addRelateTo: action.relateTo === undefined ? state.addRelateTo : action.relateTo,
+        editDocument: null,
+        editWorkspaceId: null,
+      }
     case 'CLOSE_ADD':
-      return { ...state, addOpen: false, addKind: null, editDocument: null, editWorkspaceId: null }
+      return { ...state, addOpen: false, addKind: null, addRelateTo: null, editDocument: null, editWorkspaceId: null }
     case 'OPEN_EDIT':
-      return { ...state, addOpen: true, addKind: null, editDocument: action.document, editWorkspaceId: action.workspaceId }
+      return { ...state, addOpen: true, addKind: null, addRelateTo: null, editDocument: action.document, editWorkspaceId: action.workspaceId }
     case 'SET_TOOLS_TAB':
       return { ...state, toolsTab: action.tab }
     case 'SET_APPS_APPLET':
@@ -378,6 +397,8 @@ export interface ToolboxContextValue {
   closeT2: () => void
   openAdd: (kind: AddKind) => void
   openAddPicker: () => void
+  /** Open the picker with the new document pre-related to `seed.documents`. */
+  openAddRelated: (seed: RelateSeed) => void
   closeAdd: () => void
   openEdit: (document: WorkspaceDocument, workspaceId: string) => void
   setToolsTab: (tab: ToolsTab) => void
@@ -572,7 +593,8 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
   const openAgentT2 = useCallback((agentId: string) => dispatch({ type: 'OPEN_T2_AGENT', agentId }), [])
   const closeT2 = useCallback(() => dispatch({ type: 'CLOSE_T2' }), [])
   const openAdd = useCallback((kind: AddKind) => dispatch({ type: 'OPEN_ADD', kind }), [])
-  const openAddPicker = useCallback(() => dispatch({ type: 'OPEN_ADD', kind: null }), [])
+  const openAddPicker = useCallback(() => dispatch({ type: 'OPEN_ADD', kind: null, relateTo: null }), [])
+  const openAddRelated = useCallback((seed: RelateSeed) => dispatch({ type: 'OPEN_ADD', kind: null, relateTo: seed }), [])
   const closeAdd = useCallback(() => dispatch({ type: 'CLOSE_ADD' }), [])
   const openEdit = useCallback((document: WorkspaceDocument, workspaceId: string) => dispatch({ type: 'OPEN_EDIT', document, workspaceId }), [])
   const setToolsTab = useCallback((tab: ToolsTab) => dispatch({ type: 'SET_TOOLS_TAB', tab }), [])
@@ -790,7 +812,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
 
   return (
     <ToolboxCtx.Provider
-      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, closeAdd, openEdit, setToolsTab, openApplet, setAccentColor, setFilters, setFeatureToggle, setFeatureMode, clearFilters, hasActiveFilters, setTimelineFilter, setGeoBBox, setLensGps, setLensIds, setGeoSelection, setMapDocuments, setSort, saveFilters, deleteBitmap, deleteDataset, createTimeline, deleteTimeline, refreshTimelines }}
+      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, openAddRelated, closeAdd, openEdit, setToolsTab, openApplet, setAccentColor, setFilters, setFeatureToggle, setFeatureMode, clearFilters, hasActiveFilters, setTimelineFilter, setGeoBBox, setLensGps, setLensIds, setGeoSelection, setMapDocuments, setSort, saveFilters, deleteBitmap, deleteDataset, createTimeline, deleteTimeline, refreshTimelines }}
     >
       {children}
     </ToolboxCtx.Provider>

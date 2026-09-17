@@ -1,4 +1,5 @@
 import { useLocation } from 'react-router-dom'
+import { SlidersHorizontal } from 'lucide-react'
 import { useToolbox } from '@/components/toolbox/use-toolbox'
 import { isBare } from './route-chrome'
 
@@ -35,13 +36,9 @@ export function ToolboxFab() {
         'bottom-fab-inset right-6 bg-foreground text-background hover:bg-foreground'
       }
     >
-      {/* Brand mark — a "·|" glyph mirroring the canvas icon: the dot sits at the
-          bottom-left beside an upright bar (items-end drops the short dot to the
-          baseline). currentColor so it inverts with the button state. */}
-      <span className="flex items-end gap-1" aria-hidden>
-        <span className="mb-[1px] h-2 w-2 rounded-full bg-current" />
-        <span className="h-7 w-[3px] rounded-full bg-current" />
-      </span>
+      {/* Sliders: the panel is filters first (then agents, notifications), and
+          the brand "·|" mark read as decoration rather than as a control. */}
+      <SlidersHorizontal className="h-7 w-7" strokeWidth={1.75} aria-hidden />
     </button>
   )
 }

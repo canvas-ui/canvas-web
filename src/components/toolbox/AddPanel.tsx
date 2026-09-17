@@ -140,6 +140,11 @@ export function AddPanel() {
         {isEditMode && editDocument!.schema === 'data/schema/note' && <EditNoteForm />}
         {isEditMode && editDocument!.schema === 'data/schema/link' && <EditLinkForm />}
         {/* Shared insertion menu — same entries/order as the home quick-add */}
+        {!isEditMode && isPicker && state.addRelateTo && (
+          <p className="border-b px-4 py-2 text-xs text-muted-foreground">
+            The new document will be related to {state.addRelateTo.documents.length} selected document{state.addRelateTo.documents.length === 1 ? '' : 's'}.
+          </p>
+        )}
         {!isEditMode && isPicker && <InsertMenu onSelect={openAdd} />}
         {!isEditMode && addKind === 'note' && <NoteForm />}
         {!isEditMode && addKind === 'link' && <LinkForm />}

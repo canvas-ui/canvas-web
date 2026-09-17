@@ -9,12 +9,15 @@ import { useAddTarget, describeTarget } from './useAddTarget'
 import { useNoteFields } from './useNoteFields'
 import { useTagSuggestions } from './useTagSuggestions'
 import { GeotagToggle } from './GeotagToggle'
+import { useRelationFields } from './useRelationFields'
+import { RelationFields } from './RelationFields'
 
 export function NoteForm() {
   const { closeAdd, state } = useToolbox()
   const target = useAddTarget()
   const { showSuccessToast, showErrorToast } = useToastHelpers()
   const f = useNoteFields()
+  const rel = useRelationFields(target, state.addRelateTo)
   const suggestions = useTagSuggestions(state.activeWorkspaceName)
 
   const canSave = !!target && f.canSave
@@ -22,8 +25,9 @@ export function NoteForm() {
   const handleSave = async () => {
     if (!target) return
     try {
-      await f.save(target)
-      showSuccessToast('Note created')
+      const ids = await f.save(target)
+      const failed = await rel.write(ids)
+      showSuccessToast(failed ? 'Note created; some relations failed' : 'Note created')
       closeAdd()
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to create note')
@@ -65,6 +69,8 @@ export function NoteForm() {
       </div>
 
       <GeotagToggle geotag={f.geotag} idPrefix="note-geotag" />
+
+      <RelationFields f={rel} idPrefix="note" />
 
       <p className="text-xs text-muted-foreground">{describeTarget(target)}</p>
 

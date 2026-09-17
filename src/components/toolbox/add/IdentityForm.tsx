@@ -1,5 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { useRelationFields } from './useRelationFields'
+import { RelationFields } from './RelationFields'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { useToolbox } from '../use-toolbox'
 import { useAddTarget, describeTarget } from './useAddTarget'
@@ -13,13 +15,15 @@ export function IdentityForm() {
   const target = useAddTarget()
   const { showSuccessToast, showErrorToast } = useToastHelpers()
   const f = useIdentityFields()
+  const rel = useRelationFields(target, state.addRelateTo)
   const suggestions = useTagSuggestions(state.activeWorkspaceName)
 
   const handleSave = async () => {
     if (!target) return
     try {
-      await f.save(target)
-      showSuccessToast('Identity created')
+      const ids = await f.save(target)
+      const failed = await rel.write(ids)
+      showSuccessToast(failed ? 'Identity created; some relations failed' : 'Identity created')
       closeAdd()
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to create identity')
@@ -46,6 +50,8 @@ export function IdentityForm() {
           className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-elevation-1 transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
       </div>
+
+      <RelationFields f={rel} idPrefix="identity" />
 
       <p className="text-xs text-muted-foreground">{describeTarget(target)}</p>
       <div className="flex justify-end gap-2">

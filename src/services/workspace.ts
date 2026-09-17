@@ -1257,6 +1257,22 @@ export interface DocumentRelations {
   incoming: DocumentRelation[]
 }
 
+/**
+ * The predicate registry on its own (GET …/documents/relations/predicates).
+ * The add forms pick relations before a document exists, so they cannot use
+ * the per-document read. Falls back to the local mirror on older servers.
+ */
+export async function getRelationPredicates(workspaceId: string): Promise<string[]> {
+  try {
+    const res = await api.get<{ predicates?: string[] }>(
+      `${API_ROUTES.workspaces}/${workspaceId}/documents/relations/predicates`
+    )
+    return res?.predicates?.length ? res.predicates : [...RELATION_PREDICATES]
+  } catch {
+    return [...RELATION_PREDICATES]
+  }
+}
+
 export async function getDocumentRelations(
   workspaceId: string,
   documentId: number | string,

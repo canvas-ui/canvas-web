@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { useRelationFields } from './useRelationFields'
+import { RelationFields } from './RelationFields'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { createBackendContainerDocument } from '@/services/workspace'
 import { useToolbox } from '../use-toolbox'
@@ -17,6 +19,7 @@ export function TodoForm() {
   const target = useAddTarget()
   const { showSuccessToast, showErrorToast } = useToastHelpers()
   const f = useTodoFields()
+  const rel = useRelationFields(target, state.addRelateTo)
   const suggestions = useTagSuggestions(state.activeWorkspaceName)
   // Writable remote destinations (rw GitHub repos) — 'canvas' is the local
   // default; remote choices file the todo as an issue there and it syncs back
@@ -51,8 +54,9 @@ export function TodoForm() {
     }
     if (!target) return
     try {
-      await f.save(target)
-      showSuccessToast('Todo created')
+      const ids = await f.save(target)
+      const failed = await rel.write(ids)
+      showSuccessToast(failed ? 'Todo created; some relations failed' : 'Todo created')
       closeAdd()
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to create todo')
@@ -101,6 +105,7 @@ export function TodoForm() {
         </div>
       )}
       <GeotagToggle geotag={f.geotag} idPrefix="todo-geotag" />
+      {!remote && <RelationFields f={rel} idPrefix="todo" />}
       {!remote && <p className="text-xs text-muted-foreground">{describeTarget(target)}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="outline" size="sm" onClick={closeAdd} disabled={f.saving || savingRemote}>Cancel</Button>
