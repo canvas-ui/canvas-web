@@ -1,3 +1,4 @@
+import { workspaceAddress } from '@/lib/workspace-address'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./card";
 import { Button } from "./button";
 import { Play, Square, DoorOpen, Trash2, Edit, Settings } from "lucide-react";
@@ -107,7 +108,7 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onS
               <Button
                 variant="outline"
                 size="icon"
-                onClick={() => onStart(workspace.name)}
+                onClick={() => onStart(workspaceAddress(workspace))}
                 title={isOffline ? `Remote unreachable${workspace.statusMessage ? `: ${workspace.statusMessage}` : ''}` : 'Start Workspace'}
                 disabled={isError || isNotFound || isOffline}
               >
@@ -117,7 +118,7 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onS
               <Button
                 variant="outline"
                 size="icon"
-                onClick={() => onStop(workspace.name)}
+                onClick={() => onStop(workspaceAddress(workspace))}
                 title="Stop Workspace"
                 disabled={isError || isNotFound}
               >
@@ -128,7 +129,7 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onS
               <Button
                 variant="outline"
                 size="icon"
-                onClick={() => onEnter(workspace.name)}
+                onClick={() => onEnter(workspaceAddress(workspace))}
                 title="Enter Workspace"
                 disabled={isError || isNotFound}
               >

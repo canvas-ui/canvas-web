@@ -1,3 +1,4 @@
+import { workspaceAddress } from '@/lib/workspace-address'
 import { PageHeader } from '@/components/common/page-header'
 import { useCallback, useEffect, useState } from "react"
 import { Icon } from "@iconify/react"
@@ -256,7 +257,7 @@ export default function WorkspacesPage() {
     try {
       const updatedWorkspace = await startWorkspace(workspaceName)
       // The service now returns the updated workspace object directly
-      setWorkspaces(prev => prev.map(ws => ws.name === updatedWorkspace.name ? (updatedWorkspace as Workspace) : ws))
+      setWorkspaces(prev => prev.map(ws => ws.id === updatedWorkspace.id ? ({ ...ws, ...updatedWorkspace } as Workspace) : ws))
       showToast({
         title: 'Success',
         description: `Workspace '${updatedWorkspace.label || updatedWorkspace.name}' started.`
@@ -293,7 +294,7 @@ export default function WorkspacesPage() {
     try {
       const updatedWorkspace = await stopWorkspace(workspaceName)
       // The service now returns the updated workspace object directly
-      setWorkspaces(prev => prev.map(ws => ws.name === updatedWorkspace.name ? (updatedWorkspace as Workspace) : ws))
+      setWorkspaces(prev => prev.map(ws => ws.id === updatedWorkspace.id ? ({ ...ws, ...updatedWorkspace } as Workspace) : ws))
       showToast({
         title: 'Success',
         description: `Workspace '${updatedWorkspace.label || updatedWorkspace.name}' stopped.`
@@ -335,7 +336,7 @@ export default function WorkspacesPage() {
   const { rowProps, handleProps, draggingIndex, insertLineClass } = useListReorder((from, to) => {
     const next = moveItem(workspaces, from, to)
     setWorkspaces(next)
-    persistSequentialOrder(next, (ws, order) => updateWorkspace(ws.name, { order }))
+    persistSequentialOrder(next, (ws, order) => updateWorkspace(workspaceAddress(ws), { order }))
       .then(({ failed }) => {
         window.dispatchEvent(new CustomEvent('workspaces:refresh'))
         if (failed) showToast({ title: 'Partial reorder', description: `${failed} workspace(s) could not be reordered`, variant: 'destructive' })
@@ -546,8 +547,8 @@ export default function WorkspacesPage() {
                       // Mobile lands on the section list in the menu drawer
                       // instead of General, so the other sections stay reachable.
                       onSettings={(w) => {
-                        if (isMobile) openM2Drawer('workspaces', 'settings', w.name)
-                        else navigate(`/workspaces/${w.name}/settings/general`)
+                        if (isMobile) openM2Drawer('workspaces', 'settings', workspaceAddress(w))
+                        else navigate(`/workspaces/${workspaceAddress(w)}/settings/general`)
                       }}
                       onDestroy={handleDestroyWorkspace}
                     />

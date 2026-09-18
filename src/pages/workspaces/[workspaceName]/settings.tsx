@@ -1009,7 +1009,7 @@ export default function WorkspaceSettingsPage() {
   const [isLoadingDevices, setIsLoadingDevices] = useState(false)
   const [deviceBusy, setDeviceBusy] = useState<string | null>(null)
 
-  const workspaceId = workspace?.name || workspaceName || ''
+  const workspaceId = workspaceName || workspace?.id || ''
   // Latest id for the loaders below: keeping them identity-stable (deps only on
   // the stable showToast) lets effects depend on them without re-running when
   // the workspace object loads.
@@ -1126,7 +1126,7 @@ export default function WorkspaceSettingsPage() {
           setDescription(ws.description || '')
           setColor(ws.color || '#FFFFFF')
           setIcon(ws.icon ?? null)
-          await Promise.all([loadShares(ws.name), loadRuntimeSettings(ws.name)])
+          await Promise.all([loadShares(workspaceName || ws.id), loadRuntimeSettings(workspaceName || ws.id)])
         }
       } catch {
         showToast({ title: 'Error', description: 'Failed to load workspace', variant: 'destructive' })
@@ -1161,7 +1161,7 @@ export default function WorkspaceSettingsPage() {
     if (!workspace) return
     setIsSaving(true)
     try {
-      await updateWorkspace(workspace.name, { label: label.trim(), description: description.trim(), color, icon })
+      await updateWorkspace(workspaceId, { label: label.trim(), description: description.trim(), color, icon })
       window.dispatchEvent(new CustomEvent('workspaces:refresh'))
       showToast({ title: 'Saved', description: 'Workspace settings updated' })
     } catch (err) {
@@ -1176,7 +1176,7 @@ export default function WorkspaceSettingsPage() {
     if (!window.confirm(`Destroy workspace "${workspace.label || workspace.name}"? This cannot be undone.`)) return
     setIsDestroying(true)
     try {
-      await removeWorkspace(workspace.name)
+      await removeWorkspace(workspaceId)
       window.dispatchEvent(new CustomEvent('workspaces:refresh'))
       showToast({ title: 'Destroyed', description: `${workspace.label || workspace.name} has been removed` })
       navigate('/workspaces')
@@ -1194,7 +1194,7 @@ export default function WorkspaceSettingsPage() {
     for (const id of [workspaceName, workspace?.name, workspace?.id]) {
       if (id) invalidateWorkspaceTreeCache(id, 'backends')
     }
-    window.dispatchEvent(new CustomEvent('workspace:tree:refresh', { detail: { workspaceName: workspace?.name || workspaceName } }))
+    window.dispatchEvent(new CustomEvent('workspace:tree:refresh', { detail: { workspaceName: workspaceId } }))
   }
 
   const toggleDataBackend = async (backend: Backend) => {
@@ -1309,9 +1309,9 @@ export default function WorkspaceSettingsPage() {
     if (!window.confirm(`Revoke public share for "${share.path}"?`)) return
     setBusyAction(`share:${share.code}`)
     try {
-      await revokeWorkspacePublicCanvasShare(workspace.name, share.code)
-      await loadShares(workspace.name)
-      window.dispatchEvent(new CustomEvent('workspace:tree:refresh', { detail: { workspaceName: workspace.name } }))
+      await revokeWorkspacePublicCanvasShare(workspaceId, share.code)
+      await loadShares(workspaceId)
+      window.dispatchEvent(new CustomEvent('workspace:tree:refresh', { detail: { workspaceName: workspaceId } }))
       showToast({ title: 'Revoked', description: 'Public canvas link no longer works' })
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to revoke share', variant: 'destructive' })

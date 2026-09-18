@@ -1,7 +1,7 @@
 {
   "name": "canvas-web",
   "private": true,
-  "version": "2.12.2",
+  "version": "2.12.3",
   "license": "AGPL-3.0-or-later",
   "author": "Jozef Melich <me@idnc.sk>",
   "type": "module",
@@ -9,6 +9,7 @@
     "dev": "canvas-wallpapers-copy public/wallpapers && vite",
     "build": "canvas-wallpapers-copy public/wallpapers && node scripts/generate-color-fallbacks.mjs && tsc -b && vite build",
     "lint": "eslint .",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "preview": "vite preview",
     "build:fallbacks": "node scripts/generate-color-fallbacks.mjs",
     "shots": "node scripts/screenshot.mjs"

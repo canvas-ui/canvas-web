@@ -933,7 +933,7 @@ export default function WorkspaceDetailPage() {
     if (!workspace) return;
     setIsStartingWorkspace(true);
     try {
-      const updated = await startWorkspace(workspace.name);
+      const updated = await startWorkspace(workspaceName || workspace.id);
       setWorkspace(updated);
       showToast({ title: 'Success', description: 'Workspace started successfully' });
       window.dispatchEvent(new CustomEvent('workspaces:refresh'));
@@ -948,8 +948,8 @@ export default function WorkspaceDetailPage() {
   const handleRemoveDocument = async (documentId: number) => {
     if (!workspace) return;
     try {
-      await removeWorkspaceDocuments(workspace.name, [documentId], selectedPath, [], selectedTreeName, selectedTreeType, { trashIfOrphaned: true });
-      invalidateDocumentCache(workspace.name, selectedTreeName, selectedPath);
+      await removeWorkspaceDocuments(workspaceName || workspace.id, [documentId], selectedPath, [], selectedTreeName, selectedTreeType, { trashIfOrphaned: true });
+      invalidateDocumentCache(workspaceName || workspace.id, selectedTreeName, selectedPath);
       setDocuments(prev => prev.filter(doc => doc.id !== documentId));
       setDocumentsTotalCount(prev => Math.max(0, prev - 1));
       showToast({ title: 'Success', description: 'Document removed from workspace path.' });
@@ -961,8 +961,8 @@ export default function WorkspaceDetailPage() {
   const handleDeleteDocument = async (documentId: number) => {
     if (!workspace) return;
     try {
-      await deleteWorkspaceDocuments(workspace.name, [documentId], selectedPath, [], selectedTreeName, selectedTreeType);
-      invalidateDocumentCache(workspace.name, selectedTreeName, selectedPath);
+      await deleteWorkspaceDocuments(workspaceName || workspace.id, [documentId], selectedPath, [], selectedTreeName, selectedTreeType);
+      invalidateDocumentCache(workspaceName || workspace.id, selectedTreeName, selectedPath);
       setDocuments(prev => prev.filter(doc => doc.id !== documentId));
       setDocumentsTotalCount(prev => Math.max(0, prev - 1));
       showToast({ title: 'Success', description: 'Document deleted.' });
@@ -974,8 +974,8 @@ export default function WorkspaceDetailPage() {
   const handleRemoveDocuments = async (documentIds: number[]) => {
     if (!workspace) return;
     try {
-      await removeWorkspaceDocuments(workspace.name, documentIds, selectedPath, [], selectedTreeName, selectedTreeType, { trashIfOrphaned: true });
-      invalidateDocumentCache(workspace.name, selectedTreeName, selectedPath);
+      await removeWorkspaceDocuments(workspaceName || workspace.id, documentIds, selectedPath, [], selectedTreeName, selectedTreeType, { trashIfOrphaned: true });
+      invalidateDocumentCache(workspaceName || workspace.id, selectedTreeName, selectedPath);
       setDocuments(prev => prev.filter(doc => !documentIds.includes(doc.id)));
       setDocumentsTotalCount(prev => Math.max(0, prev - documentIds.length));
       showToast({ title: 'Success', description: `${documentIds.length} document(s) removed.` });
@@ -987,8 +987,8 @@ export default function WorkspaceDetailPage() {
   const handleDeleteDocuments = async (documentIds: number[]) => {
     if (!workspace) return;
     try {
-      await deleteWorkspaceDocuments(workspace.name, documentIds, selectedPath, [], selectedTreeName, selectedTreeType);
-      invalidateDocumentCache(workspace.name, selectedTreeName, selectedPath);
+      await deleteWorkspaceDocuments(workspaceName || workspace.id, documentIds, selectedPath, [], selectedTreeName, selectedTreeType);
+      invalidateDocumentCache(workspaceName || workspace.id, selectedTreeName, selectedPath);
       setDocuments(prev => prev.filter(doc => !documentIds.includes(doc.id)));
       setDocumentsTotalCount(prev => Math.max(0, prev - documentIds.length));
       showToast({ title: 'Success', description: `${documentIds.length} document(s) deleted.` });
@@ -1000,7 +1000,7 @@ export default function WorkspaceDetailPage() {
   const handleDestroyDocument = async (documentId: number) => {
     if (!workspace) return;
     try {
-      const result = await destroyWorkspaceDocuments(workspace.name, [documentId]);
+      const result = await destroyWorkspaceDocuments(workspaceName || workspace.id, [documentId]);
       if (result.failed?.length) {
         showToast({ title: 'Error', description: result.failed[0].reason, variant: 'destructive' });
         return;
@@ -1016,7 +1016,7 @@ export default function WorkspaceDetailPage() {
   const handleDestroyDocuments = async (documentIds: number[]) => {
     if (!workspace) return;
     try {
-      const result = await destroyWorkspaceDocuments(workspace.name, documentIds);
+      const result = await destroyWorkspaceDocuments(workspaceName || workspace.id, documentIds);
       const succeededIds = new Set(result.successful?.filter(r => r.docDeleted).map(r => r.id) ?? []);
       setDocuments(prev => prev.filter(doc => !succeededIds.has(doc.id)));
       setDocumentsTotalCount(prev => Math.max(0, prev - succeededIds.size));
@@ -1104,7 +1104,7 @@ export default function WorkspaceDetailPage() {
     const confirmation = window.prompt(`Type PURGE to permanently delete all ${documentsTotalCount} matching documents.`);
     if (confirmation !== 'PURGE') return;
     try {
-      const result = await purgeWorkspaceDocuments(workspace.name, selectedPath, [], [], {}, selectedTreeName);
+      const result = await purgeWorkspaceDocuments(workspaceName || workspace.id, selectedPath, [], [], {}, selectedTreeName);
       await fetchDocuments();
       showToast({ title: 'Success', description: `${result.deleted} document(s) purged.` });
     } catch (err) {
@@ -1282,7 +1282,7 @@ export default function WorkspaceDetailPage() {
       urlDisplay={urlDisplay}
       contextPath={selectedPath}
       treeName={selectedTreeName}
-      workspaceId={workspace.name}
+      workspaceId={workspaceName || workspace.id}
       documents={shownDocuments}
       isLoading={isLoadingDocuments}
       totalCount={listedTotalCount}
@@ -1339,7 +1339,7 @@ export default function WorkspaceDetailPage() {
           an array of children is truthy even when every element is false. */}
       {showCanvasGrid && selectedNode ? (
         <CanvasGrid
-          workspaceId={workspace.name}
+          workspaceId={workspaceName || workspace.id}
           treeName={selectedTreeName}
           path={selectedPath}
           layerId={selectedNode.id}
@@ -1353,7 +1353,7 @@ export default function WorkspaceDetailPage() {
       ) : !isBackendsPath && activeContentView.kind === 'columns' ? (
         <SchemaColumnsBoard
           documents={shownDocuments}
-          workspaceId={workspace.name}
+          workspaceId={workspaceName || workspace.id}
           columns={activeContentView.columns ?? []}
           onColumnsChange={(columns) => saveContentViews(
             contentViews.map(v => (v.id === activeContentView.id ? { ...v, columns } : v)),
@@ -1362,7 +1362,7 @@ export default function WorkspaceDetailPage() {
       ) : !isBackendsPath && activeContentView.kind === 'app' && activeContentView.app ? (
         <ContentAppView
           app={activeContentView.app}
-          workspaceId={workspace.name}
+          workspaceId={workspaceName || workspace.id}
           treeName={selectedTreeName}
           path={selectedPath}
         />
@@ -1413,7 +1413,7 @@ export default function WorkspaceDetailPage() {
         <SectionBackButton
           title={isMobile ? 'Back to workspace tree' : 'Back to workspaces'}
           onBack={() => (isMobile
-            ? openM2Drawer('workspaces', 'detail', workspace.name)
+            ? openM2Drawer('workspaces', 'detail', workspaceName || workspace.id)
             : navigate('/workspaces'))}
         />
         <span
@@ -1425,7 +1425,7 @@ export default function WorkspaceDetailPage() {
         />
         <button
           type="button"
-          onClick={() => openM2Drawer('workspaces', 'detail', workspace.name)}
+          onClick={() => openM2Drawer('workspaces', 'detail', workspaceName || workspace.id)}
           title="Browse workspace tree"
           className="flex min-w-0 items-center gap-1.5 truncate rounded px-1 -mx-1 text-left text-sm font-medium transition-colors hover:bg-accent"
         >

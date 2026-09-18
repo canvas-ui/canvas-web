@@ -1,3 +1,4 @@
+import { workspaceAddress } from '@/lib/workspace-address'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useRef, useState } from 'react'
 import { Plus, Play, Square, Settings, GripVertical } from 'lucide-react'
@@ -43,7 +44,7 @@ export function WorkspaceList() {
   const { rowProps, handleProps, draggingIndex, insertLineClass } = useListReorder((from, to) => {
     const next = moveItem(orderedWorkspaces, from, to)
     setOptimisticOrder({ base: workspaces, order: next })
-    persistSequentialOrder(next, (ws, order) => updateWorkspace(ws.name, { order }))
+    persistSequentialOrder(next, (ws, order) => updateWorkspace(workspaceAddress(ws), { order }))
       .then(({ failed }) => {
         window.dispatchEvent(new CustomEvent('workspaces:refresh'))
         if (failed) showToast({ title: 'Partial reorder', description: `${failed} workspace(s) could not be reordered`, variant: 'destructive' })
@@ -51,7 +52,7 @@ export function WorkspaceList() {
   })
 
   const styleFor = (ws: Workspace): LayerStyle =>
-    styleOverrides.get(ws.name) ?? { icon: ws.icon ?? undefined, color: ws.color ?? undefined }
+    styleOverrides.get(workspaceAddress(ws)) ?? { icon: ws.icon ?? undefined, color: ws.color ?? undefined }
 
   const handleStyleChange = (name: string, current: LayerStyle, change: LayerStyle) => {
     const next: LayerStyle = { ...current, ...change }
@@ -71,39 +72,39 @@ export function WorkspaceList() {
   }
 
   const handleSelect = (ws: Workspace) => {
-    selectEntity(ws.name)
-    openM2('detail', ws.name)
+    selectEntity(workspaceAddress(ws))
+    openM2('detail', workspaceAddress(ws))
     // Resume where the user left this workspace instead of leaving the content
     // sheet on the previous workspace's path. Desktop only: on a phone the
     // navigation would close the M2 drawer that just opened.
-    if (!isMobile && recallWorkspacePath(ws.name)) navigate(workspaceResumeUrl(ws.name))
+    if (!isMobile && recallWorkspacePath(workspaceAddress(ws))) navigate(workspaceResumeUrl(workspaceAddress(ws)))
   }
 
   const handleStart = async (e: React.MouseEvent, ws: Workspace) => {
     e.stopPropagation()
-    setBusyIds(prev => new Set(prev).add(ws.name))
+    setBusyIds(prev => new Set(prev).add(workspaceAddress(ws)))
     try {
-      await startWorkspace(ws.name)
+      await startWorkspace(workspaceAddress(ws))
       showToast({ title: 'Success', description: `${ws.label || ws.name} started` })
       window.dispatchEvent(new CustomEvent('workspaces:refresh'))
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Start failed', variant: 'destructive' })
     } finally {
-      setBusyIds(prev => { const s = new Set(prev); s.delete(ws.name); return s })
+      setBusyIds(prev => { const s = new Set(prev); s.delete(workspaceAddress(ws)); return s })
     }
   }
 
   const handleStop = async (e: React.MouseEvent, ws: Workspace) => {
     e.stopPropagation()
-    setBusyIds(prev => new Set(prev).add(ws.name))
+    setBusyIds(prev => new Set(prev).add(workspaceAddress(ws)))
     try {
-      await stopWorkspace(ws.name)
+      await stopWorkspace(workspaceAddress(ws))
       showToast({ title: 'Success', description: `${ws.label || ws.name} stopped` })
       window.dispatchEvent(new CustomEvent('workspaces:refresh'))
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Stop failed', variant: 'destructive' })
     } finally {
-      setBusyIds(prev => { const s = new Set(prev); s.delete(ws.name); return s })
+      setBusyIds(prev => { const s = new Set(prev); s.delete(workspaceAddress(ws)); return s })
     }
   }
 
@@ -134,8 +135,8 @@ export function WorkspaceList() {
         ) : (
           <div className="space-y-1.5 px-2">
             {orderedWorkspaces.map((ws, index) => {
-              const isActive = state.selectedEntityId === ws.name
-              const isBusy = busyIds.has(ws.name)
+              const isActive = state.selectedEntityId === workspaceAddress(ws)
+              const isBusy = busyIds.has(workspaceAddress(ws))
               const isInactive = ws.status !== 'active'
               const style = styleFor(ws)
               const accent = visibleAccentColor(style.color)
@@ -184,12 +185,12 @@ export function WorkspaceList() {
                       onClick={(e) => {
                         if (isCoarsePointer()) return // bubbles to the row → open workspace
                         e.stopPropagation()
-                        setPicker({ x: Math.min(e.clientX, window.innerWidth - 290), y: Math.min(e.clientY, window.innerHeight - 360), name: ws.name })
+                        setPicker({ x: Math.min(e.clientX, window.innerWidth - 290), y: Math.min(e.clientY, window.innerHeight - 360), name: workspaceAddress(ws) })
                       }}
                       onContextMenu={(e) => {
                         e.preventDefault()
                         e.stopPropagation()
-                        setPicker({ x: Math.min(e.clientX, window.innerWidth - 290), y: Math.min(e.clientY, window.innerHeight - 360), name: ws.name })
+                        setPicker({ x: Math.min(e.clientX, window.innerWidth - 290), y: Math.min(e.clientY, window.innerHeight - 360), name: workspaceAddress(ws) })
                       }}
                       className="shrink-0 rounded p-0.5 hover:bg-muted-foreground/10 touch-target"
                     >
@@ -238,12 +239,12 @@ export function WorkspaceList() {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation()
-                          selectEntity(ws.name)
+                          selectEntity(workspaceAddress(ws))
                           // Mobile gets the section list as its own step (the
                           // drawer closes on navigation, so jumping straight to
                           // a section would strand the user in one pane).
-                          if (isMobile) { openM2('settings', ws.name) }
-                          else { navigate(`/workspaces/${ws.name}/settings/general`) }
+                          if (isMobile) { openM2('settings', workspaceAddress(ws)) }
+                          else { navigate(`/workspaces/${workspaceAddress(ws)}/settings/general`) }
                         }}
                         className="flex items-center justify-center w-6 h-6 rounded hover:bg-muted-foreground/10 text-muted-foreground transition-colors"
                         title="Settings"
@@ -281,7 +282,7 @@ export function WorkspaceList() {
       </div>
 
       {picker && (() => {
-        const ws = workspaces.find(w => w.name === picker.name)
+        const ws = workspaces.find(w => workspaceAddress(w) === picker.name)
         if (!ws) return null
         const current = styleFor(ws)
         return (
