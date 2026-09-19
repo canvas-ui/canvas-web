@@ -1,3 +1,4 @@
+import { StorageScanIndicator } from '@/components/notifications/StorageScanIndicator';
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { Filter } from 'lucide-react';
@@ -1372,6 +1373,7 @@ export default function WorkspaceDetailPage() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
+      <StorageScanIndicator key={workspace.id} workspaceId={workspace.id} />
       {/* Compact workspace status bar — bottom border carries the workspace
           color as the primary accent; near-white colors fall back to the
           theme border so the accent never vanishes on the light background. */}
