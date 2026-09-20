@@ -1299,8 +1299,8 @@ export default function WorkspaceDetailPage() {
       onDestroyDocuments={handleDestroyDocuments}
       onCopyDocuments={handleCopyDocuments}
       onCutDocuments={handleCutDocuments}
-      onPasteDocuments={handlePasteDocuments}
-      onImportDocuments={handleImportDocuments}
+      onPasteDocuments={isBackendsPath ? undefined : handlePasteDocuments}
+      onImportDocuments={isBackendsPath ? undefined : handleImportDocuments}
       onSelectionChange={setLeftSelection}
       selectedCount={leftSelection.length}
       onUrlClick={() => openM2Drawer('workspaces', 'detail', workspaceName ?? null)}
@@ -1850,7 +1850,7 @@ function SideWorkspaceCanvas({
           setClipboard({ documentIds, operation: 'cut', sourcePath: pane.path, sourceTreeName: pane.treeName });
           window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: { documentIds, operation: 'cut' } }));
         }}
-        onPasteDocuments={pasteDocuments}
+        onPasteDocuments={pane.treeName === 'backends' ? undefined : pasteDocuments}
         onSelectionChange={onSelectionChange}
         pastedDocumentIds={clipboard?.documentIds}
         linkTree={tree}

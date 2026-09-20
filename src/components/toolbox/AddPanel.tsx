@@ -2,7 +2,7 @@ import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { sketchEditor } from '@/components/editors/registry'
-import { useAddTarget } from './add/useAddTarget'
+import { useAddTarget, useBackendAddTarget } from './add/useAddTarget'
 import { useCallback, useRef, useState } from 'react'
 import { X, StickyNote, Link as LinkIcon, Upload, Camera, Brush, Plus, Pencil, FileSearch, FolderPlus, ListTodo, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -41,16 +41,20 @@ export function AddPanel() {
   useEscapeClose(closeAdd, state.addOpen)
   const { addOpen, addKind, editDocument } = state
   const target = useAddTarget()
+  const backend = useBackendAddTarget(target)
+  const allowedBackendKinds = ['file', 'photo', 'folder']
+  const backendBlockedKind = backend.isBackend && !!addKind && !allowedBackendKinds.includes(addKind)
+  const formKey = target?.mode === 'workspace' ? `${target.workspaceName}:${target.treeName}:${target.path}` : target?.contextId
   const navigate = useNavigate()
 
   // Sketching needs the full viewport, not a side panel: picking Sketch
   // hands off to the standalone editor surface bound to the current target
   // (see components/editors/registry.ts).
   useEffect(() => {
-    if (!addOpen || addKind !== 'sketch') return
+    if (!addOpen || addKind !== 'sketch' || backend.isBackend) return
     closeAdd()
     navigate(sketchEditor.createUrl(target))
-  }, [addOpen, addKind, target, closeAdd, navigate])
+  }, [addOpen, addKind, target, closeAdd, navigate, backend.isBackend])
   // Drawer vs docked card: what matters is whether the content column
   // survives docking, not whether this is a phone-shaped viewport.
   const asDrawer = useIsTooNarrowToDock()
@@ -79,7 +83,7 @@ export function AddPanel() {
   if (!addOpen) return null
 
   const isEditMode = Boolean(editDocument)
-  const isPicker = !isEditMode && !addKind
+  const isPicker = !isEditMode && (!addKind || backendBlockedKind)
 
   let headerLabel: string
   let HeaderIcon: typeof StickyNote
@@ -87,7 +91,7 @@ export function AddPanel() {
   if (isEditMode) {
     headerLabel = editDocument!.schema === 'data/schema/note' ? 'Edit Note' : 'Edit Link'
     HeaderIcon = editDocument!.schema === 'data/schema/note' ? StickyNote : LinkIcon
-  } else if (addKind) {
+  } else if (addKind && !backendBlockedKind) {
     headerLabel = TITLES[addKind].label
     HeaderIcon = TITLES[addKind].icon
   } else {
@@ -145,15 +149,20 @@ export function AddPanel() {
             The new document will be related to {state.addRelateTo.documents.length} selected document{state.addRelateTo.documents.length === 1 ? '' : 's'}.
           </p>
         )}
-        {!isEditMode && isPicker && <InsertMenu onSelect={openAdd} />}
-        {!isEditMode && addKind === 'note' && <NoteForm />}
-        {!isEditMode && addKind === 'link' && <LinkForm />}
-        {!isEditMode && addKind === 'todo' && <TodoForm />}
-        {!isEditMode && addKind === 'identity' && <IdentityForm />}
-        {!isEditMode && addKind === 'file' && <FileForm />}
-        {!isEditMode && addKind === 'photo' && <FileForm capture />}
-        {!isEditMode && addKind === 'existing' && <ExistingDocsForm />}
-        {!isEditMode && addKind === 'folder' && <FolderForm />}
+        {!isEditMode && backend.isBackend && (
+          <p className="border-b px-4 py-3 text-xs text-muted-foreground">
+            {backend.loading ? 'Checking storage destination…' : backend.error || 'Files are saved directly to this backend folder. Notes and other database documents belong in context or directory trees.'}
+          </p>
+        )}
+        {!isEditMode && isPicker && (!backend.isBackend || backend.destination) && <InsertMenu onSelect={openAdd} omit={backend.isBackend ? ['note', 'link', 'todo', 'identity', 'sketch', 'existing'] : undefined} />}
+        {!isEditMode && !backend.isBackend && addKind === 'note' && <NoteForm />}
+        {!isEditMode && !backend.isBackend && addKind === 'link' && <LinkForm />}
+        {!isEditMode && !backend.isBackend && addKind === 'todo' && <TodoForm />}
+        {!isEditMode && !backend.isBackend && addKind === 'identity' && <IdentityForm />}
+        {!isEditMode && (!backend.isBackend || backend.destination) && addKind === 'file' && <FileForm key={formKey} />}
+        {!isEditMode && (!backend.isBackend || backend.destination) && addKind === 'photo' && <FileForm key={formKey} capture />}
+        {!isEditMode && !backend.isBackend && addKind === 'existing' && <ExistingDocsForm />}
+        {!isEditMode && (!backend.isBackend || backend.destination) && addKind === 'folder' && <FolderForm key={formKey} />}
       </div>
     </div>
     </>

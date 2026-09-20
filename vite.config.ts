@@ -92,36 +92,12 @@ export default defineConfig({
         // covers files, which GET share targets can't receive — handled by the
         // custom service worker (src/sw.ts), not a server route.
         // Launcher shortcuts (long-press the installed icon / right-click the
-        // taskbar pin): the standalone Notes app plus the quick-add flows.
+        // taskbar pin): keep capture and the general file picker separate.
         shortcuts: [
-          {
-            name: 'Notes',
-            short_name: 'Notes',
-            description: 'Open the Notes app',
-            url: '/apps/notes',
-            icons: [{ src: '/images/logo_128x128.png', sizes: '128x128', type: 'image/png' }],
-          },
-          {
-            name: 'Add Note',
-            short_name: 'Add Note',
-            description: 'Jot a note, then link it where it belongs',
-            url: '/apps/add/note',
-            icons: [{ src: '/images/logo_128x128.png', sizes: '128x128', type: 'image/png' }],
-          },
-          {
-            name: 'Add Todo',
-            short_name: 'Add Todo',
-            description: 'Capture a todo, due today by default',
-            url: '/apps/add/todo',
-            icons: [{ src: '/images/logo_128x128.png', sizes: '128x128', type: 'image/png' }],
-          },
-          {
-            name: 'Add Photo',
-            short_name: 'Add Photo',
-            description: 'Snap or pick a photo, then link it where it belongs',
-            url: '/apps/add/photo',
-            icons: [{ src: '/images/logo_128x128.png', sizes: '128x128', type: 'image/png' }],
-          },
+          { name: 'Add Photo', short_name: 'Add Photo', description: 'Take a photo or video', url: '/apps/add/photo', icons: [{ src: '/images/logo_128x128.png', sizes: '128x128', type: 'image/png' }] },
+          { name: 'Add File', short_name: 'Add File', description: 'Upload files, including photos and videos', url: '/apps/add/file', icons: [{ src: '/images/logo_128x128.png', sizes: '128x128', type: 'image/png' }] },
+          { name: 'Add Note', short_name: 'Add Note', description: 'Write a note', url: '/apps/add/note', icons: [{ src: '/images/logo_128x128.png', sizes: '128x128', type: 'image/png' }] },
+          { name: 'Add Todo', short_name: 'Add Todo', description: 'Capture a todo', url: '/apps/add/todo', icons: [{ src: '/images/logo_128x128.png', sizes: '128x128', type: 'image/png' }] },
         ],
         share_target: {
           action: '/share-target',

@@ -3,17 +3,19 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { HomeFab } from '@/components/home/HomeFab'
 import type { QuickAddInitialData, QuickAddKind } from '@/components/home/quick-add-types'
 
-const SHARE_CACHE = 'share-target-inbox'
+import { SHARE_CACHE } from '@/lib/share-inbox'
 
 // Keyed by the ?error= codes src/sw.ts redirects with, plus the local 'expired'
 // case for a token whose inbox entry is already gone.
 const SHARE_ERRORS: Record<string, string> = {
-  'too-large': 'That file is too large to share into Canvas. Upload it from the app instead.',
+  'too-large': 'Android shares are limited to 100 MiB in total for temporary device storage. Nothing was uploaded. Use Add File to upload larger files directly.',
   'stash-failed': "Canvas couldn't hold on to the shared file — device storage may be full. Try again, or upload it from the app.",
   expired: 'Nothing shared, or the share expired.',
 }
 
 interface ShareMeta {
+  status?: 'receiving' | 'ready' | 'error'
+  error?: string
   title: string
   text: string
   url: string
@@ -22,18 +24,28 @@ interface ShareMeta {
 
 async function readShareInbox(token: string): Promise<{ kind: QuickAddKind; data: QuickAddInitialData } | null> {
   const cache = await caches.open(SHARE_CACHE)
-  const metaRes = await cache.match(`/share-target-inbox/${token}/meta`)
-  if (!metaRes) return null
-  const meta: ShareMeta = await metaRes.json()
+  let meta: ShareMeta | null = null
+  // Staging is local and may outlive the redirect. No fake upload percentage:
+  // the browser does not expose progress for parsing an incoming share.
+  const deadline = Date.now() + 5 * 60_000
+  while (Date.now() < deadline) {
+    const response = await cache.match(`/share-target-inbox/${token}/meta`)
+    if (!response) return null
+    meta = await response.json()
+    if (meta?.status === 'error') throw new Error(meta.error || 'stash-failed')
+    if (meta?.status !== 'receiving') break
+    await new Promise(resolve => setTimeout(resolve, 300))
+  }
+  if (!meta || meta.status === 'receiving') throw new Error('stash-failed')
 
   const files: File[] = []
   for (let i = 0; i < meta.fileNames.length; i++) {
     const fileRes = await cache.match(`/share-target-inbox/${token}/file-${i}`)
-    if (!fileRes) continue
+    if (!fileRes) throw new Error('stash-failed')
     const blob = await fileRes.blob()
     files.push(new File([blob], meta.fileNames[i], { type: blob.type }))
-    await cache.delete(`/share-target-inbox/${token}/file-${i}`)
   }
+  await Promise.all(meta.fileNames.map((_, i) => cache.delete(`/share-target-inbox/${token}/file-${i}`)))
   await cache.delete(`/share-target-inbox/${token}/meta`)
 
   if (files.length) return { kind: 'file', data: { files } }
@@ -46,6 +58,20 @@ async function readShareInbox(token: string): Promise<{ kind: QuickAddKind; data
   if (sharedUrl) return { kind: 'link', data: { url: sharedUrl, title: meta.title } }
 
   return { kind: 'note', data: { title: meta.title, content: meta.text } }
+}
+
+// React StrictMode remounts effects. Share inbox consumption must run once.
+const reads = new Map<string, ReturnType<typeof readShareInbox>>()
+function consumeShare(token: string) {
+  let promise = reads.get(token)
+  if (!promise) {
+    promise = readShareInbox(token)
+    reads.set(token, promise)
+    // Bound the in-memory handoff cache; files remain available across the
+    // immediate StrictMode effect replay, then the mounted card owns them.
+    void promise.finally(() => setTimeout(() => reads.delete(token), 60_000)).catch(() => {})
+  }
+  return promise
 }
 
 function isBareUrl(value: string): boolean {
@@ -80,12 +106,14 @@ export default function ShareTargetPage() {
         return
       }
       const token = searchParams.get('token')
-      const r = token ? await readShareInbox(token) : null
+      const r = token ? await consumeShare(token) : null
       if (cancelled) return
       if (r) setResolved(r)
       else setFailure('expired')
     }
-    resolve()
+    void resolve().catch(error => {
+      if (!cancelled) setFailure(error instanceof Error ? error.message : 'stash-failed')
+    })
     return () => { cancelled = true }
   }, [searchParams])
 
@@ -95,6 +123,7 @@ export default function ShareTargetPage() {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
         <p className="text-sm text-muted-foreground">{SHARE_ERRORS[failure] ?? SHARE_ERRORS.expired}</p>
+        <button type="button" onClick={() => navigate('/apps/add/file', { replace: true })} className="text-sm font-medium text-primary underline underline-offset-4">Add File</button>
         <button
           type="button"
           onClick={closeAndReturn}
@@ -107,7 +136,7 @@ export default function ShareTargetPage() {
   }
 
   if (!resolved) {
-    return <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading shared content…</div>
+    return <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Receiving shared content on this device… No upload has started.</div>
   }
 
   return <HomeFab initialKind={resolved.kind} initialData={resolved.data} onInitialCardClose={closeAndReturn} />

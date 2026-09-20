@@ -3,9 +3,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
-import { insertWorkspacePath } from '@/services/workspace'
+import { insertWorkspacePath, addBackendContainers } from '@/services/workspace'
 import { useToolbox } from '../use-toolbox'
-import { useAddTarget, describeTarget, resolveUploadWorkspace } from './useAddTarget'
+import { useAddTarget, describeTarget, resolveUploadWorkspace, resolveBackendUpload, notifyWorkspaceDocumentsChanged } from './useAddTarget'
 
 // Creates a folder (tree path) under the current target — workspace mode uses
 // the selected tree path directly; context mode resolves the context's bound
@@ -27,7 +27,13 @@ export function FolderForm() {
     try {
       const { workspaceName, path, treeName } = await resolveUploadWorkspace(target)
       const base = path === '/' ? '' : path
-      await insertWorkspacePath(workspaceName, `${base}/${trimmed}`, true, treeName)
+      if (treeName === 'backends') {
+        const backend = await resolveBackendUpload(workspaceName, path)
+        await addBackendContainers(workspaceName, backend.driver, backend.address, [[backend.key, trimmed].filter(Boolean).join('/')])
+        notifyWorkspaceDocumentsChanged(target)
+      } else {
+        await insertWorkspacePath(workspaceName, `${base}/${trimmed}`, true, treeName)
+      }
       showSuccessToast('Folder created')
       closeAdd()
     } catch (err) {

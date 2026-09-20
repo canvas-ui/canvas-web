@@ -1513,6 +1513,7 @@ export async function disableWorkspaceService(
 // the data-backends + services/imap split; driver dispatch is server-side.
 
 export interface BackendCapabilities {
+  upload?: boolean;
   sync: boolean;
   test: boolean;
   containers: boolean;

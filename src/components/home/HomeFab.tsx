@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { useNavigate } from 'react-router-dom'
 import { sketchEditor } from '@/components/editors/registry'
 import { Plus, X } from 'lucide-react'
@@ -42,6 +44,7 @@ function nextCardId() {
 
 export function HomeFab({ initialKind, initialData, onInitialCardClose, onCardsOpenChange }: HomeFabProps) {
   const [stackOpen, setStackOpen] = useState(false)
+  const isMobile = useIsMobile()
   // Same rule as ToolboxFab: the toolbox and the + AddPanel dock as right-most
   // columns inside the shell, and this button is `fixed right-6` — so while
   // either is open it floats on top of their content and bottom-right controls.
@@ -88,41 +91,9 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose, onCardsO
     if (id === 'initial') onInitialCardClose?.()
   }
 
-  return (
-    <div className="relative flex h-full w-full flex-col">
-      {/* `md:pr-28` reserves an invisible panel on the right so cards never
-          scroll underneath the floating buttons that dock bottom-right. On
-          mobile the buttons float over the full-width cards instead.
-          Only mounted while a card is open: home overlays this row on top of
-          its pinned canvases, so an empty row would swallow clicks on them
-          (and, in flow, stack a second full page height under the content).
-          `pointer-events-auto` re-enables clicks inside that overlay. */}
-      {openCards.length > 0 && (
-      <div className="pointer-events-auto flex flex-1 items-center gap-4 overflow-x-auto p-6 md:pr-28">
-        {openCards.map((c) => {
-          const onClose = () => closeCard(c.id)
-          switch (c.kind) {
-            case 'note': return <NoteCardBody key={c.id} onClose={onClose} initialData={c.initialData} />
-            case 'link': return <LinkCardBody key={c.id} onClose={onClose} initialData={c.initialData} />
-            case 'todo': return <TodoCardBody key={c.id} onClose={onClose} initialData={c.initialData} />
-            case 'identity': return <IdentityCardBody key={c.id} onClose={onClose} initialData={c.initialData} />
-            case 'file': return <FileCardBody key={c.id} onClose={onClose} initialData={c.initialData} />
-            case 'photo': return <PhotoCardBody key={c.id} onClose={onClose} />
-            case 'existing': return <ExistingCardBody key={c.id} onClose={onClose} />
-            case 'sketch': return null // handed off to /apps/sketch in addCard
-            // 'folder' is omitted from the home stack — folders are created
-            // inside the Link to… destination tree instead.
-            case 'folder': return null
-          }
-        })}
-      </div>
-      )}
-
-      {/* Desktop: stacked above the (bigger) toolbox FAB, which docks
-          bottom-right at h-16 with a 16px gap. Mobile: the FAB is hidden, so
-          the stack sits at the bottom edge itself — and disappears entirely
-          while a card is open so nothing floats over the card's controls.
-          `z-40` keeps it above any card in the row. */}
+  // A transformed/scrolling shell can clip fixed descendants on mobile.
+  // Portal the launcher to the viewport so the Home + stays reachable.
+  const fab = (
       <div
         className={cn(
           // `fixed` (not absolute) so this shares the toolbox FAB's viewport
@@ -162,6 +133,44 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose, onCardsO
           </button>
         </div>
       </div>
+  )
+
+  return (
+    <div className="relative flex h-full w-full flex-col">
+      {/* `md:pr-28` reserves an invisible panel on the right so cards never
+          scroll underneath the floating buttons that dock bottom-right. On
+          mobile the buttons float over the full-width cards instead.
+          Only mounted while a card is open: home overlays this row on top of
+          its pinned canvases, so an empty row would swallow clicks on them
+          (and, in flow, stack a second full page height under the content).
+          `pointer-events-auto` re-enables clicks inside that overlay. */}
+      {openCards.length > 0 && (
+      <div className="pointer-events-auto flex flex-1 items-center gap-4 overflow-x-auto p-6 md:pr-28">
+        {openCards.map((c) => {
+          const onClose = () => closeCard(c.id)
+          switch (c.kind) {
+            case 'note': return <NoteCardBody key={c.id} onClose={onClose} initialData={c.initialData} />
+            case 'link': return <LinkCardBody key={c.id} onClose={onClose} initialData={c.initialData} />
+            case 'todo': return <TodoCardBody key={c.id} onClose={onClose} initialData={c.initialData} />
+            case 'identity': return <IdentityCardBody key={c.id} onClose={onClose} initialData={c.initialData} />
+            case 'file': return <FileCardBody key={c.id} onClose={onClose} initialData={c.initialData} />
+            case 'photo': return <PhotoCardBody key={c.id} onClose={onClose} />
+            case 'existing': return <ExistingCardBody key={c.id} onClose={onClose} />
+            case 'sketch': return null // handed off to /apps/sketch in addCard
+            // 'folder' is omitted from the home stack — folders are created
+            // inside the Link to… destination tree instead.
+            case 'folder': return null
+          }
+        })}
+      </div>
+      )}
+
+      {/* Desktop: stacked above the (bigger) toolbox FAB, which docks
+          bottom-right at h-16 with a 16px gap. Mobile: the toolbox FAB is hidden, so
+          the stack sits at the bottom edge itself — and disappears entirely
+          while a card is open so nothing floats over the card's controls.
+          `z-40` keeps it above any card in the row. */}
+      {isMobile ? createPortal(fab, document.body) : fab}
     </div>
   )
 }

@@ -1,4 +1,5 @@
 /// <reference lib="webworker" />
+import { SHARE_CACHE, stageShare } from './lib/share-inbox'
 import { cleanupOutdatedCaches, matchPrecache, precacheAndRoute } from 'workbox-precaching'
 import {
   CONTENT_CACHE,
@@ -26,11 +27,6 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(Promise.all([self.clients.claim(), pruneShareInbox()]))
 })
 
-const SHARE_CACHE = 'share-target-inbox'
-// Cache Storage is not free real estate: a stash that throws QuotaExceededError
-// rejects respondWith, which the OS renders as a bare "webpage not available"
-// error page. Refuse oversized shares up front instead, with a message.
-const MAX_SHARE_FILE_BYTES = 100 * 1024 * 1024
 // Orphaned shares (any redirect that never reached ShareTargetPage — offline,
 // backgrounded, user swiped away) are never drained by the page, and
 // cleanupOutdatedCaches only touches workbox precaches. Left alone they pile up
@@ -42,7 +38,7 @@ const SHARE_INBOX_TTL_MS = 24 * 60 * 60 * 1000
 // no Authorization header, so the server can't authenticate it. Instead we
 // intercept it here, stash the payload in Cache Storage, and redirect into the
 // already-authenticated SPA — ShareTargetPage reads it back and uploads
-// through the normal client-side flow (uploadWorkspaceBlob), same as a
+// through the normal upload progress queue, same as a
 // manual FAB upload.
 // ─── Offline cache (opt-in, Settings → Offline) ─────────────────────────────
 // Strategies (see src/lib/offline.ts for the storage/LRU model):
@@ -86,7 +82,7 @@ self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
   if (request.method === 'POST' && url.pathname === '/share-target') {
-    event.respondWith(handleShareTarget(request))
+    event.respondWith(handleShareTarget(event))
     return
   }
   if (request.method === 'GET' && url.origin === self.location.origin && url.pathname.startsWith('/rest/v2/')) {
@@ -201,43 +197,22 @@ async function handleNavigation(request: Request): Promise<Response> {
 
 // Never rejects: a rejected respondWith on a share navigation surfaces as
 // ERR_FAILED with no way to tell the user what went wrong. Every failure path
-// redirects into the SPA with an ?error= code that ShareTargetPage renders.
-async function handleShareTarget(request: Request): Promise<Response> {
-  try {
-    const formData = await request.formData()
-    const token = crypto.randomUUID()
-
-    const title = String(formData.get('title') ?? '')
-    const text = String(formData.get('text') ?? '')
-    const url = String(formData.get('url') ?? '')
-    const files = formData.getAll('files').filter((f): f is File => f instanceof File && f.size > 0)
-
-    const oversized = files.find((f) => f.size > MAX_SHARE_FILE_BYTES)
-    if (oversized) return shareError('too-large')
-
-    const cache = await caches.open(SHARE_CACHE)
-    await cache.put(
-      `/share-target-inbox/${token}/meta`,
-      new Response(JSON.stringify({ title, text, url, fileNames: files.map((f) => f.name), stashedAt: Date.now() })),
-    )
-    await Promise.all(
-      files.map((file, i) =>
-        cache.put(
-          `/share-target-inbox/${token}/file-${i}`,
-          new Response(file, { headers: { 'Content-Type': file.type, 'X-File-Name': file.name } }),
-        ),
-      ),
-    )
-
-    return Response.redirect(`/share-target?token=${token}`, 303)
-  } catch (err) {
-    console.error('[sw] share-target stash failed', err)
-    return shareError('stash-failed')
-  }
-}
-
-function shareError(code: string): Response {
-  return Response.redirect(`/share-target?error=${code}`, 303)
+// reaches the SPA through an error redirect or an error inbox marker.
+function handleShareTarget(event: FetchEvent): Promise<Response> {
+  const token = crypto.randomUUID()
+  const ready = caches.open(SHARE_CACHE).then(async cache => {
+    await cache.put(`/share-target-inbox/${token}/meta`, new Response(JSON.stringify({ status: 'receiving', stashedAt: Date.now() })))
+    return cache
+  })
+  // Open the UI immediately, while keeping the incoming local request alive.
+  // Otherwise request.formData() hides all work behind the launch screen.
+  event.waitUntil(ready.then(cache => stageShare(event.request, token, cache)).catch(error => {
+    console.error('[sw] share-target staging failed', error)
+  }))
+  return ready.then(
+    () => Response.redirect(new URL(`/share-target?token=${token}`, self.location.origin).href, 303),
+    () => Response.redirect(new URL('/share-target?error=stash-failed', self.location.origin).href, 303),
+  )
 }
 
 // Drop stale inbox entries on activate. Entries predating the stashedAt stamp

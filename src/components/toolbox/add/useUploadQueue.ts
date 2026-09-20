@@ -1,11 +1,13 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { backendUploadKey } from '@/lib/backend-upload'
 import { sha256File } from '@/lib/sha256'
 import {
   checkWorkspaceBlobs,
   uploadWorkspaceBlobWithProgress,
+  uploadBackendFileWithProgress,
   type BlobUploadResult,
 } from '@/services/blobs'
-import { submitDocuments, notifyWorkspaceDocumentsChanged, resolveUploadWorkspace, type AddTarget } from './useAddTarget'
+import { submitDocuments, notifyWorkspaceDocumentsChanged, resolveUploadWorkspace, resolveBackendUpload, type AddTarget } from './useAddTarget'
 
 // Per-file upload pipeline with resume semantics:
 //   hash locally → batch-ask the server which checksums it already holds →
@@ -66,13 +68,15 @@ interface UseUploadQueue {
   cancel: () => void
 }
 
-export function useUploadQueue(): UseUploadQueue {
-  const [items, setItems] = useState<UploadItem[]>([])
+export function useUploadQueue(initialFiles: File[] = []): UseUploadQueue {
+  const [items, setItems] = useState<UploadItem[]>(() => initialFiles.map((file) => ({ id: itemKey(file), file, status: 'queued', progress: 0 })))
   const [running, setRunning] = useState(false)
   // Mirrors `items` for the async pipeline, which must read fresh state
   // between awaits without re-rendering per read.
-  const itemsRef = useRef<UploadItem[]>([])
+  const itemsRef = useRef<UploadItem[]>(items)
+  const targetRef = useRef<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  useEffect(() => () => abortRef.current?.abort(), [])
 
   const setAll = useCallback((next: UploadItem[]) => {
     itemsRef.current = next
@@ -113,7 +117,14 @@ export function useUploadQueue(): UseUploadQueue {
     buildDoc: (blob: BlobUploadResult, file: File) => Record<string, unknown>,
   ): Promise<UploadSummary> => {
     if (!target) throw new Error('No active workspace or context to add to')
-    const { workspaceName } = await resolveUploadWorkspace(target)
+    const { workspaceName, treeName, path } = await resolveUploadWorkspace(target)
+    const backend = treeName === 'backends' ? await resolveBackendUpload(workspaceName, path) : null
+
+    const targetKey = JSON.stringify([workspaceName, treeName, path])
+    if (targetRef.current !== null && targetRef.current !== targetKey) {
+      setAll(itemsRef.current.map(({ id, file }) => ({ id, file, status: 'queued', progress: 0 })))
+    }
+    targetRef.current = targetKey
 
     const abort = new AbortController()
     abortRef.current = abort
@@ -124,67 +135,96 @@ export function useUploadQueue(): UseUploadQueue {
     for (const it of pending) patch(it.id, { status: 'queued', progress: 0, error: undefined })
 
     try {
-      // 1. Hash everything locally (sequential — it's disk/CPU bound and fast
-      // relative to upload; progress shows on big files).
-      const checksums = new Map<string, string>()
-      for (const it of pending) {
-        if (abort.signal.aborted) throw new DOMException('cancelled', 'AbortError')
-        patch(it.id, { status: 'hashing' })
-        try {
-          const sum = await sha256File(it.file, (f) => patch(it.id, { progress: f }))
-          checksums.set(it.id, sum)
-          patch(it.id, { status: 'checking', progress: 0 })
-        } catch (err) {
-          patch(it.id, { status: 'error', error: err instanceof Error ? err.message : 'Failed to read file' })
-        }
-      }
-
-      // 2. One batch round-trip: which of these does the workspace already hold?
-      let existing: Record<string, BlobUploadResult | null> = {}
-      if (checksums.size) {
-        try {
-          existing = await checkWorkspaceBlobs(workspaceName, [...new Set(checksums.values())])
-        } catch {
-          // Endpoint unavailable (older server) — degrade to plain uploads.
-          existing = {}
-        }
-      }
-
-      // 3. Upload the misses / link the hits, a small pool at a time.
-      const queue = pending.filter((it) => checksums.has(it.id))
-      let cursor = 0
-      const worker = async () => {
-        while (cursor < queue.length) {
-          if (abort.signal.aborted) return
-          const it = queue[cursor++]
-          const checksum = checksums.get(it.id)!
-          try {
-            let blob = existing[checksum] ?? null
-            if (blob) {
-              patch(it.id, { status: 'linking', progress: 1, resumed: true })
-            } else {
-              patch(it.id, { status: 'uploading', progress: 0 })
-              blob = await uploadWorkspaceBlobWithProgress(workspaceName, it.file, {
+      if (backend) {
+        // Upload bytes straight to the selected backend folder. The server
+        // indexes the resulting file, so never import a second DB document.
+        let cursor = 0
+        const worker = async () => {
+          while (cursor < pending.length && !abort.signal.aborted) {
+            const it = pending[cursor++]
+            try {
+              patch(it.id, { status: 'uploading', progress: 0, resumed: false })
+              const result = await uploadBackendFileWithProgress(workspaceName, {
+                ...backend, key: backendUploadKey(backend.key, it.file.name),
+              }, it.file, {
                 signal: abort.signal,
                 onProgress: (sent, total) => patch(it.id, { progress: total ? sent / total : 0 }),
               })
-              patch(it.id, { status: 'linking', progress: 1 })
+              patch(it.id, { status: 'done', progress: 1, docId: result.docId ?? undefined })
+            } catch (error) {
+              patch(it.id, { status: 'error', error: error instanceof Error ? error.message : 'Upload failed' })
             }
-            // Insert immediately so a later failure can't orphan this file's
-            // work. synapsd upserts by checksum, so re-runs are idempotent.
-            const ids = await submitDocuments(target, [buildDoc(blob, it.file)], { refresh: false })
-            patch(it.id, { status: 'done', docId: ids[0] })
-          } catch (err) {
-            const aborted = err instanceof DOMException && err.name === 'AbortError'
-            patch(it.id, {
-              status: 'error',
-              error: aborted ? 'Cancelled' : err instanceof Error ? err.message : 'Upload failed',
-            })
           }
         }
+        await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, pending.length) }, worker))
+      } else {
+        // 1. Hash everything locally (sequential — it's disk/CPU bound and fast
+        // relative to upload; progress shows on big files).
+        const checksums = new Map<string, string>()
+        for (const it of pending) {
+          if (abort.signal.aborted) throw new DOMException('cancelled', 'AbortError')
+          patch(it.id, { status: 'hashing' })
+          try {
+            const sum = await sha256File(it.file, (f) => patch(it.id, { progress: f }))
+            checksums.set(it.id, sum)
+            patch(it.id, { status: 'checking', progress: 0 })
+          } catch (err) {
+            patch(it.id, { status: 'error', error: err instanceof Error ? err.message : 'Failed to read file' })
+          }
+        }
+
+        // 2. One batch round-trip: which of these does the workspace already hold?
+        let existing: Record<string, BlobUploadResult | null> = {}
+        if (checksums.size) {
+          try {
+            existing = await checkWorkspaceBlobs(workspaceName, [...new Set(checksums.values())])
+          } catch {
+            // Endpoint unavailable (older server) — degrade to plain uploads.
+            existing = {}
+          }
+        }
+
+        // 3. Upload the misses / link the hits, a small pool at a time.
+        const queue = pending.filter((it) => checksums.has(it.id))
+        let cursor = 0
+        const worker = async () => {
+          while (cursor < queue.length) {
+            if (abort.signal.aborted) return
+            const it = queue[cursor++]
+            const checksum = checksums.get(it.id)!
+            try {
+              let blob = existing[checksum] ?? null
+              if (blob) {
+                patch(it.id, { status: 'linking', progress: 1, resumed: true })
+              } else {
+                patch(it.id, { status: 'uploading', progress: 0 })
+                blob = await uploadWorkspaceBlobWithProgress(workspaceName, it.file, {
+                  signal: abort.signal,
+                  onProgress: (sent, total) => patch(it.id, { progress: total ? sent / total : 0 }),
+                })
+                patch(it.id, { status: 'linking', progress: 1 })
+              }
+              // Insert immediately so a later failure can't orphan this file's
+              // work. synapsd upserts by checksum, so re-runs are idempotent.
+              const ids = await submitDocuments(target, [buildDoc(blob, it.file)], { refresh: false })
+              patch(it.id, { status: 'done', docId: ids[0] })
+            } catch (err) {
+              const aborted = err instanceof DOMException && err.name === 'AbortError'
+              patch(it.id, {
+                status: 'error',
+                error: aborted ? 'Cancelled' : err instanceof Error ? err.message : 'Upload failed',
+              })
+            }
+          }
+        }
+        await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, queue.length) }, worker))
       }
-      await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, queue.length) }, worker))
     } finally {
+      if (abort.signal.aborted) {
+        for (const it of itemsRef.current) {
+          if (it.status !== 'done' && it.status !== 'error') patch(it.id, { status: 'error', error: 'Cancelled' })
+        }
+      }
       setRunning(false)
       if (abortRef.current === abort) abortRef.current = null
       // One list reload for the whole batch, however far it got.
@@ -201,7 +241,7 @@ export function useUploadQueue(): UseUploadQueue {
       total: finals.length,
       docIds: finals.flatMap((it) => (it.status === 'done' && it.docId != null ? [it.docId] : [])),
     }
-  }, [patch])
+  }, [patch, setAll])
 
   return { items, running, addFiles, removeItem, reset, start, cancel }
 }

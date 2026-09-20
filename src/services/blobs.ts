@@ -49,13 +49,33 @@ export function uploadWorkspaceBlobWithProgress(
   file: File | Blob,
   { onProgress, signal }: UploadProgressOptions = {},
 ): Promise<BlobUploadResult> {
-  const url = `${API_ROUTES.workspaces}/${workspaceName}/blobs`
+  return uploadWithProgress<BlobUploadResult>(`${API_ROUTES.workspaces}/${workspaceName}/blobs`, 'POST', file, { onProgress, signal })
+}
+
+export function uploadBackendFileWithProgress(
+  workspaceName: string,
+  target: { driver: string; address: string; key: string },
+  file: File,
+  options: UploadProgressOptions = {},
+): Promise<{ docId: number | null; key: string }> {
+  const key = target.key.split('/').map(encodeURIComponent).join('/')
+  const url = `${API_ROUTES.workspaces}/${encodeURIComponent(workspaceName)}/backends/${encodeURIComponent(target.driver)}/${encodeURIComponent(target.address)}/objects/${key}`
+  return uploadWithProgress(url, 'PUT', file, options, { 'If-None-Match': '*', 'X-Canvas-Mtime': String(file.lastModified) })
+}
+
+function uploadWithProgress<T>(
+  url: string, method: 'POST' | 'PUT', file: File | Blob,
+  { onProgress, signal }: UploadProgressOptions,
+  headers: Record<string, string> = {},
+): Promise<T> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) { reject(new DOMException('Upload aborted', 'AbortError')); return }
     const xhr = new XMLHttpRequest()
-    xhr.open('POST', url)
+    xhr.open(method, url)
     xhr.withCredentials = true
     xhr.responseType = 'json'
     xhr.setRequestHeader('Content-Type', 'application/octet-stream')
+    for (const [name, value] of Object.entries(headers)) xhr.setRequestHeader(name, value)
     const token = localStorage.getItem('authToken')
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
 
@@ -70,11 +90,11 @@ export function uploadWorkspaceBlobWithProgress(
 
     xhr.addEventListener('load', () => {
       signal?.removeEventListener('abort', onAbort)
-      const envelope = xhr.response as { payload?: BlobUploadResult; message?: string } | null
+      const envelope = xhr.response as { payload?: T; message?: string } | null
       if (xhr.status >= 200 && xhr.status < 300 && envelope?.payload) {
         resolve(envelope.payload)
       } else {
-        reject(new Error(envelope?.message || `Upload failed (HTTP ${xhr.status})`))
+        reject(new Error(xhr.status === 412 ? 'A file with this name already exists. Rename the file before uploading; nothing was overwritten.' : envelope?.message || `Upload failed (HTTP ${xhr.status})`))
       }
     })
     xhr.addEventListener('error', () => {

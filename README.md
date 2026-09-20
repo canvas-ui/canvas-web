@@ -23,8 +23,7 @@ so the same component can be reused by other frontends (desktop overlay, tauri).
 Applets also run standalone, outside the app shell, at `/apps/<id>` — the data
 binding lives in the URL (`?workspace=&path=` or `?context=<id>`, `add=1` opens
 the inline draft). `/apps/add/<kind>` (note|todo|link|file|photo) is a chrome-free
-quick-add card, and the PWA manifest exposes shortcuts for Notes / Add Note /
-Add Todo / Add Photo.
+quick-add card, and the PWA manifest exposes shortcuts for Add Photo / Add File / Add Note / Add Todo.
 
 ## Data management
 

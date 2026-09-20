@@ -1,9 +1,11 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { backendUploadTarget, type BackendUploadTarget } from '@/lib/backend-upload'
 import { useToolbox } from '../use-toolbox'
 import {
   DEFAULT_WORKSPACE_TREE_NAME,
   importDocumentsToWorkspacePath,
   listWorkspaceTrees,
+  listBackends,
   pasteDocumentsToWorkspacePath,
 } from '@/services/workspace'
 import { insertDocumentsToContextById, pasteDocumentsToContext, getContext } from '@/services/context'
@@ -38,9 +40,7 @@ export function useAddTarget(): AddTarget {
         treeName: activeTreeName || DEFAULT_WORKSPACE_TREE_NAME,
         // Best-effort default; submitDocuments resolves the real type so inserts
         // into directory (incl. virtual directory) trees aren't mislabelled.
-        // The backends tree is a directory tree, but the server rejects generic
-        // inserts into it — the Add toolbox shouldn't target it in the first
-        // place (WorkspaceM2 keeps the toolbox on context/directory tabs).
+        // Backend folders use the keyed-object upload API, not document import.
         treeType: (activeTreeName === 'directory' || activeTreeName === 'backends' ? 'directory' : 'context'),
       }
     }
@@ -87,6 +87,7 @@ export async function submitDocuments(
   if (!target) throw new Error('No active workspace or context to add to')
 
   if (target.mode === 'workspace') {
+    if (target.treeName === 'backends') throw new Error('Backend folders accept files, not database-only documents')
     // Resolve the actual tree type by name so directory / virtual-directory trees
     // get treeType:'directory' (the server otherwise builds a context selector and
     // throws "Tree is not a context tree").
@@ -158,4 +159,27 @@ export function describeTarget(target: AddTarget): string {
   if (!target) return 'No destination. Open a workspace path or a context first'
   if (target.mode === 'context') return 'Adds to the current context'
   return `Adds to ${target.path === '/' ? '/' : target.path}`
+}
+
+export async function resolveBackendUpload(workspaceName: string, path: string): Promise<BackendUploadTarget> {
+  return backendUploadTarget(path, await listBackends(workspaceName))
+}
+
+export function useBackendAddTarget(target: AddTarget) {
+  const isBackend = target?.mode === 'workspace' && target.treeName === 'backends'
+  const workspace = isBackend ? target.workspaceName : ''
+  const path = isBackend ? target.path : ''
+  const key = `${workspace}\0${path}`
+  const [state, setState] = useState<{ key: string; destination?: BackendUploadTarget; error?: string } | null>(null)
+  useEffect(() => {
+    if (!isBackend) return
+    let cancelled = false
+    resolveBackendUpload(workspace, path).then(destination => {
+      if (!cancelled) setState({ key, destination })
+    }).catch(error => {
+      if (!cancelled) setState({ key, error: error instanceof Error ? error.message : 'Unable to load backend' })
+    })
+    return () => { cancelled = true }
+  }, [isBackend, workspace, path, key])
+  return { isBackend, loading: isBackend && state?.key !== key, destination: state?.key === key ? state.destination : undefined, error: state?.key === key ? state.error : undefined }
 }

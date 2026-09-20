@@ -13,7 +13,7 @@ function AddButton() {
     <button
       type="button"
       onClick={openAddPicker}
-      title="Add a note, link or file here"
+      title="Add here"
       aria-label="Add"
       className="shrink-0 flex items-center justify-center w-7 h-7 rounded-full bg-foreground text-background hover:opacity-90 transition-opacity"
     >

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { X, Search, Link2, ChevronRight, ChevronDown, FolderPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Loader } from '@/components/ui/loader'
@@ -48,6 +48,7 @@ interface LinkToCardProps {
   // original behavior.
   multiple?: boolean
   saving?: boolean
+  savingContent?: ReactNode
   // Overrides the default B5-sibling sizing (85vh, 380px wide) — e.g. full
   // height for document-list's right-edge overlay usage.
   sizeClassName?: string
@@ -81,7 +82,7 @@ interface LinkToCardProps {
 // WorkspaceList-styled row list, slide into the tree-with-tabs view. Renders
 // as a plain card — callers own positioning (inline sibling for B5Card,
 // fixed overlay for document-list's existing usage).
-export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceName, multiple = true, saving = false, sizeClassName, tabs = ['context', 'directory'], title, confirmLabel, onConfirmRelation, relationWorkspaceName, relationPredicates, relationExcludeIds }: LinkToCardProps) {
+export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceName, multiple = true, saving = false, savingContent, sizeClassName, tabs = ['context', 'directory'], title, confirmLabel, onConfirmRelation, relationWorkspaceName, relationPredicates, relationExcludeIds }: LinkToCardProps) {
   const [step, setStep] = useState<'workspace' | 'tree'>(fixedWorkspaceName ? 'tree' : 'workspace')
   // Esc closes the card (all callers render it as an overlay); disabled while
   // a link is saving so it can't vanish mid-write.
@@ -222,6 +223,13 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
   }
 
   const count = documentCount ?? 1
+
+  if (saving && savingContent) return (
+    <div className={cn('flex flex-col overflow-hidden rounded-2xl border bg-card shadow-elevation-4',
+      sizeClassName || 'h-viewport-card max-h-full w-[min(380px,90vw)] max-md:h-full max-md:w-full max-md:shadow-elevation-5')}>
+      {savingContent}
+    </div>
+  )
 
   return (
     <div className={cn('flex flex-col overflow-hidden rounded-2xl border bg-card shadow-elevation-4', sizeClassName || 'h-viewport-card max-h-full w-[min(380px,90vw)] max-md:h-full max-md:w-full max-md:shadow-elevation-5')}>

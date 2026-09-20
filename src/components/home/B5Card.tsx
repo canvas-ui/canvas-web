@@ -24,6 +24,7 @@ interface B5CardProps {
   onSave?: (target: B5SaveTarget) => Promise<number[]>
   canSave?: boolean
   saving?: boolean
+  saveProgress?: ReactNode
   successMessage?: string
   lockedWorkspaceName?: string
   // Fills the parent's height instead of the fixed B5 aspect-ratio sizing —
@@ -45,14 +46,16 @@ interface B5CardProps {
 // side) rather than a modal — it only portals to a fullscreen overlay while
 // explicitly maximized.
 export function B5Card({
-  title, icon: Icon, onClose, onSave, canSave = false, saving = false, successMessage = 'Saved', lockedWorkspaceName, fillParent = false, relationSubjectId, frame, children,
+  title, icon: Icon, onClose, onSave, canSave = false, saving: externalSaving = false, saveProgress, successMessage = 'Saved', lockedWorkspaceName, fillParent = false, relationSubjectId, frame, children,
 }: B5CardProps) {
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait')
   const [maximized, setMaximized] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [relationSaving, setRelationSaving] = useState(false)
+  const [savePending, setSavePending] = useState(false)
+  const saving = externalSaving || savePending
   // Esc unwinds one layer at a time: picker first, then the maximized card.
-  useEscapeClose(() => setPickerOpen(false), pickerOpen)
+  useEscapeClose(() => setPickerOpen(false), pickerOpen && !saving)
   useEscapeClose(() => setMaximized(false), maximized && !pickerOpen)
   const pickerRef = useRef<HTMLDivElement>(null)
   const isMobile = useIsMobile()
@@ -79,7 +82,8 @@ export function B5Card({
   }, [pickerOpen])
 
   const handleSelect = async (paths: string[], ctx: LinkToTarget) => {
-    if (!onSave) return
+    if (!onSave || saving) return
+    setSavePending(true)
     try {
       const ids = await onSave({ ...ctx, path: paths[0] })
       const extraPaths = paths.slice(1)
@@ -90,6 +94,8 @@ export function B5Card({
       onClose()
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to save')
+    } finally {
+      setSavePending(false)
     }
   }
 
@@ -136,6 +142,7 @@ export function B5Card({
       onConfirm={handleSelect}
       fixedWorkspaceName={lockedWorkspaceName}
       saving={saving || relationSaving}
+      savingContent={saveProgress}
       tabs={canRelate ? ['context', 'directory', 'relations'] : ['context', 'directory']}
       onConfirmRelation={canRelate ? handleRelation : undefined}
       relationWorkspaceName={lockedWorkspaceName}
@@ -178,7 +185,7 @@ export function B5Card({
             </button>
           )}
           {onSave && (
-            <Button size="sm" variant="outline" onClick={() => setPickerOpen(true)} disabled={!canSave}>
+            <Button size="sm" variant="outline" onClick={() => setPickerOpen(true)} disabled={!canSave || saving}>
               {saving ? 'Saving…' : 'Save / Link to…'}
             </Button>
           )}

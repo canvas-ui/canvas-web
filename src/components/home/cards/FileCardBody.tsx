@@ -1,25 +1,20 @@
 import { useRef, useState, type DragEvent } from 'react'
-import { Upload, File as FileIcon, X } from 'lucide-react'
-import { Label } from '@/components/ui/label'
+import { Upload } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { uploadWorkspaceBlob } from '@/services/blobs'
-import { submitDocuments, type AddTarget } from '@/components/toolbox/add/useAddTarget'
+import { useUploadQueue } from '@/components/toolbox/add/useUploadQueue'
+import { UploadProgressList, UploadProgressPanel } from '@/components/toolbox/add/UploadProgressList'
+import { type AddTarget } from '@/components/toolbox/add/useAddTarget'
 import { useFileFields, buildFileDocument } from '@/components/toolbox/add/useFileFields'
 import { FileMetaFields } from '@/components/toolbox/add/FileMetaFields'
 import { useToolbox } from '@/components/toolbox/use-toolbox'
 import { B5Card, type B5SaveTarget } from '../B5Card'
 import type { QuickAddInitialData } from '../quick-add-types'
 
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
 export function FileCardBody({ onClose, initialData }: { onClose: () => void; initialData?: QuickAddInitialData }) {
   const inputRef = useRef<HTMLInputElement>(null)
   // Prefill once on open only (lazy initializer, not an effect).
-  const [files, setFiles] = useState<File[]>(() => (initialData?.files?.length ? initialData.files : []))
+  const queue = useUploadQueue(initialData?.files)
+  const files = queue.items.map((item) => item.file)
   const [dragOver, setDragOver] = useState(false)
   const [saving, setSaving] = useState(false)
   // The real target is only known once the Save/Link-to picker runs, so tag
@@ -30,11 +25,7 @@ export function FileCardBody({ onClose, initialData }: { onClose: () => void; in
 
   const addFiles = (list: FileList | null) => {
     if (!list) return
-    const incoming = Array.from(list)
-    setFiles((prev) => {
-      const seen = new Set(prev.map((f) => `${f.name}:${f.size}`))
-      return [...prev, ...incoming.filter((f) => !seen.has(`${f.name}:${f.size}`))]
-    })
+    if (!saving) queue.addFiles(Array.from(list))
   }
 
   const onDrop = (e: DragEvent) => {
@@ -51,12 +42,10 @@ export function FileCardBody({ onClose, initialData }: { onClose: () => void; in
       const addTarget: AddTarget = { mode: 'workspace', ...target }
       // One fix for the whole batch, taken before the uploads start.
       const geo = await meta.geotag.capture()
-      const docs = []
-      for (const file of files) {
-        const blob = await uploadWorkspaceBlob(target.workspaceName, file)
-        docs.push(buildFileDocument(blob, file, { tags: meta.tags, comment: meta.comment, geo }))
-      }
-      return await submitDocuments(addTarget, docs)
+      const summary = await queue.start(addTarget, (blob, file) =>
+        buildFileDocument(blob, file, { tags: meta.tags, comment: meta.comment, geo }))
+      if (summary.failed) throw new Error(`${summary.failed} file(s) failed or cancelled. Retry keeps completed uploads.`)
+      return summary.docIds
     } finally {
       setSaving(false)
     }
@@ -70,6 +59,7 @@ export function FileCardBody({ onClose, initialData }: { onClose: () => void; in
       onSave={save}
       canSave={canSave}
       saving={saving}
+      saveProgress={<UploadProgressPanel items={queue.items} running={queue.running} onCancel={queue.cancel} />}
       successMessage="File(s) uploaded"
     >
       <div className="flex flex-col gap-4 p-4">
@@ -90,36 +80,13 @@ export function FileCardBody({ onClose, initialData }: { onClose: () => void; in
             ref={inputRef}
             type="file"
             multiple
+            disabled={saving}
             className="hidden"
             onChange={(e) => { addFiles(e.target.files); e.target.value = '' }}
           />
         </div>
 
-        {files.length > 0 && (
-          <div className="space-y-1.5">
-            <Label>{files.length} file(s)</Label>
-            <ul className="max-h-60 space-y-1 overflow-y-auto">
-              {files.map((f, i) => (
-                <li
-                  key={`${f.name}:${f.size}:${i}`}
-                  className="flex items-center gap-2 rounded border border-input px-2 py-1 text-sm"
-                >
-                  <FileIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <span className="flex-1 truncate">{f.name}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">{formatSize(f.size)}</span>
-                  <button
-                    type="button"
-                    onClick={() => setFiles((prev) => prev.filter((_, idx) => idx !== i))}
-                    className="text-muted-foreground hover:text-foreground"
-                    aria-label={`Remove ${f.name}`}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        <UploadProgressList items={queue.items} running={saving} onRemove={queue.removeItem} />
 
         <FileMetaFields fields={meta} idPrefix="qa-file" multiple={files.length > 1} />
       </div>
