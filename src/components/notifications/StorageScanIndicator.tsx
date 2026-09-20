@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Loader2, X } from 'lucide-react'
 import { listBackends, type Backend } from '@/services/workspace'
 import socketService from '@/lib/socket'
 
 /** Persistent, unobtrusive scan progress, including scans started before login. */
-export function StorageScanIndicator({ workspaceId }: { workspaceId: string }) {
+export function StorageScanIndicator({ workspaceId, workspaceName }: { workspaceId: string; workspaceName: string }) {
   const [scans, setScans] = useState<Backend[]>([])
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set())
+  const scanKey = (backend: Backend) => `${workspaceId}:${backend.address}:${backend.resyncStartedAt || ''}`
 
   useEffect(() => {
     let disposed = false
@@ -37,15 +39,22 @@ export function StorageScanIndicator({ workspaceId }: { workspaceId: string }) {
     }
   }, [workspaceId])
 
-  if (!scans.length) return null
+  const visible = scans.filter(backend => !dismissed.has(scanKey(backend)))
+  if (!visible.length) return null
   return (
-    <aside aria-label="Storage scans" className="fixed bottom-5 right-5 z-50 w-72 max-w-[calc(100vw-2.5rem)] rounded-lg border bg-popover/95 p-3 text-popover-foreground shadow-lg backdrop-blur pointer-events-none">
+    <aside aria-label={`Storage scans for ${workspaceName}`} className="absolute bottom-5 right-5 z-50 w-72 max-w-[calc(100vw-2.5rem)] rounded-lg border bg-popover/95 p-3 text-popover-foreground shadow-lg backdrop-blur">
       <div role="status" className="mb-2 flex items-center gap-2 text-sm font-medium">
         <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
-        Scanning storage
+        <span className="min-w-0 flex-1">
+          <span className="block">Scanning storage</span>
+          <span className="block truncate text-xs font-normal text-muted-foreground" title={workspaceName}>{workspaceName}</span>
+        </span>
+        <button type="button" aria-label={`Hide scan progress for ${workspaceName}`} title="Hide progress; scanning continues" className="rounded p-1 hover:bg-muted focus-visible:outline focus-visible:outline-2" onClick={() => setDismissed(previous => new Set([...previous, ...visible.map(scanKey)]))}>
+          <X aria-hidden="true" className="h-4 w-4" />
+        </button>
       </div>
-      <div className="max-h-48 space-y-3 overflow-hidden">
-        {scans.map(backend => {
+      <div className="max-h-48 space-y-3 overflow-y-auto">
+        {visible.map(backend => {
           const { scanned = 0, total = null } = backend.progress || {}
           const percent = total && total > 0 ? Math.min(100, Math.round(scanned / total * 100)) : null
           const name = typeof backend.config?.label === 'string' ? backend.config.label : backend.address

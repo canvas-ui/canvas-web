@@ -1560,6 +1560,7 @@ export interface Backend {
   status: 'running' | 'idle' | 'stopped' | 'error' | 'syncing' | string;
   // Live resync state (initial/catch-up scan running in the background).
   resyncing?: boolean;
+  resyncStartedAt?: string | null;
   progress?: { scanned: number; total: number | null } | null;
   lastSyncAt: string | null;
   lastError: string | null;

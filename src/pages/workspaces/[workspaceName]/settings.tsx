@@ -1493,7 +1493,7 @@ export default function WorkspaceSettingsPage() {
             const style = getBackendStyle(backend)
             return (
               <section key={backendId} className="rounded-lg border p-4">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                <div className="flex flex-col gap-4">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <Icon icon={style.icon} width={16} height={16} color={style.color} className="shrink-0" />
@@ -1510,7 +1510,6 @@ export default function WorkspaceSettingsPage() {
                           indexing{backend.progress ? ` ${backend.progress.scanned}${backend.progress.total != null ? ` / ${backend.progress.total}` : ''}` : ''}
                         </span>
                       )}
-                      <span>watch: {cfg.watch ? 'true' : 'false'}</span>
                       {device?.name && <span title={device.id}>device: {device.name}</span>}
                       {cfg.readOnly === true && <span className="rounded bg-warning/15 px-1.5 py-0.5 font-medium text-warning">read-only</span>}
                       {backend.lastSyncAt && <span>last scan: {new Date(backend.lastSyncAt).toLocaleString()}</span>}
@@ -1523,12 +1522,20 @@ export default function WorkspaceSettingsPage() {
                       </p>
                     )}
                   </div>
-                  {/* Two toggles and up to two buttons — on a phone they wrap
-                      onto their own lines rather than crushing the title. */}
-                  <div className="flex shrink-0 items-center gap-3 max-sm:w-full max-sm:flex-wrap">
+                  <div className="flex flex-wrap items-center gap-3 border-t pt-3">
+                    {backend.capabilities?.sync && supported && (
+                      <label className="flex items-center gap-1.5 text-xs text-muted-foreground" title="Scan this backend in the background whenever the workspace starts. Manual scans remain available when off.">
+                        Scan on start
+                        <Toggle
+                          checked={cfg.scanOnStart === true}
+                          disabled={busyAction === `startup:${backendId}`}
+                          onClick={() => patchDataBackend(backend, { scanOnStart: cfg.scanOnStart !== true }, 'startup')}
+                        />
+                      </label>
+                    )}
                     {(backend.driver === 'file' || isGdrive) && canToggle && (
                       <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground" title={isGdrive ? 'Poll the Drive changes feed so edits made in Drive show up without a manual re-sync.' : undefined}>
-                        watch
+                        Watch for changes
                         <Toggle
                           checked={!!cfg.watch}
                           disabled={!backend.enabled || busyAction === `watch:${backendId}`}

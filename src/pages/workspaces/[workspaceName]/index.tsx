@@ -1372,8 +1372,8 @@ export default function WorkspaceDetailPage() {
   );
 
   return (
-    <div className="flex flex-col h-full min-h-0">
-      <StorageScanIndicator key={workspace.id} workspaceId={workspace.id} />
+    <div className="relative flex flex-col h-full min-h-0">
+      <StorageScanIndicator key={workspace.id} workspaceId={workspace.id} workspaceName={workspace.label || workspace.name} />
       {/* Compact workspace status bar — bottom border carries the workspace
           color as the primary accent; near-white colors fall back to the
           theme border so the accent never vanishes on the light background. */}
