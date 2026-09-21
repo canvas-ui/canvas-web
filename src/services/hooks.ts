@@ -121,7 +121,7 @@ export function ruleEvents(rule: HookRule): string[] {
 
 /** `when.path` of a rule as a list ('' when the rule has no path condition). */
 export function rulePaths(rule: HookRule): string[] {
-  const p = rule.when?.path
+  const p = rule.when?.pathExact ?? rule.when?.path
   return Array.isArray(p) ? p.map(String) : typeof p === 'string' ? [p] : []
 }
 

@@ -13,12 +13,16 @@ test('Auto-Link preserves literal folder names and supports context and director
   assert.equal(rule.enabled, true)
   assert.equal(rule.cascade, true)
   assert.deepEqual(rule.then, [
-    { action: 'link', paths: ['ctx:/Work/Acme, org/Accounting'] },
+    { action: 'link', paths: ['ctx:/Work/Acme, org/Accounting'], recursive: true },
     { action: 'link', paths: ['dir:/Accounts/Acme org'], recursive: true },
   ])
 })
 
-test('ordinary destination links are flat and do not modify storage', () => {
+test('default Auto-Link matches only direct contents and does not modify storage', () => {
+  const rule = buildAutoLinkRule('x', '/workspace/home/foo/bar', [{ tree: 'context', path: '/work/foo/bar' }])
+  assert.equal(rule.when.path, undefined)
+  assert.equal(rule.when.pathExact, 'backends:/workspace/home/foo/bar')
+  assert.deepEqual(rule.then, [{ action: 'link', paths: ['ctx:/work/foo/bar'] }])
   assert.deepEqual(buildAutoLinkRule('x', '/s3/bucket/reports', [{ tree: 'directory', path: '/reports' }]).then,
     [{ action: 'link', paths: ['dir:/reports'] }])
   assert.throws(() => buildAutoLinkRule('x', '/workspace/home', []))

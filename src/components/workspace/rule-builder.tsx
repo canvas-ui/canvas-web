@@ -54,9 +54,10 @@ const EVENT_OPTIONS = [
   { value: 'document.unlinked', label: 'is removed from a folder', hint: 'Fires when the item leaves a tree path.' },
 ] as const
 
-type ConditionKey = 'from' | 'to' | 'subject' | 'urlHost' | 'urlContains' | 'path' | 'mime' | 'attachment'
+type ConditionKey = 'from' | 'to' | 'subject' | 'urlHost' | 'urlContains' | 'path' | 'pathExact' | 'mime' | 'attachment'
 
 const CONDITION_FIELDS: Array<{ key: ConditionKey; label: string; hint: string }> = [
+  { key: 'pathExact', label: 'is directly in the folder', hint: 'Only this folder, excluding subfolders' },
   { key: 'path', label: 'is under the folder', hint: '/projects/canvas/UI or backends:/workspace/home/foo' },
   { key: 'mime', label: 'file type is', hint: 'image/*, application/pdf' },
   { key: 'from', label: 'sender contains', hint: 'boss@company.tld' },
@@ -352,7 +353,7 @@ function buildRule(form: RuleForm): HookRule {
 // ── rule → form (only shapes the builder emits; others are JSON-only) ────────
 
 function parseRule(rule: HookRule): RuleForm | null {
-  const { event, schema, from, to, subject, path, mime, url, attachment, ...restWhen } = rule.when
+  const { event, schema, from, to, subject, path, pathExact, mime, url, attachment, ...restWhen } = rule.when
   if (Object.keys(restWhen).length > 0) return null
   const events = Array.isArray(event) ? event : [event]
   if (!events.length || !events.every((e) => typeof e === 'string' && EVENT_OPTIONS.some((o) => o.value === e))) return null
@@ -366,6 +367,7 @@ function parseRule(rule: HookRule): RuleForm | null {
     return true
   }
   if (path !== undefined && !push('path', path)) return null
+  if (pathExact !== undefined && !push('pathExact', pathExact)) return null
   if (mime !== undefined && !push('mime', mime)) return null
   if (from !== undefined && !push('from', from)) return null
   if (to !== undefined && !push('to', to)) return null
@@ -488,8 +490,8 @@ function summarizeWhen(rule: HookRule, options: ReadonlyArray<{ value: string; l
   const eventLabel = ruleEvents(rule).map((e) => EVENT_OPTIONS.find((o) => o.value === e)?.label || e).join(' or ')
   const parts: string[] = [`When ${schemaLabel(w.schema, options)} ${eventLabel}`]
   const fmt = (v: unknown) => (Array.isArray(v) ? v.join(' or ') : typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v))
-  const labels: Record<string, string> = { path: 'under', mime: 'type', from: 'from', to: 'to', subject: 'subject', url: 'url', attachment: 'attachment' }
-  for (const key of ['path', 'mime', 'from', 'to', 'subject', 'url', 'attachment']) {
+  const labels: Record<string, string> = { path: 'under', pathExact: 'directly in', mime: 'type', from: 'from', to: 'to', subject: 'subject', url: 'url', attachment: 'attachment' }
+  for (const key of ['path', 'pathExact', 'mime', 'from', 'to', 'subject', 'url', 'attachment']) {
     if (w[key] !== undefined) parts.push(`${labels[key]} ${fmt(w[key])}`)
   }
   return parts.join(' · ')
@@ -878,7 +880,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
     </Button>
   )
 
-  const hasPathCondition = Boolean(form?.conditions.some((c) => c.field === 'path' && c.value.trim()))
+  const hasPathCondition = Boolean(form?.conditions.some((c) => (c.field === 'path' || c.field === 'pathExact') && c.value.trim()))
   const backendLabel = (b: Backend) => `${b.address}${b.address === 'workspace:data' ? ' — managed blob store (default)' : b.address === 'workspace:home' ? ' — workspace home folder' : b.driver ? ` — ${b.driver}` : ''}`
 
   const backendSelect = (value: string, onChange: (v: string) => void, emptyLabel: string, placeholder = 'workspace:home') => (
@@ -1068,7 +1070,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                           value={row.value}
                           onChange={(e) => setField('conditions', form.conditions.map((c, j) => (j === i ? { ...c, value: e.target.value } : c)))}
                         />
-                        {row.field === 'path' && browseButton('condition', i, 'Browse the workspace trees')}
+                        {(row.field === 'path' || row.field === 'pathExact') && browseButton('condition', i, 'Browse the workspace trees')}
                       </div>
                       <Button size="sm" variant="ghost" className="order-3 h-10 w-10 p-0 text-muted-foreground sm:order-4" title="Remove condition" onClick={() => setField('conditions', form.conditions.filter((_, j) => j !== i))}>
                         <X className="h-4 w-4" />

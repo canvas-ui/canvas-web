@@ -15,7 +15,7 @@ export function AutoLinkFolderPanel({ workspaceId, sourcePath, onClose, onManage
 }) {
   const [destinations, setDestinations] = useState<AutoLinkDestination[]>([])
   const [picker, setPicker] = useState(false)
-  const [keepSubfolders, setKeepSubfolders] = useState(false)
+  const [recursive, setRecursive] = useState(false)
   const [includeExisting, setIncludeExisting] = useState(true)
   const [ruleId] = useState(() => `autolink-${crypto.randomUUID()}`)
   const [saved, setSaved] = useState(false)
@@ -34,7 +34,7 @@ export function AutoLinkFolderPanel({ workspaceId, sourcePath, onClose, onManage
     setError('')
     try {
       if (!saved) {
-        await addAutoLinkRule(workspaceId, buildAutoLinkRule(ruleId, sourcePath, destinations, keepSubfolders))
+        await addAutoLinkRule(workspaceId, buildAutoLinkRule(ruleId, sourcePath, destinations, recursive))
         setSaved(true)
       }
       if (includeExisting) {
@@ -66,7 +66,7 @@ export function AutoLinkFolderPanel({ workspaceId, sourcePath, onClose, onManage
           <button type="button" onClick={close} disabled={busy} aria-label="Close" className="p-1 disabled:opacity-40"><X className="h-4 w-4" /></button>
         </div>
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
-          <div><p className="text-xs text-muted-foreground">Source folder, including subfolders</p><p className="mt-1 break-words text-sm">{sourcePath}</p></div>
+          <div><p className="text-xs text-muted-foreground">Source folder</p><p className="mt-1 break-words text-sm">{sourcePath}</p></div>
           <p className="text-sm text-muted-foreground">Automatically link documents from this storage folder to your virtual paths. Files stay where they are.</p>
           <div className="space-y-2">
             <h3 className="text-sm font-medium">Destinations</h3>
@@ -78,10 +78,10 @@ export function AutoLinkFolderPanel({ workspaceId, sourcePath, onClose, onManage
             <p className="text-xs text-muted-foreground">Choose a context path, a directory path, or both.</p>
           </div>
           <fieldset disabled={busy || saved} className="space-y-3 text-sm">
-            {destinations.some(target => target.tree === 'directory') && <label className="flex items-start gap-2"><input type="checkbox" checked={keepSubfolders} onChange={e => setKeepSubfolders(e.target.checked)} className="mt-1" />Keep source subfolders under directory destinations</label>}
+            <label className="flex items-start gap-2"><input type="checkbox" checked={recursive} onChange={e => setRecursive(e.target.checked)} className="mt-1" />Recursive — include subfolders and recreate their structure at each destination</label>
             <label className="flex items-start gap-2"><input type="checkbox" checked={includeExisting} onChange={e => setIncludeExisting(e.target.checked)} className="mt-1" />Also link existing documents</label>
           </fieldset>
-          <p className="text-xs text-muted-foreground">Context paths use their usual layer membership. Disable, edit, or remove this Auto-Link in workspace Rules. Disabling or removing a rule keeps links already created.</p>
+          <p className="text-xs text-muted-foreground">Without Recursive, only documents directly in the source folder are linked. Context paths use their usual layer membership. Disable, edit, or remove this Auto-Link in workspace Rules. Disabling or removing a rule keeps links already created.</p>
           {busy && <p role="status" className="text-sm">{saved ? `Linking existing documents… ${linked} linked` : 'Saving Auto-Link…'}</p>}
           {done && <p role="status" className="text-sm">Auto-Link is enabled for future documents.{includeExisting ? ` ${linked} existing documents linked.` : ''}</p>}
           {failed > 0 && <p role="alert" className="text-sm text-destructive">{failed} documents could not be linked. Check the rule’s run log in Rules and rerun it after resolving the errors.</p>}

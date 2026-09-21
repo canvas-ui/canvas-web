@@ -5,7 +5,7 @@ export interface AutoLinkDestination {
   path: string
 }
 
-export function buildAutoLinkRule(id: string, source: string, destinations: AutoLinkDestination[], keepSubfolders = false): HookRule {
+export function buildAutoLinkRule(id: string, source: string, destinations: AutoLinkDestination[], recursive = false): HookRule {
   if (!source.startsWith('/') || !destinations.length) throw new Error('Choose a source folder and at least one destination.')
   const paths = new Map<string, AutoLinkDestination>()
   for (const target of destinations) {
@@ -21,10 +21,10 @@ export function buildAutoLinkRule(id: string, source: string, destinations: Auto
     // Backend placement may itself have been made by a storage rule. Linking
     // emits no events, so these rules can safely accept automated placements.
     cascade: true,
-    when: { event: ['document.inserted', 'document.updated', 'document.linked'], path: `backends:${source}` },
+    when: { event: ['document.inserted', 'document.updated', 'document.linked'], ...(recursive ? { path: `backends:${source}` } : { pathExact: `backends:${source}` }) },
     then: [...paths.values()].map(target => ({
       action: 'link', paths: [`${target.tree === 'context' ? 'ctx' : 'dir'}:${target.path}`],
-      ...(target.tree === 'directory' && keepSubfolders ? { recursive: true } : {}),
+      ...(recursive ? { recursive: true } : {}),
     })),
   }
 }
