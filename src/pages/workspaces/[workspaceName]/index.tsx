@@ -371,6 +371,14 @@ export default function WorkspaceDetailPage() {
   // time. When clean we pass undefined, so CanvasGrid uses its default
   // (server-composed) read and a saved canvas renders exactly as stored.
   const canvasFetchDocuments = useCallback(async (opts?: WidgetFetchOpts): Promise<WidgetDocumentsResult> => {
+    let scopedIds = tbLensIds
+    if (opts?.anyOf?.length && tbAnyOf.length) {
+      const scope = await getCanvasPathDocuments(workspaceName!, selectedPath, selectedTreeName, {
+        limit: 0, anyOf: tbAnyOf, ids: tbLensIds, applyCanvasSpec: false,
+      })
+      scopedIds = (scope.payload as Document[] || []).map(doc => doc.id)
+      if (!scopedIds.length) return { payload: [], count: 0, totalCount: 0 }
+    }
     const res = await getCanvasPathDocuments(workspaceName!, selectedPath, selectedTreeName, {
       limit: opts?.limit,
       offset: opts?.offset,
@@ -380,10 +388,10 @@ export default function WorkspaceDetailPage() {
       // Keep the widget's fixed scope (e.g. gallery's data/mime/image) AND apply
       // the live toolbox feature filters on top.
       allOf: [...tbAllOf, ...(opts?.allOf ?? [])],
-      anyOf: tbAnyOf,
+      anyOf: opts?.anyOf?.length ? opts.anyOf : tbAnyOf,
       noneOf: tbNoneOf,
       filters: tbScopeFilters,
-      ids: tbLensIds,
+      ids: scopedIds,
       queries: [...serverSearchQueries, ...(opts?.queries ?? []), ...(opts?.q ? [opts.q] : [])],
       applyCanvasSpec: false,
     });

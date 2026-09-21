@@ -404,6 +404,7 @@ export interface BackfillResult {
   event: string
   dryRun: boolean
   processed: number
+  nextOffset?: number | null
   matched: number
   failed: number
   results: Array<{ docId: number; schema: string; matched?: boolean | null; status?: string; checks?: ExplainCheck[] }>
@@ -411,7 +412,7 @@ export interface BackfillResult {
 
 export async function backfillHook(
   workspaceId: string,
-  body: { ruleId?: string; hookFile?: string; event?: string; schema?: string; limit?: number; dryRun?: boolean },
+  body: { ruleId?: string; hookFile?: string; event?: string; schema?: string; limit?: number; offset?: number; dryRun?: boolean },
 ): Promise<BackfillResult> {
   const res = await api.post<BackfillResult>(`${hooksBase(workspaceId)}/backfill`, body)
   return res
@@ -487,4 +488,15 @@ export async function generateHook(
     `${hooksBase(workspaceId)}/generate`, spec,
   )
   return res
+}
+
+/** Append without treating a failed read or malformed rules file as empty. */
+export async function addAutoLinkRule(workspaceId: string, rule: HookRule): Promise<void> {
+  const content = await getHook(workspaceId, RULES_PATH)
+  const parsed = JSON.parse(content)
+  const rules = Array.isArray(parsed) ? parsed : parsed?.rules
+  if (!Array.isArray(rules)) throw new Error('The workspace rules file is invalid. Fix it in Rules before adding an Auto-Link.')
+  if (rules.some((existing: HookRule) => existing.id === rule.id)) return
+  const next = Array.isArray(parsed) ? [...rules, rule] : { ...parsed, rules: [...rules, rule] }
+  await saveHook(workspaceId, RULES_PATH, JSON.stringify(next, null, 2) + '\n')
 }

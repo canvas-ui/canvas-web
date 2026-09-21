@@ -1,3 +1,4 @@
+import { AutoLinkFolderPanel } from '../shared/AutoLinkFolderPanel'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Settings, ExternalLink, GitBranch, FolderTree, Layers, LayoutDashboard, Search, Lock, Unlock, Edit2, Trash2, Database, Pin } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
@@ -96,6 +97,7 @@ export function WorkspaceM2() {
   const [contentPath, setContentPath] = useState<string | null>(urlIsLayer && urlPath !== '/' ? urlPath : null)
   const [searchQuery, setSearchQuery] = useState('')
   const [docClipboard, setDocClipboard] = useState<{ documentIds: number[]; operation: 'copy' | 'cut' } | null>(null)
+  const [autoLinkPath, setAutoLinkPath] = useState<string | null>(null)
   const [pins, setPins] = useState<WorkspacePin[]>([])
   const [isLoadingPins, setIsLoadingPins] = useState(false)
   // Opening a pin navigates; the URL sync below would then jump to the tree
@@ -658,12 +660,7 @@ export function WorkspaceM2() {
             rootLabel={wsName ?? undefined}
             searchQuery={searchQuery}
             resyncingPaths={activeTab === 'backends' ? resyncingPaths : undefined}
-            onAddRule={wsName && activeTab === 'backends' ? (path) => {
-              // Rule builder (settings → Hooks) prefilled: everything under this
-              // backends folder → the same folder in the directory tree, recursive.
-              const params = new URLSearchParams({ addRulePath: `backends:${path}`, addRuleTarget: defaultMirrorTarget(path) })
-              navigate(`/workspaces/${wsName}/settings/hooks?${params.toString()}`)
-            } : undefined}
+            onAddRule={wsName && activeTab === 'backends' ? setAutoLinkPath : undefined}
             onSyncFolderTree={wsName && activeTab === 'backends' ? handleSyncFolderTree : undefined}
             onAddStoreRule={wsName ? (path, kind: 'store' | 'download' = 'store') => {
               // Storage rule prefilled from either side: a backends folder is
@@ -700,6 +697,10 @@ export function WorkspaceM2() {
           />
         )}
       </div>
+      {autoLinkPath && wsName && <AutoLinkFolderPanel workspaceId={wsName} sourcePath={autoLinkPath} onClose={() => setAutoLinkPath(null)} onManageRules={() => {
+        setAutoLinkPath(null)
+        navigate(`/workspaces/${wsName}/settings/hooks?section=rules`)
+      }} />}
     </div>
   )
 }

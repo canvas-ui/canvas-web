@@ -352,7 +352,17 @@ export function CanvasGrid({
       canvasQueries,
       setCanvasQueries: editable ? setCanvasQueries : undefined,
       fetchDocuments: fetchDocuments ?? (async (opts) => {
-        const res = await getCanvasPathDocuments(workspaceId, path, treeName, opts)
+        // Resolve the widget's OR group independently: merging it with the
+        // saved canvas's OR group would widen the canvas scope.
+        let ids: number[] | undefined
+        if (opts?.anyOf?.length) {
+          const media = await getCanvasPathDocuments(workspaceId, path, treeName, {
+            anyOf: opts.anyOf, limit: 0, applyCanvasSpec: false,
+          })
+          ids = (media.payload as Document[] || []).map(doc => doc.id)
+          if (!ids.length) return { payload: [], count: 0, totalCount: 0 }
+        }
+        const res = await getCanvasPathDocuments(workspaceId, path, treeName, { ...opts, anyOf: undefined, ids })
         return { payload: (res.payload as Document[]) || [], count: res.count ?? undefined, totalCount: res.totalCount ?? undefined }
       }),
     }),

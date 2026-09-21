@@ -54,8 +54,8 @@ export interface MenuTreeViewProps {
   onShareCanvas?: (path: string) => Promise<void>
   onLockLayer?: (layerId: string) => Promise<boolean>
   onResyncBackend?: (backendName: string) => Promise<boolean>
-  // Backends tree only: open the rule builder prefilled to file everything
-  // under this folder into the directory tree (recursive link rule), and run
+  // Backends tree only: open Auto-Link to file everything
+  // under this folder into context and/or directory destinations, and run
   // the folder-skeleton sync hook for this subtree.
   onAddRule?: (path: string) => void
   onSyncFolderTree?: (path: string) => Promise<boolean>
@@ -249,7 +249,7 @@ function CtxMenu({
             empty folders show up too. */}
         {isBackendsTree && backendNameForPath(path, isBackendsTree) && (onAddRule || onSyncFolderTree || onAddStoreRule) && (
           <>
-            {onAddRule && item(<FolderSymlink className="w-3 h-3" />, 'Create mirror rule…', async () => {
+            {onAddRule && item(<FolderSymlink className="w-3 h-3" />, 'Auto-Link documents to…', async () => {
               onAddRule(path)
             })}
             {onAddStoreRule && fileBackendTarget(path, isBackendsTree) && item(<HardDrive className="w-3 h-3" />, 'Create storage rule…', async () => {

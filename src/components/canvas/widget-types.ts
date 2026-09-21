@@ -25,6 +25,7 @@ export interface WidgetFetchOpts {
   order?: 'asc' | 'desc'
   /** Presence bitmaps every result must carry, e.g. ['data/mime/image']. Widget-fixed, not user input. */
   allOf?: string[]
+  anyOf?: string[]
 }
 
 // The canvas a widget lives on. Widgets fetch data via `fetchDocuments` rather

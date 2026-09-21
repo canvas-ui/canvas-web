@@ -15,6 +15,10 @@ export function isImageDoc(doc: Document): boolean {
     && String(doc.metadata?.contentType || '').startsWith('image/')
 }
 
+export function isVideoDoc(doc: Document): boolean {
+  return doc.schema === FILE_SCHEMA && String(doc.metadata?.contentType || '').startsWith('video/')
+}
+
 // Modality-level MIME presence bitmap: every image doc carries it, so the
 // server returns only images and `totalCount` is an exact image count.
 const IMAGE_MIME_FEATURE = 'data/mime/image'
@@ -45,7 +49,7 @@ export interface CanvasImages {
 
 // Shared data layer for the Gallery and Mosaic widgets: paginated, searchable,
 // timeline-sortable image loading over the canvas' document context.
-export function useCanvasImages(canvas: WidgetCanvasContext, pageSize: number): CanvasImages {
+export function useCanvasImages(canvas: WidgetCanvasContext, pageSize: number, includeVideos = false): CanvasImages {
   const [images, setImages] = useState<Document[]>([])
   const [totalCount, setTotalCount] = useState(0)
   const [page, setPage] = useState(1)
@@ -72,10 +76,10 @@ export function useCanvasImages(canvas: WidgetCanvasContext, pageSize: number): 
           queries: activeQueries.length ? activeQueries : undefined,
           sortBy: sort.sortBy,
           order: sort.order,
-          allOf: [IMAGE_MIME_FEATURE],
+          ...(includeVideos ? { anyOf: [IMAGE_MIME_FEATURE, 'data/mime/video'] } : { allOf: [IMAGE_MIME_FEATURE] }),
         })
         if (cancelled) return
-        setImages((res.payload || []).filter(isImageDoc))
+        setImages((res.payload || []).filter(doc => isImageDoc(doc) || (includeVideos && isVideoDoc(doc))))
         setTotalCount(res.totalCount || res.count || 0)
       } catch (err) {
         if (cancelled) return
@@ -87,8 +91,12 @@ export function useCanvasImages(canvas: WidgetCanvasContext, pageSize: number): 
       }
     }
     load()
-    return () => { cancelled = true }
-  }, [canvas, pageSize, page, activeQueries, sort.sortBy, sort.order])
+    window.addEventListener('workspace:documents:refresh', load)
+    return () => {
+      cancelled = true
+      window.removeEventListener('workspace:documents:refresh', load)
+    }
+  }, [canvas, pageSize, page, activeQueries, sort.sortBy, sort.order, includeVideos])
 
   const submit = useCallback(() => {
     const term = input.trim()

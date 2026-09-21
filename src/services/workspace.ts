@@ -611,6 +611,7 @@ export async function getCanvasPathDocuments(
     anyOf: options.anyOf,
     noneOf: options.noneOf,
     filters: options.filters,
+    ids: options.ids,
     sortBy: options.sortBy,
     order: options.order,
     applyCanvasSpec: options.applyCanvasSpec,

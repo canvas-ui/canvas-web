@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronLeft, ChevronRight, MessageSquareText, Search, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, MessageSquareText, Search, X, Play } from 'lucide-react'
 import { ZoomableImage } from '@/components/common/zoomable-image'
 import { Loader } from '@/components/ui/loader'
-import { useDocumentBlobUrl } from '@/components/renderers/useDocumentBlobUrl'
+import { useDocumentBlobUrl, useDocumentStreamSrc } from '@/components/renderers/useDocumentBlobUrl'
 import { useDocumentThumbnail } from '@/components/renderers/useDocumentThumbnail'
 import { getDocumentComment, getLocationFilename } from '@/lib/document-display'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 import type { Document } from '@/types/workspace'
 import { TimelineSortControl } from './sort-control'
-import type { CanvasImages } from './useCanvasImages'
+import { isVideoDoc, type CanvasImages } from './useCanvasImages'
 
 /**
  * How a tile shows its comment.
@@ -33,7 +33,7 @@ export function ImageThumb({ workspaceId, doc, onClick, className = 'aspect-squa
   className?: string
   comments?: CommentDisplay
 }) {
-  const { blobUrl, error, loading } = useDocumentThumbnail(workspaceId, doc.id, 512, { version: doc.checksumArray?.[0] ?? null })
+  const { blobUrl, error, loading } = useDocumentThumbnail(workspaceId, doc.id, 512, { blobFallback: !isVideoDoc(doc), version: doc.checksumArray?.[0] ?? null })
   const title = getLocationFilename(doc) || `image-${doc.id}`
   const comment = getDocumentComment(doc)
   const showComment = comment !== '' && comments !== 'off'
@@ -48,7 +48,7 @@ export function ImageThumb({ workspaceId, doc, onClick, className = 'aspect-squa
       className={`canvas-no-drag group relative block w-full overflow-hidden rounded-lg border bg-muted/40 shadow-elevation-1 transition-shadow hover:shadow-elevation-2 hover:ring-2 hover:ring-primary/30 ${className}`}
     >
       {loading && <div className="absolute inset-0 animate-pulse bg-muted/60" />}
-      {error && <div className="absolute inset-0 flex items-center justify-center p-1 text-[10px] text-destructive">{error}</div>}
+      {error && !isVideoDoc(doc) && <div className="absolute inset-0 flex items-center justify-center p-1 text-[10px] text-destructive">{error}</div>}
       {blobUrl && (
         <img
           src={blobUrl}
@@ -57,6 +57,7 @@ export function ImageThumb({ workspaceId, doc, onClick, className = 'aspect-squa
           className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
         />
       )}
+      {isVideoDoc(doc) && <span className="absolute inset-0 flex items-center justify-center"><Play className="h-10 w-10 rounded-full bg-black/60 p-2 text-white" /><span className="sr-only">Play video</span></span>}
       {showComment && (
         <span
           className={`pointer-events-none absolute inset-x-0 bottom-0 px-1.5 pb-1 pt-4 text-left text-[11px] leading-snug text-white ${
@@ -97,7 +98,7 @@ export function ImageLightbox({ workspaceId, docs, index, onClose, onNavigate }:
   onNavigate: (next: number) => void
 }) {
   const doc = docs[index]
-  const { blobUrl, error, loading } = useDocumentBlobUrl(workspaceId, doc.id, { version: doc.checksumArray?.[0] ?? null })
+  const { blobUrl, error, loading } = useDocumentBlobUrl(workspaceId, doc.id, { version: doc.checksumArray?.[0] ?? null, enabled: !isVideoDoc(doc) })
   const title = getLocationFilename(doc) || `image-${doc.id}`
   const comment = getDocumentComment(doc)
   // While the picture is zoomed the whole surface belongs to the gesture: the
@@ -109,6 +110,7 @@ export function ImageLightbox({ workspaceId, docs, index, onClose, onNavigate }:
   useEscapeClose(onClose)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement)?.closest('video')) return
       if (e.key === 'ArrowLeft' && index > 0) onNavigate(index - 1)
       if (e.key === 'ArrowRight' && index < docs.length - 1) onNavigate(index + 1)
     }
@@ -160,6 +162,7 @@ export function ImageLightbox({ workspaceId, docs, index, onClose, onNavigate }:
         <div className="flex min-h-0 flex-1 items-center justify-center">
           {loading && <div className="text-sm text-foreground/70">Loading…</div>}
           {error && <div className="text-sm text-destructive">{error}</div>}
+          {isVideoDoc(doc) && <GalleryVideo key={doc.id} workspaceId={workspaceId} doc={doc} />}
           {blobUrl && (
             <ZoomableImage
               src={blobUrl}
@@ -182,7 +185,7 @@ export function ImageLightbox({ workspaceId, docs, index, onClose, onNavigate }:
           {title} · {index + 1}/{docs.length}
           {/* Stated, not discovered: nobody double-taps an image on the off
               chance that it zooms. Hidden once they have. */}
-          {!zoomed && <span className="ml-2 opacity-70">· double-tap to zoom</span>}
+          {!zoomed && !isVideoDoc(doc) && <span className="ml-2 opacity-70">· double-tap to zoom</span>}
         </figcaption>
       </figure>
     </div>,
@@ -216,7 +219,7 @@ export function ImageGridToolbar({ workspaceId, state, comments, onToggleComment
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') submit() }}
-          placeholder={hasSearch ? 'Refine: add another query (Enter)…' : 'Search images (Enter)…'}
+          placeholder={hasSearch ? 'Refine: add another query (Enter)…' : 'Search media (Enter)…'}
           className="h-7 w-full rounded-md border bg-background pl-7 pr-7 text-xs"
         />
         {hasSearch && (
@@ -303,4 +306,9 @@ export function ImageGridToolbar({ workspaceId, state, comments, onToggleComment
       </div>
     </div>
   )
+}
+
+function GalleryVideo({ workspaceId, doc }: { workspaceId: string; doc: Document }) {
+  const { src, loading, error } = useDocumentStreamSrc(workspaceId, doc.id)
+  return <>{loading && <span>Loading video…</span>}{error && <span role="alert">{error}</span>}{src && <video src={src} controls playsInline preload="metadata" className="max-h-full max-w-full" />}</>
 }
