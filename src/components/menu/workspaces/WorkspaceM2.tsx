@@ -103,6 +103,8 @@ export function WorkspaceM2() {
   // Opening a pin navigates; the URL sync below would then jump to the tree
   // tab of the target — this flag keeps the Pins tab in front for that hop.
   const [stayOnPins, setStayOnPins] = useState(false)
+  const treeScrollRef = useRef<HTMLDivElement>(null)
+  const revealPinRef = useRef(false)
   // Once the user picks a tab by hand the stored default no longer applies.
   const [tabTouched, setTabTouched] = useState(false)
 
@@ -437,6 +439,19 @@ export function WorkspaceM2() {
     navigate(url)
   }, [wsName, navigate, canvasRow])
 
+  const handleShowPinInTree = useCallback((pin: WorkspacePin) => {
+    if (!wsName || pin.resolvable === false) return
+    setStayOnPins(false)
+    setTabTouched(true)
+    setActiveTab(tabForTree(pin.tree))
+    setSelectedPath(pin.path)
+    setContentPath(null)
+    setSearchQuery('')
+    revealPinRef.current = true
+    canvasRow?.setFocus('main')
+    navigate(buildWorkspaceUrl(wsName, pin.path, pin.tree))
+  }, [wsName, navigate, canvasRow])
+
   const activeTree = activeTab === 'context' ? contextTree
     : activeTab === 'directory' ? directoryTree
     : activeTab === 'backends' ? backendsTree
@@ -445,6 +460,16 @@ export function WorkspaceM2() {
     : activeTab === 'directory' ? isLoadingDirectory
     : activeTab === 'backends' ? isLoadingBackends
     : false
+
+  useEffect(() => {
+    if (!revealPinRef.current || isLoadingTree || activeTab === 'pins') return
+    // Tree rows expand the selected path's ancestors during render. Wait for
+    // the target to exist, including when its tree is still being fetched.
+    const row = treeScrollRef.current?.querySelector<HTMLElement>('[data-active="true"]')
+    if (!row) return
+    row.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    revealPinRef.current = false
+  }, [activeTab, selectedPath, activeTree, isLoadingTree])
 
   const handleTabChange = (tab: TreeTab) => {
     setTabTouched(true)
@@ -598,7 +623,7 @@ export function WorkspaceM2() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div ref={treeScrollRef} className="flex-1 overflow-y-auto">
         {activeTab === 'pins' ? (
           <WorkspacePinsTab
             pins={pins}
@@ -606,6 +631,7 @@ export function WorkspaceM2() {
             searchQuery={searchQuery}
             activeKey={pinKey(urlTree, urlPath)}
             onOpen={handleOpenPin}
+            onShowInTree={handleShowPinInTree}
             onUnpin={handleUnpin}
             onMove={handleMovePin}
           />

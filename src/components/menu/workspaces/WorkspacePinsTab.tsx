@@ -6,7 +6,7 @@
  */
 import { useState } from 'react'
 import { Icon } from '@iconify/react'
-import { GripVertical, PinOff, Lock, AlertTriangle } from 'lucide-react'
+import { GripVertical, PinOff, FolderTree, Lock, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { DEFAULT_FOLDER_ICON, DEFAULT_CANVAS_ICON } from '@/lib/layer-style'
 import { visibleAccentColor } from '@/utils/color'
@@ -18,6 +18,7 @@ interface WorkspacePinsTabProps {
   searchQuery?: string
   activeKey?: string | null
   onOpen: (pin: WorkspacePin) => void
+  onShowInTree: (pin: WorkspacePin) => void
   onUnpin: (pin: WorkspacePin) => Promise<void>
   /** Move pin `id` before `beforeId` (null = to the end). */
   onMove: (id: string, beforeId: string | null) => Promise<void>
@@ -25,7 +26,7 @@ interface WorkspacePinsTabProps {
 
 const PIN_DRAG_TYPE = 'application/x-canvas-workspace-pin'
 
-export function WorkspacePinsTab({ pins, isLoading, searchQuery = '', activeKey, onOpen, onUnpin, onMove }: WorkspacePinsTabProps) {
+export function WorkspacePinsTab({ pins, isLoading, searchQuery = '', activeKey, onOpen, onShowInTree, onUnpin, onMove }: WorkspacePinsTabProps) {
   const [dragId, setDragId] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<{ id: string | null; before: boolean } | null>(null)
 
@@ -104,7 +105,7 @@ export function WorkspacePinsTab({ pins, isLoading, searchQuery = '', activeKey,
             }}
             onDrop={e => { e.preventDefault(); e.stopPropagation(); void handleDrop() }}
             onClick={() => { if (!unresolved) onOpen(pin) }}
-            onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && !unresolved) { e.preventDefault(); onOpen(pin) } }}
+            onKeyDown={e => { if (e.target !== e.currentTarget) return; if ((e.key === 'Enter' || e.key === ' ') && !unresolved) { e.preventDefault(); onOpen(pin) } }}
             title={unresolved ? `${pin.path} — folder no longer exists` : `Open ${pin.tree}:${pin.path}`}
             className={cn(
               'group relative flex items-stretch gap-2.5 rounded-lg border bg-card shadow-elevation-1 text-left transition-colors',
@@ -143,18 +144,30 @@ export function WorkspacePinsTab({ pins, isLoading, searchQuery = '', activeKey,
             </div>
 
             <div className="flex flex-col items-center justify-between py-1.5 pr-1.5 shrink-0">
-              <button
-                type="button"
-                onClick={async e => {
-                  e.stopPropagation()
-                  try { await onUnpin(pin) } catch (err) { alert(err instanceof Error ? err.message : String(err)) }
-                }}
-                title="Unpin"
-                aria-label="Unpin"
-                className="flex items-center justify-center w-6 h-6 rounded text-muted-foreground reveal-on-hover hover:bg-destructive/10 hover:text-destructive transition-colors"
-              >
-                <PinOff className="w-3.5 h-3.5" />
-              </button>
+              <div className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  disabled={unresolved}
+                  onClick={e => { e.stopPropagation(); onShowInTree(pin) }}
+                  title="Show in tree"
+                  aria-label="Show in tree"
+                  className="flex items-center justify-center w-6 h-6 rounded text-muted-foreground reveal-on-hover focus-visible:opacity-100 hover:bg-accent hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-default"
+                >
+                  <FolderTree className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={async e => {
+                    e.stopPropagation()
+                    try { await onUnpin(pin) } catch (err) { alert(err instanceof Error ? err.message : String(err)) }
+                  }}
+                  title="Unpin"
+                  aria-label="Unpin"
+                  className="flex items-center justify-center w-6 h-6 rounded text-muted-foreground reveal-on-hover hover:bg-destructive/10 hover:text-destructive transition-colors"
+                >
+                  <PinOff className="w-3.5 h-3.5" />
+                </button>
+              </div>
               {!q && <GripVertical className="w-3.5 h-3.5 text-muted-foreground/50 cursor-grab active:cursor-grabbing" aria-hidden />}
             </div>
           </div>
