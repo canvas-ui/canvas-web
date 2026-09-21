@@ -14,3 +14,13 @@ export function bulkEditMetadata(doc: Document, tags: string[], geo: DocumentGeo
     ...(geo ? { geo } : {}),
   }
 }
+
+// Omission preserves each document's own comment; an explicit empty string
+// clears it. Comments belong to the document, outside its metadata patch.
+export function bulkEditDocument(doc: Document, tags: string[], geo: DocumentGeo | null, comment?: string) {
+  return {
+    id: doc.id, schema: doc.schema, schemaVersion: doc.schemaVersion,
+    metadata: bulkEditMetadata(doc, tags, geo),
+    ...(comment !== undefined ? { comment: comment.trim() } : {}),
+  }
+}
