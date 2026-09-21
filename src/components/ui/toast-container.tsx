@@ -10,8 +10,8 @@ export function ToastContainer({ children }: { children?: React.ReactNode }) {
   const recentToastKeys = useRef<Set<string>>(new Set())
 
   const showToast = useCallback((toast: Omit<ToastType, 'id'>) => {
-    // Network-layer failures are reported ONCE by the connectivity transition
-    // toast (App.tsx). Component catch-blocks all over the app forward the
+    // Network failures are shown by the persistent connection indicator.
+    // Component catch-blocks all over the app forward the
     // API's network-error message verbatim via their own showToast calls, so
     // the suppression has to live here, at the single choke point — and
     // unconditionally, because connectivity state can flip between a parallel

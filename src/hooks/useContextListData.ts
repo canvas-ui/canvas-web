@@ -7,9 +7,11 @@ export function useContextListData(enabled: boolean) {
   const [contexts, setContexts] = useState<Context[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const hasFetched = useRef(false)
+  const inFlight = useRef(false)
 
   const fetch = useCallback(async () => {
-    if (isLoading) return
+    if (inFlight.current) return
+    inFlight.current = true
     setIsLoading(true)
     try {
       const data = await listContexts()
@@ -18,13 +20,12 @@ export function useContextListData(enabled: boolean) {
     } catch (err) {
       console.error('Failed to fetch contexts:', err)
     } finally {
+      inFlight.current = false
       setIsLoading(false)
     }
-  }, [isLoading])
+  }, [])
 
-  // Latest fetch for the long-lived socket subscription below, so the effect
-  // does not need `fetch` as a dependency (its identity changes with isLoading
-  // and would tear down / re-create the subscription on every load).
+  // Keep the latest loader available to event handlers.
   const fetchRef = useRef(fetch)
   useEffect(() => {
     fetchRef.current = fetch
@@ -47,7 +48,10 @@ export function useContextListData(enabled: boolean) {
     const subscribe = () => socketService.emit('subscribe', { channel: 'context' })
     const unsubscribe = () => socketService.emit('unsubscribe', { channel: 'context' })
 
-    const offConnect = socketService.on('connect', subscribe)
+    const offConnect = socketService.on('connect', () => {
+      subscribe()
+      void fetch()
+    })
     subscribe()
 
     const handleCreated = (data: unknown) => {
@@ -107,7 +111,7 @@ export function useContextListData(enabled: boolean) {
       offConnect?.()
       events.forEach(([e, h]) => socketService.off(e, h))
     }
-  }, [enabled])
+  }, [enabled, fetch])
 
   // Window event fallback
   useEffect(() => {

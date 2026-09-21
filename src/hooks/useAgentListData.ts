@@ -6,9 +6,11 @@ export function useAgentListData(enabled: boolean) {
   const [agents, setAgents] = useState<Agent[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const hasFetched = useRef(false)
+  const inFlight = useRef(false)
 
   const fetch = useCallback(async () => {
-    if (isLoading) return
+    if (inFlight.current) return
+    inFlight.current = true
     setIsLoading(true)
     try {
       const data = await listAgents()
@@ -17,9 +19,10 @@ export function useAgentListData(enabled: boolean) {
     } catch (err) {
       console.error('Failed to fetch agents:', err)
     } finally {
+      inFlight.current = false
       setIsLoading(false)
     }
-  }, [isLoading])
+  }, [])
 
   const refresh = useCallback(() => {
     hasFetched.current = false
@@ -38,7 +41,10 @@ export function useAgentListData(enabled: boolean) {
     const subscribe = () => socketService.emit('subscribe', { channel: 'agent' })
     const unsubscribe = () => socketService.emit('unsubscribe', { channel: 'agent' })
 
-    const offConnect = socketService.on('connect', subscribe)
+    const offConnect = socketService.on('connect', () => {
+      subscribe()
+      void fetch()
+    })
     subscribe()
 
     const handleCreated = (data: unknown) => {
@@ -85,7 +91,7 @@ export function useAgentListData(enabled: boolean) {
       offConnect?.()
       events.forEach(([e, h]) => socketService.off(e, h))
     }
-  }, [enabled])
+  }, [enabled, fetch])
 
   // Window event fallback
   useEffect(() => {

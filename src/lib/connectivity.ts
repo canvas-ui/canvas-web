@@ -10,7 +10,7 @@
 
 type Listener = (offline: boolean) => void
 
-let offline = false
+let offline = typeof navigator !== 'undefined' && navigator.onLine === false
 const listeners = new Set<Listener>()
 
 function set(next: boolean): void {
@@ -35,7 +35,7 @@ export function reportNetworkSuccess(): void {
 
 // The one message api.ts throws for network-layer failures (no HTTP response
 // at all). Toast surfaces drop anything carrying it: offline every request
-// fails identically, and the transition toast in App.tsx already said it once.
+// fails identically, and the connection indicator already shows the status.
 // Matched anywhere, not anchored — components wrap it ("Failed to load X: …").
 const NETWORK_ERROR_MESSAGE_RE = /Network error:/i
 

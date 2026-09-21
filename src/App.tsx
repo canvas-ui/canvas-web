@@ -17,7 +17,7 @@ import { ToastContainer } from './components/ui/toast-container'
 import { useToast } from './components/ui/use-toast'
 import { NotificationsProvider } from './components/notifications/notifications-context'
 import { CanvasPinsProvider } from './components/home/pins-context'
-import { onConnectivityChange } from '@/lib/connectivity'
+import { startServerConnectionMonitor } from '@/lib/server-connection'
 import { setGlobalErrorHandler } from './lib/error-handler'
 import { ThemeProvider } from './theme'
 
@@ -33,14 +33,10 @@ function AppContent() {
         variant: 'destructive'
       })
     })
-    // Connectivity is reported ONCE per transition, not once per failed
-    // request (see lib/connectivity.ts) — offline mode must not toast-storm.
-    return onConnectivityChange((offline) => {
-      showToast(offline
-        ? { title: 'Offline', description: 'Server unreachable — showing cached content where available.' }
-        : { title: 'Back online', description: 'Connection to the server restored.' })
-    })
+
   }, [showToast])
+
+  useEffect(() => startServerConnectionMonitor(), [])
 
   return (
     <BrowserRouter>

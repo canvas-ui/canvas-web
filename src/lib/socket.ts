@@ -28,21 +28,10 @@ export type SocketEventHandler = (...args: never[]) => void
 /** Internal wrapper shape actually bound onto the socket.io instance. */
 type SocketListener = (...args: unknown[]) => void
 
-/** Extra fields socket.io attaches to connect_error errors. */
-interface SocketConnectError extends Error {
-  description?: unknown
-  context?: unknown
-  type?: string
-  transport?: string
-  code?: string | number
-}
-
 class SocketService {
   private socket: Socket | null = null
   private connected: boolean = false
-  private pending: boolean = false
-  private reconnectAttempts: number = 0
-  private maxReconnectAttempts: number = 5
+  private authToken: string | null = null
   private handlers: Map<string, Set<SocketEventHandler>> = new Map()
   private socketWrappers: Map<string, Map<SocketEventHandler, SocketListener>> = new Map()
   private desiredSubscriptions: Set<string> = new Set()
@@ -50,172 +39,64 @@ class SocketService {
   private connectionId: string = '';
 
   constructor() {
-    // Use the WS_URL directly from config
     this.baseUrl = WS_URL
-    console.log('Socket service initialized with base URL:', this.baseUrl)
-    // Generate a unique ID for this socket service instance
-    this.connectionId = `socket-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    this.connectionId = `socket-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
   }
 
   connect(token?: string) {
-    if (this.connected || this.pending) {
-      console.log('Socket already connected or connection pending, skipping connect request');
-      return;
-    }
-    this.pending = true;
-
-    // Use auth token from localStorage if not provided
     const authToken = token || getAuthToken()
-    console.log('🔍 DEBUG: Auth token check:', {
-      tokenProvided: !!token,
-      tokenFromStorage: !!getAuthToken(),
-      tokenLength: authToken ? authToken.length : 0,
-      tokenPreview: authToken ? authToken.substring(0, 20) + '...' : 'null'
-    });
+    if (!authToken || authToken === 'canvas-server-token') return
 
-    if (!authToken) {
-      console.error('❌ No auth token available for socket connection');
-      console.log('🔍 DEBUG: localStorage contents:', Object.keys(localStorage));
-      this.pending = false;
-      return;
-    }
-
-    // Reject any suspicious tokens like hardcoded test values
-    if (authToken === 'canvas-server-token') {
-      console.error('Invalid token format detected: canvas-server-token');
-      this.pending = false;
-      return;
-    }
-
-    try {
-      console.log('🔌 Attempting to connect to WebSocket server at:', this.baseUrl)
-      console.log('🔑 Using auth token for socket connection:', authToken.substring(0, 10) + '...')
-
-      // Destroy any existing socket connection
-      this.cleanupSocket();
-
-      // Create socket.io connection
-      this.socket = io(this.baseUrl, {
-        transports: ['websocket'],
-        autoConnect: true,
-        reconnection: true,
-        reconnectionAttempts: this.maxReconnectAttempts,
-        reconnectionDelay: 1000,
-        forceNew: true,  // Force a new connection to avoid issues with previous connections
-        timeout: 10000,  // Connection timeout in ms
-        // Include the token in proper Authorization header format
-        extraHeaders: {
-          Authorization: `Bearer ${authToken}`,
-          'X-Connection-ID': this.connectionId
-        },
-        auth: {
-          token: authToken // Send the raw token without modification
-        }
-      })
-
-      console.log('🎯 Socket.IO client initialized, connecting...')
-
-      // Register basic event handlers
-      this.setupDefaultHandlers()
-    } catch (error) {
-      console.error('💥 Socket connection setup error:', error)
-      this.pending = false
-
-      // Clean up any partial socket
-      this.cleanupSocket();
-    }
+    // One manager owns retries. Repeated subscriptions and auth checks must
+    // not replace it and restart its backoff while the server is unavailable.
+    if (this.socket && this.authToken === authToken) return
+    this.cleanupSocket()
+    this.authToken = authToken
+    this.socket = io(this.baseUrl, {
+      transports: ['websocket'],
+      autoConnect: false,
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 30000,
+      randomizationFactor: 0.5,
+      timeout: 10000,
+      forceNew: true,
+      extraHeaders: {
+        Authorization: `Bearer ${authToken}`,
+        'X-Connection-ID': this.connectionId,
+      },
+      auth: { token: authToken },
+    })
+    this.setupDefaultHandlers()
+    this.registerHandlers()
+    this.socket.connect()
   }
 
   private cleanupSocket() {
-    if (this.socket) {
-      try {
-        this.socket.disconnect();
-        this.socket.removeAllListeners();
-      } catch (e) {
-        console.error('Error while cleaning up socket:', e);
-      }
-      this.socket = null;
-    }
-
-    // Clear wrapper tracking (we keep handlers so they can be rebound on reconnect)
-    this.socketWrappers.clear();
+    // Remove listeners first: intentional teardown must not start more work.
+    this.socket?.removeAllListeners()
+    this.socket?.disconnect()
+    this.socket = null
+    this.connected = false
+    this.socketWrappers.clear()
   }
 
   private setupDefaultHandlers() {
     if (!this.socket) return
-
     this.socket.on('connect', () => {
-      console.log('✅ Socket connected with ID:', this.socket?.id)
-      console.log('🔗 Connection established to:', this.baseUrl)
       this.connected = true
-      this.pending = false
-      this.reconnectAttempts = 0
-
-      // Register any pending handlers
-      this.registerHandlers()
-
-      // Re-subscribe to remembered channels after reconnect/server restart.
-      // Subscriptions are server-memory only; without this, reconnect "works" but no events arrive.
       for (const channel of this.desiredSubscriptions) {
-        try {
-          this.socket?.emit('subscribe', { channel })
-        } catch (e) {
-          console.warn('Failed to re-subscribe to channel:', channel, e)
-        }
+        this.socket?.emit('subscribe', { channel })
       }
     })
-
-    this.socket.on('disconnect', (reason: string) => {
-      console.log('🔌 Socket disconnected:', reason)
-      console.log('🔍 DEBUG: Disconnect details:', {
-        reason,
-        wasConnected: this.connected,
-        reconnectAttempts: this.reconnectAttempts,
-        maxAttempts: this.maxReconnectAttempts
-      });
+    this.socket.on('disconnect', () => {
       this.connected = false
-      this.pending = false
-
-      // Auto-reconnect on most disconnect reasons (except explicit client disconnect)
-      if (reason !== 'io client disconnect' && this.reconnectAttempts < this.maxReconnectAttempts) {
-        console.log(`🔄 Attempting reconnection (${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`)
-        this.reconnectAttempts++
-        // Wait a bit before trying to reconnect
-        setTimeout(() => {
-          if (!this.connected && !this.pending) {
-            this.connect()
-          }
-        }, 2000)
-      }
     })
-
-    this.socket.on('connect_error', (error: SocketConnectError) => {
-      console.error('💥 Socket connection error:', error.message)
-      console.error('🔍 DEBUG: Connection error details:', {
-        message: error.message,
-        description: error.description,
-        context: error.context,
-        type: error.type,
-        transport: error.transport,
-        code: error.code
-      });
-      console.error('🔍 DEBUG: Full error object:', error)
+    this.socket.on('connect_error', () => {
+      // Socket.IO retries transport failures with backoff. Auth rejection
+      // intentionally waits for a fresh credential instead of retrying it.
       this.connected = false
-      this.pending = false
-    })
-
-    this.socket.on('error', (error: unknown) => {
-      console.error('Socket error:', error)
-    })
-
-    // Add handler for authenticated event
-    this.socket.on('authenticated', (data: unknown) => {
-      console.log('Socket authenticated:', data)
-    })
-
-    // Add handler for connection change events
-    this.socket.on('connection:change', (data: unknown) => {
-      console.log('Connection status changed:', data)
     })
   }
 
@@ -263,7 +144,7 @@ class SocketService {
     if (set.has(callback)) return () => this.off(event, callback)
     set.add(callback)
 
-    if (this.socket && this.connected) this.attach(event, callback)
+    if (this.socket) this.attach(event, callback)
 
     return () => this.off(event, callback)
   }
@@ -342,50 +223,34 @@ class SocketService {
         this.reconnect()
       }
     } else {
-      console.warn('Socket not connected, cannot emit:', event)
-      // Attempt to reconnect if not already connecting
-      if (!this.pending && !this.connected) {
-        this.connect()
-      }
+      this.connect()
     }
   }
 
-  // Disconnect socket
+  // Logout stops the manager's retries and forgets subscriptions.
   disconnect() {
-    if (this.socket) {
-      this.socket.disconnect()
-      this.socket = null
-      this.connected = false
-      this.pending = false
-      this.reconnectAttempts = 0
-      this.desiredSubscriptions.clear()
-    }
+    this.cleanupSocket()
+    this.authToken = null
+    this.desiredSubscriptions.clear()
   }
 
   isConnected() {
     return this.connected
   }
 
-  // Manually trigger reconnection
-  reconnect() {
+  // Explicit recovery may bypass a pending backoff. Ordinary callers use
+  // reconnect(), which leaves the manager's schedule intact.
+  retryNow() {
+    if (this.connected) return
     this.cleanupSocket()
-    this.connected = false
-    this.pending = false
-
-    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-      this.reconnectAttempts++
-      console.log(`Reconnecting socket (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
-      setTimeout(() => {
-        this.connect()
-      }, 1000)
-    } else {
-      console.error(`Reached maximum reconnection attempts (${this.maxReconnectAttempts})`)
-      // Reset attempts to allow manual reconnection later
-      setTimeout(() => {
-        this.reconnectAttempts = 0
-      }, 30000)
-    }
+    this.connect()
   }
+
+  // Ensure a connection exists without interrupting an ongoing retry.
+  reconnect() {
+    this.connect()
+  }
+
 }
 
 export const socketService = new SocketService()

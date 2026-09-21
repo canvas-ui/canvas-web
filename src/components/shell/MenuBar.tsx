@@ -1,4 +1,6 @@
 import { useCallback } from 'react'
+import { ConnectionStatus } from './ConnectionStatus'
+import { useOfflineStatus } from '@/hooks/useOfflineStatus'
 import { useNavigate } from 'react-router-dom'
 import {
   Layers3,
@@ -104,11 +106,12 @@ function NavItem({ path, icon, label, section = 'admin' }: NavItemProps) {
 // no floating chrome ever covers a panel's bottom controls.
 export function MobileMenuToggle() {
   const { state, toggleM0 } = useMenu()
+  const offline = useOfflineStatus()
   return (
     <button
       type="button"
       onClick={toggleM0}
-      aria-label={state.m0Open ? 'Close menu' : 'Open menu'}
+      aria-label={`${state.m0Open ? 'Close menu' : 'Open menu'}${offline ? ' — offline, connection options in menu' : ''}`}
       // Sized by the rail-width token (not a fixed w-12) so toggle and rail
       // read as one aligned column at every density - compact/touch change
       // the rail width and a hardcoded 3rem toggle drifts off-center.
@@ -116,6 +119,7 @@ export function MobileMenuToggle() {
       className="fixed bottom-rail-inset left-2 z-nav flex h-rail w-rail items-center justify-center rounded-full bg-foreground text-background shadow-elevation-4 md:hidden"
     >
       {state.m0Open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+      {offline && <span aria-hidden className="absolute right-0 top-0 h-3 w-3 rounded-full border-2 border-background bg-amber-500" />}
     </button>
   )
 }
@@ -209,6 +213,7 @@ export function MenuBar() {
         {/* Bottom section */}
         <div className="flex flex-col items-center gap-1 py-2 shrink-0">
           <div className="w-6 h-px bg-border mb-2" />
+          <ConnectionStatus />
 
           {/* The FAB only lives on the bare quick-capture desk (home) — on
               content pages and on mobile the rail carries the toolbox entry

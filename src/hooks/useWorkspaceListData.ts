@@ -7,9 +7,11 @@ export function useWorkspaceListData(enabled: boolean) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const hasFetched = useRef(false)
+  const inFlight = useRef(false)
 
   const fetch = useCallback(async () => {
-    if (isLoading) return
+    if (inFlight.current) return
+    inFlight.current = true
     setIsLoading(true)
     try {
       const data = await listWorkspaces()
@@ -18,9 +20,10 @@ export function useWorkspaceListData(enabled: boolean) {
     } catch (err) {
       console.error('Failed to fetch workspaces:', err)
     } finally {
+      inFlight.current = false
       setIsLoading(false)
     }
-  }, [isLoading])
+  }, [])
 
   const refresh = useCallback(() => {
     hasFetched.current = false
@@ -39,7 +42,10 @@ export function useWorkspaceListData(enabled: boolean) {
     const subscribe = () => socketService.emit('subscribe', { channel: 'workspace' })
     const unsubscribe = () => socketService.emit('unsubscribe', { channel: 'workspace' })
 
-    const offConnect = socketService.on('connect', subscribe)
+    const offConnect = socketService.on('connect', () => {
+      subscribe()
+      void fetch()
+    })
     subscribe()
 
     const handleStatusChanged = (data: unknown) => {
@@ -78,7 +84,7 @@ export function useWorkspaceListData(enabled: boolean) {
       offConnect?.()
       events.forEach(([e, h]) => socketService.off(e, h))
     }
-  }, [enabled])
+  }, [enabled, fetch])
 
   // Window event fallback
   useEffect(() => {

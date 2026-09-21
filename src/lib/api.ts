@@ -123,10 +123,8 @@ function toClientPath(endpoint: string): string {
 }
 
 const webFetch: typeof fetch = (input, init = {}) => {
-  console.log(`API Request: ${init.method || 'GET'} ${input}`);
   // Always include credentials for cookie support (historical behavior).
   return fetch(input, { ...init, credentials: 'include' }).then((response) => {
-    console.log(`API Response: ${input}`, { status: response.status, ok: response.ok });
     // Connectivity is judged HERE, on the raw response: a service-worker
     // cache fallback is stamped X-Canvas-Offline and must not count as the
     // server being reachable, while any real HTTP response (even a 4xx) does.
@@ -134,7 +132,9 @@ const webFetch: typeof fetch = (input, init = {}) => {
     else reportNetworkSuccess();
     return response;
   }, (err) => {
-    reportNetworkFailure();
+    if (!init.signal?.aborted && !(err instanceof Error && err.name === 'AbortError')) {
+      reportNetworkFailure();
+    }
     throw err;
   });
 }
@@ -252,9 +252,8 @@ async function requestJson<T>(
         // No HTTP response at all: offline, server down, or (rarely) CORS.
         // Deliberately NOT routed through handleApiError — offline, every
         // uncached call fails identically and a toast per request swamps the
-        // user. The connectivity module coalesces this into one transition
-        // that App.tsx reports once. Callers still get a rejection.
-        console.warn(`API: network failure for ${method} ${endpoint}`);
+        // user. The connection indicator shows the shared offline state.
+        // Callers still get a rejection.
         throw new Error('Network error: server unreachable. Check your connection and try again.');
       }
     }
