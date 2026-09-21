@@ -16,6 +16,7 @@ export interface PinsValue {
   isPinned: (address: CanvasAddress) => boolean
   pin: (address: CanvasAddress) => Promise<void>
   unpin: (id: string) => Promise<void>
+  setMinimized: (id: string, minimized: boolean) => Promise<void>
   /** Reorder: move pin `id` before `beforeId` (null = to the end). */
   movePin: (id: string, beforeId: string | null) => Promise<void>
 }

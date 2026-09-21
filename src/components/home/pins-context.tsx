@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { getWebuiConfig, putWebuiConfig, type PinnedCanvas, type WebuiConfig } from '@/services/user-config'
+import { createHomePinsWriter } from '@/lib/home-pins'
 import { PinsContext, type CanvasAddress } from './use-canvas-pins'
 
 // Canvases are addressed by workspace + tree + path; a pin is unique on those
@@ -16,7 +17,7 @@ export function CanvasPinsProvider({ children }: { children: ReactNode }) {
     getWebuiConfig()
       .then((loaded) => { if (!cancelled) setConfig(loaded) })
       // A config that will not load must not break the app shell; an empty one
-      // just means "no pins yet" and the next write repairs it.
+      // shows an empty home; mutations re-read successfully before writing.
       .catch(() => { if (!cancelled) setConfig({}) })
       .finally(() => { if (!cancelled) setIsLoading(false) })
     return () => { cancelled = true }
@@ -24,19 +25,7 @@ export function CanvasPinsProvider({ children }: { children: ReactNode }) {
 
   const pins = useMemo(() => config?.home?.pinnedCanvases ?? [], [config])
 
-  // Whole-document read-modify-write: sibling keys in webui.json are preserved
-  // because we merge into the config we loaded rather than sending only `home`.
-  const persist = useCallback(async (nextPins: PinnedCanvas[]) => {
-    const base = config ?? {}
-    const next: WebuiConfig = { ...base, home: { ...(base.home ?? {}), pinnedCanvases: nextPins } }
-    setConfig(next)
-    try {
-      await putWebuiConfig(next)
-    } catch (error) {
-      setConfig(base)
-      throw error
-    }
-  }, [config])
+  const [persist] = useState(() => createHomePinsWriter(getWebuiConfig, putWebuiConfig, setConfig))
 
   const isPinned = useCallback(
     (address: CanvasAddress) => pins.some((p) => addressKey(p) === addressKey(address)),
@@ -44,30 +33,32 @@ export function CanvasPinsProvider({ children }: { children: ReactNode }) {
   )
 
   const pin = useCallback(async (address: CanvasAddress) => {
-    if (pins.some((p) => addressKey(p) === addressKey(address))) return
-    await persist([...pins, { id: crypto.randomUUID(), ...address }])
-  }, [pins, persist])
+    const id = crypto.randomUUID()
+    await persist(current => current.some(p => addressKey(p) === addressKey(address)) ? current : [...current, { id, ...address }])
+  }, [persist])
 
   const unpin = useCallback(async (id: string) => {
-    await persist(pins.filter((p) => p.id !== id))
-  }, [pins, persist])
+    await persist(current => current.filter(p => p.id !== id))
+  }, [persist])
 
-  // Home tiles render in array order, so reordering IS the arrangement.
-  // persist() is optimistic with rollback, same as pin/unpin.
+  const setMinimized = useCallback(async (id: string, minimized: boolean) => {
+    await persist(current => current.map(p => p.id === id ? { ...p, minimized } : p))
+  }, [persist])
+
   const movePin = useCallback(async (id: string, beforeId: string | null) => {
-    const moved = pins.find((p) => p.id === id)
-    if (!moved || id === beforeId) return
-    const without = pins.filter((p) => p.id !== id)
-    const at = beforeId === null ? without.length : without.findIndex((p) => p.id === beforeId)
-    if (at === -1) return
-    const next = [...without.slice(0, at), moved, ...without.slice(at)]
-    if (next.every((p, i) => p === pins[i])) return // no-op move — skip the write
-    await persist(next)
-  }, [pins, persist])
+    await persist(current => {
+      const moved = current.find(p => p.id === id)
+      if (!moved || id === beforeId) return current
+      const without = current.filter(p => p.id !== id)
+      const at = beforeId === null ? without.length : without.findIndex(p => p.id === beforeId)
+      if (at === -1) return current
+      return [...without.slice(0, at), moved, ...without.slice(at)]
+    })
+  }, [persist])
 
   const value = useMemo(
-    () => ({ pins, isLoading, isPinned, pin, unpin, movePin }),
-    [pins, isLoading, isPinned, pin, unpin, movePin],
+    () => ({ pins, isLoading, isPinned, pin, unpin, movePin, setMinimized }),
+    [pins, isLoading, isPinned, pin, unpin, movePin, setMinimized],
   )
 
   return <PinsContext.Provider value={value}>{children}</PinsContext.Provider>

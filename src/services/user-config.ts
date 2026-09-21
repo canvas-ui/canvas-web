@@ -15,6 +15,8 @@ export interface PinnedCanvas {
   layerId?: string
   /** Snapshot for labelling a tile whose canvas no longer resolves. */
   label?: string
+  /** User choice; temporary quick-add minimization is never persisted. */
+  minimized?: boolean
 }
 
 export interface WebuiConfig {

@@ -13,7 +13,7 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import { workspaceResumeUrl } from '@/lib/last-path'
 import { getWorkspace, getCachedWorkspaceTreeByName, invalidateWorkspaceTreeCache, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer, pasteDocumentsToWorkspacePath, createPublicCanvasShare, listBackends, listWorkspacePins, pinWorkspacePath, unpinWorkspacePin, reorderWorkspacePins, workspacePinKey as pinKey, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
 import type { Layer, WorkspacePin } from '@/services/workspace'
-import { getWebuiConfig, putWebuiConfig, type WebuiConfig } from '@/services/user-config'
+import { getWebuiConfig, putWebuiConfig } from '@/services/user-config'
 import { WorkspacePinsTab } from './WorkspacePinsTab'
 import { useTreeOperations } from '@/hooks/useTreeOperations'
 import { listHooks, runHook, findBackendTreeSyncHook, splitBackendsPath, defaultMirrorTarget, defaultStoreFolder, rulePrefillParams, type RulePrefill } from '@/services/hooks'
@@ -111,7 +111,6 @@ export function WorkspaceM2() {
   // Tab order: per-user, server-persisted (webui config). Loaded once; the
   // whole config doc is kept so a save merges instead of clobbering siblings.
   const [tabOrder, setTabOrder] = useState<TreeTab[]>(DEFAULT_TAB_ORDER)
-  const webuiConfigRef = useRef<WebuiConfig | null>(null)
   // Mount-time snapshot: the stored default only applies to the tab the panel
   // OPENED on (URL without a tree); later URL changes are the sync below.
   const applyStoredDefault = !urlHasTreeSignal
@@ -120,22 +119,22 @@ export function WorkspaceM2() {
     getWebuiConfig()
       .then(cfg => {
         if (cancelled) return
-        webuiConfigRef.current = cfg
         const order = sanitizeTabOrder(cfg?.m2?.tabOrder)
         setTabOrder(order)
         if (applyStoredDefault) setActiveTab(prev => (prev === DEFAULT_TAB_ORDER[0] ? order[0] : prev))
       })
-      .catch(() => { if (!cancelled) webuiConfigRef.current = {} })
+      .catch(() => {})
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const saveTabOrder = useCallback(async (next: TreeTab[]) => {
     const prev = tabOrder
     setTabOrder(next)
-    const base = webuiConfigRef.current ?? {}
-    const cfg: WebuiConfig = { ...base, m2: { ...(base.m2 ?? {}), tabOrder: next } }
-    webuiConfigRef.current = cfg
-    try { await putWebuiConfig(cfg) } catch { webuiConfigRef.current = base; setTabOrder(prev) }
+    try {
+      // Home may have saved minimize state since this panel mounted.
+      const base = await getWebuiConfig()
+      await putWebuiConfig({ ...base, m2: { ...base.m2, tabOrder: next } })
+    } catch { setTabOrder(prev) }
   }, [tabOrder])
 
   // Tab drag-to-reorder (native HTML5, same as ContentViewTabs).

@@ -4,6 +4,8 @@ import { LayoutDashboard, Pin } from 'lucide-react';
 import { HomeFab } from '@/components/home/HomeFab';
 import { PinnedCanvasTile } from '@/components/home/PinnedCanvasTile';
 import { useCanvasPins } from '@/components/home/use-canvas-pins';
+import { isHomePinMinimized } from '@/lib/home-pins';
+import { useToastHelpers } from '@/hooks/useToastHelpers';
 import type { PinnedCanvas } from '@/services/user-config';
 
 function EmptyHome() {
@@ -105,59 +107,37 @@ function MinimizedTabBar({ pins, onRestore }: { pins: PinnedCanvas[]; onRestore:
 }
 
 export default function HomePage() {
-  const { pins, unpin, movePin, isLoading } = useCanvasPins();
-  const [minimizedIds, setMinimizedIds] = useState<ReadonlySet<string>>(new Set());
-  // Tiles the quick-add flow minimized (vs. the tile's own minimize button):
-  // only these restore automatically when the last quick-add card closes.
-  const autoMinimizedRef = useRef<Set<string>>(new Set());
-  // Ref (not a useCallback dep) so the handler identity stays stable — HomeFab
-  // notifies on open/close transitions and must not re-fire when pins change.
-  // Synced in an effect (not during render) per the rules of refs; the handler
-  // only runs from user events, which always follow the sync.
+  const { pins, unpin, movePin, setMinimized, isLoading } = useCanvasPins();
+  const { showErrorToast } = useToastHelpers();
+  const [temporaryMinimizedIds, setTemporaryMinimizedIds] = useState<ReadonlySet<string>>(new Set());
   const pinsRef = useRef(pins);
-  useEffect(() => {
-    pinsRef.current = pins;
-  }, [pins]);
+  useEffect(() => { pinsRef.current = pins; }, [pins]);
 
   const minimize = (id: string) => {
-    setMinimizedIds((prev) => new Set(prev).add(id));
+    void setMinimized(id, true).catch(() => showErrorToast('Could not save minimized state'));
   };
 
   const restore = (id: string) => {
-    autoMinimizedRef.current.delete(id);
-    setMinimizedIds((prev) => {
+    setTemporaryMinimizedIds(prev => {
       const next = new Set(prev);
       next.delete(id);
       return next;
     });
+    if (pins.find(pin => pin.id === id)?.minimized) {
+      void setMinimized(id, false).catch(() => showErrorToast('Could not save restored state'));
+    }
   };
 
-  // Adding a Note/File/… needs the stage: minimize every visible tile while
-  // quick-add cards are open, restore (only) those when the last card closes.
+  // Quick-add hides visible tiles only for the lifetime of its cards. It must
+  // never change the user's saved manual minimize/restore choices.
   const handleCardsOpenChange = useCallback((open: boolean) => {
-    if (open) {
-      setMinimizedIds((prev) => {
-        const next = new Set(prev);
-        for (const pin of pinsRef.current) {
-          if (!next.has(pin.id)) {
-            next.add(pin.id);
-            autoMinimizedRef.current.add(pin.id);
-          }
-        }
-        return next;
-      });
-    } else {
-      setMinimizedIds((prev) => {
-        const next = new Set(prev);
-        for (const id of autoMinimizedRef.current) next.delete(id);
-        autoMinimizedRef.current.clear();
-        return next;
-      });
-    }
+    setTemporaryMinimizedIds(open
+      ? new Set(pinsRef.current.filter(pin => !pin.minimized).map(pin => pin.id))
+      : new Set());
   }, []);
 
-  const visiblePins = pins.filter((pin) => !minimizedIds.has(pin.id));
-  const minimizedPins = pins.filter((pin) => minimizedIds.has(pin.id));
+  const visiblePins = pins.filter(pin => !isHomePinMinimized(pin, temporaryMinimizedIds));
+  const minimizedPins = pins.filter(pin => isHomePinMinimized(pin, temporaryMinimizedIds));
 
   // A tile was dropped on `target`: insert the dragged pin before/after it in
   // the FULL pins array (minimized pins keep their slot in the order).
