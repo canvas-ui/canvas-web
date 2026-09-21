@@ -58,6 +58,8 @@ export function LocationPickerSheet({
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const markerRef = useRef<L.Marker | null>(null)
+  const searchControllerRef = useRef<AbortController | null>(null)
+  useEffect(() => () => searchControllerRef.current?.abort(), [])
 
   const [picked, setPicked] = useState<PickedLocation | null>(
     initial ? { lat: initial.lat, lon: initial.lon } : null,
@@ -165,20 +167,35 @@ export function LocationPickerSheet({
   const runSearch = useCallback(async () => {
     const q = query.trim()
     if (q.length < 2) return
+    searchControllerRef.current?.abort()
+    const ctrl = new AbortController()
+    searchControllerRef.current = ctrl
+    let timedOut = false
+    const timeout = window.setTimeout(() => { timedOut = true; ctrl.abort() }, 12_000)
     setSearching(true)
+    setResults([])
     setSearchError(null)
     try {
       const res = await fetch(`${NOMINATIM}/search?format=jsonv2&limit=6&q=${encodeURIComponent(q)}`, {
+        signal: ctrl.signal,
         headers: { Accept: 'application/json' },
       })
-      if (!res.ok) throw new Error(`Search failed (${res.status})`)
-      const list = (await res.json()) as SearchResult[]
+      if (res.status === 429) throw new Error('Place search is busy. Wait a moment and try again, or click the map')
+      if (!res.ok) throw new Error(`Place search is unavailable (${res.status}). Try again, or click the map`)
+      const list = await res.json()
+      if (!Array.isArray(list)) throw new Error('Place search returned an invalid response. Try again, or click the map')
+      if (ctrl.signal.aborted || searchControllerRef.current !== ctrl) return
       setResults(list)
       if (!list.length) setSearchError('No match. Try a different spelling, or just click the map')
-    } catch {
-      setSearchError('Search is unavailable right now. Click the map to place a pin')
+    } catch (err) {
+      if (searchControllerRef.current !== ctrl || (ctrl.signal.aborted && !timedOut)) return
+      setSearchError(timedOut
+        ? 'Place search timed out. Try again, or click the map'
+        : err instanceof TypeError ? 'Could not reach place search. Check your connection, or click the map'
+          : err instanceof Error ? err.message : 'Search is unavailable right now. Click the map to place a pin')
     } finally {
-      setSearching(false)
+      window.clearTimeout(timeout)
+      if (searchControllerRef.current === ctrl && (!ctrl.signal.aborted || timedOut)) setSearching(false)
     }
   }, [query])
 
@@ -251,14 +268,22 @@ export function LocationPickerSheet({
         </div>
 
         {/* Search */}
-        <div className="relative shrink-0 border-b px-3 py-2">
+        <div className="relative z-10 shrink-0 border-b px-3 py-2">
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <input
                 value={query}
                 autoFocus
-                onChange={(e) => { setQuery(e.target.value); setSearchError(null) }}
+                onChange={(e) => {
+                  searchControllerRef.current?.abort()
+                  searchControllerRef.current = null
+                  setSearching(false)
+                  setResults([])
+                  setQuery(e.target.value)
+                  setSearchError(null)
+                }}
+                aria-label="Search for a place or address"
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runSearch() } }}
                 placeholder="Search a place, e.g. Slavkovský štít"
                 spellCheck={false}
@@ -285,7 +310,7 @@ export function LocationPickerSheet({
               Search
             </button>
           </div>
-          {searchError && <p className="mt-1 text-xs text-warning">{searchError}</p>}
+          {searchError && <p role="status" className="mt-1 text-xs text-warning">{searchError}</p>}
 
           {results.length > 0 && (
             <div className="absolute inset-x-3 top-full z-10 mt-1 max-h-64 overflow-y-auto rounded-md border bg-popover shadow-elevation-4">
@@ -303,11 +328,11 @@ export function LocationPickerSheet({
           )}
         </div>
 
-        {/* Map */}
-        <div className="relative min-h-0 flex-1">
+        {/* Keep Leaflet's tile/marker/control layers below the search dropdown. */}
+        <div className="relative isolate z-0 min-h-0 flex-1">
           <div ref={containerRef} className="h-full w-full" />
           {!picked && (
-            <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
+            <div className="pointer-events-none absolute inset-x-0 bottom-3 z-[1000] flex justify-center">
               <span className="rounded-full bg-background/90 px-3 py-1 text-xs text-muted-foreground shadow-elevation-2">
                 Click the map to drop a pin, or drag it to fine-tune
               </span>
