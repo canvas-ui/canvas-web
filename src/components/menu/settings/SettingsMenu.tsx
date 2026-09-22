@@ -1,9 +1,10 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Key, Share2, Monitor, Sparkles, Palette, Info, HardDriveDownload } from 'lucide-react'
+import { Keyboard, Key, Share2, Monitor, Sparkles, Palette, Info, HardDriveDownload } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const settingsLinks = [
   { path: '/appearance', icon: Palette, label: 'Appearance' },
+  { path: '/key-bindings', icon: Keyboard, label: 'Key bindings' },
   { path: '/offline', icon: HardDriveDownload, label: 'Offline' },
   { path: '/api-tokens', icon: Key, label: 'API Tokens' },
   { path: '/devices', icon: Monitor, label: 'Devices' },

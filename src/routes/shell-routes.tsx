@@ -9,6 +9,7 @@ import ContextDetailPage from '@/pages/contexts/[contextId]'
 import ApiTokensPage from '@/pages/api-tokens'
 import DevicesPage from '@/pages/devices'
 import AppearancePage from '@/pages/appearance'
+import KeyBindingsPage from '@/pages/key-bindings'
 import OfflinePage from '@/pages/offline'
 import AboutPage from '@/pages/about'
 import EmbeddingDefaultsPage from '@/pages/embedding'
@@ -65,6 +66,7 @@ export const shellRoutes = (
   <Route key="r21" path="roles" element={<RolesPage />} />
   <Route key="r22" path="remotes" element={<RemotesPage />} />
   <Route key="r23" path="appearance" element={<AppearancePage />} />
+  <Route key="key-bindings" path="key-bindings" element={<KeyBindingsPage />} />
   <Route key="r24" path="offline" element={<OfflinePage />} />
   <Route key="r25" path="about" element={<AboutPage />} />
   <Route key="r26" path="api-tokens" element={<ApiTokensPage />} />

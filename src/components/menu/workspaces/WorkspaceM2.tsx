@@ -1,3 +1,5 @@
+import { useTreeNavigation } from '@/hooks/useTreeNavigation'
+import { cycleTree } from '@/lib/key-bindings'
 import { AutoLinkFolderPanel } from '../shared/AutoLinkFolderPanel'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Settings, ExternalLink, GitBranch, FolderTree, Layers, LayoutDashboard, Search, Lock, Unlock, Edit2, Trash2, Database, Pin } from 'lucide-react'
@@ -470,13 +472,18 @@ export function WorkspaceM2() {
     revealPinRef.current = false
   }, [activeTab, selectedPath, activeTree, isLoadingTree])
 
-  const handleTabChange = (tab: TreeTab) => {
+  const handleTabChange = useCallback((tab: TreeTab) => {
     setTabTouched(true)
     setActiveTab(tab)
     setSelectedPath('/')
     setContentPath(null)
     setSearchQuery('')
-  }
+  }, [])
+
+  const cycleTab = useCallback((direction: number) => {
+    handleTabChange(cycleTree(tabOrder, activeTab, direction))
+  }, [tabOrder, activeTab, handleTabChange])
+  const treeNavigation = useTreeNavigation(state.m2Open, cycleTab)
 
   const handlePathSelect = (path: string) => {
     setContentPath(null)
@@ -565,7 +572,7 @@ export function WorkspaceM2() {
       />
 
       {/* Tab bar — icon only, drag to reorder (first tab = default) */}
-      <div className="flex border-b border-border shrink-0">
+      <div {...treeNavigation} className="flex border-b border-border shrink-0 touch-pan-y" aria-label="Workspace trees">
         {tabOrder.map(tab => (
           <button
             key={tab}
@@ -573,6 +580,7 @@ export function WorkspaceM2() {
             onClick={() => handleTabChange(tab)}
             title={`${TAB_LABELS[tab]} — drag to reorder; the first tab opens by default`}
             aria-label={TAB_LABELS[tab]}
+            aria-pressed={activeTab === tab}
             draggable
             onDragStart={e => {
               e.dataTransfer.setData('text/plain', tab)
