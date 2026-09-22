@@ -5,7 +5,7 @@ import { RefreshCw, Trash2, Unlink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/common/page-header'
-import { MenuTreeView } from '@/components/menu/shared/MenuTreeView'
+import { PathPickerField } from '@/components/menu/shared/PathPickerField'
 import { useToast } from '@/components/ui/use-toast'
 import { useMenu } from '@/components/shell/use-menu'
 import { cn } from '@/lib/utils'
@@ -17,7 +17,6 @@ import {
 import {
   deleteContext,
   getContext,
-  getContextTree,
   grantContextAccess,
   listContextShares,
   patchContext,
@@ -26,19 +25,12 @@ import {
   updateContextUrl,
   type ContextShare,
 } from '@/services/context'
-import type { TreeNode } from '@/types/workspace'
 
 const ACCESS_LEVELS: { value: string; label: string }[] = [
   { value: 'documentRead', label: 'Read' },
   { value: 'documentWrite', label: 'Write' },
   { value: 'documentReadWrite', label: 'Read & write' },
 ]
-
-function urlToPath(url: string): string {
-  const m = url.match(/:\/\/(.*)$/)
-  if (m) return '/' + m[1].replace(/^\/+/, '')
-  return url.startsWith('/') ? url : '/' + url
-}
 
 // Context settings, shaped exactly like workspace and agent settings: the
 // section list is in M2 and one section renders here.
@@ -71,12 +63,7 @@ export default function ContextSettingsPage() {
   const [url, setUrl] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
 
-  const [tree, setTree] = useState<TreeNode | null>(null)
-  const [treeSettled, setTreeSettled] = useState(false)
-  const [treeTarget, setTreeTarget] = useState<'url' | 'baseUrl'>('url')
-  // Derived rather than a state flag, so the fetch effect only ever writes
-  // state asynchronously.
-  const isLoadingTree = activeTab === 'location' && !treeSettled
+  const [destinationTree, setDestinationTree] = useState<string | undefined>()
 
   const [shares, setShares] = useState<ContextShare[]>([])
   const [isLoadingShares, setIsLoadingShares] = useState(false)
@@ -102,15 +89,6 @@ export default function ContextSettingsPage() {
     })
     return () => { cancelled = true }
   }, [contextId, ownerId, selectEntity, showToast])
-
-  // Tree and shares back a single section each, so they load with it.
-  useEffect(() => {
-    if (activeTab !== 'location' || !contextId || treeSettled) return
-    getContextTree(contextId, ownerId)
-      .then(setTree)
-      .catch(() => {})
-      .finally(() => setTreeSettled(true))
-  }, [activeTab, contextId, ownerId, treeSettled])
 
   const loadShares = (id = contextId) => {
     if (!id) return
@@ -159,7 +137,7 @@ export default function ContextSettingsPage() {
     setIsSaving(true)
     try {
       await Promise.all([
-        updateContextUrl(contextId, url.trim(), ownerId),
+        updateContextUrl(contextId, url.trim(), ownerId, destinationTree),
         updateContext(contextId, { baseUrl: baseUrl.trim() || null }, ownerId),
       ])
       window.dispatchEvent(new CustomEvent('contexts:refresh'))
@@ -216,14 +194,6 @@ export default function ContextSettingsPage() {
     } finally {
       setBusyShare(null)
     }
-  }
-
-  const handleTreeSelect = (path: string) => {
-    const full = context?.workspaceName
-      ? `${context.workspaceName}://${path.replace(/^\//, '')}`
-      : path
-    if (treeTarget === 'url') setUrl(full)
-    else setBaseUrl(full)
   }
 
   if (isLoading) return <div className="p-6 text-sm text-muted-foreground">Loading...</div>
@@ -290,46 +260,15 @@ export default function ContextSettingsPage() {
           <form onSubmit={handleSaveLocation} className="space-y-4 rounded-lg border p-4">
             <div>
               <label htmlFor="ctx-url" className="text-sm font-medium">URL</label>
-              <Input id="ctx-url" value={url} onChange={e => setUrl(e.target.value)} placeholder="workspace://path" className="font-mono" />
+              <PathPickerField id="ctx-url" value={url} onChange={setUrl} fixedWorkspaceName={context.workspaceName} pickerTitle="Switch context to…" placeholder="workspace://path" onPickTarget={(path, target) => {
+                setUrl(`${target.workspaceName}://${path.replace(/^\/+/, '')}`)
+                setDestinationTree(target.treeName)
+              }} />
+              {destinationTree && <p className="mt-1 text-xs text-muted-foreground">Destination tree: {destinationTree}</p>}
             </div>
             <div>
               <label htmlFor="ctx-base-url" className="text-sm font-medium">Base URL <span className="font-normal text-muted-foreground">(optional)</span></label>
-              <Input id="ctx-base-url" value={baseUrl} onChange={e => setBaseUrl(e.target.value)} placeholder="workspace://base/path" className="font-mono" />
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Pick from tree</span>
-                <div className="flex items-center gap-1">
-                  {(['url', 'baseUrl'] as const).map(target => (
-                    <button
-                      key={target}
-                      type="button"
-                      onClick={() => setTreeTarget(target)}
-                      className={cn(
-                        'rounded px-2 py-1 text-xs font-medium transition-colors',
-                        treeTarget === target
-                          ? 'bg-accent text-foreground'
-                          : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
-                      )}
-                    >
-                      {target === 'url' ? 'URL' : 'Base URL'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="overflow-hidden rounded-md border">
-                <div className="max-h-72 overflow-y-auto">
-                  <MenuTreeView
-                    root={tree}
-                    selectedPath={urlToPath(treeTarget === 'url' ? url : baseUrl)}
-                    onSelect={handleTreeSelect}
-                    isLoading={isLoadingTree}
-                    readOnly
-                    rootLabel={context.workspaceName}
-                  />
-                </div>
-              </div>
+              <PathPickerField id="ctx-base-url" value={baseUrl} onChange={setBaseUrl} fixedWorkspaceName={context.workspaceName} placeholder="workspace://base/path" pickerTitle="Pick a base path…" />
             </div>
 
             <Button type="submit" disabled={isSaving}>

@@ -1,3 +1,4 @@
+import { GeoMissingOption } from './GeoMissingOption'
 import { useCallback, useEffect, useMemo, useRef, useState, createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import L from 'leaflet'
@@ -202,6 +203,7 @@ export function MapTab() {
     const t = window.setTimeout(() => map.invalidateSize(), 120)
 
     return () => {
+      <GeoMissingOption />
       container.removeEventListener('pointerdown', onDown)
       container.removeEventListener('pointermove', onMove)
       container.removeEventListener('pointerup', onUp)

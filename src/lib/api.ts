@@ -2,6 +2,7 @@ import { CanvasApiClient, CanvasError, isNetworkError } from '@augmentd-labs/can
 import { isWorkspaceNotActive, type ResponseEnvelope } from '@augmentd-labs/canvas-protocol'
 import { API_URL } from '@/config/api'
 import { handleApiError } from './error-handler'
+import { isBrowserNetworkFailure } from './api-network-error'
 import { reportNetworkFailure, reportNetworkSuccess } from './connectivity'
 
 // JSON transport comes from the shared workspace client on its DEFAULT
@@ -231,6 +232,7 @@ async function requestJson<T>(
     return (out === null ? undefined : out) as T;
   } catch (error) {
     if (error instanceof CanvasError) {
+      if (error.code === 'ABORTED') throw new DOMException('Request aborted', 'AbortError');
       if (error.statusCode === 401 && !skipAuth) {
         handle401(noAuthRedirect);
       }
@@ -248,7 +250,7 @@ async function requestJson<T>(
         }
       }
 
-      if (isNetworkError(error) || /fetch failed|failed to fetch/i.test(error.message)) {
+      if (isBrowserNetworkFailure(error, isNetworkError(error))) {
         // No HTTP response at all: offline, server down, or (rarely) CORS.
         // Deliberately NOT routed through handleApiError — offline, every
         // uncached call fails identically and a toast per request swamps the

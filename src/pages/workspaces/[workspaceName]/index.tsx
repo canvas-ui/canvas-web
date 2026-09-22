@@ -206,7 +206,7 @@ export default function WorkspaceDetailPage() {
   const tbGeoFilters = buildGeoFilters(toolboxState.filters.geo);
   // Lens refine: GPS → a geo:near scope token; camera/desktop → a literal ids
   // constraint. Both live-feed ephemera, both fold into the fetch key.
-  const tbLensFilters = buildLensFilters(toolboxState.filters.lens);
+  const tbLensFilters = buildLensFilters(toolboxState.filters.lens, toolboxState.filters.geo.includeUnlocated);
   const tbLensIds = toolboxState.filters.lens.ids;
   const tbScopeFilters = [...tbDatetimeFilters, ...tbGeoFilters, ...tbLensFilters];
   const tbSort = toolboxState.filters.sort ?? DEFAULT_TOOLBOX_SORT;
@@ -547,8 +547,8 @@ export default function WorkspaceDetailPage() {
   useEffect(() => { setMapDocuments(listedDocuments, workspace?.name ?? null); }, [listedDocuments, workspace?.name, setMapDocuments]);
   useEffect(() => () => setMapDocuments([]), [setMapDocuments]);
   const shownDocuments = useMemo(
-    () => (geoSelection ? listedDocuments.filter((d) => docInGeoSelection(d, geoSelection)) : listedDocuments),
-    [listedDocuments, geoSelection],
+    () => geoSelection ? listedDocuments.filter(d => docInGeoSelection(d, geoSelection, toolboxState.filters.geo.includeUnlocated)) : listedDocuments,
+    [listedDocuments, geoSelection, toolboxState.filters.geo.includeUnlocated],
   );
 
   // Fetch documents when path, tree, pagination, or workspace status changes.

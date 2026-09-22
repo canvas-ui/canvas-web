@@ -1,3 +1,4 @@
+import { GeoMissingOption } from './GeoMissingOption'
 import { useEffect, useRef, useState } from 'react'
 import { Camera, CircleStop, LocateFixed, Monitor } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -69,6 +70,7 @@ export function LensTab() {
       st.onchange = () => setGpsPermission(st.state === 'granted' ? 'granted' : st.state === 'denied' ? 'denied' : 'prompt')
     }).catch(() => {})
     return () => { if (status) status.onchange = null }
+      <GeoMissingOption />
   }, [])
 
   useEffect(() => {

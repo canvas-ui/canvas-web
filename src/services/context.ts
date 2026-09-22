@@ -13,6 +13,8 @@ type CreateContextPayload = Pick<Context, 'id' | 'url'> &
 
 type UnknownRecord = Record<string, unknown>;
 type PaginationOptions = {
+  ids?: number[] | null;
+  signal?: AbortSignal;
   includeServerContext?: boolean;
   includeClientContext?: boolean;
   limit?: number;
@@ -154,14 +156,14 @@ export async function updateContext(id: string, updates: { name?: string | null;
   }
 }
 
-export async function updateContextUrl(id: string, url: string, ownerId?: string): Promise<Context> {
+export async function updateContextUrl(id: string, url: string, ownerId?: string, treeName?: string): Promise<Context> {
   try {
     const endpoint = withOwnerId(`${API_ROUTES.contexts}/${id}/url`, ownerId);
-    const response = await api.post<{ url: string }>(endpoint, { url });
+    const response = await api.post<{ url: string; treeId?: string }>(endpoint, { url, ...(treeName ? { treeName } : {}) });
     if (response && response && response.url) {
       // The URL update endpoint returns just the URL, not the full context
       // We'll need to fetch the context again or return a partial update
-      return { url: response.url } as Context;
+      return { url: response.url, treeId: response.treeId } as Context;
     }
     throw new Error('Updated context data not found in API response');
   } catch (error) {
@@ -188,7 +190,9 @@ export async function getContextDocuments(
   ownerId?: string
 ): Promise<DocumentResponse['data'] & { count?: number; totalCount?: number }> {
   try {
+    if (options.ids?.length === 0) return Object.assign([], { count: 0, totalCount: 0 });
     const params = new URLSearchParams();
+    options.ids?.forEach(id => params.append('ids', String(id)));
     featureArray.forEach(feature => params.append('allOf', feature));
     filterArray.forEach(filter => params.append('filters', filter));
     (options.anyOf || []).filter(Boolean).forEach(k => params.append('anyOf', k));
@@ -213,7 +217,7 @@ export async function getContextDocuments(
     const url = `${API_ROUTES.contexts}/${id}/documents${params.toString() ? '?' + params.toString() : ''}`;
     // Envelope variant: the pagination counts stitched onto the array below
     // live on the envelope, not in the payload.
-    const response = await api.getEnvelope<DocumentResponse['data']>(url);
+    const response = await api.getEnvelope<DocumentResponse['data']>(url, { signal: options.signal });
     const documents = response.payload;
 
     if (Array.isArray(documents)) {

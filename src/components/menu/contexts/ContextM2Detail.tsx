@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { PathPickerField } from '@/components/menu/shared/PathPickerField'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/use-toast'
 import { M2Header } from '@/components/menu/shared/M2Header'
@@ -24,6 +25,8 @@ export function ContextM2Detail() {
   const [context, setContext] = useState<Context | null>(null)
   const [tree, setTree] = useState<TreeNode | null>(null)
   const [url, setUrl] = useState('')
+  const [destinationTree, setDestinationTree] = useState<string | undefined>()
+  const [searchQuery, setSearchQuery] = useState('')
   const [selectedPath, setSelectedPath] = useState('/')
   const [pendingPath, setPendingPath] = useState<string | null>(null)
   const [isLoadingTree, setIsLoadingTree] = useState(false)
@@ -56,6 +59,9 @@ export function ContextM2Detail() {
         if (cancelled) return
         setContext(ctx)
         setUrl(ctx.url || '')
+        setDestinationTree(undefined)
+        setSearchQuery('')
+        setPendingPath(null)
         setSelectedPath(ctx.path || '/')
 
         setIsLoadingTree(true)
@@ -84,25 +90,26 @@ export function ContextM2Detail() {
   // Tree click previews into the single URL input (with the pending tint in
   // the tree) — the one Set button commits whatever the input holds.
   const handleTreeSelect = (path: string) => {
+    setDestinationTree(undefined)
     setPendingPath(path)
     setUrl(context?.workspaceName ? `${context.workspaceName}://${path.replace(/^\//, '')}` : path)
   }
 
   // Selected/typed but not committed yet — tint the input amber until Set.
-  const isDirtyUrl = context != null && url.trim() !== (context.url || '')
+  const isDirtyUrl = context != null && (url.trim() !== (context.url || '') || destinationTree !== undefined)
 
   const handleSave = async () => {
     if (!entityId) return
     const id = entityId
     setIsSaving(true)
     try {
-      await updateContextUrl(id, url)
-      const prefix = context?.workspaceName ? `${context.workspaceName}://` : null
-      const committedPath = prefix && url.startsWith(prefix) ? `/${url.slice(prefix.length).replace(/^\/+/, '')}` : selectedPath
-      setSelectedPath(committedPath)
+      await updateContextUrl(id, url, undefined, destinationTree)
+      const refreshed = await getContext(id)
+      setContext(refreshed)
+      setUrl(refreshed.url || '')
+      setSelectedPath(refreshed.path || '/')
       setPendingPath(null)
-      // The input now shows the committed URL — clear the dirty tint.
-      setContext(prev => (prev ? { ...prev, url } : prev))
+      setDestinationTree(undefined)
       window.dispatchEvent(new CustomEvent('contexts:refresh'))
       // Refetch tree so newly auto-locked layers along the new URL render with the locked tint
       await loadTree(id)
@@ -149,15 +156,22 @@ export function ContextM2Detail() {
       <div className="p-3 border-b border-border shrink-0">
         <div className="text-[10px] text-muted-foreground mb-1.5 font-medium uppercase tracking-wide">Context URL</div>
         <div className="flex gap-2">
-          <Input
+          <PathPickerField
             value={url}
-            onChange={e => setUrl(e.target.value)}
-            className={cn(
+            fixedWorkspaceName={context?.workspaceName}
+            pickerTitle="Switch context to…"
+            onPickTarget={(path, target) => {
+              setUrl(`${target.workspaceName}://${path.replace(/^\/+/, '')}`)
+              setDestinationTree(target.treeName)
+              setPendingPath(null)
+            }}
+            onChange={setUrl}
+            className="min-w-0 flex-1"
+            inputClassName={cn(
               'text-xs h-7 font-mono transition-colors',
               isDirtyUrl && 'border-warning/60 bg-warning/10',
             )}
             placeholder="workspace://path"
-            title={isDirtyUrl ? 'Not applied yet; press Set' : undefined}
           />
           <Button size="sm" className="h-7 px-2 text-xs shrink-0" onClick={handleSave} disabled={isSaving}>
             {isSaving ? '…' : 'Set'}
@@ -165,6 +179,10 @@ export function ContextM2Detail() {
         </div>
       </div>
 
+      {destinationTree && <p className="px-3 py-1 text-xs text-muted-foreground">Destination tree: {destinationTree} · press Set to apply</p>}
+      <div className="px-3 py-2 border-b shrink-0">
+        <Input aria-label="Search context tree" placeholder="Search paths…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="h-7 text-xs" />
+      </div>
       <div className="flex-1 overflow-y-auto">
         <div className="text-[10px] text-muted-foreground px-3 pt-2 pb-1 font-medium uppercase tracking-wide shrink-0">
           {context?.workspaceName || 'Workspace'} · {tree?.type === 'directory' ? 'directory' : 'context'} tree
@@ -174,6 +192,7 @@ export function ContextM2Detail() {
         )}
         <MenuTreeView
           root={tree}
+          searchQuery={searchQuery}
           selectedPath={selectedPath}
           pendingPath={pendingPath}
           onSelect={handleTreeSelect}

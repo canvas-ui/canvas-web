@@ -69,6 +69,7 @@ export interface GeoBBox {
   maxLon: number
 }
 export interface ToolboxGeoFilters {
+  includeUnlocated?: boolean
   bbox: GeoBBox | null
 }
 
@@ -126,7 +127,7 @@ export const DEFAULT_TOOLBOX_FILTERS: ToolboxFilters = {
 export function buildGeoFilters(geo: ToolboxGeoFilters): string[] {
   const b = geo.bbox
   if (!b) return []
-  return [`geo:bbox:${b.minLat},${b.minLon},${b.maxLat},${b.maxLon}`]
+  return [`geo:bbox:${b.minLat},${b.minLon},${b.maxLat},${b.maxLon}`, ...(geo.includeUnlocated ? ['geo:missing'] : [])]
 }
 
 /**
@@ -135,10 +136,10 @@ export function buildGeoFilters(geo: ToolboxGeoFilters): string[] {
  * committed rounded/throttled by the Lens tab, so this stays referentially
  * stable between real position changes.
  */
-export function buildLensFilters(lens: ToolboxLensFilters): string[] {
+export function buildLensFilters(lens: ToolboxLensFilters, includeUnlocated = false): string[] {
   if (!lens.gps) return []
   const { lat, lon, radiusM } = lens.gps
-  return [`geo:near:${lat},${lon},${Math.max(1, Math.round(radiusM))}m`]
+  return [`geo:near:${lat},${lon},${Math.max(1, Math.round(radiusM))}m`, ...(includeUnlocated ? ['geo:missing'] : [])]
 }
 
 /**

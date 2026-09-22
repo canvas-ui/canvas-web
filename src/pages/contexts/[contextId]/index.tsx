@@ -1,5 +1,5 @@
 import { CloseSectionButton, SectionBackButton } from '@/components/common/page-header';
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useToast } from '@/components/ui/use-toast';
 import {
@@ -22,7 +22,7 @@ import {
   findTreeNodeByPath,
   DEFAULT_WORKSPACE_TREE_NAME,
 } from '@/services/workspace';
-import { Document as WorkspaceDocument, buildDatetimeFilters, buildGeoFilters, type TreeNode } from '@/types/workspace';
+import { Document as WorkspaceDocument, buildDatetimeFilters, buildGeoFilters, buildLensFilters, type TreeNode } from '@/types/workspace';
 import { docInGeoSelection } from '@/utils/geo';
 import { useToolbox } from '@/components/toolbox/use-toolbox';
 import { useMenu } from '@/components/shell/use-menu';
@@ -92,13 +92,13 @@ export default function ContextDetailPage() {
   // dynamic binding, so changing them refetches (and, once saved, is what bound
   // clients inherit). The web UI drives filters (applyContextSpec:false), so
   // removing one previews immediately.
-  const tbScopeFilters = [...buildDatetimeFilters(toolboxState.filters.timeline), ...buildGeoFilters(toolboxState.filters.geo)];
-  const tbFiltersKey = JSON.stringify({ a: tbAllOf, b: tbAnyOf, c: tbNoneOf, d: tbScopeFilters });
+  const tbScopeFilters = [...buildDatetimeFilters(toolboxState.filters.timeline), ...buildGeoFilters(toolboxState.filters.geo), ...buildLensFilters(toolboxState.filters.lens, toolboxState.filters.geo.includeUnlocated)];
+  const tbFiltersKey = JSON.stringify({ a: tbAllOf, b: tbAnyOf, c: tbNoneOf, d: tbScopeFilters, ids: toolboxState.filters.lens.ids, sort: toolboxState.filters.sort });
   // Stable snapshot of the toolbox filters, re-derived only when their content
   // (the serialized key) changes — the raw arrays above get fresh identities on
   // every render, so depending on them directly would refetch constantly.
   const tbFilters = useMemo(
-    () => JSON.parse(tbFiltersKey) as { a: typeof tbAllOf; b: typeof tbAnyOf; c: typeof tbNoneOf; d: typeof tbScopeFilters },
+    () => JSON.parse(tbFiltersKey) as { a: typeof tbAllOf; b: typeof tbAnyOf; c: typeof tbNoneOf; d: typeof tbScopeFilters; ids: number[] | null; sort: { sortBy: string; order: 'asc' | 'desc' } },
     [tbFiltersKey],
   );
 
@@ -162,25 +162,33 @@ export default function ContextDetailPage() {
     });
   };
 
+  const documentRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => documentRequest.current?.abort(), []);
+
   const fetchDocuments = useCallback(async () => {
     if (!contextId) return;
+    documentRequest.current?.abort();
+    const controller = new AbortController();
+    documentRequest.current = controller;
     setIsLoadingDocuments(true);
     try {
       const data = await getContextDocuments(
         contextId,
         tbFilters.a,
         tbFilters.d,
-        { limit: pageSize, page: currentPage, queries: serverSearchQueries.length ? serverSearchQueries : undefined, anyOf: tbFilters.b, noneOf: tbFilters.c, applyContextSpec: false },
+        { ...tbFilters.sort, ids: tbFilters.ids, signal: controller.signal, limit: pageSize, page: currentPage, queries: serverSearchQueries.length ? serverSearchQueries : undefined, anyOf: tbFilters.b, noneOf: tbFilters.c, applyContextSpec: false },
         ownerId,
       );
+      if (controller.signal.aborted) return;
       setDocuments(data as unknown as WorkspaceDocument[]);
       setDocumentsTotalCount(data.totalCount || data.count || data.length);
     } catch (err) {
+      if (controller.signal.aborted) return;
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to fetch documents', variant: 'destructive' });
       setDocuments([]);
       setDocumentsTotalCount(0);
     } finally {
-      setIsLoadingDocuments(false);
+      if (!controller.signal.aborted) setIsLoadingDocuments(false);
     }
   }, [contextId, currentPage, pageSize, ownerId, serverSearchQueries, tbFilters, showToast]);
 
@@ -254,8 +262,8 @@ export default function ContextDetailPage() {
   useEffect(() => { setMapDocuments(documents, mapWsId); }, [documents, mapWsId, setMapDocuments]);
   useEffect(() => () => setMapDocuments([]), [setMapDocuments]);
   const shownDocuments = useMemo(
-    () => (geoSelection ? documents.filter((d) => docInGeoSelection(d, geoSelection)) : documents),
-    [documents, geoSelection],
+    () => geoSelection ? documents.filter(d => docInGeoSelection(d, geoSelection, toolboxState.filters.geo.includeUnlocated)) : documents,
+    [documents, geoSelection, toolboxState.filters.geo.includeUnlocated],
   );
   const loadedContextId = context?.id;
   useEffect(() => {
@@ -272,6 +280,11 @@ export default function ContextDetailPage() {
   // Prop/URL-driven state resets, done during render (previous-value-in-state
   // pattern) rather than in effects. Order matters and mirrors the former
   // effect order: context switch → URL query stack → saved context search.
+  const [previousFiltersKey, setPreviousFiltersKey] = useState(tbFiltersKey);
+  if (previousFiltersKey !== tbFiltersKey) {
+    setPreviousFiltersKey(tbFiltersKey);
+    setCurrentPage(1);
+  }
   const [prevContextId, setPrevContextId] = useState(contextId);
   if (prevContextId !== contextId) {
     setPrevContextId(contextId);

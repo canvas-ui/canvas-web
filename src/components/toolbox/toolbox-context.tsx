@@ -5,6 +5,7 @@ import {
   useRef,
   type ReactNode,
 } from 'react'
+import socketService from '@/lib/socket'
 import { useLocation } from 'react-router-dom'
 import { ToolboxCtx } from './use-toolbox'
 import type { ToolboxFilters, ToolboxTimelineFilters, ToolboxGeoFilters, ToolboxLensFilters, GeoBBox, GeoSelection, ToolboxSort, Document as WorkspaceDocument } from '@/types/workspace'
@@ -433,6 +434,7 @@ export interface ToolboxContextValue {
 export function ToolboxProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(toolboxReducer, initialState)
   const location = useLocation()
+  const contextOwnerId = new URLSearchParams(location.search).get('ownerId') || undefined
   const stateRef = useRef(state)
   // Ref synced in an effect (not during render). Declared before every other
   // effect so, with in-order effect execution, all of them — and every
@@ -548,34 +550,43 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
     if (activeContextType !== 'context' || !activeContextId) return
     let cancelled = false
 
-    getContext(activeContextId).then(ctx => {
-      if (cancelled) return
-      const metadata = (ctx as Context & { metadata?: Record<string, unknown> }).metadata
-      const saved = extractToolboxFilters(metadata)
-      // The URL carries neither workspace nor tree path — take both from the
-      // context record so the workspace-scoped lists (feature bitmaps,
-      // timelines) load, the Features/Timeline tabs show what is filtering the
-      // view, and the timeline density is scoped to the context's own path.
-      dispatch({
-        type: 'SET_CONTEXT_SCOPE',
-        workspaceName: ctx.workspaceName || ctx.workspaceId || null,
-        contextPath: ctx.path || '/',
-        treeId: ctx.treeId || null,
+    let requestId = 0
+    const load = (hydrate: boolean) => {
+      const currentRequest = ++requestId
+      return getContext(activeContextId, contextOwnerId).then(ctx => {
+        if (cancelled || currentRequest !== requestId) return
+        const metadata = (ctx as Context & { metadata?: Record<string, unknown> }).metadata
+        const saved = extractToolboxFilters(metadata)
+        // The URL carries neither workspace nor tree path — take both from the
+        // context record so the workspace-scoped lists (feature bitmaps,
+        // timelines) load, the Features/Timeline tabs show what is filtering the
+        // view, and the timeline density is scoped to the context's own path.
+        dispatch({
+          type: 'SET_CONTEXT_SCOPE',
+          workspaceName: ctx.workspaceName || ctx.workspaceId || null,
+          contextPath: ctx.path || '/',
+          treeId: ctx.treeId || null,
+        })
+        if (hydrate) dispatch({
+          type: 'SET_SAVED_FILTERS',
+          savedFilters: saved,
+          savedSearchQuery: typeof metadata?.toolboxSearchQuery === 'string' ? metadata.toolboxSearchQuery : null,
+          hydrating: true,
+        })
+      }).catch(() => {
+        if (cancelled) return
+        if (hydrate) dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: null, savedSearchQuery: null, hydrating: true })
       })
-      dispatch({
-        type: 'SET_SAVED_FILTERS',
-        savedFilters: saved,
-        savedSearchQuery: typeof metadata?.toolboxSearchQuery === 'string' ? metadata.toolboxSearchQuery : null,
-        hydrating: true,
-      })
-    }).catch(() => {
-      if (cancelled) return
-      dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: null, savedSearchQuery: null, hydrating: true })
+    }
+    void load(true)
+    const refreshScope = () => { void load(false) }
+    const offUrl = socketService.on('context.url.set', (data: unknown) => {
+      if ((data as { id?: string })?.id === activeContextId) refreshScope()
     })
-
-    return () => { cancelled = true }
+    window.addEventListener('contexts:refresh', refreshScope)
+    return () => { cancelled = true; offUrl(); window.removeEventListener('contexts:refresh', refreshScope) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.activeContextId, state.activeContextType])
+  }, [state.activeContextId, state.activeContextType, contextOwnerId])
 
   // ── Auto-save session filters when not in canvas/context mode ────────────
 
@@ -712,7 +723,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
         }, treeName)
         invalidateWorkspaceTreeCache(activeWorkspaceName, treeName)
       } else if (activeContextType === 'context' && activeContextId) {
-        const ctx = await getContext(activeContextId)
+        const ctx = await getContext(activeContextId, contextOwnerId)
         const existingMeta = (ctx as Context & { metadata?: Record<string, unknown> }).metadata || {}
         const searchQuery = new URLSearchParams(location.search).get('q') || new URLSearchParams(location.search).get('search') || ''
         await patchContext(activeContextId, {
@@ -721,14 +732,14 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
           metadata: { ...existingMeta, toolbox: stripEphemeral(filters), toolboxSearchQuery: searchQuery.trim() || undefined },
           features: filters.features,
           filters: [...buildDatetimeFilters(filters.timeline), ...buildGeoFilters(filters.geo)],
-        })
+        }, contextOwnerId)
       }
       const searchQuery = new URLSearchParams(location.search).get('q') || new URLSearchParams(location.search).get('search') || ''
       dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: filters, savedSearchQuery: searchQuery.trim() || null })
     } finally {
       dispatch({ type: 'SET_SAVING', isSaving: false })
     }
-  }, [location.search])
+  }, [location.search, contextOwnerId])
 
   // Drop a bitmap key from the available list and any active feature filters.
   const stripBitmapKey = useCallback((key: string) => {

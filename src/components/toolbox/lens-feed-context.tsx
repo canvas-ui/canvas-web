@@ -155,6 +155,7 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
   const committedRef = useRef<number[] | null>(null)
   const timerRef = useRef<number | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const failuresRef = useRef(0)
   // In-flight getUserMedia — see start().
   const startingRef = useRef(false)
   // The chained timeout re-enters tick() through this ref — a direct self-
@@ -224,7 +225,8 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
       const frame = captureFrame()
       if (frame && s.workspaceRef) {
         const applet = s.consumer === 'applet'
-        abortRef.current = new AbortController()
+        const controller = new AbortController()
+        abortRef.current = controller
         try {
           const res = await searchByImage(s.workspaceRef, frame, {
             q: applet ? (s.text || undefined) : undefined,
@@ -233,8 +235,10 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
             limit: applet ? APPLET_LIMIT : FILTER_KNN_LIMIT,
             idsOnly: !applet,
             debug: applet,
-            signal: abortRef.current.signal,
+            signal: controller.signal,
           })
+          if (controller.signal.aborted || cfgRef.current !== s || !s.running) return
+          failuresRef.current = 0
           setLatencyMs(Math.round(performance.now() - t0))
           setSearchError(null)
           if (applet) {
@@ -243,6 +247,8 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
             publishFilter(res.ids)
           }
         } catch (err) {
+          if (controller.signal.aborted || cfgRef.current !== s || !s.running) return
+          failuresRef.current++
           if ((err as Error)?.name !== 'AbortError') setSearchError((err as Error)?.message || 'search failed')
         }
       }
@@ -251,7 +257,7 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
       // Charge frame-capture + request time against the interval so the
       // selected rate is the actual rate; at 15–30 fps this degrades to
       // back-to-back (never overlapping) requests, capped by search latency.
-      const delay = Math.max(0, cfgRef.current.rateMs - (performance.now() - t0))
+      const delay = Math.max(failuresRef.current ? Math.min(30000, 1000 * 2 ** Math.min(failuresRef.current - 1, 5)) : 0, cfgRef.current.rateMs - (performance.now() - t0))
       timerRef.current = window.setTimeout(() => void tickRef.current(), delay)
     }
   }, [captureFrame, publishApplet, publishFilter])
@@ -263,6 +269,7 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
   const stop = useCallback(() => {
     const wasFilter = cfgRef.current.consumer === 'filter'
     cfgRef.current.running = false
+    failuresRef.current = 0
     cfgRef.current.consumer = null
     if (timerRef.current) window.clearTimeout(timerRef.current)
     abortRef.current?.abort()

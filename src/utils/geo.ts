@@ -45,8 +45,8 @@ export function pointInGeoSelection(lat: number, lon: number, sel: GeoSelection)
 // A document is inside a selection only when it carries a location and that
 // point falls within the drawn area. Non-located documents are excluded while a
 // selection is active (the map filter answers "what's in this area").
-export function docInGeoSelection(doc: Document, sel: GeoSelection): boolean {
+export function docInGeoSelection(doc: Document, sel: GeoSelection, includeUnlocated = false): boolean {
   const g = readDocGeo(doc)
-  if (!g) return false
+  if (!g) return includeUnlocated
   return pointInGeoSelection(g.lat, g.lon, sel)
 }
