@@ -8,6 +8,7 @@ import ContextsPage from '@/pages/contexts'
 import ContextDetailPage from '@/pages/contexts/[contextId]'
 import ApiTokensPage from '@/pages/api-tokens'
 import DevicesPage from '@/pages/devices'
+import SettingsPage from '@/pages/settings'
 import AppearancePage from '@/pages/appearance'
 import KeyBindingsPage from '@/pages/key-bindings'
 import OfflinePage from '@/pages/offline'
@@ -65,6 +66,7 @@ export const shellRoutes = (
   <Route key="r20" path="agents/:agentId/settings/:tab" element={<AgentSettingsPage />} />
   <Route key="r21" path="roles" element={<RolesPage />} />
   <Route key="r22" path="remotes" element={<RemotesPage />} />
+  <Route key="settings" path="settings" element={<SettingsPage />} />
   <Route key="r23" path="appearance" element={<AppearancePage />} />
   <Route key="key-bindings" path="key-bindings" element={<KeyBindingsPage />} />
   <Route key="r24" path="offline" element={<OfflinePage />} />

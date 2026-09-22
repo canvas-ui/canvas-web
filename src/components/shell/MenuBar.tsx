@@ -239,7 +239,7 @@ export function MenuBar() {
             </TooltipContent>
           </Tooltip>
 
-          <MenuItem section="settings" icon={<Settings className="w-5 h-5" />} label="Settings" />
+          <NavItem path="/settings" section="settings" icon={<Settings className="w-5 h-5" />} label="Settings" />
 
           <Tooltip>
             <TooltipTrigger asChild>

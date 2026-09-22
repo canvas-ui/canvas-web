@@ -64,9 +64,9 @@ export default function EmbeddingDefaultsPage() {
       <PageHeader
         compact
         className="mb-6"
-        title="Embedding defaults"
+        title="Search & AI defaults"
         onBack={useSettingsMenuBack()}
-        description="What new workspaces inherit. A workspace can override any of it, and its own setting always wins."
+        description="Your account · Choose the embedding models used for text and image search. Workspace settings override these defaults. Running workspaces adopt new defaults when restarted."
         actions={
           <Button type="button" size="sm" variant="outline" onClick={refresh} disabled={loading}>
             <RefreshCw className="mr-2 h-3.5 w-3.5" />

@@ -1,3 +1,4 @@
+import { SETTINGS_GROUPS } from '@/lib/settings-catalog'
 import { useCallback, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { isBare, isFullBleed } from '../route-chrome'
 import { Outlet, useLocation } from 'react-router-dom'
@@ -96,7 +97,11 @@ function M1List({ section }: { section: ReturnType<typeof useMenu>['state']['act
 function titleOf(entry: CanvasEntry | null, pathname: string): string {
   if (entry?.kind === 'document') return getDocumentDisplayInfo(entry.document).title
   const path = entry?.kind === 'route' ? entry.location : pathname
-  const segments = path.split('?')[0].split('/').filter(Boolean)
+  const routePath = path.split(/[?#]/)[0]
+  if (routePath === '/settings') return 'Settings'
+  const setting = SETTINGS_GROUPS.flatMap(group => [...group.items]).find(item => item.path === routePath)
+  if (setting) return setting.label
+  const segments = routePath.split('/').filter(Boolean)
   if (segments.length === 0) return 'Desk'
   return decodeURIComponent(segments[segments.length - 1])
 }

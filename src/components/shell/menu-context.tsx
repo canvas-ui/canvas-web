@@ -1,5 +1,5 @@
 import { useReducer, useCallback, useEffect, type ReactNode } from 'react'
-import { getCurrentUserFromToken } from '@/services/auth'
+import { getCurrentUser, getCurrentUserFromToken } from '@/services/auth'
 import {
   MenuContext,
   useMenuUrlSync,
@@ -142,7 +142,17 @@ export function MenuProvider({ children }: { children: ReactNode }) {
   // Load user on mount
   useEffect(() => {
     const user = getCurrentUserFromToken()
-    if (user) dispatch({ type: 'SET_USER', user })
+    if (user) {
+      dispatch({ type: 'SET_USER', user })
+      return
+    }
+    // API tokens have no embedded identity. Resolve it without blocking the
+    // shell; an offline failure must not prevent access to cached content.
+    let cancelled = false
+    void getCurrentUser().then(profile => {
+      if (!cancelled && profile) dispatch({ type: 'SET_USER', user: profile })
+    }).catch(() => {})
+    return () => { cancelled = true }
   }, [])
 
   const setSection = useCallback((section: MenuSection) => {

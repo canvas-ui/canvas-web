@@ -682,8 +682,8 @@ export function InferdConfigEditor({
       {/* ── Spaces ─────────────────────────────────────────────────────────── */}
       <section>
         <SectionHead
-          title="Spaces"
-          hint="What each kind of content is embedded with. Changing a model sends that space to its own vector table, so the previous model stays intact and reverting is instant."
+          title="Search models"
+          hint="Choose a provider and model for each kind of content. After switching models, fill the new index to make existing documents searchable. Previous model indexes are preserved."
         />
 
         {spaceNames.length === 0 ? (
@@ -866,8 +866,8 @@ export function InferdConfigEditor({
       {/* ── Backends ───────────────────────────────────────────────────────── */}
       <section>
         <SectionHead
-          title="Backends"
-          hint="Where the models run, referenced by name from the spaces above. onnx, ollama and clip always exist; declaring one merges over its defaults."
+          title="Model providers"
+          hint="Connect a service here, then select it under Search models above. Built-in providers work without an extra connection. Provider changes take effect when you save."
         />
 
         <div className="divide-y overflow-hidden rounded-lg border">

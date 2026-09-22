@@ -1334,7 +1334,7 @@ export default function WorkspaceSettingsPage() {
         compact
         className="mb-6 border-b pb-4"
         title={`${section.label} - ${workspace.label || workspace.name}`}
-        description={activeTab === 'general' ? workspace.rootPath : section.description}
+        description={`This workspace · ${section.description}`}
         backTo={`/workspaces/${workspaceName}`}
         // Mobile has no room for the M2 panel beside the content, so Back
         // reopens it at the section list rather than leaving settings — the

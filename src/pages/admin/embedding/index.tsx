@@ -72,8 +72,8 @@ export default function AdminEmbeddingPage() {
       <PageHeader
         compact
         className="mb-6"
-        title="Server embedding defaults"
-        description="The base every user inherits, before their own defaults and before a workspace's own config."
+        title="Server search & AI defaults"
+        description="Entire server · Set the embedding defaults accounts inherit. Account and workspace overrides take priority. Running workspaces adopt new defaults when restarted."
         actions={
           <Button type="button" size="sm" variant="outline" onClick={refresh} disabled={loading}>
             <RefreshCw className="mr-2 h-3.5 w-3.5" />

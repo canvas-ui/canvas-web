@@ -1,5 +1,7 @@
-import { type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { ChevronRight } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { matchesSettingsQuery } from '@/lib/settings-catalog'
 import { cn } from '@/lib/utils'
 
 export interface M2NavItem {
@@ -21,15 +23,20 @@ export function M2SettingsNav({
   activeId: string | null
   onSelect: (id: string) => void
 }) {
+  const [query, setQuery] = useState('')
+  const visibleItems = items.filter(item => matchesSettingsQuery(query, item.label, item.description || ''))
   return (
     <div className="flex-1 overflow-y-auto py-2">
       <div className="space-y-1 px-2">
-        {items.map(item => {
+        <Input type="search" aria-label="Search settings sections" placeholder="Find a setting…" className="mb-3" value={query} onChange={event => setQuery(event.target.value)} />
+        {!visibleItems.length && <p role="status" className="p-3 text-sm text-muted-foreground">No matching settings.</p>}
+        {visibleItems.map(item => {
           const isActive = item.id === activeId
           return (
             <button
               key={item.id}
               type="button"
+              aria-current={isActive ? 'page' : undefined}
               onClick={() => onSelect(item.id)}
               className={cn(
                 'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left transition-colors',
@@ -40,9 +47,9 @@ export function M2SettingsNav({
                 {item.icon}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium text-foreground">{item.label}</span>
+                <span className="block text-sm font-medium text-foreground">{item.label}</span>
                 {item.description && (
-                  <span className="block truncate text-[11px] text-muted-foreground">{item.description}</span>
+                  <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">{item.description}</span>
                 )}
               </span>
               <ChevronRight className={cn('h-3.5 w-3.5 shrink-0', isActive ? 'opacity-100' : 'opacity-0')} />

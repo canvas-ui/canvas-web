@@ -37,14 +37,14 @@ export type WorkspaceSettingsTab =
   | 'hooks'
 
 export const WORKSPACE_SETTINGS_SECTIONS: readonly SettingsSection<WorkspaceSettingsTab>[] = [
-  { id: 'general', label: 'General', description: 'Label, icon, danger zone', icon: Settings2 },
-  { id: 'data', label: 'Data Backends', description: 'Sources, disk usage, trash', icon: HardDrive },
-  { id: 'db', label: 'Database', description: 'Index, search tuning, embeddings', icon: Database },
-  { id: 'devices', label: 'Devices', description: 'Linked devices', icon: Monitor },
-  { id: 'sync', label: 'Sync', description: 'Device mirrors and conflicts', icon: RefreshCw },
-  { id: 'services', label: 'Services', description: 'Connectors, Git, WebDAV, IMAP', icon: Server },
-  { id: 'shares', label: 'Shares / ACL', description: 'Public links and access', icon: Link2 },
-  { id: 'hooks', label: 'Hooks', description: 'Event-driven automation', icon: Webhook },
+  { id: 'general', label: 'Workspace details', description: 'Rename, change appearance or remove this workspace', icon: Settings2 },
+  { id: 'data', label: 'Files & storage', description: 'Connect folders and data sources, check disk usage or restore trash', icon: HardDrive },
+  { id: 'db', label: 'Search & indexing', description: 'Rebuild indexes, tune search and choose embedding models', icon: Database },
+  { id: 'devices', label: 'Devices', description: 'Link devices to this workspace', icon: Monitor },
+  { id: 'sync', label: 'Synchronization', description: 'Manage device copies and resolve sync conflicts', icon: RefreshCw },
+  { id: 'services', label: 'Connected services', description: 'Configure Git, WebDAV, IMAP and other connectors', icon: Server },
+  { id: 'shares', label: 'Sharing & permissions', description: 'Create public links and manage workspace access', icon: Link2 },
+  { id: 'hooks', label: 'Automation', description: 'Run hooks in response to workspace events', icon: Webhook },
 ]
 
 // Tabs that used to stand on their own. Embeddings are part of the index, and
@@ -67,9 +67,9 @@ export function resolveWorkspaceSettingsTab(tab: string | undefined): WorkspaceS
 export type ContextSettingsTab = 'general' | 'location' | 'shares'
 
 export const CONTEXT_SETTINGS_SECTIONS: readonly SettingsSection<ContextSettingsTab>[] = [
-  { id: 'general', label: 'General', description: 'Name, description, danger zone', icon: Settings2 },
-  { id: 'location', label: 'Location', description: 'Context URL and base URL', icon: Link2 },
-  { id: 'shares', label: 'Shares / ACL', description: 'Who else can see this context', icon: Users },
+  { id: 'general', label: 'Context details', description: 'Rename, describe or remove this context', icon: Settings2 },
+  { id: 'location', label: 'Tree & path', description: 'Choose the workspace, tree and path this context opens', icon: Link2 },
+  { id: 'shares', label: 'Sharing & permissions', description: 'Choose who can access this context', icon: Users },
 ]
 
 export function resolveContextSettingsTab(tab: string | undefined): ContextSettingsTab {
@@ -89,13 +89,13 @@ export type AgentSettingsTab =
   | 'integrations'
 
 export const AGENT_SETTINGS_SECTIONS: readonly SettingsSection<AgentSettingsTab>[] = [
-  { id: 'identity', label: 'Identity', description: 'Name, role, system prompt', icon: Settings2 },
-  { id: 'provider', label: 'Provider', description: 'LLM provider and credentials', icon: Plug },
-  { id: 'models', label: 'Models', description: 'Model and sampling parameters', icon: Cpu },
-  { id: 'tools', label: 'Tools', description: 'Skills and MCP servers', icon: Wrench },
-  { id: 'access', label: 'Access / ACL', description: 'Canvas scope binding and agent token', icon: KeyRound },
-  { id: 'memory', label: 'Memory', description: 'Memory engine', icon: Brain },
-  { id: 'integrations', label: 'Integrations', description: 'Mail, chat, SQL, REST', icon: Boxes },
+  { id: 'identity', label: 'Identity & instructions', description: 'Set the agent’s name, role and instructions', icon: Settings2 },
+  { id: 'provider', label: 'AI connection', description: 'Connect a chat model provider and manage its credentials', icon: Plug },
+  { id: 'models', label: 'Chat model', description: 'Choose the model and tune how it responds', icon: Cpu },
+  { id: 'tools', label: 'Tools & skills', description: 'Choose the skills and MCP tools the agent can use', icon: Wrench },
+  { id: 'access', label: 'Access & permissions', description: 'Choose which Canvas content the agent can access', icon: KeyRound },
+  { id: 'memory', label: 'Memory', description: 'Configure how the agent remembers information', icon: Brain },
+  { id: 'integrations', label: 'Integrations', description: 'Connect mail, chat, databases and external APIs', icon: Boxes },
 ]
 
 export function resolveAgentSettingsTab(tab: string | undefined): AgentSettingsTab {

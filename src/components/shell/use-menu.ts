@@ -1,6 +1,7 @@
 import { createContext, useContext, useCallback, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { MOBILE_BREAKPOINT } from '@/hooks/use-mobile'
+import { PERSONAL_SETTINGS_PATHS } from '@/lib/settings-catalog'
 import { loadLayoutMode } from '@/lib/layout-mode'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -83,7 +84,7 @@ export function sectionFromPath(pathname: string): { section: MenuSection; entit
     return { section: 'agents', entityId: second, m2View: third === 'settings' ? 'settings' : second ? 'detail' : null }
   }
   if (first === 'admin') return { section: 'admin', entityId: null, m2View: null }
-  if (first === 'api-tokens') return { section: 'settings', entityId: null, m2View: null }
+  if (PERSONAL_SETTINGS_PATHS.includes(`/${first}`)) return { section: 'settings', entityId: null, m2View: null }
   return { section: null, entityId: null, m2View: null }
 }
 
