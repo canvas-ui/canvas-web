@@ -82,7 +82,7 @@ export default function ContextDetailPage() {
     return stack.length ? stack : (legacy ? [legacy] : []);
   }, [location.search]);
   const { showToast } = useToast();
-  const { state: toolboxState, saveFilters, setAccentColor, setMapDocuments, toggleView, hasActiveFilters } = useToolbox();
+  const { state: toolboxState, saveFilters, setSort, setAccentColor, setMapDocuments, toggleView, hasActiveFilters } = useToolbox();
   const { openM2Drawer } = useMenu();
   const isMobile = useIsMobile();
   const tbAllOf = toolboxState.filters.features.allOf;
@@ -631,6 +631,8 @@ export default function ContextDetailPage() {
         pastedDocumentIds={copiedDocuments}
         backendSearchQueries={serverSearchQueries}
         onBackendSearch={handleBackendSearch}
+        serverSort={toolboxState.filters.sort}
+        onServerSortChange={setSort}
         onRemoveBackendQuery={handleRemoveBackendQuery}
         canSaveChanges={canSaveChanges}
         isSavingChanges={toolboxState.isSaving}
