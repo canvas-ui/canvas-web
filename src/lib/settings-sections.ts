@@ -67,7 +67,7 @@ export function resolveWorkspaceSettingsTab(tab: string | undefined): WorkspaceS
 export type ContextSettingsTab = 'general' | 'location' | 'shares'
 
 export const CONTEXT_SETTINGS_SECTIONS: readonly SettingsSection<ContextSettingsTab>[] = [
-  { id: 'general', label: 'Context details', description: 'Rename, describe or remove this context', icon: Settings2 },
+  { id: 'general', label: 'Context details', description: 'Change the name, description or color, or remove this context', icon: Settings2 },
   { id: 'location', label: 'Tree & path', description: 'Choose the workspace, tree and path this context opens', icon: Link2 },
   { id: 'shares', label: 'Sharing & permissions', description: 'Choose who can access this context', icon: Users },
 ]

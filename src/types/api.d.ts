@@ -71,6 +71,7 @@ interface Workspace {
 }
 
 interface Context {
+  metadata?: { ui?: { color?: string | null; [key: string]: unknown }; [key: string]: unknown }
   id: string
   name?: string | null
   url: string

@@ -60,6 +60,7 @@ export default function ContextSettingsPage() {
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [color, setColor] = useState<string | null>(null)
   const [url, setUrl] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
 
@@ -80,6 +81,7 @@ export default function ContextSettingsPage() {
       selectEntity(ctx.id)
       setName(ctx.name || '')
       setDescription(ctx.description || '')
+      setColor(typeof ctx.metadata?.ui?.color === 'string' ? ctx.metadata.ui.color : null)
       setUrl(ctx.url || '')
       setBaseUrl(ctx.baseUrl || '')
     }).catch(() => {
@@ -120,6 +122,7 @@ export default function ContextSettingsPage() {
       const updated = await patchContext(contextId, {
         name: name.trim(),
         description: description.trim(),
+        metadata: { ...context?.metadata, ui: { ...context?.metadata?.ui, color } },
       }, ownerId)
       setContext(updated)
       window.dispatchEvent(new CustomEvent('contexts:refresh'))
@@ -234,6 +237,14 @@ export default function ContextSettingsPage() {
               <div>
                 <label htmlFor="ctx-description" className="text-sm font-medium">Description</label>
                 <Input id="ctx-description" value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional description" />
+              </div>
+              <div>
+                <label htmlFor="ctx-color" className="text-sm font-medium">Color</label>
+                <div className="mt-1 flex items-center gap-2">
+                  <Input id="ctx-color" type="color" value={/^#[0-9a-f]{6}$/i.test(color || context.color || '') ? (color || context.color) : '#808080'} onChange={e => setColor(e.target.value)} className="h-10 w-16 p-1" disabled={isSaving} />
+                  <Button type="button" variant="outline" size="sm" disabled={isSaving || color === null} onClick={() => setColor(null)}>Use inherited color</Button>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">{color === null ? 'Using the tree folder or workspace color.' : 'Applies only to this context.'}</p>
               </div>
               <div>
                 <label className="text-sm font-medium">Workspace</label>
