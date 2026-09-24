@@ -28,3 +28,28 @@ export function buildAutoLinkRule(id: string, source: string, destinations: Auto
     })),
   }
 }
+
+export type AutoLinkDirection = 'forward' | 'reverse' | 'both'
+
+/** Related rules share an ID prefix; each remains independently manageable. */
+export function buildAutoLinkRules(id: string, source: string, destinations: AutoLinkDestination[], recursive = false, direction: AutoLinkDirection = 'forward', mode: 'copy' | 'move' = 'copy', storage?: { address: string; key: string }): HookRule[] {
+  const forward = buildAutoLinkRule(id, source, destinations, recursive)
+  if (direction === 'forward') return [forward]
+  const parts = source.split('/').filter(Boolean)
+  if (parts.length < 2 || source.includes('{{') || parts.some(part => part === '.' || part === '..')) throw new Error('Choose a backend folder with a valid storage address.')
+  if (!storage) throw new Error('Choose a writable backend folder.')
+  const backend = storage.address
+  const folder = storage.key
+  const targets = [...new Map(destinations.map(target => [`${target.tree}:${target.path}`, target])).values()]
+  const reverse: HookRule = {
+    id: `${id}-reverse`, enabled: true,
+    description: `Auto-Link ${targets.map(target => `${target.tree}:${target.path}`).join(', ')} → backends:${source} (${mode})`,
+    // User insertions and explicit links only; automated placements must not
+    // echo through another reverse rule and fan out across storage folders.
+    cascade: false,
+    when: { event: ['document.inserted', 'document.linked'],
+      [recursive ? 'path' : 'pathExact']: targets.map(target => `${target.tree}:${target.path}`) },
+    then: [{ action: 'store', to: backend, folder, mode, autoLink: true, onConflict: 'error', ...(recursive ? { recursive: true } : {}) }],
+  }
+  return direction === 'both' ? [forward, reverse] : [reverse]
+}

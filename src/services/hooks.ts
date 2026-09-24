@@ -491,12 +491,13 @@ export async function generateHook(
 }
 
 /** Append without treating a failed read or malformed rules file as empty. */
-export async function addAutoLinkRule(workspaceId: string, rule: HookRule): Promise<void> {
+export async function addAutoLinkRule(workspaceId: string, rule: HookRule | HookRule[]): Promise<void> {
   const content = await getHook(workspaceId, RULES_PATH)
   const parsed = JSON.parse(content)
   const rules = Array.isArray(parsed) ? parsed : parsed?.rules
   if (!Array.isArray(rules)) throw new Error('The workspace rules file is invalid. Fix it in Rules before adding an Auto-Link.')
-  if (rules.some((existing: HookRule) => existing.id === rule.id)) return
-  const next = Array.isArray(parsed) ? [...rules, rule] : { ...parsed, rules: [...rules, rule] }
+  const additions = (Array.isArray(rule) ? rule : [rule]).filter(item => !rules.some((existing: HookRule) => existing.id === item.id))
+  if (!additions.length) return
+  const next = Array.isArray(parsed) ? [...rules, ...additions] : { ...parsed, rules: [...rules, ...additions] }
   await saveHook(workspaceId, RULES_PATH, JSON.stringify(next, null, 2) + '\n')
 }
