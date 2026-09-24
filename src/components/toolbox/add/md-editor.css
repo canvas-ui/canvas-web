@@ -14,3 +14,12 @@
   height: 0;
   pointer-events: none;
 }
+
+/* Rebind the shared Markdown typography aliases inside the editor's scheme.
+ * Inherited aliases otherwise retain the outer page's computed colours. */
+.md-editor {
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+}

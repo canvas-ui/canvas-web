@@ -12,10 +12,10 @@ const MarkdownHtml = lazy(() => import('./markdown-html'))
  * pre-wrapped text, which is exactly what these surfaces showed before. That
  * keeps streaming chat flicker-free — no spinner, no layout jump.
  */
-export function MarkdownView({ content, className = '' }: { content: string; className?: string }) {
+export function MarkdownView({ content, className = '', preview = false }: { content: string; className?: string; preview?: boolean }) {
   return (
     <Suspense fallback={<div className={`whitespace-pre-wrap break-words ${className}`}>{content}</div>}>
-      <MarkdownHtml content={content} className={className} />
+      <MarkdownHtml content={content} className={className} preview={preview} />
     </Suspense>
   )
 }

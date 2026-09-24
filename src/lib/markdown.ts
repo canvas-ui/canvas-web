@@ -51,7 +51,9 @@ md.core.ruler.after('inline', 'task-lists', (state) => {
   return true
 })
 
-export function renderMarkdown(source: string): string {
+export function renderMarkdown(source: string, preview = false): string {
   const html = md.render(source ?? '')
-  return DOMPurify.sanitize(html, { ADD_ATTR: ['target'] })
+  return DOMPurify.sanitize(html, preview
+    ? { FORBID_TAGS: ['img', 'picture', 'source', 'video', 'audio', 'iframe', 'a', 'input'], KEEP_CONTENT: true }
+    : { ADD_ATTR: ['target'] })
 }

@@ -31,13 +31,15 @@ import { isEditableDocument } from '@/components/object-card/editable-schema'
 import { useMirrorSaveState } from '@/lib/remote-mirror'
 import { usePublicShareCode } from '@/components/renderers/public-share'
 import { useDocumentThumbnail } from '@/components/renderers/useDocumentThumbnail'
-import { useDocumentStreamSrc } from '@/components/renderers/useDocumentBlobUrl'
+import { useDocumentBlobUrl, useDocumentStreamSrc } from '@/components/renderers/useDocumentBlobUrl'
 import { DocumentIcon } from '@/components/common/DocumentIcon'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { TimelineSortControl } from '@/components/canvas/widgets/sort-control'
 import type { ToolboxSort } from '@/types/workspace'
 import { useToolboxOptional } from '@/components/toolbox/use-toolbox'
 import { groupByDate } from '@/lib/date-groups'
+import { MarkdownView } from './markdown-view'
+import { classifyMime } from '@/components/renderers/types'
 
 interface DocumentListProps {
   documents: Document[]
@@ -782,6 +784,40 @@ function TileVideoPreview({ workspaceId, documentId, fallback }: { workspaceId: 
   )
 }
 
+// Reuse the share-aware, offline-cached content route, but only load tiles
+// entering the viewport. Large files keep their icon instead of downloading
+// megabytes merely to fill a small preview.
+function TileTextPreview({ document, workspaceId, markdown }: { document: Document; workspaceId: string; markdown: boolean }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [visible, setVisible] = useState(() => typeof IntersectionObserver === 'undefined')
+  useEffect(() => {
+    const element = ref.current
+    if (!element) return
+    if (typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) { setVisible(true); observer.disconnect() }
+    })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+  const { text, loading, error } = useDocumentBlobUrl(workspaceId, document.id, {
+    mode: 'text', enabled: visible, maxTextLength: 8_000,
+  })
+  return <div ref={ref} className="relative h-48 w-full overflow-hidden bg-card text-card-foreground">
+    {text != null && !error ? (
+      <div className="pointer-events-none p-3 pt-7 text-xs leading-relaxed" aria-hidden="true">
+        {text.length === 0 ? <span className="text-muted-foreground">Empty file</span> : markdown
+          ? <MarkdownView content={text} preview className="text-xs [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_table]:table-fixed [&_table]:w-full" />
+          : <pre className="whitespace-pre-wrap break-words font-mono">{text}</pre>}
+        <div className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-card to-transparent" />
+      </div>
+    ) : <div className="flex h-full items-center justify-center">
+      <DocumentIcon document={document} size={10} chip />
+      {visible && loading && <span className="sr-only">Loading text preview</span>}
+    </div>}
+  </div>
+}
+
 // Tile view cell — a prominent picture/thumbnail tile (image docs) or a large
 // icon tile (everything else). Mirrors DocumentRow's click/selection/right-click
 // behavior. Sized for a responsive auto-fill grid, so it reads on mobile too.
@@ -798,7 +834,10 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
   const display = getDocumentDisplayInfo(document)
   // Notes, tabs/URLs, emails, todos: the content IS the picture — render a
   // text tile (title + clamped body, or just title + status subtitle) instead
-  // of a giant icon. Files keep the icon tile.
+  // of a giant icon. Text files use a fetched, bounded preview below.
+  const fileKind = classifyMime(String(document.metadata?.contentType || '').split(';')[0].trim().toLowerCase(), document.metadata?.filename || getLocationFilename(document))
+  const isTextFile = document.schema === 'data/schema/file' && (fileKind === 'markdown' || fileKind === 'text')
+    && (document.metadata?.size ?? document.data?.size ?? 0) <= 1_048_576
   const isTextTile = !hasThumb && document.schema !== 'data/schema/file' && !!(display.preview || display.subtitle)
   const { replicating } = useMirrorSaveState(document)
   // 768px render keeps the larger (300px column, retina) photo tiles crisp.
@@ -833,7 +872,7 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
         />
         {/* Images, videos and text tiles take their natural height (masonry
             columns); icon tiles stay square. */}
-        <div className={`relative w-full bg-muted/40 ${(hasThumb && blobUrl) || isTextTile || (isVideo && workspaceId) ? '' : 'aspect-square'}`}>
+        <div className={`relative w-full bg-muted/40 ${(hasThumb && blobUrl) || isTextTile || (isTextFile && workspaceId) || (isVideo && workspaceId) ? '' : 'aspect-square'}`}>
           {hasThumb && loading && <div className="absolute inset-0 animate-pulse bg-muted/60" />}
           {hasThumb && blobUrl ? (
             <img src={blobUrl} alt={display.title} loading="lazy" className="block h-auto w-full" />
@@ -843,6 +882,8 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
               documentId={document.id}
               fallback={<div className="flex aspect-square w-full items-center justify-center"><DocumentIcon document={document} size={10} chip /></div>}
             />
+          ) : isTextFile && workspaceId ? (
+            <TileTextPreview key={`${workspaceId}:${document.id}:${document.checksumArray?.[0] ?? ''}`} document={document} workspaceId={workspaceId} markdown={fileKind === 'markdown'} />
           ) : isTextTile ? (
             <div className="flex min-h-28 w-full flex-col gap-1.5 overflow-hidden bg-card p-3 pt-7 text-left">
               <div className="flex items-center gap-1.5">
@@ -936,7 +977,7 @@ function FolderChip({ folder, onOpen, onPasteDocuments, contextPath, treeName }:
       onDragOver={drop.onDragOver}
       onDragLeave={drop.onDragLeave}
       onDrop={drop.onDrop}
-      className={`group flex min-w-0 max-w-full items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm transition-colors hover:bg-accent ${drop.over ? 'ring-2 ring-info border-info bg-accent' : ''} ${folder.isParent ? 'text-muted-foreground' : ''}`}
+      className={`folder-surface group flex min-w-0 max-w-full items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm transition-colors hover:bg-accent ${drop.over ? 'ring-2 ring-info border-info bg-accent' : ''} ${folder.isParent ? 'text-muted-foreground' : ''}`}
     >
       <span className="relative shrink-0">
         <FolderIcon folder={folder} className="h-4 w-4 group-hover:hidden" />
@@ -963,7 +1004,7 @@ function FolderTile({ folder, onOpen, onPasteDocuments, contextPath, treeName }:
       onDragOver={drop.onDragOver}
       onDragLeave={drop.onDragLeave}
       onDrop={drop.onDrop}
-      className={`group flex min-w-0 flex-col items-center gap-1.5 rounded-lg border px-2 py-3 text-sm transition hover:bg-accent hover:shadow-elevation-2 ${drop.over ? 'ring-2 ring-info border-info bg-accent' : ''} ${folder.isParent ? 'text-muted-foreground' : ''}`}
+      className={`folder-surface group flex min-w-0 flex-col items-center gap-1.5 rounded-lg border px-2 py-3 text-sm transition hover:bg-accent hover:shadow-elevation-2 ${drop.over ? 'ring-2 ring-info border-info bg-accent' : ''} ${folder.isParent ? 'text-muted-foreground' : ''}`}
     >
       <span className="relative flex h-14 w-14 items-center justify-center">
         {folder.isParent ? (

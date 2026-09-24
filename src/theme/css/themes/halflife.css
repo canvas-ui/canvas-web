@@ -141,3 +141,14 @@
   color: #fb7e14;
   color: oklch(0.724 0.181 52);
 }
+
+/* Folder tiles/chips use lambda orange on hover. Override even a custom
+   orange icon colour so the open folder remains legible on that surface. */
+[data-theme='halflife'] .folder-surface:is(:hover, :focus-visible, .bg-accent) {
+  background-color: var(--accent);
+  color: var(--accent-foreground);
+}
+[data-theme='halflife'] .folder-surface:is(:hover, :focus-visible, .bg-accent) svg,
+[data-theme='halflife'] .folder-surface:is(:hover, :focus-visible, .bg-accent) .text-muted-foreground {
+  color: var(--accent-foreground) !important;
+}

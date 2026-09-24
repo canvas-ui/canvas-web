@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
@@ -7,6 +7,8 @@ import { TaskList, TaskItem } from '@tiptap/extension-list'
 import { getMarkdown } from '@/lib/tiptap-markdown'
 import './md-editor.css'
 import {
+  Sun,
+  Moon,
   Bold,
   Italic,
   Heading1,
@@ -17,6 +19,16 @@ import {
   Code,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useTheme } from '@/theme/use-theme'
+
+const EDITOR_THEME_KEY = 'canvas.ui.markdown.theme'
+type EditorScheme = 'light' | 'dark'
+function readEditorScheme(): EditorScheme | null {
+  try {
+    const value = localStorage.getItem(EDITOR_THEME_KEY)
+    return value === 'light' || value === 'dark' ? value : null
+  } catch { return null }
+}
 
 interface MarkdownEditorProps {
   value: string
@@ -41,6 +53,7 @@ function ToolbarButton({
     <button
       type="button"
       title={title}
+      aria-label={title}
       onClick={onClick}
       className={cn(
         'flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -52,7 +65,7 @@ function ToolbarButton({
   )
 }
 
-function Toolbar({ editor }: { editor: Editor }) {
+function Toolbar({ editor, scheme, toggleScheme }: { editor: Editor; scheme: EditorScheme; toggleScheme: () => void }) {
   const setLink = () => {
     const prev = editor.getAttributes('link').href as string | undefined
     const url = window.prompt('Link URL', prev ?? 'https://')
@@ -93,6 +106,10 @@ function Toolbar({ editor }: { editor: Editor }) {
       <ToolbarButton title="Link" active={editor.isActive('link')} onClick={setLink}>
         <LinkIcon className="h-3.5 w-3.5" />
       </ToolbarButton>
+      <span className="flex-1" />
+      <ToolbarButton title={`Switch editor to ${scheme === 'dark' ? 'light' : 'dark'} theme`} onClick={toggleScheme}>
+        {scheme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+      </ToolbarButton>
     </div>
   )
 }
@@ -100,6 +117,14 @@ function Toolbar({ editor }: { editor: Editor }) {
 // TipTap WYSIWYG editor that reads/writes markdown via the tiptap-markdown extension.
 // `onChange` always receives a markdown string (stored in note.data.content).
 export function MarkdownEditor({ value, onChange, placeholder, fill = false }: MarkdownEditorProps) {
+  const { resolvedScheme } = useTheme()
+  const [schemeOverride, setSchemeOverride] = useState<EditorScheme | null>(readEditorScheme)
+  const scheme = schemeOverride ?? resolvedScheme
+  const toggleScheme = () => {
+    const next = scheme === 'dark' ? 'light' : 'dark'
+    setSchemeOverride(next)
+    try { localStorage.setItem(EDITOR_THEME_KEY, next) } catch { /* Session-only when storage is blocked. */ }
+  }
   const editor = useEditor({
     extensions: [
       // StarterKit bundles the Link extension since tiptap v3 — configure it
@@ -141,11 +166,11 @@ export function MarkdownEditor({ value, onChange, placeholder, fill = false }: M
   if (!editor) return null
 
   return (
-    <div className={cn(
-      'rounded-md border border-input bg-transparent focus-within:ring-1 focus-within:ring-ring',
+    <div data-scheme={scheme} className={cn(
+      'md-editor rounded-md border border-input bg-background text-foreground focus-within:ring-1 focus-within:ring-ring',
       fill && 'flex h-full min-h-0 flex-col',
     )}>
-      <Toolbar editor={editor} />
+      <Toolbar editor={editor} scheme={scheme} toggleScheme={toggleScheme} />
       {/* resize-y needs a scroll container; the ProseMirror div stretches to
           fill it so clicks below short content still focus the editor. */}
       <div
