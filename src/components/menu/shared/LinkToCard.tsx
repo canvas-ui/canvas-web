@@ -43,6 +43,7 @@ interface LinkToCardProps {
   // Skips the workspace-picker step entirely — used by document-list.tsx's
   // existing "Link to…" action, which already knows its workspace.
   fixedWorkspaceName?: string
+  excludeWorkspace?: string
   // false = clicking a row replaces the selection (single path), no pinned
   // chips. true (default) = multi-select with pinned chips, LinkToPanel's
   // original behavior.
@@ -82,7 +83,7 @@ interface LinkToCardProps {
 // WorkspaceList-styled row list, slide into the tree-with-tabs view. Renders
 // as a plain card — callers own positioning (inline sibling for B5Card,
 // fixed overlay for document-list's existing usage).
-export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceName, multiple = true, saving = false, savingContent, sizeClassName, tabs = ['context', 'directory'], title, confirmLabel, onConfirmRelation, relationWorkspaceName, relationPredicates, relationExcludeIds }: LinkToCardProps) {
+export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceName, excludeWorkspace, multiple = true, saving = false, savingContent, sizeClassName, tabs = ['context', 'directory'], title, confirmLabel, onConfirmRelation, relationWorkspaceName, relationPredicates, relationExcludeIds }: LinkToCardProps) {
   const [step, setStep] = useState<'workspace' | 'tree'>(fixedWorkspaceName ? 'tree' : 'workspace')
   // Esc closes the card (all callers render it as an overlay); disabled while
   // a link is saving so it can't vanish mid-write.
@@ -160,8 +161,8 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
 
   useEffect(() => {
     if (fixedWorkspaceName) return
-    listWorkspaces().then(setWorkspaces).catch(() => setWorkspaces([])).finally(() => setLoadingWorkspaces(false))
-  }, [fixedWorkspaceName])
+    listWorkspaces().then(list => setWorkspaces(list.filter(workspace => workspace.id !== excludeWorkspace && workspace.name !== excludeWorkspace))).catch(() => setWorkspaces([])).finally(() => setLoadingWorkspaces(false))
+  }, [fixedWorkspaceName, excludeWorkspace])
 
   useEffect(() => {
     // The relations tab picks documents, not paths — DocumentPathBrowser loads

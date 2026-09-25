@@ -1,3 +1,4 @@
+import { CopyToWorkspacePanel } from '@/components/menu/shared/CopyToWorkspacePanel'
 import { BulkEditDialog } from './BulkEditDialog'
 import { Document, TreeNode } from '@/types/workspace'
 import { File, Calendar, CalendarDays, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, ChevronDown, SlidersHorizontal, Play, Table as TableIcon, HardDrive, ArrowRightLeft, Loader2, Folder, FolderOpen, CornerLeftUp, Plus } from 'lucide-react'
@@ -1170,6 +1171,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   const [backendPanel, setBackendPanel] = useState<{ ids: number[]; mode: BackendTransferMode } | null>(null)
   const [backendSaving, setBackendSaving] = useState(false)
   const [pickDocsOpen, setPickDocsOpen] = useState(false)
+  const [copyWorkspaceIds, setCopyWorkspaceIds] = useState<number[] | null>(null)
   const [bulkEditIds, setBulkEditIds] = useState<number[] | null>(null)
   const bulkEditAllowed = usePublicShareCode() == null && !!workspaceId
   const [detailModal, setDetailModal] = useState<{ document: Document; edit?: boolean } | null>(null)
@@ -2015,6 +2017,8 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                   </Button>
                 )}
 
+                {bulkEditAllowed && <Button variant="outline" size="sm" onClick={() => setCopyWorkspaceIds(Array.from(selectedDocuments))}><Copy className="mr-1 h-4 w-4" />Copy to workspace…</Button>}
+
                 {canAddRelated && (
                   <Button
                     variant="outline"
@@ -2282,6 +2286,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
               <Copy className="h-3 w-3" />
               Copy {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
             </button>
+            {bulkEditAllowed && <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => { setCopyWorkspaceIds(contextMenu.documentIds); setContextMenu(null) }}><Copy className="h-3 w-3" />Copy to workspace…</button>}
             {onCutDocuments && (
               <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('cut', contextMenu.documentIds)}>
                 <Scissors className="h-3 w-3" />
@@ -2422,6 +2427,8 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
         onClose={() => setShowImportModal(false)}
         onImport={handleImport}
       />
+
+      {copyWorkspaceIds && workspaceId && <CopyToWorkspacePanel workspaceId={workspaceId} ids={copyWorkspaceIds} onClose={() => setCopyWorkspaceIds(null)} />}
 
       {linkPanelIds && linkTree && (
         // Side panel, not a centred modal: the modal covered the very list the

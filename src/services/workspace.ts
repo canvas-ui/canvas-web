@@ -2160,3 +2160,10 @@ export async function updateWorkspaceMember(
 export async function revokeWorkspaceMember(workspaceId: string, type: 'user' | 'group', principal: string): Promise<void> {
   await api.delete(memberPath(workspaceId, type, principal))
 }
+
+/** Copy one document server-side; retries reuse the operation receipt. */
+export async function copyDocumentToWorkspace(workspaceId: string, documentId: number, options: {
+  destination: string; context: string[]; treeType: 'context' | 'directory'; treeNameOrTreeId: string; operationId: string
+}): Promise<{ sourceId: number; destinationId: number }> {
+  return api.post(`${API_ROUTES.workspaces}/${encodeURIComponent(workspaceId)}/documents/copy-to-workspace`, { documentId, ...options })
+}
