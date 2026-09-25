@@ -54,7 +54,7 @@ const EVENT_OPTIONS = [
   { value: 'document.unlinked', label: 'is removed from a folder', hint: 'Fires when the item leaves a tree path.' },
 ] as const
 
-type ConditionKey = 'from' | 'to' | 'subject' | 'urlHost' | 'urlContains' | 'path' | 'pathExact' | 'mime' | 'attachment'
+type ConditionKey = 'fromRegex' | 'toRegex' | 'subjectRegex' | 'urlRegex' | 'from' | 'to' | 'subject' | 'urlHost' | 'urlContains' | 'path' | 'pathExact' | 'mime' | 'attachment'
 
 const CONDITION_FIELDS: Array<{ key: ConditionKey; label: string; hint: string }> = [
   { key: 'pathExact', label: 'is directly in the folder', hint: 'Only this folder, excluding subfolders' },
@@ -63,6 +63,10 @@ const CONDITION_FIELDS: Array<{ key: ConditionKey; label: string; hint: string }
   { key: 'from', label: 'sender contains', hint: 'boss@company.tld' },
   { key: 'to', label: 'recipient (To/Cc) contains', hint: 'invoice@my-company.tld' },
   { key: 'subject', label: 'subject contains', hint: 'invoice' },
+  { key: 'fromRegex', label: 'sender matches regex', hint: '@(acme|example)\\.com$' },
+  { key: 'toRegex', label: 'recipient (To/Cc) matches regex', hint: '^(billing|accounts)@' },
+  { key: 'subjectRegex', label: 'subject matches regex', hint: '^invoice\\s+\\d+' },
+  { key: 'urlRegex', label: 'URL matches regex', hint: '/(invoice|receipt)/' },
   { key: 'urlHost', label: 'website is', hint: 'youtube.com' },
   { key: 'urlContains', label: 'URL contains', hint: '/watch?v=' },
   { key: 'attachment', label: 'has an attachment of type', hint: 'application/pdf, or * for any' },
@@ -248,17 +252,21 @@ function buildRule(form: RuleForm): HookRule {
   const when: HookRule['when'] = { event: form.events.length === 1 ? form.events[0] : form.events }
   if (form.schema) when.schema = form.schema
 
-  const multi: Partial<Record<string, string[]>> = {}
+  const multi: Partial<Record<string, unknown[]>> = {}
   const url: Record<string, unknown> = {}
   for (const row of form.conditions) {
-    const values = splitAlternatives(row.value)
+    const regex = row.field.endsWith('Regex')
+    const values = regex ? (row.value.trim() ? [row.value] : []) : splitAlternatives(row.value)
+    if (regex && values.length) {
+      try { new RegExp(row.value, 'i') } catch { throw new Error(`Invalid regular expression for ${CONDITION_FIELDS.find(field => field.key === row.field)?.label}: ${row.value}`) }
+    }
     if (!values.length) continue
-    if (row.field === 'urlHost' || row.field === 'urlContains') {
-      const key = row.field === 'urlHost' ? 'host' : 'contains'
+    if (row.field === 'urlHost' || row.field === 'urlContains' || row.field === 'urlRegex') {
+      const key = row.field === 'urlHost' ? 'host' : row.field === 'urlRegex' ? 'regex' : 'contains'
       const prev = url[key]
       const merged = [...(Array.isArray(prev) ? prev : prev != null ? [prev] : []), ...values]
       url[key] = merged.length === 1 ? merged[0] : merged
-    } else (multi[row.field] ||= []).push(...values)
+    } else (multi[row.field.replace(/Regex$/, '')] ||= []).push(...(regex ? values.map(regex => ({ regex })) : values))
   }
   for (const [key, values] of Object.entries(multi)) {
     if (values?.length) when[key] = values.length === 1 ? values[0] : values
@@ -362,8 +370,19 @@ function parseRule(rule: HookRule): RuleForm | null {
   const conditions: ConditionRow[] = []
   const push = (field: ConditionKey, value: unknown): boolean => {
     const values = Array.isArray(value) ? value : [value]
-    if (!values.every((v) => typeof v === 'string')) return false
-    conditions.push({ field, value: (values as string[]).join(' | ') })
+    if (field.endsWith('Regex')) {
+      if (!values.every(value => typeof value === 'string')) return false
+      for (const value of values) conditions.push({ field, value: value as string })
+    } else if (['from', 'to', 'subject'].includes(field)) {
+      for (const value of values) {
+        if (typeof value === 'string') conditions.push({ field, value })
+        else if (value && typeof value === 'object' && Object.keys(value).length === 1 && typeof value.regex === 'string') conditions.push({ field: `${field}Regex` as ConditionKey, value: value.regex })
+        else return false
+      }
+    } else {
+      if (!values.every((v) => typeof v === 'string')) return false
+      conditions.push({ field, value: (values as string[]).join(' | ') })
+    }
     return true
   }
   if (path !== undefined && !push('path', path)) return null
@@ -377,10 +396,11 @@ function parseRule(rule: HookRule): RuleForm | null {
     if (typeof url === 'string') conditions.push({ field: 'urlContains', value: url })
     else if (url && typeof url === 'object') {
       const u = url as Record<string, unknown>
-      const extra = Object.keys(u).filter((k) => k !== 'host' && k !== 'contains')
+      const extra = Object.keys(u).filter((k) => k !== 'host' && k !== 'contains' && k !== 'regex')
       if (extra.length) return null
       if (u.host !== undefined && !push('urlHost', u.host)) return null
       if (u.contains !== undefined && !push('urlContains', u.contains)) return null
+      if (u.regex !== undefined && !push('urlRegex', u.regex)) return null
     } else return null
   }
 
@@ -788,7 +808,11 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
 
   const submit = async () => {
     if (!form) return
-    const rule = buildRule(form)
+    let rule: HookRule
+    try { rule = buildRule(form) } catch (error) {
+      showToast({ title: 'Invalid condition', description: error instanceof Error ? error.message : 'Invalid regular expression', variant: 'destructive' })
+      return
+    }
     if (!rule.then.length) {
       showToast({ title: 'Add an action', description: 'Pick at least one "then" action and fill in its fields.', variant: 'destructive' })
       return
@@ -1054,7 +1078,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                   return (
                     <div key={i} className="grid grid-cols-[2.25rem_1fr_auto] items-center gap-2 sm:grid-cols-[2.25rem_minmax(0,240px)_1fr_auto]">
                       <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground" title="Same condition again = either may match (OR); different conditions must all match (AND)">
-                        {form.conditions.slice(0, i).some((c) => c.field === row.field) ? 'or' : i === 0 ? 'and' : 'and'}
+                        {form.conditions.slice(0, i).some((c) => c.field.replace(/Regex$/, '') === row.field.replace(/Regex$/, '')) ? 'or' : i === 0 ? 'and' : 'and'}
                       </span>
                       <select
                         className={selectClass}
@@ -1084,7 +1108,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
               <Button size="sm" variant="outline" onClick={() => setField('conditions', [...form.conditions, { field: form.schema === 'email' ? 'from' : 'path', value: '' }])}>
                 <Plus className="mr-1 h-4 w-4" /> Add condition
               </Button>
-              <span className="text-xs text-muted-foreground">Separate alternatives with <span className="font-mono">|</span>, e.g. <span className="font-mono">image/* | video/*</span>.</span>
+              <span className="text-xs text-muted-foreground">Contains matches literal text. Regex is case-insensitive: enter the pattern without /…/ delimiters; | stays part of the expression. For other filters, separate alternatives with <span className="font-mono">|</span>, e.g. <span className="font-mono">image/* | video/*</span>.</span>
             </div>
           </section>
 
