@@ -45,11 +45,13 @@ import {
   startWorkspace,
   DEFAULT_WORKSPACE_TREE_NAME,
   treeTypeForName,
+  listWorkspaceTrees,
   listBackendDocuments,
   listBackends,
   backendAddressFromTreePath,
   type Backend,
 } from '@/services/workspace';
+import { documentEventScope, eventTouchesView, treeNameLookup, type EventScope, type ViewScope } from '@/lib/document-event-scope';
 import { Document, TreeNode, buildDatetimeFilters, buildGeoFilters, buildLensFilters, DEFAULT_TOOLBOX_SORT } from '@/types/workspace';
 import { sanitizeUrlPath, buildWorkspaceUrl, parseWorkspacePathFromUrl } from '@/utils/url-params';
 import { rememberWorkspacePath } from '@/lib/last-path';
@@ -123,14 +125,18 @@ function invalidateDocumentCache(workspaceName: string, treeName: string, path: 
   }
 }
 
-// Drop every cached path/tree for a workspace. Socket document events don't
-// carry the affected path, so a doc inserted into a non-viewed path would stay
-// stale on later navigation if we only cleared the current pane — clear the
-// whole workspace instead.
-function invalidateWorkspaceDocumentCache(workspaceName: string) {
+// Drop the cached lists a socket event can have changed: entries whose
+// tree/path overlaps where the event landed, whole-workspace-scope entries for
+// any placement change, and entries listing a document whose content changed.
+// An event we cannot place drops the whole workspace (the old behaviour) — a
+// doc inserted into a non-viewed path must not stay stale on later navigation.
+function invalidateCacheForEvent(workspaceName: string, scope: EventScope) {
   const prefix = `${workspaceName}\0`;
-  for (const key of documentCache.keys()) {
-    if (key.startsWith(prefix)) documentCache.delete(key);
+  for (const [key, entry] of documentCache) {
+    if (!key.startsWith(prefix)) continue;
+    const [, tree, path, , , , , , cacheScope = 'path'] = key.split('\0');
+    const view: ViewScope = { tree, kind: treeTypeForName(tree), path, wholeWorkspace: cacheScope.startsWith('workspace') };
+    if (eventTouchesView(scope, view, entry.documents.map(d => Number(d.id)))) documentCache.delete(key);
   }
 }
 
@@ -541,6 +547,10 @@ export default function WorkspaceDetailPage() {
   // live, fetched otherwise.
   const listedDocuments = sessionActive ? sessionDocuments : documents;
   const listedTotalCount = sessionActive ? sessionCount : documentsTotalCount;
+  // Read by the socket handler: a content-only update refreshes the view only
+  // when it lists that document.
+  const listedIdsRef = useRef<Set<number>>(new Set());
+  useEffect(() => { listedIdsRef.current = new Set(listedDocuments.map(d => Number(d.id))); }, [listedDocuments]);
 
   // Publish the current result set to the toolbox map (it plots geo-tagged docs
   // as pins) and refine the content area by any drawn area — client-side, over
@@ -728,22 +738,47 @@ export default function WorkspaceDetailPage() {
     subscribe();
     const offConnect = socketService.on('connect', subscribe);
 
+    // Tree ids → names: document events address trees by id.
+    let treeNames = new Map<string, string>();
+    let cancelled = false;
+    const loadTreeNames = () => {
+      listWorkspaceTrees(workspaceName)
+        .then(trees => { if (!cancelled) treeNames = treeNameLookup(trees); })
+        .catch(() => { /* unresolved ids just match every tree of their kind */ });
+    };
+    loadTreeNames();
+
+    // Throttled, not only debounced: a steady ingest (IMAP sync) never leaves
+    // a quiet 200 ms gap, and firing on every gap it does leave refetched the
+    // view several times a second. First refresh after 200 ms, then at most
+    // one per REFRESH_MIN_INTERVAL_MS while events keep coming.
+    const REFRESH_MIN_INTERVAL_MS = 1500;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const refresh = () => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        // Whole-workspace invalidation: the event may target a path this pane
-        // isn't showing, so clearing only the current pane would leave those
-        // paths stale until reload.
-        if (workspaceName) invalidateWorkspaceDocumentCache(workspaceName);
-        // A session usually learns about a write on its own (precise key-touch
-        // invalidation → a delta). It cannot when a cue has no keys to
-        // invalidate — a scope cue over a tree path that did not exist yet
-        // consulted no bitmap, so documents arriving there push nothing. This
-        // resync closes that gap and costs one bitmap read, no document loads.
-        if (sessionActiveRef.current) { void resyncSession(); return; }
-        fetchDocuments({ silent: true });
-      }, 200);
+    let lastRun = 0;
+    const runRefresh = () => {
+      timer = null;
+      lastRun = Date.now();
+      // A session usually learns about a write on its own (precise key-touch
+      // invalidation → a delta). It cannot when a cue has no keys to
+      // invalidate — a scope cue over a tree path that did not exist yet
+      // consulted no bitmap, so documents arriving there push nothing. This
+      // resync closes that gap and costs one bitmap read, no document loads.
+      if (sessionActiveRef.current) { void resyncSession(); return; }
+      fetchDocuments({ silent: true });
+    };
+    const makeHandler = (eventName: string) => (payload: unknown) => {
+      if (eventName.startsWith('tree.created') || eventName.startsWith('tree.renamed')) loadTreeNames();
+      const scope = documentEventScope(eventName, payload, treeNames);
+      // Cache first, for every event: other paths must not serve stale lists
+      // later, even when the open view is untouched.
+      invalidateCacheForEvent(workspaceName, scope);
+      const view: ViewScope = {
+        tree: selectedTreeName, kind: treeTypeForName(selectedTreeName), path: selectedPath,
+        wholeWorkspace: docScope === 'workspace',
+      };
+      if (!eventTouchesView(scope, view, listedIdsRef.current)) return;
+      if (timer) return;
+      timer = setTimeout(runRefresh, Math.max(200, lastRun + REFRESH_MIN_INTERVAL_MS - Date.now()));
     };
 
     const events = [
@@ -760,15 +795,19 @@ export default function WorkspaceDetailPage() {
       // Layer merge/subtract moves docs between layers (membership-only, no
       // per-doc events) — refresh the content area on these too.
       'tree.layer.merged', 'tree.layer.subtracted',
+      // Only to refresh the id → name lookup.
+      'tree.created', 'tree.renamed',
     ];
-    events.forEach(ev => socketService.on(ev, refresh));
+    const handlers = events.map(ev => [ev, makeHandler(ev)] as const);
+    handlers.forEach(([ev, fn]) => socketService.on(ev, fn));
 
     return () => {
+      cancelled = true;
       if (timer) clearTimeout(timer);
       offConnect?.();
-      events.forEach(ev => socketService.off(ev, refresh));
+      handlers.forEach(([ev, fn]) => socketService.off(ev, fn));
     };
-  }, [workspaceName, wsChannelId, wsChannelName, selectedTreeName, selectedPath, fetchDocuments, resyncSession]);
+  }, [workspaceName, wsChannelId, wsChannelName, selectedTreeName, selectedPath, docScope, fetchDocuments, resyncSession]);
 
   // Reset pagination / saved-search suppression when the addressed view changes
   // (state adjustment during render, not an effect).
