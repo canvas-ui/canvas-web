@@ -184,3 +184,9 @@
 @media (prefers-reduced-motion: reduce) {
   .strip-canvas, .strip-rows { transition: none; }
 }
+
+@media (min-width: 768px) {
+  .strip-canvas[data-reader-pane="true"]:not(.strip-canvas--wide) {
+    width: var(--reader-width, calc(var(--strip-h, 70vh) / 1.41421356));
+  }
+}

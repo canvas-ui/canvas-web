@@ -162,7 +162,7 @@ export function B5Card({
       className={cn(
         'flex flex-col overflow-hidden',
         frame ? 'strip-document-card' : 'rounded-2xl border bg-card shadow-elevation-4 transition-[width,height]',
-        fillParent && !maximized && !frame && 'w-full md:w-[min(560px,90vw)]',
+        fillParent && !maximized && !frame && 'w-full md:w-[var(--document-card-width,min(560px,90vw))]',
         mobileFullScreen && 'fixed inset-2 z-40 shadow-elevation-5',
         animateIn && 'animate-card-in',
       )}

@@ -1,5 +1,7 @@
+import { useReaderWidth } from '@/lib/reader-width'
+import { ReaderResizeHandle } from '../ReaderResizeHandle'
 import { SETTINGS_GROUPS } from '@/lib/settings-catalog'
-import { useCallback, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'react'
 import { isBare, isFullBleed } from '../route-chrome'
 import { Outlet, useLocation } from 'react-router-dom'
 import { Maximize2, Minimize2, X } from 'lucide-react'
@@ -121,13 +123,17 @@ interface CanvasFrameProps {
 }
 
 function CanvasFrame({ id, title, expanded, focused, onFocus, onToggleExpanded, onClose, badge, contentHeader, children }: CanvasFrameProps) {
+  const readerWidth = useReaderWidth()
   return (
     <section
+      data-reader-pane={contentHeader ? true : undefined}
+      style={contentHeader && !expanded && readerWidth ? { '--reader-width': `${readerWidth}px`, transition: 'none' } as CSSProperties : undefined}
       data-strip-col={id}
-      className={cn('strip-canvas surface-sheet', expanded && 'strip-canvas--wide', focused && 'strip-canvas--focused')}
+      className={cn('strip-canvas surface-sheet relative', expanded && 'strip-canvas--wide', focused && 'strip-canvas--focused')}
       onPointerDownCapture={() => onFocus(id)}
       aria-label={title}
     >
+      {contentHeader && !expanded && <ReaderResizeHandle edge="right" />}
       {!contentHeader && <header className="strip-canvas-bar">
         {badge && <span className="strip-row-label">{badge}</span>}
         <span className="strip-canvas-title" title={title}>{title}</span>

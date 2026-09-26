@@ -1,3 +1,6 @@
+import { useReaderWidth } from '@/lib/reader-width'
+import type { CSSProperties } from 'react'
+import { ReaderResizeHandle } from './ReaderResizeHandle'
 import { Outlet, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { useSideView } from './use-side-view'
@@ -15,6 +18,7 @@ const MOBILE_DRAWER =
 const MOBILE_SCRIM = 'fixed inset-0 z-side-scrim bg-scrim animate-fade-in md:hidden'
 
 export function ContentArea() {
+  const width = useReaderWidth()
   const { pathname } = useLocation()
   const fullBleed = isFullBleed(pathname)
   const bare = isBare(pathname)
@@ -43,7 +47,8 @@ export function ContentArea() {
         {entry && (
           <>
             <div className={MOBILE_SCRIM} onClick={closeSideView} aria-hidden />
-            <div className={cn('flex shrink-0 items-stretch py-2 pr-2', MOBILE_DRAWER)}>
+            <div data-reader-pane style={{ '--reader-width': `${width ?? 560}px`, '--document-card-width': '100%' } as CSSProperties} className={cn('relative flex shrink-0 items-stretch py-2 pr-2 md:w-[var(--reader-width)] md:max-w-[calc(100%_-_240px)]', MOBILE_DRAWER)}>
+              <ReaderResizeHandle edge="left" />
               <DocumentSideCard />
             </div>
           </>
