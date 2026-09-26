@@ -36,13 +36,15 @@ export function WorkspaceContentGate({ workspaceName, children }: { workspaceNam
     }
     void refresh()
     window.addEventListener('workspaces:refresh', invalidate)
-    window.addEventListener('focus', invalidate)
+    // Refocusing only rechecks status; clearing it would unmount every reader
+    // and reset the UI even when the workspace is still active.
+    window.addEventListener('focus', refresh)
     const timer = window.setInterval(refresh, 5000)
     return () => {
       cancelled = true
       window.clearInterval(timer)
       window.removeEventListener('workspaces:refresh', invalidate)
-      window.removeEventListener('focus', invalidate)
+      window.removeEventListener('focus', refresh)
     }
   }, [workspaceName, identity, revision])
 
