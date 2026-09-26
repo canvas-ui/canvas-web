@@ -166,13 +166,6 @@ function pickClient(skipAuth: boolean, envelope: boolean): CanvasApiClient {
   return skipAuth ? clients.anon : clients.authed;
 }
 
-// --- Offline workspaces -----------------------------------------------------
-// Workspaces stay stopped until something actually reads from them. Any query
-// against an offline workspace starts it and is then replayed, so pinned
-// canvases and paths resolve without the user first hunting for a Start
-// button. Only reads/writes *inside* a workspace wake it — fetching the
-// workspace record itself (GET /workspaces/:id, the list) does not.
-
 async function requestJson<T>(
   method: string,
   endpoint: string,
@@ -196,6 +189,8 @@ async function requestJson<T>(
     return (out === null ? undefined : out) as T;
   } catch (error) {
     if (error instanceof CanvasError) {
+      // A stopped workspace is an expected lifecycle state, handled inline.
+      if (error.code === 'WORKSPACE_STOPPED') throw error;
       if (error.code === 'ABORTED') throw new DOMException('Request aborted', 'AbortError');
       if (error.statusCode === 401 && !skipAuth) {
         handle401(noAuthRedirect);

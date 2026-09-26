@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
+import * as contextDeletion from '../src/lib/context-deletion.ts'
 import { isBrowserNetworkFailure } from '../src/lib/api-network-error.ts'
 import { docInGeoSelection } from '../src/utils/geo.ts'
 import { buildGeoFilters, buildLensFilters } from '../src/types/workspace.ts'
@@ -36,6 +37,7 @@ test('context requests carry feature, spatial, live-image, sort and stacked-sear
   }).outputText
   vm.runInNewContext(code, { exports, URLSearchParams, console,
     require: name => {
+      if (name === '@/lib/context-deletion') return contextDeletion
       if (name === '@/config/api') return { API_ROUTES: { contexts: 'https://test/rest/v2/contexts' } }
       if (name === '@/lib/api') return { api: { getEnvelope: async (...args) => { calls.push(args); return { payload: [], count: 0, totalCount: 0 } } } }
       throw new Error(`Unexpected module ${name}`)

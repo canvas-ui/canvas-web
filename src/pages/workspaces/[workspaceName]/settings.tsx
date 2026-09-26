@@ -1138,6 +1138,12 @@ export default function WorkspaceSettingsPage() {
     load()
   }, [workspaceName, loadShares, loadRuntimeSettings, showToast, reloadKey])
 
+  useEffect(() => {
+    const refresh = () => setReloadKey(value => value + 1)
+    window.addEventListener('workspaces:refresh', refresh)
+    return () => window.removeEventListener('workspaces:refresh', refresh)
+  }, [])
+
   // Mirror "already loaded / in flight" into refs so the lazy tab loader below
   // keeps its run-once-per-visit semantics without depending on the very state
   // its fetches mutate (which would retrigger it).
@@ -1149,13 +1155,13 @@ export default function WorkspaceSettingsPage() {
   })
 
   useEffect(() => {
-    if (activeTab === 'db' && workspaceId && !dbTabSatisfiedRef.current) {
+    if (workspace?.status === 'active' && activeTab === 'db' && workspaceId && !dbTabSatisfiedRef.current) {
       loadDbStats()
     }
-    if (activeTab === 'devices' && workspaceId && !devicesTabSatisfiedRef.current) {
+    if (workspace?.status === 'active' && activeTab === 'devices' && workspaceId && !devicesTabSatisfiedRef.current) {
       loadDevices()
     }
-  }, [activeTab, workspaceId, loadDbStats, loadDevices])
+  }, [activeTab, workspaceId, workspace?.status, loadDbStats, loadDevices])
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1344,6 +1350,10 @@ export default function WorkspaceSettingsPage() {
         onBack={isMobile ? () => openM2Drawer('workspaces', 'settings', workspaceName ?? null) : undefined}
       />
 
+      {workspace.status !== 'active' && activeTab !== 'general' && (
+        <p className="text-sm text-muted-foreground">Start this workspace to access these settings. General settings and protection remain available while stopped.</p>
+      )}
+
       {activeTab === 'general' && (
         <div className="space-y-6">
           <form onSubmit={handleSave} className="space-y-4 rounded-lg border p-4">
@@ -1387,9 +1397,9 @@ export default function WorkspaceSettingsPage() {
           )}
 
           <WorkspaceProtectionPanel currentMode={workspace.protection?.mode} workspaceId={workspaceId} isActive={workspace.status === 'active'} onChanged={() => setReloadKey(k => k + 1)} />
-          <DefaultFoldersSection workspaceName={workspaceName!} />
+          {workspace.status === 'active' && <DefaultFoldersSection workspaceName={workspaceName!} />}
 
-          <WorkspaceUsageSection workspaceId={workspaceId} />
+          {workspace.status === 'active' && <WorkspaceUsageSection workspaceId={workspaceId} />}
 
           <WorkspacePortabilitySection
             workspaceId={workspaceId}
@@ -1408,7 +1418,7 @@ export default function WorkspaceSettingsPage() {
         </div>
       )}
 
-      {activeTab === 'shares' && (
+      {workspace.status === 'active' && activeTab === 'shares' && (
         <div className="space-y-4">
           <section className="rounded-lg border p-4">
             <div className="mb-3">
@@ -1465,7 +1475,7 @@ export default function WorkspaceSettingsPage() {
         </div>
       )}
 
-      {activeTab === 'data' && (
+      {workspace.status === 'active' && activeTab === 'data' && (
         <div className="space-y-3">
           {dataBackends.map((backend) => {
             const cfg = (backend.config || {}) as Record<string, unknown>
@@ -1647,7 +1657,7 @@ export default function WorkspaceSettingsPage() {
         </div>
       )}
 
-      {activeTab === 'db' && (
+      {workspace.status === 'active' && activeTab === 'db' && (
         <div className="space-y-8">
           {/* Embeddings lead: this is the part people come here to change.
               Index maintenance and raw counts are the rarer, mechanical half. */}
@@ -1671,7 +1681,7 @@ export default function WorkspaceSettingsPage() {
         </div>
       )}
 
-      {activeTab === 'devices' && (
+      {workspace.status === 'active' && activeTab === 'devices' && (
         <DevicesTab
           allDevices={allDevices}
           linkedDevices={linkedDevices}
@@ -1684,13 +1694,13 @@ export default function WorkspaceSettingsPage() {
         />
       )}
 
-      {activeTab === 'sync' && (
+      {workspace.status === 'active' && activeTab === 'sync' && (
         <section className="rounded-lg border p-4">
           <SyncPanel workspaceId={workspaceId} workspaceUuid={workspace?.id} />
         </section>
       )}
 
-      {activeTab === 'services' && (
+      {workspace.status === 'active' && activeTab === 'services' && (
         <div className="space-y-4">
           {/* External poll-synced sources (GitHub / Slack / GCal / CalDAV /
               Teams) — background sync services over the backends facade,
@@ -1724,7 +1734,7 @@ export default function WorkspaceSettingsPage() {
         </div>
       )}
 
-      {activeTab === 'hooks' && (
+      {workspace.status === 'active' && activeTab === 'hooks' && (
         <section className="rounded-lg border p-4">
           <HooksPanel workspaceId={workspaceId} prefillRule={prefillRule} onPrefillConsumed={clearRulePrefill} initialSection={hooksSection} initialRunsHandler={runsHandlerParam} initialRunId={runIdParam} />
         </section>

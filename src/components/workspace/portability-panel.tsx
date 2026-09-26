@@ -55,7 +55,7 @@ export function WorkspacePortabilitySection({
 
   const refresh = useCallback(async () => {
     try {
-      setArchives(await listWorkspaceExports(workspaceId))
+      setArchives(isActive ? await listWorkspaceExports(workspaceId) : [])
     } catch {
       // A workspace with no Exports dir yet is the normal empty case, not an
       // error worth a toast.
@@ -63,7 +63,7 @@ export function WorkspacePortabilitySection({
     } finally {
       setLoading(false)
     }
-  }, [workspaceId])
+  }, [workspaceId, isActive])
 
   // Fetch on mount / workspace change. The lint rule fires on the setState
   // inside refresh(), which is the point of the effect — this IS the external

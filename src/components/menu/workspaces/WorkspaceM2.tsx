@@ -1,3 +1,4 @@
+import { WorkspaceContentGate } from '@/components/workspace/workspace-content-gate'
 import { useTreeNavigation } from '@/hooks/useTreeNavigation'
 import { cycleTree } from '@/lib/key-bindings'
 import { AutoLinkFolderPanel } from '../shared/AutoLinkFolderPanel'
@@ -63,6 +64,12 @@ const tabForTree = (treeName: string, layerId?: string | null): TreeTab =>
   layerId ? 'layers' : treeName === 'directory' ? 'directory' : treeName === 'backends' ? 'backends' : 'context'
 
 export function WorkspaceM2() {
+  const { state } = useMenu()
+  if (!state.selectedEntityId) return null
+  return <WorkspaceContentGate workspaceName={state.selectedEntityId}><WorkspaceM2Content /></WorkspaceContentGate>
+}
+
+function WorkspaceM2Content() {
   const { state, closeM2, openM2 } = useMenu()
   const canvasRow = useCanvasRow()
   const isMobile = useIsMobile()

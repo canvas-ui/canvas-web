@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
+import * as contextDeletion from '../src/lib/context-deletion.ts'
 
 function load(path, dependencies, globals = {}) {
   const source = readFileSync(new URL(path, import.meta.url), 'utf8')
@@ -55,6 +56,7 @@ for (const kind of ['Workspace', 'Context', 'Agent']) {
         if (fail) throw new Error('Network error: offline')
         return [{ id: 'recovered' }]
       } },
+      '@/lib/context-deletion': contextDeletion,
       '@/lib/socket': { default: socket },
       '@/lib/list-order': { sortByOrder: value => value },
     }, { window: { addEventListener() {}, removeEventListener() {} } })

@@ -1,3 +1,4 @@
+import { WorkspaceContentGate } from '@/components/workspace/workspace-content-gate';
 import { MessageComposer } from '@/components/common/MessageComposer';
 import { StorageScanIndicator } from '@/components/notifications/StorageScanIndicator';
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
@@ -153,6 +154,12 @@ function invalidateRefreshTarget(fallbackWorkspaceName: string, detail?: { works
 }
 
 export default function WorkspaceDetailPage() {
+  const { workspaceName } = useParams<{ workspaceName: string }>();
+  if (!workspaceName) return null;
+  return <WorkspaceContentGate workspaceName={workspaceName}><WorkspaceContent /></WorkspaceContentGate>;
+}
+
+function WorkspaceContent() {
   const { workspaceName, treeName } = useParams<{ workspaceName: string; treeName?: string; '*'?: string }>();
   const location = useLocation();
   const navigate = useNavigate();
