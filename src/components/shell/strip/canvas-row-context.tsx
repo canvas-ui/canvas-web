@@ -82,6 +82,19 @@ export function CanvasRowProvider({ children }: { children: ReactNode }) {
     openCanvas({ kind: 'document', document, workspaceId })
   }, [openCanvas])
 
+  const previewDocument = useCallback((document: Document, workspaceId: string) => {
+    const id = 'document-preview'
+    updateActive((row) => {
+      const previous = row.entries.find((entry) => entry.id === id)
+      const preview: CanvasEntry = { kind: 'document', id, document, workspaceId, expanded: previous?.expanded }
+      // Default reading always belongs next to the main list/board. Explicit
+      // "open to side" canvases stay independent of this reusable pane.
+      return { ...row, entries: [preview, ...row.entries.filter((entry) => entry.id !== id)] }
+    })
+    focusRef.current = id
+    setFocus(id)
+  }, [updateActive])
+
   const closeCanvas = useCallback((id: string) => {
     updateActive((row) => ({ ...row, entries: row.entries.filter((e) => e.id !== id) }))
     setFocus((f) => (f === id ? MAIN_COLUMN : f))
@@ -144,8 +157,8 @@ export function CanvasRowProvider({ children }: { children: ReactNode }) {
   )
 
   const sideView = useMemo<SideViewContextValue>(
-    () => ({ entry: null, open: openDocument, close: () => {} }),
-    [openDocument],
+    () => ({ entry: null, open: openDocument, preview: previewDocument, close: () => {} }),
+    [openDocument, previewDocument],
   )
 
   return (

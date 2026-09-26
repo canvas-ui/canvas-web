@@ -53,7 +53,7 @@ export function DocumentSideCard({ entry: entryProp, onClose, frame }: { entry?:
       frame={frame}
       fillParent
     >
-      <ObjectPropertiesCard document={document} workspaceId={workspaceId} onChanged={refresh} compact />
+      <ObjectPropertiesCard key={`${workspaceId}:${document.id}`} document={document} workspaceId={workspaceId} onChanged={refresh} compact />
     </B5Card>
   )
 }

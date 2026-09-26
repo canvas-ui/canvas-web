@@ -1,3 +1,4 @@
+import { setDocumentOpenMode, useDocumentOpenMode } from '@/lib/document-open-mode'
 import { useState } from 'react'
 import { Check, Monitor, Moon, Sun } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -39,6 +40,7 @@ const SCHEME_ICONS: Record<SchemePreference, typeof Sun> = {
 export function AppearanceSettings() {
   const { theme, scheme, density, resolvedScheme, setTheme, setScheme, setDensity, reset } =
     useTheme()
+  const documentOpenMode = useDocumentOpenMode()
   const layout = useLayoutMode()
   const treeStyle = useTreeStyle()
   const layoutNav = useLayoutNavModifier()
@@ -184,12 +186,22 @@ export function AppearanceSettings() {
         </p>
       </section>
 
+      <section>
+        <SectionHeading title="Open documents" description="Choose how documents open from lists, tiles and boards. Saved on this device." />
+        <SegmentedControl
+          options={[{ id: 'modal', label: 'Modal' }, { id: 'side', label: 'Side reading pane' }]}
+          value={documentOpenMode}
+          onChange={setDocumentOpenMode}
+        />
+        <p className="mt-2 text-xs text-muted-foreground">The reading pane opens beside the content and updates as you select another document. On small screens it opens as a drawer.</p>
+      </section>
+
       <WallpaperSection />
 
       <section>
         <button
           type="button"
-          onClick={reset}
+          onClick={() => { reset(); setDocumentOpenMode('modal') }}
           className="focus-ring rounded-md text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
         >
           Reset to defaults

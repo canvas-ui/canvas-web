@@ -1,3 +1,4 @@
+import { MessageComposer } from '@/components/common/MessageComposer'
 import { Suspense, useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Copy, Download, Trash2, Database, HardDrive, Mail, Globe, FileQuestion, Pencil, Brush, PenLine, ArrowRight } from 'lucide-react'
@@ -34,6 +35,8 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
   const { showErrorToast } = useToastHelpers()
   // Every non-public document is editable — at minimum the universal comment
   // section; schema-specific fields (url/title/body) render only for note/link/tab.
+  const [replying, setReplying] = useState(false)
+  const canReply = !isPublic && (document.schema === 'data/schema/message/email' || ['slack', 'whatsapp'].includes(String(document.data?.platform)))
   const canEdit = !isPublic
   const [editing, setEditing] = useState(initialEdit && isEditableDocument(document))
   // Drawings get a real content editor (full-viewport Excalidraw overlay) on
@@ -68,6 +71,7 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
     <div className="flex h-full min-h-0 flex-col gap-3">
       {canEdit && (
         <div className="flex shrink-0 justify-end gap-2">
+          {canReply && <Button size="sm" variant="outline" onClick={() => setReplying(!replying)}>Reply</Button>}
           {/* Best-copy download (server picks the first reachable location);
               the Storage tab keeps its per-location download buttons. */}
           {document.schema === 'data/schema/file' && (
@@ -126,6 +130,7 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
       )}
       <div className="min-h-0 flex-1 overflow-auto">
         <DocumentRenderer workspaceId={workspaceId} document={document} />
+        {replying && canReply && <MessageComposer key={document.id} workspaceId={workspaceId} replyToDocumentId={Number(document.id)} onClose={() => setReplying(false)} />}
       </div>
       {document.comment?.trim() && (
         <div className="shrink-0 rounded-md border border-border bg-muted/40 px-3 py-2">

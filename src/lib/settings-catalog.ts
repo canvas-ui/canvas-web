@@ -2,7 +2,7 @@ import { Palette, Keyboard, HardDriveDownload, Key, Monitor, Sparkles, Share2, I
 
 export const SETTINGS_GROUPS = [
   { id: 'device', label: 'This device', description: 'Personalize this browser and manage content available offline.', items: [
-    { path: '/appearance', icon: Palette, label: 'Appearance', description: 'Choose the theme, layout, colours and display density.' },
+    { path: '/appearance', icon: Palette, label: 'Appearance', description: 'Choose the theme, layout, colours, display density and document reading pane.' },
     { path: '/key-bindings', icon: Keyboard, label: 'Keyboard shortcuts', description: 'View and customize shortcuts for navigation and actions.' },
     { path: '/offline', icon: HardDriveDownload, label: 'Offline & cache', description: 'Manage cached content and storage on this device.' },
   ] },

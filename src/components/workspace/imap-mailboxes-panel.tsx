@@ -36,11 +36,13 @@ interface AccountForm {
   password: string;
   pollInterval: number;
   initialSyncDays: number;
+  smtp: { enabled: boolean; host: string; port: number; secure: boolean; user: string; password: string; from: string; sentFolder: string; appendSent: boolean; allowAgentSend: boolean };
 }
 
 const EMPTY_FORM: AccountForm = {
   host: '', port: 993, tls: true, allowSelfSigned: true,
   user: '', password: '', pollInterval: 60000, initialSyncDays: 180,
+  smtp: { enabled: false, host: '', port: 587, secure: false, user: '', password: '', from: '', sentFolder: 'Sent', appendSent: false, allowAgentSend: false },
 };
 
 function formFromBackend(b: Backend): AccountForm {
@@ -54,6 +56,7 @@ function formFromBackend(b: Backend): AccountForm {
     password: '',
     pollInterval: Number(c.pollInterval ?? 60000),
     initialSyncDays: Number(c.initialSyncDays ?? 180),
+    smtp: { ...EMPTY_FORM.smtp, ...(c.smtp as Partial<AccountForm['smtp']> || {}), password: '' },
   };
 }
 
@@ -171,6 +174,7 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
         port: Number(form.port) || 993, tls: form.tls, allowSelfSigned: form.allowSelfSigned,
         pollInterval: Number(form.pollInterval) || 60000,
         initialSyncDays: Math.max(0, Number(form.initialSyncDays) || 0),
+        smtp: form.smtp,
         ...(form.password ? { password: form.password } : {}),
       };
 
@@ -298,6 +302,20 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
             {selectedFolders.length} folder{selectedFolders.length === 1 ? '' : 's'} selected; each synced as its own container. Unchecking a synced folder removes it on Save.
           </p>
         </div>
+        <fieldset className="rounded border p-3 space-y-3 sm:col-span-2">
+          <legend className="px-1 text-sm font-medium">Outgoing email (SMTP)</legend>
+          <label className="flex gap-2 text-xs"><input type="checkbox" checked={form.smtp.enabled} onChange={(e) => change('smtp', { ...form.smtp, enabled: e.target.checked })} />Allow sending from Canvas</label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {(['host', 'user', 'password', 'from', 'sentFolder'] as const).map((field) => <label key={field} className="text-xs">
+              {{ host: 'SMTP host', user: 'SMTP username', password: 'SMTP password (blank keeps current)', from: 'From address', sentFolder: 'Sent folder' }[field]}
+              <Input type={field === 'password' ? 'password' : 'text'} value={form.smtp[field]} autoComplete="off" onChange={(e) => change('smtp', { ...form.smtp, [field]: e.target.value })} />
+            </label>)}
+            <label className="text-xs">Port<Input type="number" min={1} max={65535} value={form.smtp.port} onChange={(e) => change('smtp', { ...form.smtp, port: Number(e.target.value) })} /></label>
+          </div>
+          <label className="flex gap-2 text-xs"><input type="checkbox" checked={form.smtp.secure} onChange={(e) => change('smtp', { ...form.smtp, secure: e.target.checked })} />Implicit TLS (usually port 465; otherwise STARTTLS is required)</label>
+          <label className="flex gap-2 text-xs"><input type="checkbox" checked={form.smtp.appendSent} onChange={(e) => change('smtp', { ...form.smtp, appendSent: e.target.checked })} />Save a copy in the IMAP Sent folder (leave off if your provider does this automatically)</label>
+          <label className="flex gap-2 text-xs"><input type="checkbox" checked={form.smtp.allowAgentSend} onChange={(e) => change('smtp', { ...form.smtp, allowAgentSend: e.target.checked })} />Allow agents with workspace write access to send</label>
+        </fieldset>
         <div className="grid gap-2">
           <Label htmlFor="imap-lookback">Initial sync lookback (days)</Label>
           <Input id="imap-lookback" type="number" min="0" value={String(form.initialSyncDays)} onChange={(e) => change('initialSyncDays', Number(e.target.value || 0))} />

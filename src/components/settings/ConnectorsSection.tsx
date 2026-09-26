@@ -1,3 +1,4 @@
+import { WhatsAppConnection } from './WhatsAppConnection'
 import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '@iconify/react'
 import { Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react'
@@ -49,7 +50,20 @@ const DRIVERS: Record<string, { label: string; icon: string; blurb: string; fiel
     fields: [
       { key: 'address', label: 'Workspace label', placeholder: 'e.g. acme', required: true },
       { key: 'token', label: 'Token (xoxb-… / xoxp-…)', secret: true, required: true },
-      { key: 'channels', label: 'Channels (names or ids, empty = all joined)', list: true },
+      { key: 'channels', label: 'Conversations (channel names or IDs; DM IDs need im:read + im:history)', list: true },
+      { key: 'directMessages', label: 'Include direct messages', hint: 'Requires im:read, im:history, mpim:read and mpim:history.', bool: true },
+      { key: 'writeBack', label: 'Allow sending from Canvas', hint: 'Token also needs chat:write.', bool: true },
+      { key: 'allowAgentSend', label: 'Allow agents with workspace write access to send', bool: true },
+    ],
+  },
+  whatsapp: {
+    label: 'WhatsApp (linked device)', icon: 'mdi:whatsapp',
+    blurb: 'Pair your phone with Canvas, then choose conversations. Uses Baileys; separate from WhatsApp Business.',
+    fields: [
+      { key: 'address', label: 'Account label', placeholder: 'personal', required: true },
+      { key: 'chats', label: 'Conversation IDs to sync (one per line; available after pairing)', list: true },
+      { key: 'writeBack', label: 'Allow sending from Canvas', bool: true },
+      { key: 'allowAgentSend', label: 'Allow agents with workspace write access to send', bool: true },
     ],
   },
   gcal: {
@@ -140,7 +154,7 @@ export function ConnectorsSection({ workspaceId }: { workspaceId: string }) {
     for (const field of spec.fields) {
       if (field.key === 'address') { next.address = c.address; continue }
       if (field.secret) continue
-      if (field.key === 'writeBack') { next.writeBack = cfg.readOnly === false ? 'true' : ''; continue }
+      if (field.key === 'writeBack') { next.writeBack = cfg.readOnly === false && (!['slack', 'whatsapp'].includes(c.driver) || cfg.sendEnabled === true) ? 'true' : ''; continue }
       const value = cfg[field.key]
       if (field.list) { next[field.key] = Array.isArray(value) ? value.join('\n') : ''; continue }
       if (value !== undefined && value !== null) next[field.key] = String(value)
@@ -169,6 +183,7 @@ export function ConnectorsSection({ workspaceId }: { workspaceId: string }) {
     }
     // The UI asks the positive question; the server flag is readOnly.
     if (spec.fields.some((f) => f.key === 'writeBack')) {
+      if (['slack', 'whatsapp'].includes(adding)) config.sendEnabled = config.writeBack === true
       config.readOnly = config.writeBack !== true
       delete config.writeBack
     }
@@ -226,6 +241,7 @@ export function ConnectorsSection({ workspaceId }: { workspaceId: string }) {
             const spec = DRIVERS[c.driver]
             return (
               <div key={`${c.driver}:${c.address}`} className="rounded-md border p-3">
+                {c.driver === 'whatsapp' && <WhatsAppConnection workspaceId={workspaceId} address={c.address} />}
                 <div className="flex flex-wrap items-center gap-2">
                   <Icon icon={spec?.icon || 'mdi:cloud-sync'} width={16} height={16} className="shrink-0" />
                   <span className="text-sm font-medium">{spec?.label || c.driver}</span>

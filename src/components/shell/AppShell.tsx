@@ -29,10 +29,9 @@ export function AppShell() {
               and on mobile closing it is the only way to see the results). */}
           <LensFeedProvider>
           <SideViewProvider>
-            <DocumentModalProvider>
             {layout === 'strip' ? (
-              <CanvasRowProvider><StripShell /></CanvasRowProvider>
-            ) : (<>
+              <CanvasRowProvider><DocumentModalProvider><StripShell /></DocumentModalProvider></CanvasRowProvider>
+            ) : (<DocumentModalProvider>
             {/* h-viewport (not h-screen) so the shell tracks the real visible height
                 when mobile browser chrome expands/collapses */}
             <div className="flex h-viewport w-full overflow-hidden surface-desk gap-shell p-shell">
@@ -52,8 +51,7 @@ export function AppShell() {
             <MobileMenuToggle />
             {/* A running feed with no panel showing it collapses to here. */}
             <LensFeedWidget />
-            </>)}
-            </DocumentModalProvider>
+            </DocumentModalProvider>)}
           </SideViewProvider>
           </LensFeedProvider>
         </ToolboxProvider>

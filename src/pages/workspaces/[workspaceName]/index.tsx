@@ -1,3 +1,4 @@
+import { MessageComposer } from '@/components/common/MessageComposer';
 import { StorageScanIndicator } from '@/components/notifications/StorageScanIndicator';
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
@@ -160,6 +161,7 @@ export default function WorkspaceDetailPage() {
     return s ? [s] : [];
   })();
 
+  const [composingMessage, setComposingMessage] = useState(false);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(true);
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -1420,6 +1422,7 @@ export default function WorkspaceDetailPage() {
             />
           </div>
         )}
+        {composingMessage && workspaceName && <MessageComposer key={workspaceName} workspaceId={workspaceName} onClose={() => setComposingMessage(false)} />}
         <div className="flex h-12 items-center gap-3 px-4">
         {/* Same gesture as a settings page: reopen the tree panel on mobile
             (it closed on navigation), step up to the list on desktop. */}
@@ -1489,6 +1492,7 @@ export default function WorkspaceDetailPage() {
             Unfiled only
           </button>
         )}
+        <Button size="sm" variant="ghost" className="shrink-0 px-2" aria-label="New message" title="New message" onClick={() => setComposingMessage(!composingMessage)}><Icon icon="mdi:message-plus-outline" width={18} /></Button>
         {/* Filtering earns the header slot; stopping a workspace is a rarer
             action that stays available on the workspace list rows (M1). */}
         {workspace.status === 'active' ? (

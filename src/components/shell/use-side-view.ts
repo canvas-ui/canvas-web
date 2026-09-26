@@ -9,6 +9,8 @@ export interface SideViewEntry {
 export interface SideViewContextValue {
   entry: SideViewEntry | null
   open: (document: Document, workspaceId: string) => void
+  /** Reuse the reading pane for default document activation. */
+  preview?: (document: Document, workspaceId: string) => void
   close: () => void
 }
 

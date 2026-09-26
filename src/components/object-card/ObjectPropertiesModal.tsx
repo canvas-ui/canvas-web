@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useContext, useLayoutEffect, useState } from 'react'
+import { SideViewContext } from '@/components/shell/use-side-view'
+import { useDocumentOpenMode } from '@/lib/document-open-mode'
 import { createPortal } from 'react-dom'
 import { ExternalLink, Maximize2, Minimize2 } from 'lucide-react'
 import { ObjectPropertiesCard, type ObjectCardTab } from './ObjectPropertiesCard'
@@ -21,7 +23,23 @@ interface ObjectPropertiesModalProps {
 
 // Centered-modal host for the object properties card (list "view details" /
 // "edit" actions). The side-view host is DocumentSideCard.
-export function ObjectPropertiesModal({ document: opened, isOpen, onClose, workspaceId, initialTab, initialEdit }: ObjectPropertiesModalProps) {
+// All document-view entry points (including boards and widgets) share the
+// preference here. Explicit Edit/tab actions retain their requested modal.
+export function ObjectPropertiesModal(props: ObjectPropertiesModalProps) {
+  const mode = useDocumentOpenMode()
+  const sideView = useContext(SideViewContext)
+  const { document, workspaceId, isOpen, onClose, initialEdit, initialTab } = props
+  const toSide = mode === 'side' && !!sideView && !!workspaceId && !initialEdit && !initialTab
+  useLayoutEffect(() => {
+    if (!toSide || !isOpen || !document || !workspaceId || !sideView) return
+    const open = sideView.preview ?? sideView.open
+    open(document, workspaceId)
+    onClose()
+  }, [toSide, isOpen, document, workspaceId, sideView, onClose])
+  return toSide ? null : <DocumentModal {...props} />
+}
+
+function DocumentModal({ document: opened, isOpen, onClose, workspaceId, initialTab, initialEdit }: ObjectPropertiesModalProps) {
   const [fullscreen, setFullscreen] = useState(false)
   const toolbox = useToolboxOptional()
   // `opened` is the list's snapshot — an edit saved inside the card never

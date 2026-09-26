@@ -521,6 +521,7 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
       if (isTabDocument && tabUrl) {
         window.open(tabUrl, '_blank', 'noopener,noreferrer')
       } else {
+        setDetailEdit(false)
         setShowDetailModal(true)
       }
     }
@@ -659,7 +660,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
         onSelect(document.id, true, isCtrlClick)
       }
     }
-    if (!isCtrlClick) { if (isTabDocument && tabUrl) { window.open(tabUrl, '_blank', 'noopener,noreferrer') } else { setShowDetailModal(true) } }
+    if (!isCtrlClick) { if (isTabDocument && tabUrl) { window.open(tabUrl, '_blank', 'noopener,noreferrer') } else { setDetailEdit(false); setShowDetailModal(true) } }
   }
 
   const handleMouseDown = () => {
