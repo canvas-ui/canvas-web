@@ -5,7 +5,14 @@ export interface MessageAccount { driver: 'imap' | 'slack' | 'whatsapp'; address
 export interface MessageSend {
   requestId: string; text: string; driver?: string; address?: string; target?: string;
   replyToDocumentId?: number; replyAll?: boolean; subject?: string; to?: string[]; cc?: string[]; bcc?: string[];
+  /** Email only: HTML body; `text` is then its plain-text alternative. */
+  html?: string
+  /** Email replies: quote the original below the reply (server-built, from the stored message). */
+  quote?: boolean
+  /** Email only: forward `replyToDocumentId` with its attachments to `to`. */
+  forward?: boolean
 }
+export type ComposeMode = 'reply' | 'replyAll' | 'forward'
 export interface MessageReceipt { status: 'accepted' | 'unknown'; requestId: string; docId?: number; message?: string; warnings?: string[]; rejected?: string[] }
 const base = (workspace: string) => `${API_ROUTES.workspaces}/${encodeURIComponent(workspace)}/messages`
 export const messageAccounts = (workspace: string) => api.get<MessageAccount[]>(`${base(workspace)}/accounts`)

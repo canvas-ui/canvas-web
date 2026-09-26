@@ -32,7 +32,12 @@ function readEditorScheme(): EditorScheme | null {
 
 interface MarkdownEditorProps {
   value: string
-  onChange: (markdown: string) => void
+  /** Receives `value` in `format`, plus the document as plain text. */
+  onChange: (value: string, plainText: string) => void
+  /** What `value` holds: markdown (notes, .md files) or HTML (email bodies). */
+  format?: 'markdown' | 'html'
+  /** false freezes the content (e.g. while a message is being sent). */
+  editable?: boolean
   placeholder?: string
   /** Fill the host's height instead of the default resizable 8rem–70vh box. */
   fill?: boolean
@@ -114,9 +119,11 @@ function Toolbar({ editor, scheme, toggleScheme }: { editor: Editor; scheme: Edi
   )
 }
 
-// TipTap WYSIWYG editor that reads/writes markdown via the tiptap-markdown extension.
-// `onChange` always receives a markdown string (stored in note.data.content).
-export function MarkdownEditor({ value, onChange, placeholder, fill = false }: MarkdownEditorProps) {
+// TipTap WYSIWYG editor. Markdown by default (via tiptap-markdown, stored in
+// note.data.content); `format="html"` reads/writes tiptap's own HTML instead,
+// for bodies that are HTML at rest (outgoing email).
+export function MarkdownEditor({ value, onChange, placeholder, fill = false, format = 'markdown', editable = true }: MarkdownEditorProps) {
+  const read = (editor: Editor) => (format === 'html' ? editor.getHTML() : getMarkdown(editor))
   const { resolvedScheme } = useTheme()
   const [schemeOverride, setSchemeOverride] = useState<EditorScheme | null>(readEditorScheme)
   const scheme = schemeOverride ?? resolvedScheme
@@ -138,7 +145,7 @@ export function MarkdownEditor({ value, onChange, placeholder, fill = false }: M
       TableKit.configure({ table: { resizable: false } }),
       TaskList,
       TaskItem.configure({ nested: true }),
-      Markdown.configure({ html: false, transformPastedText: true }),
+      ...(format === 'markdown' ? [Markdown.configure({ html: false, transformPastedText: true })] : []),
     ],
     content: value,
     editorProps: {
@@ -148,7 +155,7 @@ export function MarkdownEditor({ value, onChange, placeholder, fill = false }: M
       },
     },
     onUpdate: ({ editor }) => {
-      onChange(getMarkdown(editor))
+      onChange(read(editor), editor.getText({ blockSeparator: '\n\n' }))
     },
   })
 
@@ -157,11 +164,18 @@ export function MarkdownEditor({ value, onChange, placeholder, fill = false }: M
     // isDestroyed guard: a destroyed editor is truthy but its commandManager
     // is nulled — editor.commands then throws (StrictMode remount race).
     if (!editor || editor.isDestroyed) return
-    const current = getMarkdown(editor)
-    if (value !== current) {
+    const current = read(editor)
+    // An empty HTML editor reports '<p></p>', not '' — don't reset it to itself.
+    if (value !== current && !(format === 'html' && !value && editor.isEmpty)) {
       editor.commands.setContent(value || '', { emitUpdate: false })
     }
+    // read derives from format, which is fixed for an editor instance.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, editor])
+
+  useEffect(() => {
+    if (editor && !editor.isDestroyed && editor.isEditable !== editable) editor.setEditable(editable)
+  }, [editor, editable])
 
   if (!editor) return null
 

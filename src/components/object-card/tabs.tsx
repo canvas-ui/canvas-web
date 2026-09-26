@@ -1,7 +1,8 @@
 import { MessageComposer } from '@/components/common/MessageComposer'
+import type { ComposeMode } from '@/services/messages'
 import { Suspense, useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { Copy, Download, Trash2, Database, HardDrive, Mail, Globe, FileQuestion, Pencil, Brush, PenLine, ArrowRight } from 'lucide-react'
+import { Copy, Download, Trash2, Database, HardDrive, Mail, Globe, FileQuestion, Pencil, Brush, PenLine, ArrowRight, Reply, ReplyAll, Forward } from 'lucide-react'
 import { BackendActionCard, type BackendTransferConfirmOptions } from '@/components/menu/shared/BackendActionCard'
 import { Button } from '@/components/ui/button'
 import { DocumentRenderer } from '@/components/renderers/registry'
@@ -28,6 +29,9 @@ interface TabProps {
   onChanged?: () => void
 }
 
+const COMPOSE_LABELS: Record<ComposeMode, string> = { reply: 'Reply', replyAll: 'Reply all', forward: 'Forward' }
+const COMPOSE_ICONS: Record<ComposeMode, typeof Reply> = { reply: Reply, replyAll: ReplyAll, forward: Forward }
+
 // ── View/Edit ────────────────────────────────────────────────────────────────
 
 export function ViewTab({ document, workspaceId, initialEdit = false, onChanged }: TabProps & { initialEdit?: boolean }) {
@@ -35,8 +39,13 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
   const { showErrorToast } = useToastHelpers()
   // Every non-public document is editable — at minimum the universal comment
   // section; schema-specific fields (url/title/body) render only for note/link/tab.
-  const [replying, setReplying] = useState(false)
-  const canReply = !isPublic && (document.schema === 'data/schema/message/email' || ['slack', 'whatsapp'].includes(String(document.data?.platform)))
+  const [replying, setReplying] = useState<ComposeMode | null>(null)
+  const isEmail = document.schema === 'data/schema/message/email'
+  const canReply = !isPublic && (isEmail || ['slack', 'whatsapp'].includes(String(document.data?.platform)))
+  // Chats only reply; email also offers Reply all and Forward. A second click
+  // on the open mode's button closes the composer.
+  const composeModes: ComposeMode[] = isEmail ? ['reply', 'replyAll', 'forward'] : ['reply']
+  const toggleCompose = (mode: ComposeMode) => setReplying((open) => (open === mode ? null : mode))
   const canEdit = !isPublic
   const [editing, setEditing] = useState(initialEdit && isEditableDocument(document))
   // Drawings get a real content editor (full-viewport Excalidraw overlay) on
@@ -71,7 +80,14 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
     <div className="flex h-full min-h-0 flex-col gap-3">
       {canEdit && (
         <div className="flex shrink-0 justify-end gap-2">
-          {canReply && <Button size="sm" variant="outline" onClick={() => setReplying(!replying)}>Reply</Button>}
+          {canReply && composeModes.map((mode) => {
+            const Icon = COMPOSE_ICONS[mode]
+            return (
+              <Button key={mode} size="sm" variant={replying === mode ? 'secondary' : 'outline'} onClick={() => toggleCompose(mode)}>
+                <Icon className="mr-1.5 h-3.5 w-3.5" />{COMPOSE_LABELS[mode]}
+              </Button>
+            )
+          })}
           {/* Best-copy download (server picks the first reachable location);
               the Storage tab keeps its per-location download buttons. */}
           {document.schema === 'data/schema/file' && (
@@ -130,7 +146,16 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
       )}
       <div className="min-h-0 flex-1 overflow-auto">
         <DocumentRenderer workspaceId={workspaceId} document={document} />
-        {replying && canReply && <MessageComposer key={document.id} workspaceId={workspaceId} replyToDocumentId={Number(document.id)} onClose={() => setReplying(false)} />}
+        {replying && canReply && (
+          <MessageComposer
+            key={`${document.id}:${replying}`}
+            workspaceId={workspaceId}
+            replyToDocumentId={Number(document.id)}
+            mode={replying}
+            originalSubject={isEmail && typeof document.data?.subject === 'string' ? document.data.subject : undefined}
+            onClose={() => setReplying(null)}
+          />
+        )}
       </div>
       {document.comment?.trim() && (
         <div className="shrink-0 rounded-md border border-border bg-muted/40 px-3 py-2">
