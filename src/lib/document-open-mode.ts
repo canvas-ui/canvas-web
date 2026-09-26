@@ -7,9 +7,9 @@ const KEY = 'canvas:documentOpenMode'
 function read(): DocumentOpenMode {
   try {
     const v = localStorage.getItem(KEY)
-    return v === 'side' ? 'side' : 'modal'
+    return v === 'modal' ? 'modal' : 'side'
   } catch {
-    return 'modal'
+    return 'side'
   }
 }
 
@@ -23,8 +23,7 @@ export function loadDocumentOpenMode(): DocumentOpenMode {
 
 export function setDocumentOpenMode(mode: DocumentOpenMode): void {
   try {
-    if (mode === 'modal') localStorage.removeItem(KEY)
-    else localStorage.setItem(KEY, mode)
+    localStorage.setItem(KEY, mode)
   } catch {
     /* private mode / quota: keep the in-memory value for this session */
   }
@@ -47,5 +46,5 @@ function subscribe(fn: () => void): () => void {
 }
 
 export function useDocumentOpenMode(): DocumentOpenMode {
-  return useSyncExternalStore(subscribe, loadDocumentOpenMode, () => 'modal')
+  return useSyncExternalStore(subscribe, loadDocumentOpenMode, () => 'side')
 }

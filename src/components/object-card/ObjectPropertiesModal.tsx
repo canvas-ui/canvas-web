@@ -1,4 +1,5 @@
 import { useContext, useLayoutEffect, useState } from 'react'
+import { ImageViewContext } from '@/components/common/image-view-context'
 import { SideViewContext } from '@/components/shell/use-side-view'
 import { useDocumentOpenMode } from '@/lib/document-open-mode'
 import { createPortal } from 'react-dom'
@@ -45,7 +46,7 @@ function DocumentModal({ document: opened, isOpen, onClose, workspaceId, initial
   // `opened` is the list's snapshot — an edit saved inside the card never
   // updates it, so re-read the document after every change and render that.
   const { document, refresh } = useLiveDocument(workspaceId, opened)
-  useEscapeClose(onClose, isOpen && !!document)
+  useEscapeClose(() => fullscreen ? setFullscreen(false) : onClose(), isOpen && !!document)
 
   if (!isOpen || !document) return null
 
@@ -115,13 +116,15 @@ function DocumentModal({ document: opened, isOpen, onClose, workspaceId, initial
           </div>
         </div>
         <div className="min-h-0 flex-1">
-          <ObjectPropertiesCard
-            document={document}
-            workspaceId={workspaceId ?? ''}
-            initialTab={initialTab}
-            initialEdit={initialEdit}
-            onChanged={refresh}
-          />
+          <ImageViewContext.Provider value={() => setFullscreen((value) => !value)}>
+            <ObjectPropertiesCard
+              document={document}
+              workspaceId={workspaceId ?? ''}
+              initialTab={initialTab}
+              initialEdit={initialEdit}
+              onChanged={refresh}
+            />
+          </ImageViewContext.Provider>
         </div>
       </div>
     </div>,

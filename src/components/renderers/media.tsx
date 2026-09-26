@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useContext, useState } from 'react'
+import { ImageViewContext } from '@/components/common/image-view-context'
 import { Download } from 'lucide-react'
 import { useDocumentBlobUrl, useDocumentStreamSrc } from './useDocumentBlobUrl'
 import { PdfViewer } from './PdfViewer'
@@ -42,6 +43,7 @@ function MediaShell({ error, loading, children }: { error: string | null; loadin
 }
 
 export function ImageRenderer({ workspaceId, document: doc, className = '' }: RendererProps) {
+  const toggleMaximized = useContext(ImageViewContext)
   // Downscaled preview (falls back to full bytes only if no thumbnail exists).
   // Content checksum as cache version: immutable files keep a stable key,
   // editable previews (drawings) roll to a fresh URL per edit.
@@ -72,15 +74,24 @@ export function ImageRenderer({ workspaceId, document: doc, className = '' }: Re
   return (
     <MediaShell error={error} loading={loading}>
       {blobUrl && (
-        <div className={`space-y-2 ${className}`}>
-          {/* Fill the width of the (possibly maximized) modal/preview area,
-              keeping aspect via h-auto. */}
-          <img src={blobUrl} alt={filename} className="w-full h-auto rounded border" />
+        <div className={`flex h-full min-h-0 flex-col gap-2 ${className}`}>
+          <img
+            src={blobUrl}
+            alt={filename}
+            draggable={false}
+            onDoubleClick={toggleMaximized ? (event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              toggleMaximized()
+            } : undefined}
+            title={toggleMaximized ? 'Double-click to maximize or restore' : undefined}
+            className={`min-h-0 w-full flex-1 object-contain ${toggleMaximized ? 'cursor-zoom-in' : ''}`}
+          />
           <button
             type="button"
             onClick={downloadOriginal}
             disabled={downloading}
-            className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+            className="inline-flex shrink-0 self-start items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
           >
             <Download className="h-3.5 w-3.5" />
             {downloading ? 'Preparing…' : 'Download original'}

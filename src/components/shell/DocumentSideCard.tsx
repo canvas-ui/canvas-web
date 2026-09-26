@@ -1,4 +1,6 @@
 import { StickyNote, Link as LinkIcon, File as FileIcon, Mail, FileQuestion } from 'lucide-react'
+import { resolveRenderer } from '@/components/renderers/resolve-renderer'
+import { ImageRenderer } from '@/components/renderers/media'
 import { B5Card, type B5SaveTarget } from '@/components/home/B5Card'
 import { ObjectPropertiesCard } from '@/components/object-card/ObjectPropertiesCard'
 import { NOTE_SCHEMA, TAB_SCHEMA, FILE_SCHEMA, EMAIL_SCHEMA } from '@/components/renderers/types'
@@ -52,6 +54,7 @@ export function DocumentSideCard({ entry: entryProp, onClose, frame }: { entry?:
       relationSubjectId={document.id}
       frame={frame}
       fillParent
+      fullWidthContent={resolveRenderer(document) === ImageRenderer}
     >
       <ObjectPropertiesCard key={`${workspaceId}:${document.id}`} document={document} workspaceId={workspaceId} onChanged={refresh} compact />
     </B5Card>

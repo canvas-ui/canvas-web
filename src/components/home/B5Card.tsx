@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { ImageViewContext } from '@/components/common/image-view-context'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { createPortal } from 'react-dom'
 import { RotateCw, Maximize2, Minimize2, X, type LucideIcon } from 'lucide-react'
@@ -32,6 +33,7 @@ interface B5CardProps {
   // rather than look like a floating quick-add card. Orientation toggle
   // (aspect-ratio only makes sense for the fixed-size card) is hidden.
   fillParent?: boolean
+  fullWidthContent?: boolean
   /** A strip owns the surface and expansion; this card supplies its single header. */
   frame?: { expanded: boolean; onToggleExpanded: () => void }
   // Id of the document this card is showing, when it already exists — enables
@@ -46,7 +48,7 @@ interface B5CardProps {
 // side) rather than a modal — it only portals to a fullscreen overlay while
 // explicitly maximized.
 export function B5Card({
-  title, icon: Icon, onClose, onSave, canSave = false, saving: externalSaving = false, saveProgress, successMessage = 'Saved', lockedWorkspaceName, fillParent = false, relationSubjectId, frame, children,
+  title, icon: Icon, onClose, onSave, canSave = false, saving: externalSaving = false, saveProgress, successMessage = 'Saved', lockedWorkspaceName, fillParent = false, fullWidthContent = false, relationSubjectId, frame, children,
 }: B5CardProps) {
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait')
   const [maximized, setMaximized] = useState(false)
@@ -155,13 +157,13 @@ export function B5Card({
 
   const card = (
     <div
-      style={frame ? { width: '100%', height: '100%', minWidth: 0 } : cardStyle}
+      style={frame && !maximized ? { width: '100%', height: '100%', minWidth: 0 } : cardStyle}
       onAnimationEnd={(e) => {
         if (animateIn && e.target === e.currentTarget) setEntered(true)
       }}
       className={cn(
         'flex flex-col overflow-hidden',
-        frame ? 'strip-document-card' : 'rounded-2xl border bg-card shadow-elevation-4 transition-[width,height]',
+        frame && !maximized ? 'strip-document-card' : 'rounded-2xl border bg-card shadow-elevation-4 transition-[width,height]',
         fillParent && !maximized && !frame && 'w-full md:w-[var(--document-card-width,min(560px,90vw))]',
         mobileFullScreen && 'fixed inset-2 z-40 shadow-elevation-5',
         animateIn && 'animate-card-in',
@@ -191,17 +193,17 @@ export function B5Card({
           )}
           <button
             type="button"
-            onClick={() => frame ? frame.onToggleExpanded() : setMaximized((m) => !m)}
+            onClick={() => frame && !maximized ? frame.onToggleExpanded() : setMaximized((m) => !m)}
             className={cn(
               'rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
               // Already full-screen on mobile; keep Restore reachable if a
               // desktop-maximized window shrinks below the breakpoint.
               !maximized && !frame && 'max-md:hidden',
             )}
-            aria-label={frame ? (frame.expanded ? 'Card size' : 'Expand to full width') : maximized ? 'Restore' : 'Maximize'}
-            title={frame ? (frame.expanded ? 'Card size' : 'Expand to full width') : maximized ? 'Restore' : 'Maximize'}
+            aria-label={frame && !maximized ? (frame.expanded ? 'Card size' : 'Expand to full width') : maximized ? 'Restore' : 'Maximize'}
+            title={frame && !maximized ? (frame.expanded ? 'Card size' : 'Expand to full width') : maximized ? 'Restore' : 'Maximize'}
           >
-            {(frame?.expanded ?? maximized) ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            {(maximized || frame?.expanded) ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </button>
           <button
             type="button"
@@ -215,7 +217,9 @@ export function B5Card({
         </div>
       </div>
 
-      <div className={cn('flex-1 overflow-y-auto', maximized && 'mx-auto w-full max-w-3xl')}>{frame && picker ? picker : children}</div>
+      <ImageViewContext.Provider value={() => setMaximized((m) => !m)}>
+        <div className={cn('min-h-0 flex-1 overflow-y-auto', maximized && !fullWidthContent && 'mx-auto w-full max-w-3xl')}>{frame && picker ? picker : children}</div>
+      </ImageViewContext.Provider>
     </div>
   )
 
