@@ -1,3 +1,4 @@
+import { requestWorkspaceUnlock, type WorkspaceStartOptions } from '@/components/workspace/workspace-start-dialog';
 import type { ResponseEnvelope } from '@augmentd-labs/canvas-protocol';
 import { API_ROUTES, API_URL } from '@/config/api';
 import { api } from '@/lib/api';
@@ -398,9 +399,14 @@ export async function importWorkspaceFromExport(name: string): Promise<Workspace
   return api.post(`${API_ROUTES.workspaces}/import`, { export: name })
 }
 
-export async function startWorkspace(id: string): Promise<Workspace> {
+export async function startWorkspace(id: string, options?: WorkspaceStartOptions): Promise<Workspace> {
   try {
-    const response = await api.post<Workspace>(`${API_ROUTES.workspaces}/${id}/start`);
+    if (!options) {
+      const status = await api.get<{ status: string; protection?: { mode: string } }>(`${API_ROUTES.workspaces}/${id}/status`)
+      const mode = status.protection?.mode || 'none'
+      options = status.status !== 'active' && mode !== 'none' ? await requestWorkspaceUnlock(mode) : {}
+    }
+    const response = await api.post<Workspace>(`${API_ROUTES.workspaces}/${id}/start`, options);
     return response;
   } catch (error) {
     console.error('Failed to start workspace:', error);

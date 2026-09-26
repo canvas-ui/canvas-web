@@ -19,6 +19,9 @@ interface Session {
 type WorkspaceLayout = 'full' | 'home'
 
 interface Workspace {
+  protection?: { mode: 'none' | 'secrets' | 'workspace'; secretsUnlocked?: boolean; withoutSecrets?: boolean }
+  lastStopReason?: string | null
+  stoppedAt?: string | null
   id: string
   name: string
   description: string

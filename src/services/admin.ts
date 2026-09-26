@@ -30,6 +30,8 @@ export interface UpdateUserData {
 
 // Admin Workspace interfaces
 export interface AdminWorkspace {
+  protection?: { mode: string };
+  lastStopReason?: string;
   id: string;
   name: string;
   label: string;

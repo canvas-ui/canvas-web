@@ -236,6 +236,7 @@ export default function AdminWorkspacesPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Workspace Administration" description="Manage workspaces across all users" />
+      {workspaces.some(ws => ws.status !== 'active' && ws.protection?.mode && ws.protection.mode !== 'none') && <p className="text-sm rounded border p-3">{workspaces.filter(ws => ws.status !== 'active' && ws.protection?.mode && ws.protection.mode !== 'none').length} protected workspaces waiting for their owners to start them.</p>}
 
       {/* Filters and Actions */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">

@@ -1,3 +1,4 @@
+import { WorkspaceProtectionPanel } from '@/components/workspace/protection-panel'
 import { useMenu } from '@/components/shell/use-menu'
 import { useIsMobile } from '@/hooks/use-mobile'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -1126,7 +1127,7 @@ export default function WorkspaceSettingsPage() {
           setDescription(ws.description || '')
           setColor(ws.color || '#FFFFFF')
           setIcon(ws.icon ?? null)
-          await Promise.all([loadShares(workspaceName || ws.id), loadRuntimeSettings(workspaceName || ws.id)])
+          if (ws.status === 'active') await Promise.all([loadShares(workspaceName || ws.id), loadRuntimeSettings(workspaceName || ws.id)])
         }
       } catch {
         showToast({ title: 'Error', description: 'Failed to load workspace', variant: 'destructive' })
@@ -1385,6 +1386,7 @@ export default function WorkspaceSettingsPage() {
             />
           )}
 
+          <WorkspaceProtectionPanel currentMode={workspace.protection?.mode} workspaceId={workspaceId} isActive={workspace.status === 'active'} onChanged={() => setReloadKey(k => k + 1)} />
           <DefaultFoldersSection workspaceName={workspaceName!} />
 
           <WorkspaceUsageSection workspaceId={workspaceId} />

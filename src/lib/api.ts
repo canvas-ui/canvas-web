@@ -1,5 +1,5 @@
 import { CanvasApiClient, CanvasError, isNetworkError } from '@augmentd-labs/canvas-api-client'
-import { isWorkspaceNotActive, type ResponseEnvelope } from '@augmentd-labs/canvas-protocol'
+import { type ResponseEnvelope } from '@augmentd-labs/canvas-protocol'
 import { API_URL } from '@/config/api'
 import { handleApiError } from './error-handler'
 import { isBrowserNetworkFailure } from './api-network-error'
@@ -16,7 +16,7 @@ import { reportNetworkFailure, reportNetworkSuccess } from './connectivity'
 // (admin reindex). Everything else uses the plain methods.
 //
 // Web-only policy stays here: the redirect guard, token-format gate,
-// 401 → /login, and the workspace autostart-and-replay. stream() keeps a raw
+// 401 → /login. Workspace startup is an explicit user action. stream() keeps a raw
 // fetch path — it needs the untouched Response body.
 
 // Keep track of redirects to prevent loops
@@ -173,49 +173,13 @@ function pickClient(skipAuth: boolean, envelope: boolean): CanvasApiClient {
 // button. Only reads/writes *inside* a workspace wake it — fetching the
 // workspace record itself (GET /workspaces/:id, the list) does not.
 
-const workspaceStarts = new Map<string, Promise<void>>();
-
-// The workspace ref of a request that operates inside a workspace, or null.
-// Requires a segment after the ref, which is what excludes the plain
-// GET /workspaces/:id detail fetch, plus /start and /stop themselves.
-function workspaceRefForRequest(endpoint: string): string | null {
-  const path = endpoint.startsWith('http')
-    ? new URL(endpoint).pathname
-    : endpoint.split('?')[0];
-  if (path.includes('/admin/')) return null;
-  const match = path.match(/\/workspaces\/([^/?#]+)\/([^/?#]+)/);
-  if (!match) return null;
-  if (match[2] === 'start' || match[2] === 'stop') return null;
-  return decodeURIComponent(match[1]);
-}
-
-// Concurrent queries against the same sleeping workspace share one /start.
-function startWorkspaceForRequest(ref: string): Promise<void> {
-  const pending = workspaceStarts.get(ref);
-  if (pending) return pending;
-
-  const started = requestJson<void>('POST', `${API_URL}/workspaces/${encodeURIComponent(ref)}/start`, undefined, {
-    skipWorkspaceAutostart: true,
-  })
-    .then(() => {
-      // Let the workspace list and any open workspace view repaint their
-      // status without polling.
-      window.dispatchEvent(new CustomEvent('workspace:autostarted', { detail: { workspace: ref } }));
-      window.dispatchEvent(new CustomEvent('workspaces:refresh'));
-    })
-    .finally(() => { workspaceStarts.delete(ref); });
-
-  workspaceStarts.set(ref, started);
-  return started;
-}
-
 async function requestJson<T>(
   method: string,
   endpoint: string,
   data: unknown,
   options: RequestOptions = {},
 ): Promise<T> {
-  const { skipAuth = false, noAuthRedirect = false, skipWorkspaceAutostart = false, envelope = false, headers, signal, body } = options;
+  const { skipAuth = false, noAuthRedirect = false, envelope = false, headers, signal, body } = options;
 
   ensureAuthReady(skipAuth, noAuthRedirect);
 
@@ -235,19 +199,6 @@ async function requestJson<T>(
       if (error.code === 'ABORTED') throw new DOMException('Request aborted', 'AbortError');
       if (error.statusCode === 401 && !skipAuth) {
         handle401(noAuthRedirect);
-      }
-
-      // The workspace this query targets is asleep: start it and replay.
-      // (The message fallback inside isWorkspaceNotActive covers servers
-      // older than the WORKSPACE_NOT_ACTIVE code normalization.)
-      if (!skipWorkspaceAutostart && isWorkspaceNotActive(error)) {
-        const ref = workspaceRefForRequest(endpoint);
-        if (ref) {
-          const ok = await startWorkspaceForRequest(ref).then(() => true, () => false);
-          if (ok) {
-            return requestJson<T>(method, endpoint, data, { ...options, skipWorkspaceAutostart: true });
-          }
-        }
       }
 
       if (isBrowserNetworkFailure(error, isNetworkError(error))) {
@@ -337,7 +288,7 @@ export const api = {
 
   // Streaming API method for real-time data. Needs the raw Response body, so
   // it stays on plain fetch — with the same auth gate, headers, credentials,
-  // 401 handling and workspace autostart as the JSON path.
+  // 401 handling as the JSON path.
   async stream(
     endpoint: string,
     data?: unknown,
@@ -351,7 +302,7 @@ export const api = {
       skipWorkspaceAutostart?: boolean;
     } = {}
   ): Promise<void> {
-    const { onOpen, onChunk, onError, onComplete, signal, skipWorkspaceAutostart = false } = options;
+    const { onOpen, onChunk, onError, onComplete, signal } = options;
 
     try {
       ensureAuthReady(false, false);
@@ -393,17 +344,6 @@ export const api = {
           // Non-JSON error body; fall back to the status text below.
         }
         const errorMessage = errorData?.message || errorData?.error || response.statusText || 'Request failed';
-
-        // The workspace this stream targets is asleep: start it and replay.
-        if (!skipWorkspaceAutostart && isWorkspaceNotActive({ code: errorData?.code, message: errorMessage })) {
-          const ref = workspaceRefForRequest(endpoint);
-          if (ref) {
-            const ok = await startWorkspaceForRequest(ref).then(() => true, () => false);
-            if (ok) {
-              return api.stream(endpoint, data, { ...options, skipWorkspaceAutostart: true });
-            }
-          }
-        }
 
         throw new Error(`HTTP ${response.status}: ${errorMessage}`);
       }
