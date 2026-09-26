@@ -11,6 +11,7 @@ import { PublicRoute } from './components/auth/public-route'
 import PublicCanvasPage from './pages/pub/canvas'
 import AppletHostPage from './pages/apps'
 import { UpdateBanner } from './components/common/update-banner'
+import { RememberLastScreen } from './components/shell/RememberLastScreen'
 import { AppShell } from './components/shell/AppShell'
 import { shellRoutes } from './routes/shell-routes'
 import { ToastContainer } from './components/ui/toast-container'
@@ -40,6 +41,7 @@ function AppContent() {
 
   return (
     <BrowserRouter>
+      <RememberLastScreen />
       <UpdateBanner />
       <Routes>
         {/* Authentication routes */}

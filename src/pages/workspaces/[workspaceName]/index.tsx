@@ -583,6 +583,7 @@ export default function WorkspaceDetailPage() {
     if (cached) {
       setDocuments(cached.documents);
       setDocumentsTotalCount(cached.totalCount);
+      setIsLoadingDocuments(false);
       return;
     }
     // Background refreshes (socket events, post-mutation reconcile) and live
@@ -671,7 +672,9 @@ export default function WorkspaceDetailPage() {
       setDocuments([]);
       setDocumentsTotalCount(0);
     } finally {
-      if (!silent && seq === fetchSeqRef.current) setIsLoadingDocuments(false);
+      // A silent refresh may supersede the initial foreground load. The
+      // latest request owns completion even when it did not show the spinner.
+      if (seq === fetchSeqRef.current) setIsLoadingDocuments(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceName, selectedPath, selectedTreeName, selectedLayerId, isLayerView, currentPage, pageSize, workspace?.status, serverSearchQueries, tbFiltersKey, docScope, unfiledOnly, queryDebug]);
