@@ -1,3 +1,4 @@
+import { useSettingsMenuBack } from '@/components/common/use-settings-back'
 import { PageHeader } from '@/components/common/page-header'
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Activity, Pause, Play, RotateCw, Trash2 } from "lucide-react"
@@ -40,6 +41,7 @@ function getLogLineColor(entry: AdminLogEntry) {
 }
 
 export default function AdminLogsPage() {
+  const backToSettings = useSettingsMenuBack()
   const currentUser = getCurrentUserFromToken()
   const isCurrentUserAdmin = currentUser?.userType === "admin"
   const { showToast } = useToast()
@@ -159,7 +161,7 @@ export default function AdminLogsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <PageHeader onBack={backToSettings}
         title="Server Logs"
         description="Live tail for the unified canvas-server logger"
         actions={

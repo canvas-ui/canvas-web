@@ -1,7 +1,7 @@
-import { useNavigate } from 'react-router-dom'
+import { useMenu } from '@/components/shell/use-menu'
 
-/** Every personal settings page has a route back to the searchable overview. */
+/** Return to the settings navigation without replacing the current page. */
 export function useSettingsMenuBack(): () => void {
-  const navigate = useNavigate()
-  return () => navigate('/settings')
+  const { openM1Drawer } = useMenu()
+  return () => openM1Drawer('settings')
 }

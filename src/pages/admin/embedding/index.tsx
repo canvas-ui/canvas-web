@@ -1,3 +1,4 @@
+import { useSettingsMenuBack } from '@/components/common/use-settings-back'
 import { PageHeader } from '@/components/common/page-header'
 import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw, ShieldAlert } from 'lucide-react'
@@ -24,6 +25,7 @@ import {
  * beyond that.
  */
 export default function AdminEmbeddingPage() {
+  const backToSettings = useSettingsMenuBack()
   const { showToast } = useToast()
   const [defaults, setDefaults] = useState<ServerInferdDefaults | null>(null)
   const [loading, setLoading] = useState(true)
@@ -69,7 +71,7 @@ export default function AdminEmbeddingPage() {
 
   return (
     <div className="mx-auto max-w-4xl p-6">
-      <PageHeader
+      <PageHeader onBack={backToSettings}
         compact
         className="mb-6"
         title="Server search & AI defaults"

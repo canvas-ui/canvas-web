@@ -83,7 +83,7 @@ export function sectionFromPath(pathname: string): { section: MenuSection; entit
   if (first === 'agents') {
     return { section: 'agents', entityId: second, m2View: third === 'settings' ? 'settings' : second ? 'detail' : null }
   }
-  if (first === 'admin') return { section: 'admin', entityId: null, m2View: null }
+  if (first === 'admin') return { section: 'settings', entityId: null, m2View: null }
   if (PERSONAL_SETTINGS_PATHS.includes(`/${first}`)) return { section: 'settings', entityId: null, m2View: null }
   return { section: null, entityId: null, m2View: null }
 }

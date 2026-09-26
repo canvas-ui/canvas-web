@@ -68,12 +68,12 @@ interface NavItemProps {
   path: string
   icon: React.ReactNode
   label: string
-  // Which M1 panel to leave open behind the page. Admin pages keep the admin
-  // list up; standalone pages (Roles) open no panel at all.
+  // Which menu to keep beside the page. Administration shares the settings
+  // list; standalone pages (Roles) open no panel at all.
   section?: MenuSection
 }
 
-function NavItem({ path, icon, label, section = 'admin' }: NavItemProps) {
+function NavItem({ path, icon, label, section = 'settings' }: NavItemProps) {
   const navigate = useNavigate()
   const { setSection } = useMenu()
 

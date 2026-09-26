@@ -1,3 +1,4 @@
+import { useSettingsMenuBack } from '@/components/common/use-settings-back'
 import { PageHeader } from '@/components/common/page-header'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { useEffect, useState, useCallback, useRef } from "react"
@@ -60,6 +61,7 @@ function TypeBadge({ type }: { type: 'global' | 'workspace' }) {
 }
 
 export default function AdminRolesPage() {
+  const backToSettings = useSettingsMenuBack()
   const currentUser = getCurrentUserFromToken()
   const isCurrentUserAdmin = currentUser?.userType === 'admin'
 
@@ -304,7 +306,7 @@ export default function AdminRolesPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <PageHeader onBack={backToSettings}
         title="Role Management"
         description="Manage global and workspace roles for Canvas services"
         actions={

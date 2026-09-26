@@ -1,3 +1,4 @@
+import { useSettingsMenuBack } from '@/components/common/use-settings-back'
 import { PageHeader } from '@/components/common/page-header'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { useEffect, useState, useCallback } from "react"
@@ -28,6 +29,7 @@ type PasswordPolicy = {
 }
 
 export default function AdminUsersPage() {
+  const backToSettings = useSettingsMenuBack()
   const currentUser = getCurrentUserFromToken()
   // Check if current user is admin
   const isCurrentUserAdmin = currentUser?.userType === 'admin'
@@ -358,7 +360,7 @@ export default function AdminUsersPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="User Management" description="Manage user accounts and permissions" />
+      <PageHeader onBack={backToSettings} title="User Management" description="Manage user accounts and permissions" />
 
       {/* Filters and Actions */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
