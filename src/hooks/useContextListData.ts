@@ -1,3 +1,4 @@
+import { CONTEXT_DELETED_EVENT, isDeletedContext, type ContextDeletion } from '@/lib/context-deletion'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { listContexts } from '@/services/context'
 import { sortByOrder } from '@/lib/list-order'
@@ -112,6 +113,16 @@ export function useContextListData(enabled: boolean) {
       events.forEach(([e, h]) => socketService.off(e, h))
     }
   }, [enabled, fetch])
+
+  // Deletion is a local removal, not a refresh of the now-missing context.
+  useEffect(() => {
+    const onDeleted = (event: Event) => {
+      const deletion = (event as CustomEvent<ContextDeletion>).detail
+      setContexts(previous => previous.filter(context => !isDeletedContext(context, deletion)))
+    }
+    window.addEventListener(CONTEXT_DELETED_EVENT, onDeleted)
+    return () => window.removeEventListener(CONTEXT_DELETED_EVENT, onDeleted)
+  }, [])
 
   // Window event fallback
   useEffect(() => {

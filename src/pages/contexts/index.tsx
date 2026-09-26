@@ -1,3 +1,4 @@
+import { isDeletedContext } from '@/lib/context-deletion'
 import { PageHeader } from '@/components/common/page-header'
 import { useEffect, useState, useCallback, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
@@ -319,10 +320,7 @@ export default function ContextsPage() {
 
     try {
       await deleteContext(deletingContextId)
-      // Refresh the list to ensure it's up-to-date
-      await fetchData()
-      // Notify sidebar to refresh its list
-      window.dispatchEvent(new CustomEvent('contexts:refresh'))
+      setContexts(previous => previous.filter(context => !isDeletedContext(context, { id: deletingContextId })))
       showToast({
         title: 'Success',
         description: 'Context deleted successfully'

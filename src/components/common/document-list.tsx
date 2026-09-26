@@ -1,3 +1,4 @@
+import { selectDocumentRange } from '@/lib/document-selection'
 import { CopyToWorkspacePanel } from '@/components/menu/shared/CopyToWorkspacePanel'
 import { BulkEditDialog } from './BulkEditDialog'
 import { Document, TreeNode } from '@/types/workspace'
@@ -9,7 +10,6 @@ import { PickDocumentsCard } from '@/components/menu/shared/PickDocumentsCard'
 import { transferDocumentsToBackends, createDocumentRelations, type BackendTransferMode } from '@/services/workspace'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { useSideView } from '@/components/shell/use-side-view'
-import { useCanvasRow } from '@/components/shell/strip/use-canvas-row'
 import { useState, useCallback, useMemo, useEffect, useRef, useDeferredValue } from 'react'
 import { createPortal } from 'react-dom'
 import Fuse from 'fuse.js'
@@ -131,7 +131,7 @@ interface DocumentRowProps {
   document: Document
   isSelected?: boolean
   workspaceId?: string
-  onSelect?: (documentId: number, isSelected: boolean, isCtrlClick: boolean) => void
+  onSelect?: (documentId: number, isSelected: boolean, isCtrlClick: boolean, isShiftClick?: boolean) => void
   onRemoveDocument?: (documentId: number) => void
   onDeleteDocument?: (documentId: number) => void
   onLinkDocument?: (documentId: number) => void
@@ -144,7 +144,7 @@ interface DocumentTableRowProps {
   document: Document
   isSelected?: boolean
   workspaceId?: string
-  onSelect?: (documentId: number, isSelected: boolean, isCtrlClick: boolean) => void
+  onSelect?: (documentId: number, isSelected: boolean, isCtrlClick: boolean, isShiftClick?: boolean) => void
   onRemoveDocument?: (documentId: number) => void
   onDeleteDocument?: (documentId: number) => void
   onLinkDocument?: (documentId: number) => void
@@ -472,7 +472,6 @@ function ReplicatingBadge({ document }: { document: Document }) {
 }
 
 function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemoveDocument, onDeleteDocument, onLinkDocument, onOpenToSide, onRightClick, onDragStart }: DocumentTableRowProps) {
-  const canvasRow = useCanvasRow()
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [detailEdit, setDetailEdit] = useState(false)
   const [actionSheet, setActionSheet] = useState(false)
@@ -506,8 +505,7 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
 
   const handleDocumentClick = (e: React.MouseEvent) => {
     const isCtrlClick = e.ctrlKey || e.metaKey
-    // Strip layout: Shift+click opens the document as a canvas to the right.
-    if (e.shiftKey && canvasRow && onOpenToSide) { onOpenToSide(document); return }
+    if (e.shiftKey && onSelect) { e.preventDefault(); onSelect(document.id, true, isCtrlClick, true); return }
     if (onSelect) {
       if (isCtrlClick) {
         // For ctrl+click, toggle selection state
@@ -527,7 +525,8 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
     }
   }
 
-  const handleMouseDown = () => {
+  const handleMouseDown = (event: React.MouseEvent) => {
+    if (event.shiftKey) event.preventDefault()
     // Removed auto-selection logic to avoid race conditions with drag operations
     // Drag will work based on current selection state, click will handle selection
   }
@@ -559,7 +558,8 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
             type="checkbox"
             className="h-4 w-4 cursor-pointer accent-primary align-middle"
             checked={!!isSelected}
-            onChange={(e) => onSelect?.(document.id, e.target.checked, true)}
+            onClick={e => { e.stopPropagation(); onSelect?.(document.id, e.currentTarget.checked, true, e.shiftKey) }}
+            onChange={() => {}}
           />
         </TableCell>
         <TableCell className="w-12">
@@ -621,7 +621,6 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
 }
 
 function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocument, onDeleteDocument, onLinkDocument, onOpenToSide, onRightClick, onDragStart }: DocumentRowProps) {
-  const canvasRow = useCanvasRow()
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [detailEdit, setDetailEdit] = useState(false)
   const [actionSheet, setActionSheet] = useState(false)
@@ -649,8 +648,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
 
   const handleDocumentClick = (e: React.MouseEvent) => {
     const isCtrlClick = e.ctrlKey || e.metaKey
-    // Strip layout: Shift+click opens the document as a canvas to the right.
-    if (e.shiftKey && canvasRow && onOpenToSide) { onOpenToSide(document); return }
+    if (e.shiftKey && onSelect) { e.preventDefault(); onSelect(document.id, true, isCtrlClick, true); return }
     if (onSelect) {
       if (isCtrlClick) {
         // For ctrl+click, toggle selection state
@@ -663,7 +661,8 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
     if (!isCtrlClick) { if (isTabDocument && tabUrl) { window.open(tabUrl, '_blank', 'noopener,noreferrer') } else { setDetailEdit(false); setShowDetailModal(true) } }
   }
 
-  const handleMouseDown = () => {
+  const handleMouseDown = (event: React.MouseEvent) => {
+    if (event.shiftKey) event.preventDefault()
     // Removed auto-selection logic to avoid race conditions with drag operations
     // Drag will work based on current selection state, click will handle selection
   }
@@ -824,7 +823,6 @@ function TileTextPreview({ document, workspaceId, markdown }: { document: Docume
 // icon tile (everything else). Mirrors DocumentRow's click/selection/right-click
 // behavior. Sized for a responsive auto-fill grid, so it reads on mobile too.
 function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSide, onRightClick, onDragStart }: DocumentRowProps) {
-  const canvasRow = useCanvasRow()
   const [showDetailModal, setShowDetailModal] = useState(false)
   const isTabDocument = document.schema === 'data/schema/tab'
   const tabUrl = isTabDocument ? document.data.url : null
@@ -847,8 +845,7 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
 
   const handleClick = (e: React.MouseEvent) => {
     const isCtrlClick = e.ctrlKey || e.metaKey
-    // Strip layout: Shift+click opens the document as a canvas to the right.
-    if (e.shiftKey && canvasRow && onOpenToSide) { onOpenToSide(document); return }
+    if (e.shiftKey && onSelect) { e.preventDefault(); onSelect(document.id, true, isCtrlClick, true); return }
     if (onSelect) onSelect(document.id, isCtrlClick ? !isSelected : true, isCtrlClick)
     if (!isCtrlClick) { if (isTabDocument && tabUrl) { window.open(tabUrl, '_blank', 'noopener,noreferrer') } else { setShowDetailModal(true) } }
   }
@@ -859,6 +856,7 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
       <div
         className={`group relative mb-3 flex break-inside-avoid flex-col overflow-hidden rounded-lg border transition cursor-pointer hover:shadow-elevation-2 ${replicating ? 'opacity-60' : ''} ${isSelected ? 'ring-2 ring-info border-info' : ''}`}
         onClick={handleClick}
+        onMouseDown={event => { if (event.shiftKey) event.preventDefault() }}
         onContextMenu={handleRightClick}
         draggable
         onDragStart={(e) => onDragStart?.(e, document.id)}
@@ -869,8 +867,8 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
           type="checkbox"
           className={`absolute left-2 top-2 z-10 h-4 w-4 cursor-pointer accent-primary ${isSelected ? '' : 'reveal-on-hover'}`}
           checked={isSelected}
-          onClick={(e) => e.stopPropagation()}
-          onChange={(e) => onSelect?.(document.id, e.target.checked, true)}
+          onClick={e => { e.stopPropagation(); onSelect?.(document.id, e.currentTarget.checked, true, e.shiftKey) }}
+          onChange={() => {}}
         />
         {/* Images, videos and text tiles take their natural height (masonry
             columns); icon tiles stay square. */}
@@ -1398,17 +1396,25 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     })
   }, [])
 
-  const handleDocumentSelect = useCallback((documentId: number, isSelected: boolean, isCtrlClick: boolean) => {
+  const visibleSelectionOrder = useMemo(() => (
+    view === 'table' ? sortedDocuments
+      : showDateGroups ? dateGroups.filter(group => !collapsedGroups.has(group.key)).flatMap(group => group.items)
+        : filteredDocuments
+  ).map(document => document.id), [view, sortedDocuments, showDateGroups, dateGroups, collapsedGroups, filteredDocuments])
+  const selectionAnchor = useRef<{ scope: string; id: number } | null>(null)
+  const selectionScope = JSON.stringify([workspaceId, contextPath, treeName, currentPage])
+  const handleDocumentSelect = useCallback((documentId: number, isSelected: boolean, isCtrlClick: boolean, isShiftClick = false) => {
+    const previousAnchor = selectionAnchor.current
+    const anchor = previousAnchor?.scope === selectionScope && visibleSelectionOrder.includes(previousAnchor.id) ? previousAnchor.id : null
+    if (!isShiftClick || anchor === null) selectionAnchor.current = { scope: selectionScope, id: documentId }
     setSelectedDocuments(prev => {
-      const newSelection = new Set(prev)
-      if (isCtrlClick) {
-        if (isSelected) { newSelection.add(documentId) } else { newSelection.delete(documentId) }
-      } else {
-        newSelection.clear(); if (isSelected) { newSelection.add(documentId) }
-      }
-      return newSelection
+      if (isShiftClick) return selectDocumentRange(visibleSelectionOrder, anchor, documentId, prev, isCtrlClick)
+      const next = isCtrlClick ? new Set(prev) : new Set<number>()
+      if (isSelected) next.add(documentId)
+      else next.delete(documentId)
+      return next
     })
-  }, [])
+  }, [selectionScope, visibleSelectionOrder])
 
   const handleDocumentRightClick = useCallback((event: React.MouseEvent, documentId: number) => {
     // Modals portal to <body> but React synthetic events still bubble through

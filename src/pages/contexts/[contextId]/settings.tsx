@@ -40,7 +40,7 @@ export default function ContextSettingsPage() {
   const ownerId = searchParams.get('ownerId') || undefined
   const navigate = useNavigate()
   const { showToast } = useToast()
-  const { selectEntity, openM2Drawer } = useMenu()
+  const { selectEntity, openM2Drawer, closeM2 } = useMenu()
   const isMobile = useIsMobile()
 
   const activeTab: ContextSettingsTab = resolveContextSettingsTab(tab)
@@ -158,9 +158,10 @@ export default function ContextSettingsPage() {
     setIsDeleting(true)
     try {
       await deleteContext(contextId, ownerId)
-      window.dispatchEvent(new CustomEvent('contexts:refresh'))
+      closeM2()
+      selectEntity(null)
       showToast({ title: 'Deleted', description: `Context "${contextId}" removed` })
-      navigate('/contexts')
+      navigate('/contexts', { replace: true })
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Delete failed', variant: 'destructive' })
     } finally {

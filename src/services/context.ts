@@ -1,3 +1,4 @@
+import { CONTEXT_DELETED_EVENT } from '@/lib/context-deletion';
 import { API_ROUTES } from '@/config/api';
 import { api } from '@/lib/api';
 import type { TreeNode } from '@/types/workspace';
@@ -176,6 +177,7 @@ export async function deleteContext(id: string, ownerId?: string): Promise<void>
   try {
     const endpoint = withOwnerId(`${API_ROUTES.contexts}/${id}`, ownerId);
     await api.delete<null>(endpoint);
+    window.dispatchEvent(new CustomEvent(CONTEXT_DELETED_EVENT, { detail: { id, ownerId } }));
   } catch (error) {
     console.error(`Failed to delete context ${id}:`, error);
     throw error;
