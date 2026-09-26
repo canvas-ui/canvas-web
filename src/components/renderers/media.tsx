@@ -1,4 +1,6 @@
 import { useContext, useState } from 'react'
+import { ZoomableImage } from '@/components/common/zoomable-image'
+import { useIsMobile, useMediaQuery } from '@/hooks/use-mobile'
 import { ImageViewContext } from '@/components/common/image-view-context'
 import { Download } from 'lucide-react'
 import { useDocumentBlobUrl, useDocumentStreamSrc } from './useDocumentBlobUrl'
@@ -44,6 +46,8 @@ function MediaShell({ error, loading, children }: { error: string | null; loadin
 
 export function ImageRenderer({ workspaceId, document: doc, className = '' }: RendererProps) {
   const toggleMaximized = useContext(ImageViewContext)
+  const isMobile = useIsMobile()
+  const isTouch = useMediaQuery('(pointer: coarse)')
   // Downscaled preview (falls back to full bytes only if no thumbnail exists).
   // Content checksum as cache version: immutable files keep a stable key,
   // editable previews (drawings) roll to a fresh URL per edit.
@@ -75,18 +79,28 @@ export function ImageRenderer({ workspaceId, document: doc, className = '' }: Re
     <MediaShell error={error} loading={loading}>
       {blobUrl && (
         <div className={`flex h-full min-h-0 flex-col gap-2 ${className}`}>
-          <img
-            src={blobUrl}
-            alt={filename}
-            draggable={false}
-            onDoubleClick={toggleMaximized ? (event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              toggleMaximized()
-            } : undefined}
-            title={toggleMaximized ? 'Double-click to maximize or restore' : undefined}
-            className={`min-h-0 w-full flex-1 object-contain ${toggleMaximized ? 'cursor-zoom-in' : ''}`}
-          />
+          {isMobile || isTouch ? (
+            <div className="min-h-0 flex-1">
+              <ZoomableImage
+                src={blobUrl}
+                alt={filename}
+                className="max-h-full max-w-full object-contain"
+              />
+            </div>
+          ) : (
+            <img
+              src={blobUrl}
+              alt={filename}
+              draggable={false}
+              onDoubleClick={toggleMaximized ? (event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                toggleMaximized()
+              } : undefined}
+              title={toggleMaximized ? 'Double-click to maximize or restore' : undefined}
+              className={`min-h-0 w-full flex-1 object-contain ${toggleMaximized ? 'cursor-zoom-in' : ''}`}
+            />
+          )}
           <button
             type="button"
             onClick={downloadOriginal}

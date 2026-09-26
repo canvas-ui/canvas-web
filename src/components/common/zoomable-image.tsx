@@ -56,6 +56,7 @@ export function ZoomableImage({
   const gesture = useRef<{ dist: number; scale: number; cx: number; cy: number } | null>(null)
   const lastTap = useRef<{ t: number; x: number; y: number } | null>(null)
   const moved = useRef(false)
+  const lastPointerZoom = useRef<number | null>(null)
   // A finger is currently driving the transform. State, not a ref, because the
   // rendered style depends on it: transitions are ON for a double-tap step and
   // OFF while dragging, where a 160ms ease would trail the finger.
@@ -186,6 +187,7 @@ export function ZoomableImage({
       && Math.hypot(e.clientX - prev.x, e.clientY - prev.y) < TAP_SLOP_PX
     ) {
       lastTap.current = null
+      lastPointerZoom.current = now
       toggleZoom(e.clientX, e.clientY)
       return
     }
@@ -213,13 +215,21 @@ export function ZoomableImage({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={endPointer}
-      onPointerCancel={endPointer}
+      onPointerCancel={(e) => {
+        pointers.current.delete(e.pointerId)
+        gesture.current = null
+        lastTap.current = null
+        moved.current = true
+        if (pointers.current.size === 0) setInteracting(false)
+      }}
       onWheel={onWheel}
       onDoubleClick={(e) => {
-        // Mouse double-click arrives as a real dblclick too; the tap detector
-        // above already handled it, so this only covers pointer types that
-        // don't emit the paired taps (some trackpads, assistive devices).
-        if (!zoomed) toggleZoom(e.clientX, e.clientY)
+        e.preventDefault()
+        e.stopPropagation()
+        // Some browsers emit dblclick after the pointer pair. Suppress that
+        // duplicate in BOTH directions, especially when returning to fit.
+        if (lastPointerZoom.current !== null && e.timeStamp - lastPointerZoom.current < DOUBLE_TAP_MS) return
+        toggleZoom(e.clientX, e.clientY)
       }}
     >
       <img
