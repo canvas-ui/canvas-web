@@ -84,8 +84,8 @@ export function UrlPdfRenderer({ document: doc, className = '' }: RendererProps)
   }
 
   return (
-    <div className={`space-y-2 ${className}`}>
-      <div className="flex flex-wrap items-center gap-3">
+    <div className={`flex h-full min-h-0 flex-col gap-2 ${className}`}>
+      <div className="flex shrink-0 flex-wrap items-center gap-3">
         <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
           <ExternalLink className="h-3 w-3" /> {url}
         </a>
@@ -105,7 +105,7 @@ export function UrlPdfRenderer({ document: doc, className = '' }: RendererProps)
           Inline preview unavailable (direct fetch and server proxy both failed). Use the link above.
         </p>
       )}
-      {blobUrl && <PdfViewer blob={blob} blobUrl={blobUrl} filename={filename} className="h-viewport-pane" />}
+      {blobUrl && <PdfViewer blob={blob} blobUrl={blobUrl} filename={filename} className="min-h-[300px] flex-1" />}
     </div>
   )
 }

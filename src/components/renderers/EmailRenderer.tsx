@@ -165,9 +165,9 @@ export function EmailRenderer({ workspaceId, document: doc, className = '' }: Re
   }
 
   return (
-    <div className={`space-y-3 ${className}`}>
+    <div className={`flex h-full min-h-0 flex-col gap-3 ${className}`}>
       {/* Header */}
-      <div className="rounded-md border bg-muted/30 p-3 text-sm">
+      <div className="shrink-0 rounded-md border bg-muted/30 p-3 text-sm">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">
             <div className="text-base font-semibold">{String(data.subject ?? '(no subject)')}</div>
@@ -202,20 +202,21 @@ export function EmailRenderer({ workspaceId, document: doc, className = '' }: Re
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      {/* Body */}
+      {/* Fill the space below the header; the sandboxed frame scrolls its own body.
+          The minimum keeps it usable in short readers, with outer scrolling for attachments. */}
       {!showPlain && bodyHtml ? (
         htmlUrl
           // Literal white, not a token: this is the email's own canvas, and
           // real-world HTML mail assumes a white ground (dark text, no
           // background set). Theming it would make most messages unreadable.
-          ? <iframe src={htmlUrl} sandbox="" title={String(data.subject ?? 'email')} className="min-h-viewport-half w-full rounded border bg-white" />
+          ? <iframe src={htmlUrl} sandbox="" title={String(data.subject ?? 'email')} className="min-h-[12rem] w-full flex-1 rounded border bg-white" />
           : <p className="text-sm text-muted-foreground">Rendering...</p>
       ) : (
-        <pre className="whitespace-pre-wrap rounded bg-muted p-3 text-sm max-h-viewport-pane overflow-auto">{bodyText || '(empty body)'}</pre>
+        <pre className="min-h-[12rem] flex-1 overflow-auto whitespace-pre-wrap rounded bg-muted p-3 text-sm">{bodyText || '(empty body)'}</pre>
       )}
       {/* Attachments */}
       {visibleAttachments.length > 0 && (
-        <div className="space-y-1">
+        <div className="shrink-0 space-y-1">
           <div className="text-xs font-medium text-muted-foreground">Attachments ({visibleAttachments.length})</div>
           {visibleAttachments.map((a, i) => (
             <div key={a.url || i} className="flex items-center justify-between gap-2 rounded border px-2 py-1.5 text-sm">
