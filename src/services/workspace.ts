@@ -419,6 +419,7 @@ export async function stopWorkspace(id: string): Promise<Workspace> {
   try {
     const response = await api.post<Workspace>(`${API_ROUTES.workspaces}/${id}/stop`);
     invalidateWorkspaceTreeCache(id);
+    window.dispatchEvent(new CustomEvent('workspace:stopped', { detail: { refs: [id] } }));
     window.dispatchEvent(new CustomEvent('workspaces:refresh'));
     return response;
   } catch (error) {

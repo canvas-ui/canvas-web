@@ -1,12 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { getWorkspace, startWorkspace } from '@/services/workspace'
 import { Button } from '@/components/ui/button'
 
 /** Do not mount content readers (including their caches) until status is known. */
 export function WorkspaceContentGate({ workspaceName, children }: { workspaceName: string; children: ReactNode }) {
-  const location = useLocation()
-  const identity = `${workspaceName}:${location.key}`
+  // Route changes within a workspace must not unmount its content readers.
+  const identity = workspaceName
   const [checked, setChecked] = useState<{ identity: string; active: boolean } | null>(null)
   const [error, setError] = useState('')
   const [starting, setStarting] = useState(false)
@@ -15,11 +15,13 @@ export function WorkspaceContentGate({ workspaceName, children }: { workspaceNam
   useEffect(() => {
     let cancelled = false
     let sequence = 0
+    let workspaceId: string | undefined
     const refresh = async () => {
       const request = ++sequence
       try {
         const workspace = await getWorkspace(workspaceName)
         if (!cancelled && request === sequence) {
+          workspaceId = workspace.id
           setChecked({ identity, active: workspace.status === 'active' })
           setError('')
         }
@@ -30,12 +32,16 @@ export function WorkspaceContentGate({ workspaceName, children }: { workspaceNam
         }
       }
     }
-    const invalidate = () => {
-      setChecked(null)
-      void refresh()
+    const onStopped = (event: Event) => {
+      const refs = (event as CustomEvent<{ refs: string[] }>).detail?.refs
+      if (!refs?.includes(workspaceName) && !(workspaceId && refs?.includes(workspaceId))) return
+      // An earlier status request must not reopen content after a local stop.
+      sequence++
+      setChecked({ identity, active: false })
     }
     void refresh()
-    window.addEventListener('workspaces:refresh', invalidate)
+    window.addEventListener('workspaces:refresh', refresh)
+    window.addEventListener('workspace:stopped', onStopped)
     // Refocusing only rechecks status; clearing it would unmount every reader
     // and reset the UI even when the workspace is still active.
     window.addEventListener('focus', refresh)
@@ -43,7 +49,8 @@ export function WorkspaceContentGate({ workspaceName, children }: { workspaceNam
     return () => {
       cancelled = true
       window.clearInterval(timer)
-      window.removeEventListener('workspaces:refresh', invalidate)
+      window.removeEventListener('workspaces:refresh', refresh)
+      window.removeEventListener('workspace:stopped', onStopped)
       window.removeEventListener('focus', refresh)
     }
   }, [workspaceName, identity, revision])

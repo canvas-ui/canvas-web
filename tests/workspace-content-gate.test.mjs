@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
 
-test('content stays unmounted until active, hides on stop/navigation, and ignores stale responses', async () => {
+test('content survives navigation and refreshes but hides on stop or workspace switch', async () => {
   const slots = []
   let cursor = 0
   let effects = []
@@ -12,6 +12,7 @@ test('content stays unmounted until active, hides on stop/navigation, and ignore
   const requests = []
   let poll
   const location = { key: 'first' }
+  let workspaceName = 'private'
   const react = {
     useState(initial) {
       const index = cursor++
@@ -48,11 +49,11 @@ test('content stays unmounted until active, hides on stop/navigation, and ignore
   const render = () => {
     cursor = 0
     effects = []
-    const result = exports.WorkspaceContentGate({ workspaceName: 'private', children: content })
+    const result = exports.WorkspaceContentGate({ workspaceName, children: content })
     effects.forEach(fn => fn())
     return result
   }
-  const settle = async status => { requests.shift()({ status }); await new Promise(resolve => setImmediate(resolve)) }
+  const settle = async status => { requests.shift()({ status, id: 'workspace-uuid' }); await new Promise(resolve => setImmediate(resolve)) }
   assert.notEqual(render(), content)
   await settle('inactive')
   assert.notEqual(render(), content)
@@ -70,6 +71,22 @@ test('content stays unmounted until active, hides on stop/navigation, and ignore
   poll()
   await settle('active')
   assert.equal(render(), content)
+  location.key = 'folder-navigation'
+  assert.equal(render(), content, 'folder navigation retains the content subtree')
+  assert.equal(requests.length, 0, 'navigation does not refetch workspace status')
+  location.key = 'back-navigation'
+  assert.equal(render(), content, 'back navigation within a workspace retains content')
+  events.get('workspaces:refresh')()
+  assert.equal(render(), content, 'list refresh does not clear active status')
+  await settle('active')
+  assert.equal(render(), content)
+  events.get('workspace:stopped')({ detail: { refs: ['unrelated'] } })
+  assert.equal(render(), content, 'stopping another workspace does not affect this one')
+  poll()
+  events.get('workspace:stopped')({ detail: { refs: ['workspace-uuid'] } })
+  assert.notEqual(render(), content, 'a matching stop immediately hides content')
+  await settle('active')
+  assert.notEqual(render(), content, 'a request predating the stop cannot reopen content')
   events.get('workspaces:refresh')()
   assert.notEqual(render(), content)
   await settle('inactive')
@@ -78,8 +95,8 @@ test('content stays unmounted until active, hides on stop/navigation, and ignore
   await settle('active')
   assert.equal(render(), content)
   poll() // Response from the old navigation is still pending.
-  location.key = 'back-navigation'
-  assert.notEqual(render(), content)
+  workspaceName = 'other-workspace'
+  assert.notEqual(render(), content, 'switching workspaces requires a fresh status check')
   await settle('active')
   assert.notEqual(render(), content)
   await settle('inactive')
