@@ -1,28 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { LayoutDashboard, Pin } from 'lucide-react';
+import { LayoutDashboard } from 'lucide-react';
 import { HomeFab } from '@/components/home/HomeFab';
 import { PinnedCanvasTile } from '@/components/home/PinnedCanvasTile';
 import { useCanvasPins } from '@/components/home/use-canvas-pins';
 import { isHomePinMinimized } from '@/lib/home-pins';
 import { useToastHelpers } from '@/hooks/useToastHelpers';
 import type { PinnedCanvas } from '@/services/user-config';
-
-function EmptyHome() {
-  return (
-    <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-6">
-      <Pin className="w-8 h-8 text-muted-foreground/60" />
-      <p className="text-sm text-muted-foreground">No canvases pinned yet.</p>
-      <p className="text-xs text-muted-foreground max-w-sm">
-        Open a canvas in a workspace and use its <span className="font-medium">Pin</span> button to
-        show it here. Pinned canvases tile side by side.
-      </p>
-      <Link to="/workspaces" className="mt-1 px-2.5 py-1 text-xs border rounded-md hover:bg-accent">
-        Browse workspaces
-      </Link>
-    </div>
-  );
-}
 
 function tabLabel(pin: PinnedCanvas) {
   return pin.label || pin.path.split('/').filter(Boolean).pop() || 'Canvas';
@@ -158,8 +141,6 @@ export default function HomePage() {
       <div className="h-full overflow-y-auto">
         {isLoading ? (
           <div className="flex items-center justify-center h-full text-xs text-muted-foreground">Loading…</div>
-        ) : pins.length === 0 ? (
-          <EmptyHome />
         ) : (
           // h-full (NOT min-h-full) + auto-rows-fr: the home never scrolls -
           // rows split the view and each canvas scrolls its own content.

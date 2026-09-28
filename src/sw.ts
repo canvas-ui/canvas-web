@@ -204,12 +204,10 @@ function handleShareTarget(event: FetchEvent): Promise<Response> {
     await cache.put(`/share-target-inbox/${token}/meta`, new Response(JSON.stringify({ status: 'receiving', stashedAt: Date.now() })))
     return cache
   })
-  // Open the UI immediately, while keeping the incoming local request alive.
-  // Otherwise request.formData() hides all work behind the launch screen.
-  event.waitUntil(ready.then(cache => stageShare(event.request, token, cache)).catch(error => {
-    console.error('[sw] share-target staging failed', error)
-  }))
-  return ready.then(
+  // Finish consuming and storing the POST before redirecting its navigation.
+  // waitUntil extends the worker lifetime, but does not make an early redirect
+  // wait for the incoming request body to be consumed.
+  return ready.then(cache => stageShare(event.request, token, cache)).then(
     () => Response.redirect(new URL(`/share-target?token=${token}`, self.location.origin).href, 303),
     () => Response.redirect(new URL('/share-target?error=stash-failed', self.location.origin).href, 303),
   )

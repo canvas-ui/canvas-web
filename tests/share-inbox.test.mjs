@@ -66,3 +66,40 @@ test('text shares become ready without file entries', async () => {
   assert.deepEqual(meta.fileNames, [])
   assert.equal(cache.entries.size, 1)
 })
+
+test('empty and whitespace-only shares produce an error instead of a blank note', async () => {
+  for (const text of ['', ' \n ']) {
+    const cache = inbox()
+    const form = new FormData()
+    form.set('text', text)
+    await stageShare(new Request('https://canvas.test/share-target', { method: 'POST', body: form }), 'test', cache)
+    assert.equal((await cache.meta()).status, 'error')
+    assert.equal((await cache.meta()).error, 'empty-share')
+    assert.equal(cache.entries.size, 1)
+  }
+})
+
+test('empty photo attachments do not fall back to their accompanying text', async () => {
+  const cache = inbox()
+  await stageShare(request([new File([], 'photo.jpg', { type: 'image/jpeg' })]), 'test', cache)
+  assert.equal((await cache.meta()).error, 'empty-file')
+  assert.equal(cache.entries.size, 1)
+})
+
+test('mixed valid and empty attachments fail without silently losing a file', async () => {
+  const cache = inbox()
+  await stageShare(request([
+    new File(['photo bytes'], 'photo.jpg', { type: 'image/jpeg' }),
+    new File([], 'missing.jpg', { type: 'image/jpeg' }),
+  ]), 'test', cache)
+  assert.equal((await cache.meta()).error, 'empty-file')
+  assert.equal(cache.entries.size, 1)
+})
+
+test('photos with missing MIME metadata retain their bytes and filename', async () => {
+  const cache = inbox()
+  await stageShare(request([new File(['photo bytes'], 'photo.jpg')]), 'test', cache)
+  assert.equal((await cache.meta()).status, 'ready')
+  assert.deepEqual((await cache.meta()).fileNames, ['photo.jpg'])
+  assert.equal(await cache.entries.get('/share-target-inbox/test/file-0').text(), 'photo bytes')
+})

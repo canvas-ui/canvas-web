@@ -10,6 +10,8 @@ import { SHARE_CACHE } from '@/lib/share-inbox'
 const SHARE_ERRORS: Record<string, string> = {
   'too-large': 'Android shares are limited to 100 MiB in total for temporary device storage. Nothing was uploaded. Use Add File to upload larger files directly.',
   'stash-failed': "Canvas couldn't hold on to the shared file — device storage may be full. Try again, or upload it from the app.",
+  'empty-share': 'Canvas received no files or text from the sharing app. Try again, or use Add File to select the photo directly.',
+  'empty-file': 'The sharing app delivered an empty file. Try again, or use Add File to select the original directly.',
   expired: 'Nothing shared, or the share expired.',
 }
 
@@ -49,6 +51,7 @@ async function readShareInbox(token: string): Promise<{ kind: QuickAddKind; data
   await cache.delete(`/share-target-inbox/${token}/meta`)
 
   if (files.length) return { kind: 'file', data: { files } }
+  if (![meta.title, meta.text, meta.url].some(value => value.trim())) throw new Error('empty-share')
 
   // The `url` param is the well-behaved case, but a lot of apps (esp. the
   // Android share sheet for browsers/social apps) put the shared link in

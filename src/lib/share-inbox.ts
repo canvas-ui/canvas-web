@@ -18,9 +18,25 @@ export async function stageShare(request: Request, token: string, cache: Cache):
       return
     }
     const form = await request.formData()
-    const files = form.getAll('files').filter((file): file is File => file instanceof File && file.size > 0)
+    const files = form.getAll('files').filter((file): file is File => file instanceof File)
+    // Do not silently turn an unreadable attachment into a text-only share.
+    if (files.some(file => file.size === 0)) {
+      await fail('empty-file')
+      return
+    }
     if (files.reduce((size, file) => size + file.size, 0) > MAX_SHARE_BYTES) {
       await fail('too-large')
+      return
+    }
+    const textField = (name: string) => {
+      const value = form.get(name)
+      return typeof value === 'string' ? value : ''
+    }
+    const title = textField('title')
+    const text = textField('text')
+    const url = textField('url')
+    if (!files.length && ![title, text, url].some(value => value.trim())) {
+      await fail('empty-share')
       return
     }
     for (const [i, file] of files.entries()) {
@@ -29,8 +45,7 @@ export async function stageShare(request: Request, token: string, cache: Cache):
       stored.push(key)
     }
     await cache.put(`${base}/meta`, new Response(JSON.stringify({
-      status: 'ready', title: String(form.get('title') || ''), text: String(form.get('text') || ''),
-      url: String(form.get('url') || ''), fileNames: files.map(file => file.name), stashedAt: Date.now(),
+      status: 'ready', title, text, url, fileNames: files.map(file => file.name), stashedAt: Date.now(),
     })))
   } catch {
     await fail('stash-failed')
