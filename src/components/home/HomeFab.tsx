@@ -154,7 +154,7 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose, onCardsO
             case 'todo': return <TodoCardBody key={c.id} onClose={onClose} initialData={c.initialData} />
             case 'identity': return <IdentityCardBody key={c.id} onClose={onClose} initialData={c.initialData} />
             case 'file': return <FileCardBody key={c.id} onClose={onClose} initialData={c.initialData} />
-            case 'photo': return <PhotoCardBody key={c.id} onClose={onClose} />
+            case 'photo': return <PhotoCardBody key={c.id} onClose={onClose} initialData={c.initialData} />
             case 'existing': return <ExistingCardBody key={c.id} onClose={onClose} />
             case 'sketch': return null // handed off to /apps/sketch in addCard
             // 'folder' is omitted from the home stack — folders are created

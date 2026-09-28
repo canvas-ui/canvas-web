@@ -8,6 +8,8 @@ import { useFileFields, buildFileDocument } from '@/components/toolbox/add/useFi
 import { FileMetaFields } from '@/components/toolbox/add/FileMetaFields'
 import { useToolbox } from '@/components/toolbox/use-toolbox'
 import { B5Card, type B5SaveTarget } from '../B5Card'
+import { isPreviewMedia } from '@/lib/shared-files'
+import { MediaPreview } from './MediaPreview'
 import type { QuickAddInitialData } from '../quick-add-types'
 
 export function FileCardBody({ onClose, initialData }: { onClose: () => void; initialData?: QuickAddInitialData }) {
@@ -86,6 +88,9 @@ export function FileCardBody({ onClose, initialData }: { onClose: () => void; in
           />
         </div>
 
+        {queue.items.filter(item => isPreviewMedia(item.file)).map(item => (
+          <MediaPreview key={item.id} file={item.file} />
+        ))}
         <UploadProgressList items={queue.items} running={saving} onRemove={queue.removeItem} />
 
         <FileMetaFields fields={meta} idPrefix="qa-file" multiple={files.length > 1} />

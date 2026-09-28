@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Camera, File as FileIcon, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUploadQueue } from '@/components/toolbox/add/useUploadQueue'
@@ -8,39 +8,26 @@ import { useFileFields, buildFileDocument } from '@/components/toolbox/add/useFi
 import { FileMetaFields } from '@/components/toolbox/add/FileMetaFields'
 import { useToolbox } from '@/components/toolbox/use-toolbox'
 import { B5Card, type B5SaveTarget } from '../B5Card'
+import type { QuickAddInitialData } from '../quick-add-types'
+import { MediaPreview } from './MediaPreview'
 
-// Capture-to-file only: the OS camera UI *is* the capture flow (no in-app
-// preview/record). Explicitly not the deferred live record-to-agent feature.
-export function PhotoCardBody({ onClose }: { onClose: () => void }) {
-  const queue = useUploadQueue()
+// Shared media and camera captures use the same preview and save form.
+export function PhotoCardBody({ onClose, initialData }: { onClose: () => void; initialData?: QuickAddInitialData }) {
+  const queue = useUploadQueue(initialData?.files)
   const inputRef = useRef<HTMLInputElement>(null)
-  // File + its object URL live together: the URL is created in the pick
-  // handler (event, not effect) and revoked by the effect cleanup below.
-  const [shot, setShot] = useState<{ file: File; url: string } | null>(null)
-  const file = shot?.file ?? null
-  const previewUrl = shot?.url ?? null
+  const hasFiles = queue.items.length > 0
   const [saving, setSaving] = useState(false)
   // Target workspace comes from the Save/Link-to picker, so suggestions fall
   // back to the toolbox's active workspace (null on home → freeform).
   const { state } = useToolbox()
   const meta = useFileFields(state.activeWorkspaceName)
 
-  const pickFile = (f: File | null) => {
-    if (saving) return
-    queue.reset()
-    if (f) queue.addFiles([f])
-    setShot(f ? { file: f, url: URL.createObjectURL(f) } : null)
+  const pickFile = (file: File | null) => {
+    if (!saving && file) queue.addFiles([file])
   }
 
-  // Revoke the object URL when the shot changes or the card unmounts.
-  useEffect(() => {
-    if (!shot) return
-    const url = shot.url
-    return () => URL.revokeObjectURL(url)
-  }, [shot])
-
   const save = async (target: B5SaveTarget) => {
-    if (!file) return []
+    if (!hasFiles) return []
     setSaving(true)
     try {
       const geo = await meta.geotag.capture()
@@ -60,15 +47,15 @@ export function PhotoCardBody({ onClose }: { onClose: () => void }) {
       icon={Camera}
       onClose={onClose}
       onSave={save}
-      canSave={!!file}
+      canSave={hasFiles}
       saving={saving}
       saveProgress={<UploadProgressPanel items={queue.items} running={queue.running} onCancel={queue.cancel} />}
       successMessage="Upload saved"
     >
       {/* Centre the empty state; once a shot exists the preview shares the card
           with the tag/comment fields and must be free to shrink. */}
-      <div className={cn('flex h-full flex-col gap-4 p-4', !file && 'items-center justify-center')}>
-        {!file ? (
+      <div className={cn('flex h-full flex-col gap-4 p-4', !hasFiles && 'items-center justify-center')}>
+        {!hasFiles ? (
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
@@ -79,24 +66,23 @@ export function PhotoCardBody({ onClose }: { onClose: () => void }) {
           </button>
         ) : (
           <>
-            <div className="flex min-h-0 w-full flex-1 flex-col gap-3">
-              <div className="flex min-h-[6rem] flex-1 items-center justify-center overflow-hidden rounded-md border border-input bg-muted/30">
-                {previewUrl && file.type.startsWith('video/') ? (
-                  <video src={previewUrl} controls className="max-h-full max-w-full" />
-                ) : previewUrl ? (
-                  <img src={previewUrl} alt={file.name} className="max-h-full max-w-full object-contain" />
-                ) : null}
-              </div>
-              <div className="flex w-full shrink-0 items-center gap-2 rounded border border-input px-3 py-2 text-sm">
-                <FileIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className="flex-1 truncate">{file.name}</span>
-                <button type="button" onClick={() => pickFile(null)} aria-label="Remove" className="text-muted-foreground hover:text-foreground">
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
+            <div className="flex min-h-0 w-full flex-1 flex-col gap-3 overflow-y-auto">
+              {queue.items.map(({ id, file, status }) => (
+                <div key={id} className="space-y-2">
+                  <MediaPreview file={file} />
+                  <div className="flex w-full items-center gap-2 rounded border border-input px-3 py-2 text-sm">
+                    <FileIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="flex-1 truncate">{file.name}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{(file.size / 1024 / 1024).toFixed(1)} MB</span>
+                    <button type="button" disabled={saving || status === 'done'} onClick={() => queue.removeItem(id)} aria-label={`Remove ${file.name}`} className="text-muted-foreground hover:text-foreground disabled:opacity-40">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
             <div className="w-full shrink-0 space-y-4">
-              <FileMetaFields fields={meta} idPrefix="qa-photo" />
+              <FileMetaFields fields={meta} idPrefix="qa-photo" multiple={queue.items.length > 1} />
             </div>
           </>
         )}
@@ -106,7 +92,8 @@ export function PhotoCardBody({ onClose }: { onClose: () => void }) {
           accept="image/*,video/*"
           capture="environment"
           className="hidden"
-          onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
+          disabled={saving}
+          onChange={(e) => { pickFile(e.target.files?.[0] ?? null); e.target.value = '' }}
         />
       </div>
     </B5Card>

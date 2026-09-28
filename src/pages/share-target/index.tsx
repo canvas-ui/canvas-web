@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { HomeFab } from '@/components/home/HomeFab'
 import type { QuickAddInitialData, QuickAddKind } from '@/components/home/quick-add-types'
 
+import { classifySharedFiles } from '@/lib/shared-files'
 import { SHARE_CACHE } from '@/lib/share-inbox'
 
 // Keyed by the ?error= codes src/sw.ts redirects with, plus the local 'expired'
@@ -47,10 +48,11 @@ async function readShareInbox(token: string): Promise<{ kind: QuickAddKind; data
     const blob = await fileRes.blob()
     files.push(new File([blob], meta.fileNames[i], { type: blob.type }))
   }
+  const classified = files.length ? await classifySharedFiles(files) : null
   await Promise.all(meta.fileNames.map((_, i) => cache.delete(`/share-target-inbox/${token}/file-${i}`)))
   await cache.delete(`/share-target-inbox/${token}/meta`)
 
-  if (files.length) return { kind: 'file', data: { files } }
+  if (classified) return { kind: classified.kind, data: { files: classified.files } }
   if (![meta.title, meta.text, meta.url].some(value => value.trim())) throw new Error('empty-share')
 
   // The `url` param is the well-behaved case, but a lot of apps (esp. the
