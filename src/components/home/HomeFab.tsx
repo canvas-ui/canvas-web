@@ -116,7 +116,7 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose, onCardsO
               picker, minus Folder: on home a folder has no natural location,
               so folders are created inside the Link to… destination tree
               (long-press / right-click a row) instead. */}
-          <InsertMenu variant="stack" omit={['folder']} onSelect={addCard} />
+          <InsertMenu variant="stack" omit={['folder', 'message']} onSelect={addCard} />
         </div>
 
         {/* Center the smaller + over the toolbox FAB's column (both dock at
@@ -159,7 +159,8 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose, onCardsO
             case 'sketch': return null // handed off to /apps/sketch in addCard
             // 'folder' is omitted from the home stack — folders are created
             // inside the Link to… destination tree instead.
-            case 'folder': return null
+            case 'folder':
+            case 'message': return null
           }
         })}
       </div>

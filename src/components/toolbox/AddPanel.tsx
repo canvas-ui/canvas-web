@@ -4,9 +4,10 @@ import { useNavigate } from 'react-router-dom'
 import { sketchEditor } from '@/components/editors/registry'
 import { useAddTarget, useBackendAddTarget } from './add/useAddTarget'
 import { useCallback, useRef, useState } from 'react'
-import { X, StickyNote, Link as LinkIcon, Upload, Camera, Brush, Plus, Pencil, FileSearch, FolderPlus, ListTodo, User } from 'lucide-react'
+import { X, MessageSquarePlus, StickyNote, Link as LinkIcon, Upload, Camera, Brush, Plus, Pencil, FileSearch, FolderPlus, ListTodo, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useIsTooNarrowToDock } from '@/hooks/use-mobile'
+import { MessageComposer } from '@/components/common/MessageComposer'
 import { InsertMenu } from '@/components/common/insert-menu'
 import { useToolbox } from './use-toolbox'
 import { type AddKind } from './toolbox-context'
@@ -25,6 +26,7 @@ const MIN_WIDTH = 300
 const MAX_WIDTH = 560
 
 const TITLES: Record<AddKind, { label: string; icon: typeof StickyNote }> = {
+  message: { label: 'New Message', icon: MessageSquarePlus },
   note: { label: 'New Note', icon: StickyNote },
   link: { label: 'New Link', icon: LinkIcon },
   todo: { label: 'New Todo', icon: ListTodo },
@@ -42,8 +44,13 @@ export function AddPanel() {
   const { addOpen, addKind, editDocument } = state
   const target = useAddTarget()
   const backend = useBackendAddTarget(target)
-  const allowedBackendKinds = ['file', 'photo', 'folder']
+  const allowedBackendKinds = ['file', 'photo', 'folder', 'message']
   const backendBlockedKind = backend.isBackend && !!addKind && !allowedBackendKinds.includes(addKind)
+  const messageWorkspace = state.activeWorkspaceName
+  const omitMessage = !messageWorkspace || !!state.addRelateTo
+  const blockedKind = backendBlockedKind || (addKind === 'message' && omitMessage)
+  const omittedKinds: AddKind[] = backend.isBackend ? ['note', 'link', 'todo', 'identity', 'sketch', 'existing'] : []
+  if (omitMessage) omittedKinds.push('message')
   const formKey = target?.mode === 'workspace' ? `${target.workspaceName}:${target.treeName}:${target.path}` : target?.contextId
   const navigate = useNavigate()
 
@@ -83,7 +90,7 @@ export function AddPanel() {
   if (!addOpen) return null
 
   const isEditMode = Boolean(editDocument)
-  const isPicker = !isEditMode && (!addKind || backendBlockedKind)
+  const isPicker = !isEditMode && (!addKind || blockedKind)
 
   let headerLabel: string
   let HeaderIcon: typeof StickyNote
@@ -91,7 +98,7 @@ export function AddPanel() {
   if (isEditMode) {
     headerLabel = editDocument!.schema === 'data/schema/note' ? 'Edit Note' : 'Edit Link'
     HeaderIcon = editDocument!.schema === 'data/schema/note' ? StickyNote : LinkIcon
-  } else if (addKind && !backendBlockedKind) {
+  } else if (addKind && !blockedKind) {
     headerLabel = TITLES[addKind].label
     HeaderIcon = TITLES[addKind].icon
   } else {
@@ -149,12 +156,13 @@ export function AddPanel() {
             The new document will be related to {state.addRelateTo.documents.length} selected document{state.addRelateTo.documents.length === 1 ? '' : 's'}.
           </p>
         )}
-        {!isEditMode && backend.isBackend && (
+        {!isEditMode && backend.isBackend && addKind !== 'message' && (
           <p className="border-b px-4 py-3 text-xs text-muted-foreground">
             {backend.loading ? 'Checking storage destination…' : backend.error || 'Files are saved directly to this backend folder. Notes and other database documents belong in context or directory trees.'}
           </p>
         )}
-        {!isEditMode && isPicker && (!backend.isBackend || backend.destination) && <InsertMenu onSelect={openAdd} omit={backend.isBackend ? ['note', 'link', 'todo', 'identity', 'sketch', 'existing'] : undefined} />}
+        {!isEditMode && isPicker && (!backend.isBackend || backend.destination) && <InsertMenu onSelect={openAdd} omit={omittedKinds} />}
+        {!isEditMode && addKind === 'message' && !omitMessage && messageWorkspace && <MessageComposer key={messageWorkspace} workspaceId={messageWorkspace} onClose={closeAdd} />}
         {!isEditMode && !backend.isBackend && addKind === 'note' && <NoteForm />}
         {!isEditMode && !backend.isBackend && addKind === 'link' && <LinkForm />}
         {!isEditMode && !backend.isBackend && addKind === 'todo' && <TodoForm />}

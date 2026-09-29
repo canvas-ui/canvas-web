@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { workspacePathUrl } from '@/lib/workspace-path-url'
 import { ImageViewContext } from '@/components/common/image-view-context'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { createPortal } from 'react-dom'
@@ -23,6 +25,7 @@ interface B5CardProps {
   // is multi-selected, B5Card links those same ids into every additional
   // path itself (see handleSelect) rather than re-creating per path.
   onSave?: (target: B5SaveTarget) => Promise<number[]>
+  navigateAfterSave?: boolean
   canSave?: boolean
   saving?: boolean
   saveProgress?: ReactNode
@@ -48,8 +51,9 @@ interface B5CardProps {
 // side) rather than a modal — it only portals to a fullscreen overlay while
 // explicitly maximized.
 export function B5Card({
-  title, icon: Icon, onClose, onSave, canSave = false, saving: externalSaving = false, saveProgress, successMessage = 'Saved', lockedWorkspaceName, fillParent = false, fullWidthContent = false, relationSubjectId, frame, children,
+  title, icon: Icon, onClose, onSave, navigateAfterSave = false, canSave = false, saving: externalSaving = false, saveProgress, successMessage = 'Saved', lockedWorkspaceName, fillParent = false, fullWidthContent = false, relationSubjectId, frame, children,
 }: B5CardProps) {
+  const navigate = useNavigate()
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait')
   const [maximized, setMaximized] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -94,6 +98,7 @@ export function B5Card({
       }
       showSuccessToast(successMessage)
       onClose()
+      if (navigateAfterSave) navigate(workspacePathUrl({ ...ctx, path: paths[0] }), { replace: true })
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to save')
     } finally {

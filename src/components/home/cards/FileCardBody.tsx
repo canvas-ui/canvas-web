@@ -59,6 +59,7 @@ export function FileCardBody({ onClose, initialData }: { onClose: () => void; in
       icon={Upload}
       onClose={onClose}
       onSave={save}
+      navigateAfterSave
       canSave={canSave}
       saving={saving}
       saveProgress={<UploadProgressPanel items={queue.items} running={queue.running} onCancel={queue.cancel} />}

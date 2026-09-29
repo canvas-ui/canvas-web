@@ -1,3 +1,4 @@
+import { useLongPressContextMenu } from '@/hooks/use-long-press-context-menu'
 /**
  * MenuTreeView — card-style tree for M2 panels.
  * Supports full tree operations via context-menu: new folder (inline),
@@ -579,6 +580,7 @@ function CardNode({
   dragOverPath, isCopyDrag, onDragStart, onDragEnter, onDragOver, onDragLeave, onDragEnd, onDrop,
   resyncingPaths, accordion = false, trail = [],
 }: CardNodeProps) {
+  const longPressMenu = useLongPressContextMenu()
 
   const path = buildPath(parentPath, node.name)
   const style = styleOverrides.get(path) ?? getLayerStyle(node)
@@ -682,6 +684,7 @@ function CardNode({
       }}
       draggable={!readOnly}
       onClick={handleClick}
+      {...(!readOnly ? longPressMenu : {})}
       onContextMenu={e => { if (!readOnly) { e.preventDefault(); onCtxMenu(e, path, node) } }}
       onDragStart={e => { if (!readOnly) onDragStart(path, e) }}
       onDragEnter={e => { if (!readOnly) onDragEnter(path, e) }}
@@ -814,7 +817,8 @@ function CardNode({
         style={{ borderRight: style.color ? `4px solid ${style.color}` : '4px solid transparent' }}
         draggable={!readOnly}
         onClick={handleClick}
-        onContextMenu={e => { if (!readOnly) { e.preventDefault(); onCtxMenu(e, path, node) } }}
+        {...(!readOnly ? longPressMenu : {})}
+      onContextMenu={e => { if (!readOnly) { e.preventDefault(); onCtxMenu(e, path, node) } }}
         onDragStart={e => { if (!readOnly) onDragStart(path, e) }}
         onDragEnter={e => { if (!readOnly) onDragEnter(path, e) }}
         onDragOver={e => { if (!readOnly) onDragOver(path, e) }}

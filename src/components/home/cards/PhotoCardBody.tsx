@@ -47,6 +47,7 @@ export function PhotoCardBody({ onClose, initialData }: { onClose: () => void; i
       icon={Camera}
       onClose={onClose}
       onSave={save}
+      navigateAfterSave
       canSave={hasFiles}
       saving={saving}
       saveProgress={<UploadProgressPanel items={queue.items} running={queue.running} onCancel={queue.cancel} />}

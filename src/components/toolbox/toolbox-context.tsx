@@ -34,7 +34,7 @@ export type ToolsTab = 'features' | 'timeline' | 'map' | 'lens'
 // Maps directly to synapsd feature sigil algebra: anyOf (OR), allOf (+ gate), noneOf (! exclude).
 export type FeatureMode = 'off' | 'anyOf' | 'allOf' | 'noneOf'
 export type ActiveContextType = 'canvas' | 'context' | null
-export type AddKind = 'note' | 'link' | 'todo' | 'identity' | 'sketch' | 'file' | 'photo' | 'existing' | 'folder'
+export type AddKind = 'message' | 'note' | 'link' | 'todo' | 'identity' | 'sketch' | 'file' | 'photo' | 'existing' | 'folder'
 export type { WorkspaceDocument }
 
 export interface RelateSeed {

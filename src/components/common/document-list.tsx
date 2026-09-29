@@ -1,3 +1,4 @@
+import { useLongPressContextMenu } from '@/hooks/use-long-press-context-menu'
 import { selectDocumentRange } from '@/lib/document-selection'
 import { CopyToWorkspacePanel } from '@/components/menu/shared/CopyToWorkspacePanel'
 import { BulkEditDialog } from './BulkEditDialog'
@@ -472,6 +473,7 @@ function ReplicatingBadge({ document }: { document: Document }) {
 }
 
 function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemoveDocument, onDeleteDocument, onLinkDocument, onOpenToSide, onRightClick, onDragStart }: DocumentTableRowProps) {
+  const longPressMenu = useLongPressContextMenu()
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [detailEdit, setDetailEdit] = useState(false)
   const [actionSheet, setActionSheet] = useState(false)
@@ -549,6 +551,7 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
         className={`cursor-pointer transition-opacity ${replicating ? 'opacity-60' : ''} ${isSelected ? 'bg-info-subtle hover:bg-info-subtle' : 'hover:bg-muted/50'}`}
         onClick={handleDocumentClick}
         onMouseDown={handleMouseDown}
+        {...longPressMenu}
         onContextMenu={handleRightClick}
         draggable
         onDragStart={handleDragStart}
@@ -621,6 +624,7 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
 }
 
 function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocument, onDeleteDocument, onLinkDocument, onOpenToSide, onRightClick, onDragStart }: DocumentRowProps) {
+  const longPressMenu = useLongPressContextMenu()
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [detailEdit, setDetailEdit] = useState(false)
   const [actionSheet, setActionSheet] = useState(false)
@@ -679,6 +683,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
         className={`border rounded-lg p-4 transition cursor-pointer ${replicating ? 'opacity-60' : ''} ${isSelected ? 'bg-info-subtle border-info ring-1 ring-info' : ''} ${isTabDocument && !isSelected ? 'hover:bg-info-subtle hover:border-info' : !isSelected ? 'hover:bg-accent/50' : ''}`}
         onClick={handleDocumentClick}
         onMouseDown={handleMouseDown}
+        {...longPressMenu}
         onContextMenu={handleRightClick}
         draggable
         onDragStart={handleDragStart}
@@ -823,6 +828,7 @@ function TileTextPreview({ document, workspaceId, markdown }: { document: Docume
 // icon tile (everything else). Mirrors DocumentRow's click/selection/right-click
 // behavior. Sized for a responsive auto-fill grid, so it reads on mobile too.
 function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSide, onRightClick, onDragStart }: DocumentRowProps) {
+  const longPressMenu = useLongPressContextMenu()
   const [showDetailModal, setShowDetailModal] = useState(false)
   const isTabDocument = document.schema === 'data/schema/tab'
   const tabUrl = isTabDocument ? document.data.url : null
@@ -857,6 +863,7 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
         className={`group relative mb-3 flex break-inside-avoid flex-col overflow-hidden rounded-lg border transition cursor-pointer hover:shadow-elevation-2 ${replicating ? 'opacity-60' : ''} ${isSelected ? 'ring-2 ring-info border-info' : ''}`}
         onClick={handleClick}
         onMouseDown={event => { if (event.shiftKey) event.preventDefault() }}
+        {...longPressMenu}
         onContextMenu={handleRightClick}
         draggable
         onDragStart={(e) => onDragStart?.(e, document.id)}
