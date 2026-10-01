@@ -43,7 +43,7 @@ quick-add card, and the PWA manifest exposes shortcuts for Add Photo / Add File 
 
 ### Workspace Detail
 
-Workspace connected to a browser running [canvas-browser-extension](https://github.com/canvas-ui/canvas-browser-extensions)
+Workspace connected to a browser running [canvas-browser-extension](https://github.com/canvas-ui/canvas-browser-extension)
 ![Workspace Management](./public/screenshots/s2.png)
 
 ### Context detail
@@ -54,8 +54,8 @@ Context-bound browser with real-time data sync
 ## Installation (standalone)
 
 ### Prerequisites
-- Node.js >= 20.0.0
-- npm or yarn package manager
+- Node.js >= 22
+- pnpm (via `corepack enable`; the version is pinned in `package.json`)
 
 ### Setup
 1. **Clone this repository**
@@ -66,28 +66,39 @@ Context-bound browser with real-time data sync
 
 2. **Install dependencies**
    ```bash
-   npm install
+   pnpm install
    ```
 
 3. **Build the web frontend**
    ```bash
-   npm run build
+   pnpm run build
    ```
 
 ### Development
 ```bash
 # Start development server
-npm run dev
+pnpm run dev
 
 # Build for production
-npm run build
+pnpm run build
 
 # Preview production build
-npm run preview
+pnpm run preview
 
 # Lint code
-npm run lint
+pnpm run lint
 ```
+
+## Shared packages and releases
+
+`@augmentd-labs/canvas-{protocol,api-client,wallpapers}` come from the
+[canvas-common](https://github.com/canvas-ui/canvas-common) `*-dist` branches;
+`pnpm update @augmentd-labs/canvas-protocol` (etc.) picks up a new push.
+
+- Every push to `main` republishes the **`web-dist`** branch (dist.yml), which
+  canvas-server installs as `"canvas-web": "github:canvas-ui/canvas-web#web-dist"`.
+- `pnpm run release tag --bump patch` bumps, tags `vX.Y.Z` and lets
+  release.yml attach the prebuilt tarball to a GitHub Release.
 
 ## Configuration
 

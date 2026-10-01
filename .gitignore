@@ -138,3 +138,6 @@ build/Release
 
 # Copied in from @augmentd-labs/canvas-wallpapers at dev/build time
 public/wallpapers/
+
+# Release staging
+/artifacts/

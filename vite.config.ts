@@ -134,6 +134,10 @@ export default defineConfig({
           if (id.includes('@iconify')) return 'icons'
           if (id.includes('fuse.js')) return 'search'
           if (id.includes('socket.io-client')) return 'socket'
+          // Explicit, or rolldown may hoist them into index and push it past
+          // the 2 MiB SW precache limit (happened on the monorepo split).
+          if (id.includes('leaflet')) return 'map'
+          if (id.includes('dompurify')) return 'sanitize'
           if (['class-variance-authority', 'clsx', 'tailwind-merge', 'jwt-decode'].some((pkg) => id.includes(pkg))) return 'utils'
         },
       },

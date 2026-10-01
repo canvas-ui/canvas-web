@@ -1,0 +1,69 @@
+name: housekeeping
+
+# Keeps the Actions history and the Releases page short: at most KEEP_RUNS
+# completed runs per workflow and KEEP_RELEASES releases per app (grouped by
+# tag prefix). Older releases
+# are deleted together with their tags. Runs after every ci/release/dist run
+# and once a day.
+
+on:
+  workflow_run:
+    workflows: [ci, release, dist]
+    types: [completed]
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+
+concurrency:
+  group: housekeeping
+  cancel-in-progress: false
+
+env:
+  KEEP_RUNS: 5
+  KEEP_RELEASES: 5
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prune workflow runs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          R: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          for wf in $(gh api "repos/$R/actions/workflows" --jq '.workflows[].id'); do
+            name=$(gh api "repos/$R/actions/workflows/$wf" --jq .name)
+            # newest first from the API; skip anything still running
+            ids=$(gh api --paginate "repos/$R/actions/workflows/$wf/runs?per_page=100" \
+              --jq '.workflow_runs[] | select(.status == "completed") | .id')
+            n=0
+            for id in $ids; do
+              n=$((n + 1))
+              [ "$n" -le "$KEEP_RUNS" ] && continue
+              gh api -X DELETE "repos/$R/actions/runs/$id" >/dev/null && echo "deleted run $id ($name)"
+            done
+          done
+      - name: Prune releases (and their tags)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          R: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # id, tag, created_at — grouped by the tag's app prefix, newest first
+          gh api --paginate "repos/$R/releases?per_page=100" \
+            --jq '.[] | select(.draft == false) | [.id, .tag_name, .created_at] | @tsv' \
+          | sort -t$'\t' -k3,3r \
+          | while IFS=$'\t' read -r id tag created; do
+              prefix=$(printf '%s' "$tag" | sed -E 's/-?v?[0-9].*$//')
+              printf '%s\t%s\t%s\n' "$prefix" "$id" "$tag"
+            done \
+          | awk -F'\t' -v keep="$KEEP_RELEASES" '{ c[$1]++; if (c[$1] > keep) print $2 "\t" $3 }' \
+          | while IFS=$'\t' read -r id tag; do
+              gh api -X DELETE "repos/$R/releases/$id" >/dev/null && echo "deleted release $tag"
+              gh api -X DELETE "repos/$R/git/refs/tags/$tag" >/dev/null 2>&1 && echo "deleted tag $tag" || true
+            done

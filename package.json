@@ -12,12 +12,14 @@
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "preview": "vite preview",
     "build:fallbacks": "node scripts/generate-color-fallbacks.mjs",
-    "shots": "node scripts/screenshot.mjs"
+    "shots": "node scripts/screenshot.mjs",
+    "pack:dist": "node scripts/pack-dist.mjs",
+    "release": "bash scripts/release.sh"
   },
   "dependencies": {
-    "@augmentd-labs/canvas-api-client": "workspace:*",
-    "@augmentd-labs/canvas-protocol": "workspace:*",
-    "@augmentd-labs/canvas-wallpapers": "workspace:*",
+    "@augmentd-labs/canvas-api-client": "github:canvas-ui/canvas-common#api-client-dist",
+    "@augmentd-labs/canvas-protocol": "github:canvas-ui/canvas-common#protocol-dist",
+    "@augmentd-labs/canvas-wallpapers": "github:canvas-ui/canvas-common#wallpapers-dist",
     "@codemirror/lang-javascript": "^6.2.5",
     "@codemirror/lang-json": "^6.0.2",
     "@codemirror/language": "^6.12.4",
@@ -84,5 +86,10 @@
   },
   "files": [
     "dist"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/canvas-ui/canvas-web.git"
+  },
+  "packageManager": "pnpm@10.32.1"
 }
