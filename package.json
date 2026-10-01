@@ -17,9 +17,9 @@
     "release": "bash scripts/release.sh"
   },
   "dependencies": {
-    "@augmentd-labs/canvas-api-client": "github:canvas-ui/canvas-common#api-client-dist",
-    "@augmentd-labs/canvas-protocol": "github:canvas-ui/canvas-common#protocol-dist",
-    "@augmentd-labs/canvas-wallpapers": "github:canvas-ui/canvas-common#wallpapers-dist",
+    "@augmentd-labs/canvas-api-client": "^0.3.0",
+    "@augmentd-labs/canvas-protocol": "^0.4.0",
+    "@augmentd-labs/canvas-wallpapers": "^0.1.0",
     "@codemirror/lang-javascript": "^6.2.5",
     "@codemirror/lang-json": "^6.0.2",
     "@codemirror/language": "^6.12.4",

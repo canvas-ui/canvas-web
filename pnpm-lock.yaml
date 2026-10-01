@@ -9,13 +9,13 @@ importers:
   .:
     dependencies:
       '@augmentd-labs/canvas-api-client':
-        specifier: github:canvas-ui/canvas-common#api-client-dist
+        specifier: ^0.3.0
         version: https://codeload.github.com/canvas-ui/canvas-common/tar.gz/c43ec8bb4541d6ff1157eca30fc091b83b471139
       '@augmentd-labs/canvas-protocol':
-        specifier: github:canvas-ui/canvas-common#protocol-dist
+        specifier: ^0.4.0
         version: https://codeload.github.com/canvas-ui/canvas-common/tar.gz/cbcab5d0eeeec0d34e5994d057221458974c7376
       '@augmentd-labs/canvas-wallpapers':
-        specifier: github:canvas-ui/canvas-common#wallpapers-dist
+        specifier: ^0.1.0
         version: https://codeload.github.com/canvas-ui/canvas-common/tar.gz/e862f707d85b6c76999591b1f875c8794c103514
       '@codemirror/lang-javascript':
         specifier: ^6.2.5

@@ -91,9 +91,9 @@ pnpm run lint
 
 ## Shared packages and releases
 
-`@augmentd-labs/canvas-{protocol,api-client,wallpapers}` come from the
-[canvas-common](https://github.com/canvas-ui/canvas-common) `*-dist` branches;
-`pnpm update @augmentd-labs/canvas-protocol` (etc.) picks up a new push.
+`@augmentd-labs/canvas-{protocol,api-client,wallpapers}` are npm packages
+published from [canvas-common](https://github.com/canvas-ui/canvas-common);
+`pnpm update @augmentd-labs/canvas-protocol` (etc.) picks up a new release.
 
 - Every push to `main` republishes the **`web-dist`** branch (dist.yml), which
   canvas-server installs as `"canvas-web": "github:canvas-ui/canvas-web#web-dist"`.
