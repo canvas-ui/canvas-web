@@ -38,6 +38,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
       - id: npm
+        shell: bash   # -eo pipefail: a failed publish must fail the step, not just grep
         run: node scripts/publish-npm.mjs --out artifacts | tee /dev/stderr | grep '^published=' >> "$GITHUB_OUTPUT"
       - name: Tag + GitHub Release
         if: steps.npm.outputs.published != ''
