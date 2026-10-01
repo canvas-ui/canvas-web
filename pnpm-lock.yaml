@@ -10,13 +10,13 @@ importers:
     dependencies:
       '@augmentd-labs/canvas-api-client':
         specifier: ^0.3.0
-        version: https://codeload.github.com/canvas-ui/canvas-common/tar.gz/c43ec8bb4541d6ff1157eca30fc091b83b471139
+        version: 0.3.0
       '@augmentd-labs/canvas-protocol':
         specifier: ^0.4.0
-        version: https://codeload.github.com/canvas-ui/canvas-common/tar.gz/cbcab5d0eeeec0d34e5994d057221458974c7376
+        version: 0.4.0
       '@augmentd-labs/canvas-wallpapers':
         specifier: ^0.1.0
-        version: https://codeload.github.com/canvas-ui/canvas-common/tar.gz/e862f707d85b6c76999591b1f875c8794c103514
+        version: 0.1.0
       '@codemirror/lang-javascript':
         specifier: ^6.2.5
         version: 6.2.5
@@ -204,21 +204,16 @@ packages:
     peerDependencies:
       ajv: '>=8'
 
-  '@augmentd-labs/canvas-api-client@https://codeload.github.com/canvas-ui/canvas-common/tar.gz/c43ec8bb4541d6ff1157eca30fc091b83b471139':
-    resolution: {tarball: https://codeload.github.com/canvas-ui/canvas-common/tar.gz/c43ec8bb4541d6ff1157eca30fc091b83b471139}
-    version: 0.3.0
-    engines: {node: '>=20'}
-    bundledDependencies:
-      - '@augmentd-labs/canvas-protocol'
-
-  '@augmentd-labs/canvas-protocol@https://codeload.github.com/canvas-ui/canvas-common/tar.gz/cbcab5d0eeeec0d34e5994d057221458974c7376':
-    resolution: {tarball: https://codeload.github.com/canvas-ui/canvas-common/tar.gz/cbcab5d0eeeec0d34e5994d057221458974c7376}
-    version: 0.4.0
+  '@augmentd-labs/canvas-api-client@0.3.0':
+    resolution: {integrity: sha512-YQk0K6rTjJxizRsZc5c3WP22N7sHAHvEYXp3KBtWjPUhEVee3wK21o+wvdvy6DPWgkvrAPNuxsJl8RiHreg8qg==}
     engines: {node: '>=20'}
 
-  '@augmentd-labs/canvas-wallpapers@https://codeload.github.com/canvas-ui/canvas-common/tar.gz/e862f707d85b6c76999591b1f875c8794c103514':
-    resolution: {tarball: https://codeload.github.com/canvas-ui/canvas-common/tar.gz/e862f707d85b6c76999591b1f875c8794c103514}
-    version: 0.1.0
+  '@augmentd-labs/canvas-protocol@0.4.0':
+    resolution: {integrity: sha512-cmPU1k8qcSR9H0klQIbq1hmI22rhbC+1n7XXUkn2ctwjAmk7qDuc9ao3P/nH3XlaUoMJkiTsHgHfMwU+aMad/Q==}
+    engines: {node: '>=20'}
+
+  '@augmentd-labs/canvas-wallpapers@0.1.0':
+    resolution: {integrity: sha512-WHh4FXufZtEw2o0WBWFD+o4v6pOKsB3y3BrdDwzBnXdkR58lFK7794N9TvMG5kbtsq+6QTupnQOE1uHAlN9Jyg==}
     engines: {node: '>=20'}
     hasBin: true
 
@@ -4816,11 +4811,13 @@ snapshots:
       jsonpointer: 5.0.1
       leven: 3.1.0
 
-  '@augmentd-labs/canvas-api-client@https://codeload.github.com/canvas-ui/canvas-common/tar.gz/c43ec8bb4541d6ff1157eca30fc091b83b471139': {}
+  '@augmentd-labs/canvas-api-client@0.3.0':
+    dependencies:
+      '@augmentd-labs/canvas-protocol': 0.4.0
 
-  '@augmentd-labs/canvas-protocol@https://codeload.github.com/canvas-ui/canvas-common/tar.gz/cbcab5d0eeeec0d34e5994d057221458974c7376': {}
+  '@augmentd-labs/canvas-protocol@0.4.0': {}
 
-  '@augmentd-labs/canvas-wallpapers@https://codeload.github.com/canvas-ui/canvas-common/tar.gz/e862f707d85b6c76999591b1f875c8794c103514': {}
+  '@augmentd-labs/canvas-wallpapers@0.1.0': {}
 
   '@babel/code-frame@7.29.7':
     dependencies:
