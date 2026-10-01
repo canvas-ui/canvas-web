@@ -95,10 +95,12 @@ pnpm run lint
 published from [canvas-common](https://github.com/canvas-ui/canvas-common);
 `pnpm update @augmentd-labs/canvas-protocol` (etc.) picks up a new release.
 
-- Every push to `main` republishes the **`web-dist`** branch (dist.yml), which
-  canvas-server installs as `"canvas-web": "github:canvas-ui/canvas-web#web-dist"`.
-- `pnpm run release tag --bump patch` bumps, tags `vX.Y.Z` and lets
-  release.yml attach the prebuilt tarball to a GitHub Release.
+- canvas-server serves the UI from the npm package
+  **`@augmentd-labs/canvas-web`** (prebuilt `dist/`, no dependencies).
+- `pnpm run release patch` bumps the version and pushes; npm-publish.yml then
+  publishes it to npm and creates the `vX.Y.Z` tag + GitHub Release.
+- To develop the server against a local build, point it at this checkout:
+  `CANVAS_WEB_ROOT=../canvas-web/dist npm run dev` in canvas-server.
 
 ## Configuration
 

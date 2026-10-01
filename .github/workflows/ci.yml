@@ -20,6 +20,6 @@ jobs:
       - run: pnpm run lint
       - run: pnpm run test
       - run: pnpm run build
-      # The web-dist artifact must stage + pack on every PR, so a broken
-      # bundle fails review rather than the dist publish.
-      - run: node scripts/pack-dist.mjs --out artifacts --pack
+      # Stage + pack the npm package on every PR (skipped once the version is
+      # already on npm), so a broken bundle fails review, not the publish.
+      - run: node scripts/publish-npm.mjs --dry-run --out artifacts
