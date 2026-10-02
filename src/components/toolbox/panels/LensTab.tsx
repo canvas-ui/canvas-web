@@ -22,8 +22,8 @@ import { LENS_RATES } from '../lens-rates'
 // toolbox closes or another tab is picked — which on mobile is the only way to
 // see the results it produces. See lens-feed-context.tsx.
 //
-// All of it is deliberately EPHEMERAL state: cleared rather than persisted —
-// a saved canvas must not replay yesterday's position or a long-gone frame.
+// Frames and capture sessions are temporary. Contexts can explicitly save a
+// frozen fix and match set; a saved view never restarts capture.
 
 const RADII = [
   { label: '25 m', m: 25 },
@@ -39,12 +39,13 @@ const inputClass = 'h-7 rounded-md border border-input bg-transparent px-2 text-
 const round4 = (n: number) => Math.round(n * 10000) / 10000
 
 export function LensTab() {
-  const { state, setLensGps } = useToolbox()
+  const { state, setLensGps, setLensIds } = useToolbox()
   const lens = state.filters.lens
   const workspaceName = state.activeWorkspaceName
+  const displayRadius = lens.gps?.radiusM ?? 100
 
   // ── GPS refine ─────────────────────────────────────────────────────────────
-  const [gpsOn, setGpsOn] = useState(lens.gps !== null)
+  const [gpsOn, setGpsOn] = useState(false)
   const [radiusM, setRadiusM] = useState(lens.gps?.radiusM ?? 100)
   const [gpsError, setGpsError] = useState<string | null>(null)
   // Bumping this re-runs the watch effect → a fresh watchPosition call, which
@@ -70,7 +71,6 @@ export function LensTab() {
       st.onchange = () => setGpsPermission(st.state === 'granted' ? 'granted' : st.state === 'denied' ? 'denied' : 'prompt')
     }).catch(() => {})
     return () => { if (status) status.onchange = null }
-      <GeoMissingOption />
   }, [])
 
   useEffect(() => {
@@ -120,13 +120,15 @@ export function LensTab() {
 
   const startFeed = (kind: 'camera' | 'screen') => {
     if (!workspaceName) return
-    void feed.start(kind, 'filter', { workspaceRef: workspaceName })
+    void feed.start(kind, 'filter', { workspaceRef: workspaceName, contextPath: state.activeContextPath })
   }
 
   const feedRunning = ownFeed
 
   return (
     <div className="flex flex-col gap-4 p-3 text-sm">
+      {state.activeContextType === 'context' && <p className="text-xs text-muted-foreground">Point the camera at an object to find visually related content in this context. {state.liveEnabled ? 'Bound devices follow your matches as you move.' : 'Enable Live to show the matches on your other devices.'}</p>}
+      <GeoMissingOption />
       {/* GPS */}
       <section className="space-y-2">
         <div className="flex items-center justify-between gap-2">
@@ -138,7 +140,7 @@ export function LensTab() {
               onChange={(e) => toggleGps(e.target.checked)}
             />
             <LocateFixed className="h-4 w-4 text-muted-foreground" />
-            <span>Refine with GPS</span>
+            <span>Track this device’s GPS</span>
           </label>
           <select className={selectClass} value={radiusM} onChange={(e) => changeRadius(Number(e.target.value))} disabled={!gpsOn}>
             {RADII.map((r) => <option key={r.m} value={r.m}>{r.label}</option>)}
@@ -159,7 +161,7 @@ export function LensTab() {
                   </span>
                 )
                 : lens.gps
-                ? `Showing documents within ${radiusM >= 1000 ? `${radiusM / 1000} km` : `${radiusM} m`} of ${lens.gps.lat}, ${lens.gps.lon}.`
+                ? `Showing documents within ${displayRadius >= 1000 ? `${displayRadius / 1000} km` : `${displayRadius} m`} of ${lens.gps.lat}, ${lens.gps.lon}.`
                 : gpsOn ? 'Waiting for a position fix…' : 'Resurface documents geotagged near your current position.'}
         </p>
       </section>
@@ -225,12 +227,15 @@ export function LensTab() {
             `Live: view narrowed to ${feed.lastCount ?? '…'} match${feed.lastCount === 1 ? '' : 'es'}. Frames are ephemeral, never stored. Closing the toolbox keeps it running.`
           ) : otherFeed ? (
             'The Lens applet is using the camera. Stop it there first.'
+          ) : lens.ids !== null ? (
+            `The current view holds ${lens.ids.length} camera match${lens.ids.length === 1 ? '' : 'es'}. Save to keep this view, or clear matches to remove the camera filter.`
           ) : !workspaceName ? (
             'Open a workspace to refine with a live feed.'
           ) : (
             'Point a camera (or share a screen). The view narrows to what the feed matches.'
           )}
         </p>
+        {!feedRunning && lens.ids !== null && <button type="button" onClick={() => setLensIds(null)} className="min-h-10 rounded-md border border-border px-3 text-xs hover:bg-muted">Clear matches</button>}
       </section>
     </div>
   )

@@ -11,7 +11,7 @@ import { LensFeedCtx, useLensFeed } from './use-lens-feed'
 import { useWebcam } from '@/hooks/useWebcam'
 import { searchByImage } from '@/services/lens'
 import { DEFAULT_LENS_RATE_MS } from './lens-rates'
-import type { Document } from '@/types/workspace'
+import { buildDatetimeFilters, buildGeoFilters, buildLensFilters, type Document } from '@/types/workspace'
 
 /**
  * The live Lens feed, hoisted out of the panels that display it.
@@ -34,8 +34,8 @@ import type { Document } from '@/types/workspace'
  *  - `applet` (Apps → Lens): hydrated documents + distances, optional fused
  *    text, scoped to the applet's bound path → its own result grid.
  *
- * All of it stays EPHEMERAL: frames are embedded for the query and never
- * stored, and nothing here is persisted across a reload.
+ * Frames are embedded for the query and never stored. A context may save
+ * its current match IDs, while capture itself never resumes after a reload.
  */
 
 const SMOOTH_WINDOW = 3 // majority vote over the last N frames kills flicker
@@ -156,6 +156,7 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
   const timerRef = useRef<number | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const failuresRef = useRef(0)
+  const scopeKeyRef = useRef('')
   // In-flight getUserMedia — see start().
   const startingRef = useRef(false)
   // The chained timeout re-enters tick() through this ref — a direct self-
@@ -228,10 +229,16 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
         const controller = new AbortController()
         abortRef.current = controller
         try {
+          const tb = toolboxRef.current?.state
+          const filterScope = !applet && tb?.activeContextType === 'context'
           const res = await searchByImage(s.workspaceRef, frame, {
             q: applet ? (s.text || undefined) : undefined,
             maxDistance: Number.isFinite(s.maxDistance) ? s.maxDistance : undefined,
-            contextPath: applet ? s.contextPath : null,
+            contextPath: filterScope ? tb.activeContextPath : applet ? s.contextPath : null,
+            treeId: filterScope ? tb.activeTreeName : null,
+            features: filterScope ? tb.filters.features : undefined,
+            filters: filterScope ? [...buildDatetimeFilters(tb.filters.timeline), ...buildGeoFilters(tb.filters.geo), ...buildLensFilters(tb.filters.lens, tb.filters.geo.includeUnlocated)] : undefined,
+            applyCanvasQuerySpec: filterScope ? false : undefined,
             limit: applet ? APPLET_LIMIT : FILTER_KNN_LIMIT,
             idsOnly: !applet,
             debug: applet,
@@ -285,9 +292,9 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
     setLastCount(null)
     setLatencyMs(null)
     setSearchError(null)
-    // Only the filter consumer owns a listing constraint; clearing it for the
-    // applet would wipe a refine the user set from the Filters tab.
-    if (wasFilter) toolboxRef.current?.setLensIds(null)
+    // A context holds the last scene when capture stops, ready to Save.
+    // Other views clear the ephemeral refine as before.
+    if (wasFilter && toolboxRef.current?.state.activeContextType !== 'context') toolboxRef.current?.setLensIds(null)
   }, [stopMedia])
 
   useEffect(() => { endedRef.current = stop }, [stop])
@@ -322,9 +329,21 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
     setSource(kind)
     setConsumer(who)
     setPausedState(false)
+    if (who === 'filter') toolboxRef.current?.setLensIds([])
     void tick()
     return true
   }, [startCamera, startScreen, stop, tick])
+
+  const filterScopeKey = JSON.stringify(toolbox ? { contextId: toolbox.state.activeContextId, path: toolbox.state.activeContextPath, tree: toolbox.state.activeTreeName, features: toolbox.state.filters.features, timeline: toolbox.state.filters.timeline, geo: toolbox.state.filters.geo, gps: toolbox.state.filters.lens.gps } : null)
+  useEffect(() => {
+    if (scopeKeyRef.current === filterScopeKey) return
+    scopeKeyRef.current = filterScopeKey
+    if (cfgRef.current.consumer !== 'filter') return
+    abortRef.current?.abort()
+    historyRef.current = []
+    committedRef.current = null
+    toolboxRef.current?.setLensIds([])
+  }, [filterScopeKey])
 
   // The applet's binding tracks navigation, so the scope has to stay live for
   // the running loop rather than being frozen at start().

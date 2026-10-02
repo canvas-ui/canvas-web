@@ -1,7 +1,7 @@
 import { CONTEXT_DELETED_EVENT } from '@/lib/context-deletion';
 import { API_ROUTES } from '@/config/api';
 import { api } from '@/lib/api';
-import type { TreeNode } from '@/types/workspace';
+import type { TreeNode, ContextQueryOptions, GeoSelection } from '@/types/workspace';
 // Removed import for Context and Workspace as they are global types from src/types/api.d.ts
 
 // Type for the payload when creating a context
@@ -15,6 +15,8 @@ type CreateContextPayload = Pick<Context, 'id' | 'url'> &
 type UnknownRecord = Record<string, unknown>;
 type PaginationOptions = {
   ids?: number[] | null;
+  geoSelection?: GeoSelection | null;
+  includeUnlocated?: boolean;
   signal?: AbortSignal;
   includeServerContext?: boolean;
   includeClientContext?: boolean;
@@ -129,7 +131,7 @@ export async function createContext(contextData: CreateContextPayload): Promise<
   }
 }
 
-export async function patchContext(id: string, updates: { name?: string; description?: string; metadata?: Record<string, unknown>; features?: { allOf: string[]; anyOf: string[]; noneOf: string[] }; filters?: string[] }, ownerId?: string): Promise<Context> {
+export async function patchContext(id: string, updates: { name?: string; description?: string; metadata?: Record<string, unknown>; features?: { allOf: string[]; anyOf: string[]; noneOf: string[] }; filters?: string[]; queryOptions?: ContextQueryOptions }, ownerId?: string): Promise<Context> {
   try {
     const endpoint = withOwnerId(`${API_ROUTES.contexts}/${id}`, ownerId);
     const response = await api.put<{ context: Context }>(endpoint, updates);
@@ -194,6 +196,10 @@ export async function getContextDocuments(
   try {
     if (options.ids?.length === 0) return Object.assign([], { count: 0, totalCount: 0 });
     const params = new URLSearchParams();
+    if (options.geoSelection) {
+      params.set('geoSelection', JSON.stringify(options.geoSelection));
+      params.set('includeUnlocated', String(options.includeUnlocated === true));
+    }
     options.ids?.forEach(id => params.append('ids', String(id)));
     featureArray.forEach(feature => params.append('allOf', feature));
     filterArray.forEach(filter => params.append('filters', filter));

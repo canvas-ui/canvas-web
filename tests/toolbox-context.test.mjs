@@ -6,7 +6,7 @@ import ts from 'typescript'
 import * as contextDeletion from '../src/lib/context-deletion.ts'
 import { isBrowserNetworkFailure } from '../src/lib/api-network-error.ts'
 import { docInGeoSelection } from '../src/utils/geo.ts'
-import { buildGeoFilters, buildLensFilters } from '../src/types/workspace.ts'
+import { buildGeoFilters, buildLensFilters, buildDatetimeFilters, DEFAULT_TOOLBOX_FILTERS } from '../src/types/workspace.ts'
 
 test('embedding service fetch failure is not a browser connectivity failure', () => {
   assert.equal(isBrowserNetworkFailure({ statusCode: 500, message: 'gpu-image embeddings request failed: fetch failed' }, true), false)
@@ -57,4 +57,11 @@ test('context requests carry feature, spatial, live-image, sort and stacked-sear
   assert.equal(empty.length, 0)
   assert.equal(empty.totalCount, 0)
   assert.equal(calls.length, 1, 'zero image matches must never become an unfiltered request')
+})
+
+test('live timeline state produces filters for both CRUD and content ranges', () => {
+  const timeline = { ...DEFAULT_TOOLBOX_FILTERS.timeline, quickFilter: 'today' }
+  assert.deepEqual(buildDatetimeFilters(timeline), ['t:crud:created:today', 't:crud:updated:today'])
+  assert.deepEqual(buildDatetimeFilters({ ...timeline, indexCreated: false, indexUpdated: false, contentEvents: true, customRanges: [{ start: '2026-10-01', end: '2026-10-02' }] }), ['t:content:2026-10-01..2026-10-02'])
+  assert.deepEqual(buildGeoFilters({ bbox: { minLat: 48, minLon: 17, maxLat: 49, maxLon: 18 } }), ['geo:bbox:48,17,49,18'])
 })

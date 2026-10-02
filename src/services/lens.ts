@@ -1,7 +1,7 @@
 import { api } from '@/lib/api'
 import { API_ROUTES } from '@/config/api'
 import type { ResponseEnvelope } from '@augmentd-labs/canvas-protocol'
-import type { Document } from '@/types/workspace'
+import type { Document, ToolboxFeatureFilters } from '@/types/workspace'
 
 /**
  * Search-by-image ("lens") — POST /workspaces/:ref/documents/search/image.
@@ -25,6 +25,10 @@ export interface LensSearchOptions {
   /** Return matching ids only (skips document hydration server-side). */
   idsOnly?: boolean
   contextPath?: string | null
+  treeId?: string | null
+  features?: ToolboxFeatureFilters
+  filters?: string[]
+  applyCanvasQuerySpec?: boolean
   signal?: AbortSignal
 }
 
@@ -73,6 +77,10 @@ export async function searchByImage(
   if (opts.debug) body.debug = true
   if (opts.idsOnly) body.idsOnly = true
   if (opts.contextPath) body.context = opts.contextPath
+  if (opts.treeId) body.treeNameOrTreeId = opts.treeId
+  if (opts.features) Object.assign(body, opts.features)
+  if (opts.filters) body.filters = opts.filters
+  if (opts.applyCanvasQuerySpec !== undefined) body.applyCanvasQuerySpec = opts.applyCanvasQuerySpec
 
   const res = await api.postEnvelope<LensPayload | undefined>(
     `${API_ROUTES.workspaces}/${encodeURIComponent(workspaceRef)}/documents/search/image`,

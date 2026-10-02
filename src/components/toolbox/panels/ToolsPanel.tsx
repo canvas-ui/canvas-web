@@ -325,7 +325,7 @@ function FeaturesTab() {
 // ─── ToolsPanel ───────────────────────────────────────────────────────────────
 
 export function ToolsPanel() {
-  const { state, setToolsTab, saveFilters, clearFilters, hasActiveFilters } = useToolbox()
+  const { state, setToolsTab, saveFilters, clearFilters, hasActiveFilters, setLiveEnabled } = useToolbox()
   const { toolsTab, isDirty, isSaving, activeContextType, savedSearchQuery } = state
   const location = useLocation()
   const currentSearchQuery = new URLSearchParams(location.search).get('q') || new URLSearchParams(location.search).get('search') || ''
@@ -362,6 +362,17 @@ export function ToolsPanel() {
         ))}
       </div>
 
+      {activeContextType === 'context' && (
+        <div className="space-y-2 border-b border-border px-3 py-2 shrink-0">
+          <label className="flex min-h-10 cursor-pointer items-center justify-between gap-3 text-sm font-medium">
+            <span className="flex items-center gap-2"><span className={cn('h-2 w-2 rounded-full', state.liveEnabled ? 'bg-success' : 'bg-muted-foreground')} />Live</span>
+            <input type="checkbox" className="h-5 w-5 accent-current" checked={state.liveEnabled} disabled={new URLSearchParams(location.search).has('ownerId')} onChange={e => { void setLiveEnabled(e.target.checked) }} />
+          </label>
+          <p className="text-xs text-muted-foreground">{state.liveEnabled ? 'Filters and camera matches update every device bound to this context. Save to keep the current view.' : 'Preview on this device. Turn on Live to update bound devices.'}</p>
+          {state.liveError && <p role="status" className="text-xs text-destructive">{state.liveError}</p>}
+        </div>
+      )}
+
       {/* Contextual action row — only present when there's something to do. */}
       {(hasActiveFilters || canSave) && (
         <div className="flex items-center justify-end gap-2 border-b border-border px-3 py-1.5 shrink-0">
@@ -384,7 +395,7 @@ export function ToolsPanel() {
               className="flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1 text-xs text-primary-foreground transition-colors hover:bg-primary disabled:opacity-60"
             >
               {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-              Save filters
+              {activeContextType === 'context' && state.liveEnabled ? 'Save current view' : 'Save filters'}
             </button>
           )}
         </div>

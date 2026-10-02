@@ -1,15 +1,17 @@
 import {
   useReducer,
+  useMemo,
+  useState,
   useCallback,
   useEffect,
   useRef,
   type ReactNode,
 } from 'react'
 import socketService from '@/lib/socket'
-import { useLocation } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { ToolboxCtx } from './use-toolbox'
 import type { ToolboxFilters, ToolboxTimelineFilters, ToolboxGeoFilters, ToolboxLensFilters, GeoBBox, GeoSelection, ToolboxSort, Document as WorkspaceDocument } from '@/types/workspace'
-import { DEFAULT_TOOLBOX_FILTERS, DEFAULT_TOOLBOX_SORT, buildDatetimeFilters, buildGeoFilters } from '@/types/workspace'
+import { DEFAULT_TOOLBOX_FILTERS, DEFAULT_TOOLBOX_SORT, buildDatetimeFilters, buildGeoFilters, buildContextBinding, type LiveContextQuery } from '@/types/workspace'
 import {
   DEFAULT_WORKSPACE_TREE_NAME,
   listWorkspaceBitmaps,
@@ -43,6 +45,9 @@ export interface RelateSeed {
 }
 
 export interface ToolboxState {
+  savedGeoSelection: GeoSelection | null
+  liveEnabled: boolean
+  liveError: string | null
   t1Open: boolean
   t1View: T1View
   toolsTab: ToolsTab
@@ -129,6 +134,9 @@ type ToolboxAction =
     }
   | { type: 'SET_CONTEXT_SCOPE'; workspaceName: string | null; contextPath: string | null; treeId: string | null }
   | { type: 'SET_FILTERS'; filters: ToolboxFilters }
+  | { type: 'SET_LIVE'; enabled: boolean }
+  | { type: 'SET_SAVED_GEO_SELECTION'; selection: GeoSelection | null }
+  | { type: 'SET_LIVE_ERROR'; error: string | null }
   // `hydrating`: the saved view arrived from an async fetch. Edits made while
   // it was in flight are the user's latest intent — keep them, and only
   // re-baseline what "dirty" means. A save (not hydrating) replaces outright.
@@ -141,18 +149,21 @@ type ToolboxAction =
 
 // ─── Reducer ──────────────────────────────────────────────────────────────────
 
-// Lens refine state is LIVE-FEED ephemera (device fix, camera kNN survivors) —
-// it must never mark a view dirty nor be persisted into session storage or a
-// canvas/context querySpec. Strip it before any compare/persist.
+// Session and canvas views strip live feed state. A context can explicitly
+// save the current fix and camera matches as a frozen snapshot.
 function stripEphemeral(filters: ToolboxFilters): ToolboxFilters {
   return { ...filters, lens: DEFAULT_TOOLBOX_FILTERS.lens }
 }
 
-function isDirtyCheck(filters: ToolboxFilters, savedFilters: ToolboxFilters | null): boolean {
-  return JSON.stringify(stripEphemeral(filters)) !== JSON.stringify(stripEphemeral(savedFilters ?? DEFAULT_TOOLBOX_FILTERS))
+function isDirtyCheck(filters: ToolboxFilters, savedFilters: ToolboxFilters | null, includeLens = false): boolean {
+  const comparable = includeLens ? (value: ToolboxFilters) => value : stripEphemeral
+  return JSON.stringify(comparable(filters)) !== JSON.stringify(comparable(savedFilters ?? DEFAULT_TOOLBOX_FILTERS))
 }
 
 const initialState: ToolboxState = {
+  savedGeoSelection: null,
+  liveEnabled: false,
+  liveError: null,
   t1Open: false,
   t1View: null,
   toolsTab: 'features',
@@ -219,7 +230,9 @@ function toolboxReducer(state: ToolboxState, action: ToolboxAction): ToolboxStat
     case 'SET_ACCENT_COLOR':
       return state.activeAccentColor === action.color ? state : { ...state, activeAccentColor: action.color }
     case 'SET_GEO_SELECTION':
-      return { ...state, geoSelection: action.selection }
+      return { ...state, geoSelection: action.selection, isDirty: state.activeContextType === 'context' ? isDirtyCheck(state.filters, state.savedFilters, true) || JSON.stringify(action.selection) !== JSON.stringify(state.savedGeoSelection) : state.isDirty }
+    case 'SET_SAVED_GEO_SELECTION':
+      return { ...state, savedGeoSelection: action.selection, isDirty: state.activeContextType === 'context' ? isDirtyCheck(state.filters, state.savedFilters, true) || JSON.stringify(state.geoSelection) !== JSON.stringify(action.selection) : state.isDirty }
     case 'SET_MAP_DOCUMENTS':
       return (state.mapDocuments === action.documents && state.mapWorkspaceId === action.workspaceId)
         ? state
@@ -243,7 +256,7 @@ function toolboxReducer(state: ToolboxState, action: ToolboxAction): ToolboxStat
         activeContextPath: action.contextPath,
         // A drawn map area is view-specific — drop it when navigating away.
         geoSelection: null,
-        ...(sameView ? {} : { filters: DEFAULT_TOOLBOX_FILTERS, savedFilters: null, savedSearchQuery: null, isDirty: false }),
+        ...(sameView ? {} : { filters: DEFAULT_TOOLBOX_FILTERS, savedFilters: null, savedSearchQuery: null, isDirty: false, savedGeoSelection: null, liveEnabled: false, liveError: null }),
       }
     }
     // A `/contexts/:id` route carries no workspace or tree path in its URL —
@@ -265,12 +278,16 @@ function toolboxReducer(state: ToolboxState, action: ToolboxAction): ToolboxStat
         activeContextPath: action.contextPath,
         activeTreeName: action.treeId,
       }
+    case 'SET_LIVE':
+      return { ...state, liveEnabled: action.enabled, liveError: null }
+    case 'SET_LIVE_ERROR':
+      return { ...state, liveError: action.error }
     case 'SET_FILTERS':
       return {
         ...state,
         filters: action.filters,
         isDirty: state.activeContextType !== null
-          ? isDirtyCheck(action.filters, state.savedFilters)
+          ? isDirtyCheck(action.filters, state.savedFilters, state.activeContextType === 'context') || (state.activeContextType === 'context' && JSON.stringify(state.geoSelection) !== JSON.stringify(state.savedGeoSelection))
           : false,
       }
     case 'SET_SAVED_FILTERS': {
@@ -286,7 +303,7 @@ function toolboxReducer(state: ToolboxState, action: ToolboxAction): ToolboxStat
         savedFilters: action.savedFilters,
         savedSearchQuery: action.savedSearchQuery ?? null,
         filters,
-        isDirty: keepEdits ? isDirtyCheck(filters, action.savedFilters) : false,
+        isDirty: keepEdits ? isDirtyCheck(filters, action.savedFilters, state.activeContextType === 'context') : false,
       }
     }
     case 'SET_SAVING':
@@ -345,7 +362,7 @@ function saveSessionFilters(filters: ToolboxFilters) {
 
 // ─── Extract toolbox filters from opaque metadata blob ────────────────────────
 
-function extractToolboxFilters(metadata: Record<string, unknown> | undefined): ToolboxFilters | null {
+function extractToolboxFilters(metadata: Record<string, unknown> | undefined, includeLens = false): ToolboxFilters | null {
   if (!metadata?.toolbox) return null
   try {
     const t = metadata.toolbox as Partial<ToolboxFilters>
@@ -366,8 +383,8 @@ function extractToolboxFilters(metadata: Record<string, unknown> | undefined): T
         contentEvents: (t.timeline as ToolboxTimelineFilters)?.contentEvents ?? false,
         selectedTimelines: (t.timeline as ToolboxTimelineFilters)?.selectedTimelines ?? [],
       },
-      geo: { bbox: (t.geo as ToolboxGeoFilters)?.bbox ?? null },
-      lens: DEFAULT_TOOLBOX_FILTERS.lens, // ephemeral — never persisted
+      geo: { bbox: (t.geo as ToolboxGeoFilters)?.bbox ?? null, includeUnlocated: (t.geo as ToolboxGeoFilters)?.includeUnlocated ?? false },
+      lens: includeLens ? { ...DEFAULT_TOOLBOX_FILTERS.lens, ...(t.lens ?? {}) } : DEFAULT_TOOLBOX_FILTERS.lens,
       sort: {
         sortBy: (t.sort as ToolboxSort)?.sortBy ?? DEFAULT_TOOLBOX_SORT.sortBy,
         order: (t.sort as ToolboxSort)?.order === 'asc' ? 'asc' : 'desc',
@@ -421,6 +438,7 @@ export interface ToolboxContextValue {
   setGeoSelection: (selection: GeoSelection | null) => void
   setMapDocuments: (documents: WorkspaceDocument[], workspaceId?: string | null) => void
   setSort: (sort: ToolboxSort) => void
+  setLiveEnabled: (enabled: boolean) => Promise<void>
   saveFilters: () => Promise<void>
   deleteBitmap: (key: string) => Promise<void>
   deleteDataset: (key: string) => Promise<number>
@@ -434,7 +452,9 @@ export interface ToolboxContextValue {
 export function ToolboxProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(toolboxReducer, initialState)
   const location = useLocation()
+  const navigate = useNavigate()
   const contextOwnerId = new URLSearchParams(location.search).get('ownerId') || undefined
+  const liveSnapshot = useRef<string | null>(null)
   const stateRef = useRef(state)
   // Ref synced in an effect (not during render). Declared before every other
   // effect so, with in-order effect execution, all of them — and every
@@ -549,33 +569,52 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
     const { activeContextType, activeContextId } = state
     if (activeContextType !== 'context' || !activeContextId) return
     let cancelled = false
+    liveSnapshot.current = null
 
     let requestId = 0
+    const syncQueries = (queries: string[]) => {
+      const params = new URLSearchParams(window.location.search)
+      params.delete('q'); params.delete('search')
+      for (const query of queries) params.append('q', query)
+      const search = params.toString()
+      navigate(`${location.pathname}${search ? `?${search}` : ''}`, { replace: true })
+    }
+    const applyLive = (live: LiveContextQuery | null, saved: ToolboxFilters | null, savedSearch: string | null, selection: GeoSelection | null = null, savedQueries: string[] = savedSearch ? [savedSearch] : []) => {
+      const filters = live?.filters ?? saved ?? DEFAULT_TOOLBOX_FILTERS
+      const geoSelection = live?.geoSelection ?? selection
+      liveSnapshot.current = JSON.stringify({ filters, geoSelection, queries: live?.queries ?? savedQueries })
+      dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: saved, savedSearchQuery: savedSearch })
+      dispatch({ type: 'SET_FILTERS', filters })
+      dispatch({ type: 'SET_GEO_SELECTION', selection: geoSelection })
+      dispatch({ type: 'SET_SAVED_GEO_SELECTION', selection })
+      dispatch({ type: 'SET_LIVE', enabled: live !== null })
+      syncQueries(live?.queries ?? savedQueries)
+    }
     const load = (hydrate: boolean) => {
       const currentRequest = ++requestId
       return getContext(activeContextId, contextOwnerId).then(ctx => {
         if (cancelled || currentRequest !== requestId) return
-        const metadata = (ctx as Context & { metadata?: Record<string, unknown> }).metadata
-        const saved = extractToolboxFilters(metadata)
-        // The URL carries neither workspace nor tree path — take both from the
-        // context record so the workspace-scoped lists (feature bitmaps,
-        // timelines) load, the Features/Timeline tabs show what is filtering the
-        // view, and the timeline density is scoped to the context's own path.
-        dispatch({
-          type: 'SET_CONTEXT_SCOPE',
-          workspaceName: ctx.workspaceName || ctx.workspaceId || null,
-          contextPath: ctx.path || '/',
-          treeId: ctx.treeId || null,
-        })
-        if (hydrate) dispatch({
-          type: 'SET_SAVED_FILTERS',
-          savedFilters: saved,
-          savedSearchQuery: typeof metadata?.toolboxSearchQuery === 'string' ? metadata.toolboxSearchQuery : null,
-          hydrating: true,
-        })
-      }).catch(() => {
-        if (cancelled) return
-        if (hydrate) dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: null, savedSearchQuery: null, hydrating: true })
+        const metadata = ctx.metadata
+        const saved = extractToolboxFilters(metadata, true)
+        const savedSearch = typeof metadata?.toolboxSearchQuery === 'string' ? metadata.toolboxSearchQuery : null
+        dispatch({ type: 'SET_CONTEXT_SCOPE', workspaceName: ctx.workspaceName || ctx.workspaceId || null, contextPath: ctx.path || '/', treeId: ctx.treeId || null })
+        if (ctx.liveQuery) {
+          applyLive(ctx.liveQuery, saved, savedSearch, (metadata?.toolboxGeoSelection as GeoSelection | null) ?? null, ctx.queryOptions?.queries)
+        } else if (hydrate) {
+          dispatch({ type: 'SET_LIVE', enabled: false })
+          const filters = stateRef.current.isDirty ? stateRef.current.filters : (saved ?? DEFAULT_TOOLBOX_FILTERS)
+          const geoSelection = (metadata?.toolboxGeoSelection as GeoSelection | null) ?? null
+          liveSnapshot.current = JSON.stringify({ filters, geoSelection, queries: [] })
+          dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: saved, savedSearchQuery: savedSearch, hydrating: true })
+          dispatch({ type: 'SET_GEO_SELECTION', selection: geoSelection })
+          dispatch({ type: 'SET_SAVED_GEO_SELECTION', selection: geoSelection })
+          const params = new URLSearchParams(window.location.search)
+          const queries = ctx.queryOptions?.queries?.length ? ctx.queryOptions.queries : savedSearch ? [savedSearch] : []
+          if (!params.has('q') && !params.has('search') && queries.length) syncQueries(queries)
+        }
+      }).catch((error: unknown) => {
+        if (cancelled || currentRequest !== requestId) return
+        dispatch({ type: 'SET_LIVE_ERROR', error: error instanceof Error ? error.message : 'Could not load context' })
       })
     }
     void load(true)
@@ -583,10 +622,81 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
     const offUrl = socketService.on('context.url.set', (data: unknown) => {
       if ((data as { id?: string })?.id === activeContextId) refreshScope()
     })
+    const offUpdated = socketService.on('context.updated', (raw: unknown) => {
+      const data = raw as { id?: string; contextId?: string; liveQuery?: LiveContextQuery | null; queryOptions?: { queries?: string[] }; metadata?: Record<string, unknown> }
+      if ((data.contextId || data.id) !== activeContextId) return
+      if (!data.metadata) { void load(true); return }
+      ++requestId
+      const saved = extractToolboxFilters(data.metadata, true)
+      applyLive(data.liveQuery ?? null, saved, typeof data.metadata.toolboxSearchQuery === 'string' ? data.metadata.toolboxSearchQuery : null, (data.metadata.toolboxGeoSelection as GeoSelection | null) ?? null, data.queryOptions?.queries)
+    })
+    const offConnect = socketService.on('connect', () => { void load(true) })
+    const offDisconnect = socketService.on('disconnect', () => {
+      if (stateRef.current.liveEnabled) dispatch({ type: 'SET_LIVE_ERROR', error: 'Disconnected — Live updates will resume when connected.' })
+    })
     window.addEventListener('contexts:refresh', refreshScope)
-    return () => { cancelled = true; offUrl(); window.removeEventListener('contexts:refresh', refreshScope) }
+    return () => { cancelled = true; liveSnapshot.current = null; offUrl(); offUpdated(); offConnect(); offDisconnect(); window.removeEventListener('contexts:refresh', refreshScope) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.activeContextId, state.activeContextType, contextOwnerId])
+
+  const contextQueries = useMemo(() => {
+    const params = new URLSearchParams(location.search)
+    const stack = params.getAll('q').map(q => q.trim()).filter(Boolean)
+    const legacy = (params.get('search') || '').trim()
+    return stack.length ? stack : legacy ? [legacy] : []
+  }, [location.search])
+
+  // Throttle the latest state instead of debouncing each edit: an ongoing
+  // map gesture or fast camera feed must publish before the movement stops.
+  const queryStackRef = useRef(contextQueries)
+  useEffect(() => { queryStackRef.current = contextQueries }, [contextQueries])
+  const publishing = useRef(false)
+  const publisherTimer = useRef<number | null>(null)
+  const [publishRevision, setPublishRevision] = useState(0)
+  useEffect(() => () => {
+    if (publisherTimer.current !== null) window.clearTimeout(publisherTimer.current)
+    publisherTimer.current = null
+  }, [state.activeContextType, state.activeContextId, state.liveEnabled, contextOwnerId])
+  useEffect(() => {
+    if (state.activeContextType !== 'context' || !state.activeContextId || contextOwnerId || !state.liveEnabled || liveSnapshot.current === null || publishing.current || publisherTimer.current !== null || !socketService.isConnected()) return
+    const snapshot = JSON.stringify({ filters: state.filters, geoSelection: state.geoSelection, queries: contextQueries })
+    if (snapshot === liveSnapshot.current) return
+    publisherTimer.current = window.setTimeout(() => {
+      publisherTimer.current = null
+      const current = stateRef.current
+      if (current.activeContextId !== state.activeContextId || !current.liveEnabled) return
+      const queries = queryStackRef.current
+      const latestSnapshot = JSON.stringify({ filters: current.filters, geoSelection: current.geoSelection, queries })
+      if (latestSnapshot === liveSnapshot.current) return
+      const previousSnapshot = liveSnapshot.current
+      publishing.current = true
+      const liveQuery: LiveContextQuery = { filters: current.filters, geoSelection: current.geoSelection, queries, binding: buildContextBinding(current.filters, current.geoSelection, queries) }
+      void socketService.request('context.filters.set', { contextId: current.activeContextId, liveQuery }).then(() => {
+        if (stateRef.current.activeContextId !== current.activeContextId || liveSnapshot.current !== previousSnapshot) return
+        liveSnapshot.current = latestSnapshot
+        dispatch({ type: 'SET_LIVE_ERROR', error: null })
+      }).catch((error: unknown) => {
+        if (stateRef.current.activeContextId === current.activeContextId) dispatch({ type: 'SET_LIVE_ERROR', error: error instanceof Error ? error.message : 'Live update failed' })
+      }).finally(() => {
+        publishing.current = false
+        setPublishRevision(n => n + 1)
+      })
+    }, state.liveError ? 1500 : 100)
+  }, [state.activeContextType, state.activeContextId, state.liveEnabled, state.filters, state.geoSelection, contextQueries, contextOwnerId, publishRevision, state.liveError])
+
+  const setLiveEnabled = useCallback(async (enabled: boolean) => {
+    const current = stateRef.current
+    if (current.activeContextType !== 'context' || !current.activeContextId || contextOwnerId) return
+    const queries = contextQueries
+    const liveQuery: LiveContextQuery | null = enabled ? { filters: current.filters, geoSelection: current.geoSelection, queries, binding: buildContextBinding(current.filters, current.geoSelection, queries) } : null
+    try {
+      await socketService.request('context.filters.set', { contextId: current.activeContextId, liveQuery })
+      liveSnapshot.current = JSON.stringify({ filters: current.filters, geoSelection: current.geoSelection, queries })
+      dispatch({ type: 'SET_LIVE', enabled })
+    } catch (error) {
+      dispatch({ type: 'SET_LIVE_ERROR', error: error instanceof Error ? error.message : 'Could not change Live mode' })
+    }
+  }, [contextOwnerId, contextQueries])
 
   // ── Auto-save session filters when not in canvas/context mode ────────────
 
@@ -650,6 +760,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
 
   const clearFilters = useCallback(() => {
     const { filters } = stateRef.current
+    dispatch({ type: 'SET_GEO_SELECTION', selection: null })
     dispatch({ type: 'SET_FILTERS', filters: { ...DEFAULT_TOOLBOX_FILTERS, timeline: { ...filters.timeline, quickFilter: null, customRanges: [], customRange: null, selectedTimelines: [] } } })
   }, [])
 
@@ -697,7 +808,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const saveFilters = useCallback(async () => {
-    const { activeContextType, activeContextId, activeWorkspaceName, activeTreeName, activeContextPath, filters, isSaving } = stateRef.current
+    const { activeContextType, activeContextId, activeWorkspaceName, activeTreeName, activeContextPath, filters, geoSelection, isSaving } = stateRef.current
     if (isSaving) return
     dispatch({ type: 'SET_SAVING', isSaving: true })
     try {
@@ -729,17 +840,17 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
         await patchContext(activeContextId, {
           // metadata.toolbox = UI state (reconstructs the toolbox + dirty check);
           // features/filters = the SERVER-ENFORCED binding bound clients inherit.
-          metadata: { ...existingMeta, toolbox: stripEphemeral(filters), toolboxSearchQuery: searchQuery.trim() || undefined },
-          features: filters.features,
-          filters: [...buildDatetimeFilters(filters.timeline), ...buildGeoFilters(filters.geo)],
+          metadata: { ...existingMeta, toolbox: filters, toolboxGeoSelection: geoSelection, toolboxSearchQuery: searchQuery.trim() || undefined },
+          ...buildContextBinding(filters, geoSelection, contextQueries),
         }, contextOwnerId)
       }
       const searchQuery = new URLSearchParams(location.search).get('q') || new URLSearchParams(location.search).get('search') || ''
-      dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: filters, savedSearchQuery: searchQuery.trim() || null })
+      dispatch({ type: 'SET_SAVED_FILTERS', savedFilters: filters, savedSearchQuery: searchQuery.trim() || null, hydrating: true })
+      if (activeContextType === 'context') dispatch({ type: 'SET_SAVED_GEO_SELECTION', selection: geoSelection })
     } finally {
       dispatch({ type: 'SET_SAVING', isSaving: false })
     }
-  }, [location.search, contextOwnerId])
+  }, [location.search, contextOwnerId, contextQueries])
 
   // Drop a bitmap key from the available list and any active feature filters.
   const stripBitmapKey = useCallback((key: string) => {
@@ -819,11 +930,11 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
     f.allOf.length > 0 || f.anyOf.length > 0 || f.noneOf.length > 0 ||
     tl.quickFilter !== null || (tl.customRanges?.length ?? 0) > 0 ||
     (tl.selectedTimelines?.length ?? 0) > 0 ||
-    geo.bbox !== null || lens.gps !== null || lens.ids !== null
+    geo.bbox !== null || lens.gps !== null || lens.ids !== null || state.geoSelection !== null
 
   return (
     <ToolboxCtx.Provider
-      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, openAddRelated, closeAdd, openEdit, setToolsTab, openApplet, setAccentColor, setFilters, setFeatureToggle, setFeatureMode, clearFilters, hasActiveFilters, setTimelineFilter, setGeoBBox, setLensGps, setLensIds, setGeoSelection, setMapDocuments, setSort, saveFilters, deleteBitmap, deleteDataset, createTimeline, deleteTimeline, refreshTimelines }}
+      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, openAddRelated, closeAdd, openEdit, setToolsTab, openApplet, setAccentColor, setFilters, setFeatureToggle, setFeatureMode, clearFilters, hasActiveFilters, setTimelineFilter, setGeoBBox, setLensGps, setLensIds, setGeoSelection, setMapDocuments, setSort, setLiveEnabled, saveFilters, deleteBitmap, deleteDataset, createTimeline, deleteTimeline, refreshTimelines }}
     >
       {children}
     </ToolboxCtx.Provider>

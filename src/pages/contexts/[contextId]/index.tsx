@@ -93,12 +93,12 @@ export default function ContextDetailPage() {
   // clients inherit). The web UI drives filters (applyContextSpec:false), so
   // removing one previews immediately.
   const tbScopeFilters = [...buildDatetimeFilters(toolboxState.filters.timeline), ...buildGeoFilters(toolboxState.filters.geo), ...buildLensFilters(toolboxState.filters.lens, toolboxState.filters.geo.includeUnlocated)];
-  const tbFiltersKey = JSON.stringify({ a: tbAllOf, b: tbAnyOf, c: tbNoneOf, d: tbScopeFilters, ids: toolboxState.filters.lens.ids, sort: toolboxState.filters.sort });
+  const tbFiltersKey = JSON.stringify({ a: tbAllOf, b: tbAnyOf, c: tbNoneOf, d: tbScopeFilters, ids: toolboxState.filters.lens.ids, sort: toolboxState.filters.sort, geoSelection: toolboxState.geoSelection, includeUnlocated: toolboxState.filters.geo.includeUnlocated });
   // Stable snapshot of the toolbox filters, re-derived only when their content
   // (the serialized key) changes — the raw arrays above get fresh identities on
   // every render, so depending on them directly would refetch constantly.
   const tbFilters = useMemo(
-    () => JSON.parse(tbFiltersKey) as { a: typeof tbAllOf; b: typeof tbAnyOf; c: typeof tbNoneOf; d: typeof tbScopeFilters; ids: number[] | null; sort: { sortBy: string; order: 'asc' | 'desc' } },
+    () => JSON.parse(tbFiltersKey) as { a: typeof tbAllOf; b: typeof tbAnyOf; c: typeof tbNoneOf; d: typeof tbScopeFilters; ids: number[] | null; sort: { sortBy: string; order: 'asc' | 'desc' }; geoSelection: import('@/types/workspace').GeoSelection | null; includeUnlocated?: boolean },
     [tbFiltersKey],
   );
 
@@ -118,7 +118,7 @@ export default function ContextDetailPage() {
   const isSharedContext = Boolean(ownerId);
   const selectedPath = context ? contextUrlToPath(context.url, context.workspaceName) : '/';
   const urlType = layerParam ? 'context-layer' : 'context';
-  const savedContextSearchQuery = typeof context?.metadata?.toolboxSearchQuery === 'string' ? context.metadata.toolboxSearchQuery : '';
+  const savedContextSearchQuery = !toolboxState.liveEnabled && typeof context?.metadata?.toolboxSearchQuery === 'string' ? context.metadata.toolboxSearchQuery : '';
 
   // ── Content-area views (tabs) ──────────────────────────────────────────
   // A context is a live pointer at a workspace tree path — the tabs are the
@@ -176,7 +176,7 @@ export default function ContextDetailPage() {
         contextId,
         tbFilters.a,
         tbFilters.d,
-        { ...tbFilters.sort, ids: tbFilters.ids, signal: controller.signal, limit: pageSize, page: currentPage, queries: serverSearchQueries.length ? serverSearchQueries : undefined, anyOf: tbFilters.b, noneOf: tbFilters.c, applyContextSpec: false },
+        { ...tbFilters.sort, geoSelection: tbFilters.geoSelection, includeUnlocated: tbFilters.includeUnlocated, ids: tbFilters.ids, signal: controller.signal, limit: pageSize, page: currentPage, queries: serverSearchQueries.length ? serverSearchQueries : undefined, anyOf: tbFilters.b, noneOf: tbFilters.c, applyContextSpec: false },
         ownerId,
       );
       if (controller.signal.aborted) return;
@@ -347,8 +347,9 @@ export default function ContextDetailPage() {
   useEffect(() => {
     if (!contextId) return;
 
-    const subscribe = () => socketService.emit('subscribe', { channel: `context:${contextId}` });
-    const unsubscribe = () => socketService.emit('unsubscribe', { channel: `context:${contextId}` });
+    const channel = `context:${ownerId ? `${ownerId}/` : ''}${contextId}`;
+    const subscribe = () => socketService.emit('subscribe', { channel });
+    const unsubscribe = () => socketService.emit('unsubscribe', { channel });
 
     const offConnect = socketService.on('connect', subscribe);
     subscribe();
@@ -414,7 +415,7 @@ export default function ContextDetailPage() {
       unsubscribe();
       events.forEach(([ev, fn]) => socketService.off(ev, fn));
     };
-  }, [contextId, fetchDocuments]);
+  }, [contextId, ownerId, fetchDocuments]);
 
   const handleRemoveDocument = async (documentId: number) => {
     if (!context) return;

@@ -60,8 +60,7 @@ export interface ToolboxSort {
 
 // Spatial filter: a bounding box selected on the map. The backend geo grammar
 // (synapsd filters.js) supports bbox / near / cell; the map UI draws a box, so
-// we model a bbox. A polygon selection is reduced to its bounding box until the
-// backend gains a polygon coverer.
+// we model a bbox. Context query options also carry exact drawn polygons.
 export interface GeoBBox {
   minLat: number
   minLon: number
@@ -114,7 +113,7 @@ export const DEFAULT_TOOLBOX_FILTERS: ToolboxFilters = {
     contentEvents: false,
     selectedTimelines: [],
   },
-  geo: { bbox: null },
+  geo: { bbox: null, includeUnlocated: false },
   lens: { gps: null, ids: null },
   sort: { ...DEFAULT_TOOLBOX_SORT },
 }
@@ -178,6 +177,31 @@ export function buildDatetimeFilters(timeline: ToolboxTimelineFilters): string[]
   if (contentEvents) names.push('content')
   names.push(...selectedTimelines)
   return names.flatMap(name => specs.map(spec => `t:${name}:${spec}`))
+}
+
+/** A context binding can save a frozen GPS fix or the current camera matches. */
+export interface ContextQueryOptions {
+  ids: number[] | null
+  sortBy: string
+  order: 'asc' | 'desc'
+  queries: string[]
+  geoSelection: GeoSelection | null
+  includeUnlocated: boolean
+}
+
+export interface LiveContextQuery {
+  filters: ToolboxFilters
+  geoSelection: GeoSelection | null
+  queries: string[]
+  binding: { features: ToolboxFeatureFilters; filters: string[]; queryOptions: ContextQueryOptions }
+}
+
+export function buildContextBinding(filters: ToolboxFilters, geoSelection: GeoSelection | null, queries: string[] = []): LiveContextQuery['binding'] {
+  return {
+    features: filters.features,
+    filters: [...buildDatetimeFilters(filters.timeline), ...buildGeoFilters(filters.geo), ...buildLensFilters(filters.lens, filters.geo.includeUnlocated)],
+    queryOptions: { ids: filters.lens.ids, sortBy: filters.sort.sortBy, order: filters.sort.order, queries, geoSelection, includeUnlocated: filters.geo.includeUnlocated ?? false },
+  }
 }
 
 // Timeline types

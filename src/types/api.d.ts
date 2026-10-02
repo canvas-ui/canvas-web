@@ -74,6 +74,8 @@ interface Workspace {
 }
 
 interface Context {
+  liveQuery?: import('./workspace').LiveContextQuery | null
+  queryOptions?: import('./workspace').ContextQueryOptions
   metadata?: { ui?: { color?: string | null; [key: string]: unknown }; [key: string]: unknown }
   id: string
   name?: string | null
