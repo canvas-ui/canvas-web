@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Publishes the prebuilt web UI to npm as @augmentd-labs/canvas-web — the
 // package canvas-server serves the UI from. Skips when npm already has this
-// version, so it is safe on every push to main (npm-publish.yml); a release
+// version, so it is safe on every push to main (release.yml); a release
 // is a version bump (`pnpm run release patch`).
 //
 // The published package is dist/ plus a minimal manifest: vite already bundled

@@ -8,7 +8,7 @@ name: housekeeping
 
 on:
   workflow_run:
-    workflows: [ci, release, dist]
+    workflows: [ci, release]
     types: [completed]
   schedule:
     - cron: '17 4 * * *'

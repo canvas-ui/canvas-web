@@ -1,4 +1,4 @@
-name: npm-publish
+name: release
 
 # On every push to main: build the web UI and, if npm does not have this
 # version yet, publish @augmentd-labs/canvas-web and create the v<version>
@@ -19,7 +19,7 @@ permissions:
   id-token: write   # npm trusted publishing
 
 concurrency:
-  group: npm-publish
+  group: release
   cancel-in-progress: false
 
 jobs:

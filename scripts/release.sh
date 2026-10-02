@@ -4,7 +4,7 @@
 #   pnpm run release patch|minor|major      bump package.json, commit, push
 #   pnpm run release patch --dry-run        print the plan, change nothing
 #
-# Pushing the bumped version is the whole release: npm-publish.yml builds,
+# Pushing the bumped version is the whole release: release.yml builds,
 # publishes @augmentd-labs/canvas-web@<version> to npm and creates the
 # v<version> tag + GitHub Release. canvas-server picks it up with
 # `npm update @augmentd-labs/canvas-web`. CI never bumps versions.
@@ -30,4 +30,4 @@ npm version "$BUMP" --no-git-tag-version >/dev/null
 ver=$(node -p "require('./package.json').version")
 git commit --quiet -am "canvas-web $ver"
 git push --quiet origin main
-say "Pushed canvas-web $ver — npm-publish.yml publishes it. Watch: gh run list --workflow=npm-publish.yml --limit 1"
+say "Pushed canvas-web $ver — release.yml publishes it. Watch: gh run list --workflow=release.yml --limit 1"
