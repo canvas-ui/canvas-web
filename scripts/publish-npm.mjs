@@ -8,7 +8,7 @@
 // every runtime dependency, so it has none. `canvasRev` records the commit.
 //
 // Usage (build first: `pnpm run build`):
-//   node scripts/publish-npm.mjs [--dry-run] [--out artifacts]
+//   node scripts/publish-npm.mjs [--dry-run | --pack-only] [--out artifacts]
 // Prints `published=<version>` (or `published=`) for the workflow. Leaves the
 // packed tarball in <out> for the GitHub Release.
 // Auth: CI uses npm trusted publishing (OIDC, provenance attached); a local
@@ -22,6 +22,7 @@ import { execFileSync } from 'node:child_process';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
+const packOnly = args.includes('--pack-only');
 const outIdx = args.indexOf('--out');
 const out = outIdx >= 0 ? resolve(args[outIdx + 1]) : join(root, 'artifacts');
 
@@ -32,7 +33,7 @@ if (!existsSync(join(root, 'dist', 'index.html'))) {
 
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 const spec = `${pkg.name}@${pkg.version}`;
-try {
+if (!packOnly && !dryRun) try {
     const have = execFileSync('npm', ['view', spec, 'version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
     if (have === pkg.version) {
         console.log(`${spec}: already on npm — skipping`);
@@ -66,8 +67,8 @@ execFileSync('npm', ['pack', '--pack-destination', out], { cwd: stage, stdio: ['
 const cmd = ['publish', '--access', 'public'];
 if (process.env.GITHUB_ACTIONS === 'true') cmd.push('--provenance');
 if (dryRun) cmd.push('--dry-run');
-console.log(`${spec} (${rev}): npm ${cmd.join(' ')}`);
+if (!packOnly) console.log(`${spec} (${rev}): npm ${cmd.join(' ')}`);
 // From inside the staged dir — npm resolves package files against the cwd.
-execFileSync('npm', cmd, { cwd: stage, stdio: 'inherit' });
+if (!packOnly) execFileSync('npm', cmd, { cwd: stage, stdio: 'inherit' });
 rmSync(stage, { recursive: true, force: true });
-console.log(`published=${dryRun ? '' : pkg.version}`);
+console.log(`published=${dryRun || packOnly ? '' : pkg.version}`);

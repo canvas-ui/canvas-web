@@ -20,6 +20,5 @@ jobs:
       - run: pnpm run lint
       - run: pnpm run test
       - run: pnpm run build
-      # Stage + pack the npm package on every PR (skipped once the version is
-      # already on npm), so a broken bundle fails review, not the publish.
-      - run: node scripts/publish-npm.mjs --dry-run --out artifacts
+      # Always stage and pack, including versions already published on npm.
+      - run: node scripts/publish-npm.mjs --pack-only --out artifacts
