@@ -37,7 +37,7 @@ export function LensFeedWidget() {
         title="Back to Lens"
         className="relative block w-full cursor-pointer bg-black/80 aspect-video"
       >
-        <LensFeedVideo className="h-full w-full object-cover" />
+        <LensFeedVideo className="h-full w-full" />
         {paused && (
           <span className="absolute inset-0 flex items-center justify-center bg-black/50 text-xs font-medium text-white">
             paused

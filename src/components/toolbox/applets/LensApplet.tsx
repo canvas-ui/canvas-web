@@ -8,6 +8,7 @@ import { useDocumentThumbnail } from '@/components/renderers/useDocumentThumbnai
 import { getDocumentDisplayInfo, isImageFile } from '@/lib/document-display'
 import { useLensFeed, useLensFeedViewer } from '../use-lens-feed'
 import { LensFeedVideo } from '../lens-feed-context'
+import { LensCameraControls } from '../LensCameraControls'
 import { LENS_RATES } from '../lens-rates'
 import type { Document } from '@/types/workspace'
 
@@ -69,6 +70,8 @@ export function LensApplet() {
   const otherFeed = feed.running && feed.consumer !== 'applet'
   const hits = running ? feed.hits : []
   useLensFeedViewer(running)
+  const size = running ? feed.camera?.size : null
+  const portrait = !!size && size.height > size.width
 
   const startLens = (kind: 'camera' | 'screen') => {
     if (!workspaceRef) return
@@ -147,16 +150,18 @@ export function LensApplet() {
         )}
       </div>
 
-      <div className="relative shrink-0 overflow-hidden rounded-xl border border-border bg-black/80 aspect-video max-h-64">
+      <div className={cn('relative shrink-0 overflow-hidden rounded-xl border border-border bg-black/80', portrait ? 'aspect-[3/4] max-h-[60vh]' : 'aspect-video max-h-80')}>
         {/* Only when this applet owns the feed — otherwise the Filters tab's
             stream would show through the "camera off" state. */}
-        {running && <LensFeedVideo className="h-full w-full object-cover" />}
+        {running && <LensFeedVideo className="h-full w-full" interactive />}
         {!running && (
           <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
             <Focus className="mr-2 h-4 w-4" /> camera off
           </div>
         )}
       </div>
+
+      {running && <LensCameraControls className="shrink-0" />}
 
       <div className="shrink-0 text-xs text-muted-foreground">
         {feedError ? (

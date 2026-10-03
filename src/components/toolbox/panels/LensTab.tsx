@@ -6,6 +6,7 @@ import { useToolbox } from '../use-toolbox'
 import { useLensFeed, useLensFeedViewer } from '../use-lens-feed'
 import { LensFeedVideo } from '../lens-feed-context'
 import { LENS_RATES } from '../lens-rates'
+import { LensCameraControls } from '../LensCameraControls'
 
 // The Lens filter tab: LIVE feeds refining the current view, sitting beside
 // Features / Timeline / Map.
@@ -124,6 +125,8 @@ export function LensTab() {
   }
 
   const feedRunning = ownFeed
+  const size = feed.camera?.size
+  const portrait = !!size && size.height > size.width
 
   return (
     <div className="flex flex-col gap-4 p-3 text-sm">
@@ -216,9 +219,12 @@ export function LensTab() {
           />
         </div>
 
-        <div className={cn('relative overflow-hidden rounded-lg border border-border bg-black/80', feedRunning ? 'aspect-video' : 'hidden')}>
-          <LensFeedVideo className="h-full w-full object-cover" />
+        {/* A portrait phone feed in a 16:9 box is either tiny (contain) or
+            heavily cropped (cover) — follow the stream's own orientation. */}
+        <div className={cn('relative overflow-hidden rounded-lg border border-border bg-black/80', feedRunning ? (portrait ? 'aspect-[3/4] max-h-[60vh]' : 'aspect-video') : 'hidden')}>
+          <LensFeedVideo className="h-full w-full" interactive />
         </div>
+        {feedRunning && <LensCameraControls />}
 
         <p className="text-xs text-muted-foreground">
           {feedError ? (

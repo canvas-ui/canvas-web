@@ -4,13 +4,15 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from 'react'
 import { useToolboxOptional } from './use-toolbox'
 import { LensFeedCtx, useLensFeed } from './use-lens-feed'
-import { useWebcam } from '@/hooks/useWebcam'
+import { useWebcam, type CameraControls } from '@/hooks/useWebcam'
 import { searchByImage } from '@/services/lens'
 import { DEFAULT_LENS_RATE_MS } from './lens-rates'
+import { cn } from '@/lib/utils'
 import { buildDatetimeFilters, buildGeoFilters, buildLensFilters, type Document } from '@/types/workspace'
 
 /**
@@ -41,6 +43,7 @@ import { buildDatetimeFilters, buildGeoFilters, buildLensFilters, type Document 
 const SMOOTH_WINDOW = 3 // majority vote over the last N frames kills flicker
 const FILTER_KNN_LIMIT = 32
 const APPLET_LIMIT = 12
+const FIT_KEY = 'canvas.lens.fit'
 
 export type LensSource = 'camera' | 'screen'
 export type LensConsumer = 'filter' | 'applet'
@@ -63,6 +66,11 @@ export interface LensFeedValue {
   paused: boolean
   consumer: LensConsumer | null
   stream: MediaStream | null
+  /** Lens / resolution / zoom / torch / focus — camera source only. */
+  camera: CameraControls | null
+  /** Preview framing: `contain` shows the whole frame that gets searched. */
+  fit: 'contain' | 'cover'
+  setFit: (fit: 'contain' | 'cover') => void
   workspaceRef: string
   rateMs: number
   setRateMs: (ms: number) => void
@@ -94,9 +102,10 @@ export interface LensFeedValue {
  * to the shared MediaStream — the panel's preview and the widget's preview are
  * different elements showing one stream, so either can unmount freely.
  */
-export function LensFeedVideo({ className }: { className?: string }) {
-  const { stream } = useLensFeed()
+export function LensFeedVideo({ className, interactive = false }: { className?: string; interactive?: boolean }) {
+  const { stream, camera, fit } = useLensFeed()
   const ref = useRef<HTMLVideoElement | null>(null)
+  const [focusMark, setFocusMark] = useState<{ x: number; y: number; key: number } | null>(null)
   useEffect(() => {
     const el = ref.current
     if (!el) return
@@ -104,7 +113,59 @@ export function LensFeedVideo({ className }: { className?: string }) {
     if (stream) void el.play().catch(() => {})
     return () => { el.srcObject = null }
   }, [stream])
-  return <video ref={ref} muted playsInline className={className} />
+  useEffect(() => {
+    if (!focusMark) return
+    const t = window.setTimeout(() => setFocusMark(null), 900)
+    return () => window.clearTimeout(t)
+  }, [focusMark])
+
+  // Digital zoom is a centre crop in captureFrame(); mirror it here so the
+  // preview shows exactly the searched region.
+  const digital = camera && !camera.zoomRange.hardware ? camera.zoom : 1
+
+  // Tap to focus: map the tap from element space into normalised frame space,
+  // undoing object-fit letterboxing/cropping and the digital zoom.
+  const onTap = (e: ReactMouseEvent<HTMLVideoElement>) => {
+    const el = ref.current
+    if (!el || !camera?.focusSupported || !el.videoWidth) return
+    const r = el.getBoundingClientRect()
+    const ex = (e.clientX - r.left) / r.width
+    const ey = (e.clientY - r.top) / r.height
+    // Element-relative point before the CSS scale (scaled about the centre).
+    const ux = 0.5 + (ex - 0.5) / digital
+    const uy = 0.5 + (ey - 0.5) / digital
+    const s = fit === 'contain'
+      ? Math.min(r.width / el.videoWidth, r.height / el.videoHeight)
+      : Math.max(r.width / el.videoWidth, r.height / el.videoHeight)
+    const dw = (el.videoWidth * s) / r.width
+    const dh = (el.videoHeight * s) / r.height
+    const x = 0.5 + (ux - 0.5) / dw
+    const y = 0.5 + (uy - 0.5) / dh
+    if (x < 0 || x > 1 || y < 0 || y > 1) return
+    camera.focusAt({ x, y })
+    setFocusMark({ x: ex, y: ey, key: Date.now() })
+  }
+
+  return (
+    <>
+      <video
+        ref={ref}
+        muted
+        playsInline
+        onClick={interactive ? onTap : undefined}
+        style={digital !== 1 ? { transform: `scale(${digital})` } : undefined}
+        className={cn(className, fit === 'contain' ? 'object-contain' : 'object-cover', interactive && camera?.focusSupported && 'cursor-crosshair')}
+      />
+      {focusMark && (
+        <span
+          key={focusMark.key}
+          aria-hidden
+          className="pointer-events-none absolute h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/90 animate-fade-in"
+          style={{ left: `${focusMark.x * 100}%`, top: `${focusMark.y * 100}%` }}
+        />
+      )}
+    </>
+  )
 }
 
 export function LensFeedProvider({ children }: { children: ReactNode }) {
@@ -120,7 +181,7 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
   // Ending a share from the browser's own UI must tear the loop down too,
   // rather than leave it searching against black frames.
   const endedRef = useRef<() => void>(() => {})
-  const { videoRef, stream, error: mediaError, start: startCamera, startScreen, stop: stopMedia, captureFrame } =
+  const { videoRef, stream, camera, error: mediaError, start: startCamera, startScreen, stop: stopMedia, captureFrame } =
     useWebcam({ onEnded: () => endedRef.current() })
 
   const [source, setSource] = useState<LensSource | null>(null)
@@ -135,6 +196,13 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
   const [hits, setHits] = useState<LensHit[]>([])
   const [viewers, setViewers] = useState(0)
   const [workspaceRef, setWorkspaceRef] = useState('')
+  const [fit, setFitState] = useState<'contain' | 'cover'>(() => {
+    try { return localStorage.getItem(FIT_KEY) === 'cover' ? 'cover' : 'contain' } catch { return 'contain' }
+  })
+  const setFit = useCallback((next: 'contain' | 'cover') => {
+    setFitState(next)
+    try { localStorage.setItem(FIT_KEY, next) } catch { /* ignore */ }
+  }, [])
 
   // Loop state lives in refs: the chained-timeout tick must always read the
   // CURRENT knob values without re-creating the loop on every keystroke.
@@ -386,6 +454,9 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
     paused,
     consumer,
     stream,
+    camera,
+    fit,
+    setFit,
     workspaceRef,
     rateMs,
     setRateMs,
@@ -404,7 +475,7 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
     reopen,
     hasViewer: viewers > 0,
     registerViewer,
-  }), [source, paused, consumer, stream, workspaceRef, rateMs, maxDistance, text, mediaError, searchError, latencyMs, lastCount, hits, start, setContextPath, stop, setPaused, reopen, viewers, registerViewer])
+  }), [source, paused, consumer, stream, camera, fit, setFit, workspaceRef, rateMs, maxDistance, text, mediaError, searchError, latencyMs, lastCount, hits, start, setContextPath, stop, setPaused, reopen, viewers, registerViewer])
 
   return (
     <LensFeedCtx.Provider value={value}>
