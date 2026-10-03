@@ -1,4 +1,4 @@
-import { Crosshair, Expand, Flashlight, FlashlightOff, Shrink, ZoomIn } from 'lucide-react'
+import { Aperture, Crosshair, Expand, Flashlight, FlashlightOff, RotateCcw, Shrink, ZoomIn } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CAMERA_RESOLUTIONS, type CameraResolution } from '@/hooks/useWebcam'
 import { useLensFeed } from './use-lens-feed'
@@ -96,5 +96,48 @@ export function LensCameraControls({ className }: { className?: string }) {
         </label>
       )}
     </div>
+  )
+}
+
+/**
+ * Shutter + frozen-frame overlay, rendered INSIDE a (relative) preview box.
+ * Live: a round shutter button over the feed. Snapshot: the still covers the
+ * video and the results stay put until "Live" resumes the loop.
+ */
+export function LensSnapshotOverlay() {
+  const { running, snapshot, takeSnapshot, clearSnapshot, fit } = useLensFeed()
+  if (!running) return null
+  if (snapshot) {
+    return (
+      <>
+        <img
+          src={snapshot}
+          alt="Snapshot being searched"
+          className={cn('absolute inset-0 h-full w-full bg-black', fit === 'contain' ? 'object-contain' : 'object-cover')}
+        />
+        <span className="pointer-events-none absolute left-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white">
+          Snapshot
+        </span>
+        <button
+          type="button"
+          onClick={clearSnapshot}
+          className="absolute bottom-2 left-1/2 flex h-9 -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-3 text-xs font-medium text-white backdrop-blur transition-colors hover:bg-black/75"
+          title="Discard the snapshot and go back to the live feed"
+        >
+          <RotateCcw className="h-3.5 w-3.5" /> Live
+        </button>
+      </>
+    )
+  }
+  return (
+    <button
+      type="button"
+      onClick={takeSnapshot}
+      aria-label="Take a snapshot and search it"
+      title="Snapshot: freeze this frame and search for similar items"
+      className="absolute bottom-2 left-1/2 flex h-12 w-12 -translate-x-1/2 items-center justify-center rounded-full border-4 border-white/90 bg-white/25 text-white shadow-lg backdrop-blur transition-transform hover:bg-white/40 active:scale-90"
+    >
+      <Aperture className="h-5 w-5" />
+    </button>
   )
 }

@@ -8,7 +8,7 @@ import { useDocumentThumbnail } from '@/components/renderers/useDocumentThumbnai
 import { getDocumentDisplayInfo, isImageFile } from '@/lib/document-display'
 import { useLensFeed, useLensFeedViewer } from '../use-lens-feed'
 import { LensFeedVideo } from '../lens-feed-context'
-import { LensCameraControls } from '../LensCameraControls'
+import { LensCameraControls, LensSnapshotOverlay } from '../LensCameraControls'
 import { LENS_RATES } from '../lens-rates'
 import type { Document } from '@/types/workspace'
 
@@ -154,6 +154,7 @@ export function LensApplet() {
         {/* Only when this applet owns the feed — otherwise the Filters tab's
             stream would show through the "camera off" state. */}
         {running && <LensFeedVideo className="h-full w-full" interactive />}
+        {running && <LensSnapshotOverlay />}
         {!running && (
           <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
             <Focus className="mr-2 h-4 w-4" /> camera off
@@ -167,7 +168,7 @@ export function LensApplet() {
         {feedError ? (
           <span className="text-destructive">{feedError}</span>
         ) : running ? (
-          <>live · {latencyMs != null ? `${latencyMs} ms/frame` : 'searching…'} · {hits.length} match{hits.length === 1 ? '' : 'es'}{boundPath ? ` · scoped to ${boundPath}` : ''}</>
+          <>{feed.snapshot ? 'snapshot' : 'live'} · {latencyMs != null ? `${latencyMs} ms/frame` : 'searching…'} · {hits.length} match{hits.length === 1 ? '' : 'es'}{boundPath ? ` · scoped to ${boundPath}` : ''}</>
         ) : otherFeed ? (
           'The Lens filter is using the camera. Stop it there first.'
         ) : (
@@ -177,7 +178,7 @@ export function LensApplet() {
 
       {hits.length === 0 ? (
         <div className="flex min-h-24 flex-1 items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted-foreground">
-          {running ? 'Nothing matching in view' : 'Matches appear here'}
+          {running ? (feed.snapshot ? 'Nothing similar in the snapshot' : 'Nothing matching in view') : 'Matches appear here'}
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">

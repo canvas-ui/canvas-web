@@ -6,7 +6,7 @@ import { useToolbox } from '../use-toolbox'
 import { useLensFeed, useLensFeedViewer } from '../use-lens-feed'
 import { LensFeedVideo } from '../lens-feed-context'
 import { LENS_RATES } from '../lens-rates'
-import { LensCameraControls } from '../LensCameraControls'
+import { LensCameraControls, LensSnapshotOverlay } from '../LensCameraControls'
 
 // The Lens filter tab: LIVE feeds refining the current view, sitting beside
 // Features / Timeline / Map.
@@ -223,6 +223,7 @@ export function LensTab() {
             heavily cropped (cover) — follow the stream's own orientation. */}
         <div className={cn('relative overflow-hidden rounded-lg border border-border bg-black/80', feedRunning ? (portrait ? 'aspect-[3/4] max-h-[60vh]' : 'aspect-video') : 'hidden')}>
           <LensFeedVideo className="h-full w-full" interactive />
+          <LensSnapshotOverlay />
         </div>
         {feedRunning && <LensCameraControls />}
 
@@ -230,7 +231,9 @@ export function LensTab() {
           {feedError ? (
             <span className="text-destructive">{feedError}</span>
           ) : feedRunning ? (
-            `Live: view narrowed to ${feed.lastCount ?? '…'} match${feed.lastCount === 1 ? '' : 'es'}. Frames are ephemeral, never stored. Closing the toolbox keeps it running.`
+            feed.snapshot
+              ? `Snapshot: view narrowed to ${feed.lastCount ?? '…'} match${feed.lastCount === 1 ? '' : 'es'}. The photo is not stored. Tap Live to resume the feed.`
+              : `Live: view narrowed to ${feed.lastCount ?? '…'} match${feed.lastCount === 1 ? '' : 'es'}. Tap the shutter to search one still frame. Frames are ephemeral, never stored. Closing the toolbox keeps it running.`
           ) : otherFeed ? (
             'The Lens applet is using the camera. Stop it there first.'
           ) : lens.ids !== null ? (

@@ -90,6 +90,12 @@ export interface LensFeedValue {
   setContextPath: (path: string | null) => void
   stop: () => void
   setPaused: (paused: boolean) => void
+  /** A frozen frame (JPEG data URI) the results were searched from, or null when live. */
+  snapshot: string | null
+  /** Freeze the current frame and search it once; the camera stays on. */
+  takeSnapshot: () => void
+  /** Drop the snapshot and resume the live loop. */
+  clearSnapshot: () => void
   /** Re-open the panel this feed was started from. */
   reopen: () => void
   /** True while some panel is displaying the feed (the widget stands down). */
@@ -194,6 +200,7 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
   const [latencyMs, setLatencyMs] = useState<number | null>(null)
   const [lastCount, setLastCount] = useState<number | null>(null)
   const [hits, setHits] = useState<LensHit[]>([])
+  const [snapshot, setSnapshot] = useState<string | null>(null)
   const [viewers, setViewers] = useState(0)
   const [workspaceRef, setWorkspaceRef] = useState('')
   const [fit, setFitState] = useState<'contain' | 'cover'>(() => {
@@ -215,6 +222,8 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
     text: '',
     maxDistance: NaN,
     rateMs: DEFAULT_LENS_RATE_MS,
+    // A frozen frame is being shown — the live loop idles, the camera stays on.
+    snapshot: false,
   })
   const historyRef = useRef<number[][]>([])
   const docsRef = useRef(new Map<number, LensHit>())
@@ -286,47 +295,55 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
 
   // ── The frame loop ─────────────────────────────────────────────────────────
 
+  // One search for one frame, published to whichever consumer owns the feed.
+  // Resolves false when the request was superseded (abort / stop / restart).
+  const searchFrame = useCallback(async (frame: string, s: typeof cfgRef.current) => {
+    const t0 = performance.now()
+    const applet = s.consumer === 'applet'
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    try {
+      const tb = toolboxRef.current?.state
+      const filterScope = !applet && tb?.activeContextType === 'context'
+      const res = await searchByImage(s.workspaceRef, frame, {
+        q: applet ? (s.text || undefined) : undefined,
+        maxDistance: Number.isFinite(s.maxDistance) ? s.maxDistance : undefined,
+        contextPath: filterScope ? tb.activeContextPath : applet ? s.contextPath : null,
+        treeId: filterScope ? tb.activeTreeName : null,
+        features: filterScope ? tb.filters.features : undefined,
+        filters: filterScope ? [...buildDatetimeFilters(tb.filters.timeline), ...buildGeoFilters(tb.filters.geo), ...buildLensFilters(tb.filters.lens, tb.filters.geo.includeUnlocated)] : undefined,
+        applyCanvasQuerySpec: filterScope ? false : undefined,
+        limit: applet ? APPLET_LIMIT : FILTER_KNN_LIMIT,
+        idsOnly: !applet,
+        debug: applet,
+        signal: controller.signal,
+      })
+      if (controller.signal.aborted || cfgRef.current !== s || !s.running) return false
+      failuresRef.current = 0
+      setLatencyMs(Math.round(performance.now() - t0))
+      setSearchError(null)
+      if (applet) {
+        publishApplet(res.documents, new Map((res.distances ?? []).map((d) => [d.id, d.distance])))
+      } else {
+        publishFilter(res.ids)
+      }
+      return true
+    } catch (err) {
+      if (controller.signal.aborted || cfgRef.current !== s || !s.running) return false
+      failuresRef.current++
+      if ((err as Error)?.name !== 'AbortError') setSearchError((err as Error)?.message || 'search failed')
+      return false
+    }
+  }, [publishApplet, publishFilter])
+
   const tick = useCallback(async () => {
     const s = cfgRef.current
     if (!s.running) return
     const t0 = performance.now()
-    if (!s.paused) {
+    if (!s.paused && !s.snapshot) {
       const frame = captureFrame()
-      if (frame && s.workspaceRef) {
-        const applet = s.consumer === 'applet'
-        const controller = new AbortController()
-        abortRef.current = controller
-        try {
-          const tb = toolboxRef.current?.state
-          const filterScope = !applet && tb?.activeContextType === 'context'
-          const res = await searchByImage(s.workspaceRef, frame, {
-            q: applet ? (s.text || undefined) : undefined,
-            maxDistance: Number.isFinite(s.maxDistance) ? s.maxDistance : undefined,
-            contextPath: filterScope ? tb.activeContextPath : applet ? s.contextPath : null,
-            treeId: filterScope ? tb.activeTreeName : null,
-            features: filterScope ? tb.filters.features : undefined,
-            filters: filterScope ? [...buildDatetimeFilters(tb.filters.timeline), ...buildGeoFilters(tb.filters.geo), ...buildLensFilters(tb.filters.lens, tb.filters.geo.includeUnlocated)] : undefined,
-            applyCanvasQuerySpec: filterScope ? false : undefined,
-            limit: applet ? APPLET_LIMIT : FILTER_KNN_LIMIT,
-            idsOnly: !applet,
-            debug: applet,
-            signal: controller.signal,
-          })
-          if (controller.signal.aborted || cfgRef.current !== s || !s.running) return
-          failuresRef.current = 0
-          setLatencyMs(Math.round(performance.now() - t0))
-          setSearchError(null)
-          if (applet) {
-            publishApplet(res.documents, new Map((res.distances ?? []).map((d) => [d.id, d.distance])))
-          } else {
-            publishFilter(res.ids)
-          }
-        } catch (err) {
-          if (controller.signal.aborted || cfgRef.current !== s || !s.running) return
-          failuresRef.current++
-          if ((err as Error)?.name !== 'AbortError') setSearchError((err as Error)?.message || 'search failed')
-        }
-      }
+      if (frame && s.workspaceRef) await searchFrame(frame, s)
     }
     if (cfgRef.current.running) {
       // Charge frame-capture + request time against the interval so the
@@ -335,7 +352,7 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
       const delay = Math.max(failuresRef.current ? Math.min(30000, 1000 * 2 ** Math.min(failuresRef.current - 1, 5)) : 0, cfgRef.current.rateMs - (performance.now() - t0))
       timerRef.current = window.setTimeout(() => void tickRef.current(), delay)
     }
-  }, [captureFrame, publishApplet, publishFilter])
+  }, [captureFrame, searchFrame])
 
   useEffect(() => { tickRef.current = tick }, [tick])
 
@@ -357,6 +374,7 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
     setPausedState(false)
     setWorkspaceRef('')
     setHits([])
+    setSnapshot(null)
     setLastCount(null)
     setLatencyMs(null)
     setSearchError(null)
@@ -393,7 +411,9 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
       consumer: who,
       workspaceRef: opts.workspaceRef,
       contextPath: opts.contextPath ?? null,
+      snapshot: false,
     }
+    setSnapshot(null)
     setSource(kind)
     setConsumer(who)
     setPausedState(false)
@@ -423,6 +443,50 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
     cfgRef.current.paused = next
     setPausedState(next)
   }, [])
+
+  // ── Snapshot ───────────────────────────────────────────────────────────────
+  // "This chair, this door": a still answers one question cleanly, where the
+  // live loop keeps re-answering as the camera drifts. The still is searched
+  // without smoothing (there is nothing to vote across) and stays ephemeral
+  // like every other frame.
+
+  const searchSnapshot = useCallback((frame: string) => {
+    const s = cfgRef.current
+    if (!s.running || !s.workspaceRef) return
+    historyRef.current = []
+    docsRef.current.clear()
+    committedRef.current = null
+    setLastCount(null)
+    void searchFrame(frame, s)
+  }, [searchFrame])
+
+  const takeSnapshot = useCallback(() => {
+    const s = cfgRef.current
+    if (!s.running) return
+    // Larger than a loop frame: it is also the picture the user looks at.
+    const frame = captureFrame(1280, 0.85)
+    if (!frame) return
+    s.snapshot = true
+    setSnapshot(frame)
+    searchSnapshot(frame)
+  }, [captureFrame, searchSnapshot])
+
+  const clearSnapshot = useCallback(() => {
+    cfgRef.current.snapshot = false
+    abortRef.current?.abort()
+    historyRef.current = []
+    docsRef.current.clear()
+    setSnapshot(null)
+  }, [])
+
+  // Re-ask the same still when the knobs change (max distance, fused text,
+  // the filter scope) — debounced, since the text box fires per keystroke.
+  useEffect(() => {
+    if (!snapshot) return
+    const t = window.setTimeout(() => searchSnapshot(snapshot), 350)
+    return () => window.clearTimeout(t)
+    // searchSnapshot reads the knobs from cfgRef, these deps only re-trigger it.
+  }, [snapshot, text, maxDistance, filterScopeKey, searchSnapshot])
 
   // The results are meaningless against a different workspace, so navigating
   // away ends the session rather than silently re-scoping it. Only inside the
@@ -472,10 +536,13 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
     setContextPath,
     stop,
     setPaused,
+    snapshot,
+    takeSnapshot,
+    clearSnapshot,
     reopen,
     hasViewer: viewers > 0,
     registerViewer,
-  }), [source, paused, consumer, stream, camera, fit, setFit, workspaceRef, rateMs, maxDistance, text, mediaError, searchError, latencyMs, lastCount, hits, start, setContextPath, stop, setPaused, reopen, viewers, registerViewer])
+  }), [source, paused, consumer, stream, camera, fit, setFit, workspaceRef, rateMs, maxDistance, text, mediaError, searchError, latencyMs, lastCount, hits, start, setContextPath, stop, setPaused, snapshot, takeSnapshot, clearSnapshot, reopen, viewers, registerViewer])
 
   return (
     <LensFeedCtx.Provider value={value}>

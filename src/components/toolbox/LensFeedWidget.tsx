@@ -14,7 +14,7 @@ import { LensFeedVideo } from './lens-feed-context'
 // it (`hasViewer`), which covers closing the toolbox, switching T1 tabs, and
 // moving between Filters sub-tabs — all of which used to kill the camera.
 export function LensFeedWidget() {
-  const { running, hasViewer, paused, source, lastCount, error, setPaused, stop, reopen } = useLensFeed()
+  const { running, hasViewer, paused, snapshot, source, lastCount, error, setPaused, stop, reopen } = useLensFeed()
 
   if (!running || hasViewer) return null
 
@@ -38,6 +38,7 @@ export function LensFeedWidget() {
         className="relative block w-full cursor-pointer bg-black/80 aspect-video"
       >
         <LensFeedVideo className="h-full w-full" />
+        {snapshot && <img src={snapshot} alt="" className="absolute inset-0 h-full w-full bg-black object-contain" />}
         {paused && (
           <span className="absolute inset-0 flex items-center justify-center bg-black/50 text-xs font-medium text-white">
             paused
@@ -52,6 +53,8 @@ export function LensFeedWidget() {
             <span className="text-destructive">{error}</span>
           ) : paused ? (
             'paused'
+          ) : snapshot ? (
+            `snapshot · ${lastCount ?? '…'} match${lastCount === 1 ? '' : 'es'}`
           ) : (
             `live · ${lastCount ?? '…'} match${lastCount === 1 ? '' : 'es'}`
           )}
