@@ -1,4 +1,4 @@
-import { Palette, Keyboard, HardDriveDownload, Key, Monitor, Sparkles, Share2, Info, Users, Shield, ScrollText, Layers3, FolderOpen, Brain } from 'lucide-react'
+import { KeyRound, Palette, Keyboard, HardDriveDownload, Key, Monitor, Sparkles, Share2, Info, Users, Shield, ScrollText, Layers3, FolderOpen, Brain } from 'lucide-react'
 
 export const SETTINGS_GROUPS = [
   { id: 'device', label: 'This device', description: 'Personalize this browser and manage content available offline.', items: [
@@ -15,6 +15,7 @@ export const SETTINGS_GROUPS = [
   { id: 'server', label: 'Server administration', description: 'Administrator controls for everyone using this Canvas server.', items: [
     { path: '/admin/users', icon: Users, label: 'Users', description: 'Manage accounts and server access.' },
     { path: '/admin/roles', icon: Shield, label: 'Roles & permissions', description: 'Manage reusable permissions across the server.' },
+    { path: '/admin/auth', icon: KeyRound, label: 'Authentication', description: 'Configure sign-in backends: local passwords, LDAP and IMAP.' },
     { path: '/admin/embedding', icon: Sparkles, label: 'Server search & AI defaults', description: 'Set the embedding providers and models accounts inherit.' },
     { path: '/admin/logs', icon: ScrollText, label: 'Server logs', description: 'Inspect server activity and troubleshoot failures.' },
     { path: '/admin/contexts', icon: Layers3, label: 'All contexts', description: 'Inspect and manage contexts across the server.' },

@@ -22,6 +22,7 @@ import AdminLogsPage from '@/pages/admin/logs'
 import AdminRolesPage from '@/pages/admin/roles'
 import AdminUsersPage from '@/pages/admin/users'
 import AdminEmbeddingPage from '@/pages/admin/embedding'
+import AdminAuthPage from '@/pages/admin/auth'
 import AgentsPage from '@/pages/agents'
 import AgentDetailPage from '@/pages/agents/[agentId]'
 import AgentSettingsPage from '@/pages/agents/[agentId]/settings'
@@ -84,5 +85,6 @@ export const shellRoutes = (
   <Route key="r34" path="admin/logs" element={<AdminLogsPage />} />
   <Route key="r35" path="admin/roles" element={<AdminRolesPage />} />
   <Route key="r36" path="admin/embedding" element={<AdminEmbeddingPage />} />
+  <Route key="r37" path="admin/auth" element={<AdminAuthPage />} />
   </>
 )

@@ -62,6 +62,7 @@ export const API_ROUTES = {
     logs: `${API_URL}/admin/logs`,
     logsStream: `${API_URL}/admin/logs/stream`,
     inferd: `${API_URL}/admin/inferd`,
+    authConfig: `${API_URL}/admin/auth-config`,
   },
 
   // Roles
