@@ -8,7 +8,7 @@ import { useDocumentThumbnail } from '@/components/renderers/useDocumentThumbnai
 import { getDocumentDisplayInfo, isImageFile } from '@/lib/document-display'
 import { useLensFeed, useLensFeedViewer } from '../use-lens-feed'
 import { LensFeedVideo } from '../lens-feed-context'
-import { LensCameraControls, LensSnapshotOverlay } from '../LensCameraControls'
+import { LensCameraControls, LensPhotoButton, LensSnapshotOverlay } from '../LensCameraControls'
 import { LENS_RATES } from '../lens-rates'
 import type { Document } from '@/types/workspace'
 
@@ -70,7 +70,7 @@ export function LensApplet() {
   const otherFeed = feed.running && feed.consumer !== 'applet'
   const hits = running ? feed.hits : []
   useLensFeedViewer(running)
-  const size = running ? feed.camera?.size : null
+  const size = running ? (feed.snapshotSize ?? feed.camera?.size) : null
   const portrait = !!size && size.height > size.width
 
   const startLens = (kind: 'camera' | 'screen') => {
@@ -126,7 +126,7 @@ export function LensApplet() {
             onClick={feed.stop}
             className="flex h-8 items-center gap-1 rounded-md bg-destructive px-3 text-xs font-medium text-destructive-foreground transition-colors hover:bg-destructive/90"
           >
-            <CircleStop className="h-3.5 w-3.5" /> Stop
+            <CircleStop className="h-3.5 w-3.5" /> {feed.source === 'photo' ? 'Close photo' : 'Stop'}
           </button>
         ) : (
           <>
@@ -148,6 +148,13 @@ export function LensApplet() {
             </button>
           </>
         )}
+        <LensPhotoButton
+          consumer="applet"
+          workspaceRef={workspaceRef}
+          contextPath={boundPath}
+          disabled={otherFeed}
+          className="flex h-8 items-center gap-1 rounded-md bg-foreground px-3 text-xs font-medium text-background transition-colors hover:bg-foreground/90 disabled:opacity-50"
+        />
       </div>
 
       <div className={cn('relative shrink-0 overflow-hidden rounded-xl border border-border bg-black/80', portrait ? 'aspect-[3/4] max-h-[60vh]' : 'aspect-video max-h-80')}>
@@ -157,7 +164,7 @@ export function LensApplet() {
         {running && <LensSnapshotOverlay />}
         {!running && (
           <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
-            <Focus className="mr-2 h-4 w-4" /> camera off
+            <Focus className="mr-2 h-4 w-4" /> camera off · or pick a photo
           </div>
         )}
       </div>

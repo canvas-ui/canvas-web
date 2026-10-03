@@ -6,7 +6,7 @@ import { useToolbox } from '../use-toolbox'
 import { useLensFeed, useLensFeedViewer } from '../use-lens-feed'
 import { LensFeedVideo } from '../lens-feed-context'
 import { LENS_RATES } from '../lens-rates'
-import { LensCameraControls, LensSnapshotOverlay } from '../LensCameraControls'
+import { LensCameraControls, LensPhotoButton, LensSnapshotOverlay } from '../LensCameraControls'
 
 // The Lens filter tab: LIVE feeds refining the current view, sitting beside
 // Features / Timeline / Map.
@@ -125,7 +125,8 @@ export function LensTab() {
   }
 
   const feedRunning = ownFeed
-  const size = feed.camera?.size
+  // A snapshot or picked photo sets the shape while it is shown.
+  const size = feed.snapshotSize ?? feed.camera?.size
   const portrait = !!size && size.height > size.width
 
   return (
@@ -178,7 +179,7 @@ export function LensTab() {
               onClick={feed.stop}
               className="flex h-7 items-center gap-1 rounded-md bg-destructive px-2.5 text-xs font-medium text-destructive-foreground hover:bg-destructive/90"
             >
-              <CircleStop className="h-3.5 w-3.5" /> Stop {feed.source === 'camera' ? 'camera' : 'recording'}
+              <CircleStop className="h-3.5 w-3.5" /> {feed.source === 'photo' ? 'Close photo' : `Stop ${feed.source === 'camera' ? 'camera' : 'recording'}`}
             </button>
           ) : (
             <>
@@ -200,6 +201,13 @@ export function LensTab() {
               </button>
             </>
           )}
+          <LensPhotoButton
+            consumer="filter"
+            workspaceRef={workspaceName ?? ''}
+            contextPath={state.activeContextPath}
+            disabled={otherFeed}
+            className="flex h-7 items-center gap-1 rounded-md bg-foreground px-2.5 text-xs font-medium text-background hover:bg-foreground/90 disabled:opacity-50"
+          />
           <select
             className={selectClass}
             value={rateMs}

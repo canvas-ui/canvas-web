@@ -1,4 +1,4 @@
-import { CircleStop, Maximize2, Pause, Play, Camera, Monitor } from 'lucide-react'
+import { CircleStop, Maximize2, Pause, Play, Camera, Monitor, ImageIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useLensFeed } from './use-lens-feed'
 import { LensFeedVideo } from './lens-feed-context'
@@ -18,7 +18,7 @@ export function LensFeedWidget() {
 
   if (!running || hasViewer) return null
 
-  const SourceIcon = source === 'screen' ? Monitor : Camera
+  const SourceIcon = source === 'screen' ? Monitor : source === 'photo' ? ImageIcon : Camera
 
   return (
     <div
@@ -54,12 +54,12 @@ export function LensFeedWidget() {
           ) : paused ? (
             'paused'
           ) : snapshot ? (
-            `snapshot · ${lastCount ?? '…'} match${lastCount === 1 ? '' : 'es'}`
+            `${source === 'photo' ? 'photo' : 'snapshot'} · ${lastCount ?? '…'} match${lastCount === 1 ? '' : 'es'}`
           ) : (
             `live · ${lastCount ?? '…'} match${lastCount === 1 ? '' : 'es'}`
           )}
         </span>
-        <button
+        {source !== 'photo' && <button
           type="button"
           onClick={() => setPaused(!paused)}
           aria-label={paused ? 'Resume Lens' : 'Pause Lens'}
@@ -67,7 +67,7 @@ export function LensFeedWidget() {
           className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           {paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
-        </button>
+        </button>}
         <button
           type="button"
           onClick={reopen}

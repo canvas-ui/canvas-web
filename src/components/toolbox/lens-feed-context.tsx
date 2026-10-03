@@ -45,7 +45,9 @@ const FILTER_KNN_LIMIT = 32
 const APPLET_LIMIT = 12
 const FIT_KEY = 'canvas.lens.fit'
 
-export type LensSource = 'camera' | 'screen'
+// 'photo' = a picked image file (camera app / gallery): no stream, no loop —
+// a session that is a snapshot from the start.
+export type LensSource = 'camera' | 'screen' | 'photo'
 export type LensConsumer = 'filter' | 'applet'
 
 export interface LensHit {
@@ -58,6 +60,8 @@ interface StartOptions {
   workspaceRef: string
   /** Applet only: bound path scoping the candidate set. */
   contextPath?: string | null
+  /** 'photo' source only: the picked image as a JPEG data URI. */
+  image?: string
 }
 
 export interface LensFeedValue {
@@ -96,6 +100,13 @@ export interface LensFeedValue {
   takeSnapshot: () => void
   /** Drop the snapshot and resume the live loop. */
   clearSnapshot: () => void
+  /** Natural size of the snapshot (for portrait-aware previews). */
+  snapshotSize: { width: number; height: number } | null
+  /**
+   * Search a picked image. With this consumer's camera already live it becomes
+   * the snapshot (Live returns to the camera); otherwise a 'photo' session.
+   */
+  searchPhoto: (image: string, consumer: LensConsumer, opts: StartOptions) => Promise<boolean>
   /** Re-open the panel this feed was started from. */
   reopen: () => void
   /** True while some panel is displaying the feed (the widget stands down). */
@@ -191,6 +202,8 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
     useWebcam({ onEnded: () => endedRef.current() })
 
   const [source, setSource] = useState<LensSource | null>(null)
+  const sourceRef = useRef(source)
+  useEffect(() => { sourceRef.current = source }, [source])
   const [consumer, setConsumer] = useState<LensConsumer | null>(null)
   const [paused, setPausedState] = useState(false)
   const [rateMs, setRateMs] = useState<number>(DEFAULT_LENS_RATE_MS)
@@ -201,6 +214,12 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
   const [lastCount, setLastCount] = useState<number | null>(null)
   const [hits, setHits] = useState<LensHit[]>([])
   const [snapshot, setSnapshot] = useState<string | null>(null)
+  // Keyed by the frame it measured, so a stale size never outlives its image.
+  const [measured, setMeasured] = useState<{ frame: string; width: number; height: number } | null>(null)
+  const snapshotSize = measured && measured.frame === snapshot ? measured : null
+  // What the current snapshot was last searched with — the knob effect below
+  // only re-asks when one of them actually changed.
+  const searchedRef = useRef<{ frame: string; key: string } | null>(null)
   const [viewers, setViewers] = useState(0)
   const [workspaceRef, setWorkspaceRef] = useState('')
   const [fit, setFitState] = useState<'contain' | 'cover'>(() => {
@@ -239,6 +258,7 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
   // The chained timeout re-enters tick() through this ref — a direct self-
   // reference inside its own useCallback trips lint and would go stale.
   const tickRef = useRef<() => Promise<void>>(async () => {})
+  const searchSnapshotRef = useRef<(frame: string) => void>(() => {})
 
   useEffect(() => {
     cfgRef.current.text = text
@@ -393,8 +413,9 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
     // leave one stream live with nothing tracking it.
     if (startingRef.current) return false
     if (cfgRef.current.running) stop()
+    if (kind === 'photo' && !opts.image) return false
     startingRef.current = true
-    const ok = kind === 'camera' ? await startCamera() : await startScreen()
+    const ok = kind === 'photo' ? true : kind === 'camera' ? await startCamera() : await startScreen()
     startingRef.current = false
     if (!ok) return false
     historyRef.current = []
@@ -411,14 +432,15 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
       consumer: who,
       workspaceRef: opts.workspaceRef,
       contextPath: opts.contextPath ?? null,
-      snapshot: false,
+      snapshot: kind === 'photo',
     }
-    setSnapshot(null)
+    setSnapshot(kind === 'photo' ? opts.image! : null)
     setSource(kind)
     setConsumer(who)
     setPausedState(false)
     if (who === 'filter') toolboxRef.current?.setLensIds([])
-    void tick()
+    if (kind === 'photo') searchSnapshotRef.current(opts.image!)
+    else void tick()
     return true
   }, [startCamera, startScreen, stop, tick])
 
@@ -450,15 +472,22 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
   // without smoothing (there is nothing to vote across) and stays ephemeral
   // like every other frame.
 
+  const snapshotKey = JSON.stringify([text, maxDistance, filterScopeKey])
+  const snapshotKeyRef = useRef(snapshotKey)
+  useEffect(() => { snapshotKeyRef.current = snapshotKey })
+
   const searchSnapshot = useCallback((frame: string) => {
     const s = cfgRef.current
     if (!s.running || !s.workspaceRef) return
+    searchedRef.current = { frame, key: snapshotKeyRef.current }
     historyRef.current = []
     docsRef.current.clear()
     committedRef.current = null
     setLastCount(null)
     void searchFrame(frame, s)
   }, [searchFrame])
+  // start() is declared above this and needs it for the photo source.
+  useEffect(() => { searchSnapshotRef.current = searchSnapshot }, [searchSnapshot])
 
   const takeSnapshot = useCallback(() => {
     const s = cfgRef.current
@@ -472,21 +501,45 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
   }, [captureFrame, searchSnapshot])
 
   const clearSnapshot = useCallback(() => {
+    // A photo session has no live feed to return to.
+    if (cfgRef.current.running && sourceRef.current === 'photo') { stop(); return }
     cfgRef.current.snapshot = false
     abortRef.current?.abort()
     historyRef.current = []
     docsRef.current.clear()
     setSnapshot(null)
-  }, [])
+  }, [stop])
+
+  const searchPhoto = useCallback(async (image: string, who: LensConsumer, opts: StartOptions) => {
+    const s = cfgRef.current
+    if (s.running && s.consumer === who && sourceRef.current === 'camera') {
+      s.snapshot = true
+      setSnapshot(image)
+      searchSnapshot(image)
+      return true
+    }
+    return start('photo', who, { ...opts, image })
+  }, [start, searchSnapshot])
+
+  useEffect(() => {
+    if (!snapshot) return
+    let live = true
+    const img = new Image()
+    img.onload = () => { if (live) setMeasured({ frame: snapshot, width: img.naturalWidth, height: img.naturalHeight }) }
+    img.src = snapshot
+    return () => { live = false }
+  }, [snapshot])
 
   // Re-ask the same still when the knobs change (max distance, fused text,
   // the filter scope) — debounced, since the text box fires per keystroke.
   useEffect(() => {
     if (!snapshot) return
+    const last = searchedRef.current
+    if (last && last.frame === snapshot && last.key === snapshotKey) return
     const t = window.setTimeout(() => searchSnapshot(snapshot), 350)
     return () => window.clearTimeout(t)
-    // searchSnapshot reads the knobs from cfgRef, these deps only re-trigger it.
-  }, [snapshot, text, maxDistance, filterScopeKey, searchSnapshot])
+    // searchSnapshot reads the knobs from cfgRef; the key only re-triggers it.
+  }, [snapshot, snapshotKey, searchSnapshot])
 
   // The results are meaningless against a different workspace, so navigating
   // away ends the session rather than silently re-scoping it. Only inside the
@@ -539,10 +592,12 @@ export function LensFeedProvider({ children }: { children: ReactNode }) {
     snapshot,
     takeSnapshot,
     clearSnapshot,
+    snapshotSize,
+    searchPhoto,
     reopen,
     hasViewer: viewers > 0,
     registerViewer,
-  }), [source, paused, consumer, stream, camera, fit, setFit, workspaceRef, rateMs, maxDistance, text, mediaError, searchError, latencyMs, lastCount, hits, start, setContextPath, stop, setPaused, snapshot, takeSnapshot, clearSnapshot, reopen, viewers, registerViewer])
+  }), [source, paused, consumer, stream, camera, fit, setFit, workspaceRef, rateMs, maxDistance, text, mediaError, searchError, latencyMs, lastCount, hits, start, setContextPath, stop, setPaused, snapshot, takeSnapshot, clearSnapshot, snapshotSize, searchPhoto, reopen, viewers, registerViewer])
 
   return (
     <LensFeedCtx.Provider value={value}>
