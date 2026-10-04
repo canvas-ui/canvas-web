@@ -269,6 +269,9 @@ function WorkspaceContent() {
   // the REST API. See `feedback_url_design` memory for rationale.
   const [tree, setTree] = useState<TreeNode | null>(null);
   const [sidePane, setSidePane] = useState<WorkspaceSidePane | null>(null);
+  // Read by the socket handler, which must not resubscribe when the pane moves.
+  const sidePaneRef = useRef<WorkspaceSidePane | null>(null);
+  useEffect(() => { sidePaneRef.current = sidePane; }, [sidePane]);
   const [focusedPane, setFocusedPane] = useState<FocusedPane>('left');
   const [leftSelection, setLeftSelection] = useState<number[]>([]);
   const { openM2Drawer } = useMenu();
@@ -760,9 +763,19 @@ function WorkspaceContent() {
     const REFRESH_MIN_INTERVAL_MS = 1500;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let lastRun = 0;
+    let mainDirty = false;
+    let sideDirty: WorkspaceSidePane | null = null;
     const runRefresh = () => {
       timer = null;
       lastRun = Date.now();
+      // The side-by-side pane fetches on its own; it listens for this event.
+      if (sideDirty) {
+        const { treeName, path } = sideDirty;
+        sideDirty = null;
+        window.dispatchEvent(new CustomEvent('workspace:documents:refresh', { detail: { workspaceName, treeName, path } }));
+      }
+      if (!mainDirty) return;
+      mainDirty = false;
       // A session usually learns about a write on its own (precise key-touch
       // invalidation → a delta). It cannot when a cue has no keys to
       // invalidate — a scope cue over a tree path that did not exist yet
@@ -781,7 +794,10 @@ function WorkspaceContent() {
         tree: selectedTreeName, kind: treeTypeForName(selectedTreeName), path: selectedPath,
         wholeWorkspace: docScope === 'workspace',
       };
-      if (!eventTouchesView(scope, view, listedIdsRef.current)) return;
+      const side = sidePaneRef.current;
+      if (side && eventTouchesView(scope, { tree: side.treeName, kind: treeTypeForName(side.treeName), path: side.path })) sideDirty = side;
+      if (eventTouchesView(scope, view, listedIdsRef.current)) mainDirty = true;
+      if (!mainDirty && !sideDirty) return;
       if (timer) return;
       timer = setTimeout(runRefresh, Math.max(200, lastRun + REFRESH_MIN_INTERVAL_MS - Date.now()));
     };
