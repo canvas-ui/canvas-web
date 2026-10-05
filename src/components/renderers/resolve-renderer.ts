@@ -14,6 +14,7 @@ import { isPdfUrl } from './pdf-url'
 import { LinkCardRenderer } from './LinkCardRenderer'
 import { TodoRenderer } from './TodoRenderer'
 import { EmailRenderer } from './EmailRenderer'
+import { MessageRenderer } from './MessageRenderer'
 import { IdentityRenderer } from './IdentityRenderer'
 import { BinaryFallback } from './BinaryFallback'
 
@@ -28,6 +29,7 @@ export function resolveRenderer(document: Document): ComponentType<RendererProps
   if (schema === DRAWING_SCHEMA) return ImageRenderer
   if (schema === TODO_SCHEMA) return TodoRenderer
   if (schema === EMAIL_SCHEMA) return EmailRenderer
+  if (schema === 'data/schema/message') return MessageRenderer
   // Subtypes (`data/schema/identity/person`) render the same way — the leaf
   // is the schema id, which the renderer shows as a badge.
   if (schema === IDENTITY_SCHEMA || schema.startsWith(`${IDENTITY_SCHEMA}/`)) return IdentityRenderer

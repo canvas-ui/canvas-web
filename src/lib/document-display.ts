@@ -216,6 +216,17 @@ export function getDocumentDisplayInfo(document: Document): {
     }
   }
 
+  if (document.schema === 'data/schema/message') {
+    const sender = document.data.sender as { name?: string; displayName?: string; username?: string; id?: string } | undefined
+    const channel = document.data.channel as { name?: string; id?: string } | undefined
+    return {
+      title: truncate(document.data.text, 160) || 'Message',
+      preview: truncate(document.data.text, 400),
+      subtitle: [sender?.name || sender?.displayName || sender?.username || sender?.id, channel?.name || channel?.id].filter(Boolean).join(' · '),
+      icon: 'mail', isExternal: false, schemaLabel,
+    }
+  }
+
   if (isTab) {
     const title = String(document.data.title || document.data.name || '').trim()
     const url = String(document.data.url || '').trim()
