@@ -14,8 +14,10 @@ function draftKey(workspace: string, replyId?: number, forward = false) {
 
 const TITLES: Record<ComposeMode, string> = { reply: 'Reply', replyAll: 'Reply all', forward: 'Forward' }
 
-export function MessageComposer({ workspaceId, replyToDocumentId, mode = 'reply', originalSubject, onClose }: {
+export function MessageComposer({ workspaceId, replyToDocumentId, mode = 'reply', originalSubject, initialAccount, testEmail = false, onClose }: {
   workspaceId: string
+  initialAccount?: { driver: MessageAccount['driver']; address: string }
+  testEmail?: boolean
   replyToDocumentId?: number
   /** Only meaningful with replyToDocumentId. Reply/Reply all/Forward apply to email; chats only reply. */
   mode?: ComposeMode
@@ -24,8 +26,9 @@ export function MessageComposer({ workspaceId, replyToDocumentId, mode = 'reply'
   onClose: () => void
 }) {
   const forward = !!replyToDocumentId && mode === 'forward'
-  const key = draftKey(workspaceId, replyToDocumentId, forward)
-  const fresh = (): MessageSend => ({ requestId: crypto.randomUUID(), text: '', replyToDocumentId,
+  const key = testEmail ? `${draftKey(workspaceId)}:smtp-test:${initialAccount?.address}` : draftKey(workspaceId, replyToDocumentId, forward)
+  const fresh = (): MessageSend => ({ requestId: crypto.randomUUID(), text: testEmail ? 'This is a test email sent from Canvas to check the SMTP configuration.' : '', replyToDocumentId,
+    ...initialAccount, ...(testEmail ? { subject: 'Canvas SMTP test' } : {}),
     ...(forward ? { forward: true } : replyToDocumentId ? { replyAll: mode === 'replyAll', quote: true } : {}) })
   const [draft, setDraft] = useState<MessageSend>(() => {
     try {
@@ -34,7 +37,11 @@ export function MessageComposer({ workspaceId, replyToDocumentId, mode = 'reply'
         const parsed = JSON.parse(saved)
         const restored: MessageSend = parsed.draft || parsed
         // The button that opened the composer decides Reply vs Reply all.
-        return forward || !replyToDocumentId ? restored : { ...restored, replyAll: mode === 'replyAll' }
+        if (forward || !replyToDocumentId || parsed.attempted) return restored
+        const replyAll = mode === 'replyAll'
+        return { ...restored, replyAll,
+          ...(!!restored.replyAll !== replyAll ? { to: undefined, cc: undefined } : {}),
+        }
       }
     } catch { /* storage may be unavailable */ }
     return fresh()
@@ -59,10 +66,18 @@ export function MessageComposer({ workspaceId, replyToDocumentId, mode = 'reply'
         setReplyTarget(target)
         setAccounts(list.filter((a) => a.canSend && (!target || (a.driver === target.driver && a.address === target.address))))
         if (replyToDocumentId && !target) setError('This message has no supported reply account.')
-        if (target) setDraft((d) => ({ ...d, driver: target.driver, address: target.address }))
+        if (target) setDraft((d) => {
+          const recipients = d.replyAll ? target.allRecipients : target.recipients
+          return { ...d, driver: target.driver, address: target.address,
+            ...(!forward && recipients && !attempted ? {
+              to: d.to?.some((value) => value.trim()) ? d.to : recipients.to,
+              cc: d.cc?.some((value) => value.trim()) ? d.cc : recipients.cc,
+            } : {}),
+          }
+        })
       }).catch((e) => { if (active) setError(e.message) })
     return () => { active = false }
-  }, [workspaceId, replyToDocumentId])
+  }, [workspaceId, replyToDocumentId, forward, attempted])
   useEffect(() => { try { if (receipt?.status === 'accepted') localStorage.removeItem(key); else localStorage.setItem(key, JSON.stringify({ draft, attempted })) } catch { /* keep the in-memory draft */ } }, [key, draft, attempted, receipt])
   const account = accounts.find((a) => a.driver === draft.driver && a.address === draft.address)
   const isEmail = account?.driver === 'imap'
@@ -95,18 +110,19 @@ export function MessageComposer({ workspaceId, replyToDocumentId, mode = 'reply'
   }
   const replyRecipients = draft.replyAll ? replyTarget?.allRecipients : replyTarget?.recipients
   const locked = busy || attempted
-  const title = replyToDocumentId ? (forward ? TITLES.forward : TITLES[draft.replyAll ? 'replyAll' : 'reply']) : 'New message'
+  const title = testEmail ? 'Send test email' : replyToDocumentId ? (forward ? TITLES.forward : TITLES[draft.replyAll ? 'replyAll' : 'reply']) : 'New message'
   const subjectPlaceholder = replyToDocumentId && originalSubject
     ? `${forward ? 'Fwd' : 'Re'}: ${originalSubject.replace(forward ? /^(fwd?|fw):\s*/i : /^re:\s*/i, '')}`
     : ''
   return <section className="max-h-[70dvh] overflow-y-auto rounded-md border bg-card p-3 space-y-3" aria-label={replyToDocumentId ? `${title} to message` : 'New message'}>
     <div className="flex justify-between items-center"><strong className="text-sm">{title}</strong><Button size="sm" variant="ghost" onClick={onClose}>Close</Button></div>
     <label className="block text-xs">Send from
-      <select aria-label="Sending account" className="w-full rounded border bg-background p-2" value={account ? `${account.driver}:${account.address}` : ''} disabled={locked || !!replyToDocumentId} onChange={(e) => {
+      <select aria-label="Sending account" className="w-full rounded border bg-background p-2" value={account ? `${account.driver}:${account.address}` : ''} disabled={locked || !!replyToDocumentId || !!initialAccount} onChange={(e) => {
         const a = accounts.find((a) => `${a.driver}:${a.address}` === e.target.value)
         if (a) patch({ driver: a.driver, address: a.address, to: [], cc: [], bcc: [], subject: undefined, target: undefined, replyAll: false })
       }}><option value="">Select an enabled sending account</option>{accounts.map((a) => <option key={`${a.driver}:${a.address}`} value={`${a.driver}:${a.address}`}>{a.driver} · {a.from || a.address}</option>)}</select>
     </label>
+    {testEmail && <p className="text-xs text-muted-foreground">Uses the saved SMTP settings. Enter a recipient you control, then click Send. This sends a real email; provider acceptance does not guarantee inbox delivery.</p>}
     {!accounts.length && <p className="text-xs text-muted-foreground">Enable sending in the account’s workspace settings. Your draft stays on this device.</p>}
     {isEmail ? <>
       <label className="block text-xs">To {replyToDocumentId && !forward ? '(leave blank to reply to the sender)' : ''}<Input aria-label="To" disabled={locked} value={draft.to?.join(', ') || ''} onChange={(e) => patch({ to: [e.target.value] })} /></label>
@@ -115,7 +131,10 @@ export function MessageComposer({ workspaceId, replyToDocumentId, mode = 'reply'
       {/* Blank keeps the server's Re:/Fwd: subject. */}
       <label className="block text-xs">Subject<Input aria-label="Subject" disabled={locked} value={draft.subject || ''} placeholder={subjectPlaceholder} onChange={(e) => patch({ subject: e.target.value || undefined })} /></label>
       {replyToDocumentId && !forward && <div className="flex flex-wrap gap-4 text-xs">
-        <label className="flex gap-2"><input type="checkbox" disabled={locked} checked={draft.replyAll || false} onChange={(e) => patch({ replyAll: e.target.checked })} />Reply all</label>
+        <label className="flex gap-2"><input type="checkbox" disabled={locked} checked={draft.replyAll || false} onChange={(e) => {
+          const recipients = e.target.checked ? replyTarget?.allRecipients : replyTarget?.recipients
+          patch({ replyAll: e.target.checked, ...(recipients ? { to: recipients.to, cc: recipients.cc } : {}) })
+        }} />Reply all</label>
         <label className="flex gap-2"><input type="checkbox" disabled={locked} checked={draft.quote || false} onChange={(e) => patch({ quote: e.target.checked })} />Quote original message</label>
       </div>}
       {forward && <p className="text-xs text-muted-foreground">The original message and its attachments are included below your note.</p>}

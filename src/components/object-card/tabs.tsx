@@ -1,4 +1,4 @@
-import { MessageComposer } from '@/components/common/MessageComposer'
+import { MessageComposerDialog } from '@/components/common/MessageComposerDialog'
 import type { ComposeMode } from '@/services/messages'
 import { Suspense, useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
@@ -62,6 +62,7 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
   if (resetKey !== lastResetKey) {
     setLastResetKey(resetKey)
     setEditing(initialEdit && isEditableDocument(document))
+    setReplying(null)
   }
 
   if (editing && canEdit) {
@@ -147,7 +148,7 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
       <div className="min-h-0 flex-1 overflow-auto">
         <DocumentRenderer workspaceId={workspaceId} document={document} />
         {replying && canReply && (
-          <MessageComposer
+          <MessageComposerDialog
             key={`${document.id}:${replying}`}
             workspaceId={workspaceId}
             replyToDocumentId={Number(document.id)}

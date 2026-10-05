@@ -315,6 +315,7 @@ function WorkspaceM2Content() {
     }
     const events = [
       'context.path.changed',
+      'backend.tree.changed', 'dataBackends.changed', 'services.changed',
       'tree.path.inserted', 'tree.path.moved', 'tree.path.removed', 'tree.path.copied',
       'tree.layer.updated', 'tree.layer.merged', 'tree.layer.subtracted',
       'tree.recalculated', 'tree.created', 'tree.deleted', 'tree.renamed',

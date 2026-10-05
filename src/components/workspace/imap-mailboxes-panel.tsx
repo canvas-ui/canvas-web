@@ -1,3 +1,4 @@
+import { MessageComposerDialog } from '@/components/common/MessageComposerDialog';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -62,6 +63,7 @@ function formFromBackend(b: Backend): AccountForm {
 
 export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelProps) {
   const [accounts, setAccounts] = useState<Backend[]>([]);
+  const [smtpTestAccount, setSmtpTestAccount] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null); // address of the expanded account
   const [showNew, setShowNew] = useState(false); // new-account form visible
   const [form, setForm] = useState<AccountForm>(EMPTY_FORM);
@@ -304,6 +306,9 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
         </div>
         <fieldset className="rounded border p-3 space-y-3 sm:col-span-2">
           <legend className="px-1 text-sm font-medium">Outgoing email (SMTP)</legend>
+          <Button type="button" variant="outline" size="sm" disabled={!current || !form.smtp.enabled || isSaving} onClick={() => setSmtpTestAccount(current!.address)}>Send test email</Button>
+          <p className="text-xs text-muted-foreground">Save your SMTP settings before testing. The test uses the saved account.</p>
+          {smtpTestAccount && <MessageComposerDialog workspaceId={workspaceId} initialAccount={{ driver: 'imap', address: smtpTestAccount }} testEmail onClose={() => setSmtpTestAccount(null)} />}
           <label className="flex gap-2 text-xs"><input type="checkbox" checked={form.smtp.enabled} onChange={(e) => change('smtp', { ...form.smtp, enabled: e.target.checked })} />Allow sending from Canvas</label>
           <div className="grid gap-3 sm:grid-cols-2">
             {(['host', 'user', 'password', 'from', 'sentFolder'] as const).map((field) => <label key={field} className="text-xs">
