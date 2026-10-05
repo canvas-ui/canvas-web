@@ -60,7 +60,7 @@ const DRIVERS: Record<string, { label: string; icon: string; blurb: string; fiel
     label: 'WhatsApp (linked device)', icon: 'mdi:whatsapp',
     blurb: 'Pair your phone with Canvas, then choose conversations. Uses Baileys; separate from WhatsApp Business.',
     fields: [
-      { key: 'address', label: 'Account label', placeholder: 'personal', required: true },
+      { key: 'address', label: 'Account label', placeholder: 'personal', hint: 'Any unique label; no phone number required. Keep it unchanged after pairing.', required: true },
       { key: 'chats', label: 'Conversation IDs to sync (one per line; available after pairing)', list: true },
       { key: 'writeBack', label: 'Allow sending from Canvas', bool: true },
       { key: 'allowAgentSend', label: 'Allow agents with workspace write access to send', bool: true },
@@ -241,7 +241,7 @@ export function ConnectorsSection({ workspaceId }: { workspaceId: string }) {
             const spec = DRIVERS[c.driver]
             return (
               <div key={`${c.driver}:${c.address}`} className="rounded-md border p-3">
-                {c.driver === 'whatsapp' && <WhatsAppConnection workspaceId={workspaceId} address={c.address} />}
+                {c.driver === 'whatsapp' && <WhatsAppConnection workspaceId={workspaceId} address={c.address} selectedChats={Array.isArray(c.config?.chats) ? c.config.chats as string[] : []} onSaved={load} />}
                 <div className="flex flex-wrap items-center gap-2">
                   <Icon icon={spec?.icon || 'mdi:cloud-sync'} width={16} height={16} className="shrink-0" />
                   <span className="text-sm font-medium">{spec?.label || c.driver}</span>
