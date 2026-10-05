@@ -1,3 +1,4 @@
+import type { Document } from '@/types/workspace'
 import { api } from '@/lib/api'
 import { API_ROUTES } from '@/config/api'
 
@@ -23,3 +24,12 @@ export const messageConnection = (workspace: string, address: string) => api.get
 
 export const messageSendStatus = (workspace: string, requestId: string) => api.get<MessageReceipt>(`${base(workspace)}/outbox/${encodeURIComponent(requestId)}`)
 export const resetMessageConnection = (workspace: string, address: string) => api.delete(`${base(workspace)}/whatsapp/${encodeURIComponent(address)}/connection`)
+
+export interface MessageThreadResult {
+  documentId: number
+  documents: Document[]
+  parents: Record<string, number[]>
+  rootIds: number[]
+  truncated: boolean
+}
+export const getMessageThread = (workspace: string, id: number) => api.get<MessageThreadResult>(`${base(workspace)}/thread/${id}`)

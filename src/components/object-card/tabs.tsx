@@ -1,3 +1,4 @@
+import { MessageThread } from '@/components/common/MessageThread'
 import { MessageComposerDialog } from '@/components/common/MessageComposerDialog'
 import type { ComposeMode } from '@/services/messages'
 import { Suspense, useEffect, useState, type ReactNode } from 'react'
@@ -39,6 +40,8 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
   const { showErrorToast } = useToastHelpers()
   // Every non-public document is editable — at minimum the universal comment
   // section; schema-specific fields (url/title/body) render only for note/link/tab.
+  const [showThread, setShowThread] = useState(false)
+  const isMessage = ['data/schema/message', 'data/schema/message/email'].includes(document.schema)
   const [replying, setReplying] = useState<ComposeMode | null>(null)
   const isEmail = document.schema === 'data/schema/message/email'
   const canReply = !isPublic && (isEmail || ['slack', 'whatsapp'].includes(String(document.data?.platform)))
@@ -63,6 +66,7 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
     setLastResetKey(resetKey)
     setEditing(initialEdit && isEditableDocument(document))
     setReplying(null)
+    setShowThread(false)
   }
 
   if (editing && canEdit) {
@@ -81,6 +85,7 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
     <div className="flex h-full min-h-0 flex-col gap-3">
       {canEdit && (
         <div className="flex shrink-0 justify-end gap-2">
+          {isMessage && <Button size="sm" variant={showThread ? 'secondary' : 'outline'} onClick={() => setShowThread(!showThread)}>{showThread ? 'Show message' : 'View thread'}</Button>}
           {canReply && composeModes.map((mode) => {
             const Icon = COMPOSE_ICONS[mode]
             return (
@@ -146,7 +151,7 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
         </Suspense>
       )}
       <div className="min-h-0 flex-1 overflow-auto">
-        <DocumentRenderer workspaceId={workspaceId} document={document} />
+        {showThread && !isPublic ? <MessageThread key={`${workspaceId}:${document.id}`} workspaceId={workspaceId} documentId={Number(document.id)} /> : <DocumentRenderer workspaceId={workspaceId} document={document} />}
         {replying && canReply && (
           <MessageComposerDialog
             key={`${document.id}:${replying}`}
