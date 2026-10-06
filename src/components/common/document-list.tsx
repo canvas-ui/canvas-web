@@ -1464,8 +1464,10 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
       add(openToSide && { id: 'open-side', group: 'open', label: 'Open to the side', icon: PanelRight, run: () => openToSide(single) })
     }
 
-    add(onCopyDocuments && { id: 'copy', group: 'clipboard', label: `Copy${count}`, icon: Copy, shortcut: 'Mod+C', run: () => { onCopyDocuments(ids); done() } })
-    add(onCutDocuments && { id: 'cut', group: 'clipboard', label: `Cut${count}`, icon: Scissors, shortcut: 'Mod+X', run: () => { onCutDocuments(ids); done() } })
+    // Copy/cut keep the selection (Explorer/Finder): the user often acts on
+    // the same set next, and the selection is the only visible clipboard cue.
+    add(onCopyDocuments && { id: 'copy', group: 'clipboard', label: `Copy${count}`, icon: Copy, shortcut: 'Mod+C', run: () => onCopyDocuments(ids) })
+    add(onCutDocuments && { id: 'cut', group: 'clipboard', label: `Cut${count}`, icon: Scissors, shortcut: 'Mod+X', run: () => onCutDocuments(ids) })
     add(single && { id: 'copy-id', group: 'clipboard', label: 'Copy ID', icon: Link, run: () => copyText(String(single.id)) })
 
     add(canLink && { id: 'link-to', group: 'organize', label: `Link to…${count}`, icon: Link2, run: () => setLinkPanelIds(ids) })
