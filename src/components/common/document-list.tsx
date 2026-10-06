@@ -3,7 +3,7 @@ import { selectDocumentRange } from '@/lib/document-selection'
 import { CopyToWorkspacePanel } from '@/components/menu/shared/CopyToWorkspacePanel'
 import { BulkEditDialog } from './BulkEditDialog'
 import { Document, TreeNode } from '@/types/workspace'
-import { File, Calendar, CalendarDays, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, ChevronDown, SlidersHorizontal, Play, Table as TableIcon, HardDrive, ArrowRightLeft, Loader2, Folder, FolderOpen, CornerLeftUp, Plus } from 'lucide-react'
+import { File, Calendar, CalendarDays, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, MoreHorizontal, Play, Table as TableIcon, HardDrive, ArrowRightLeft, Loader2, Folder, FolderOpen, CornerLeftUp, Plus } from 'lucide-react'
 import { LinkToCard, type LinkToTarget, type LinkToRelation } from '@/components/menu/shared/LinkToCard'
 import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from '@/components/menu/shared/LinkToSidePanel'
 import { BackendActionCard, type BackendTransferConfirmOptions } from '@/components/menu/shared/BackendActionCard'
@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/table'
 import { useSortableData } from '@/components/ui/use-sortable-data'
 import { Button } from '@/components/ui/button'
-import { ContextMenuShell } from '@/components/common/context-menu-shell'
+import { ActionMenuHost, anchorFromElement, dispatchActionShortcut, formatShortcut, isMenuKey, isTextInteraction, type ActionAnchor, type ActionItem } from '@/components/common/action-menu'
 import { getDocumentDisplayInfo, getLocationFilename } from '@/lib/document-display'
 import { announceRelationsChanged } from '@/lib/relation-events'
 import { ObjectPropertiesModal } from '@/components/object-card/ObjectPropertiesModal'
@@ -35,7 +35,6 @@ import { usePublicShareCode } from '@/components/renderers/public-share'
 import { useDocumentThumbnail } from '@/components/renderers/useDocumentThumbnail'
 import { useDocumentBlobUrl, useDocumentStreamSrc } from '@/components/renderers/useDocumentBlobUrl'
 import { DocumentIcon } from '@/components/common/DocumentIcon'
-import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { TimelineSortControl } from '@/components/canvas/widgets/sort-control'
 import type { ToolboxSort } from '@/types/workspace'
 import { useToolboxOptional } from '@/components/toolbox/use-toolbox'
@@ -133,26 +132,14 @@ interface DocumentRowProps {
   isSelected?: boolean
   workspaceId?: string
   onSelect?: (documentId: number, isSelected: boolean, isCtrlClick: boolean, isShiftClick?: boolean) => void
-  onRemoveDocument?: (documentId: number) => void
-  onDeleteDocument?: (documentId: number) => void
-  onLinkDocument?: (documentId: number) => void
   onOpenToSide?: (document: Document) => void
   onRightClick?: (event: React.MouseEvent, documentId: number) => void
+  // The row's "⋯" button: opens the list's shared action menu for this row.
+  onOpenActions?: (anchorEl: HTMLElement, documentId: number) => void
   onDragStart?: (event: React.DragEvent, documentId: number) => void
 }
 
-interface DocumentTableRowProps {
-  document: Document
-  isSelected?: boolean
-  workspaceId?: string
-  onSelect?: (documentId: number, isSelected: boolean, isCtrlClick: boolean, isShiftClick?: boolean) => void
-  onRemoveDocument?: (documentId: number) => void
-  onDeleteDocument?: (documentId: number) => void
-  onLinkDocument?: (documentId: number) => void
-  onOpenToSide?: (document: Document) => void
-  onRightClick?: (event: React.MouseEvent, documentId: number) => void
-  onDragStart?: (event: React.DragEvent, documentId: number) => void
-}
+type DocumentTableRowProps = DocumentRowProps
 
 interface ExportModalProps {
   isOpen: boolean
@@ -366,93 +353,6 @@ function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
   )
 }
 
-interface DocumentActionSheetProps {
-  document: Document
-  open: boolean
-  onClose: () => void
-  onViewDetails: () => void
-  onEdit?: () => void
-  onLink?: () => void
-  onOpenToSide?: () => void
-  onRemove?: () => void
-  onDelete?: () => void
-}
-
-// Mobile replacement for the row action icon strip: a full-screen slide-in
-// card. Actions anchor to the bottom of the screen so everything is reachable
-// one-handed; the empty top area and Cancel both dismiss.
-function DocumentActionSheet({ document, open, onClose, onViewDetails, onEdit, onLink, onOpenToSide, onRemove, onDelete }: DocumentActionSheetProps) {
-  useEscapeClose(onClose, open)
-
-  if (!open) return null
-  const display = getDocumentDisplayInfo(document)
-  const run = (fn: () => void) => () => { onClose(); fn() }
-
-  const actionClass = 'flex w-full items-center gap-3 rounded-xl border bg-card px-4 py-4 text-base font-medium transition-transform active:scale-[.98]'
-
-  return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="fixed inset-0 z-fullscreen flex flex-col bg-background animate-in slide-in-from-bottom-10 fade-in duration-200"
-      onClick={onClose}
-    >
-      <div className="flex shrink-0 items-start gap-3 border-b p-4" onClick={(e) => e.stopPropagation()}>
-        <DocumentIcon document={document} chip />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-base font-semibold">{display.title}</div>
-          <div className="truncate text-xs text-muted-foreground">ID: {document.id} · {document.schema}</div>
-        </div>
-        <button onClick={onClose} className="rounded-sm p-2 hover:bg-muted" title="Close" aria-label="Close">
-          <X className="h-5 w-5" />
-        </button>
-      </div>
-
-      {/* Empty flex spacer — tapping it dismisses, keeping actions in thumb reach */}
-      <div className="flex-1" />
-
-      <div
-        className="shrink-0 space-y-2 px-4 pt-2"
-        style={{ paddingBottom: 'calc(var(--safe-bottom) + 1.25rem)' }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button onClick={run(onViewDetails)} className={actionClass}>
-          <Eye className="h-5 w-5 shrink-0 text-muted-foreground" /> View details
-        </button>
-        {onEdit && (
-          <button onClick={run(onEdit)} className={actionClass}>
-            <Pencil className="h-5 w-5 shrink-0 text-muted-foreground" /> Edit
-          </button>
-        )}
-        {onLink && (
-          <button onClick={run(onLink)} className={actionClass}>
-            <Link2 className="h-5 w-5 shrink-0 text-muted-foreground" /> Link to…
-          </button>
-        )}
-        {onOpenToSide && (
-          <button onClick={run(onOpenToSide)} className={actionClass}>
-            <PanelRight className="h-5 w-5 shrink-0 text-muted-foreground" /> Open to the side
-          </button>
-        )}
-        {onRemove && (
-          <button onClick={run(onRemove)} className={actionClass}>
-            <X className="h-5 w-5 shrink-0 text-muted-foreground" /> Remove from context
-          </button>
-        )}
-        {onDelete && (
-          <button onClick={run(onDelete)} className={`${actionClass} border-destructive/30 text-destructive`}>
-            <Trash2 className="h-5 w-5 shrink-0" /> Delete permanently
-          </button>
-        )}
-        <button onClick={onClose} className={`${actionClass} justify-center bg-muted`}>
-          Cancel
-        </button>
-      </div>
-    </div>,
-    window.document.body,
-  )
-}
-
 /*
  * A document synced from a connector is written to its SOURCE before the local
  * mirror moves — a GitHub round trip, not a local save — so a row can sit in
@@ -472,13 +372,42 @@ function ReplicatingBadge({ document }: { document: Document }) {
   )
 }
 
-function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemoveDocument, onDeleteDocument, onLinkDocument, onOpenToSide, onRightClick, onDragStart }: DocumentTableRowProps) {
+// Keyboard-fired contextmenu events (Menu key) can arrive without a pointer
+// position — anchor those to the element itself.
+function menuAnchor(event: React.MouseEvent): ActionAnchor {
+  return event.clientX || event.clientY
+    ? { x: event.clientX, y: event.clientY }
+    : anchorFromElement(event.currentTarget as Element, 'inside')
+}
+
+// The one per-row affordance: everything else lives in the shared action menu
+// (right-click / long-press / Shift+F10 open the same list).
+function RowActionsButton({ documentId, onOpenActions, className }: { documentId: number; onOpenActions?: DocumentRowProps['onOpenActions']; className?: string }) {
+  if (!onOpenActions) return null
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onOpenActions(e.currentTarget, documentId) }}
+      className={`rounded-sm p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground ${className ?? ''}`}
+      title="Actions"
+      aria-label="Document actions"
+      aria-haspopup="menu"
+    >
+      <MoreVertical className="h-4 w-4" />
+    </button>
+  )
+}
+
+// Enter on a focused row/card/tile = click it (open). Space toggles selection.
+function rowKeyDown(event: React.KeyboardEvent, onActivate: () => void, onToggle?: () => void) {
+  if (event.target !== event.currentTarget) return
+  if (event.key === 'Enter') { event.preventDefault(); onActivate() }
+  else if (event.key === ' ' && onToggle) { event.preventDefault(); onToggle() }
+}
+
+function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRightClick, onOpenActions, onDragStart }: DocumentTableRowProps) {
   const longPressMenu = useLongPressContextMenu()
   const [showDetailModal, setShowDetailModal] = useState(false)
-  const [detailEdit, setDetailEdit] = useState(false)
-  const [actionSheet, setActionSheet] = useState(false)
-  const isPublicShare = usePublicShareCode() != null
-  const isEditable = isEditableDocument(document)
   const { replicating } = useMirrorSaveState(document)
 
   const isTabDocument = document.schema === 'data/schema/tab'
@@ -521,7 +450,6 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
       if (isTabDocument && tabUrl) {
         window.open(tabUrl, '_blank', 'noopener,noreferrer')
       } else {
-        setDetailEdit(false)
         setShowDetailModal(true)
       }
     }
@@ -540,15 +468,14 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
     onRightClick?.(e, document.id)
   }
 
-  const handleViewDetails = (e: React.MouseEvent) => { e.stopPropagation(); setDetailEdit(false); setShowDetailModal(true) }
-  const handleEditDocument = (e: React.MouseEvent) => { e.stopPropagation(); setDetailEdit(true); setShowDetailModal(true) }
-  const handleRemoveDocument = (e: React.MouseEvent) => { e.stopPropagation(); onRemoveDocument?.(document.id) }
-  const handleDeleteDocument = (e: React.MouseEvent) => { e.stopPropagation(); onDeleteDocument?.(document.id) }
-
   return (
     <>
       <TableRow
-        className={`cursor-pointer transition-opacity ${replicating ? 'opacity-60' : ''} ${isSelected ? 'bg-info-subtle hover:bg-info-subtle' : 'hover:bg-muted/50'}`}
+        tabIndex={0}
+        data-document-id={document.id}
+        aria-selected={!!isSelected}
+        onKeyDown={(e) => rowKeyDown(e, () => (isTabDocument && tabUrl ? window.open(tabUrl, '_blank', 'noopener,noreferrer') : setShowDetailModal(true)), () => onSelect?.(document.id, !isSelected, true))}
+        className={`cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring transition-opacity ${replicating ? 'opacity-60' : ''} ${isSelected ? 'bg-info-subtle hover:bg-info-subtle' : 'hover:bg-muted/50'}`}
         onClick={handleDocumentClick}
         onMouseDown={handleMouseDown}
         {...longPressMenu}
@@ -593,44 +520,19 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRemov
         <TableCell className="hidden text-xs text-muted-foreground lg:table-cell">{document.id}</TableCell>
         <TableCell className="hidden text-xs text-muted-foreground lg:table-cell">{primaryChecksum && (<span className="font-mono" title={`${primaryChecksum.algo} checksum`}>{primaryChecksum.hash}</span>)}</TableCell>
         <TableCell className="hidden text-xs text-muted-foreground sm:table-cell">{formatDate(document.createdAt)}</TableCell>
-        <TableCell>
-          <div className="hidden items-center gap-1 md:flex">
-            <Button variant="ghost" size="sm" onClick={handleViewDetails} title="View document details"><Eye className="h-4 w-4" /></Button>
-            {isEditable && !isPublicShare && (<Button variant="ghost" size="sm" onClick={handleEditDocument} title="Edit document"><Pencil className="h-4 w-4" /></Button>)}
-            {onLinkDocument && (<Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onLinkDocument(document.id) }} title="Link document to other paths"><Link2 className="h-4 w-4" /></Button>)}
-            {onOpenToSide && (<Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onOpenToSide(document) }} title="Open to the side"><PanelRight className="h-4 w-4" /></Button>)}
-            {onRemoveDocument && (<Button variant="ghost" size="sm" onClick={handleRemoveDocument} title="Remove document from context"><X className="h-4 w-4" /></Button>)}
-            {onDeleteDocument && (<Button variant="ghost" size="sm" onClick={handleDeleteDocument} title="Delete document permanently" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>)}
-          </div>
-          <Button variant="ghost" size="sm" className="md:hidden" onClick={(e) => { e.stopPropagation(); setActionSheet(true) }} title="Actions" aria-label="Document actions">
-            <MoreVertical className="h-4 w-4" />
-          </Button>
+        <TableCell className="w-12 text-right">
+          <RowActionsButton documentId={document.id} onOpenActions={onOpenActions} />
         </TableCell>
       </TableRow>
-      <DocumentActionSheet
-        document={document}
-        open={actionSheet}
-        onClose={() => setActionSheet(false)}
-        onViewDetails={() => { setDetailEdit(false); setShowDetailModal(true) }}
-        onEdit={isEditable && !isPublicShare ? () => { setDetailEdit(true); setShowDetailModal(true) } : undefined}
-        onLink={onLinkDocument ? () => onLinkDocument(document.id) : undefined}
-        onOpenToSide={onOpenToSide ? () => onOpenToSide(document) : undefined}
-        onRemove={onRemoveDocument ? () => onRemoveDocument(document.id) : undefined}
-        onDelete={onDeleteDocument ? () => onDeleteDocument(document.id) : undefined}
-      />
-      <ObjectPropertiesModal document={document} isOpen={showDetailModal} onClose={() => setShowDetailModal(false)} workspaceId={workspaceId} initialEdit={detailEdit} />
+      <ObjectPropertiesModal document={document} isOpen={showDetailModal} onClose={() => setShowDetailModal(false)} workspaceId={workspaceId} />
     </>
   )
 }
 
-function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocument, onDeleteDocument, onLinkDocument, onOpenToSide, onRightClick, onDragStart }: DocumentRowProps) {
+function DocumentRow({ document, isSelected, workspaceId, onSelect, onRightClick, onOpenActions, onDragStart }: DocumentRowProps) {
   const longPressMenu = useLongPressContextMenu()
   const [showDetailModal, setShowDetailModal] = useState(false)
-  const [detailEdit, setDetailEdit] = useState(false)
-  const [actionSheet, setActionSheet] = useState(false)
-  const isPublicShare = usePublicShareCode() != null
   const isTabDocument = document.schema === 'data/schema/tab'
-  const isEditable = isEditableDocument(document)
   const { replicating } = useMirrorSaveState(document)
   const tabUrl = isTabDocument ? document.data.url : null
   const display = getDocumentDisplayInfo(document)
@@ -662,7 +564,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
         onSelect(document.id, true, isCtrlClick)
       }
     }
-    if (!isCtrlClick) { if (isTabDocument && tabUrl) { window.open(tabUrl, '_blank', 'noopener,noreferrer') } else { setDetailEdit(false); setShowDetailModal(true) } }
+    if (!isCtrlClick) { if (isTabDocument && tabUrl) { window.open(tabUrl, '_blank', 'noopener,noreferrer') } else { setShowDetailModal(true) } }
   }
 
   const handleMouseDown = (event: React.MouseEvent) => {
@@ -672,15 +574,15 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
   }
 
   const handleRightClick = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); if (onSelect && !isSelected) { onSelect(document.id, true, false) } onRightClick?.(e, document.id) }
-  const handleViewDetails = (e: React.MouseEvent) => { e.stopPropagation(); setDetailEdit(false); setShowDetailModal(true) }
-  const handleEditDocument = (e: React.MouseEvent) => { e.stopPropagation(); setDetailEdit(true); setShowDetailModal(true) }
-  const handleRemoveDocument = (e: React.MouseEvent) => { e.stopPropagation(); onRemoveDocument?.(document.id) }
-  const handleDeleteDocument = (e: React.MouseEvent) => { e.stopPropagation(); onDeleteDocument?.(document.id) }
 
   return (
     <>
       <div
-        className={`border rounded-lg p-4 transition cursor-pointer ${replicating ? 'opacity-60' : ''} ${isSelected ? 'bg-info-subtle border-info ring-1 ring-info' : ''} ${isTabDocument && !isSelected ? 'hover:bg-info-subtle hover:border-info' : !isSelected ? 'hover:bg-accent/50' : ''}`}
+        tabIndex={0}
+        data-document-id={document.id}
+        aria-selected={!!isSelected}
+        onKeyDown={(e) => rowKeyDown(e, () => (isTabDocument && tabUrl ? window.open(tabUrl, '_blank', 'noopener,noreferrer') : setShowDetailModal(true)), () => onSelect?.(document.id, !isSelected, true))}
+        className={`border rounded-lg p-4 transition cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring ${replicating ? 'opacity-60' : ''} ${isSelected ? 'bg-info-subtle border-info ring-1 ring-info' : ''} ${isTabDocument && !isSelected ? 'hover:bg-info-subtle hover:border-info' : !isSelected ? 'hover:bg-accent/50' : ''}`}
         onClick={handleDocumentClick}
         onMouseDown={handleMouseDown}
         {...longPressMenu}
@@ -719,36 +621,10 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRemoveDocu
               <div className="flex items-center gap-1 flex-shrink-0"><Calendar className="h-3 w-3" /><span title={`Created: ${formatDate(document.createdAt)}`}>{formatDate(document.createdAt)}</span></div>
             </div>
           </div>
-          <div className="hidden items-center gap-2 md:flex">
-            <button onClick={handleViewDetails} className="p-1 hover:bg-muted rounded-sm" title="View document details"><Eye className="h-4 w-4" /></button>
-            {isEditable && !isPublicShare && (<button onClick={handleEditDocument} className="p-1 hover:bg-muted rounded-sm" title="Edit document"><Pencil className="h-4 w-4" /></button>)}
-            {onLinkDocument && (<button onClick={(e) => { e.stopPropagation(); onLinkDocument(document.id) }} className="p-1 hover:bg-muted rounded-sm" title="Link document to other paths"><Link2 className="h-4 w-4" /></button>)}
-            {onOpenToSide && (<button onClick={(e) => { e.stopPropagation(); onOpenToSide(document) }} className="p-1 hover:bg-muted rounded-sm" title="Open to the side"><PanelRight className="h-4 w-4" /></button>)}
-            {onRemoveDocument && (<button onClick={handleRemoveDocument} className="p-1 hover:bg-muted rounded-sm" title="Remove document from context (keep in database)"><X className="h-4 w-4" /></button>)}
-            {onDeleteDocument && (<button onClick={handleDeleteDocument} className="p-1 hover:bg-destructive hover:text-destructive-foreground rounded-sm text-destructive" title="Delete document permanently from database"><Trash2 className="h-4 w-4" /></button>)}
-          </div>
-          <button
-            onClick={(e) => { e.stopPropagation(); setActionSheet(true) }}
-            className="p-2 hover:bg-muted rounded-sm md:hidden"
-            title="Actions"
-            aria-label="Document actions"
-          >
-            <MoreVertical className="h-4 w-4" />
-          </button>
+          <RowActionsButton documentId={document.id} onOpenActions={onOpenActions} className="-mr-1 -mt-1 p-2" />
         </div>
       </div>
-      <DocumentActionSheet
-        document={document}
-        open={actionSheet}
-        onClose={() => setActionSheet(false)}
-        onViewDetails={() => { setDetailEdit(false); setShowDetailModal(true) }}
-        onEdit={isEditable && !isPublicShare ? () => { setDetailEdit(true); setShowDetailModal(true) } : undefined}
-        onLink={onLinkDocument ? () => onLinkDocument(document.id) : undefined}
-        onOpenToSide={onOpenToSide ? () => onOpenToSide(document) : undefined}
-        onRemove={onRemoveDocument ? () => onRemoveDocument(document.id) : undefined}
-        onDelete={onDeleteDocument ? () => onDeleteDocument(document.id) : undefined}
-      />
-      <ObjectPropertiesModal document={document} isOpen={showDetailModal} onClose={() => setShowDetailModal(false)} workspaceId={workspaceId} initialEdit={detailEdit} />
+      <ObjectPropertiesModal document={document} isOpen={showDetailModal} onClose={() => setShowDetailModal(false)} workspaceId={workspaceId} />
     </>
   )
 }
@@ -827,7 +703,7 @@ function TileTextPreview({ document, workspaceId, markdown }: { document: Docume
 // Tile view cell — a prominent picture/thumbnail tile (image docs) or a large
 // icon tile (everything else). Mirrors DocumentRow's click/selection/right-click
 // behavior. Sized for a responsive auto-fill grid, so it reads on mobile too.
-function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSide, onRightClick, onDragStart }: DocumentRowProps) {
+function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSide, onRightClick, onOpenActions, onDragStart }: DocumentRowProps) {
   const longPressMenu = useLongPressContextMenu()
   const [showDetailModal, setShowDetailModal] = useState(false)
   const isTabDocument = document.schema === 'data/schema/tab'
@@ -860,7 +736,11 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
   return (
     <>
       <div
-        className={`group relative mb-3 flex break-inside-avoid flex-col overflow-hidden rounded-lg border transition cursor-pointer hover:shadow-elevation-2 ${replicating ? 'opacity-60' : ''} ${isSelected ? 'ring-2 ring-info border-info' : ''}`}
+        tabIndex={0}
+        data-document-id={document.id}
+        aria-selected={!!isSelected}
+        onKeyDown={(e) => rowKeyDown(e, () => (isTabDocument && tabUrl ? window.open(tabUrl, '_blank', 'noopener,noreferrer') : setShowDetailModal(true)), () => onSelect?.(document.id, !isSelected, true))}
+        className={`group relative mb-3 flex break-inside-avoid flex-col overflow-hidden rounded-lg border transition cursor-pointer outline-none hover:shadow-elevation-2 focus-visible:ring-2 focus-visible:ring-ring ${replicating ? 'opacity-60' : ''} ${isSelected ? 'ring-2 ring-info border-info' : ''}`}
         onClick={handleClick}
         onMouseDown={event => { if (event.shiftKey) event.preventDefault() }}
         {...longPressMenu}
@@ -910,15 +790,28 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
               <DocumentIcon document={document} size={10} chip />
             </div>
           )}
-          {onOpenToSide && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onOpenToSide(document) }}
-              className="absolute right-2 top-2 rounded-sm bg-scrim p-1 text-scrim-foreground reveal-on-hover"
-              title="Open to the side"
-            >
-              <PanelRight className="h-3.5 w-3.5" />
-            </button>
-          )}
+          <div className="absolute right-2 top-2 flex gap-1 reveal-on-hover">
+            {onOpenToSide && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onOpenToSide(document) }}
+                className="rounded-sm bg-scrim p-1 text-scrim-foreground"
+                title="Open to the side"
+              >
+                <PanelRight className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {onOpenActions && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onOpenActions(e.currentTarget, document.id) }}
+                className="rounded-sm bg-scrim p-1 text-scrim-foreground"
+                title="Actions"
+                aria-label="Document actions"
+                aria-haspopup="menu"
+              >
+                <MoreVertical className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </div>
         {/* Text tiles carry their title inside the tile body already. */}
         {!isTextTile && (
@@ -1159,7 +1052,10 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     })
   }, [])
   const [selectedDocuments, setSelectedDocuments] = useState<Set<number>>(new Set())
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; documentIds: number[] } | null>(null)
+  // One menu for every way of asking for actions: right-click, long-press,
+  // Shift+F10 / Menu key, a row's "⋯" and the toolbar's "Actions". `ids`
+  // null = the folder itself (empty-area menu).
+  const [menu, setMenu] = useState<{ anchor: ActionAnchor; ids: number[] | null } | null>(null)
   const [linkPanelIds, setLinkPanelIds] = useState<number[] | null>(null)
   // "Add related document…": opens the add panel with the selection as the
   // relation targets of whatever gets created (see toolbox add/RelationFields).
@@ -1194,8 +1090,6 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   const removeDocument = isWorkspaceScope ? undefined : onRemoveDocument
   const removeDocuments = isWorkspaceScope ? undefined : onRemoveDocuments
 
-  const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null)
-  const [actionsOpen, setActionsOpen] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
   // The input is a buffer for the NEXT query to add to the stack (not a mirror of
@@ -1423,16 +1317,25 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     })
   }, [selectionScope, visibleSelectionOrder])
 
+  // Acting on an unselected document acts on it alone (Explorer/Finder rule);
+  // on a selected one, on the whole selection.
+  const openDocumentMenu = useCallback((documentId: number, anchor: ActionAnchor) => {
+    let targetIds: number[]
+    if (selectedDocuments.has(documentId)) { targetIds = Array.from(selectedDocuments) } else { targetIds = [documentId]; setSelectedDocuments(new Set([documentId])) }
+    setMenu({ anchor, ids: targetIds })
+  }, [selectedDocuments])
+  const handleOpenRowActions = useCallback((anchorEl: HTMLElement, documentId: number) => {
+    openDocumentMenu(documentId, anchorFromElement(anchorEl))
+  }, [openDocumentMenu])
+
   const handleDocumentRightClick = useCallback((event: React.MouseEvent, documentId: number) => {
     // Modals portal to <body> but React synthetic events still bubble through
     // the JSX tree — leave right-clicks inside any dialog to the browser.
     if ((event.target as HTMLElement).closest?.('[role="dialog"]')) return
     event.preventDefault()
     event.stopPropagation() // Prevent bubbling to empty area handler
-    let targetIds: number[]
-    if (selectedDocuments.has(documentId)) { targetIds = Array.from(selectedDocuments) } else { targetIds = [documentId]; setSelectedDocuments(new Set([documentId])) }
-    setContextMenu({ x: event.clientX, y: event.clientY, documentIds: targetIds })
-  }, [selectedDocuments])
+    openDocumentMenu(documentId, menuAnchor(event))
+  }, [openDocumentMenu])
 
   // Relations branch of the same card: every selected document gets the picked
   // edge to every picked target. Direction is an axis — 'in' flips which side
@@ -1513,101 +1416,6 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     }
   }, [workspaceId, backendPanel, showSuccessToast, showErrorToast])
 
-  const handleContextMenuAction = useCallback(async (action: string, documentIds: number[]) => {
-    switch (action) {
-      case 'edit':
-        if (documentIds.length === 1) {
-          const doc = documents.find(d => d.id === documentIds[0])
-          if (doc) { setDetailModal({ document: doc, edit: true }); setContextMenu(null); return }
-        }
-        break
-      case 'copy': onCopyDocuments?.(documentIds); break
-      case 'cut': onCutDocuments?.(documentIds); break
-      case 'link-to': setLinkPanelIds(documentIds); setContextMenu(null); return
-      case 'add-related': addRelated(documentIds); setContextMenu(null); return
-      case 'remove':
-        if (documentIds.length === 1) onRemoveDocument?.(documentIds[0])
-        else onRemoveDocuments?.(documentIds)
-        break
-      case 'delete':
-        if (documentIds.length === 1) onDeleteDocument?.(documentIds[0])
-        else onDeleteDocuments?.(documentIds)
-        break
-      case 'destroy':
-        if (documentIds.length === 1) onDestroyDocument?.(documentIds[0])
-        else onDestroyDocuments?.(documentIds)
-        break
-      case 'view-details':
-        if (documentIds.length === 1) {
-          const doc = documents.find(d => d.id === documentIds[0]);
-          if (doc) { setDetailModal({ document: doc }); setContextMenu(null); return }
-        }
-        break;
-      case 'open-url':
-        if (documentIds.length === 1) {
-          const document = documents.find(doc => doc.id === documentIds[0]);
-          if (document && document.schema === 'data/schema/tab' && document.data.url) {
-            window.open(document.data.url, '_blank', 'noopener,noreferrer');
-          }
-        }
-        break;
-      case 'copy-id':
-        if (documentIds.length === 1) {
-          try {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-              await navigator.clipboard.writeText(documentIds[0].toString());
-            } else {
-              // Fallback for environments without clipboard API
-              const textArea = document.createElement('textarea');
-              textArea.value = documentIds[0].toString();
-              document.body.appendChild(textArea);
-              textArea.select();
-              document.execCommand('copy');
-              document.body.removeChild(textArea);
-            }
-          } catch (err) {
-            console.error('Failed to copy ID to clipboard:', err);
-            // Fallback method
-            const textArea = document.createElement('textarea');
-            textArea.value = documentIds[0].toString();
-            document.body.appendChild(textArea);
-            textArea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textArea);
-          }
-        }
-        break;
-    }
-    setContextMenu(null)
-    setSelectedDocuments(new Set())
-  }, [onCopyDocuments, onCutDocuments, onRemoveDocument, onRemoveDocuments, onDeleteDocument, onDeleteDocuments, onDestroyDocument, onDestroyDocuments, documents, addRelated])
-
-  const handleEmptyAreaRightClick = useCallback((event: React.MouseEvent) => {
-    // Right-clicks inside a portaled dialog bubble here via the React tree —
-    // keep the browser's default menu (text copy etc.) there.
-    if ((event.target as HTMLElement).closest?.('[role="dialog"]')) return
-    // Show context menu if there are documents to paste or import functionality is available
-    const hasPasteOption = pastedDocumentIds && pastedDocumentIds.length > 0 && onPasteDocuments
-    const hasImportOption = onImportDocuments
-
-    if (!hasPasteOption && !hasImportOption) return
-
-    event.preventDefault()
-    event.stopPropagation()
-    setEmptyAreaContextMenu({ x: event.clientX, y: event.clientY })
-  }, [pastedDocumentIds, onPasteDocuments, onImportDocuments])
-
-  const handleEmptyAreaPaste = useCallback(async () => {
-    if (!onPasteDocuments || !pastedDocumentIds || pastedDocumentIds.length === 0) return
-    try {
-      await onPasteDocuments(contextPath, pastedDocumentIds)
-    } catch (error) {
-      console.error('Failed to paste documents:', error)
-    } finally {
-      setEmptyAreaContextMenu(null)
-    }
-  }, [onPasteDocuments, pastedDocumentIds, contextPath])
-
   const handleSelectAll = useCallback(() => {
     if (selectedDocuments.size === filteredDocuments.length) {
       setSelectedDocuments(new Set())
@@ -1615,6 +1423,177 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
       setSelectedDocuments(new Set(filteredDocuments.map(doc => doc.id)))
     }
   }, [selectedDocuments.size, filteredDocuments])
+
+  const copyText = useCallback(async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      // Insecure origins have no async clipboard API.
+      const textArea = window.document.createElement('textarea')
+      textArea.value = text
+      window.document.body.appendChild(textArea)
+      textArea.select()
+      window.document.execCommand('copy')
+      window.document.body.removeChild(textArea)
+    }
+  }, [])
+
+  // Every document action, described once. The menu, the phone sheet, the
+  // toolbar "Actions" button and the keyboard shortcuts all render this list.
+  const documentActions = (ids: number[]): ActionItem[] => {
+    if (ids.length === 0) return []
+    const n = ids.length
+    const count = n > 1 ? ` (${n})` : ''
+    const single = n === 1 ? documents.find(d => d.id === ids[0]) : undefined
+    const done = () => setSelectedDocuments(new Set())
+    const hasFileData = ids.some(id => ((documents.find(doc => doc.id === id) as { locations?: unknown[] } | undefined)?.locations?.length ?? 0) > 0)
+    const items: ActionItem[] = []
+    const add = (item: ActionItem | false | undefined | null | '') => { if (item) items.push(item) }
+
+    if (single) {
+      const tabUrl = single.schema === 'data/schema/tab' ? single.data.url : null
+      add({ id: 'view', group: 'open', label: 'View details', icon: Eye, run: () => setDetailModal({ document: single }) })
+      add(isEditableDocument(single) && bulkEditAllowed && { id: 'edit', group: 'open', label: 'Edit', icon: Pencil, run: () => setDetailModal({ document: single, edit: true }) })
+      add(tabUrl && { id: 'open-url', group: 'open', label: 'Open URL', icon: ExternalLink, run: () => { window.open(tabUrl, '_blank', 'noopener,noreferrer') } })
+      add(openToSide && { id: 'open-side', group: 'open', label: 'Open to the side', icon: PanelRight, run: () => openToSide(single) })
+    }
+
+    add(onCopyDocuments && { id: 'copy', group: 'clipboard', label: `Copy${count}`, icon: Copy, shortcut: 'Mod+C', run: () => { onCopyDocuments(ids); done() } })
+    add(onCutDocuments && { id: 'cut', group: 'clipboard', label: `Cut${count}`, icon: Scissors, shortcut: 'Mod+X', run: () => { onCutDocuments(ids); done() } })
+    add(single && { id: 'copy-id', group: 'clipboard', label: 'Copy ID', icon: Link, run: () => copyText(String(single.id)) })
+
+    add(canLink && { id: 'link-to', group: 'organize', label: `Link to…${count}`, icon: Link2, run: () => setLinkPanelIds(ids) })
+    add(canAddRelated && { id: 'add-related', group: 'organize', label: `Add related document…${count}`, icon: Plus, run: () => addRelated(ids) })
+    add(bulkEditAllowed && { id: 'bulk-edit', group: 'organize', label: `Bulk edit…${count}`, icon: Pencil, run: () => setBulkEditIds(ids) })
+    add(bulkEditAllowed && { id: 'copy-workspace', group: 'organize', label: 'Copy to workspace…', icon: Copy, run: () => setCopyWorkspaceIds(ids) })
+    // The export modal exports the current selection, which opening this menu
+    // has already narrowed to `ids`.
+    add({ id: 'export', group: 'organize', label: `Export…${count}`, icon: Download, run: () => setShowExportModal(true) })
+
+    // Delete key = the safe, reversible one (unlink). Deleting from the index
+    // has no confirmation upstream, so it gets no shortcut.
+    add((removeDocument || removeDocuments) && {
+      id: 'remove', group: 'remove', label: `Remove (unlink) from folder${count}`, icon: Move, shortcut: 'Delete',
+      hint: 'Unlinks from this folder; the document stays in the index',
+      run: () => { if (n === 1 && removeDocument) removeDocument(ids[0]); else removeDocuments?.(ids); done() },
+    })
+    add((onDeleteDocument || onDeleteDocuments) && {
+      id: 'delete', group: 'remove', label: `Delete from index${count}`, icon: Trash2, destructive: true,
+      hint: 'Removes the document from the index entirely; file data stays on its backend(s)',
+      run: () => { if (n === 1 && onDeleteDocument) onDeleteDocument(ids[0]); else onDeleteDocuments?.(ids); done() },
+    })
+
+    // Backends — only for a selection that actually has file data on a
+    // backend; JSON-only docs have no bytes to move.
+    if (hasFileData && canUseBackends) {
+      add({ id: 'backend-copy', group: 'backends', groupLabel: 'Backends', label: `Copy to backend…${count}`, icon: HardDrive, hint: 'Copy the file data to another storage backend (keeps the existing copies)', run: () => setBackendPanel({ ids, mode: 'copy' }) })
+      add({ id: 'backend-move', group: 'backends', label: `Move to backend…${count}`, icon: ArrowRightLeft, hint: 'Move the file data to another storage backend (source released once the copy is durable)', run: () => setBackendPanel({ ids, mode: 'move' }) })
+      add({ id: 'backend-delete', group: 'backends', label: `Delete from backend…${count}`, icon: Trash2, destructive: true, hint: 'Delete the file data from selected backends (copies elsewhere are kept)', run: () => setBackendPanel({ ids, mode: 'delete' }) })
+    } else if (hasFileData && (onDestroyDocument || onDestroyDocuments)) {
+      // Legacy whole-object destroy (every location at once) — kept for
+      // views that pass the handler explicitly.
+      add({
+        id: 'destroy', group: 'backends', label: `Delete from backend(s)${count}`, icon: Trash2, destructive: true,
+        hint: 'Deletes the document and its file data from the storage backend(s)',
+        run: () => { if (n === 1 && onDestroyDocument) onDestroyDocument(ids[0]); else onDestroyDocuments?.(ids); done() },
+      })
+    }
+    return items
+  }
+
+  // The folder itself: what right-clicking empty space (or "Actions" with
+  // nothing selected) offers.
+  const areaActions = (): ActionItem[] => {
+    const items: ActionItem[] = []
+    const add = (item: ActionItem | false | undefined | null | 0) => { if (item) items.push(item) }
+    const pasteIds = pastedDocumentIds ?? []
+    add(onPasteDocuments && pasteIds.length > 0 && {
+      id: 'paste', group: 'clipboard', label: `Paste (${pasteIds.length})`, icon: Clipboard, shortcut: 'Mod+V',
+      run: async () => {
+        try { await onPasteDocuments(contextPath, pasteIds) } catch (error) { console.error('Failed to paste documents:', error) }
+      },
+    })
+    add(filteredDocuments.length > 0 && {
+      id: 'select-all', group: 'select', label: searchQuery ? `Select all matches (${filteredDocuments.length})` : 'Select all on this page', icon: CheckSquare, shortcut: 'Mod+A',
+      run: () => setSelectedDocuments(new Set(filteredDocuments.map(doc => doc.id))),
+    })
+    add(selectedDocuments.size > 0 && { id: 'select-none', group: 'select', label: 'Clear selection', icon: Square, run: () => setSelectedDocuments(new Set()) })
+    add(onPasteDocuments && { id: 'add-existing', group: 'add', label: 'Add existing documents…', icon: FileSearch, hint: 'Browse and add existing documents to this folder', run: () => setPickDocsOpen(true) })
+    add(onImportDocuments && { id: 'import', group: 'add', label: 'Import…', icon: Upload, run: () => setShowImportModal(true) })
+    add(documents.length > 0 && { id: 'export-all', group: 'add', label: 'Export all…', icon: Download, run: () => { setSelectedDocuments(new Set()); setShowExportModal(true) } })
+    add(onPurgeDocuments && totalCount > 0 && {
+      id: 'purge', group: 'purge', label: `Purge all (${totalCount})`, icon: Trash2, destructive: true,
+      disabled: disablePurgeDocuments || Boolean(searchQuery),
+      hint: disablePurgeDocuments || searchQuery ? 'Purge is disabled while local search is active' : 'Delete all documents matching the current server-side filters across all pages',
+      run: onPurgeDocuments,
+    })
+    return items
+  }
+
+  const showSort = Boolean(onServerSortChange && serverSort && workspaceId)
+  const menuItems = menu ? (menu.ids ? documentActions(menu.ids) : areaActions()) : []
+  const menuSingle = menu?.ids?.length === 1 ? documents.find(d => d.id === menu.ids![0]) : undefined
+  const menuHeader = menuSingle ? (
+    <div className="flex items-start gap-3">
+      <DocumentIcon document={menuSingle} chip />
+      <div className="min-w-0">
+        <div className="truncate text-base font-semibold">{getDocumentDisplayInfo(menuSingle).title}</div>
+        <div className="truncate text-xs text-muted-foreground">ID: {menuSingle.id} · {menuSingle.schema}</div>
+      </div>
+    </div>
+  ) : (
+    <div className="truncate text-base font-semibold">{menu?.ids ? `${menu.ids.length} documents` : 'This folder'}</div>
+  )
+
+  // "Actions" toolbar button: the selection's menu, or the folder's when
+  // nothing is selected.
+  const openToolbarMenu = (event: React.MouseEvent<HTMLElement>) => {
+    setMenu({ anchor: anchorFromElement(event.currentTarget), ids: selectedDocuments.size > 0 ? Array.from(selectedDocuments) : null })
+  }
+
+  // Right-click on empty space: the folder's menu, and — like Explorer —
+  // the selection is dropped, so nothing acts on documents you can't see.
+  const handleEmptyAreaRightClick = (event: React.MouseEvent) => {
+    // Right-clicks inside a portaled dialog bubble here via the React tree —
+    // keep the browser's default menu (text copy etc.) there.
+    if ((event.target as HTMLElement).closest?.('[role="dialog"]')) return
+    event.preventDefault()
+    event.stopPropagation()
+    setSelectedDocuments(new Set())
+    setMenu({ anchor: menuAnchor(event), ids: null })
+  }
+
+  // Keyboard model for the whole list (scoped to it — focus must be inside,
+  // so split panes never both react): Shift+F10 / Menu key opens the menu,
+  // ↑/↓ walk the documents (Shift extends), Esc clears the selection, and
+  // every action's shortcut fires against the selection.
+  const handleListKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented || isTextInteraction(event.target)) return
+    const row = (event.target as HTMLElement).closest?.<HTMLElement>('[data-document-id]') ?? null
+    if (isMenuKey(event)) {
+      event.preventDefault()
+      if (row) openDocumentMenu(Number(row.dataset.documentId), anchorFromElement(row, 'inside'))
+      else setMenu({ anchor: anchorFromElement(event.target as Element, 'inside'), ids: selectedDocuments.size > 0 ? Array.from(selectedDocuments) : null })
+      return
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      const rows = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('[data-document-id]'))
+      if (rows.length === 0) return
+      const index = row ? rows.indexOf(row) : -1
+      const next = rows[event.key === 'ArrowDown' ? Math.min(index + 1, rows.length - 1) : Math.max(index - 1, 0)]
+      event.preventDefault()
+      next.focus({ preventScroll: true })
+      next.scrollIntoView({ block: 'nearest' })
+      if (event.shiftKey) handleDocumentSelect(Number(next.dataset.documentId), true, false, true)
+      return
+    }
+    if (event.key === 'Escape' && selectedDocuments.size > 0) {
+      event.preventDefault()
+      setSelectedDocuments(new Set())
+      return
+    }
+    dispatchActionShortcut(event, [...documentActions(Array.from(selectedDocuments)), ...areaActions()])
+  }
 
   const handleImport = useCallback(async (importedDocuments: Record<string, unknown>[]) => {
     if (!onImportDocuments) return false
@@ -1665,7 +1644,11 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
 
   return (
     <div
-      className={`flex-1 flex flex-col min-h-0 p-4 rounded-lg transition-colors ${isDragOver ? 'ring-2 ring-inset ring-primary bg-primary/5' : ''}`}
+      // tabIndex -1: clicking empty space focuses the list, so its shortcuts
+      // (paste, select all, Shift+F10) work without first focusing a row.
+      tabIndex={-1}
+      onKeyDown={handleListKeyDown}
+      className={`flex-1 flex flex-col min-h-0 p-4 rounded-lg outline-none transition-colors ${isDragOver ? 'ring-2 ring-inset ring-primary bg-primary/5' : ''}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -1861,327 +1844,117 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
           )}
         </div>
 
-        {/* Pagination Controls */}
-        {/* The page-size select is useful before there is a second page (it
-            is how you ASK for more per request), so the row shows whenever
-            there is anything to page; the arrows stay disabled on one page. */}
-        {onPageChange && totalCount > 0 && (
-          // Wraps rather than overflowing: on a 360px screen this row is far
-          // wider than the viewport, and it used to push the paging buttons
-          // off the right edge with no way to scroll to them.
-          <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-3 border-t max-sm:flex-nowrap max-sm:gap-1">
-            <div className="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
-              <span className="max-sm:sr-only">Show:</span>
-              <select
-                value={pageSize}
-                onChange={(e) => onPageSizeChange?.(Number(e.target.value))}
-                className="h-control-sm rounded-(--input-radius) border-(length:--input-border-width) border-input bg-background px-2 text-sm focus-ring"
-              >
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-                <option value={200}>200</option>
-              </select>
-              <span className="max-sm:sr-only">per page</span>
+        {/* View row: page size + server sort on the left, paging on the right.
+            Sort sits with paging because it orders the whole result set
+            across pages, not the rows on screen. Shows whenever there is
+            anything to page — the page-size select is how you ASK for more —
+            and wraps rather than overflowing on a 360px screen. */}
+        {((onPageChange && totalCount > 0) || showSort) && (
+          <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-3 border-t max-sm:gap-1">
+            <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+              {onPageChange && totalCount > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="max-sm:sr-only">Show:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => onPageSizeChange?.(Number(e.target.value))}
+                    className="h-control-sm rounded-(--input-radius) border-(length:--input-border-width) border-input bg-background px-2 text-sm focus-ring"
+                    aria-label="Documents per page"
+                  >
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value={200}>200</option>
+                  </select>
+                  <span className="max-sm:sr-only">per page</span>
+                </div>
+              )}
+              {showSort && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs max-sm:sr-only">Sort</span>
+                  <TimelineSortControl workspaceId={workspaceId!} value={serverSort!} onChange={onServerSortChange!} />
+                </div>
+              )}
             </div>
 
-            <div className="flex min-w-0 items-center gap-2 max-sm:gap-0.5">
-              {/* Redundant with "Page N of M" beside the arrows, so it is the
-                  first thing to go when space is tight. */}
-              <span className="text-sm text-muted-foreground max-md:hidden">
-                Showing {Math.min((currentPage - 1) * pageSize + 1, totalCount)} - {Math.min(currentPage * pageSize, totalCount)} of {totalCount}
-              </span>
-
-              <div className="flex items-center gap-1 max-sm:gap-0.5">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onPageChange(1)}
-                  disabled={currentPage === 1}
-                  className="p-1 touch-target"
-                >
-                  <ChevronsLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onPageChange(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  className="p-1 touch-target"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-
-                <span className="whitespace-nowrap px-3 py-1 text-sm font-medium max-sm:px-1 max-sm:text-xs">
-                  <span className="max-sm:sr-only">Page </span>{currentPage}<span className="max-sm:hidden"> of </span><span className="sm:hidden">/</span>{Math.ceil(totalCount / pageSize)}
+            {onPageChange && totalCount > 0 && (
+              <div className="flex min-w-0 items-center gap-2 max-sm:gap-0.5">
+                {/* Redundant with "Page N of M" beside the arrows, so it is the
+                    first thing to go when space is tight. */}
+                <span className="text-sm text-muted-foreground max-md:hidden">
+                  Showing {Math.min((currentPage - 1) * pageSize + 1, totalCount)} - {Math.min(currentPage * pageSize, totalCount)} of {totalCount}
                 </span>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onPageChange(currentPage + 1)}
-                  disabled={currentPage >= Math.ceil(totalCount / pageSize)}
-                  className="p-1 touch-target"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onPageChange(Math.ceil(totalCount / pageSize))}
-                  disabled={currentPage >= Math.ceil(totalCount / pageSize)}
-                  className="p-1 touch-target"
-                >
-                  <ChevronsRight className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center gap-1 max-sm:gap-0.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onPageChange(1)}
+                    disabled={currentPage === 1}
+                    className="p-1 touch-target"
+                  >
+                    <ChevronsLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onPageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="p-1 touch-target"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+
+                  <span className="whitespace-nowrap px-3 py-1 text-sm font-medium max-sm:px-1 max-sm:text-xs">
+                    <span className="max-sm:sr-only">Page </span>{currentPage}<span className="max-sm:hidden"> of </span><span className="sm:hidden">/</span>{Math.ceil(totalCount / pageSize)}
+                  </span>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onPageChange(currentPage + 1)}
+                    disabled={currentPage >= Math.ceil(totalCount / pageSize)}
+                    className="p-1 touch-target"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onPageChange(Math.ceil(totalCount / pageSize))}
+                    disabled={currentPage >= Math.ceil(totalCount / pageSize)}
+                    className="p-1 touch-target"
+                  >
+                    <ChevronsRight className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
-        {documents.length > 0 && (
-          <div className="mt-3 pt-3 border-t">
-            {/* Phones: the bulk-action row is 3-4 lines of buttons that push the
-                actual documents below the fold, so it is opened on demand.
-                sm+ keeps it always visible. */}
-            <button
-              type="button"
-              onClick={() => setActionsOpen((v) => !v)}
-              aria-expanded={actionsOpen}
-              className="flex w-full items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-accent/50 sm:hidden"
-            >
-              <span className="flex items-center gap-1.5">
-                <SlidersHorizontal className="h-3.5 w-3.5" />
-                Actions{selectedDocuments.size > 0 ? ` (${selectedDocuments.size} selected)` : ''}
-              </span>
-              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${actionsOpen ? 'rotate-180' : ''}`} />
-            </button>
-            <div className={`flex items-center gap-2 flex-wrap ${actionsOpen ? 'max-sm:mt-2' : 'max-sm:hidden'}`}>
-            {onServerSortChange && serverSort && workspaceId && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-muted-foreground">Sort</span>
-                <TimelineSortControl workspaceId={workspaceId} value={serverSort} onChange={onServerSortChange} />
-              </div>
-            )}
-            {/* Table view has a header select-all checkbox; card/tile views need this button. */}
-            {view !== 'table' && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSelectAll}
-              className="flex items-center gap-2"
-              disabled={filteredDocuments.length === 0}
-            >
-              {selectedDocuments.size === filteredDocuments.length ? (
-                <>
-                  <CheckSquare className="h-4 w-4" />
-                  Deselect Page{searchQuery && ` (${filteredDocuments.length})`}
-                </>
-              ) : (
-                <>
-                  <Square className="h-4 w-4" />
-                  Select Page{searchQuery && ` (${filteredDocuments.length})`}
-                </>
-              )}
+        {/* Actions row. Everything lives in the shared action menu (right-click,
+            long-press, Shift+F10, a row's ⋯); this button opens the same menu
+            for the selection — or the folder when nothing is selected — so
+            nothing depends on knowing to right-click. Paste stays visible:
+            pending clipboard state is easy to forget. */}
+        {(documents.length > 0 || onImportDocuments || onPasteDocuments) && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3">
+            <Button variant="outline" size="sm" onClick={openToolbarMenu} aria-haspopup="menu" className="flex items-center gap-1.5" title={`Actions (${formatShortcut('Shift+F10')} or right-click)`}>
+              <MoreHorizontal className="h-4 w-4" />
+              Actions{selectedDocuments.size > 0 ? ` (${selectedDocuments.size} selected)` : ''}
             </Button>
-            )}
-
-            {onPurgeDocuments && totalCount > 0 && selectedDocuments.size === 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onPurgeDocuments}
-                disabled={disablePurgeDocuments || Boolean(searchQuery)}
-                className="flex items-center gap-2 text-destructive hover:text-destructive-foreground hover:bg-destructive"
-                title={disablePurgeDocuments || searchQuery ? 'Purge is disabled while local search is active' : 'Delete all documents matching the current server-side filters across all pages'}
-              >
-                <Trash2 className="h-4 w-4" />
-                Purge All ({totalCount})
+            {selectedDocuments.size > 0 && (
+              <Button variant="ghost" size="sm" onClick={() => setSelectedDocuments(new Set())} title="Clear selection (Esc)">
+                <X className="mr-1 h-3.5 w-3.5" />Clear
               </Button>
             )}
-
-            {selectedDocuments.size > 0 && (
-              <>
-                {bulkEditAllowed && <Button variant="outline" size="sm" onClick={() => setBulkEditIds(Array.from(selectedDocuments))}><Pencil className="mr-2 h-4 w-4" />Bulk Edit… ({selectedDocuments.size})</Button>}
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const selectedIds = Array.from(selectedDocuments)
-                    onCopyDocuments?.(selectedIds)
-                  }}
-                  className="flex items-center gap-2"
-                  title="Copy selected documents"
-                >
-                  <Copy className="h-4 w-4" />
-                  Copy ({selectedDocuments.size})
-                </Button>
-
-                {canLink && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setLinkPanelIds(Array.from(selectedDocuments))}
-                    className="flex items-center gap-2"
-                    title="Link selected documents to another path"
-                  >
-                    <Link2 className="h-4 w-4" />
-                    Link to… ({selectedDocuments.size})
-                  </Button>
-                )}
-
-                {bulkEditAllowed && <Button variant="outline" size="sm" onClick={() => setCopyWorkspaceIds(Array.from(selectedDocuments))}><Copy className="mr-1 h-4 w-4" />Copy to workspace…</Button>}
-
-                {canAddRelated && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => addRelated(Array.from(selectedDocuments))}
-                    className="flex items-center gap-2"
-                    title="Create a new document related to the selected ones"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add related… ({selectedDocuments.size})
-                  </Button>
-                )}
-
-                {canUseBackends && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setBackendPanel({ ids: Array.from(selectedDocuments), mode: 'copy' })}
-                    className="flex items-center gap-2"
-                    title="Copy, move, or delete the file data on storage backends"
-                  >
-                    <HardDrive className="h-4 w-4" />
-                    Backends… ({selectedDocuments.size})
-                  </Button>
-                )}
-
-                {onCutDocuments && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const selectedIds = Array.from(selectedDocuments)
-                      onCutDocuments(selectedIds)
-                    }}
-                    className="flex items-center gap-2"
-                    title="Cut selected documents"
-                  >
-                    <Scissors className="h-4 w-4" />
-                    Cut ({selectedDocuments.size})
-                  </Button>
-                )}
-
-                {(onRemoveDocument || onRemoveDocuments) && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={isWorkspaceScope}
-                    onClick={() => {
-                      const selectedIds = Array.from(selectedDocuments)
-                      if (selectedIds.length === 1) {
-                        removeDocument?.(selectedIds[0])
-                      } else {
-                        removeDocuments?.(selectedIds)
-                      }
-                      setSelectedDocuments(new Set())
-                    }}
-                    className="flex items-center gap-2"
-                    title={isWorkspaceScope ? 'Switch to “This path” to remove documents from a folder' : 'Remove selected documents from this folder (kept in index)'}
-                  >
-                    <X className="h-4 w-4" />
-                    Remove (unlink) from folder ({selectedDocuments.size})
-                  </Button>
-                )}
-
-                {(onDeleteDocument || onDeleteDocuments) && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const selectedIds = Array.from(selectedDocuments)
-                      if (selectedIds.length === 1) {
-                        onDeleteDocument?.(selectedIds[0])
-                      } else {
-                        onDeleteDocuments?.(selectedIds)
-                      }
-                      setSelectedDocuments(new Set())
-                    }}
-                    className="flex items-center gap-2 text-destructive hover:text-destructive-foreground hover:bg-destructive"
-                    title="Delete from index (data stays on backends)"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete from index ({selectedDocuments.size})
-                  </Button>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowExportModal(true)}
-                  className="flex items-center gap-2"
-                  title="Export selected documents"
-                >
-                  <Download className="h-4 w-4" />
-                  Export ({selectedDocuments.size})
-                </Button>
-              </>
-            )}
-
             {pastedDocumentIds && pastedDocumentIds.length > 0 && onPasteDocuments && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onPasteDocuments(contextPath, pastedDocumentIds)}
-                className="flex items-center gap-2"
-                title="Paste documents to current context"
-              >
+              <Button variant="outline" size="sm" onClick={() => onPasteDocuments(contextPath, pastedDocumentIds)} className="flex items-center gap-1.5" title={`Paste into this folder (${formatShortcut('Mod+V')})`}>
                 <Clipboard className="h-4 w-4" />
                 Paste ({pastedDocumentIds.length})
               </Button>
             )}
-
-            {selectedDocuments.size === 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowExportModal(true)}
-                className="flex items-center gap-2"
-                title="Export all documents"
-              >
-                <Download className="h-4 w-4" />
-                Export All
-              </Button>
-            )}
-
-            {onImportDocuments && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowImportModal(true)}
-                className="flex items-center gap-2"
-                title="Import documents"
-              >
-                <Upload className="h-4 w-4" />
-                Import
-              </Button>
-            )}
-
-            {onPasteDocuments && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPickDocsOpen(true)}
-                className="flex items-center gap-2"
-                title="Browse and add existing documents to this folder"
-              >
-                <FileSearch className="h-4 w-4" />
-                Add existing…
-              </Button>
-            )}
-            </div>
           </div>
         )}
       </div>
@@ -2209,7 +1982,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
               </button>
             )}
             {!searchQuery && pastedDocumentIds && pastedDocumentIds.length > 0 && (
-              <p className="text-xs text-muted-foreground">Right-click to paste {pastedDocumentIds.length} document(s)</p>
+              <p className="text-xs text-muted-foreground">Right-click or press {formatShortcut('Mod+V')} to paste {pastedDocumentIds.length} document(s)</p>
             )}
           </div>
         </div>
@@ -2228,7 +2001,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
           {renderBands((docs) => (
             <div className="columns-[300px] gap-3 pr-2">
               {docs.map((document) => (
-                <DocumentTile key={document.id} document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onRemoveDocument={removeDocument} onDeleteDocument={onDeleteDocument} onLinkDocument={canLink ? (id) => setLinkPanelIds([id]) : undefined} onOpenToSide={openToSide} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
+                <DocumentTile key={document.id} document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onOpenToSide={openToSide} onRightClick={handleDocumentRightClick} onOpenActions={handleOpenRowActions} onDragStart={handleMultiDragStart} />
               ))}
             </div>
           ))}
@@ -2266,7 +2039,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                 <FolderTableRow key={folder.path} folder={folder} onOpen={onOpenFolder} onPasteDocuments={onPasteDocuments} contextPath={contextPath} treeName={treeName} />
               ))}
               {sortedDocuments.map((document) => (
-                <DocumentTableRow key={document.id} document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onRemoveDocument={removeDocument} onDeleteDocument={onDeleteDocument} onLinkDocument={canLink ? (id) => setLinkPanelIds([id]) : undefined} onOpenToSide={openToSide} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
+                <DocumentTableRow key={document.id} document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onOpenToSide={openToSide} onRightClick={handleDocumentRightClick} onOpenActions={handleOpenRowActions} onDragStart={handleMultiDragStart} />
               ))}
             </TableBody>
           </Table>
@@ -2280,8 +2053,8 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
           {renderBands((docs) => (
             <div className="space-y-3 pr-2">
               {docs.map((document) => (
-                <div key={document.id} onContextMenu={(e) => { e.stopPropagation(); handleDocumentRightClick(e, document.id); }}>
-                  <DocumentRow document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onRemoveDocument={removeDocument} onDeleteDocument={onDeleteDocument} onLinkDocument={canLink ? (id) => setLinkPanelIds([id]) : undefined} onOpenToSide={openToSide} onRightClick={handleDocumentRightClick} onDragStart={handleMultiDragStart} />
+                <div key={document.id}>
+                  <DocumentRow document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onOpenToSide={openToSide} onRightClick={handleDocumentRightClick} onOpenActions={handleOpenRowActions} onDragStart={handleMultiDragStart} />
                 </div>
               ))}
             </div>
@@ -2289,144 +2062,14 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
         </div>
       )}
 
-      {contextMenu && (
-        <ContextMenuShell
-          x={contextMenu.x}
-          y={contextMenu.y}
-          onClose={() => setContextMenu(null)}
-          className="bg-background border rounded-lg shadow-elevation-3 py-1 min-w-[120px]"
-        >
-            <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('copy', contextMenu.documentIds)}>
-              <Copy className="h-3 w-3" />
-              Copy {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
-            </button>
-            {bulkEditAllowed && <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => { setCopyWorkspaceIds(contextMenu.documentIds); setContextMenu(null) }}><Copy className="h-3 w-3" />Copy to workspace…</button>}
-            {onCutDocuments && (
-              <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('cut', contextMenu.documentIds)}>
-                <Scissors className="h-3 w-3" />
-                Cut {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
-              </button>
-            )}
-            {canLink && (
-              <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('link-to', contextMenu.documentIds)}>
-                <Link2 className="h-3 w-3" />
-                Link to… {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
-              </button>
-            )}
-            {bulkEditAllowed && (
-              <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => { setBulkEditIds(contextMenu.documentIds); setContextMenu(null) }}>
-                <Pencil className="h-3 w-3" />Bulk Edit… ({contextMenu.documentIds.length})
-              </button>
-            )}
-            {canAddRelated && (
-              <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('add-related', contextMenu.documentIds)}>
-                <Plus className="h-3 w-3" />
-                Add related document… {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
-              </button>
-            )}
-            {contextMenu.documentIds.length === 1 && (
-              <>
-                <div className="my-1 h-px bg-border" />
-                <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('view-details', contextMenu.documentIds)}>
-                  <Eye className="h-3 w-3" />
-                  View Details
-                </button>
-                {(() => {
-                  const document = documents.find(doc => doc.id === contextMenu.documentIds[0]);
-                  const isEditable = document?.schema === 'data/schema/note' || document?.schema === 'data/schema/link';
-                  return isEditable ? (
-                    <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('edit', contextMenu.documentIds)}>
-                      <Pencil className="h-3 w-3" />
-                      Edit
-                    </button>
-                  ) : null;
-                })()}
-                {(() => {
-                  const document = documents.find(doc => doc.id === contextMenu.documentIds[0]);
-                  const isTabDocument = document?.schema === 'data/schema/tab';
-                  return isTabDocument && document?.data.url ? (
-                    <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('open-url', contextMenu.documentIds)}>
-                      <ExternalLink className="h-3 w-3" />
-                      Open URL
-                    </button>
-                  ) : null;
-                })()}
-                <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => handleContextMenuAction('copy-id', contextMenu.documentIds)}>
-                  <Link className="h-3 w-3" />
-                  Copy ID
-                </button>
-              </>
-            )}
-            {(removeDocument || removeDocuments) && (
-              <>
-                <div className="my-1 h-px bg-border" />
-                <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" title="Unlinks from this folder; the document stays in the index" onClick={() => handleContextMenuAction('remove', contextMenu.documentIds)}>
-                  <Move className="h-3 w-3" />
-                  Remove (unlink) from folder {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
-                </button>
-              </>
-            )}
-            {(onDeleteDocument || onDeleteDocuments) && (
-              <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2 text-destructive" title="Removes the document from the index entirely; file data stays on its backend(s)" onClick={() => handleContextMenuAction('delete', contextMenu.documentIds)}>
-                <Trash2 className="h-3 w-3" />
-                Delete from index {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
-              </button>
-            )}
-            {/* Backends — only for a selection that actually has file data on a
-                backend (a non-empty locations array); JSON-only docs have no
-                bytes to move. */}
-            {canUseBackends
-              && contextMenu.documentIds.some(id => ((documents.find(doc => doc.id === id) as { locations?: unknown[] } | undefined)?.locations?.length ?? 0) > 0) && (
-              <>
-                <div className="my-1 h-px bg-border" />
-                <div className="px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Backends</div>
-                <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" title="Copy the file data to another storage backend (keeps the existing copies)" onClick={() => { setBackendPanel({ ids: contextMenu.documentIds, mode: 'copy' }); setContextMenu(null) }}>
-                  <HardDrive className="h-3 w-3" />
-                  Copy to backend… {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
-                </button>
-                <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" title="Move the file data to another storage backend (source released once the copy is durable)" onClick={() => { setBackendPanel({ ids: contextMenu.documentIds, mode: 'move' }); setContextMenu(null) }}>
-                  <ArrowRightLeft className="h-3 w-3" />
-                  Move to backend… {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
-                </button>
-                <button className="w-full text-left px-3 py-1 hover:bg-destructive hover:text-destructive-foreground text-sm flex items-center gap-2 text-destructive font-medium" title="Delete the file data from selected backends (copies elsewhere are kept)" onClick={() => { setBackendPanel({ ids: contextMenu.documentIds, mode: 'delete' }); setContextMenu(null) }}>
-                  <Trash2 className="h-3 w-3" />
-                  Delete from backend… {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
-                </button>
-              </>
-            )}
-            {/* Legacy whole-object destroy (every location at once) — kept for
-                views that pass the handler explicitly. */}
-            {!canUseBackends && (onDestroyDocument || onDestroyDocuments)
-              && contextMenu.documentIds.some(id => ((documents.find(doc => doc.id === id) as { locations?: unknown[] } | undefined)?.locations?.length ?? 0) > 0) && (
-              <button className="w-full text-left px-3 py-1 hover:bg-destructive hover:text-destructive-foreground text-sm flex items-center gap-2 text-destructive font-medium" title="Deletes the document and its file data from the storage backend(s)" onClick={() => handleContextMenuAction('destroy', contextMenu.documentIds)}>
-                <Trash2 className="h-3 w-3" />
-                Delete from backend(s) {contextMenu.documentIds.length > 1 ? `(${contextMenu.documentIds.length})` : ''}
-              </button>
-            )}
-        </ContextMenuShell>
-      )}
-
-      {/* Empty Area Context Menu */}
-      {emptyAreaContextMenu && (
-        <ContextMenuShell
-          x={emptyAreaContextMenu.x}
-          y={emptyAreaContextMenu.y}
-          onClose={() => setEmptyAreaContextMenu(null)}
-          className="bg-background border rounded-lg shadow-elevation-3 py-1 min-w-[120px]"
-        >
-            {pastedDocumentIds && pastedDocumentIds.length > 0 && (
-              <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={handleEmptyAreaPaste}>
-                <Clipboard className="h-3 w-3" />
-                Paste Documents ({pastedDocumentIds.length})
-              </button>
-            )}
-            {onImportDocuments && (
-              <button className="w-full text-left px-3 py-1 hover:bg-muted text-sm flex items-center gap-2" onClick={() => { setEmptyAreaContextMenu(null); setShowImportModal(true) }}>
-                <Upload className="h-3 w-3" />
-                Import Documents
-              </button>
-            )}
-        </ContextMenuShell>
+      {menu && (
+        <ActionMenuHost
+          anchor={menu.anchor}
+          items={menuItems}
+          onClose={() => setMenu(null)}
+          label={menu.ids ? 'Document actions' : 'Folder actions'}
+          header={menuHeader}
+        />
       )}
 
       <ExportModal

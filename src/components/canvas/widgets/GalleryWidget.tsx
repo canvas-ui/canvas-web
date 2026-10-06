@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { BulkEditDialog } from '@/components/common/BulkEditDialog'
-import { ContextMenuShell } from '@/components/common/context-menu-shell'
+import { ActionMenuHost } from '@/components/common/action-menu'
 import { usePublicShareCode } from '@/components/renderers/public-share'
 import { Button } from '@/components/ui/button'
-import { Images } from 'lucide-react'
+import { Images, Pencil } from 'lucide-react'
 import { registerWidget } from '../widget-registry'
 import type { WidgetProps } from '../widget-types'
 import { useCanvasImages } from './useCanvasImages'
@@ -83,9 +83,12 @@ export function GalleryWidget({ config, setConfig, canvas }: WidgetProps) {
         )}
       </div>
 
-      {menu && <ContextMenuShell x={menu.x} y={menu.y} onClose={() => setMenu(null)} className="rounded-lg border bg-popover p-1 shadow-elevation-3">
-        <button className="px-3 py-2 text-sm hover:bg-muted" onClick={() => { setBulkIds(menu.ids); setMenu(null) }}>Bulk Edit… ({menu.ids.length})</button>
-      </ContextMenuShell>}
+      {menu && <ActionMenuHost
+        anchor={menu}
+        onClose={() => setMenu(null)}
+        label={`${menu.ids.length} image${menu.ids.length === 1 ? '' : 's'}`}
+        items={[{ id: 'bulk-edit', label: `Bulk edit… (${menu.ids.length})`, icon: Pencil, run: () => setBulkIds(menu.ids) }]}
+      />}
       {bulkIds && <BulkEditDialog workspaceId={canvas.workspaceId} documentIds={bulkIds} onClose={() => setBulkIds(null)} />}
       {lightbox != null && images[lightbox] && (
         <ImageLightbox

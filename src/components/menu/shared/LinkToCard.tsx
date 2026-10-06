@@ -3,7 +3,7 @@ import { X, Search, Link2, ChevronRight, ChevronDown, FolderPlus, Pin } from 'lu
 import { Button } from '@/components/ui/button'
 import { Loader } from '@/components/ui/loader'
 import { cn } from '@/lib/utils'
-import { ContextMenuShell } from '@/components/common/context-menu-shell'
+import { ActionMenu } from '@/components/common/action-menu'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
 import {
   listWorkspaces, listWorkspacePins, type WorkspacePin,
@@ -464,21 +464,13 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
 
       {/* Row context menu (right-click / long-press) */}
       {rowMenu && (
-        <ContextMenuShell
-          x={rowMenu.clientX}
-          y={rowMenu.clientY}
+        // Always the anchored menu, never the phone sheet: this card is itself
+        // a picker panel, and a full-screen sheet over it loses the context.
+        <ActionMenu
+          anchor={{ x: rowMenu.clientX, y: rowMenu.clientY }}
           onClose={() => setRowMenu(null)}
-          className="min-w-[11rem] rounded-md border bg-popover p-1 shadow-elevation-3"
-        >
-          <button
-            type="button"
-            className="flex w-full items-center gap-2 rounded-sm px-3 py-1.5 text-left text-xs hover:bg-accent"
-            onClick={() => { setCreateParent(rowMenu.path); setRowMenu(null) }}
-          >
-            <FolderPlus className="h-3 w-3" />
-            New folder in {rowMenu.path}
-          </button>
-        </ContextMenuShell>
+          items={[{ id: 'new-folder', label: `New folder in ${rowMenu.path}`, icon: FolderPlus, run: () => setCreateParent(rowMenu.path) }]}
+        />
       )}
     </div>
   )
