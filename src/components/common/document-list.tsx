@@ -40,6 +40,7 @@ import type { ToolboxSort } from '@/types/workspace'
 import { useToolboxOptional } from '@/components/toolbox/use-toolbox'
 import { groupByDate } from '@/lib/date-groups'
 import { MarkdownView } from './markdown-view'
+import { FolderContextMenu } from '@/components/workspaces/FolderContextMenu'
 import { classifyMime } from '@/components/renderers/types'
 
 interface DocumentListProps {
@@ -858,6 +859,16 @@ function useFolderDrop(folder: FolderEntry, onPasteDocuments?: DocumentListProps
   return { over, onDragOver, onDragLeave, onDrop }
 }
 
+// Right-click on a folder: its own menu (the caller owns it), never the
+// empty-area / document menus around it. ".." has no menu.
+type FolderMenuHandler = (path: string, event: React.MouseEvent) => void
+function openFolderMenu(e: React.MouseEvent, folder: FolderEntry, onMenu?: FolderMenuHandler) {
+  e.stopPropagation()
+  if (folder.isParent || !onMenu) return
+  e.preventDefault()
+  onMenu(folder.path, e)
+}
+
 function FolderIcon({ folder, className = 'h-4 w-4' }: { folder: FolderEntry; className?: string }) {
   if (folder.isParent) return <CornerLeftUp className={`${className} text-muted-foreground`} />
   const style = folder.color ? { color: folder.color } : undefined
@@ -867,13 +878,14 @@ function FolderIcon({ folder, className = 'h-4 w-4' }: { folder: FolderEntry; cl
 const folderTitle = (folder: FolderEntry) => folder.isParent ? 'Parent folder' : (folder.label && folder.label !== folder.name ? `${folder.label} (${folder.name})` : folder.name)
 
 // Card + tile views: a wrapped strip of folder chips above the documents.
-function FolderChip({ folder, onOpen, onPasteDocuments, contextPath, treeName }: { folder: FolderEntry; onOpen?: (path: string) => void; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string }) {
+function FolderChip({ folder, onOpen, onMenu, onPasteDocuments, contextPath, treeName }: { folder: FolderEntry; onOpen?: (path: string) => void; onMenu?: FolderMenuHandler; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string }) {
   const drop = useFolderDrop(folder, onPasteDocuments, contextPath, treeName)
   return (
     <button
       type="button"
       title={folderTitle(folder)}
       onClick={() => onOpen?.(folder.path)}
+      onContextMenu={(e) => openFolderMenu(e, folder, onMenu)}
       onDragOver={drop.onDragOver}
       onDragLeave={drop.onDragLeave}
       onDrop={drop.onDrop}
@@ -893,7 +905,7 @@ function FolderChip({ folder, onOpen, onPasteDocuments, contextPath, treeName }:
 
 // Tile view: folders as proper tiles in a responsive grid, so they read at the
 // same weight as the photo/text tiles below them instead of as small chips.
-function FolderTile({ folder, onOpen, onPasteDocuments, contextPath, treeName }: { folder: FolderEntry; onOpen?: (path: string) => void; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string }) {
+function FolderTile({ folder, onOpen, onMenu, onPasteDocuments, contextPath, treeName }: { folder: FolderEntry; onOpen?: (path: string) => void; onMenu?: FolderMenuHandler; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string }) {
   const drop = useFolderDrop(folder, onPasteDocuments, contextPath, treeName)
   const iconStyle = folder.color ? { color: folder.color } : undefined
   return (
@@ -901,6 +913,7 @@ function FolderTile({ folder, onOpen, onPasteDocuments, contextPath, treeName }:
       type="button"
       title={folderTitle(folder)}
       onClick={() => onOpen?.(folder.path)}
+      onContextMenu={(e) => openFolderMenu(e, folder, onMenu)}
       onDragOver={drop.onDragOver}
       onDragLeave={drop.onDragLeave}
       onDrop={drop.onDrop}
@@ -924,23 +937,23 @@ function FolderTile({ folder, onOpen, onPasteDocuments, contextPath, treeName }:
   )
 }
 
-function FolderTileGrid({ folders, onOpen, onPasteDocuments, contextPath, treeName }: { folders: FolderEntry[]; onOpen?: (path: string) => void; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string }) {
+function FolderTileGrid({ folders, onOpen, onMenu, onPasteDocuments, contextPath, treeName }: { folders: FolderEntry[]; onOpen?: (path: string) => void; onMenu?: FolderMenuHandler; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string }) {
   if (folders.length === 0) return null
   return (
     <div className="mb-4 grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3 pr-2" onContextMenu={(e) => e.stopPropagation()}>
       {folders.map((folder) => (
-        <FolderTile key={folder.path} folder={folder} onOpen={onOpen} onPasteDocuments={onPasteDocuments} contextPath={contextPath} treeName={treeName} />
+        <FolderTile key={folder.path} folder={folder} onOpen={onOpen} onMenu={onMenu} onPasteDocuments={onPasteDocuments} contextPath={contextPath} treeName={treeName} />
       ))}
     </div>
   )
 }
 
-function FolderStrip({ folders, onOpen, onPasteDocuments, contextPath, treeName }: { folders: FolderEntry[]; onOpen?: (path: string) => void; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string }) {
+function FolderStrip({ folders, onOpen, onMenu, onPasteDocuments, contextPath, treeName }: { folders: FolderEntry[]; onOpen?: (path: string) => void; onMenu?: FolderMenuHandler; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string }) {
   if (folders.length === 0) return null
   return (
     <div className="mb-3 flex flex-wrap gap-2 pr-2" onContextMenu={(e) => e.stopPropagation()}>
       {folders.map((folder) => (
-        <FolderChip key={folder.path} folder={folder} onOpen={onOpen} onPasteDocuments={onPasteDocuments} contextPath={contextPath} treeName={treeName} />
+        <FolderChip key={folder.path} folder={folder} onOpen={onOpen} onMenu={onMenu} onPasteDocuments={onPasteDocuments} contextPath={contextPath} treeName={treeName} />
       ))}
     </div>
   )
@@ -949,13 +962,13 @@ function FolderStrip({ folders, onOpen, onPasteDocuments, contextPath, treeName 
 // Table view: folders as leading rows, Explorer style. The cells line up with
 // the document columns (checkbox / type / title / schema / id / checksum /
 // created / actions) so the eye reads one list.
-function FolderTableRow({ folder, onOpen, onPasteDocuments, contextPath, treeName }: { folder: FolderEntry; onOpen?: (path: string) => void; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string }) {
+function FolderTableRow({ folder, onOpen, onMenu, onPasteDocuments, contextPath, treeName }: { folder: FolderEntry; onOpen?: (path: string) => void; onMenu?: FolderMenuHandler; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string }) {
   const drop = useFolderDrop(folder, onPasteDocuments, contextPath, treeName)
   return (
     <TableRow
       className={`cursor-pointer ${drop.over ? 'bg-accent ring-1 ring-inset ring-info' : ''} ${folder.isParent ? 'text-muted-foreground' : ''}`}
       onClick={() => onOpen?.(folder.path)}
-      onContextMenu={(e) => e.stopPropagation()}
+      onContextMenu={(e) => openFolderMenu(e, folder, onMenu)}
       onDragOver={drop.onDragOver}
       onDragLeave={drop.onDragLeave}
       onDrop={drop.onDrop}
@@ -1265,7 +1278,14 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     return folders
   }, [folders, deferredQuery])
   const hasFolders = visibleFolders.length > 0
-  const folderStripProps = { folders: visibleFolders, onOpen: onOpenFolder, onPasteDocuments, contextPath, treeName }
+  // Folder right-click menu — directory-type trees of a workspace only.
+  const [folderMenu, setFolderMenu] = useState<{ x: number; y: number; path: string } | null>(null)
+  const onFolderMenu = useMemo<FolderMenuHandler | undefined>(() => (
+    workspaceId && treeName && onOpenFolder
+      ? (path, e) => setFolderMenu({ x: e.clientX, y: e.clientY, path })
+      : undefined
+  ), [workspaceId, treeName, onOpenFolder])
+  const folderStripProps = { folders: visibleFolders, onOpen: onOpenFolder, onMenu: onFolderMenu, onPasteDocuments, contextPath, treeName }
 
   // Column sort for the table view
   const sortAccessors = useMemo(() => ({
@@ -2044,7 +2064,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
             </TableHeader>
             <TableBody>
               {visibleFolders.map((folder) => (
-                <FolderTableRow key={folder.path} folder={folder} onOpen={onOpenFolder} onPasteDocuments={onPasteDocuments} contextPath={contextPath} treeName={treeName} />
+                <FolderTableRow key={folder.path} folder={folder} onOpen={onOpenFolder} onMenu={onFolderMenu} onPasteDocuments={onPasteDocuments} contextPath={contextPath} treeName={treeName} />
               ))}
               {sortedDocuments.map((document) => (
                 <DocumentTableRow key={document.id} document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onOpenToSide={openToSide} onRightClick={handleDocumentRightClick} onOpenActions={handleOpenRowActions} onDragStart={handleMultiDragStart} />
@@ -2163,6 +2183,23 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
         workspaceId={workspaceId}
         initialEdit={detailModal?.edit}
       />
+
+      {folderMenu && workspaceId && treeName && onOpenFolder && (
+        <FolderContextMenu
+          x={folderMenu.x}
+          y={folderMenu.y}
+          workspaceName={workspaceId}
+          treeName={treeName}
+          path={folderMenu.path}
+          onClose={() => setFolderMenu(null)}
+          onOpen={onOpenFolder}
+          onOpenToSide={(path) => window.dispatchEvent(new CustomEvent('workspace:open-to-side', {
+            detail: { workspaceName: workspaceId, treeName, path },
+          }))}
+          pastedDocumentIds={pastedDocumentIds}
+          onPasteDocuments={onPasteDocuments ? (path, ids) => onPasteDocuments(path, ids) : undefined}
+        />
+      )}
     </div>
   )
 }
