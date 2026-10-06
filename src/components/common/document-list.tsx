@@ -1117,7 +1117,13 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     if (window.matchMedia('(max-width: 767px)').matches) return
     const el = searchInputRef.current
     if (!el) return
-    const t = setTimeout(() => el.focus(), 60)
+    // Never steal focus: after a tree click the user's next keystroke
+    // (Ctrl+V into the selected folder) belongs to the tree, not the search box.
+    const t = setTimeout(() => {
+      const active = window.document.activeElement
+      if (active && active !== window.document.body) return
+      el.focus()
+    }, 60)
     return () => clearTimeout(t)
   }, [allowViewToggle])
 

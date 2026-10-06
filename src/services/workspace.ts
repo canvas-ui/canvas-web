@@ -845,10 +845,14 @@ export async function copyWorkspacePath(workspaceId: string, fromPath: string, t
 export async function pasteDocumentsToWorkspacePath(workspaceId: string, path: string, documentIds: number[], treeName = DEFAULT_WORKSPACE_TREE_NAME, treeType: 'context' | 'directory' = 'context'): Promise<boolean> {
   try {
     const ids = normalizeDocumentIds(Array.isArray(documentIds) ? documentIds : [documentIds])
+    const started = performance.now()
     await api.post<unknown>(
       `${API_ROUTES.workspaces}/${workspaceId}/documents`,
       { documentIds: ids, treeNameOrTreeId: treeName, treeType, context: path }
     );
+    // Paste latency is user-visible (and was once ~30s with no explanation):
+    // keep the server's share measurable apart from the list refresh after it.
+    console.info(`[paste] linked ${ids.length} document(s) → ${treeName}:${path} in ${Math.round(performance.now() - started)} ms`)
     return true;
   } catch (error) {
     console.error(`Failed to paste documents to workspace path ${path}:`, error);

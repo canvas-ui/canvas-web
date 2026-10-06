@@ -81,7 +81,7 @@ export default function ContextDetailPage() {
     const legacy = (params.get('search') || '').trim();
     return stack.length ? stack : (legacy ? [legacy] : []);
   }, [location.search]);
-  const { showToast } = useToast();
+  const { showToast, showProgress } = useToast();
   const { state: toolboxState, saveFilters, setSort, setAccentColor, setMapDocuments, toggleView, hasActiveFilters } = useToolbox();
   const { openM2Drawer } = useMenu();
   const isMobile = useIsMobile();
@@ -472,16 +472,17 @@ export default function ContextDetailPage() {
 
   const handlePasteDocuments = async (path: string, documentIds: number[]): Promise<boolean> => {
     if (!context) return false;
+    const progress = showProgress({ title: 'Pasting…', description: `${documentIds.length} document(s) → "${path}"` });
     try {
       const success = await pasteDocumentsToContext(context.id, path, documentIds, ownerId);
+      progress.done(success ? { title: 'Success', description: `${documentIds.length} document(s) pasted to "${path}"` } : undefined);
       if (success) {
-        await fetchDocuments();
         setCopiedDocuments([]);
-        showToast({ title: 'Success', description: `${documentIds.length} document(s) pasted to "${path}"` });
+        await fetchDocuments();
       }
       return success;
     } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to paste documents', variant: 'destructive' });
+      progress.fail({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to paste documents', variant: 'destructive' });
       return false;
     }
   };

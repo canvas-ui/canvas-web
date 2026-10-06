@@ -162,7 +162,7 @@ function WorkspaceContent() {
   const { workspaceName, treeName } = useParams<{ workspaceName: string; treeName?: string; '*'?: string }>();
   const location = useLocation();
   const navigate = useNavigate();
-  const { showToast } = useToast();
+  const { showToast, showProgress } = useToast();
   const searchParams = new URLSearchParams(location.search);
   // Stacked text queries (?q=car&q=red) refine each other (AND-narrow); a single
   // ?q / ?search is the ordinary one-shot search.
@@ -1125,6 +1125,8 @@ function WorkspaceContent() {
     // of a read-only backends path into a context/directory tree.
     const targetTreeName = options.targetTreeName ?? selectedTreeName;
     const targetTreeType = options.targetTreeType ?? selectedTreeType;
+    const moving = options.move || clipboard?.operation === 'cut';
+    const progress = showProgress({ title: moving ? 'Moving…' : 'Pasting…', description: `${documentIds.length} document(s) → "${path}"` });
     try {
       const success = await pasteDocumentsToWorkspacePath(workspaceName, path, documentIds, targetTreeName, targetTreeType);
       if (success) {
@@ -1140,17 +1142,23 @@ function WorkspaceContent() {
             detail: { workspaceName, path: sourcePath, treeName: sourceTreeName },
           }));
         }
-        await fetchDocuments();
+        // Done as far as the user is concerned: the server has the links. The
+        // list reload below is ours, and is timed separately.
+        progress.done({ title: 'Success', description: `${documentIds.length} document(s) ${moving ? 'moved' : 'pasted'} to "${path}"` });
         setClipboard(null);
         window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: null }));
+        const refreshStarted = performance.now();
+        await fetchDocuments();
+        console.info(`[paste] list refresh ${Math.round(performance.now() - refreshStarted)} ms`);
         window.dispatchEvent(new CustomEvent('workspace:documents:refresh', {
           detail: { workspaceName, path, treeName: targetTreeName },
         }));
-        showToast({ title: 'Success', description: `${documentIds.length} document(s) ${options.move || clipboard?.operation === 'cut' ? 'moved' : 'pasted'} to "${path}"` });
+      } else {
+        progress.done();
       }
       return success;
     } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to paste documents', variant: 'destructive' });
+      progress.fail({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to paste documents', variant: 'destructive' });
       return false;
     }
   };
@@ -1301,9 +1309,10 @@ function WorkspaceContent() {
       return;
     }
     const targetType: 'context' | 'directory' = treeTypeForName(target.treeName);
+    const progress = showProgress({ title: move ? 'Moving…' : 'Copying…', description: `${ids.length} document(s) → "${target.path}"` });
     try {
       const ok = await pasteDocumentsToWorkspacePath(workspaceName, target.path, ids, target.treeName, targetType);
-      if (!ok) return;
+      if (!ok) { progress.done(); return; }
       invalidateDocumentCache(workspaceName, target.treeName, target.path);
       if (move) {
         const sourceType: 'context' | 'directory' = treeTypeForName(source.treeName);
@@ -1313,11 +1322,11 @@ function WorkspaceContent() {
       [source, target].forEach(p => window.dispatchEvent(new CustomEvent('workspace:documents:refresh', {
         detail: { workspaceName, path: p.path, treeName: p.treeName },
       })));
-      showToast({ title: move ? 'Moved' : 'Copied', description: `${ids.length} document(s) → "${target.path}"` });
+      progress.done({ title: move ? 'Moved' : 'Copied', description: `${ids.length} document(s) → "${target.path}"` });
     } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Transfer failed', variant: 'destructive' });
+      progress.fail({ title: 'Error', description: err instanceof Error ? err.message : 'Transfer failed', variant: 'destructive' });
     }
-  }, [workspaceName, sidePane, focusedPane, selectedTreeName, selectedPath, leftSelection, rightSelection, showToast]);
+  }, [workspaceName, sidePane, focusedPane, selectedTreeName, selectedPath, leftSelection, rightSelection, showToast, showProgress]);
 
   useEffect(() => {
     if (!sidePane) return;
@@ -1709,7 +1718,7 @@ function SideWorkspaceCanvas({
   onNavigate?: (path: string) => void;
   onClose?: () => void;
 }) {
-  const { showToast } = useToast();
+  const { showToast, showProgress } = useToast();
   const [tree, setTree] = useState<TreeNode | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -1808,6 +1817,8 @@ function SideWorkspaceCanvas({
     // "Link to…" targets an explicit tree; a plain paste targets this pane's tree.
     const targetTreeName = options.targetTreeName ?? pane.treeName;
     const targetTreeType = options.targetTreeType ?? treeType;
+    const moving = options.move || clipboard?.operation === 'cut';
+    const progress = showProgress({ title: moving ? 'Moving…' : 'Pasting…', description: `${documentIds.length} document(s) → "${path}"` });
     try {
       const success = await pasteDocumentsToWorkspacePath(workspaceName, path, documentIds, targetTreeName, targetTreeType);
       if (success) {
@@ -1823,18 +1834,21 @@ function SideWorkspaceCanvas({
             detail: { workspaceName, path: sourcePath, treeName: sourceTreeName },
           }));
         }
+        progress.done({ title: 'Success', description: `${documentIds.length} document(s) ${moving ? 'moved' : 'pasted'} to "${path}"` });
         setClipboard(null);
         await fetchPaneDocuments();
         window.dispatchEvent(new CustomEvent('workspace:documents:refresh', {
           detail: { workspaceName, path, treeName: targetTreeName },
         }));
+      } else {
+        progress.done();
       }
       return success;
     } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to paste documents', variant: 'destructive' });
+      progress.fail({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to paste documents', variant: 'destructive' });
       return false;
     }
-  }, [workspaceName, pane.treeName, treeType, fetchPaneDocuments, showToast, clipboard, setClipboard]);
+  }, [workspaceName, pane.treeName, treeType, fetchPaneDocuments, showProgress, clipboard, setClipboard]);
 
   // Remove / delete / destroy, scoped to this pane's own path + tree.
   const refreshPane = useCallback(() => {

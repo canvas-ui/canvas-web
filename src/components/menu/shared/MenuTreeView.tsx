@@ -20,6 +20,7 @@ import {
 } from '@/lib/layer-style'
 import { LayerIconPicker } from './LayerIconPicker'
 import { ContextMenuShell } from '@/components/common/context-menu-shell'
+import { isTextInteraction, matchesShortcut } from '@/components/common/action-menu'
 import { findTreeNodeByPath } from '@/services/workspace'
 import { useTreeAccordion } from '@/lib/tree-style'
 import { onAccentTextClass, onAccentSolidTextClass } from '@/utils/color'
@@ -1247,13 +1248,35 @@ export function MenuTreeView({
     setInlineCreateParent(null)
   }, [])
 
-  // Delete/Backspace removes the selected layer. Scoped to the tree container
-  // (not window) so it never fires while the user is in the document list.
+  const copyPath = useCallback((path: string, mode: 'copy' | 'cut') => {
+    const next = { mode, path, treeName }
+    setClipboard(next)
+    window.dispatchEvent(new CustomEvent('tree:path-clipboard', { detail: next }))
+  }, [treeName])
+
+  // Keyboard on the selected folder, scoped to the tree container (not
+  // window) so it never fires while the user is in the document list:
+  // Ctrl/⌘+V pastes copied DOCUMENTS into it (else a copied folder),
+  // Ctrl/⌘+C / X copy or cut the folder itself, Delete/Backspace removes it.
   const handleTreeKeyDown = useCallback((event: React.KeyboardEvent) => {
-    if (readOnly || !onRemovePath) return
+    if (readOnly || isTextInteraction(event.target)) return
+    if (matchesShortcut(event, 'Mod+V')) {
+      if (pastedDocumentIds?.length && onPasteDocuments && selectedPath) {
+        event.preventDefault()
+        void onPasteDocuments(selectedPath, pastedDocumentIds).catch(() => {})
+      } else if (clipboard && selectedPath) {
+        event.preventDefault()
+        void handlePaste(selectedPath).catch(err => alert(err instanceof Error ? err.message : String(err)))
+      }
+      return
+    }
+    if (selectedPath && selectedPath !== '/' && (matchesShortcut(event, 'Mod+C') || (!isBackendsTree && matchesShortcut(event, 'Mod+X')))) {
+      event.preventDefault()
+      copyPath(selectedPath, event.key.toLowerCase() === 'x' ? 'cut' : 'copy')
+      return
+    }
+    if (!onRemovePath) return
     if (event.key !== 'Delete' && event.key !== 'Backspace') return
-    const el = event.target as HTMLElement | null
-    if (el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA') return
     if (!selectedPath || selectedPath === '/') return
     event.preventDefault()
     const node = findTreeNodeByPath(root, selectedPath)
@@ -1261,7 +1284,7 @@ export function MenuTreeView({
     if (confirm(`Remove "${selectedPath}"?`)) {
       onRemovePath(selectedPath, false).catch(err => alert(err instanceof Error ? err.message : String(err)))
     }
-  }, [readOnly, onRemovePath, selectedPath, root])
+  }, [readOnly, onRemovePath, selectedPath, root, pastedDocumentIds, onPasteDocuments, clipboard, handlePaste, isBackendsTree, copyPath])
 
   const toggleCopyMode = useCallback(() => {
     setCopyModeSticky(v => {
@@ -1449,16 +1472,8 @@ export function MenuTreeView({
           onAddStoreRule={onAddStoreRule}
           onRenameBackendFolder={onRenameBackendFolder}
           onDeleteBackendFolder={onDeleteBackendFolder}
-          onCopy={path => {
-            const next = { mode: 'copy' as const, path, treeName }
-            setClipboard(next)
-            window.dispatchEvent(new CustomEvent('tree:path-clipboard', { detail: next }))
-          }}
-          onCut={path => {
-            const next = { mode: 'cut' as const, path, treeName }
-            setClipboard(next)
-            window.dispatchEvent(new CustomEvent('tree:path-clipboard', { detail: next }))
-          }}
+          onCopy={path => copyPath(path, 'copy')}
+          onCut={path => copyPath(path, 'cut')}
           onPaste={handlePaste}
           pastedDocumentIds={pastedDocumentIds}
           onPasteDocuments={onPasteDocuments}

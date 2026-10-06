@@ -379,7 +379,7 @@ function WorkspaceM2Content() {
     setContentPath(path !== '/' ? path : null)
   }
 
-  const { showToast } = useToast()
+  const { showToast, showProgress } = useToast()
   // Folder-skeleton sync for one backends subtree: runs the shipped
   // started/…backend-tree-sync.js hook by hand with the subtree as payload
   // (backend + subdir → dir:/<rel>), so empty folders land in the directory
@@ -722,7 +722,15 @@ function WorkspaceM2Content() {
               // read-only (mirrors backend storage) — no paste target there.
               const treeType: 'context' | 'directory' = activeTab === 'directory' ? 'directory' : 'context'
               const treeName = activeTab === 'directory' ? 'directory' : DEFAULT_WORKSPACE_TREE_NAME
-              const success = await pasteDocumentsToWorkspacePath(wsName, path, ids, treeName, treeType)
+              const progress = showProgress({ title: 'Pasting…', description: `${ids.length} document(s) → "${path}"` })
+              let success = false
+              try {
+                success = await pasteDocumentsToWorkspacePath(wsName, path, ids, treeName, treeType)
+              } catch (err) {
+                progress.fail({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to paste documents', variant: 'destructive' })
+                return false
+              }
+              progress.done(success ? { title: 'Success', description: `${ids.length} document(s) pasted to "${path}"` } : undefined)
               if (success) {
                 if (docClipboard) {
                   setDocClipboard(null)

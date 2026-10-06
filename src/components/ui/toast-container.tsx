@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState, useCallback } from 'react'
 import { ToastProvider, ToastViewport, Toast, ToastTitle, ToastDescription, ToastClose } from './toast'
-import { ToastContext, type ToastType } from './use-toast'
+import { Loader2 } from 'lucide-react'
+import { ToastContext, type ProgressToast, type ToastInput, type ToastType } from './use-toast'
 import { isNetworkErrorMessage } from '@/lib/connectivity'
 
 export function ToastContainer({ children }: { children?: React.ReactNode }) {
@@ -9,7 +10,7 @@ export function ToastContainer({ children }: { children?: React.ReactNode }) {
   // Keep a short-lived set of recent toast keys to avoid accidental spam (e.g. socket events firing multiple times)
   const recentToastKeys = useRef<Set<string>>(new Set())
 
-  const showToast = useCallback((toast: Omit<ToastType, 'id'>) => {
+  const showToast = useCallback((toast: ToastInput) => {
     // Network failures are shown by the persistent connection indicator.
     // Component catch-blocks all over the app forward the
     // API's network-error message verbatim via their own showToast calls, so
@@ -37,19 +38,35 @@ export function ToastContainer({ children }: { children?: React.ReactNode }) {
     }, 5000)
   }, [])
 
-  const contextValue = useMemo(() => ({ showToast }), [showToast])
+  const showProgress = useCallback((toast: ToastInput): ProgressToast => {
+    const id = Math.random().toString(36).substring(2, 9)
+    setToasts((prev) => [...prev, { ...toast, id, busy: true }])
+    let settled = false
+    const settle = (result?: ToastInput) => {
+      if (settled) return
+      settled = true
+      setToasts((prev) => prev.filter((t) => t.id !== id))
+      if (result) showToast(result)
+    }
+    return { done: settle, fail: settle }
+  }, [showToast])
+
+  const contextValue = useMemo(() => ({ showToast, showProgress }), [showToast, showProgress])
 
   return (
     <ToastContext.Provider value={contextValue}>
       <ToastProvider>
         {children}
         {toasts.map((toast) => (
-          <Toast key={toast.id} variant={toast.variant}>
+          <Toast key={toast.id} variant={toast.variant} duration={toast.busy ? Infinity : undefined}>
             <div className="grid gap-1">
-              <ToastTitle>{toast.title}</ToastTitle>
+              <ToastTitle className="flex items-center gap-2">
+                {toast.busy && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />}
+                {toast.title}
+              </ToastTitle>
               {toast.description != null && <ToastDescription>{toast.description}</ToastDescription>}
             </div>
-            <ToastClose />
+            {!toast.busy && <ToastClose />}
           </Toast>
         ))}
         <ToastViewport />
