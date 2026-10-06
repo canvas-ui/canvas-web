@@ -91,9 +91,10 @@ export function useDocumentBlobUrl(
 export function useDocumentStreamSrc(
   workspaceId: string,
   documentId: number | string,
+  { url, enabled = true }: { url?: string; enabled?: boolean } = {},
 ): { src: string | null; error: string | null; loading: boolean } {
   const { isPublic, streamUrl, mintTicket } = useDocumentContent(workspaceId)
-  const key = `${isPublic ? 'pub' : 'ws'}:${workspaceId}:${documentId}`
+  const key = `${isPublic ? 'pub' : 'ws'}:${workspaceId}:${documentId}:${url || ''}:${enabled}`
   const [state, setState] = useState<{ src: string | null; error: string | null; loading: boolean }>({ src: null, error: null, loading: true })
   // Render-time reset when the target changes (no setState-in-effect).
   const [lastKey, setLastKey] = useState(key)
@@ -103,11 +104,12 @@ export function useDocumentStreamSrc(
   }
 
   useEffect(() => {
+    if (!enabled) return
     let cancelled = false
     mintTicket(documentId)
       .then((ok) => {
         if (cancelled) return
-        if (ok) setState({ src: streamUrl(documentId), error: null, loading: false })
+        if (ok) setState({ src: streamUrl(documentId, { url }), error: null, loading: false })
         else setState({ src: null, error: 'Could not authorize stream', loading: false })
       })
       .catch((e) => {

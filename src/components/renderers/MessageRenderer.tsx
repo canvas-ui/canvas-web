@@ -1,37 +1,31 @@
-import { useEffect, useRef, useState } from 'react'
-import { useDocumentContent, usePublicShareCode } from './public-share'
+import { useDocumentBlobUrl, useDocumentStreamSrc } from './useDocumentBlobUrl'
+import { useState } from 'react'
+import { useDocumentContent } from './public-share'
 import type { RendererProps } from './types'
 
 interface Attachment { type?: string; name?: string; filename?: string; url?: string; mimeType?: string; contentType?: string }
 
 function MessageAttachment({ attachment, workspaceId, document }: RendererProps & { attachment: Attachment }) {
-  const { fetchBlob } = useDocumentContent(workspaceId)
-  const shareCode = usePublicShareCode()
-  const fetchRef = useRef(fetchBlob)
-  useEffect(() => { fetchRef.current = fetchBlob })
-  const [source, setSource] = useState<{ url?: string; error?: string } | null>(null)
-  useEffect(() => {
-    if (!attachment.url) return
-    let active = true
-    let created: string | undefined
-    void fetchRef.current(document.id, { url: attachment.url }).then(({ blob }) => {
-      if (!active) return
-      created = URL.createObjectURL(blob)
-      setSource({ url: created })
-    }).catch(() => { if (active) setSource({ error: 'Attachment could not be loaded.' }) })
-    return () => { active = false; if (created) URL.revokeObjectURL(created) }
-  }, [workspaceId, shareCode, document.id, attachment.url])
+  const { download } = useDocumentContent(workspaceId)
   const mime = attachment.mimeType || attachment.contentType || ''
   const name = attachment.name || attachment.filename || 'Attachment'
+  const media = mime.startsWith('audio/') || mime.startsWith('video/')
+  const { blobUrl, error: blobError, loading: blobLoading } = useDocumentBlobUrl(workspaceId, document.id, { url: attachment.url, typeHint: mime, enabled: !media && !!attachment.url })
+  const { src, error: streamError, loading: streamLoading } = useDocumentStreamSrc(workspaceId, document.id, { url: attachment.url, enabled: media && !!attachment.url })
+  const [playError, setPlayError] = useState(false)
+  const [downloadError, setDownloadError] = useState('')
+  const error = media ? streamError : blobError
+  const loading = media ? streamLoading : blobLoading
   return <div className="space-y-2 rounded border p-2">
-    {source?.error && <p className="text-xs text-destructive">{source.error}</p>}
-    {!source && attachment.url && <p className="text-xs text-muted-foreground">Loading attachment…</p>}
-    {source?.url && <>
-      {mime.startsWith('image/') && <img src={source.url} alt={name} className="max-h-96 max-w-full rounded object-contain" />}
-      {mime.startsWith('audio/') && <audio controls src={source.url} className="w-full" />}
-      {mime.startsWith('video/') && <video controls src={source.url} className="max-h-96 max-w-full rounded" />}
-      <a href={source.url} download={name} className="text-sm text-primary underline">Download {name}</a>
-    </>}
+    {error && <p className="text-xs text-destructive">{error}</p>}
+    {loading && <p className="text-xs text-muted-foreground">Loading attachment…</p>}
+    {!media && blobUrl && mime.startsWith('image/') && <img src={blobUrl} alt={name} className="max-h-96 max-w-full rounded object-contain" />}
+    {media && src && (mime.startsWith('video/')
+      ? <video key={src} controls playsInline preload="metadata" src={src} onError={() => setPlayError(true)} className="max-h-96 w-full rounded" />
+      : <audio key={src} controls preload="metadata" src={src} onError={() => setPlayError(true)} className="w-full" />)}
+    {playError && <p role="alert" className="text-xs text-destructive">This media could not be played in your browser. Download it to play in another app.</p>}
+    {downloadError && <p role="alert" className="text-xs text-destructive">{downloadError}</p>}
+    {attachment.url && <button className="text-sm text-primary underline" onClick={() => { void download(document.id, name, { url: attachment.url }).catch(() => setDownloadError('Attachment could not be downloaded.')) }}>Download {name}</button>}
   </div>
 }
 

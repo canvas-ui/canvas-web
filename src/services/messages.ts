@@ -4,6 +4,7 @@ import { API_ROUTES } from '@/config/api'
 
 export interface MessageAccount { driver: 'imap' | 'slack' | 'whatsapp'; address: string; canSend: boolean; from?: string; allowAgentSend: boolean }
 export interface MessageSend {
+  images?: Array<{ name: string; mimeType: string; base64: string }>
   requestId: string; text: string; driver?: string; address?: string; target?: string;
   replyToDocumentId?: number; replyAll?: boolean; subject?: string; to?: string[]; cc?: string[]; bcc?: string[];
   /** Email only: HTML body; `text` is then its plain-text alternative. */

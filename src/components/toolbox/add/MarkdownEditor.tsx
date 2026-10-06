@@ -145,7 +145,7 @@ export function MarkdownEditor({ value, onChange, placeholder, fill = false, for
       TableKit.configure({ table: { resizable: false } }),
       TaskList,
       TaskItem.configure({ nested: true }),
-      ...(format === 'markdown' ? [Markdown.configure({ html: false, transformPastedText: true })] : []),
+      Markdown.configure({ html: format === 'html', transformPastedText: true }),
     ],
     content: value,
     editorProps: {

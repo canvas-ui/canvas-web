@@ -85,8 +85,9 @@ function buildEmailHtmlBlob(
     const csp = `default-src 'none'; img-src data:${allowRemote ? ' https:' : ''}; style-src 'unsafe-inline'`
     const doc = `<!doctype html><html><head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="${csp}">
-<style>body{margin:12px;font:14px/1.5 system-ui,sans-serif;color:#1a1a1a;background:#fff;word-break:break-word}img{max-width:100%}</style>
+<style>body{margin:12px;font:14px/1.5 system-ui,sans-serif;color:#1a1a1a;background:#fff;word-break:break-word}img{max-width:100%;height:auto}@media(max-width:480px){body{margin:8px}table{max-width:100%!important;width:100%!important}td,th{overflow-wrap:anywhere}}</style>
 </head><body>${clean}</body></html>`
     // charset both in the blob type and as <meta>: without either, the blob
     // document defaults to the locale charset and UTF-8 bodies render mojibake.
@@ -167,17 +168,31 @@ export function EmailRenderer({ workspaceId, document: doc, className = '' }: Re
   return (
     <div className={`flex h-full min-h-0 flex-col gap-3 ${className}`}>
       {/* Header */}
-      <div className="shrink-0 rounded-md border bg-muted/30 p-3 text-sm">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 space-y-1">
-            <div className="text-base font-semibold">{String(data.subject ?? '(no subject)')}</div>
+      <div className="shrink-0 rounded-md border bg-muted/30 p-2 text-sm sm:p-3">
+        <div className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:gap-3">
+          <div className="min-w-0 w-full space-y-1">
+            <div className="truncate text-base font-semibold">{String(data.subject ?? '(no subject)')}</div>
+            <details className="sm:hidden">
+              <summary className="cursor-pointer text-xs">
+                <span className="inline-block max-w-[85%] truncate align-bottom">{typeof data.from === 'object' && data.from ? (data.from as EmailParty).name || (data.from as EmailParty).address : String(data.from || 'Unknown sender')}</span>
+                <span className="ml-2 text-muted-foreground">Details</span>
+              </summary>
+              <div className="mt-2 space-y-1 break-words text-xs">
             <div><span className="text-muted-foreground">From:</span> {partyLabel(data.from as string | EmailParty)}</div>
             {partiesLabel(data.to) && <div><span className="text-muted-foreground">To:</span> {partiesLabel(data.to)}</div>}
             {partiesLabel(data.cc) && <div><span className="text-muted-foreground">Cc:</span> {partiesLabel(data.cc)}</div>}
             {date && <div className="text-xs text-muted-foreground">{date}</div>}
+              </div>
+            </details>
+            <div className="hidden space-y-1 break-words sm:block">
+            <div><span className="text-muted-foreground">From:</span> {partyLabel(data.from as string | EmailParty)}</div>
+            {partiesLabel(data.to) && <div><span className="text-muted-foreground">To:</span> {partiesLabel(data.to)}</div>}
+            {partiesLabel(data.cc) && <div><span className="text-muted-foreground">Cc:</span> {partiesLabel(data.cc)}</div>}
+            {date && <div className="text-xs text-muted-foreground">{date}</div>}
+            </div>
           </div>
           {bodyHtml && (
-            <div className="flex shrink-0 flex-wrap justify-end gap-2">
+            <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
               <Button size="sm" variant="outline" onClick={() => setShowPlain(!showPlain)}>
                 {showPlain ? <Code className="mr-1.5 h-3.5 w-3.5" /> : <FileText className="mr-1.5 h-3.5 w-3.5" />}
                 {showPlain ? 'HTML' : 'Plain text'}

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { whatsappMarkdown } from '@/lib/whatsapp-markdown'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { LazyMarkdownEditor } from '@/components/common/lazy-editor'
@@ -54,6 +55,8 @@ export function MessageComposer({ workspaceId, replyToDocumentId, mode = 'reply'
     window.addEventListener('online', update); window.addEventListener('offline', update)
     return () => { window.removeEventListener('online', update); window.removeEventListener('offline', update) }
   }, [])
+  const readingPictures = useRef(false)
+  const [picturesBusy, setPicturesBusy] = useState(false)
   const [busy, setBusy] = useState(false)
   const [attempted, setAttempted] = useState(() => { try { return JSON.parse(localStorage.getItem(key) || '{}').attempted === true } catch { return false } })
   const [error, setError] = useState('')
@@ -81,6 +84,8 @@ export function MessageComposer({ workspaceId, replyToDocumentId, mode = 'reply'
   useEffect(() => { try { if (receipt?.status === 'accepted') localStorage.removeItem(key); else localStorage.setItem(key, JSON.stringify({ draft, attempted })) } catch { /* keep the in-memory draft */ } }, [key, draft, attempted, receipt])
   const account = accounts.find((a) => a.driver === draft.driver && a.address === draft.address)
   const isEmail = account?.driver === 'imap'
+  const isWhatsApp = account?.driver === 'whatsapp'
+  const hasPictures = !!draft.images?.length
   const hasText = !!draft.text.trim()
   const patch = (next: Partial<MessageSend>) => setDraft((d) => ({ ...d, ...next }))
   const send = async () => {
@@ -89,7 +94,7 @@ export function MessageComposer({ workspaceId, replyToDocumentId, mode = 'reply'
     // email-only options (undefined drops out of the JSON).
     const body: MessageSend = isEmail
       ? (hasText ? draft : { ...draft, html: undefined })
-      : { ...draft, html: undefined, quote: undefined, forward: undefined }
+      : { ...draft, text: isWhatsApp ? whatsappMarkdown(draft.text) : draft.text, html: undefined, quote: undefined, forward: undefined }
     try {
       const result = attempted
         ? await messageSendStatus(workspaceId, draft.requestId).catch((e) => {
@@ -108,18 +113,41 @@ export function MessageComposer({ workspaceId, replyToDocumentId, mode = 'reply'
       if (!attempted && failure.statusCode && failure.statusCode >= 400 && failure.statusCode < 500 && failure.statusCode !== 409) setAttempted(false)
     } finally { setBusy(false) }
   }
+  const addPictures = async (files: File[]) => {
+    if (locked || readingPictures.current) return
+    const pictures = files.filter((file) => ['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type))
+    if (!pictures.length) return
+    if ((draft.images?.length || 0) + pictures.length > (isWhatsApp ? 1 : 8)) { setError(isWhatsApp ? 'One picture per WhatsApp reply.' : 'Up to 8 pictures per email.'); return }
+    const existingBytes = (draft.images || []).reduce((total, image) => total + image.base64.length * 3 / 4, 0)
+    if (existingBytes + pictures.reduce((total, file) => total + file.size, 0) > 8 * 1024 * 1024) { setError('Pictures must total at most 8 MB.'); return }
+    readingPictures.current = true; setPicturesBusy(true)
+    try {
+      const images = await Promise.all(pictures.map((file) => new Promise<{ name: string; mimeType: string; base64: string }>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onerror = () => reject(new Error('Could not read picture'))
+        reader.onload = () => resolve({ name: file.name, mimeType: file.type, base64: String(reader.result).split(',')[1] })
+        reader.readAsDataURL(file)
+      })))
+      setDraft((previous) => ({ ...previous, images: [...(previous.images || []), ...images] }))
+      setError('')
+    } catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not read picture') } finally { readingPictures.current = false; setPicturesBusy(false) }
+  }
   const replyRecipients = draft.replyAll ? replyTarget?.allRecipients : replyTarget?.recipients
-  const locked = busy || attempted
+  const locked = busy || attempted || picturesBusy
   const title = testEmail ? 'Send test email' : replyToDocumentId ? (forward ? TITLES.forward : TITLES[draft.replyAll ? 'replyAll' : 'reply']) : 'New message'
   const subjectPlaceholder = replyToDocumentId && originalSubject
     ? `${forward ? 'Fwd' : 'Re'}: ${originalSubject.replace(forward ? /^(fwd?|fw):\s*/i : /^re:\s*/i, '')}`
     : ''
-  return <section className="max-h-[70dvh] overflow-y-auto rounded-md border bg-card p-3 space-y-3" aria-label={replyToDocumentId ? `${title} to message` : 'New message'}>
+  return <section onPasteCapture={(event) => {
+    if (!(isEmail || isWhatsApp)) return
+    const files = Array.from(event.clipboardData.files)
+    if (files.some((file) => file.type.startsWith('image/'))) { event.preventDefault(); event.stopPropagation(); void addPictures(files) }
+  }} className="max-h-[70dvh] overflow-y-auto rounded-md border bg-card p-3 space-y-3" aria-label={replyToDocumentId ? `${title} to message` : 'New message'}>
     <div className="flex justify-between items-center"><strong className="text-sm">{title}</strong><Button size="sm" variant="ghost" onClick={onClose}>Close</Button></div>
     <label className="block text-xs">Send from
       <select aria-label="Sending account" className="w-full rounded border bg-background p-2" value={account ? `${account.driver}:${account.address}` : ''} disabled={locked || !!replyToDocumentId || !!initialAccount} onChange={(e) => {
         const a = accounts.find((a) => `${a.driver}:${a.address}` === e.target.value)
-        if (a) patch({ driver: a.driver, address: a.address, to: [], cc: [], bcc: [], subject: undefined, target: undefined, replyAll: false })
+        if (a) patch({ driver: a.driver, address: a.address, to: [], cc: [], bcc: [], subject: undefined, target: undefined, images: undefined, replyAll: false })
       }}><option value="">Select an enabled sending account</option>{accounts.map((a) => <option key={`${a.driver}:${a.address}`} value={`${a.driver}:${a.address}`}>{a.driver} · {a.from || a.address}</option>)}</select>
     </label>
     {testEmail && <p className="text-xs text-muted-foreground">Uses the saved SMTP settings. Enter a recipient you control, then click Send. This sends a real email; provider acceptance does not guarantee inbox delivery.</p>}
@@ -142,11 +170,16 @@ export function MessageComposer({ workspaceId, replyToDocumentId, mode = 'reply'
         onChange={(html, text) => patch({ html, text: text.slice(0, 32000) })} />
     </> : <>
       {!replyToDocumentId && <label className="block text-xs">Conversation (configured channel name or ID)<Input aria-label="Conversation" disabled={locked} value={draft.target || ''} onChange={(e) => patch({ target: e.target.value })} /></label>}
-      <textarea aria-label="Message text" className="w-full rounded border bg-background p-2 text-sm" rows={5} maxLength={32000} disabled={locked} value={draft.text} onChange={(e) => patch({ text: e.target.value })} placeholder="Write a message…" />
+      {isWhatsApp ? <LazyMarkdownEditor format="markdown" editable={!locked} value={draft.text} placeholder="Write a message…" onChange={(text) => patch({ text: text.slice(0, 32000) })} /> : <textarea aria-label="Message text" className="w-full rounded border bg-background p-2 text-sm" rows={5} maxLength={32000} disabled={locked} value={draft.text} onChange={(e) => patch({ text: e.target.value })} placeholder="Write a message…" />}
     </>}
+    {(isEmail || isWhatsApp) && <div className="space-y-2">
+      <label className="block text-xs">Paste a picture into the reply, or attach one<input aria-label="Attach pictures" className="block" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple={!isWhatsApp} disabled={locked} onChange={(event) => { void addPictures(Array.from(event.target.files || [])); event.target.value = '' }} /></label>
+      {draft.images?.map((image, index) => <div key={index} className="flex items-center gap-2"><img className="h-20 w-20 rounded object-contain" src={`data:${image.mimeType};base64,${image.base64}`} alt={image.name} /><span className="text-xs">{image.name}</span><Button size="sm" variant="ghost" disabled={locked} onClick={() => patch({ images: draft.images?.filter((_, position) => position !== index) })}>Remove picture</Button></div>)}
+      {isWhatsApp && <p className="text-xs text-muted-foreground">Bold, italic, strikethrough and code are supported. Your reply becomes the picture caption.</p>}
+    </div>}
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {receipt && <p role="status" className="text-sm">{receipt.status === 'accepted' ? 'Accepted by the provider.' : receipt.message} {receipt.warnings?.join(' ')} {receipt.rejected?.length ? `Not accepted for: ${receipt.rejected.join(', ')}` : ''}</p>}
-    {receipt?.status !== 'accepted' && <Button size="sm" disabled={busy || (!attempted && (!account || (!hasText && !(isEmail && forward)) || (forward && !draft.to?.some((s) => s.trim())))) || !online} onClick={() => void send()}>{busy ? 'Sending…' : attempted ? 'Check send status' : 'Send'}</Button>}
+    {receipt?.status !== 'accepted' && <Button size="sm" disabled={busy || picturesBusy || (!attempted && (!account || (!hasText && !hasPictures && !(isEmail && forward)) || (forward && !draft.to?.some((s) => s.trim())))) || !online} onClick={() => void send()}>{busy ? 'Sending…' : attempted ? 'Check send status' : 'Send'}</Button>}
     <Button size="sm" variant="ghost" disabled={busy} onClick={() => {
       if (!window.confirm(attempted ? 'This message may already have been sent. Discard this draft only after checking the conversation.' : 'Discard this draft?')) return
       setDraft({ ...fresh(), driver: draft.driver, address: draft.address }); setAttempted(false); setReceipt(null); setError('')
