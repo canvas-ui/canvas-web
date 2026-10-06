@@ -22,6 +22,7 @@ import { documentBodyKind, isTextBackedFile, textFileTooLarge, MAX_EDITABLE_TEXT
 import { useDocumentBlobUrl } from '@/components/renderers/useDocumentBlobUrl'
 import { saveTextFileContent } from '@/services/text-documents'
 import { useMirrorSaveState } from '@/lib/remote-mirror'
+import { announceRelationsChanged } from '@/lib/relation-events'
 
 // Per-schema field mapping for the url/title pair. Legacy links store these as
 // uri/label; tabs use url/title. Notes have no url.
@@ -201,7 +202,10 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
       // the rest of the object survive. null un-indexes it from the geo index.
       if (geoChanged) payload.metadata = { ...(payload.metadata ?? {}), geo }
       await updateWorkspaceDocument(workspaceId, payload)
-      if (isIdentity) await syncOrganizationEdges(workspaceId, doc.id, identity.values.organizations)
+      if (isIdentity) {
+        await syncOrganizationEdges(workspaceId, doc.id, identity.values.organizations)
+        announceRelationsChanged()
+      }
       showSuccessToast('Document updated')
       window.dispatchEvent(new CustomEvent('workspace:documents:refresh'))
       onClose()

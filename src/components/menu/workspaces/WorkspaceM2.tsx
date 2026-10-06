@@ -23,6 +23,7 @@ import { listHooks, runHook, findBackendTreeSyncHook, splitBackendsPath, default
 import { useToast } from '@/components/ui/use-toast'
 import type { TreeNode } from '@/types/workspace'
 import socketService from '@/lib/socket'
+import { watchWorkspaceTreeChanges, type TreeRefreshDetail } from '@/services/workspace-tree-events'
 
 type TreeTab = 'pins' | 'context' | 'layers' | 'directory' | 'backends'
 type TreeDataTab = 'context' | 'directory' | 'backends'
@@ -66,7 +67,7 @@ const tabForTree = (treeName: string, layerId?: string | null): TreeTab =>
 export function WorkspaceM2() {
   const { state } = useMenu()
   if (!state.selectedEntityId) return null
-  return <WorkspaceContentGate workspaceName={state.selectedEntityId}><WorkspaceM2Content /></WorkspaceContentGate>
+  return <WorkspaceContentGate workspaceName={state.selectedEntityId}><WorkspaceM2Content key={state.selectedEntityId} /></WorkspaceContentGate>
 }
 
 function WorkspaceM2Content() {
@@ -177,41 +178,54 @@ function WorkspaceM2Content() {
     setSelectedPath(urlPath)
   }
 
-  const loadTree = useCallback(async (name: string, tab: TreeDataTab, force = false) => {
+  const loadRequests = useRef(new Map<string, symbol>())
+  const loadTree = useCallback(async (name: string, tab: TreeDataTab, force = false, cacheInvalidated = false) => {
+    const request = Symbol()
+    loadRequests.current.set(tab, request)
+    const current = () => loadRequests.current.get(tab) === request
     const setLoading = tab === 'context' ? setIsLoadingContext : tab === 'directory' ? setIsLoadingDirectory : setIsLoadingBackends
     const setData = tab === 'context' ? setContextTree : tab === 'directory' ? setDirectoryTree : setBackendsTree
-    setLoading(true)
+    // Keep branches mounted while updating: replacing them with a loading
+    // message also discards expansion, inline editing and scroll state.
+    if (!force) setLoading(true)
     try {
-      if (force) invalidateWorkspaceTreeCache(name, tab)
-      const res = await getCachedWorkspaceTreeByName(name, tab, { force })
-      setData(res)
+      if (force && !cacheInvalidated) invalidateWorkspaceTreeCache(name, tab)
+      const res = await getCachedWorkspaceTreeByName(name, tab)
+      if (current()) setData(res)
     } catch {
       // tree unavailable
     } finally {
-      setLoading(false)
+      if (current()) setLoading(false)
     }
   }, [])
 
-  const loadPins = useCallback(async (name: string) => {
-    setIsLoadingPins(true)
+  const loadPins = useCallback(async (name: string, silent = false) => {
+    const request = Symbol()
+    loadRequests.current.set('pins', request)
+    const current = () => loadRequests.current.get('pins') === request
+    if (!silent) setIsLoadingPins(true)
     try {
-      setPins(await listWorkspacePins(name))
+      const data = await listWorkspacePins(name)
+      if (current()) setPins(data)
     } catch {
       // pins unavailable (older server) — the tab just stays empty
     } finally {
-      setIsLoadingPins(false)
+      if (current()) setIsLoadingPins(false)
     }
   }, [])
 
-  const loadLayers = useCallback(async (name: string) => {
-    setIsLoadingLayers(true)
+  const loadLayers = useCallback(async (name: string, silent = false) => {
+    const request = Symbol()
+    loadRequests.current.set('layers', request)
+    const current = () => loadRequests.current.get('layers') === request
+    if (!silent) setIsLoadingLayers(true)
     try {
       const data = await listWorkspaceLayers(name, 'context')
-      setLayers(data)
+      if (current()) setLayers(data)
     } catch {
-      setLayers([])
+      // Keep the last successful list on a transient refresh failure.
     } finally {
-      setIsLoadingLayers(false)
+      if (current()) setIsLoadingLayers(false)
     }
   }, [])
 
@@ -219,64 +233,41 @@ function WorkspaceM2Content() {
     if (!wsName) return
     const name = wsName
     let cancelled = false
+    const requests = loadRequests.current
 
     async function loadAll() {
-      setIsLoadingContext(true)
-      setIsLoadingDirectory(true)
-      setIsLoadingBackends(true)
-      setIsLoadingLayers(true)
-      try {
-        const [ctxRes, dirRes, beRes] = await Promise.allSettled([
-          getCachedWorkspaceTreeByName(name, 'context'),
-          getCachedWorkspaceTreeByName(name, 'directory'),
-          getCachedWorkspaceTreeByName(name, 'backends'),
-        ])
-        // Fetch workspace details for label (non-blocking)
-        getWorkspace(name).then(ws => { if (!cancelled) { setWsLabel(ws.label || null); setWsId(ws.id || null); setWsStyle({ icon: ws.icon ?? null, color: ws.color ?? null }) } }).catch(() => {})
-        if (cancelled) return
-        if (ctxRes.status === 'fulfilled') setContextTree(ctxRes.value)
-        if (dirRes.status === 'fulfilled') setDirectoryTree(dirRes.value)
-        if (beRes.status === 'fulfilled') setBackendsTree(beRes.value)
-        loadPins(name)
-      } finally {
-        if (!cancelled) {
-          setIsLoadingContext(false)
-          setIsLoadingDirectory(false)
-          setIsLoadingBackends(false)
-        }
-      }
-      try {
-        const layerData = await listWorkspaceLayers(name, 'context')
-        if (!cancelled) setLayers(layerData)
-      } catch {
-        // non-fatal
-      } finally {
-        if (!cancelled) setIsLoadingLayers(false)
-      }
+      // Fetch workspace details for label (non-blocking).
+      getWorkspace(name).then(ws => { if (!cancelled) { setWsLabel(ws.label || null); setWsId(ws.id || null); setWsStyle({ icon: ws.icon ?? null, color: ws.color ?? null }) } }).catch(() => {})
+      await Promise.all([
+        loadTree(name, 'context'), loadTree(name, 'directory'), loadTree(name, 'backends'),
+        loadLayers(name), loadPins(name),
+      ])
     }
 
     loadAll()
-    return () => { cancelled = true }
-  }, [wsName, loadPins])
+    return () => { cancelled = true; requests.clear() }
+  }, [wsName, loadTree, loadLayers, loadPins])
 
-  const refreshAll = useCallback((name: string) => {
-    loadTree(name, 'context', true)
-    loadTree(name, 'directory', true)
-    loadTree(name, 'backends', true)
-    loadLayers(name)
+  const refreshAll = useCallback((name: string, treeName?: string, cacheInvalidated = false) => {
+    const trees: TreeDataTab[] = ['context', 'directory', 'backends']
+    for (const tab of trees) {
+      if (!treeName || treeName === tab) void loadTree(name, tab, true, cacheInvalidated)
+    }
+    if (!treeName || treeName === 'context') void loadLayers(name, true)
     // Pins resolve label/color/icon from the live tree — re-read with it.
-    loadPins(name)
+    loadPins(name, true)
   }, [loadTree, loadLayers, loadPins])
 
   const handleRefresh = useCallback(() => {
     if (wsName) refreshAll(wsName)
   }, [wsName, refreshAll])
 
-  // Refresh tree when a canvas is created from the detail page
+  // Local edits and scoped socket updates share this notification.
   useEffect(() => {
     if (!wsName) return
-    const handler = (e: CustomEvent) => {
-      if (e.detail?.workspaceName === wsName) refreshAll(wsName)
+    const handler = (e: CustomEvent<TreeRefreshDetail>) => {
+      if (e.detail?.workspaceName && e.detail.workspaceName !== wsName) return
+      refreshAll(wsName, e.detail?.treeName, e.detail?.cacheInvalidated)
     }
     window.addEventListener('workspace:tree:refresh', handler as EventListener)
     return () => window.removeEventListener('workspace:tree:refresh', handler as EventListener)
@@ -295,10 +286,7 @@ function WorkspaceM2Content() {
     return () => { cancelled = true }
   }, [wsName])
 
-  // Subscribe to the workspace channel and refresh trees on relevant DB events:
-  //  • context.path.changed — lock/unlock state shifts
-  //  • tree.path.* / tree.layer.updated — folders created/moved/removed by any
-  //    client (CLI, agents, browser extension)
+  // Subscribe to structural updates, sharing a listener with the detail page.
   // Subscribe by BOTH name and id: synapsd tree events carry only workspaceId,
   // so a name-only subscription would never receive them.
   useEffect(() => {
@@ -308,22 +296,9 @@ function WorkspaceM2Content() {
     const offConnect = socketService.on('connect', subscribe)
     subscribe()
 
-    let timer: ReturnType<typeof setTimeout> | null = null
-    const refreshSoon = () => {
-      if (timer) clearTimeout(timer)
-      timer = setTimeout(() => refreshAll(wsName), 200)
-    }
-    const events = [
-      'context.path.changed',
-      'backend.tree.changed', 'dataBackends.changed', 'services.changed',
-      'tree.path.inserted', 'tree.path.moved', 'tree.path.removed', 'tree.path.copied',
-      'tree.layer.updated', 'tree.layer.merged', 'tree.layer.subtracted',
-      'tree.recalculated', 'tree.created', 'tree.deleted', 'tree.renamed',
-    ]
-    events.forEach(ev => socketService.on(ev, refreshSoon))
+    const stopTreeEvents = watchWorkspaceTreeChanges(wsName, wsId)
 
-    // Live resync badge: toggle the spinner on the backend's mirror node; when
-    // a scan finishes, refresh the trees once so final counts/paths settle.
+    // Resync only changes the badge. Any new folders announce themselves.
     const onResync = (payload: { workspaceId?: string; treePath?: string | null; resyncing?: boolean }) => {
       if (payload?.workspaceId && wsId && payload.workspaceId !== wsId) return
       const treePath = payload?.treePath
@@ -333,7 +308,6 @@ function WorkspaceM2Content() {
         if (payload.resyncing) next.add(treePath); else next.delete(treePath)
         return next
       })
-      if (!payload.resyncing) refreshSoon()
     }
     socketService.on('backend.resync.changed', onResync)
 
@@ -341,19 +315,18 @@ function WorkspaceM2Content() {
     // list moves, the trees are untouched.
     const onPins = (payload: { workspaceId?: string }) => {
       if (payload?.workspaceId && wsId && payload.workspaceId !== wsId) return
-      loadPins(wsName)
+      loadPins(wsName, true)
     }
     socketService.on('pins.changed', onPins)
 
     return () => {
-      if (timer) clearTimeout(timer)
-      channels.forEach(ch => socketService.emit('unsubscribe', { channel: ch }))
+      stopTreeEvents()
+      // The page may still use these channels; subscriptions are shared.
       offConnect?.()
-      events.forEach(ev => socketService.off(ev, refreshSoon))
       socketService.off('backend.resync.changed', onResync)
       socketService.off('pins.changed', onPins)
     }
-  }, [wsName, wsId, refreshAll, loadPins])
+  }, [wsName, wsId, loadPins])
 
   // Sync active tab and selected path when URL pathname changes externally.
   // Runs during render (prev-value-in-state) — initialised to null so the

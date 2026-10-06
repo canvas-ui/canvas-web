@@ -542,11 +542,13 @@ export async function getCachedWorkspaceTreeByName(
       // directory tree, and a user folder called `.trash` deeper in the tree is
       // theirs to see.
       const pruned = withoutTrashNode(response) as TreeNode
-      workspaceTreeCache.set(key, pruned)
+      // An event can invalidate this request while it is downloading. Its
+      // response must not overwrite a newer tree or clear that tree's request.
+      if (workspaceTreeInflight.get(key) === request) workspaceTreeCache.set(key, pruned)
       return pruned
     })
     .finally(() => {
-      workspaceTreeInflight.delete(key)
+      if (workspaceTreeInflight.get(key) === request) workspaceTreeInflight.delete(key)
     })
 
   workspaceTreeInflight.set(key, request)
@@ -1262,6 +1264,7 @@ export interface DocumentRelation {
   // The far side, resolved server-side. null when the target document is gone
   // (edges to missing documents are legal) or beyond the resolve cap.
   document?: CanvasDocument | null
+  preview?: boolean
 }
 
 export interface DocumentRelations {
@@ -1270,6 +1273,8 @@ export interface DocumentRelations {
   predicates: string[]
   outgoing: DocumentRelation[]
   incoming: DocumentRelation[]
+  outgoingCount?: number
+  incomingCount?: number
 }
 
 /**
@@ -1291,9 +1296,14 @@ export async function getRelationPredicates(workspaceId: string): Promise<string
 export async function getDocumentRelations(
   workspaceId: string,
   documentId: number | string,
-  options: { resolve?: boolean } = {}
+  options: { resolve?: boolean; offset?: number; limit?: number; summary?: boolean } = {}
 ): Promise<DocumentRelations> {
-  const qs = options.resolve === false ? '?resolve=false' : ''
+  const params = new URLSearchParams()
+  if (options.resolve === false) params.set('resolve', 'false')
+  if (options.offset !== undefined) params.set('offset', String(options.offset))
+  if (options.limit !== undefined) params.set('limit', String(options.limit))
+  if (options.summary) params.set('summary', 'true')
+  const qs = params.size ? `?${params}` : ''
   const response = await api.get<DocumentRelations>(
     `${API_ROUTES.workspaces}/${workspaceId}/documents/${documentId}/relations${qs}`
   )

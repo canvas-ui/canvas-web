@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Plus, Trash2, ArrowRight, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DocumentIcon } from '@/components/common/DocumentIcon'
@@ -11,6 +11,7 @@ import { useSideView } from '@/components/shell/use-side-view'
 import { useCanvasRow } from '@/components/shell/strip/use-canvas-row'
 import {
   getDocumentRelations,
+  getWorkspaceDocument,
   createDocumentRelations,
   removeDocumentRelation,
   type DocumentRelation,
@@ -18,6 +19,8 @@ import {
 } from '@/services/workspace'
 import { RELATIONS_CHANGED, announceRelationsChanged } from '@/lib/relation-events'
 import type { Document } from '@/types/workspace'
+
+const PAGE_SIZE = 50
 
 // One edge row: the far-side document (clickable — opens it in the shared
 // details modal, which is how "query related documents" actually feels) plus a
@@ -36,6 +39,19 @@ function RelationRow({
   const canvasRow = useCanvasRow()
   const otherId = direction === 'out' ? relation.to : relation.from
   const doc = relation.document ?? null
+  const [opening, setOpening] = useState(false)
+  const { showErrorToast } = useToastHelpers()
+  const openDocument = async () => {
+    if (otherId == null || !doc) return
+    setOpening(true)
+    try {
+      const full = relation.preview ? await getWorkspaceDocument(workspaceId, otherId) : doc
+      if (canvasRow) sideView.open(full as Document, workspaceId)
+      else open(full as Document, workspaceId)
+    } catch (error) {
+      showErrorToast(error instanceof Error ? error.message : 'Failed to open document')
+    } finally { setOpening(false) }
+  }
   // Absence of a meta row IS the asserted-edge convention (synapsd synthesizes
   // src:'doc'), so anything else came from an extractor or an agent. Those are
   // not the user's to delete — re-running their producer owns them.
@@ -50,7 +66,8 @@ function RelationRow({
       {doc ? (
         <button
           type="button"
-          onClick={() => (canvasRow ? sideView.open(doc as Document, workspaceId) : open(doc as Document, workspaceId))}
+          onClick={() => void openDocument()}
+          disabled={opening}
           className="min-w-0 flex-1 truncate text-left hover:underline"
           title={`Open document ${otherId}`}
         >
@@ -96,16 +113,26 @@ export function DocumentRelationsSection({ document, workspaceId }: { document: 
   const [picking, setPicking] = useState(false)
   const [saving, setSaving] = useState(false)
   const [removingKey, setRemovingKey] = useState<string | null>(null)
+  const [page, setPage] = useState(0)
+  const [pageCount, setPageCount] = useState(1)
+  const requestSeq = useRef(0)
+  const invalidatePending = useCallback(() => { requestSeq.current++ }, [])
 
   const load = useCallback(async () => {
+    const seq = ++requestSeq.current
     try {
-      const next = await getDocumentRelations(workspaceId, document.id)
+      const next = await getDocumentRelations(workspaceId, document.id, { offset: page * PAGE_SIZE, limit: PAGE_SIZE, summary: true })
+      if (seq !== requestSeq.current) return
+      const lastPage = Math.max(0, Math.ceil(Math.max(next.outgoingCount ?? next.outgoing.length, next.incomingCount ?? next.incoming.length) / PAGE_SIZE) - 1)
+      setPageCount(lastPage + 1)
+      if (page > lastPage) { setPage(lastPage); return }
       setRelations(next)
       setError(null)
     } catch (e) {
+      if (seq !== requestSeq.current) return
       setError(e instanceof Error ? e.message : String(e))
     }
-  }, [workspaceId, document.id])
+  }, [workspaceId, document.id, page])
 
   // Render-time reset when the host swaps documents, so the previous
   // document's edges never flash under the new one's header.
@@ -115,6 +142,8 @@ export function DocumentRelationsSection({ document, workspaceId }: { document: 
     setLastKey(fetchKey)
     setRelations(null)
     setError(null)
+    setPage(0)
+    setPageCount(1)
   }
 
   useEffect(() => {
@@ -123,8 +152,11 @@ export function DocumentRelationsSection({ document, workspaceId }: { document: 
     async function loadRelations() { await load() }
     loadRelations()
     window.addEventListener(RELATIONS_CHANGED, loadRelations)
-    return () => window.removeEventListener(RELATIONS_CHANGED, loadRelations)
-  }, [load])
+    return () => {
+      invalidatePending()
+      window.removeEventListener(RELATIONS_CHANGED, loadRelations)
+    }
+  }, [load, invalidatePending])
 
   const remove = async (relation: DocumentRelation, direction: 'in' | 'out') => {
     const otherId = direction === 'out' ? relation.to : relation.from
@@ -146,6 +178,7 @@ export function DocumentRelationsSection({ document, workspaceId }: { document: 
     { dir: 'out', title: 'Points at', hint: 'this document as the subject', entries: relations?.outgoing ?? [] },
     { dir: 'in', title: 'Pointed at by', hint: 'this document as the object', entries: relations?.incoming ?? [] },
   ]
+  const changePage = (next: number) => { setRelations(null); setPage(next) }
 
   return (
     <div>
@@ -190,6 +223,14 @@ export function DocumentRelationsSection({ document, workspaceId }: { document: 
               ))}
             </div>
           )}
+
+      {(pageCount > 1 || page > 0) && (
+        <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <Button variant="outline" size="sm" disabled={page === 0} onClick={() => changePage(page - 1)}>Previous</Button>
+          <span>Page {page + 1} of {pageCount}</span>
+          <Button variant="outline" size="sm" disabled={!relations || page + 1 >= pageCount} onClick={() => changePage(page + 1)}>Next</Button>
+        </div>
+      )}
 
       {/* Same right-edge geometry as every other "Link to…" — z-picker (60)
           puts it above the object card's own modal (z-dialog, 50). */}

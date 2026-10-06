@@ -64,6 +64,7 @@ import { useQueryDebug, type QueryDebugData } from '@/lib/query-debug';
 import { QueryDebugPanel } from '@/components/common/query-debug-panel';
 import { cn } from '@/lib/utils';
 import socketService from '@/lib/socket';
+import { watchWorkspaceTreeChanges, type TreeRefreshDetail } from '@/services/workspace-tree-events';
 
 // File-manager folders for the content view of a directory tree: the node's
 // children (already client-side in the tree JSON) plus a ".." parent entry.
@@ -578,29 +579,45 @@ function WorkspaceContent() {
   // current one and clobber the list with unrelated documents. Only the latest
   // fetch is allowed to write state.
   const fetchSeqRef = useRef(0);
+  const documentFetchRef = useRef<{ key: string; refreshPending: boolean } | null>(null);
+  useEffect(() => () => {
+    fetchSeqRef.current++;
+    documentFetchRef.current = null;
+  }, []);
   // Everything that identifies the fetch EXCEPT the live lens id-set. When two
   // consecutive fetches share this identity, the trigger was a lens tick.
   const fetchIdentityRef = useRef('');
-  const fetchDocuments = useCallback(async (opts?: { silent?: boolean }) => {
+  const fetchDocuments = useCallback(async (opts?: { silent?: boolean }): Promise<void> => {
     if (!workspaceName) return;
     // While a session drives the list, a refetch would be both redundant and
     // wrong: it re-fetches every document to answer a question the deltas
     // already answered incrementally.
     if (sessionActiveRef.current) return;
-    const seq = ++fetchSeqRef.current;
     const effectiveScope = unfiledOnly && backendTarget ? `${docScope}:unfiled` : docScope;
     const lensActive = (tbLensIds?.length ?? 0) > 0;
     const identity = documentKey(workspaceName, selectedTreeName, selectedPath, currentPage, pageSize, serverSearchQueries.join('␟'), tbFiltersKeyNoLens, (isLayerView && selectedLayerId) ? selectedLayerId : '', effectiveScope);
     const lensTickOnly = lensActive && identity === fetchIdentityRef.current;
     fetchIdentityRef.current = identity;
     const cacheKey = documentKey(workspaceName, selectedTreeName, selectedPath, currentPage, pageSize, serverSearchQueries.join('␟'), tbFiltersKey, (isLayerView && selectedLayerId) ? selectedLayerId : '', effectiveScope);
+    const requestKey = `${cacheKey}\0${queryDebug}`;
+    // During sync a refresh can arrive faster than the response downloads.
+    // Superseding that request on every tick prevents ANY response from painting.
+    // Let it finish, then reconcile once with the changes received meanwhile.
+    if (opts?.silent && documentFetchRef.current?.key === requestKey) {
+      documentFetchRef.current.refreshPending = true;
+      return;
+    }
+    const seq = ++fetchSeqRef.current;
     // Live-feed ticks bypass the cache: every frame is a fresh id-set, so
     // caching would balloon the map with single-use entries.
     // Debug reads bypass the cache too: a cache hit skips the request entirely,
     // so the distances would never arrive and the panel would stay empty right
     // after switching the toggle on.
-    const cached = (lensActive || queryDebug) ? undefined : documentCache.get(cacheKey);
+    // A refresh must hit the server even if an older in-flight response has
+    // repopulated the cache since the event invalidated it.
+    const cached = (opts?.silent || lensActive || queryDebug) ? undefined : documentCache.get(cacheKey);
     if (cached) {
+      documentFetchRef.current = null;
       setDocuments(cached.documents);
       setDocumentsTotalCount(cached.totalCount);
       setIsLoadingDocuments(false);
@@ -611,6 +628,8 @@ function WorkspaceContent() {
     // the previous results rendered — no blink.
     const silent = opts?.silent ?? lensTickOnly;
     if (!silent) setIsLoadingDocuments(true);
+    const activeFetch = { key: requestKey, refreshPending: false };
+    documentFetchRef.current = activeFetch;
     try {
       let response;
       if (unfiledOnly && backendTarget) {
@@ -663,7 +682,7 @@ function WorkspaceContent() {
       const nextTotalCount = response.totalCount || response.count || 0;
       // Cache is keyed by the exact query/scope, so store regardless of order —
       // but only the latest fetch may paint the live list.
-      if (!lensActive) documentCache.set(cacheKey, { documents: nextDocuments, totalCount: nextTotalCount });
+      if (!lensActive && !activeFetch.refreshPending) documentCache.set(cacheKey, { documents: nextDocuments, totalCount: nextTotalCount });
       if (seq !== fetchSeqRef.current) return;
       // Calibration data rides beside the payload; it is absent unless the
       // toggle is on AND the search had a text query.
@@ -692,9 +711,11 @@ function WorkspaceContent() {
       setDocuments([]);
       setDocumentsTotalCount(0);
     } finally {
-      // A silent refresh may supersede the initial foreground load. The
-      // latest request owns completion even when it did not show the spinner.
+      if (documentFetchRef.current === activeFetch) documentFetchRef.current = null;
       if (seq === fetchSeqRef.current) setIsLoadingDocuments(false);
+      if (seq === fetchSeqRef.current && activeFetch.refreshPending) {
+        void fetchDocuments({ silent: true });
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceName, selectedPath, selectedTreeName, selectedLayerId, isLayerView, currentPage, pageSize, workspace?.status, serverSearchQueries, tbFiltersKey, docScope, unfiledOnly, queryDebug]);
@@ -943,50 +964,34 @@ function WorkspaceContent() {
     let cancelled = false;
     if (!workspaceName) return;
 
+    let requestSeq = 0;
+    let hasTree = false;
     const loadTree = (force = false) => {
+      const seq = ++requestSeq;
       if (force) invalidateWorkspaceTreeCache(workspaceName, selectedTreeName);
-      getCachedWorkspaceTreeByName(workspaceName, selectedTreeName, { force })
-        .then(res => { if (!cancelled) { loadedTreeKeyRef.current = `${workspaceName}/${selectedTreeName}`; setTree(res); } })
-        .catch(() => { if (!cancelled) setTree(null); });
+      getCachedWorkspaceTreeByName(workspaceName, selectedTreeName)
+        .then(res => { if (!cancelled && seq === requestSeq) { hasTree = true; loadedTreeKeyRef.current = `${workspaceName}/${selectedTreeName}`; setTree(res); } })
+        .catch(() => { if (!cancelled && seq === requestSeq && !hasTree) setTree(null); });
     };
 
     loadTree(false);
 
     const onTreeRefresh = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { workspaceName?: string; treeName?: string } | undefined;
+      const detail = (e as CustomEvent<TreeRefreshDetail>).detail;
       if (detail?.workspaceName && detail.workspaceName !== workspaceName) return;
       if (detail?.treeName && detail.treeName !== selectedTreeName) return;
-      loadTree(true);
+      loadTree(!detail?.cacheInvalidated);
     };
     window.addEventListener('workspace:tree:refresh', onTreeRefresh);
 
-    // Live-reload the tree when paths change in the DB from any client (CLI,
-    // agents, the browser extension). The backend forwards synapsd tree events
-    // over the workspace socket channel (subscribed by-id in the document
-    // effect — tree events carry only workspaceId). Re-broadcast as the local
-    // 'workspace:tree:refresh' so BOTH this page tree and the sidebar
-    // (WorkspaceM2) reload. Debounced so a batch triggers a single refetch.
-    let socketTimer: ReturnType<typeof setTimeout> | null = null;
-    const reloadTreeSoon = () => {
-      if (socketTimer) clearTimeout(socketTimer);
-      socketTimer = setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('workspace:tree:refresh', { detail: { workspaceName } }));
-      }, 200);
-    };
-    const treeEvents = [
-      'tree.path.inserted', 'tree.path.moved', 'tree.path.removed', 'tree.path.copied',
-      'tree.layer.updated', 'tree.layer.merged', 'tree.layer.subtracted',
-      'tree.recalculated', 'tree.created', 'tree.deleted', 'tree.renamed',
-    ];
-    treeEvents.forEach(ev => socketService.on(ev, reloadTreeSoon));
+    const stopTreeEvents = watchWorkspaceTreeChanges(workspaceName, wsChannelId);
 
     return () => {
       cancelled = true;
-      if (socketTimer) clearTimeout(socketTimer);
+      stopTreeEvents();
       window.removeEventListener('workspace:tree:refresh', onTreeRefresh);
-      treeEvents.forEach(ev => socketService.off(ev, reloadTreeSoon));
     };
-  }, [workspaceName, selectedTreeName]);
+  }, [workspaceName, selectedTreeName, wsChannelId]);
 
   // Not on a shareable canvas → no public-share state (guarded state adjustment
   // during render; the effect below only handles the fetch).
@@ -1771,20 +1776,23 @@ function SideWorkspaceCanvas({
 
   useEffect(() => {
     let cancelled = false;
+    let requestSeq = 0;
+    let hasTree = false;
     const loadTree = (force = false) => {
+      const seq = ++requestSeq;
       if (force) invalidateWorkspaceTreeCache(workspaceName, pane.treeName);
-      getCachedWorkspaceTreeByName(workspaceName, pane.treeName, { force })
-        .then(res => { if (!cancelled) setTree(res); })
-        .catch(() => { if (!cancelled) setTree(null); });
+      getCachedWorkspaceTreeByName(workspaceName, pane.treeName)
+        .then(res => { if (!cancelled && seq === requestSeq) { hasTree = true; setTree(res); } })
+        .catch(() => { if (!cancelled && seq === requestSeq && !hasTree) setTree(null); });
     };
 
     loadTree(false);
 
     const onTreeRefresh = (event: Event) => {
-      const detail = (event as CustomEvent).detail as { workspaceName?: string; treeName?: string } | undefined;
+      const detail = (event as CustomEvent<TreeRefreshDetail>).detail;
       if (detail?.workspaceName && detail.workspaceName !== workspaceName) return;
       if (detail?.treeName && detail.treeName !== pane.treeName) return;
-      loadTree(true);
+      loadTree(!detail?.cacheInvalidated);
     };
 
     window.addEventListener('workspace:tree:refresh', onTreeRefresh);
