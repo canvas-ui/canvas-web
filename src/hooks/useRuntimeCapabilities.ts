@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { API_URL } from '@/config/api'
-export interface RuntimeCapabilities { local: boolean; agent?: boolean }
+export interface RuntimeCapabilities { local: boolean; agent?: boolean; workspace?: boolean }
 let pending: Promise<RuntimeCapabilities> | undefined
 export function useRuntimeCapabilities() {
   const [capabilities, setCapabilities] = useState<RuntimeCapabilities>({ local: false })

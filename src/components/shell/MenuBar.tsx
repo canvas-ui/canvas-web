@@ -193,11 +193,11 @@ export function MenuBar() {
         {/* Main nav — scrolls on vertically small screens so the bottom
             section (logout) never overlaps the rail toggle below the card. */}
         <nav className="flex flex-col items-center gap-1 py-2 flex-1 min-h-0 overflow-y-auto">
-          <MenuItem section="contexts" icon={<Layers3 className="w-5 h-5" />} label="Contexts" />
-          <MenuItem section="workspaces" icon={<LayoutGrid className="w-5 h-5" />} label="Workspaces" />
+          {(!runtime.local || runtime.workspace !== false) && <MenuItem section="contexts" icon={<Layers3 className="w-5 h-5" />} label="Contexts" />}
+          {(!runtime.local || runtime.workspace !== false) && <MenuItem section="workspaces" icon={<LayoutGrid className="w-5 h-5" />} label="Workspaces" />}
           {(!runtime.local || runtime.agent) && <MenuItem section="agents" icon={<Brain className="w-5 h-5" />} label="Agents" />}
           {/* Roles have no M1 list of their own — the page is the surface. */}
-          <NavItem path="/roles" section={null} icon={<Shield className="w-5 h-5" />} label="Roles" />
+          {(!runtime.local || runtime.workspace !== false) && <NavItem path="/roles" section={null} icon={<Shield className="w-5 h-5" />} label="Roles" />}
 
           {/* Admin section */}
           {isAdmin && (
