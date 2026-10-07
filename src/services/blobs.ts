@@ -34,6 +34,41 @@ export async function checkWorkspaceBlobs(
   )
 }
 
+export interface BackendObjectWriteResult {
+  key: string
+  sha256: string
+  size: number
+  mtime: number | null
+  seq?: number
+  docId: number | null
+  version: number | null
+  previous: { sha256: string | null } | null
+  unchanged: boolean
+}
+
+// Write bytes IN PLACE onto the file backend that owns a key (workspace:home,
+// a mounted folder): the sync-protocol route canvas-fuse uses. Unlike the
+// blob store this replaces the real file on disk, so an edit made here is
+// what every other integration (mirror, WebDAV, the folder watcher) sees.
+// `ifMatch` is the sha256 the edit started from; a concurrent change answers
+// 412 rather than being overwritten.
+export async function writeBackendObject(
+  workspaceName: string,
+  target: { driver: string; address: string; key: string },
+  body: Blob,
+  { ifMatch, contentType }: { ifMatch?: string; contentType?: string } = {},
+): Promise<BackendObjectWriteResult> {
+  const key = target.key.split('/').map(encodeURIComponent).join('/')
+  const url = `${API_ROUTES.workspaces}/${encodeURIComponent(workspaceName)}/backends/${encodeURIComponent(target.driver)}/${encodeURIComponent(target.address)}/objects/${key}`
+  return api.put<BackendObjectWriteResult>(url, body, {
+    headers: {
+      'Content-Type': contentType || 'application/octet-stream',
+      'X-Canvas-Mtime': String(Date.now()),
+      ...(ifMatch ? { 'If-Match': `"${ifMatch}"` } : { 'If-None-Match': '*' }),
+    },
+  })
+}
+
 export interface UploadProgressOptions {
   /** Bytes sent so far / total. Fires on the browser's own progress cadence. */
   onProgress?: (sent: number, total: number) => void

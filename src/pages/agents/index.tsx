@@ -1,3 +1,4 @@
+import { useRuntimeCapabilities } from '@/hooks/useRuntimeCapabilities'
 import { PageHeader } from '@/components/common/page-header'
 import { useEffect, useState } from "react"
 import { FormPanel } from '@/components/common/form-panel'
@@ -55,6 +56,7 @@ export default function AgentsPage() {
   })
   const [newAgentSystemPrompt, setNewAgentSystemPrompt] = useState("")
   const [isCreating, setIsCreating] = useState(false)
+  const runtime = useRuntimeCapabilities()
   const [showCreate, setShowCreate] = useCreatePanel()
   const { showToast } = useToast()
   const navigate = useNavigate()
@@ -310,7 +312,7 @@ export default function AgentsPage() {
       <PageHeader
         title="AI Agents"
         description="Create and manage your AI agents with multiple LLM providers"
-        actions={!showCreate && (
+        actions={!runtime.local && !showCreate && (
           <Button onClick={() => setShowCreate(true)} className="max-sm:h-9 max-sm:w-9 max-sm:p-0" aria-label="Create agent" title="Create agent">
             <Plus className="h-4 w-4 sm:mr-2" />
             <span className="max-sm:hidden">Create Agent</span>
@@ -319,7 +321,7 @@ export default function AgentsPage() {
       />
 
       {/* Create New Agent Section */}
-      {showCreate && (
+      {!runtime.local && showCreate && (
       <FormPanel title="Create New Agent" onClose={() => setShowCreate(false)}>
         <form onSubmit={handleCreateAgent} className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">

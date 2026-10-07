@@ -1,3 +1,4 @@
+import { useRuntimeCapabilities } from '@/hooks/useRuntimeCapabilities'
 import { workspaceAddress } from '@/lib/workspace-address'
 import { PageHeader } from '@/components/common/page-header'
 import { useCallback, useEffect, useState } from "react"
@@ -56,6 +57,7 @@ export default function WorkspacesPage() {
   const [createPickerPos, setCreatePickerPos] = useState<{ x: number; y: number } | null>(null)
   const [editPickerPos, setEditPickerPos] = useState<{ x: number; y: number } | null>(null)
   const [isCreating, setIsCreating] = useState(false)
+  const runtime = useRuntimeCapabilities()
   const [showCreate, setShowCreate] = useCreatePanel();
   const folderPick = useFolderSelection();
   const [showShared, setShowShared] = useState(false);
@@ -361,7 +363,7 @@ export default function WorkspacesPage() {
             <Button variant="outline" onClick={() => setShowOpenRemote(o => !o)} className="max-sm:hidden">
               Open remote…
             </Button>
-            {!showCreate && (
+            {!runtime.local && !showCreate && (
               <Button onClick={() => setShowCreate(true)} className="max-sm:h-9 max-sm:w-9 max-sm:p-0" aria-label="Create workspace" title="Create workspace">
                 <Plus className="h-4 w-4 sm:mr-2" />
                 <span className="max-sm:hidden">Create Workspace</span>
@@ -372,7 +374,7 @@ export default function WorkspacesPage() {
       />
 
       {/* Create New Workspace Section */}
-      {showCreate && (
+      {!runtime.local && showCreate && (
       <FormPanel title="Create New Workspace" onClose={() => setShowCreate(false)}>
         <form onSubmit={handleCreateWorkspace} className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
