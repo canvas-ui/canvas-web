@@ -60,7 +60,7 @@ export function WorkspacePinsTab({ pins, isLoading, searchQuery = '', activeKey,
     return (
       <div className="px-3 py-6 text-xs text-muted-foreground text-center space-y-1">
         <p>No pinned folders yet.</p>
-        <p className="text-muted-foreground/70">Right-click a folder in the context or directory tree and choose <span className="font-medium">Pin</span>.</p>
+        <p className="text-muted-foreground/70">Right-click a folder in the context, directory or backends tree and choose <span className="font-medium">Pin</span>.</p>
       </div>
     )
   }

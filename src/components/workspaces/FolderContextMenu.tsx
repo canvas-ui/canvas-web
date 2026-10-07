@@ -34,13 +34,12 @@ export function FolderContextMenu({ x, y, workspaceName, treeName, path, onClose
   // Pin state is fetched per open — the page doesn't hold workspace pins.
   const [pin, setPin] = useState<WorkspacePin | null | undefined>(undefined)
   useEffect(() => {
-    if (isBackends) return
     let cancelled = false
     listWorkspacePins(workspaceName)
       .then(pins => { if (!cancelled) setPin(pins.find(p => p.tree === treeName && p.path === path) ?? null) })
       .catch(() => { if (!cancelled) setPin(null) })
     return () => { cancelled = true }
-  }, [workspaceName, treeName, path, isBackends])
+  }, [workspaceName, treeName, path])
 
   const run = async (fn: () => Promise<unknown> | unknown) => {
     onClose()
@@ -104,18 +103,18 @@ export function FolderContextMenu({ x, y, workspaceName, treeName, path, onClose
             const n = askName('New name:', name)
             if (n) await ops.onRenamePath(path, n)
           })}
-          {pin !== undefined && item(
-            pin ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />,
-            pin ? 'Unpin' : 'Pin',
-            async () => {
-              if (pin) await unpinWorkspacePin(workspaceName, pin.id)
-              else await pinWorkspacePath(workspaceName, path, treeName)
-              window.dispatchEvent(new CustomEvent('workspace:tree:refresh', { detail: { workspaceName } }))
-            },
-          )}
           {item(<HardDrive className="w-3 h-3" />, 'Create rule…', () => openRuleBuilder('store'))}
           {item(<Download className="w-3 h-3" />, 'Create download rule…', () => openRuleBuilder('download'))}
         </>
+      )}
+      {pin !== undefined && item(
+        pin ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />,
+        pin ? 'Unpin' : 'Pin',
+        async () => {
+          if (pin) await unpinWorkspacePin(workspaceName, pin.id)
+          else await pinWorkspacePath(workspaceName, path, treeName)
+          window.dispatchEvent(new CustomEvent('workspace:tree:refresh', { detail: { workspaceName } }))
+        },
       )}
 
       {sep}

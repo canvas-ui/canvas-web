@@ -687,8 +687,8 @@ function WorkspaceM2Content() {
               navigate(`/workspaces/${wsName}/settings/hooks?${rulePrefillParams(prefill).toString()}`)
             } : undefined}
             pastedDocumentIds={docClipboard?.documentIds}
-            isPathPinned={activeTab !== 'backends' ? isPathPinned : undefined}
-            onTogglePin={wsName && activeTab !== 'backends' ? handleTogglePin : undefined}
+            isPathPinned={isPathPinned}
+            onTogglePin={wsName ? handleTogglePin : undefined}
             onPasteDocuments={wsName && activeTab !== 'backends' ? async (path, ids) => {
               // Ungated on the clipboard: also serves drag-and-drop from the
               // content area (no prior "Copy" involved). The backends tree is
