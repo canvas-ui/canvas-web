@@ -1,3 +1,4 @@
+import { useRuntimeCapabilities } from '@/hooks/useRuntimeCapabilities'
 import { useCallback } from 'react'
 import { ConnectionStatus } from './ConnectionStatus'
 import { useOfflineStatus } from '@/hooks/useOfflineStatus'
@@ -130,6 +131,7 @@ export function MenuBar() {
   const navigate = useNavigate()
   const { showToast } = useToast()
   const isAdmin = state.user?.userType === 'admin'
+  const runtime = useRuntimeCapabilities()
 
   // Mobile replacement for the (hidden) toolbox FAB — opening the toolbox
   // drawer dismisses the rail and any M1 drawer it was floating beside.
@@ -193,7 +195,7 @@ export function MenuBar() {
         <nav className="flex flex-col items-center gap-1 py-2 flex-1 min-h-0 overflow-y-auto">
           <MenuItem section="contexts" icon={<Layers3 className="w-5 h-5" />} label="Contexts" />
           <MenuItem section="workspaces" icon={<LayoutGrid className="w-5 h-5" />} label="Workspaces" />
-          <MenuItem section="agents" icon={<Brain className="w-5 h-5" />} label="Agents" />
+          {(!runtime.local || runtime.agent) && <MenuItem section="agents" icon={<Brain className="w-5 h-5" />} label="Agents" />}
           {/* Roles have no M1 list of their own — the page is the surface. */}
           <NavItem path="/roles" section={null} icon={<Shield className="w-5 h-5" />} label="Roles" />
 
@@ -239,7 +241,7 @@ export function MenuBar() {
             </TooltipContent>
           </Tooltip>
 
-          <NavItem path="/settings" section="settings" icon={<Settings className="w-5 h-5" />} label="Settings" />
+          {!runtime.local && <NavItem path="/settings" section="settings" icon={<Settings className="w-5 h-5" />} label="Settings" />}
 
           <Tooltip>
             <TooltipTrigger asChild>

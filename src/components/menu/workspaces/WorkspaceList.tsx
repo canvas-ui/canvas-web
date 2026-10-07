@@ -1,3 +1,4 @@
+import { useRuntimeCapabilities } from '@/hooks/useRuntimeCapabilities'
 import { workspaceAddress } from '@/lib/workspace-address'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useRef, useState } from 'react'
@@ -25,6 +26,7 @@ function StatusDot({ status }: { status: string }) {
 }
 
 export function WorkspaceList() {
+  const runtime = useRuntimeCapabilities()
   const { state, selectEntity, openM2, closeM2 } = useMenu()
   const isMobile = useIsMobile()
   const { workspaces, isLoading } = useWorkspaceListData(state.activeSection === 'workspaces')
@@ -115,7 +117,7 @@ export function WorkspaceList() {
         <span className="text-sm font-semibold">Workspaces</span>
         {/* Creation is a content-area job — the M2 drawer is too narrow for
             the layout picker and default folders. */}
-        <button
+        {!runtime.local && <button
           type="button"
           onClick={() => { closeM2(); navigate('/workspaces?create=1') }}
           title="Create workspace"
@@ -123,7 +125,7 @@ export function WorkspaceList() {
           className="flex items-center justify-center w-6 h-6 rounded-full bg-foreground text-background hover:opacity-80 transition-opacity"
         >
           <Plus className="w-3.5 h-3.5" />
-        </button>
+        </button>}
       </div>
 
       {/* List */}

@@ -1,3 +1,4 @@
+import { useRuntimeCapabilities } from '@/hooks/useRuntimeCapabilities'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useState } from 'react'
 import { Plus, Play, Square, Settings } from 'lucide-react'
@@ -19,6 +20,7 @@ function StatusDot({ status }: { status: string }) {
 }
 
 export function AgentList() {
+  const runtime = useRuntimeCapabilities()
   const { state, selectEntity, openM2, closeM2 } = useMenu()
   const isMobile = useIsMobile()
   const { agents, isLoading, refresh } = useAgentListData(state.activeSection === 'agents')
@@ -66,7 +68,7 @@ export function AgentList() {
       <div className="flex items-center justify-between px-4 h-12 border-b border-border shrink-0">
         <span className="text-sm font-semibold">Agents</span>
         {/* Creation is a content-area job — see WorkspaceList. */}
-        <button
+        {!runtime.local && <button
           type="button"
           onClick={() => { closeM2(); navigate('/agents?create=1') }}
           title="Create agent"
@@ -74,7 +76,7 @@ export function AgentList() {
           className="flex items-center justify-center w-6 h-6 rounded-full bg-foreground text-background hover:opacity-80 transition-opacity"
         >
           <Plus className="w-3.5 h-3.5" />
-        </button>
+        </button>}
       </div>
 
       {/* List */}

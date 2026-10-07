@@ -4,7 +4,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AuthLayout } from "@/components/auth/auth-layout"
-import { loginUser, isAuthenticated, getAuthConfig } from "@/services/auth"
+import { loginUser, isAuthenticated, getAuthConfig, getCurrentUser } from "@/services/auth"
+
+import { api } from '@/lib/api'
+import { API_URL } from '@/config/api'
 
 interface FormData {
   email: string
@@ -32,6 +35,9 @@ const registrationsAllowed = (config: AuthConfig | null) => config?.allowUserReg
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const [localRuntime, setLocalRuntime] = React.useState(false)
+  const [localToken, setLocalToken] = React.useState('')
+  const [tokenError, setTokenError] = React.useState('')
   const [isLoading, setIsLoading] = React.useState<boolean>(false)
   const [errors, setErrors] = React.useState<Partial<FormData>>({})
   const [authConfig, setAuthConfig] = React.useState<AuthConfig | null>(null)
@@ -46,6 +52,8 @@ export default function LoginPage() {
     if (isAuthenticated()) {
       navigate('/workspaces');
     }
+
+    void fetch(`${API_URL}/runtime/capabilities`).then(r => r.ok ? r.json() : null).then(data => setLocalRuntime(data?.payload?.local === true)).catch(() => {})
 
     // Load authentication configuration
     getAuthConfig().then(config => {
@@ -122,6 +130,27 @@ export default function LoginPage() {
       setIsLoading(false)
     }
   }
+
+  if (localRuntime) return (
+    <AuthLayout>
+      <form className="grid gap-4" onSubmit={async event => {
+        event.preventDefault(); setIsLoading(true); setTokenError('')
+        try {
+          api.setAuthToken(localToken.trim())
+          if (!await getCurrentUser()) throw new Error('The local token was not accepted')
+          navigate('/workspaces')
+        } catch (error) { api.clearAuthToken(); setTokenError(error instanceof Error ? error.message : 'Authentication failed') }
+        finally { setIsLoading(false) }
+      }}>
+        <h1 className="text-2xl font-semibold">Connect to your local runtime</h1>
+        <p className="text-sm text-muted-foreground">Enter the token shown by <code>canvas runtime token</code> in the runtime folder.</p>
+        <Label htmlFor="local-token">Local access token</Label>
+        <Input id="local-token" type="password" autoComplete="off" value={localToken} onChange={event => setLocalToken(event.target.value)} required />
+        {tokenError && <p role="alert" className="text-sm text-destructive">{tokenError}</p>}
+        <Button disabled={isLoading}>{isLoading ? 'Connecting…' : 'Connect'}</Button>
+      </form>
+    </AuthLayout>
+  )
 
   return (
     <AuthLayout>
