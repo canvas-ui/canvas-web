@@ -90,7 +90,9 @@ export function useWorkspaceListData(enabled: boolean) {
   useEffect(() => {
     const handleRefresh = () => { hasFetched.current = false; fetch() }
     window.addEventListener('workspaces:refresh', handleRefresh)
-    return () => window.removeEventListener('workspaces:refresh', handleRefresh)
+    return () => {
+      window.removeEventListener('workspaces:refresh', handleRefresh)
+    }
   }, [fetch])
 
   const sortedWorkspaces = useMemo(() => sortByOrder(workspaces), [workspaces])

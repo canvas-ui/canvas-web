@@ -37,9 +37,9 @@ const DRIVERS: Record<string, { label: string; icon: string; blurb: string; fiel
     blurb: 'Issues from the listed github.com or GitHub Enterprise repos sync as todos. Token optional for public repos.',
     fields: [
       { key: 'address', label: 'Account label', placeholder: 'e.g. canvas-ui', required: true },
-      { key: 'baseUrl', label: 'GitHub Enterprise URL', placeholder: 'https://ghe.example.com', hint: 'Leave blank for github.com; /api/v3 is added when no path is given.' },
+      { key: 'baseUrl', label: 'GitHub Enterprise URL', placeholder: 'https://ghe.example.com', hint: 'Leave blank for github.com. Works with GitHub Enterprise Server (ghe.example.com) and GHE.com (yourco.ghe.com) — the web address is enough.' },
       { key: 'token', label: 'Personal access token', hint: 'Optional for public repos; required for write-back and @me filters.', secret: true },
-      { key: 'repos', label: 'Repositories', placeholder: 'owner/repo, one per line', hint: 'Issues from each repo sync as todos.', list: true, required: true },
+      { key: 'repos', label: 'Repositories', placeholder: 'owner/repo, one per line', hint: 'owner/repo or the repo’s URL. Issues from each repo sync as todos.', list: true, required: true },
       { key: 'assignee', label: 'Only issues assigned to', placeholder: '@me, a login, * or none', hint: 'Filters are applied by GitHub and combined with AND. Changing one re-syncs from scratch.' },
       { key: 'creator', label: 'Only issues opened by', placeholder: '@me or a login' },
       { key: 'mentioned', label: 'Only issues mentioning', placeholder: '@me or a login' },

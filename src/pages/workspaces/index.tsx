@@ -37,6 +37,7 @@ import { DefaultFoldersPicker } from '@/components/workspaces/DefaultFoldersPick
 import { createDefaultFolders, useFolderSelection } from '@/components/workspaces/default-folders'
 import { WorkspaceLayoutPicker } from '@/components/workspaces/WorkspaceLayoutPicker'
 import { useDefaultWorkspaceLayout } from '@/hooks/useDefaultWorkspaceLayout'
+import { WorkspaceImportForm, WorkspaceImportIdentityFields } from '@/components/workspace/workspace-import-form'
 import { sortByOrder, moveItem, persistSequentialOrder, useListReorder } from '@/lib/list-order'
 
 
@@ -62,6 +63,7 @@ export default function WorkspacesPage() {
   const folderPick = useFolderSelection();
   const [showShared, setShowShared] = useState(false);
   const [showRemote, setShowRemote] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [showOpenRemote, setShowOpenRemote] = useState(false);
   const [editingWorkspace, setEditingWorkspace] = useState<Workspace | null>(null)
   const { showToast } = useToast()
@@ -117,9 +119,12 @@ export default function WorkspacesPage() {
         setIsLoading(false)
       }
     }
-    loadWorkspaces()
-
-
+    void loadWorkspaces()
+    const refresh = () => { void loadWorkspaces() }
+    window.addEventListener('workspaces:refresh', refresh)
+    return () => {
+      window.removeEventListener('workspaces:refresh', refresh)
+    }
   }, [socket, showToast])
 
   const handleCreateWorkspace = async (e: React.FormEvent) => {
@@ -357,6 +362,7 @@ export default function WorkspacesPage() {
             <Button variant="outline" onClick={() => setShowShared(o => !o)} className="max-sm:hidden">
               Open shared Workspace (local)…
             </Button>
+            <Button variant="outline" onClick={() => setShowImport(o => !o)}>Import workspace</Button>
             <Button variant="outline" onClick={() => setShowRemote(o => !o)} className="max-sm:hidden">
               Import remote…
             </Button>
@@ -484,6 +490,9 @@ export default function WorkspacesPage() {
       )}
 
       {/* Import (pull) — takes a full copy from another canvas-server */}
+      {showImport && <FormPanel title="Import workspace" onClose={() => setShowImport(false)}>
+        <WorkspaceImportForm onImported={() => setShowImport(false)} />
+      </FormPanel>}
       {showRemote && (
         <AddRemoteWorkspace
           onImported={(ws) => {
@@ -656,6 +665,8 @@ function AddRemoteWorkspace({ onImported, onClose }: { onImported: (ws: Workspac
   const { showToast } = useToast()
   const [url, setUrl] = useState('')
   const [token, setToken] = useState('')
+  const [name, setName] = useState('')
+  const [label, setLabel] = useState('')
   const [isImporting, setIsImporting] = useState(false)
   const [phase, setPhase] = useState('')
 
@@ -678,7 +689,7 @@ function AddRemoteWorkspace({ onImported, onClose }: { onImported: (ws: Workspac
     try {
       const ws = await importWorkspaceFromRemote(base, token.trim(), (job) => {
         setPhase(IMPORT_PHASE_LABELS[job.phase] || job.phase)
-      })
+      }, { name: name.trim(), label: label.trim() })
       showToast({
         title: 'Success',
         description: `Workspace '${ws.label || ws.name}' imported from ${base}.`
@@ -710,10 +721,11 @@ function AddRemoteWorkspace({ onImported, onClose }: { onImported: (ws: Workspac
             onChange={(e) => setToken(e.target.value)}
             disabled={isImporting}
           />
-          <Button type="submit" disabled={isImporting || !url.trim() || !token.trim()}>
+          <Button type="submit" disabled={isImporting || !url.trim() || !token.trim() || !name.trim() || !label.trim()}>
             {isImporting ? 'Importing…' : 'Import Workspace'}
           </Button>
         </div>
+        <WorkspaceImportIdentityFields name={name} label={label} setName={setName} setLabel={setLabel} disabled={isImporting} />
         {isImporting && phase && (
           <p className="text-sm text-muted-foreground">{phase}</p>
         )}

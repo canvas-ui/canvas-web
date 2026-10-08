@@ -1,17 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Download, Package, Trash2, Upload, RefreshCw } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { Download, Package, Trash2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { WorkspaceImportForm } from './workspace-import-form'
 import { useToast } from '@/components/ui/use-toast'
 import {
   deleteWorkspaceExport,
   downloadWorkspaceExport,
   exportWorkspace,
   formatBytes,
-  importWorkspaceFromFile,
   listWorkspaceExports,
   startWorkspace,
-  IMPORT_PHASE_LABELS,
-  type ImportJob,
   type WorkspaceExportArchive,
 } from '@/services/workspace'
 
@@ -24,11 +22,8 @@ import {
  * published into the user's Exports dir and listed here with their size and a
  * download link.
  *
- * Import goes the other way: a file from the user's local drive is streamed
- * up, extracted into their Workspaces dir, validated and loaded. The three
- * server-side steps are one request — a half-imported workspace is not a
- * state worth exposing — so the progress shown is the upload, then a single
- * "extracting" phase for the rest.
+ * Imports accept a browser upload or a server path, ask for the destination
+ * name/label, and track extraction/registration through a background job.
  */
 export function WorkspacePortabilitySection({
   workspaceId,
@@ -48,14 +43,11 @@ export function WorkspacePortabilitySection({
   const [stoppedByExport, setStoppedByExport] = useState(false)
   const [restarting, setRestarting] = useState(false)
   const [busyName, setBusyName] = useState<string | null>(null)
-  const [uploadPct, setUploadPct] = useState<number | null>(null)
-  const [importPhase, setImportPhase] = useState<'uploading' | 'server' | null>(null)
-  const [serverPhase, setServerPhase] = useState<string>('')
-  const fileInput = useRef<HTMLInputElement>(null)
+  const [showImport, setShowImport] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
-      setArchives(isActive ? await listWorkspaceExports(workspaceId) : [])
+      setArchives(await listWorkspaceExports(workspaceId))
     } catch {
       // A workspace with no Exports dir yet is the normal empty case, not an
       // error worth a toast.
@@ -63,7 +55,7 @@ export function WorkspacePortabilitySection({
     } finally {
       setLoading(false)
     }
-  }, [workspaceId, isActive])
+  }, [workspaceId])
 
   // Fetch on mount / workspace change. The lint rule fires on the setState
   // inside refresh(), which is the point of the effect — this IS the external
@@ -147,41 +139,6 @@ export function WorkspacePortabilitySection({
     }
   }
 
-  const handleImport = async (file: File) => {
-    setImportPhase('uploading')
-    setUploadPct(0)
-    setServerPhase('')
-    try {
-      const workspace = await importWorkspaceFromFile(
-        file,
-        (fraction) => {
-          setUploadPct(Math.round(fraction * 100))
-          // bytes are up; the server now works through its own phases
-          if (fraction >= 1) setImportPhase('server')
-        },
-        (job: ImportJob) => setServerPhase(IMPORT_PHASE_LABELS[job.phase] || job.phase),
-      )
-      showToast({
-        title: 'Workspace imported',
-        description: `'${workspace.label || workspace.name}' was extracted, validated and loaded.`,
-      })
-      onChanged?.()
-      window.dispatchEvent(new CustomEvent('workspaces:refresh'))
-    } catch (err) {
-      showToast({
-        title: 'Import failed',
-        description: err instanceof Error ? err.message : 'Failed to import workspace',
-        variant: 'destructive',
-      })
-    } finally {
-      setImportPhase(null)
-      setUploadPct(null)
-      setServerPhase('')
-      if (fileInput.current) fileInput.current.value = ''
-    }
-  }
-
-  const importing = importPhase !== null
 
   return (
     <section className="rounded-lg border p-4">
@@ -196,7 +153,7 @@ export function WorkspacePortabilitySection({
       </p>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <Button type="button" variant="outline" size="sm" disabled={exporting || importing} onClick={handleExport}>
+        <Button type="button" variant="outline" size="sm" disabled={exporting} onClick={handleExport}>
           <Package className={`mr-2 h-3.5 w-3.5 ${exporting ? 'animate-pulse' : ''}`} />
           {exporting ? 'Exporting…' : 'Export Workspace'}
         </Button>
@@ -257,41 +214,12 @@ export function WorkspacePortabilitySection({
         )}
       </div>
 
-      {/* Import */}
-      <div className="mt-4 border-t pt-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Import</h3>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Pick a workspace archive from your local drive. It is uploaded into your home, extracted
-          into your Workspaces folder, validated and loaded as a new workspace.
-        </p>
-        <input
-          ref={fileInput}
-          type="file"
-          accept=".tar.gz,.tgz,.tar.bz2,.tbz2,.tbz,application/gzip,application/x-bzip2"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0]
-            if (file) void handleImport(file)
-          }}
-        />
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={importing || exporting}
-            onClick={() => fileInput.current?.click()}
-          >
-            <Upload className="mr-2 h-3.5 w-3.5" />
-            Import from local drive…
-          </Button>
-          {importPhase === 'uploading' && (
-            <span className="text-xs text-muted-foreground">Uploading… {uploadPct}%</span>
-          )}
-          {importPhase === 'server' && (
-            <span className="text-xs text-muted-foreground">{serverPhase || 'Extracting, validating and loading…'}</span>
-          )}
-        </div>
+      <div className="mt-4 space-y-3 border-t pt-3">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Import workspace</h3>
+        <Button type="button" variant="outline" size="sm" disabled={exporting} onClick={() => setShowImport(open => !open)}>
+          {showImport ? 'Close import' : 'Import workspace…'}
+        </Button>
+        {showImport && <WorkspaceImportForm disabled={exporting} onImported={() => onChanged?.()} />}
       </div>
     </section>
   )

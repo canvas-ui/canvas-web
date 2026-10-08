@@ -165,6 +165,19 @@ export async function listWorkspaces(): Promise<Workspace[]> {
   }
 }
 
+export interface DiscoveredWorkspace { id: string; name: string; label?: string; dir: string }
+export interface WorkspaceScanReport {
+  discovered: DiscoveredWorkspace[]
+  adopted: DiscoveredWorkspace[]
+  updated: DiscoveredWorkspace[]
+  skipped: Array<{ dir: string; reason: string }>
+  missing: Array<{ id: string; name: string; rootPath: string | null }>
+}
+
+export async function scanWorkspaceFolders(): Promise<WorkspaceScanReport> {
+  return api.post<WorkspaceScanReport>(`${API_ROUTES.workspaces}/scan`)
+}
+
 // createWorkspace payload and response should align with the global Workspace type.
 // Note: Global Workspace has owner, createdAt, updatedAt, status, type - some set by backend.
 interface CreateWorkspacePayload {
@@ -252,8 +265,9 @@ export async function importWorkspaceFromRemote(
   url: string,
   token: string,
   onProgress?: (job: ImportJob) => void,
+  presentation: WorkspaceImportPresentation = {},
 ): Promise<Workspace> {
-  const job = await api.post<ImportJob>(`${API_ROUTES.workspaces}/import`, { url, token })
+  const job = await api.post<ImportJob>(`${API_ROUTES.workspaces}/import`, { url, token, ...presentation })
   return waitForImportJob(job.id, onProgress)
 }
 
@@ -336,7 +350,7 @@ export async function deleteWorkspaceExport(name: string): Promise<void> {
  */
 export async function downloadWorkspaceExport(name: string): Promise<void> {
   await api.post(`${API_ROUTES.workspaces}/exports/ticket`)
-  const href = `${API_URL}${API_ROUTES.workspaces}/exports/${encodeURIComponent(name)}`
+  const href = `${API_ROUTES.workspaces}/exports/${encodeURIComponent(name)}`
   const a = document.createElement('a')
   a.href = href
   a.download = name
@@ -357,8 +371,9 @@ export async function importWorkspaceFromFile(
   file: File,
   onProgress?: (fraction: number) => void,
   onJobProgress?: (job: ImportJob) => void,
+  presentation: WorkspaceImportPresentation = {},
 ): Promise<Workspace> {
-  const job = await uploadWorkspaceArchive(file, onProgress)
+  const job = await uploadWorkspaceArchive(file, onProgress, presentation)
   // The bytes are up; extraction/validation/registration continue as a job.
   return waitForImportJob(job.id, onJobProgress)
 }
@@ -367,9 +382,11 @@ export async function importWorkspaceFromFile(
 function uploadWorkspaceArchive(
   file: File,
   onProgress?: (fraction: number) => void,
+  presentation: WorkspaceImportPresentation = {},
 ): Promise<ImportJob> {
   const token = localStorage.getItem('authToken')
-  const url = `${API_URL}${API_ROUTES.workspaces}/import/upload?filename=${encodeURIComponent(file.name)}`
+  const query = new URLSearchParams({ filename: file.name, ...presentation })
+  const url = `${API_ROUTES.workspaces}/import/upload?${query}`
 
   return new Promise<ImportJob>((resolve, reject) => {
     const xhr = new XMLHttpRequest()
@@ -394,9 +411,17 @@ function uploadWorkspaceArchive(
   })
 }
 
+export interface WorkspaceImportPresentation { name?: string; label?: string }
+
 /** Import an archive already sitting in the user's Exports dir. */
-export async function importWorkspaceFromExport(name: string): Promise<Workspace> {
-  return api.post(`${API_ROUTES.workspaces}/import`, { export: name })
+export async function importWorkspaceFromExport(archive: string, presentation: WorkspaceImportPresentation = {}): Promise<Workspace> {
+  const job = await api.post<ImportJob>(`${API_ROUTES.workspaces}/import`, { export: archive, ...presentation })
+  return waitForImportJob(job.id)
+}
+
+export async function importWorkspaceFromPath(path: string, presentation: WorkspaceImportPresentation, onProgress?: (job: ImportJob) => void): Promise<Workspace> {
+  const result = await api.post<Workspace | ImportJob>(`${API_ROUTES.workspaces}/import`, { path, ...presentation })
+  return 'phase' in result ? waitForImportJob(result.id, onProgress) : result
 }
 
 export async function startWorkspace(id: string, options?: WorkspaceStartOptions): Promise<Workspace> {
