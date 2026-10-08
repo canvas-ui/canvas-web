@@ -53,6 +53,8 @@ export interface MenuTreeViewProps {
   onRenamePath?: (fromPath: string, newName: string) => Promise<boolean>
   onMovePath?: (from: string, to: string, recursive?: boolean, sourceTreeName?: string, targetTreeName?: string, options?: { mergeDown?: boolean }) => Promise<boolean>
   onCopyPath?: (from: string, to: string, recursive?: boolean, sourceTreeName?: string, targetTreeName?: string) => Promise<boolean>
+  onExportSubtree?: (path: string) => Promise<void>
+  onImportSubtree?: (path: string) => Promise<void>
   onShareCanvas?: (path: string) => Promise<void>
   onLockLayer?: (layerId: string) => Promise<boolean>
   onResyncBackend?: (backendName: string) => Promise<boolean>
@@ -146,6 +148,8 @@ interface CtxMenuProps {
   onChangeIcon?: () => void
   onNewCanvas?: (parentPath: string) => void
   onShareCanvas?: MenuTreeViewProps['onShareCanvas']
+  onExportSubtree?: MenuTreeViewProps['onExportSubtree']
+  onImportSubtree?: MenuTreeViewProps['onImportSubtree']
   onRemove?: MenuTreeViewProps['onRemovePath']
   onRename?: MenuTreeViewProps['onRenamePath']
   onLock?: MenuTreeViewProps['onLockLayer']
@@ -174,6 +178,7 @@ function CtxMenu({
   x, y, node, path, isBackendsTree, onClose, onShowContent, onOpenToSide,
   sourceLayer, targetLayers, clipboard,
   onStartInlineCreate, onChangeIcon, onNewCanvas, onShareCanvas, onRemove, onRename,
+  onExportSubtree, onImportSubtree,
   onLock, onUnlock, onDestroy, onMerge, onSubtract, onMergeDown, onSubtractDown, onResyncBackend,
   onAddRule, onSyncFolderTree, onAddStoreRule,
   onRenameBackendFolder, onDeleteBackendFolder,
@@ -191,8 +196,8 @@ function CtxMenu({
   )
 
   const run = async (fn: () => Promise<void>) => {
-    try { await fn() } catch (err) { alert(err instanceof Error ? err.message : String(err)) }
     onClose()
+    try { await fn() } catch (err) { alert(err instanceof Error ? err.message : String(err)) }
   }
 
   const item = (icon: React.ReactNode, label: string, fn: () => Promise<void>, danger = false) => (
@@ -366,6 +371,11 @@ function CtxMenu({
           `Paste ${pastedDocumentIds.length} document(s)`,
           async () => { await onPasteDocuments(path, pastedDocumentIds) },
         )}
+
+        {/* Portable document records and tree structure */}
+        {(onExportSubtree || onImportSubtree) && <div className="my-1 h-px bg-border" />}
+        {onExportSubtree && node.type !== 'canvas' && item(<Download className="w-3 h-3" />, 'Export subtree…', () => onExportSubtree(path))}
+        {onImportSubtree && !isBackendsTree && node.type !== 'canvas' && item(<FolderTree className="w-3 h-3" />, 'Import subtree here…', () => onImportSubtree(path))}
 
         {/* Remove — disabled for locked layers */}
         {path !== '/' && !node.locked && onRemove && (
@@ -565,6 +575,7 @@ interface CardNodeProps {
   onDragEnd: () => void
   onDrop: (path: string, e: React.DragEvent) => void
   resyncingPaths?: Set<string>
+  removingPaths: Map<string, string>
   // Accordion style: full-width rows, no indent. `trail` is one entry per
   // ancestor (outermost first) — that ancestor's effective colour or null —
   // and draws the depth rail; its last non-null entry is the inherited colour.
@@ -579,7 +590,7 @@ function CardNode({
   onSelect, onShiftSelect, onShowContent, onCtrl, onCtxMenu,
   onConfirmCreate, onCancelCreate, onOpenPicker, styleOverrides,
   dragOverPath, isCopyDrag, onDragStart, onDragEnter, onDragOver, onDragLeave, onDragEnd, onDrop,
-  resyncingPaths, accordion = false, trail = [],
+  resyncingPaths, removingPaths, accordion = false, trail = [],
 }: CardNodeProps) {
   const longPressMenu = useLongPressContextMenu()
 
@@ -747,6 +758,9 @@ function CardNode({
         {node.label || node.name}
       </span>
 
+      {removingPaths.has(path) && (
+        <RefreshCw className="mr-1 h-3.5 w-3.5 shrink-0 animate-spin self-center" aria-label={removingPaths.get(path)} />
+      )}
       {resyncingPaths?.has(path) && (
         <RefreshCw className="mr-1 h-3.5 w-3.5 shrink-0 animate-spin self-center opacity-70" aria-label="Indexing" />
       )}
@@ -871,6 +885,9 @@ function CardNode({
           {node.label || node.name}
         </span>
 
+        {removingPaths.has(path) && (
+          <RefreshCw className="h-3.5 w-3.5 shrink-0 animate-spin" aria-label={removingPaths.get(path)} />
+        )}
         {resyncingPaths?.has(path) && (
           <RefreshCw
             className="w-3.5 h-3.5 shrink-0 animate-spin text-muted-foreground"
@@ -932,6 +949,7 @@ function CardNode({
               onDragEnd={onDragEnd}
               onDrop={onDrop}
               resyncingPaths={resyncingPaths}
+              removingPaths={removingPaths}
               accordion={accordion}
               trail={childTrail}
             />
@@ -949,6 +967,7 @@ export function MenuTreeView({
   onAddRule, onSyncFolderTree, onAddStoreRule,
   rootLabel, contentPath, onShowContent, onOpenToSide, onShiftSelect,
   onInsertPath, onNewCanvas, onShareCanvas, onRemovePath, onRenamePath, onMovePath, onCopyPath,
+  onExportSubtree, onImportSubtree,
   pastedDocumentIds, onPasteDocuments,
   onLockLayer, onUnlockLayer, onDestroyLayer, onMergeLayer, onSubtractLayer,
   onMergeDown, onSubtractDown,
@@ -966,6 +985,24 @@ export function MenuTreeView({
   const [sourceLayer, setSourceLayer] = useState<LayerRef | null>(null)
   const [targetLayers, setTargetLayers] = useState<Map<string, string>>(new Map())
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; path: string; node: TreeNode } | null>(null)
+  const [removingPaths, setRemovingPaths] = useState<Map<string, string>>(new Map())
+  const removingRef = useRef(new Set<string>())
+  const handleRemovePath = useCallback(async (path: string, recursive = false, purge = false, destroy = false) => {
+    if (!onRemovePath || [...removingRef.current].some(p => p === path || p.startsWith(path + '/') || path.startsWith(p + '/'))) return false
+    removingRef.current.add(path)
+    const message = destroy ? 'Removing documents and backend files…' : purge ? 'Removing and purging documents…' : 'Removing folder…'
+    setRemovingPaths(previous => new Map(previous).set(path, message))
+    try {
+      return await onRemovePath(path, recursive, purge, destroy)
+    } finally {
+      removingRef.current.delete(path)
+      setRemovingPaths(previous => {
+        const next = new Map(previous)
+        next.delete(path)
+        return next
+      })
+    }
+  }, [onRemovePath])
   const [picker, setPicker] = useState<{ x: number; y: number; path: string; node: TreeNode } | null>(null)
   // Live style preview keyed by path; persistence is debounced. Cleared on
   // every tree refetch (root identity change) so server data takes over.
@@ -1282,9 +1319,9 @@ export function MenuTreeView({
     const node = findTreeNodeByPath(root, selectedPath)
     if (node?.locked) { alert(`"${selectedPath}" is locked`); return }
     if (confirm(`Remove "${selectedPath}"?`)) {
-      onRemovePath(selectedPath, false).catch(err => alert(err instanceof Error ? err.message : String(err)))
+      handleRemovePath(selectedPath, false).catch(err => alert(err instanceof Error ? err.message : String(err)))
     }
-  }, [readOnly, onRemovePath, selectedPath, root, pastedDocumentIds, onPasteDocuments, clipboard, handlePaste, isBackendsTree, copyPath])
+  }, [readOnly, onRemovePath, handleRemovePath, selectedPath, root, pastedDocumentIds, onPasteDocuments, clipboard, handlePaste, isBackendsTree, copyPath])
 
   const toggleCopyMode = useCallback(() => {
     setCopyModeSticky(v => {
@@ -1320,10 +1357,21 @@ export function MenuTreeView({
     onDragEnd: handleDragEnd,
     onDrop: handleDrop,
     resyncingPaths,
+    removingPaths,
   }
 
   return (
     <div className="px-3 py-2 space-y-1.5 outline-none" tabIndex={0} onKeyDown={handleTreeKeyDown}>
+      {removingPaths.size > 0 && (
+        <div role="status" aria-live="polite" className="space-y-1 rounded-md border bg-muted/50 p-2 text-xs">
+          {[...removingPaths].map(([path, message]) => (
+            <div key={path} className="flex items-start gap-2">
+              <RefreshCw className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden="true" />
+              <span className="min-w-0"><span className="block">{message}</span><span className="block truncate text-muted-foreground" title={path}>{path}</span></span>
+            </div>
+          ))}
+        </div>
+      )}
       {!readOnly && (
         <div className="flex items-center justify-end px-1 pb-0.5 text-[10px]">
           <button
@@ -1457,7 +1505,9 @@ export function MenuTreeView({
           onChangeIcon={onUpdateNode ? () => openPicker({ clientX: ctxMenu.x, clientY: ctxMenu.y, stopPropagation: () => {} } as React.MouseEvent, ctxMenu.path, ctxMenu.node) : undefined}
           onNewCanvas={onNewCanvas}
           onShareCanvas={onShareCanvas}
-          onRemove={!readOnly ? onRemovePath : undefined}
+          onExportSubtree={onExportSubtree}
+          onImportSubtree={!readOnly ? onImportSubtree : undefined}
+          onRemove={!readOnly && onRemovePath && ![...removingPaths.keys()].some(p => p === ctxMenu.path || p.startsWith(ctxMenu.path + '/') || ctxMenu.path.startsWith(p + '/')) ? handleRemovePath : undefined}
           onRename={!readOnly ? onRenamePath : undefined}
           onLock={!readOnly ? onLockLayer : undefined}
           onUnlock={!readOnly ? onUnlockLayer : undefined}

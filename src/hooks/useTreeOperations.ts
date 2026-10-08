@@ -76,12 +76,14 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
   }, [contextId, workspaceId, wsTree, refresh])
 
   const onRemovePath = useCallback(async (path: string, recursive = false, purge = false, destroy = false): Promise<boolean> => {
-    let result: boolean
-    if (contextId) result = await removeContextPath(contextId, path, recursive)
-    else if (workspaceId) result = await removeWorkspacePath(workspaceId, path, recursive, wsTree, purge, destroy)
-    else return false
-    refresh()
-    return result
+    try {
+      if (contextId) return await removeContextPath(contextId, path, recursive)
+      if (workspaceId) return await removeWorkspacePath(workspaceId, path, recursive, wsTree, purge, destroy)
+      return false
+    } finally {
+      // A batched purge may have committed some deletions before an error.
+      refresh()
+    }
   }, [contextId, workspaceId, wsTree, refresh])
 
   // Rename = move to same parent with a new last segment
@@ -239,8 +241,16 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     return true
   }, [workspaceId, refresh])
 
+  const transferSubtree = useCallback(async (mode: 'export' | 'import', path: string) => {
+    if (!workspaceId) return
+    const { showSubtreeTransfer } = await import('@/components/workspace/subtree-transfer-dialog')
+    showSubtreeTransfer({ mode, path, workspaceId, treeName: wsTree, onImported: refresh })
+  }, [workspaceId, wsTree, refresh])
+
   return {
     onInsertPath, onRemovePath, onRenamePath, onMovePath, onCopyPath,
+    onExportSubtree: workspaceId ? (path: string) => transferSubtree('export', path) : undefined,
+    onImportSubtree: workspaceId && wsTree !== 'backends' ? (path: string) => transferSubtree('import', path) : undefined,
     onUpdateNode,
     onMergeLayer, onSubtractLayer,
     onMergeDown: !isDirectoryTree ? onMergeDown : undefined,
