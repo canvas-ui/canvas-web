@@ -8,11 +8,12 @@ import { useLongPressContextMenu } from '@/hooks/use-long-press-context-menu'
 import { useState, useCallback, useRef, useEffect } from 'react'
 import {
   ChevronRight, ChevronDown,
-  Plus, Trash2, Edit2, Copy, Scissors, Clipboard,
+  Plus, Trash2, RotateCcw, Edit2, Copy, Scissors, Clipboard,
   Layers, LayoutDashboard, MoreHorizontal, Lock, Unlock, Eye, Share2, Palette, RefreshCw,
   FolderSymlink, FolderTree, ArrowDownToLine, ArrowUpFromLine, HardDrive, Download, Pin, PinOff } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import { cn, isCoarsePointer } from '@/lib/utils'
+import { backendTrashLocation } from '@/lib/backend-trash'
 import type { TreeNode, LayerMetadata } from '@/types/workspace'
 import {
   getLayerStyle, mergeLayerStyle, DEFAULT_FOLDER_ICON, DEFAULT_CANVAS_ICON,
@@ -34,6 +35,7 @@ export interface MenuTreeViewProps {
   // resync / purge / destroy actions and disables generic tree mutations
   // (except real folder ops on writable file backends).
   isBackendsTree?: boolean
+  onRestoreTrash?: (path: string) => Promise<void>
   selectedPath: string
   pendingPath?: string | null
   onSelect: (path: string) => void
@@ -164,6 +166,7 @@ interface CtxMenuProps {
   onSyncFolderTree?: MenuTreeViewProps['onSyncFolderTree']
   onAddStoreRule?: MenuTreeViewProps['onAddStoreRule']
   onRenameBackendFolder?: MenuTreeViewProps['onRenameBackendFolder']
+  onRestoreTrash?: MenuTreeViewProps['onRestoreTrash']
   onDeleteBackendFolder?: MenuTreeViewProps['onDeleteBackendFolder']
   onCopy: (path: string) => void
   onCut: (path: string) => void
@@ -181,7 +184,7 @@ function CtxMenu({
   onExportSubtree, onImportSubtree,
   onLock, onUnlock, onDestroy, onMerge, onSubtract, onMergeDown, onSubtractDown, onResyncBackend,
   onAddRule, onSyncFolderTree, onAddStoreRule,
-  onRenameBackendFolder, onDeleteBackendFolder,
+  onRenameBackendFolder, onDeleteBackendFolder, onRestoreTrash,
   onCopy, onCut, onPaste,
   pastedDocumentIds, onPasteDocuments,
   isPinned, onTogglePin,
@@ -212,6 +215,13 @@ function CtxMenu({
       {icon}
       {label}
     </button>
+  )
+
+  if (isBackendsTree && node.metadata?.backendTrash) return (
+    <ContextMenuShell x={x} y={y} onClose={onClose} className="min-w-44 rounded-md border bg-popover p-1 shadow-elevation-3">
+      {onShowContent && item(<Trash2 className="h-3 w-3" />, 'Open Trash', async () => onShowContent(path))}
+      {path !== '/Trash' && onRestoreTrash && item(<RotateCcw className="h-3 w-3" />, 'Restore original paths', () => onRestoreTrash(path))}
+    </ContextMenuShell>
   )
 
   return (
@@ -694,7 +704,7 @@ function CardNode({
         borderBottom: `1px solid ${veil(14)}`,
         ...(sticks ? { position: 'sticky' as const, top: depth * ACCORDION_ROW_H, zIndex: 20 - depth } : {}),
       }}
-      draggable={!readOnly}
+      draggable={!readOnly && !node.metadata?.backendTrash}
       onClick={handleClick}
       {...(!readOnly ? longPressMenu : {})}
       onContextMenu={e => { if (!readOnly) { e.preventDefault(); onCtxMenu(e, path, node) } }}
@@ -830,7 +840,7 @@ function CardNode({
           dragOverPath === path && !readOnly && isCopyDrag && 'ring-2 ring-success bg-success-subtle/50',
         )}
         style={{ borderRight: style.color ? `4px solid ${style.color}` : '4px solid transparent' }}
-        draggable={!readOnly}
+        draggable={!readOnly && !node.metadata?.backendTrash}
         onClick={handleClick}
         {...(!readOnly ? longPressMenu : {})}
       onContextMenu={e => { if (!readOnly) { e.preventDefault(); onCtxMenu(e, path, node) } }}
@@ -963,7 +973,7 @@ function CardNode({
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export function MenuTreeView({
-  root, treeName = 'context', isBackendsTree = false, selectedPath, pendingPath, onSelect, isLoading = false, readOnly = false,
+  root, treeName = 'context', isBackendsTree = false, onRestoreTrash, selectedPath, pendingPath, onSelect, isLoading = false, readOnly = false,
   onAddRule, onSyncFolderTree, onAddStoreRule,
   rootLabel, contentPath, onShowContent, onOpenToSide, onShiftSelect,
   onInsertPath, onNewCanvas, onShareCanvas, onRemovePath, onRenamePath, onMovePath, onCopyPath,
@@ -1068,6 +1078,7 @@ export function MenuTreeView({
   }, [])
 
   const isValidPathDrop = useCallback((src: string, tgt: string, isCopy: boolean): boolean => {
+    if (backendTrashLocation(draggedTreeRef.current, src) || backendTrashLocation(treeName, tgt)) return false
     if (draggedTreeRef.current !== treeName) return true
     const ns = src.endsWith('/') ? src.slice(0, -1) : src
     const nt = tgt.endsWith('/') ? tgt.slice(0, -1) : tgt
@@ -1079,6 +1090,7 @@ export function MenuTreeView({
   }, [treeName])
 
   const handleDragStart = useCallback((path: string, e: React.DragEvent) => {
+    if (backendTrashLocation(treeName, path)) { e.preventDefault(); return }
     draggedPathRef.current = path
     draggedTreeRef.current = treeName
     e.dataTransfer.setData('text/plain', path)
@@ -1090,6 +1102,7 @@ export function MenuTreeView({
     e.ctrlKey || e.altKey || copyModeStickyRef.current
 
   const handleDragEnter = useCallback((path: string, e: React.DragEvent) => {
+    if (backendTrashLocation(treeName, path)) return
     const src = draggedPathRef.current
     const isCopy = eventIsCopy(e)
     if (isCopy !== isCopyRef.current) { isCopyRef.current = isCopy; setIsCopyDrag(isCopy) }
@@ -1098,9 +1111,10 @@ export function MenuTreeView({
     }
     e.preventDefault()
     setDragOverPath(path)
-  }, [isValidPathDrop])
+  }, [isValidPathDrop, treeName])
 
   const handleDragOver = useCallback((path: string, e: React.DragEvent) => {
+    if (backendTrashLocation(treeName, path)) { e.dataTransfer.dropEffect = 'none'; return }
     const isCopy = eventIsCopy(e)
     if (isCopy !== isCopyRef.current) {
       isCopyRef.current = isCopy
@@ -1115,7 +1129,7 @@ export function MenuTreeView({
     }
     e.preventDefault()
     e.dataTransfer.dropEffect = isCopy ? 'copy' : 'move'
-  }, [isValidPathDrop])
+  }, [isValidPathDrop, treeName])
 
   const handleDragLeave = useCallback((path: string, e: React.DragEvent) => {
     if (!(e.currentTarget as Node).contains(e.relatedTarget as Node)) {
@@ -1133,6 +1147,7 @@ export function MenuTreeView({
 
   const handleDrop = useCallback(async (targetPath: string, e: React.DragEvent) => {
     e.preventDefault()
+    if (backendTrashLocation(treeName, targetPath)) return
     // Documents dragged from the content area carry an application/json
     // payload ({ type: 'document', documentIds }) — link them into the
     // drop path instead of treating the drop as a tree-path move.
@@ -1157,6 +1172,7 @@ export function MenuTreeView({
     })()
     const src = payload?.path || e.dataTransfer.getData('text/plain')
     const sourceTreeName = payload?.treeName || draggedTreeRef.current || treeName
+    if (backendTrashLocation(sourceTreeName, src)) return
     const isCopy = eventIsCopy(e) || isCopyRef.current
     draggedPathRef.current = null
     draggedTreeRef.current = treeName
@@ -1189,6 +1205,7 @@ export function MenuTreeView({
 
   const openPicker = useCallback((e: React.MouseEvent, path: string, node: TreeNode) => {
     e.stopPropagation()
+    if (node.metadata?.backendTrash) return
     pickerStyleRef.current = null
     setKeptPickerStyle(null)
     setPicker({ x: e.clientX, y: e.clientY, path, node })
@@ -1296,7 +1313,7 @@ export function MenuTreeView({
   // Ctrl/⌘+V pastes copied DOCUMENTS into it (else a copied folder),
   // Ctrl/⌘+C / X copy or cut the folder itself, Delete/Backspace removes it.
   const handleTreeKeyDown = useCallback((event: React.KeyboardEvent) => {
-    if (readOnly || isTextInteraction(event.target)) return
+    if (readOnly || isTextInteraction(event.target) || (selectedPath && backendTrashLocation(treeName, selectedPath))) return
     if (matchesShortcut(event, 'Mod+V')) {
       if (pastedDocumentIds?.length && onPasteDocuments && selectedPath) {
         event.preventDefault()
@@ -1321,7 +1338,7 @@ export function MenuTreeView({
     if (confirm(`Remove "${selectedPath}"?`)) {
       handleRemovePath(selectedPath, false).catch(err => alert(err instanceof Error ? err.message : String(err)))
     }
-  }, [readOnly, onRemovePath, handleRemovePath, selectedPath, root, pastedDocumentIds, onPasteDocuments, clipboard, handlePaste, isBackendsTree, copyPath])
+  }, [readOnly, onRemovePath, handleRemovePath, selectedPath, root, pastedDocumentIds, onPasteDocuments, clipboard, handlePaste, isBackendsTree, copyPath, treeName])
 
   const toggleCopyMode = useCallback(() => {
     setCopyModeSticky(v => {
@@ -1496,7 +1513,8 @@ export function MenuTreeView({
           path={ctxMenu.path}
           isBackendsTree={isBackendsTree}
           onClose={() => setCtxMenu(null)}
-          onShowContent={onShowContent}
+          onShowContent={ctxMenu.node.metadata?.backendTrash ? onSelect : onShowContent}
+          onRestoreTrash={!readOnly ? onRestoreTrash : undefined}
           onOpenToSide={onOpenToSide ? (path) => onOpenToSide(path, treeName) : undefined}
           sourceLayer={sourceLayer}
           targetLayers={targetLayers}

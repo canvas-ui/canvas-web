@@ -1,3 +1,5 @@
+import { BackendTrashBrowser } from '@/components/workspaces/BackendTrashBrowser';
+import { backendTrashLocation } from '@/lib/backend-trash';
 import { WorkspaceContentGate } from '@/components/workspace/workspace-content-gate';
 import { StorageScanIndicator } from '@/components/notifications/StorageScanIndicator';
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
@@ -589,6 +591,10 @@ function WorkspaceContent() {
   const fetchIdentityRef = useRef('');
   const fetchDocuments = useCallback(async (opts?: { silent?: boolean }): Promise<void> => {
     if (!workspaceName) return;
+    if (backendTrashLocation(selectedTreeName, selectedPath)) {
+      fetchSeqRef.current++; documentFetchRef.current = null; fetchIdentityRef.current = '';
+      setDocuments([]); setDocumentsTotalCount(0); setIsLoadingDocuments(false); return;
+    }
     // While a session drives the list, a refetch would be both redundant and
     // wrong: it re-fetches every document to answer a question the deltas
     // already answered incrementally.
@@ -1363,7 +1369,10 @@ function WorkspaceContent() {
 
   const showCanvasGrid = selectedNodeType === 'canvas' && !isLayerView && !!selectedNode;
 
-  const currentCanvas = (
+  const currentCanvas = backendTrashLocation(selectedTreeName, selectedPath) ? (
+    <BackendTrashBrowser key={workspaceName} workspace={workspaceName || workspace.id} path={selectedPath}
+      onNavigate={path => navigate(buildWorkspaceUrl(workspaceName!, path, 'backends'))} />
+  ) : (
     <DefaultCanvas
       // The chip names the ACTUAL tree ('backends', not its 'directory' type).
       urlType={isLayerView ? (treeTypeForName(selectedTreeName) === 'directory' ? `${selectedTreeName}-layer` : 'context-layer') : (selectedNodeType === 'canvas' ? 'canvas' : treeTypeForName(selectedTreeName) === 'directory' ? selectedTreeName : 'context')}
@@ -1745,6 +1754,7 @@ function SideWorkspaceCanvas({
   const urlDisplay = `${workspaceName}://${pane.path === '/' ? '' : pane.path.replace(/^\//, '')}`;
 
   const fetchPaneDocuments = useCallback(async () => {
+    if (backendTrashLocation(pane.treeName, pane.path)) { setDocuments([]); setTotalCount(0); setIsLoading(false); return; }
     const cacheKey = documentKey(workspaceName, pane.treeName, pane.path, currentPage, pageSize, '', '');
     const cached = documentCache.get(cacheKey);
     if (cached) {
@@ -1918,7 +1928,7 @@ function SideWorkspaceCanvas({
           Close
         </button>
       )}
-      <DefaultCanvas
+      {backendTrashLocation(pane.treeName, pane.path) ? <BackendTrashBrowser workspace={workspaceName} path={pane.path} onNavigate={onNavigate || (() => {})} /> : <DefaultCanvas
         urlType={isCanvas ? 'canvas' : (treeType === 'directory' ? pane.treeName : 'context')}
         urlDisplay={urlDisplay}
         contextPath={pane.path}
@@ -1973,7 +1983,7 @@ function SideWorkspaceCanvas({
             path={pane.path}
           />
         ) : null}
-      </DefaultCanvas>
+      </DefaultCanvas>}
     </div>
   );
 }

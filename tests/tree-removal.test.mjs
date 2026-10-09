@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { backendTrashLocation } from '../src/lib/backend-trash.ts'
 
 function children(element) {
   if (Array.isArray(element)) return element.flatMap(children)
@@ -30,6 +31,7 @@ function setup() {
     '@iconify/react': { Icon: 'icon' },
     '@/hooks/use-long-press-context-menu': {},
     '@/lib/utils': { cn: (...args) => args.filter(Boolean).join(' ') },
+    '@/lib/backend-trash': { backendTrashLocation },
     '@/lib/layer-style': {}, './LayerIconPicker': {},
     '@/components/common/context-menu-shell': { ContextMenuShell: 'menu' },
     '@/components/common/action-menu': {},
@@ -55,8 +57,31 @@ function setup() {
     card(render()).props.onCtxMenu({ preventDefault() {}, stopPropagation() {}, clientX: 10, clientY: 10 }, '/mail', node)
     return find(render(), element => element.type?.name === 'CtxMenu')
   }
-  return { render, find, card, open, alerts, requests, selected }
+  return { render, find, card, open, alerts, requests, selected, props }
 }
+
+test('virtual Trash exposes restore and rejects ordinary tree drag and drop', async () => {
+  const ui = setup()
+  const path = '/Trash/workspace%3Ahome'
+  const node = { id: 'trash', name: 'workspace%3Ahome', children: [], locked: true, metadata: { backendTrash: true } }
+  ui.props.root.children = [node]
+  ui.props.selectedPath = path
+  const restored = []
+  ui.props.onRestoreTrash = async path => { restored.push(path) }
+  ui.card(ui.render()).props.onCtxMenu({ stopPropagation() {}, clientX: 1, clientY: 1 }, path, node)
+  const menu = ui.find(ui.render(), element => element.type?.name === 'CtxMenu')
+  const content = menu.type(menu.props)
+  const buttons = children(content).filter(element => element.type === 'button')
+  assert.equal(buttons.length, 2, 'only Open Trash and Restore are available')
+  const restore = buttons.find(element => element.props.children?.includes('Restore original paths'))
+  await restore.props.onClick()
+  assert.deepEqual(restored, [path])
+  const event = { preventDefault() {}, dataTransfer: { getData() { assert.fail('Trash cannot accept ordinary drops') } } }
+  await ui.card(ui.render()).props.onDrop(path, event)
+  let prevented = false
+  ui.card(ui.render()).props.onDragStart(path, { preventDefault() { prevented = true } })
+  assert.equal(prevented, true)
+})
 
 for (const outcome of ['success', 'error']) {
   test(`purge shows pending status, releases menu overlay, prevents duplicates and clears on ${outcome}`, async () => {

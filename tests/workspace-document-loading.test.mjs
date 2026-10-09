@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { backendTrashLocation } from '../src/lib/backend-trash.ts'
 
 // Exercise the production fetch callback with controlled network completion
 // order, without mounting the surrounding shell, maps and canvas widgets.
@@ -26,6 +27,7 @@ function build() {
     workspaceName: 'universe', selectedTreeName: 'backends', selectedPath: '/imap/me/inbox',
     sessionActiveRef: { current: false }, fetchSeqRef: { current: 0 }, fetchIdentityRef: { current: '' },
     documentFetchRef: { current: null },
+    backendTrashLocation,
     unfiledOnly: false, backendTarget: null, docScope: 'path', tbLensIds: null,
     currentPage: 1, pageSize: 50, serverSearchQueries: [], tbFiltersKey: '', tbFiltersKeyNoLens: '',
     isLayerView: false, selectedLayerId: null, queryDebug: false,
@@ -42,6 +44,19 @@ function build() {
 }
 
 const finishMicrotasks = () => new Promise(resolve => setImmediate(resolve))
+
+test('opening Trash skips document queries and discards a previous folder response', async () => {
+  const { fetch, state, pending, context } = build()
+  const initial = fetch()
+  context.selectedPath = '/Trash/workspace%3Ahome'
+  await fetch()
+  assert.equal(pending.length, 1)
+  assert.equal(state.loading, false)
+  assert.equal(state.documents.length, 0)
+  pending[0].resolve({ payload: [{ id: 1 }], totalCount: 1 })
+  await initial
+  assert.equal(state.documents.length, 0)
+})
 
 test('steady sync paints completed requests and coalesces refreshes into one follow-up', async () => {
   const { fetch, state, pending, cache, context } = build()

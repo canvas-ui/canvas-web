@@ -7,6 +7,17 @@
 - Bundled with [Canvas Server](https://github.com/canvas-ui/canvas-server)  
 - For standalone deployment, see the installation section below
 
+## Backend Trash
+
+The backends tree includes **Trash → backend → original path** for file backends.
+Right-click a deleted file or folder and choose **Restore file** or **Restore
+folder** to put it back at its original location. Multiple selections can be
+restored together. Existing destinations are preserved; conflicting items stay
+in Trash. Whole deleted folders restore their contents, including empty folders.
+The server retention setting controls expiry (30 days by default). This requires
+the matching server/runtime and canvas-stored Trash support; it is separate from
+canvas-fuse's local mirror trash.
+
 ## Apps (applets)
 
 The Toolbox has a top-level **Apps** tab hosting small self-contained applets
