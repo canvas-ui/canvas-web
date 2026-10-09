@@ -11,7 +11,7 @@ import socketService from '@/lib/socket'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { ToolboxCtx } from './use-toolbox'
 import type { ToolboxFilters, ToolboxTimelineFilters, ToolboxGeoFilters, ToolboxLensFilters, GeoBBox, GeoSelection, ToolboxSort, Document as WorkspaceDocument } from '@/types/workspace'
-import { DEFAULT_TOOLBOX_FILTERS, DEFAULT_TOOLBOX_SORT, buildDatetimeFilters, buildGeoFilters, buildContextBinding, type LiveContextQuery } from '@/types/workspace'
+import { DEFAULT_TOOLBOX_FILTERS, normalizeDocumentSort, buildDatetimeFilters, buildGeoFilters, buildContextBinding, type LiveContextQuery } from '@/types/workspace'
 import {
   DEFAULT_WORKSPACE_TREE_NAME,
   listWorkspaceBitmaps,
@@ -345,7 +345,7 @@ function loadSessionFilters(): ToolboxFilters | null {
       timeline: { ...DEFAULT_TOOLBOX_FILTERS.timeline, ...(parsed.timeline ?? {}) },
       geo: { ...DEFAULT_TOOLBOX_FILTERS.geo, ...(parsed.geo ?? {}) },
       lens: DEFAULT_TOOLBOX_FILTERS.lens, // ephemeral — never restored
-      sort: { ...DEFAULT_TOOLBOX_SORT, ...(parsed.sort ?? {}) },
+      sort: normalizeDocumentSort(parsed.sort),
     }
   } catch {
     return null
@@ -385,10 +385,7 @@ function extractToolboxFilters(metadata: Record<string, unknown> | undefined, in
       },
       geo: { bbox: (t.geo as ToolboxGeoFilters)?.bbox ?? null, includeUnlocated: (t.geo as ToolboxGeoFilters)?.includeUnlocated ?? false },
       lens: includeLens ? { ...DEFAULT_TOOLBOX_FILTERS.lens, ...(t.lens ?? {}) } : DEFAULT_TOOLBOX_FILTERS.lens,
-      sort: {
-        sortBy: (t.sort as ToolboxSort)?.sortBy ?? DEFAULT_TOOLBOX_SORT.sortBy,
-        order: (t.sort as ToolboxSort)?.order === 'asc' ? 'asc' : 'desc',
-      },
+      sort: normalizeDocumentSort(t.sort as ToolboxSort),
     }
   } catch {
     return null

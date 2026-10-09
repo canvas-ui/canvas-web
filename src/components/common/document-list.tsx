@@ -1,3 +1,4 @@
+import { documentType, isDocumentFieldSort } from '@/lib/document-sort'
 import { useLongPressContextMenu } from '@/hooks/use-long-press-context-menu'
 import { selectDocumentRange } from '@/lib/document-selection'
 import { CopyToWorkspacePanel } from '@/components/menu/shared/CopyToWorkspacePanel'
@@ -1275,8 +1276,10 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   // Folders are not searched: a typed query narrows to documents only.
   const visibleFolders = useMemo<FolderEntry[]>(() => {
     if (!folders || folders.length === 0 || deferredQuery.trim()) return []
-    return folders
-  }, [folders, deferredQuery])
+    const direction = serverSort?.order === 'desc' ? -1 : 1
+    return [...folders].sort((a, b) => Number(Boolean(b.isParent)) - Number(Boolean(a.isParent))
+      || (a.label || a.name).localeCompare(b.label || b.name, undefined, { numeric: true, sensitivity: 'base' }) * direction)
+  }, [folders, deferredQuery, serverSort?.order])
   const hasFolders = visibleFolders.length > 0
   // Folder right-click menu — directory-type trees of a workspace only.
   const [folderMenu, setFolderMenu] = useState<{ x: number; y: number; path: string } | null>(null)
@@ -1292,7 +1295,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     title: (d: Document) => getDocumentDisplayInfo(d).title?.toLowerCase() ?? '',
     schema: (d: Document) => getDocumentDisplayInfo(d).schemaLabel ?? '',
     // Group by kind: mime content-type first (jpeg/png/pdf…), else the schema.
-    type: (d: Document) => (d.metadata?.contentType || d.schema || '').toLowerCase(),
+    type: documentType,
     id: (d: Document) => d.id,
     created: (d: Document) => Date.parse(d.createdAt) || 0,
   }), [])
@@ -1312,7 +1315,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     [filteredDocuments, groupDateOf, serverSort?.order],
   )
   // A single band is no band at all — it just costs a header row.
-  const showDateGroups = groupDates && dateGroups.length > 1
+  const showDateGroups = groupDates && !isDocumentFieldSort(serverSort?.sortBy) && dateGroups.length > 1
 
   // Band header checkbox: additive, like ctrl-clicking every tile in the band.
   const selectGroup = useCallback((ids: number[], selected: boolean) => {
@@ -1761,7 +1764,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
             )}
             {/* Date bands on/off. Only offered for the two views that carry
                 them — the table has its own column sorting and stays flat. */}
-            {allowViewToggle && view !== 'table' && (
+            {allowViewToggle && view !== 'table' && !isDocumentFieldSort(serverSort?.sortBy) && (
               <button
                 type="button"
                 onClick={toggleGroupDates}

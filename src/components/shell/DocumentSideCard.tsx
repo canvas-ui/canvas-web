@@ -56,7 +56,9 @@ export function DocumentSideCard({ entry: entryProp, onClose, frame }: { entry?:
       fillParent
       fullWidthContent={resolveRenderer(document) === ImageRenderer}
     >
-      <ObjectPropertiesCard key={`${workspaceId}:${document.id}`} document={document} workspaceId={workspaceId} onChanged={refresh} compact />
+      <div className="document-side-content h-full min-h-0 min-w-0 w-full">
+        <ObjectPropertiesCard key={`${workspaceId}:${document.id}`} document={document} workspaceId={workspaceId} onChanged={refresh} compact />
+      </div>
     </B5Card>
   )
 }

@@ -84,7 +84,7 @@ export default function TextDocumentEditor({
       }
     >
       <div className="flex h-full min-h-0 flex-col px-4 py-4 md:px-8">
-        <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col">
+        <div className="mx-auto flex min-h-0 w-full max-w-full flex-1 flex-col overflow-auto md:w-[700px] md:min-w-[320px] md:resize-x">
           {tooLarge ? (
             <p className="text-sm text-muted-foreground">
               This file is too large to edit here ({'>'}{Math.round(MAX_EDITABLE_TEXT_BYTES / 1000)} kB) — download it instead.

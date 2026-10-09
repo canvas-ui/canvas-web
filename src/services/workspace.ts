@@ -1,3 +1,4 @@
+import { getFieldSortedDocuments, isDocumentFieldSort } from '@/lib/document-sort';
 import { requestWorkspaceUnlock, type WorkspaceStartOptions } from '@/components/workspace/workspace-start-dialog';
 import type { ResponseEnvelope } from '@augmentd-labs/canvas-protocol';
 import { API_ROUTES, API_URL } from '@/config/api';
@@ -587,6 +588,11 @@ export async function getWorkspaceDocuments(
   featureArray: string[] = [],
   options: { limit?: number; offset?: number; page?: number; treeName?: string; treeType?: string; q?: string; queries?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[]; rel?: RelFilter[]; ids?: number[] | null; scope?: 'path' | 'workspace'; sortBy?: string; order?: 'asc' | 'desc'; applyCanvasSpec?: boolean; debug?: boolean; debugLimit?: number } = {}
 ): Promise<DocumentsEnvelopeWithDebug> {
+  if (isDocumentFieldSort(options.sortBy)) {
+    return getFieldSortedDocuments(options, pagination => getWorkspaceDocuments(id, contextSpec, featureArray, {
+      ...options, ...pagination, sortBy: undefined, order: 'asc',
+    }));
+  }
   try {
     const params = new URLSearchParams();
     const wholeWorkspace = options.scope === 'workspace'
@@ -661,6 +667,11 @@ export async function getWorkspaceLayerDocuments(
   layerId: string,
   options: { limit?: number; offset?: number; page?: number; q?: string; queries?: string[]; allOf?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[]; ids?: number[] | null; sortBy?: string; order?: 'asc' | 'desc' } = {}
 ): Promise<DocumentsEnvelope> {
+  if (isDocumentFieldSort(options.sortBy)) {
+    return getFieldSortedDocuments(options, pagination => getWorkspaceLayerDocuments(id, treeName, layerId, {
+      ...options, ...pagination, sortBy: undefined, order: 'asc',
+    }));
+  }
   try {
     const params = new URLSearchParams();
     if (options.limit !== undefined) params.append('limit', options.limit.toString());

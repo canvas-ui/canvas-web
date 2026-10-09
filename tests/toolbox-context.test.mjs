@@ -37,6 +37,7 @@ test('context requests carry feature, spatial, live-image, sort and stacked-sear
   }).outputText
   vm.runInNewContext(code, { exports, URLSearchParams, console,
     require: name => {
+      if (name === '@/lib/document-sort') return { isDocumentFieldSort: () => false }
       if (name === '@/lib/context-deletion') return contextDeletion
       if (name === '@/config/api') return { API_ROUTES: { contexts: 'https://test/rest/v2/contexts' } }
       if (name === '@/lib/api') return { api: { getEnvelope: async (...args) => { calls.push(args); return { payload: [], count: 0, totalCount: 0 } } } }

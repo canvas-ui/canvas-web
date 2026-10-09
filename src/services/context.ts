@@ -1,3 +1,4 @@
+import { getFieldSortedDocuments, isDocumentFieldSort } from '@/lib/document-sort';
 import { CONTEXT_DELETED_EVENT } from '@/lib/context-deletion';
 import { API_ROUTES } from '@/config/api';
 import { api } from '@/lib/api';
@@ -195,6 +196,15 @@ export async function getContextDocuments(
 ): Promise<DocumentResponse['data'] & { count?: number; totalCount?: number }> {
   try {
     if (options.ids?.length === 0) return Object.assign([], { count: 0, totalCount: 0 });
+    if (isDocumentFieldSort(options.sortBy)) {
+      const response = await getFieldSortedDocuments(options, async pagination => {
+        const payload = await getContextDocuments(id, featureArray, filterArray, {
+          ...options, ...pagination, sortBy: undefined, order: 'asc',
+        }, ownerId);
+        return { payload, count: payload.count, totalCount: payload.totalCount };
+      });
+      return Object.assign(response.payload, { count: response.count, totalCount: response.totalCount });
+    }
     const params = new URLSearchParams();
     if (options.geoSelection) {
       params.set('geoSelection', JSON.stringify(options.geoSelection));

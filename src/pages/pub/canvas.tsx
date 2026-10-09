@@ -5,6 +5,8 @@ import { io, Socket } from 'socket.io-client'
 import { Download, LayoutDashboard, RefreshCw, Search, Wifi, WifiOff, X } from 'lucide-react'
 import { API_URL, WS_URL } from '@/config/api'
 import { api } from '@/lib/api'
+import { isDocumentFieldSort, sortDocuments } from '@/lib/document-sort'
+import type { WidgetFetchOpts } from '@/components/canvas/widget-types'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CanvasGrid } from '@/components/canvas/CanvasGrid'
@@ -203,8 +205,8 @@ export default function PublicCanvasPage() {
     setSearchQuery('')
   }, [])
 
-  const publicFetchDocuments = useCallback(async () => ({
-    payload: documents,
+  const publicFetchDocuments = useCallback(async (options?: WidgetFetchOpts) => ({
+    payload: isDocumentFieldSort(options?.sortBy) ? sortDocuments(documents, options!.sortBy!, options?.order) : documents,
     totalCount: payload?.stats.documentCount ?? documents.length,
   }), [documents, payload])
 

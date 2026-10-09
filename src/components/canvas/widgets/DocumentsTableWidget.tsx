@@ -77,6 +77,7 @@ export function DocumentsTableWidget({ config, canvas }: WidgetProps) {
           treeName={canvas.treeName}
           workspaceId={canvas.workspaceId}
           totalCount={totalCount}
+          serverSort={sort}
           viewMode={initialView}
           allowViewToggle
           currentPage={currentPage}

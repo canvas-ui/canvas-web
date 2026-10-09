@@ -20,12 +20,13 @@ export function TimelineSortControl({
     <div className="canvas-no-drag flex items-center gap-1">
       <select
         value={value.sortBy}
-        onChange={(e) => onChange({ ...value, sortBy: e.target.value })}
+        onChange={(e) => onChange({ ...value, sortBy: e.target.value, order: ['alphabetical', 'type'].includes(e.target.value) ? 'asc' : value.order })}
         className="h-7 rounded-md border bg-background px-1.5 text-xs"
-        title="Sort by timeline"
+        title="Sort by"
+        aria-label="Sort by"
       >
         {/* Keep the current value selectable even before timelines have loaded. */}
-        {!options.some((o) => o.value === value.sortBy) && (
+        {value.sortBy !== 'crud:deleted' && !options.some((o) => o.value === value.sortBy) && (
           <option value={value.sortBy}>{labelFor(value.sortBy)}</option>
         )}
         {options.map((o) => (
@@ -35,7 +36,8 @@ export function TimelineSortControl({
       <button
         type="button"
         onClick={toggleOrder}
-        title={value.order === 'asc' ? 'Ascending (oldest first)' : 'Descending (newest first)'}
+        title={value.order === 'asc' ? 'Ascending' : 'Descending'}
+        aria-label={value.order === 'asc' ? 'Ascending' : 'Descending'}
         className="flex h-7 w-7 items-center justify-center rounded-md border text-muted-foreground hover:bg-accent hover:text-foreground touch-target"
       >
         {value.order === 'asc'

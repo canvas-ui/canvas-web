@@ -17,6 +17,34 @@
   line-height: 1.7;
   max-width: 74ch;
 }
+/* Side previews follow the adjustable pane rather than a fixed reading measure. */
+.document-side-content .markdown-body.markdown-doc {
+  width: 100%;
+  max-width: none;
+}
+
+/* The card's padded View tab supplies the bottom margin. Keep overflow inside
+ * the bordered preview, with the toolbar and comment outside its scroll area. */
+.document-side-content .markdown-document-frame {
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+}
+.document-side-content .markdown-note {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.document-side-content .markdown-note > h3 {
+  flex-shrink: 0;
+}
+.document-side-content .markdown-note .markdown-document-frame {
+  height: auto;
+  flex: 1 1 0%;
+}
+
 .markdown-doc > p,
 .markdown-doc > ul,
 .markdown-doc > ol,

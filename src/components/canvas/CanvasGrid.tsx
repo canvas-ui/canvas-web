@@ -8,10 +8,11 @@ import './canvas-grid.css'
 import './widgets'
 import { getWidget, listWidgets } from './widget-registry'
 import { WidgetFrame } from './WidgetFrame'
-import { DEFAULT_TIMELINE_SORT, type TimelineSort } from './widgets/useTimelineOptions'
+import type { TimelineSort } from './widgets/useTimelineOptions'
 import type { WidgetCanvasContext, WidgetConfig, WidgetDocumentsResult, WidgetFetchOpts } from './widget-types'
 import { saveCanvasUi, getCanvasPathDocuments } from '@/services/workspace'
 import { cn } from '@/lib/utils'
+import { normalizeDocumentSort } from '@/types/workspace'
 import type { CanvasQuerySpec, Document, LayerMetadata } from '@/types/workspace'
 
 const ReactGridLayout = WidthProvider(GridLayout)
@@ -246,7 +247,7 @@ export function CanvasGrid({
   // Canvas-level view order. Seeded from the stored querySpec so widgets show
   // the baked sort; edited via a widget's sort control and persisted back into
   // querySpec.sort on Save (only when actually touched → sortDirtyRef).
-  const [canvasSort, setCanvasSortState] = useState<TimelineSort>(() => querySpec?.sort ?? DEFAULT_TIMELINE_SORT)
+  const [canvasSort, setCanvasSortState] = useState<TimelineSort>(() => normalizeDocumentSort(querySpec?.sort))
   const sortDirtyRef = useRef(false)
   // Canvas-level search stack, seeded from the stored querySpec.query. Widget
   // search boxes append to this (via the canvas context) and it persists back
@@ -281,7 +282,7 @@ export function CanvasGrid({
     setWidgets(next.widgets)
     applyFills(next.fills)
     latest.current = next
-    setCanvasSortState(querySpec?.sort ?? DEFAULT_TIMELINE_SORT)
+    setCanvasSortState(normalizeDocumentSort(querySpec?.sort))
     sortDirtyRef.current = false
     setCanvasQueriesState(queriesFromSpec(querySpec?.query))
     queriesDirtyRef.current = false
