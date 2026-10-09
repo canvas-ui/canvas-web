@@ -36,6 +36,7 @@ export interface MenuTreeViewProps {
   // (except real folder ops on writable file backends).
   isBackendsTree?: boolean
   onRestoreTrash?: (path: string) => Promise<void>
+  onDiscardTrash?: (path: string) => Promise<void>
   selectedPath: string
   pendingPath?: string | null
   onSelect: (path: string) => void
@@ -167,6 +168,7 @@ interface CtxMenuProps {
   onAddStoreRule?: MenuTreeViewProps['onAddStoreRule']
   onRenameBackendFolder?: MenuTreeViewProps['onRenameBackendFolder']
   onRestoreTrash?: MenuTreeViewProps['onRestoreTrash']
+  onDiscardTrash?: MenuTreeViewProps['onDiscardTrash']
   onDeleteBackendFolder?: MenuTreeViewProps['onDeleteBackendFolder']
   onCopy: (path: string) => void
   onCut: (path: string) => void
@@ -184,7 +186,7 @@ function CtxMenu({
   onExportSubtree, onImportSubtree,
   onLock, onUnlock, onDestroy, onMerge, onSubtract, onMergeDown, onSubtractDown, onResyncBackend,
   onAddRule, onSyncFolderTree, onAddStoreRule,
-  onRenameBackendFolder, onDeleteBackendFolder, onRestoreTrash,
+  onRenameBackendFolder, onDeleteBackendFolder, onRestoreTrash, onDiscardTrash,
   onCopy, onCut, onPaste,
   pastedDocumentIds, onPasteDocuments,
   isPinned, onTogglePin,
@@ -221,6 +223,7 @@ function CtxMenu({
     <ContextMenuShell x={x} y={y} onClose={onClose} className="min-w-44 rounded-md border bg-popover p-1 shadow-elevation-3">
       {onShowContent && item(<Trash2 className="h-3 w-3" />, 'Open Trash', async () => onShowContent(path))}
       {path !== '/Trash' && onRestoreTrash && item(<RotateCcw className="h-3 w-3" />, 'Restore original paths', () => onRestoreTrash(path))}
+      {path !== '/Trash' && onDiscardTrash && item(<Trash2 className="h-3 w-3" />, 'Empty Trash', () => onDiscardTrash(path), true)}
     </ContextMenuShell>
   )
 
@@ -973,7 +976,7 @@ function CardNode({
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export function MenuTreeView({
-  root, treeName = 'context', isBackendsTree = false, onRestoreTrash, selectedPath, pendingPath, onSelect, isLoading = false, readOnly = false,
+  root, treeName = 'context', isBackendsTree = false, onRestoreTrash, onDiscardTrash, selectedPath, pendingPath, onSelect, isLoading = false, readOnly = false,
   onAddRule, onSyncFolderTree, onAddStoreRule,
   rootLabel, contentPath, onShowContent, onOpenToSide, onShiftSelect,
   onInsertPath, onNewCanvas, onShareCanvas, onRemovePath, onRenamePath, onMovePath, onCopyPath,
@@ -1515,6 +1518,7 @@ export function MenuTreeView({
           onClose={() => setCtxMenu(null)}
           onShowContent={ctxMenu.node.metadata?.backendTrash ? onSelect : onShowContent}
           onRestoreTrash={!readOnly ? onRestoreTrash : undefined}
+          onDiscardTrash={!readOnly ? onDiscardTrash : undefined}
           onOpenToSide={onOpenToSide ? (path) => onOpenToSide(path, treeName) : undefined}
           sourceLayer={sourceLayer}
           targetLayers={targetLayers}

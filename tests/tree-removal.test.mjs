@@ -66,16 +66,19 @@ test('virtual Trash exposes restore and rejects ordinary tree drag and drop', as
   const node = { id: 'trash', name: 'workspace%3Ahome', children: [], locked: true, metadata: { backendTrash: true } }
   ui.props.root.children = [node]
   ui.props.selectedPath = path
-  const restored = []
+  const restored = [], discarded = []
   ui.props.onRestoreTrash = async path => { restored.push(path) }
+  ui.props.onDiscardTrash = async path => { discarded.push(path) }
   ui.card(ui.render()).props.onCtxMenu({ stopPropagation() {}, clientX: 1, clientY: 1 }, path, node)
   const menu = ui.find(ui.render(), element => element.type?.name === 'CtxMenu')
   const content = menu.type(menu.props)
   const buttons = children(content).filter(element => element.type === 'button')
-  assert.equal(buttons.length, 2, 'only Open Trash and Restore are available')
+  assert.equal(buttons.length, 3, 'Open Trash, Restore and Empty Trash are available')
   const restore = buttons.find(element => element.props.children?.includes('Restore original paths'))
   await restore.props.onClick()
   assert.deepEqual(restored, [path])
+  await buttons.find(element => element.props.children?.includes('Empty Trash')).props.onClick()
+  assert.deepEqual(discarded, [path])
   const event = { preventDefault() {}, dataTransfer: { getData() { assert.fail('Trash cannot accept ordinary drops') } } }
   await ui.card(ui.render()).props.onDrop(path, event)
   let prevented = false

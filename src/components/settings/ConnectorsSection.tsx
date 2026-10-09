@@ -5,6 +5,8 @@ import { Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/use-toast'
+import { GoogleOAuthButton } from '@/components/settings/GoogleOAuthButton'
+import type { GoogleOAuthScope } from '@/services/oauth'
 import {
   listBackends, addBackend, updateBackend, removeBackend, syncBackend,
   type Backend,
@@ -28,6 +30,9 @@ interface FieldSpec {
   list?: boolean
   bool?: boolean
   required?: boolean
+  // Google-backed drivers: offer the consent popup under the refresh-token field.
+  oauth?: 'google'
+  oauthScope?: GoogleOAuthScope
 }
 
 const DRIVERS: Record<string, { label: string; icon: string; blurb: string; fields: FieldSpec[] }> = {
@@ -80,7 +85,7 @@ const DRIVERS: Record<string, { label: string; icon: string; blurb: string; fiel
       { key: 'address', label: 'Account label', placeholder: 'e.g. me-gmail', required: true },
       { key: 'clientId', label: 'OAuth client id', required: true },
       { key: 'clientSecret', label: 'OAuth client secret', secret: true, required: true },
-      { key: 'refreshToken', label: 'Refresh token', secret: true, required: true },
+      { key: 'refreshToken', label: 'Refresh token', secret: true, required: true, oauth: 'google', oauthScope: 'calendar.readonly' },
       { key: 'calendars', label: 'Calendar ids (empty = primary)', list: true },
     ],
   },
@@ -324,6 +329,21 @@ export function ConnectorsSection({ workspaceId }: { workspaceId: string }) {
                   />
                 )}
                 {field.hint && <span className="mt-0.5 block text-[11px] text-muted-foreground/80">{field.hint}</span>}
+                {field.oauth === 'google' && (
+                  <span className="mt-1.5 block">
+                    <GoogleOAuthButton
+                      clientId={form.clientId || ''}
+                      clientSecret={form.clientSecret || ''}
+                      scope={field.oauthScope || 'calendar.readonly'}
+                      disabled={busy}
+                      onLinked={({ refreshToken, account }) => setForm((prev) => ({
+                        ...prev,
+                        [field.key]: refreshToken,
+                        address: (prev.address || '').trim() || (account ? account.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() : ''),
+                      }))}
+                    />
+                  </span>
+                )}
               </label>
             ))}
           </div>

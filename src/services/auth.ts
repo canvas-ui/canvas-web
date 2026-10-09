@@ -1,4 +1,4 @@
-import { API_ROUTES } from '@/config/api'
+import { API_ROUTES, API_URL } from '@/config/api'
 import { api } from '@/lib/api'
 import socketService from '@/lib/socket'
 import { jwtDecode } from 'jwt-decode'
@@ -267,7 +267,25 @@ export interface AuthConfig {
       enabled: boolean;
       domains: AuthImapDomain[];
     };
+    ldap?: { enabled: boolean };
+    google?: { enabled: boolean };
   };
+}
+
+// "Sign in with Google": full-page redirect to the server, which bounces back
+// to /auth/google/callback?code=… once Google has vouched for the account.
+export function startGoogleLogin(): void {
+  const url = new URL(`${API_URL}/oauth/google/login`);
+  url.searchParams.set('origin', window.location.origin);
+  window.location.assign(url.toString());
+}
+
+// Second leg: swap the one-time code for a JWT session, same shape as loginUser.
+export async function completeGoogleLogin(code: string): Promise<void> {
+  const response = await api.post<{ token: string }>(`${API_URL}/oauth/google/exchange`, { code }, { skipAuth: true });
+  if (!response?.token) throw new Error('Invalid login response: missing token');
+  api.setAuthToken(response.token);
+  socketService.connect(response.token);
 }
 
 export async function getAuthConfig(): Promise<AuthConfig> {

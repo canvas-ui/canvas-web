@@ -20,6 +20,7 @@ import type { RulePrefill } from '@/services/hooks'
 import { TrashPanel } from '@/components/workspace/trash-panel'
 import { SyncPanel } from '@/components/workspace/sync-panel'
 import { ConnectorsSection } from '@/components/settings/ConnectorsSection'
+import { GoogleOAuthButton } from '@/components/settings/GoogleOAuthButton'
 import { ImapMailboxesPanel } from '@/components/workspace/imap-mailboxes-panel'
 import { TokenManager } from '@/components/workspace/token-manager'
 import { MembersManager } from '@/components/workspace/members-manager'
@@ -259,8 +260,8 @@ function AddGoogleDriveForm({ workspaceId, onAdded }: { workspaceId: string; onA
       </div>
       <p className="text-xs text-muted-foreground">
         Index a Drive folder (or the whole My Drive) as a remote data source. Files are hashed from Drive metadata,
-        uploads are queued through the workspace cache. Needs an OAuth client with the <code>drive</code> scope and an
-        offline-access refresh token — the same kind of credentials as the Google Calendar connector.
+        uploads are queued through the workspace cache. Needs a Google OAuth client (Web application) — enter its id and
+        secret, then sign in to obtain the offline-access refresh token, or paste one you already have.
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
@@ -281,7 +282,19 @@ function AddGoogleDriveForm({ workspaceId, onAdded }: { workspaceId: string; onA
         </div>
         <div className="space-y-1 sm:col-span-2">
           <label className="text-xs font-medium">Refresh token</label>
-          <Input type="password" value={form.refreshToken} onChange={set('refreshToken')} required className="font-mono" autoComplete="off" />
+          <Input type="password" value={form.refreshToken} onChange={set('refreshToken')} required className="font-mono" autoComplete="off"
+            placeholder="Sign in below, or paste an offline-access refresh token" />
+          <GoogleOAuthButton
+            clientId={form.clientId}
+            clientSecret={form.clientSecret}
+            scope={readOnly ? 'drive.readonly' : 'drive'}
+            disabled={busy}
+            onLinked={({ refreshToken, account }) => setForm((f) => ({
+              ...f,
+              refreshToken,
+              name: f.name.trim() || (account ? `Drive (${account})` : f.name),
+            }))}
+          />
         </div>
       </div>
       <div className="flex items-center gap-6 text-[11px] text-muted-foreground">

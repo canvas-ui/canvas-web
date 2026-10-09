@@ -18,6 +18,13 @@ The server retention setting controls expiry (30 days by default). This requires
 the matching server/runtime and canvas-stored Trash support; it is separate from
 canvas-fuse's local mirror trash.
 
+Use **Delete permanently** in a Trash item's context menu, **Delete selected**
+for a selection, or **Empty Trash** for a backend. Inside an original-path folder,
+**Empty this folder** affects only that subtree. Each action confirms the count
+and paths before deletion. Live files at the original paths are preserved;
+shared recovery bytes remain while another Trash item or retained version needs
+them. Failed items stay listed so deletion can be retried.
+
 ## Apps (applets)
 
 The Toolbox has a top-level **Apps** tab hosting small self-contained applets

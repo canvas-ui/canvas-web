@@ -48,12 +48,26 @@ export interface ExternalStrategyDefaults {
   defaultStatus: AuthUserStatus
 }
 
+export interface GoogleStrategyConfig extends ExternalStrategyDefaults {
+  clientId: string
+  clientSecretSet: boolean
+  /** Write-only: undefined = keep stored, null = clear, string = replace. */
+  clientSecret?: string | null
+  /** E-mail domains allowed to sign in; empty = any Google account. */
+  allowedDomains: string[]
+  /** Create a canvas user on first sign-in; false = only pre-existing users. */
+  autoCreateUsers: boolean
+  /** Extra SPA origins the login may return to (dev servers); the API origin is always allowed. */
+  webOrigins: string[]
+}
+
 export interface AuthConfig {
   allowUserRegistrations: boolean
   strategies: {
     local: { enabled: boolean; requireEmailVerification: boolean; passwordPolicy: PasswordPolicy }
     imap: ExternalStrategyDefaults & { domains: Record<string, ImapDomainConfig> }
     ldap: ExternalStrategyDefaults & { servers: Record<string, LdapServerConfig> }
+    google: GoogleStrategyConfig
   }
 }
 

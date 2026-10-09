@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AuthLayout } from "@/components/auth/auth-layout"
-import { loginUser, isAuthenticated, getAuthConfig, getCurrentUser } from "@/services/auth"
+import { loginUser, isAuthenticated, getAuthConfig, getCurrentUser, startGoogleLogin } from "@/services/auth"
+import { Icon } from "@iconify/react"
 
 import { api } from '@/lib/api'
 import { API_URL } from '@/config/api'
@@ -27,6 +28,7 @@ interface AuthConfig {
         requireAppPassword: boolean
       }>
     }
+    google?: { enabled: boolean }
   }
 }
 
@@ -220,6 +222,12 @@ export default function LoginPage() {
               <Button type="submit" disabled={isLoading}>
                 {isLoading ? "Signing in..." : "Sign In"}
               </Button>
+              {authConfig?.strategies?.google?.enabled && (
+                <Button type="button" variant="outline" disabled={isLoading} onClick={() => startGoogleLogin()}>
+                  <Icon icon="logos:google-icon" width={16} height={16} className="mr-2" />
+                  Sign in with Google
+                </Button>
+              )}
               {localEnabled(authConfig) && registrationsAllowed(authConfig) && (
                 <Button
                   variant="outline"

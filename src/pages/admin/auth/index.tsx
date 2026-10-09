@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/use-toast'
 import { cn } from '@/lib/utils'
 import { getCurrentUserFromToken } from '@/services/auth'
+import { API_URL } from '@/config/api'
 import {
   getAuthConfig,
   saveAuthConfig,
@@ -38,6 +39,7 @@ interface Draft {
   local: AuthConfig['strategies']['local']
   ldap: Omit<AuthConfig['strategies']['ldap'], 'servers'> & { servers: LdapRow[] }
   imap: Omit<AuthConfig['strategies']['imap'], 'domains'> & { domains: ImapRow[] }
+  google: AuthConfig['strategies']['google']
 }
 
 let rowSeq = 0
@@ -51,6 +53,7 @@ function toDraft(c: AuthConfig): Draft {
     local: c.strategies.local,
     ldap: { ...ldap, servers: Object.entries(servers).map(([name, s]) => ({ ...s, id: rowId(), name, originalName: name })) },
     imap: { ...imap, domains: Object.entries(domains).map(([domain, d]) => ({ ...d, id: rowId(), domain })) },
+    google: c.strategies.google ?? { enabled: false, defaultUserType: 'user', defaultStatus: 'active', clientId: '', clientSecretSet: false, allowedDomains: [], autoCreateUsers: true, webOrigins: [] },
   }
 }
 
@@ -76,8 +79,26 @@ function fromDraft(d: Draft): AuthConfig {
         defaultStatus: d.imap.defaultStatus,
         domains: Object.fromEntries(d.imap.domains.map(({ id: _id, domain, ...rest }) => [domain.trim().toLowerCase(), rest])),
       },
+      google: d.google,
     },
   }
+}
+
+// Comma/newline separated list field ↔ string[]
+function ListInput({ value, onChange, placeholder, disabled }: { value: string[]; onChange: (v: string[]) => void; placeholder?: string; disabled?: boolean }) {
+  const joined = value.join(', ')
+  const [text, setText] = useState(joined)
+  const [prevJoined, setPrevJoined] = useState(joined)
+  // Re-sync from props only when they change underneath us (Discard / reload),
+  // never while the user is typing — the raw text keeps its separators.
+  if (joined !== prevJoined) {
+    setPrevJoined(joined)
+    if (text.split(/[\s,]+/).filter(Boolean).join(', ') !== joined) setText(joined)
+  }
+  return (
+    <Input className="h-8 text-sm" value={text} placeholder={placeholder} disabled={disabled}
+      onChange={(e) => { setText(e.target.value); onChange(e.target.value.split(/[\s,]+/).map((v) => v.trim()).filter(Boolean)) }} />
+  )
 }
 
 const NEW_LDAP: Omit<LdapRow, 'id' | 'name'> = {
@@ -539,6 +560,38 @@ export default function AdminAuthPage() {
               onClick={() => patch((d) => ({ ...d, imap: { ...d.imap, domains: [...d.imap.domains, { ...NEW_IMAP, id: rowId() }] } }))}>
               <Plus className="mr-2 h-3.5 w-3.5" /> Add mail domain
             </Button>
+          </Section>
+
+          <Section
+            title="Google sign-in"
+            description={<>One-click sign-in with a Google account via OAuth. Needs a Google Cloud OAuth client of type <em>Web application</em> whose authorized redirect URI is <code className="select-all">{`${API_URL}/oauth/google/callback`}</code>.</>}
+            enabled={draft.google.enabled}
+            onToggle={(v) => patch((d) => ({ ...d, google: { ...d.google, enabled: v } }))}
+          >
+            <NewUserDefaults value={draft.google} onChange={(v) => patch((d) => ({ ...d, google: { ...d.google, ...v } }))} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="OAuth client id">
+                <Input className="h-8 font-mono text-sm" value={draft.google.clientId} autoComplete="off"
+                  onChange={(e) => patch((d) => ({ ...d, google: { ...d.google, clientId: e.target.value } }))} />
+              </Field>
+              <Field label="OAuth client secret" hint={draft.google.clientSecretSet && draft.google.clientSecret === undefined ? 'A secret is stored; leave blank to keep it.' : undefined}>
+                <Input className="h-8 font-mono text-sm" type="password" autoComplete="off"
+                  value={draft.google.clientSecret ?? ''}
+                  placeholder={draft.google.clientSecretSet ? '••••••••' : ''}
+                  onChange={(e) => patch((d) => ({ ...d, google: { ...d.google, clientSecret: e.target.value === '' ? undefined : e.target.value } }))} />
+              </Field>
+              <Field label="Allowed e-mail domains" hint="Comma separated. Empty = any Google account may sign in.">
+                <ListInput value={draft.google.allowedDomains} placeholder="example.com, example.org"
+                  onChange={(v) => patch((d) => ({ ...d, google: { ...d.google, allowedDomains: v } }))} />
+              </Field>
+              <Field label="Extra web origins" hint="Only when the web UI is served from another origin than the API (e.g. a Vite dev server).">
+                <ListInput value={draft.google.webOrigins} placeholder="http://localhost:5173"
+                  onChange={(v) => patch((d) => ({ ...d, google: { ...d.google, webOrigins: v } }))} />
+              </Field>
+            </div>
+            <Check checked={draft.google.autoCreateUsers} label="Create an account on first sign-in"
+              hint="Off: only users that already exist (by e-mail) can sign in with Google."
+              onChange={(v) => patch((d) => ({ ...d, google: { ...d.google, autoCreateUsers: v } }))} />
           </Section>
 
           {(dirty || saveErrors) && (

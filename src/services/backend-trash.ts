@@ -25,12 +25,20 @@ export async function listBackendTrash(workspace: string, backend: string) {
 
 export interface TrashRestoreResult { id: string; key?: string; ok: boolean; reason?: string; message?: string }
 
-export async function restoreBackendTrash(workspace: string, backend: string, ids: string[]) {
+export function restoreBackendTrash(workspace: string, backend: string, ids: string[]) {
+  return mutateBackendTrash(workspace, backend, ids, 'restore')
+}
+
+export function discardBackendTrash(workspace: string, backend: string, ids: string[]) {
+  return mutateBackendTrash(workspace, backend, ids, 'discard')
+}
+
+async function mutateBackendTrash(workspace: string, backend: string, ids: string[], action: 'restore' | 'discard') {
   const unique = [...new Set(ids)]
   const results: TrashRestoreResult[] = []
   try {
     for (let offset = 0; offset < unique.length; offset += 100) {
-      const page = await api.post<{ results: TrashRestoreResult[] }>(`${route(workspace, backend)}/restore`, { ids: unique.slice(offset, offset + 100) })
+      const page = await api.post<{ results: TrashRestoreResult[] }>(`${route(workspace, backend)}/${action}`, { ids: unique.slice(offset, offset + 100) })
       results.push(...page.results)
     }
     return results
@@ -51,4 +59,22 @@ export async function restoreBackendTrashPath(workspace: string, path: string) {
   const results = await restoreBackendTrash(workspace, target.backend, selected.map(item => item.id))
   const failed = results.filter(result => !result.ok)
   if (failed.length) throw new Error(`${results.length - failed.length} restored; ${failed.length} remain in Trash. Existing paths were kept.`)
+}
+
+export function confirmTrashDiscard(backend: string, items: BackendTrashItem[]): boolean {
+  if (!items.length) return false
+  const paths = [...new Set(items.map(item => item.key))]
+  const preview = paths.slice(0, 5).join('\n') + (paths.length > 5 ? `\n…and ${paths.length - 5} more paths` : '')
+  return window.confirm(`Permanently delete ${items.length} Trash item(s) from ${backend}?\n\n${preview}\n\nDeleted folders include all their contents. This cannot be undone. Files currently at the original paths are kept.`)
+}
+
+export async function discardBackendTrashPath(workspace: string, path: string) {
+  const target = backendTrashLocation('backends', path)
+  if (!target?.backend) return
+  const { items } = await listBackendTrash(workspace, target.backend)
+  const selected = items.filter(item => !target.prefix || item.key === target.prefix || item.key.startsWith(`${target.prefix}/`))
+  if (!confirmTrashDiscard(target.backend, selected)) return
+  const results = await discardBackendTrash(workspace, target.backend, selected.map(item => item.id))
+  const failed = results.filter(result => !result.ok)
+  if (failed.length) throw new Error(`${results.length - failed.length} deleted; ${failed.length} remain in Trash. ${failed[0].message || failed[0].reason || 'Please retry.'}`)
 }

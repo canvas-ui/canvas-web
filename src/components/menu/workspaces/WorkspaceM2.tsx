@@ -1,4 +1,4 @@
-import { restoreBackendTrashPath } from '@/services/backend-trash'
+import { restoreBackendTrashPath, discardBackendTrashPath } from '@/services/backend-trash'
 import { WorkspaceContentGate } from '@/components/workspace/workspace-content-gate'
 import { useTreeNavigation } from '@/hooks/useTreeNavigation'
 import { cycleTree } from '@/lib/key-bindings'
@@ -659,6 +659,7 @@ function WorkspaceM2Content() {
             treeName={activeTab}
             isBackendsTree={activeTab === 'backends'}
             onRestoreTrash={wsName ? path => restoreBackendTrashPath(wsName, path) : undefined}
+            onDiscardTrash={wsName ? path => discardBackendTrashPath(wsName, path) : undefined}
             onShiftSelect={canvasRow ? (path) => handleOpenToSide(path, treeNameForTab(activeTab)) : undefined}
             selectedPath={selectedPath}
             contentPath={contentPath}

@@ -1,5 +1,5 @@
 import { backendTrashLocation } from '@/lib/backend-trash'
-import { restoreBackendTrashPath } from '@/services/backend-trash'
+import { restoreBackendTrashPath, discardBackendTrashPath } from '@/services/backend-trash'
 import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Clipboard, Copy, Download, Edit2, Eye, FolderOpen, HardDrive, Pin, PinOff, Plus, Trash2, RotateCcw } from 'lucide-react'
@@ -79,6 +79,7 @@ export function FolderContextMenu({ x, y, workspaceName, treeName, path, onClose
   if (trash) return <ContextMenuShell x={x} y={y} onClose={onClose} className="min-w-44 rounded-md border bg-popover p-1 shadow-elevation-3">
     {item(<Trash2 className="h-3 w-3" />, 'Open Trash', () => onOpen(path))}
     {trash.backend && item(<RotateCcw className="h-3 w-3" />, 'Restore original paths', () => restoreBackendTrashPath(workspaceName, path))}
+    {trash.backend && item(<Trash2 className="h-3 w-3" />, 'Empty Trash', () => discardBackendTrashPath(workspaceName, path), true)}
   </ContextMenuShell>
 
   return (

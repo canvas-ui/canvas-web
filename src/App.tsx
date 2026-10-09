@@ -6,6 +6,7 @@ import { useEffect, lazy, Suspense } from 'react'
 const NextShell = lazy(() => import('./next/NextShell'))
 import LoginPage from './pages/auth/login'
 import RegisterPage from './pages/auth/register'
+import GoogleCallbackPage from './pages/auth/google-callback'
 import { ProtectedRoute } from './components/auth/protected-route'
 import { PublicRoute } from './components/auth/public-route'
 import PublicCanvasPage from './pages/pub/canvas'
@@ -47,6 +48,7 @@ function AppContent() {
         {/* Authentication routes */}
         <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
         <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
+        <Route path="/auth/google/callback" element={<PublicRoute><GoogleCallbackPage /></PublicRoute>} />
         <Route path="/pub/c/:code" element={<PublicCanvasPage />} />
 
         {/* Standalone applet host - chrome-free, one PWA-shortcut click away.
