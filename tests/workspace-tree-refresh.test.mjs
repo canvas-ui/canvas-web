@@ -93,6 +93,31 @@ test('changes in several trees are batched without broadening to every tree', ()
   assert.equal(bus.refreshed.length, 2, 'unmount cancels the pending refresh')
 })
 
+test('backend changes refresh the mirror even without individual folder events', () => {
+  const bus = events()
+  const stop = bus.watch('universe', 'ws-1')
+  bus.emit('backend.changed', { workspaceId: 'other', backend: 'workspace:home' })
+  assert.equal(bus.timers.size, 0)
+  for (let i = 0; i < 20; i++) bus.emit('backend.changed', { workspaceId: 'ws-1', backend: 'workspace:home' })
+  bus.flush()
+  assert.deepEqual(bus.invalidated, [['universe', 'backends']])
+  assert.equal(bus.refreshed.length, 1)
+  stop()
+})
+
+test('completed scans and reconnects retire stale mirrors, but progress ticks do not', () => {
+  const bus = events()
+  const stop = bus.watch('universe', 'ws-1')
+  for (let i = 0; i < 20; i++) bus.emit('backend.resync.changed', { workspaceId: 'ws-1', resyncing: true })
+  assert.equal(bus.timers.size, 0)
+  bus.emit('backend.resync.changed', { workspaceId: 'ws-1', resyncing: false })
+  bus.flush()
+  bus.emit('connect')
+  bus.flush()
+  assert.deepEqual(bus.invalidated, [['universe', 'backends'], ['universe', 'backends']])
+  stop()
+})
+
 // Exercise production async loaders with controlled completion order.
 const menuSource = ts.createSourceFile('menu.tsx', read('components/menu/workspaces/WorkspaceM2.tsx'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
 const callbacks = {}

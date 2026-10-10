@@ -76,6 +76,12 @@ interface LinkToCardProps {
   // (rule builder) where "Link N documents" would mislead.
   title?: string
   confirmLabel?: string
+  // Transfer destinations can create real folders on writable file backends.
+  // Other backend pickers retain their read-only mirror behavior.
+  backendFolderCreation?: {
+    canCreate: (path: string) => boolean
+    create: (parent: string, name: string) => Promise<void>
+  }
 }
 
 // Merges the old TreePicker (workspace choice) and LinkToPanel (nice
@@ -83,11 +89,10 @@ interface LinkToCardProps {
 // WorkspaceList-styled row list, slide into the tree-with-tabs view. Renders
 // as a plain card — callers own positioning (inline sibling for B5Card,
 // fixed overlay for document-list's existing usage).
-export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceName, excludeWorkspace, multiple = true, saving = false, savingContent, sizeClassName, tabs = ['context', 'directory'], title, confirmLabel, onConfirmRelation, relationWorkspaceName, relationPredicates, relationExcludeIds }: LinkToCardProps) {
+export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceName, excludeWorkspace, multiple = true, saving = false, savingContent, sizeClassName, tabs = ['context', 'directory'], title, confirmLabel, backendFolderCreation, onConfirmRelation, relationWorkspaceName, relationPredicates, relationExcludeIds }: LinkToCardProps) {
   const [step, setStep] = useState<'workspace' | 'tree'>(fixedWorkspaceName ? 'tree' : 'workspace')
   // Esc closes the card (all callers render it as an overlay); disabled while
   // a link is saving so it can't vanish mid-write.
-  useEscapeClose(onClose, !saving)
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   // Starts true whenever the workspace list will be fetched (no fixed
   // workspace) — the fetch effect below only ever clears it.
@@ -125,23 +130,30 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
   const [rowMenu, setRowMenu] = useState<RowMenuEvent | null>(null)
   const [createParent, setCreateParent] = useState<string | null>(null)
   const [creatingFolder, setCreatingFolder] = useState(false)
+  useEscapeClose(onClose, !saving && !creatingFolder)
   const rootRowMenu = useRowMenu('/', (e) => setRowMenu(e))
 
-  // The backends tree is a locked mirror — no user-created folders there.
-  const canCreateFolders = activeTab !== 'pins' && activeTab !== 'backends' && activeTab !== 'relations'
+  const canCreateAt = (path: string) => !saving && (activeTab === 'backends'
+    ? backendFolderCreation?.canCreate(path) === true
+    : activeTab !== 'pins' && activeTab !== 'relations')
 
   const createFolder = async (parent: string, rawName: string) => {
     const name = rawName.trim().replace(/^\/+|\/+$/g, '')
-    if (!name || !workspaceName || creatingFolder || !canCreateFolders) return
+    if (!name || !workspaceName || creatingFolder || !canCreateAt(parent)) return
     setCreatingFolder(true)
     try {
       const path = `${parent === '/' ? '' : parent}/${name}`
-      const treeName = activeTab === 'directory' ? 'directory' : DEFAULT_WORKSPACE_TREE_NAME
-      await insertWorkspacePath(workspaceName, path, true, treeName)
-      invalidateWorkspaceTreeCache(workspaceName)
+      const treeName = activeTab === 'context' ? DEFAULT_WORKSPACE_TREE_NAME : activeTab
+      if (activeTab === 'backends') await backendFolderCreation!.create(parent, name)
+      else await insertWorkspacePath(workspaceName, path, true, treeName)
+      invalidateWorkspaceTreeCache(workspaceName, treeName)
+      window.dispatchEvent(new CustomEvent('workspace:tree:refresh', {
+        detail: { workspaceName, treeName, cacheInvalidated: true },
+      }))
       const res = await getCachedWorkspaceTreeByName(workspaceName, activeTab as TreeTab)
       setTree(res)
       setSelected(prev => (multiple ? new Set([...prev, path]) : new Set([path])))
+      setQuery('')
       setCreateParent(null)
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to create folder')
@@ -169,21 +181,31 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
     // its own tree there, so this one stays as the user left it.
     if (!workspaceName || (activeTab === 'relations' || activeTab === 'pins')) return
     let cancelled = false
+    let request = 0
 
-    async function loadTree() {
-      setLoadingTree(true)
+    async function loadTree(background = false) {
+      const sequence = ++request
+      if (!background) setLoadingTree(true)
       try {
         const res = await getCachedWorkspaceTreeByName(workspaceName as string, activeTab as TreeTab)
-        if (!cancelled) setTree(res)
+        if (!cancelled && sequence === request) setTree(res)
       } catch {
-        if (!cancelled) setTree(null)
+        if (!cancelled && sequence === request && !background) setTree(null)
       } finally {
-        if (!cancelled) setLoadingTree(false)
+        if (!cancelled && sequence === request) setLoadingTree(false)
       }
     }
 
+    const refresh = (event: Event) => {
+      const detail = (event as CustomEvent<{ workspaceName?: string; treeName?: string; cacheInvalidated?: boolean }>).detail
+      if (detail?.workspaceName && detail.workspaceName !== workspaceName) return
+      if (detail?.treeName && detail.treeName !== activeTab) return
+      if (!detail?.cacheInvalidated) invalidateWorkspaceTreeCache(workspaceName!, activeTab)
+      void loadTree(true)
+    }
+    window.addEventListener('workspace:tree:refresh', refresh)
     loadTree()
-    return () => { cancelled = true }
+    return () => { cancelled = true; window.removeEventListener('workspace:tree:refresh', refresh) }
   }, [workspaceName, activeTab])
 
   const pickWorkspace = (name: string) => {
@@ -258,7 +280,7 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
               ? `Relate ${count} document${count !== 1 ? 's' : ''} to…`
               : `Link ${count} document${count !== 1 ? 's' : ''} to…`)}
         </span>
-        <button type="button" onClick={onClose} disabled={saving} className="text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40" aria-label="Close">
+        <button type="button" onClick={onClose} disabled={saving || creatingFolder} className="text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40" aria-label="Close">
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -280,15 +302,16 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
           <div className="flex min-w-0 flex-col overflow-hidden">
             <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b px-2 pt-2">
               {!fixedWorkspaceName && (
-                <button type="button" onClick={() => setStep('workspace')} className="mr-1 rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground touch-target" aria-label="Back to workspaces">
+                <button type="button" disabled={creatingFolder} onClick={() => setStep('workspace')} className="mr-1 rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground touch-target" aria-label="Back to workspaces">
                   <ChevronRight className="h-4 w-4 rotate-180" />
                 </button>
               )}
-              {(tabs.includes('context') || tabs.includes('directory')) && <button type="button" onClick={() => { setActiveTab('pins'); setSelected(new Set()); setCreateParent(null) }} className={cn('flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-xs', activeTab === 'pins' ? 'border-primary' : 'border-transparent text-muted-foreground')}><Pin className="h-3.5 w-3.5" />Pins</button>}
+              {(tabs.includes('context') || tabs.includes('directory')) && <button type="button" disabled={creatingFolder} onClick={() => { setActiveTab('pins'); setSelected(new Set()); setCreateParent(null) }} className={cn('flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-xs', activeTab === 'pins' ? 'border-primary' : 'border-transparent text-muted-foreground')}><Pin className="h-3.5 w-3.5" />Pins</button>}
               {tabs.map(tab => (
                 <button
                   key={tab}
                   type="button"
+                  disabled={creatingFolder}
                   onClick={() => { setActiveTab(tab); setSelected(new Set()); setCreateParent(null) }}
                   className={cn(
                     'flex shrink-0 items-center gap-1.5 rounded-t-md border-b-2 px-3 py-2 text-xs font-medium transition-colors',
@@ -407,7 +430,7 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
                     )}
                     onClick={rootRowMenu.guardClick(() => toggle('/'))}
                     title="/"
-                    {...(canCreateFolders ? rootRowMenu.handlers : {})}
+                    {...(canCreateAt('/') ? rootRowMenu.handlers : {})}
                   >
                     <ChevronDown className="w-4 h-4 shrink-0 text-muted-foreground" />
                     <span className="flex-1 truncate font-medium">/</span>
@@ -429,7 +452,7 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
                           query={q}
                           selected={selected}
                           onToggle={toggle}
-                          onRowMenu={canCreateFolders ? setRowMenu : undefined}
+                          onRowMenu={e => { if (canCreateAt(e.path)) setRowMenu(e) }}
                           createParent={createParent}
                           onCreateConfirm={createFolder}
                           onCreateCancel={() => setCreateParent(null)}
@@ -454,7 +477,7 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
               ? `${selectedDocIds.size} document${selectedDocIds.size !== 1 ? 's' : ''} selected`
               : `${selected.size} path${selected.size !== 1 ? 's' : ''} selected`}
           </span>
-          <Button size="sm" onClick={confirm} disabled={!canConfirm || saving}>
+          <Button size="sm" onClick={confirm} disabled={!canConfirm || saving || creatingFolder}>
             {saving
               ? (<><Loader className="mr-1.5 h-3.5 w-3.5" />{isRelations ? 'Relating…' : 'Linking…'}</>)
               : (<><Link2 className="mr-1 h-3.5 w-3.5" />{isRelations ? 'Relate' : (confirmLabel ?? 'Link')}</>)}

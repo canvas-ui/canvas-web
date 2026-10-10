@@ -8,14 +8,16 @@ export interface TreeRefreshDetail {
   cacheInvalidated?: boolean
 }
 
-// Document membership/content never changes the folder hierarchy. Keep this
-// separate from the document-list subscriptions, including merge/subtract.
+// Keep this separate from high-volume document-list subscriptions. Backend
+// nudges and completed scans also retire cached mirrors: older runtimes do not
+// announce every implicitly created or pruned folder as a structural event.
 const TREE_EVENTS = [
   'tree.path.inserted', 'tree.path.moved', 'tree.path.removed', 'tree.path.copied',
   'tree.path.locked', 'tree.path.unlocked',
   'tree.layer.updated', 'tree.layer.converted', 'tree.recalculated',
   'tree.created', 'tree.deleted', 'tree.renamed',
-  'context.path.changed', 'backend.tree.changed', 'dataBackends.changed', 'services.changed',
+  'context.path.changed', 'backend.tree.changed', 'backend.changed', 'backend.resync.changed',
+  'dataBackends.changed', 'services.changed', 'connect',
 ]
 
 interface Watcher {
@@ -38,6 +40,9 @@ export function watchWorkspaceTreeChanges(workspaceName: string, workspaceId?: s
     let timer: ReturnType<typeof setTimeout> | undefined
     const handlers = TREE_EVENTS.map(event => {
       const handler = (payload: Record<string, unknown> = {}) => {
+        // Progress updates only affect the resync badge. Refresh after the
+        // scan has settled, including its folder sweep, not during each tick.
+        if (event === 'backend.resync.changed' && payload.resyncing !== false) return
         const id = typeof payload.workspaceId === 'string' ? payload.workspaceId : null
         const name = typeof payload.workspaceName === 'string' ? payload.workspaceName : null
         if (id && !workspaceIds.has(id)) return
@@ -46,7 +51,7 @@ export function watchWorkspaceTreeChanges(workspaceName: string, workspaceId?: s
         let treeName = typeof payload.treeName === 'string' ? payload.treeName : undefined
         if (event === 'tree.renamed') treeName = undefined // old name is absent from the event
         else if (event === 'context.path.changed') treeName ??= 'context'
-        else if (['backend.tree.changed', 'dataBackends.changed', 'services.changed'].includes(event)) treeName ??= 'backends'
+        else if (['backend.tree.changed', 'backend.changed', 'backend.resync.changed', 'dataBackends.changed', 'services.changed', 'connect'].includes(event)) treeName ??= 'backends'
         pending.add(treeName)
         // A fixed window also makes progress during a steady folder import.
         if (timer) return

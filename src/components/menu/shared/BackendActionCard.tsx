@@ -10,6 +10,8 @@ import {
   listBackends,
   backendKeepsPaths,
   backendTreeTarget,
+  backendFolderTarget,
+  addBackendContainers,
   type Backend,
   type BackendTransferMode,
   type BackendTransferConflict,
@@ -147,6 +149,17 @@ export function BackendActionCard({
     [backends, selected],
   )
   const showDestination = mode !== 'delete' && pathTargets.length > 0
+
+  const canCreateDestinationFolder = (path: string) => {
+    const target = backendFolderTarget(path, backends || [])
+    const backend = target && backends?.find(b => b.address === target.address)
+    return !!backend && !isDisabled(backend) && mode !== 'delete' && !saving
+  }
+  const createDestinationFolder = async (parent: string, name: string) => {
+    const target = backendFolderTarget(parent, backends || [])
+    if (!target || !canCreateDestinationFolder(parent)) throw new Error('Choose a writable file backend folder')
+    await addBackendContainers(workspaceId, target.driver, target.address, [[target.key, name].filter(Boolean).join('/')])
+  }
 
   // A pick in the backends tree names both the backend and the folder inside
   // it, so it also (re)selects the backend — one gesture instead of two.
@@ -395,6 +408,7 @@ export function BackendActionCard({
             fixedWorkspaceName={workspaceId}
             title="Pick a destination folder…"
             confirmLabel="Use folder"
+            backendFolderCreation={{ canCreate: canCreateDestinationFolder, create: createDestinationFolder }}
             onConfirm={pickFolder}
             onClose={() => setBrowsing(false)}
           />
