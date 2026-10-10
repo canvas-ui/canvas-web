@@ -1161,7 +1161,7 @@ export interface BackendTransferResult {
     kept?: string[]
     docDeleted?: boolean
   }>
-  failed: Array<{ id: number; reason: string }>
+  failed: Array<{ id: number; reason: string; code?: string; source?: string; target?: string; targetKey?: string }>
 }
 
 /**

@@ -1,4 +1,5 @@
 import { documentType, isDocumentFieldSort } from '@/lib/document-sort'
+import { backendTransferFailureMessage } from '@/lib/backend-transfer-errors'
 import { useLongPressContextMenu } from '@/hooks/use-long-press-context-menu'
 import { selectDocumentRange } from '@/lib/document-selection'
 import { CopyToWorkspacePanel } from '@/components/menu/shared/CopyToWorkspacePanel'
@@ -1141,12 +1142,15 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     return () => clearTimeout(t)
   }, [allowViewToggle])
 
-  // Clear selection when context path changes (during render — prev-value-in-
-  // state — so no effect round-trip)
-  const [prevContextPath, setPrevContextPath] = useState(contextPath)
-  if (contextPath !== prevContextPath) {
-    setPrevContextPath(contextPath)
+  // IDs belong to a workspace and tree scope, not merely a folder spelling.
+  const documentScope = JSON.stringify([workspaceId, treeName, contextPath])
+  const [prevDocumentScope, setPrevDocumentScope] = useState(documentScope)
+  if (documentScope !== prevDocumentScope) {
+    setPrevDocumentScope(documentScope)
     setSelectedDocuments(new Set())
+    setBackendPanel(null)
+    setLinkPanelIds(null)
+    setMenu(null)
   }
 
   // Content-header "Link selection" button (DefaultCanvas) — selection + the
@@ -1432,18 +1436,22 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
 
       if (done > 0) showSuccessToast(`${verb} ${where}: ${done} document${done !== 1 ? 's' : ''}${notes ? ` · ${notes}` : ''}`)
       else if (unchanged > 0) showSuccessToast(`Nothing to do — already on ${where}`)
-      else if (failed > 0) showErrorToast(result.failed[0]?.reason || 'Transfer failed')
-      if (failed > 0) console.warn('Backend transfer skipped documents:', result.failed)
+      if (failed > 0) {
+        showErrorToast(backendTransferFailureMessage(result.failed, new Map(documents.map(doc => [doc.id, getDocumentDisplayInfo(doc).title]))), `${failed} file${failed === 1 ? '' : 's'} skipped`)
+        console.warn('Backend transfer skipped documents:', result.failed)
+      }
 
       window.dispatchEvent(new CustomEvent('workspace:documents:refresh'))
-      setBackendPanel(null)
-      setSelectedDocuments(new Set())
+      // Retain only failures for retry; never repeat a successful move.
+      const failedIds = result.failed.map(failure => failure.id)
+      setBackendPanel(failedIds.length ? { ids: failedIds, mode } : null)
+      setSelectedDocuments(new Set(failedIds))
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : String(err))
     } finally {
       setBackendSaving(false)
     }
-  }, [workspaceId, backendPanel, showSuccessToast, showErrorToast])
+  }, [workspaceId, backendPanel, documents, showSuccessToast, showErrorToast])
 
   const handleSelectAll = useCallback(() => {
     if (selectedDocuments.size === filteredDocuments.length) {

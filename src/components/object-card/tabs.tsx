@@ -1,4 +1,5 @@
 import { MessageThread } from '@/components/common/MessageThread'
+import { backendTransferFailureMessage } from '@/lib/backend-transfer-errors'
 import { MessageComposerDialog } from '@/components/common/MessageComposerDialog'
 import type { ComposeMode } from '@/services/messages'
 import { Suspense, useEffect, useState, type ReactNode } from 'react'
@@ -489,7 +490,7 @@ export function BackendsTab({ document, workspaceId, onChanged }: TabProps) {
         onConflict: options.onConflict,
       })
       const outcome = result.successful[0]
-      if (!outcome) throw new Error(result.failed[0]?.reason || 'Transfer failed')
+      if (!outcome) throw new Error(backendTransferFailureMessage(result.failed, new Map([[document.id, getLocationFilename(document) || `Document ${document.id}`]])) || 'Transfer failed')
       const landed = outcome.transfers?.flatMap(t => t.state === 'unchanged' ? [] : [t.backend]) ?? []
       const where = backends.join(', ')
       if (mode === 'delete') showSuccessToast(`Deleted from ${where}`)
