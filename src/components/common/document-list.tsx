@@ -1,4 +1,5 @@
 import { documentType, isDocumentFieldSort } from '@/lib/document-sort'
+import { parseDocumentIdQuery } from '@/lib/document-id-query'
 import { backendTransferFailureMessage } from '@/lib/backend-transfer-errors'
 import { useLongPressContextMenu } from '@/hooks/use-long-press-context-menu'
 import { selectDocumentRange } from '@/lib/document-selection'
@@ -1271,10 +1272,10 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   const deferredQuery = useDeferredValue(searchQuery)
   const filteredDocuments = useMemo(() => {
     if (!deferredQuery.trim()) return documents
-    if (!fuse) return documents
-
-    const searchResults = fuse.search(deferredQuery)
-    return searchResults.map(result => result.item)
+    const { text, ids, invalid } = parseDocumentIdQuery(deferredQuery)
+    if (invalid) return []
+    const matches = text && fuse ? fuse.search(text).map(result => result.item) : documents
+    return ids.length ? matches.filter(document => ids.every(id => document.id === id)) : matches
   }, [documents, deferredQuery, fuse])
 
   // Folders are not searched: a typed query narrows to documents only.
@@ -1789,6 +1790,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                 ref={searchInputRef}
                 type="text"
                 placeholder={onBackendSearch ? (hasServerSearch ? 'Refine: add another query (Enter)…' : 'Search documents (Enter for server search)…') : 'Search documents...'}
+                title="Search text or an exact document ID, e.g. id:101140. Press Enter to search the server."
                 // UNCONTROLLED (no `value` prop): the DOM owns the text while
                 // typing, so mobile IMEs (Gboard composes even latin text) aren't
                 // fought by a controlled write-back — that both broke typing and
