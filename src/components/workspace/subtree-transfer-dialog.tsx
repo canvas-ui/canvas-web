@@ -92,6 +92,14 @@ function SubtreeTransfer({ mode, workspaceId, treeName, path, onImported, onClos
       {archive && <p className="text-sm">{archive.nodes.length} folders, {selectedCount} subtree documents, and {archive.documents.length - selectedCount} supporting records.
         {archive.summary?.externalRelations > 0 && ` ${archive.summary.externalRelations} references point outside this export.`}
       </p>}
+      {!!archive?.skippedDocuments?.length && <div role="status" className="space-y-2 rounded-md border p-3 text-sm">
+        <p>{archive.skippedDocuments.length} missing document{archive.skippedDocuments.length === 1 ? ' was' : 's were'} skipped during export. Available records and folders are included.</p>
+        <ul className="max-h-32 overflow-y-auto text-xs">
+          {archive.skippedDocuments.map(document => <li key={document.id}>
+            {mode === 'export' ? <a className="underline" target="_blank" rel="noopener noreferrer" href={`/workspaces/${encodeURIComponent(workspaceId)}/documents/by-id/${document.id}`}>Document {document.id}</a> : `Source document ${document.id}`}: {document.reason === 'not-found' ? 'record not found' : document.reason}
+          </li>)}
+        </ul>
+      </div>}
       {busy && <div role="status" className="flex items-center gap-2 text-sm"><RefreshCw className="h-4 w-4 animate-spin" />
         <span>{job ? `${job.phase.charAt(0).toUpperCase()}${job.phase.slice(1)}${job.total ? `: ${job.received} / ${job.total}` : '…'}` : 'Starting…'}</span>
       </div>}

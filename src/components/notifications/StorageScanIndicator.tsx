@@ -3,39 +3,79 @@ import { Loader2, X } from 'lucide-react'
 import { listBackends, type Backend } from '@/services/workspace'
 import socketService from '@/lib/socket'
 
+type Scan = Pick<Backend, 'address' | 'config' | 'progress' | 'resyncStartedAt'>
+interface ScanChange {
+  workspaceId?: string
+  backend?: string
+  resyncing?: boolean
+  progress?: Backend['progress']
+}
+
 /** Persistent, unobtrusive scan progress, including scans started before login. */
 export function StorageScanIndicator({ workspaceId, workspaceName }: { workspaceId: string; workspaceName: string }) {
-  const [scans, setScans] = useState<Backend[]>([])
+  const [scans, setScans] = useState<Scan[]>([])
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
-  const scanKey = (backend: Backend) => `${workspaceId}:${backend.address}:${backend.resyncStartedAt || ''}`
+  const scanKey = (backend: Scan) => `${workspaceId}:${backend.address}:${backend.resyncStartedAt || ''}`
 
   useEffect(() => {
     let disposed = false
     let pending = false
     let refreshAgain = false
+    let version = 0
+    const changes = new Map<string, { version: number; event: ScanChange }>()
+    let knownBackends = new Map<string, Backend>()
+    const applyChange = (current: Scan[], event: ScanChange): Scan[] => {
+      const remaining = current.filter(backend => backend.address !== event.backend)
+      if (!event.resyncing) return remaining
+      const existing = current.find(backend => backend.address === event.backend)
+      const backend = existing || knownBackends.get(event.backend!)
+      return [...remaining, {
+        address: event.backend!, config: backend?.config,
+        resyncStartedAt: backend?.resyncStartedAt || new Date().toISOString(),
+        progress: event.progress ?? backend?.progress,
+      }]
+    }
     const refresh = async () => {
       if (pending) { refreshAgain = true; return }
       pending = true
+      const requestVersion = version
       try {
         const backends = await listBackends(workspaceId)
-        if (!disposed) setScans(backends.filter(backend => backend.resyncing))
+        if (!disposed) {
+          knownBackends = new Map(backends.map(backend => [backend.address, backend]))
+          let next: Scan[] = backends.filter(backend => backend.resyncing)
+          // An older snapshot must not undo progress/completion received while
+          // it was downloading.
+          for (const change of changes.values()) {
+            if (change.version > requestVersion) next = applyChange(next, change.event)
+          }
+          setScans(next)
+        }
       } catch { /* Keep the last known progress during transient disconnects. */ }
       finally {
         pending = false
         if (refreshAgain && !disposed) { refreshAgain = false; void refresh() }
       }
     }
-    const onChange = (event: { workspaceId?: string }) => {
+    const onChange = (event: ScanChange) => {
+      if (event.workspaceId !== workspaceId || !event.backend || typeof event.resyncing !== 'boolean') return
+      changes.set(event.backend, { version: ++version, event })
+      setScans(previous => applyChange(previous, event))
+    }
+    const onBackendChanged = (event: { workspaceId?: string }) => {
       if (event.workspaceId === workspaceId) void refresh()
     }
     void refresh()
-    // Poll also covers reconnects, missed startup events and quiet progress updates.
-    const timer = setInterval(() => { void refresh() }, 3000)
+    const offConnect = socketService.on('connect', refresh)
     socketService.on('backend.resync.changed', onChange)
+    socketService.on('backend.changed', onBackendChanged)
+    window.addEventListener('focus', refresh)
     return () => {
       disposed = true
-      clearInterval(timer)
+      offConnect?.()
       socketService.off('backend.resync.changed', onChange)
+      socketService.off('backend.changed', onBackendChanged)
+      window.removeEventListener('focus', refresh)
     }
   }, [workspaceId])
 

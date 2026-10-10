@@ -190,7 +190,11 @@ async function requestJson<T>(
   } catch (error) {
     if (error instanceof CanvasError) {
       // A stopped workspace is an expected lifecycle state, handled inline.
-      if (error.code === 'WORKSPACE_STOPPED') throw error;
+      if (error.code === 'WORKSPACE_STOPPED') {
+        const ref = endpoint.match(/\/workspaces\/([^/?#]+)/)?.[1];
+        if (ref) window.dispatchEvent(new CustomEvent('workspace:stopped', { detail: { refs: [decodeURIComponent(ref)] } }));
+        throw error;
+      }
       if (error.code === 'ABORTED') throw new DOMException('Request aborted', 'AbortError');
       if (error.statusCode === 401 && !skipAuth) {
         handle401(noAuthRedirect);

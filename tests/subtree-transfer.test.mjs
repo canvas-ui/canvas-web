@@ -89,3 +89,28 @@ test('import resumes the same job after a polling failure and refreshes after co
   assert.equal(ui.button('Close').props.disabled, false)
   assert.equal(ui.button('Import subtree'), undefined)
 })
+
+test('export reports skipped IDs with inspection links and still permits downloading', async () => {
+  const ui = setup('export')
+  ui.button('Create export').props.onClick()
+  await new Promise(setImmediate)
+  ui.finish({ ...archive, skippedDocuments: [{ id: 101140, reason: 'not-found' }] })
+  await new Promise(setImmediate)
+  assert.match(JSON.stringify(ui.render()), /missing document/)
+  const link = ui.find(el => el.type === 'a')
+  assert.equal(link.props.href, '/workspaces/prod/documents/by-id/101140')
+  assert.equal(link.props.target, '_blank')
+  ui.button('Download export').props.onClick()
+  assert.deepEqual(ui.downloads, ['Cestovanie.canvas-subtree.json'])
+})
+
+test('import displays source skipped IDs without linking them to unrelated destination IDs', async () => {
+  const ui = setup('import')
+  ui.find(el => el.type === 'input' && el.props.type === 'file').props.onChange({ target: { files: [{ size: 1000,
+    text: async () => JSON.stringify({ ...archive, skippedDocuments: [{ id: 101140, reason: 'not-found' }] }),
+  }] } })
+  await new Promise(setImmediate)
+  assert.match(JSON.stringify(ui.render()), /Source document 101140/)
+  assert.equal(ui.find(el => el.type === 'a'), undefined)
+  assert.equal(ui.button('Import subtree').props.disabled, false)
+})

@@ -1,6 +1,7 @@
 import { Route } from 'react-router-dom'
 import WorkspacesPage from '@/pages/workspaces'
 import WorkspaceDetailPage from '@/pages/workspaces/[workspaceName]'
+import WorkspaceDocumentPage from '@/pages/workspaces/[workspaceName]/document'
 import HomePage from '@/pages/home'
 import DeskPage from '@/pages/desk'
 import ShareTargetPage from '@/pages/share-target'
@@ -51,6 +52,10 @@ export const shellRoutes = (
   <Route key="r4" path="apps/add/:kind" element={<QuickAddPage />} />
   <Route key="r5" path="workspaces" element={<WorkspacesPage />} />
   <Route key="r6" path="workspaces/:workspaceName" element={<WorkspaceDetailPage />} />
+  <Route key="workspace-document-by-id" path="workspaces/:workspaceName/documents/by-id/:documentId" element={<WorkspaceDocumentPage />} />
+  <Route key="workspace-document" path="workspaces/:workspaceName/documents/:documentId" element={<WorkspaceDocumentPage />} />
+  <Route key="workspace-document-by-hash" path="workspaces/:workspaceName/documents/by-hash/:algo/:checksum" element={<WorkspaceDocumentPage />} />
+  <Route key="workspace-document-by-checksum" path="workspaces/:workspaceName/documents/by-checksum/:algo/:checksum" element={<WorkspaceDocumentPage />} />
   <Route key="r7" path="workspaces/:workspaceName/settings" element={<WorkspaceSettingsPage />} />
   <Route key="r8" path="workspaces/:workspaceName/settings/:tab" element={<WorkspaceSettingsPage />} />
   <Route key="r9" path="workspaces/:workspaceName/path/*" element={<WorkspaceDetailPage />} />

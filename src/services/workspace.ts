@@ -147,6 +147,11 @@ export async function getWorkspace(id: string): Promise<Workspace> {
   return (p && 'workspace' in p) ? p.workspace : p as Workspace
 }
 
+/** Lightweight lifecycle check; does not load workspace metadata or trees. */
+export async function getWorkspaceStatus(id: string): Promise<Pick<Workspace, 'status'>> {
+  return api.get(`${API_ROUTES.workspaces}/${id}/status`)
+}
+
 // listWorkspaces should return a Promise where Workspace is the global type.
 export async function listWorkspaces(): Promise<Workspace[]> {
   try {
@@ -1232,7 +1237,13 @@ export interface DocumentLocationInfo {
  */
 export async function getWorkspaceDocument(workspaceId: string, documentId: number | string): Promise<CanvasDocument> {
   return await api.get<CanvasDocument>(
-    `${API_ROUTES.workspaces}/${workspaceId}/documents/${documentId}`
+    `${API_ROUTES.workspaces}/${encodeURIComponent(workspaceId)}/documents/${documentId}`
+  )
+}
+
+export async function getWorkspaceDocumentByChecksum(workspaceId: string, algo: string, checksum: string): Promise<CanvasDocument> {
+  return await api.get<CanvasDocument>(
+    `${API_ROUTES.workspaces}/${encodeURIComponent(workspaceId)}/documents/by-hash/${encodeURIComponent(algo)}/${encodeURIComponent(checksum)}`
   )
 }
 

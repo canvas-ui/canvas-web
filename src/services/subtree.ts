@@ -10,7 +10,8 @@ export interface SubtreeArchive {
   documents: Array<{ id: number }>
   relations: Array<{ from: number; p: string; to: number }>
   externalReferences: Array<{ id: number }>
-  summary: { folders: number; subtreeDocuments: number; supportingDocuments: number; documents: number; externalRelations: number }
+  skippedDocuments?: Array<{ id: number; reason: string }>
+  summary: { folders: number; subtreeDocuments: number; supportingDocuments: number; documents: number; externalRelations: number; skippedDocuments?: number }
 }
 
 export interface SubtreeImportResult {
