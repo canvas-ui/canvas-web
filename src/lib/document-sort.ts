@@ -27,24 +27,36 @@ export function sortDocuments<T extends Document>(documents: T[], sortBy: string
 // Bounded reads work with endpoints that cap their maximum response size.
 export async function getFieldSortedDocuments<T extends Document, E extends { payload: T[]; count?: number | null; totalCount?: number | null }>(
   options: { sortBy?: string; order?: 'asc' | 'desc'; limit?: number; offset?: number; page?: number },
-  fetchPage: (pagination: { limit: number; offset: number; page: number }) => Promise<E>,
+  fetchPage: (pagination: { limit: number; offset: number; page: undefined }) => Promise<E>,
 ): Promise<E> {
   const documents: T[] = []
   const seen = new Set<number>()
   let response: E
   let offset = 0
+  let batchSize = 500
   do {
-    response = await fetchPage({ limit: 500, offset, page: 1 })
-    if (!response.payload.length) break
+    // Use offset alone: a fixed page=1 can override it on older endpoints.
+    response = await fetchPage({ limit: batchSize, offset, page: undefined })
+    // Learn an endpoint's response cap once, then keep a stable scan stride.
+    // Later pages can be short when indexed IDs cannot be hydrated; advancing
+    // by their returned length would overlap the same candidate window.
+    if (offset === 0 && response.payload.length && response.payload.length < batchSize
+      && (response.totalCount == null || response.payload.length < response.totalCount)) {
+      batchSize = response.payload.length
+      // Re-read the first window at the learned size. Its short response may
+      // reflect missing records rather than a cap; using the large window's
+      // documents with the smaller stride would overlap them on later reads.
+      response = await fetchPage({ limit: batchSize, offset, page: undefined })
+    }
+    if (!response.payload.length && (response.totalCount == null || offset >= response.totalCount)) break
     let added = 0
     for (const document of response.payload) {
       if (!seen.has(document.id)) { seen.add(document.id); documents.push(document); added++ }
     }
-    if (!added) throw new Error('Document pagination did not advance')
-    offset += response.payload.length
+    if (response.payload.length && !added) throw new Error('Document pagination did not advance')
+    offset += batchSize
     if (response.totalCount != null && offset >= response.totalCount) break
-    if (response.totalCount == null && response.payload.length < 500) break
-  } while (response.payload.length > 0)
+  } while (true)
   const sorted = sortDocuments(documents, options.sortBy!, options.order)
   const limit = options.limit ?? 50
   const start = Math.max(0, options.offset ?? ((options.page ?? 1) - 1) * (limit || 100))

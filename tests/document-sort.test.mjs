@@ -54,7 +54,7 @@ test('pagination sorts the whole scoped set before slicing, including capped res
   }
   const first = await getFieldSortedDocuments({ sortBy: 'alphabetical', limit: 2 }, fetch)
   assert.deepEqual(ids(first.payload), [3, 4])
-  assert.deepEqual(reads, [0, 2])
+  assert.deepEqual(reads, [0, 0, 2])
   const second = await getFieldSortedDocuments({ sortBy: 'alphabetical', limit: 2, page: 2 }, fetch)
   assert.deepEqual(ids(second.payload), [2, 1])
   assert.equal(second.totalCount, 4)
@@ -67,6 +67,52 @@ test('empty results and stalled pagination finish without looping', async () => 
   const empty = await getFieldSortedDocuments({ sortBy: 'type' }, async () => ({ payload: [], totalCount: 0 }))
   assert.equal(empty.count, 0)
   await assert.rejects(getFieldSortedDocuments({ sortBy: 'type' }, async () => ({ payload: [note(1, 'A')], totalCount: 2 })), /did not advance/)
+})
+
+test('short and empty hydrated pages advance by the scan window without losing later documents', async () => {
+  // A bitmap still counts candidate IDs whose records are missing/corrupt.
+  // An endpoint cap makes the first window smaller than the requested 500.
+  const candidates = [note(1, 'Z'), note(2, 'Y'), null, note(4, 'B'), null, null, note(7, 'A'), null]
+  const reads = []
+  const result = await getFieldSortedDocuments({ sortBy: 'alphabetical', limit: 0, page: 3 }, async pagination => {
+    reads.push({ ...pagination })
+    const size = Math.min(pagination.limit, 2)
+    return {
+      payload: candidates.slice(pagination.offset, pagination.offset + size).filter(Boolean),
+      totalCount: candidates.length,
+    }
+  })
+  assert.deepEqual(ids(result.payload), [7, 4, 2, 1])
+  assert.equal(result.totalCount, 4)
+  assert.deepEqual(reads.map(read => read.offset), [0, 0, 2, 4, 6])
+  assert.deepEqual(reads.map(read => read.limit), [500, 2, 2, 2, 2])
+  assert.ok(reads.every(read => read.page === undefined))
+})
+
+test('endpoints without totals are scanned through the terminal empty page, including caps', async () => {
+  const documents = [note(1, 'Z'), note(2, 'Y'), note(3, 'A'), note(4, 'B'), note(5, 'C')]
+  const reads = []
+  const result = await getFieldSortedDocuments({ sortBy: 'alphabetical', limit: 2, page: 2 }, async pagination => {
+    reads.push(pagination.offset)
+    return { payload: documents.slice(pagination.offset, pagination.offset + Math.min(pagination.limit, 2)) }
+  })
+  assert.deepEqual(ids(result.payload), [5, 2])
+  assert.equal(result.totalCount, 5)
+  assert.deepEqual(reads, [0, 0, 2, 4, 6])
+})
+
+test('missing records in the first window are not mistaken for a response cap', async () => {
+  const candidates = [null, note(2, 'Z'), null, null, note(5, 'A'), note(6, 'B')]
+  const reads = []
+  const result = await getFieldSortedDocuments({ sortBy: 'alphabetical', limit: 0 }, async pagination => {
+    reads.push(pagination.offset)
+    return {
+      payload: candidates.slice(pagination.offset, pagination.offset + pagination.limit).filter(Boolean),
+      totalCount: candidates.length,
+    }
+  })
+  assert.deepEqual(ids(result.payload), [5, 6, 2])
+  assert.deepEqual(reads, [0, 0, 3])
 })
 
 for (const scope of ['workspace', 'context']) {
@@ -93,8 +139,9 @@ for (const scope of ['workspace', 'context']) {
     }
     assert.deepEqual(ids(documents), [3])
     assert.equal(totalCount, 3)
-    assert.equal(requests.length, 2)
+    assert.equal(requests.length, 3)
     for (const params of requests) {
+      assert.equal(params.get('page'), null)
       assert.equal(params.get('anyOf'), 'tag/a')
       assert.equal(params.get('allOf'), 'tag/b')
       assert.equal(params.get('q'), 'search')
