@@ -1790,7 +1790,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                 ref={searchInputRef}
                 type="text"
                 placeholder={onBackendSearch ? (hasServerSearch ? 'Refine: add another query (Enter)…' : 'Search documents (Enter for server search)…') : 'Search documents...'}
-                title="Search text or an exact document ID, e.g. id:101140. Press Enter to search the server."
+                title="Search text or an exact document ID, e.g. @id:101140. Press Enter to search the server."
                 // UNCONTROLLED (no `value` prop): the DOM owns the text while
                 // typing, so mobile IMEs (Gboard composes even latin text) aren't
                 // fought by a controlled write-back — that both broke typing and
