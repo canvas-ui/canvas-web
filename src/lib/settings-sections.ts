@@ -3,6 +3,7 @@ import {
   Brain,
   Cpu,
   Database,
+  FolderSync,
   HardDrive,
   KeyRound,
   Link2,
@@ -34,6 +35,7 @@ export type WorkspaceSettingsTab =
   | 'sync'
   | 'services'
   | 'shares'
+  | 'policies'
   | 'hooks'
 
 export const WORKSPACE_SETTINGS_SECTIONS: readonly SettingsSection<WorkspaceSettingsTab>[] = [
@@ -44,6 +46,7 @@ export const WORKSPACE_SETTINGS_SECTIONS: readonly SettingsSection<WorkspaceSett
   { id: 'sync', label: 'Synchronization', description: 'Manage device copies and resolve sync conflicts', icon: RefreshCw },
   { id: 'services', label: 'Connected services', description: 'Configure Git, WebDAV, IMAP and other connectors', icon: Server },
   { id: 'shares', label: 'Sharing & permissions', description: 'Create public links and manage workspace access', icon: Link2 },
+  { id: 'policies', label: 'Storage policies', description: 'Mirror folders of the virtual tree to physical backends', icon: FolderSync },
   { id: 'hooks', label: 'Automation', description: 'Run hooks in response to workspace events', icon: Webhook },
 ]
 

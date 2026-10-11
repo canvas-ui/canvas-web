@@ -10,7 +10,7 @@ import {
   ChevronRight, ChevronDown,
   Plus, Trash2, RotateCcw, Edit2, Copy, Scissors, Clipboard,
   Layers, LayoutDashboard, MoreHorizontal, Lock, Unlock, Eye, Share2, Palette, RefreshCw,
-  FolderSymlink, FolderTree, ArrowDownToLine, ArrowUpFromLine, HardDrive, Download, Pin, PinOff } from 'lucide-react'
+  FolderSymlink, FolderTree, ArrowDownToLine, ArrowUpFromLine, HardDrive, Download, Pin, PinOff, FolderSync } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import { cn, isCoarsePointer } from '@/lib/utils'
 import { backendTrashLocation } from '@/lib/backend-trash'
@@ -71,6 +71,13 @@ export interface MenuTreeViewProps {
   // directory trees: this path is the condition; backends tree: this folder
   // is the destination).
   onAddStoreRule?: (path: string, kind?: 'store' | 'download') => void
+  // Virtual trees only: open the storage-policy dialog for this folder
+  // (documents filed here are mirrored to physical backends).
+  onStoragePolicy?: (path: string) => void
+  // Virtual trees only: title for the sync badge on nodes covered by an
+  // enabled storage policy (e.g. "Mirrored to workspace:home:Invoices");
+  // null/undefined = no badge.
+  policyBadgeFor?: (path: string) => string | null
   // Writable file-backend folder ops (real fs dirs under /file/<addr> in the
   // backends tree).
   onCreateBackendFolder?: (parentPath: string, name: string) => Promise<boolean>
@@ -168,6 +175,7 @@ interface CtxMenuProps {
   onAddRule?: MenuTreeViewProps['onAddRule']
   onSyncFolderTree?: MenuTreeViewProps['onSyncFolderTree']
   onAddStoreRule?: MenuTreeViewProps['onAddStoreRule']
+  onStoragePolicy?: MenuTreeViewProps['onStoragePolicy']
   onRenameBackendFolder?: MenuTreeViewProps['onRenameBackendFolder']
   onRestoreTrash?: MenuTreeViewProps['onRestoreTrash']
   onDiscardTrash?: MenuTreeViewProps['onDiscardTrash']
@@ -187,7 +195,7 @@ function CtxMenu({
   onStartInlineCreate, onChangeIcon, onNewCanvas, onShareCanvas, onRemove, onRename,
   onExportSubtree, onImportSubtree,
   onLock, onUnlock, onDestroy, onMerge, onSubtract, onMergeDown, onSubtractDown, onResyncBackend,
-  onAddRule, onSyncFolderTree, onAddStoreRule,
+  onAddRule, onSyncFolderTree, onAddStoreRule, onStoragePolicy,
   onRenameBackendFolder, onDeleteBackendFolder, onRestoreTrash, onDiscardTrash,
   onCopy, onCut, onPaste,
   pastedDocumentIds, onPasteDocuments,
@@ -286,13 +294,16 @@ function CtxMenu({
         {/* Storage rule from a context/directory folder ("Create rule…"): "files filed here
             keep their bytes on a real backend" (default workspace:home,
             mirroring this path). */}
-        {!isBackendsTree && onAddStoreRule && path !== '/' && (
+        {!isBackendsTree && (onAddStoreRule || onStoragePolicy) && path !== '/' && (
           <>
-            {item(<HardDrive className="w-3 h-3" />, 'Create rule…', async () => {
+            {onAddStoreRule && item(<HardDrive className="w-3 h-3" />, 'Create rule…', async () => {
               onAddStoreRule(path)
             })}
-            {item(<Download className="w-3 h-3" />, 'Create download rule…', async () => {
+            {onAddStoreRule && item(<Download className="w-3 h-3" />, 'Create download rule…', async () => {
               onAddStoreRule(path, 'download')
+            })}
+            {onStoragePolicy && node.type !== 'canvas' && item(<FolderSync className="w-3 h-3" />, 'Storage policy…', async () => {
+              onStoragePolicy(path)
             })}
             <div className="my-1 h-px bg-border" />
           </>
@@ -590,6 +601,7 @@ interface CardNodeProps {
   onDragEnd: () => void
   onDrop: (path: string, e: React.DragEvent) => void
   resyncingPaths?: Set<string>
+  policyBadgeFor?: (path: string) => string | null
   removingPaths: Map<string, string>
   // Accordion style: full-width rows, no indent. `trail` is one entry per
   // ancestor (outermost first) — that ancestor's effective colour or null —
@@ -605,11 +617,12 @@ function CardNode({
   onSelect, onShiftSelect, onShowContent, onCtrl, onCtxMenu,
   onConfirmCreate, onCancelCreate, onOpenPicker, styleOverrides,
   dragOverPath, isCopyDrag, onDragStart, onDragEnter, onDragOver, onDragLeave, onDragEnd, onDrop,
-  resyncingPaths, removingPaths, accordion = false, trail = [],
+  resyncingPaths, policyBadgeFor, removingPaths, accordion = false, trail = [],
 }: CardNodeProps) {
   const longPressMenu = useLongPressContextMenu()
 
   const path = buildPath(parentPath, node.name)
+  const policyBadge = policyBadgeFor?.(path) ?? null
   const style = styleOverrides.get(path) ?? getLayerStyle(node)
 
   const [expanded, setExpanded] = useState(() =>
@@ -779,6 +792,11 @@ function CardNode({
       {resyncingPaths?.has(path) && (
         <RefreshCw className="mr-1 h-3.5 w-3.5 shrink-0 animate-spin self-center opacity-70" aria-label="Indexing" />
       )}
+      {policyBadge && (
+        <FolderSync className="mr-1 h-3 w-3 shrink-0 self-center text-muted-foreground" aria-label={policyBadge}>
+          <title>{policyBadge}</title>
+        </FolderSync>
+      )}
 
       {!readOnly && (
         <button
@@ -909,6 +927,11 @@ function CardNode({
             aria-label="Indexing"
           />
         )}
+        {policyBadge && (
+          <FolderSync className="w-3 h-3 shrink-0 text-muted-foreground" aria-label={policyBadge}>
+            <title>{policyBadge}</title>
+          </FolderSync>
+        )}
 
         {!readOnly && (
           <button
@@ -964,6 +987,7 @@ function CardNode({
               onDragEnd={onDragEnd}
               onDrop={onDrop}
               resyncingPaths={resyncingPaths}
+              policyBadgeFor={policyBadgeFor}
               removingPaths={removingPaths}
               accordion={accordion}
               trail={childTrail}
@@ -979,7 +1003,7 @@ function CardNode({
 
 export function MenuTreeView({
   root, treeName = 'context', isBackendsTree = false, onRestoreTrash, onDiscardTrash, selectedPath, pendingPath, onSelect, isLoading = false, readOnly = false,
-  onAddRule, onSyncFolderTree, onAddStoreRule,
+  onAddRule, onSyncFolderTree, onAddStoreRule, onStoragePolicy, policyBadgeFor,
   rootLabel, contentPath, onShowContent, onOpenToSide, onShiftSelect,
   onInsertPath, onNewCanvas, onShareCanvas, onRemovePath, onRenamePath, onMovePath, onCopyPath,
   onExportSubtree, onImportSubtree,
@@ -1379,6 +1403,7 @@ export function MenuTreeView({
     onDragEnd: handleDragEnd,
     onDrop: handleDrop,
     resyncingPaths,
+    policyBadgeFor: isBackendsTree ? undefined : policyBadgeFor,
     removingPaths,
   }
 
@@ -1544,6 +1569,7 @@ export function MenuTreeView({
           onAddRule={onAddRule}
           onSyncFolderTree={onSyncFolderTree}
           onAddStoreRule={onAddStoreRule}
+          onStoragePolicy={!readOnly && !isBackendsTree ? onStoragePolicy : undefined}
           onRenameBackendFolder={onRenameBackendFolder}
           onDeleteBackendFolder={onDeleteBackendFolder}
           onCopy={path => copyPath(path, 'copy')}

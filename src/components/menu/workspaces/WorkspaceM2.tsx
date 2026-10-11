@@ -3,6 +3,9 @@ import { WorkspaceContentGate } from '@/components/workspace/workspace-content-g
 import { useTreeNavigation } from '@/hooks/useTreeNavigation'
 import { cycleTree } from '@/lib/key-bindings'
 import { AutoLinkFolderPanel } from '../shared/AutoLinkFolderPanel'
+import { StoragePolicyPanel } from '../shared/StoragePolicyPanel'
+import { useStoragePolicies } from '@/hooks/useStoragePolicies'
+import { describePolicyTargets, policiesForPath, qualifyPolicyPath } from '@/services/storage-policies'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Settings, ExternalLink, GitBranch, FolderTree, Layers, LayoutDashboard, Search, Lock, Unlock, Edit2, Trash2, Database, Pin } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
@@ -109,6 +112,16 @@ function WorkspaceM2Content() {
   const [searchQuery, setSearchQuery] = useState('')
   const [docClipboard, setDocClipboard] = useState<{ documentIds: number[]; operation: 'copy' | 'cut' } | null>(null)
   const [autoLinkPath, setAutoLinkPath] = useState<string | null>(null)
+  // Storage policy dialog: the qualified virtual path (ctx:/… or dir:/…) it
+  // was opened for; null = closed.
+  const [storagePolicyPath, setStoragePolicyPath] = useState<string | null>(null)
+  const { policies: storagePolicies, refresh: refreshStoragePolicies } = useStoragePolicies(wsName)
+  const policyBadgeFor = useCallback((path: string): string | null => {
+    if (activeTab !== 'context' && activeTab !== 'directory') return null
+    if (!storagePolicies.length) return null
+    const matches = policiesForPath(storagePolicies, activeTab, path)
+    return matches.length ? `Storage policy targets: ${describePolicyTargets(matches)} (see Settings for transfer status)` : null
+  }, [activeTab, storagePolicies])
   const [pins, setPins] = useState<WorkspacePin[]>([])
   const [isLoadingPins, setIsLoadingPins] = useState(false)
   // Opening a pin navigates; the URL sync below would then jump to the tree
@@ -689,6 +702,8 @@ function WorkspaceM2Content() {
                 : { kind, path: `${activeTab === 'directory' ? 'dir' : 'ctx'}:${path}`, storeFolder: kind === 'download' ? 'Downloads' : defaultStoreFolder(path) }
               navigate(`/workspaces/${wsName}/settings/hooks?${rulePrefillParams(prefill).toString()}`)
             } : undefined}
+            onStoragePolicy={wsName && (activeTab === 'context' || activeTab === 'directory') ? (path) => setStoragePolicyPath(qualifyPolicyPath(activeTab, path)) : undefined}
+            policyBadgeFor={policyBadgeFor}
             pastedDocumentIds={docClipboard?.documentIds}
             isPathPinned={isPathPinned}
             onTogglePin={wsName ? handleTogglePin : undefined}
@@ -726,6 +741,7 @@ function WorkspaceM2Content() {
         setAutoLinkPath(null)
         navigate(`/workspaces/${wsName}/settings/hooks?section=rules`)
       }} />}
+      {storagePolicyPath && wsName && <StoragePolicyPanel workspaceId={wsName} path={storagePolicyPath} onClose={() => setStoragePolicyPath(null)} onSaved={() => { void refreshStoragePolicies() }} />}
     </div>
   )
 }

@@ -16,6 +16,7 @@ import { PageHeader } from '@/components/common/page-header'
 import { WORKSPACE_SETTINGS_SECTIONS, resolveWorkspaceSettingsTab, type WorkspaceSettingsTab } from '@/lib/settings-sections'
 import { InferdSettingsPanel } from '@/components/workspace/inferd-settings-panel'
 import { HooksPanel } from '@/components/workspace/hooks-panel'
+import { StoragePoliciesPanel } from '@/components/workspace/storage-policies-panel'
 import type { RulePrefill } from '@/services/hooks'
 import { TrashPanel } from '@/components/workspace/trash-panel'
 import { SyncPanel } from '@/components/workspace/sync-panel'
@@ -1745,6 +1746,10 @@ export default function WorkspaceSettingsPage() {
             <ImapMailboxesPanel workspaceId={workspaceId} enabled={!!(services?.imap?.enabled || services?.imapSync?.enabled)} />
           </section>
         </div>
+      )}
+
+      {workspace.status === 'active' && activeTab === 'policies' && (
+        <StoragePoliciesPanel workspaceId={workspaceId} />
       )}
 
       {workspace.status === 'active' && activeTab === 'hooks' && (
