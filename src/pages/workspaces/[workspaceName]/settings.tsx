@@ -1,3 +1,4 @@
+import { S3BackendForm } from '@/components/settings/S3BackendForm'
 import { WorkspaceProtectionPanel } from '@/components/workspace/protection-panel'
 import { useMenu } from '@/components/shell/use-menu'
 import { useIsMobile } from '@/hooks/use-mobile'
@@ -80,10 +81,6 @@ const DATA_BACKEND_LABELS: Record<string, { title: string; description: string }
   'workspace:data': {
     title: 'Workspace Data',
     description: 'Managed content-addressable blob store (deduped, checksum-keyed). Opaque by design: the tree is the navigation; not meant for direct edits or export.',
-  },
-  s3: {
-    title: 'S3',
-    description: 'Remote object storage. Placeholder until Stored gets a real S3 driver.',
   },
   imap: {
     title: 'IMAP',
@@ -1495,12 +1492,15 @@ export default function WorkspaceSettingsPage() {
             const cfg = (backend.config || {}) as Record<string, unknown>
             const backendId = backend.address
             const device = (cfg.device || null) as { id?: string; name?: string } | null
-            // User-added mounts (local folder / Google Drive): labelled, removable.
+            // User-added mounts: labelled, removable.
             const isGdrive = backend.driver === 'gdrive'
-            const isUserMount = (backend.driver === 'file' || isGdrive) && cfg.managed !== true && !DATA_BACKEND_LABELS[backendId]
+            const isS3 = backend.driver === 's3'
+            const isUserMount = (backend.driver === 'file' || isGdrive || isS3) && cfg.managed !== true && !DATA_BACKEND_LABELS[backendId]
             const copy = DATA_BACKEND_LABELS[backendId] || {
               title: (typeof cfg.label === 'string' && cfg.label) || backendId,
-              description: isGdrive
+              description: isS3
+                ? `S3 bucket ${cfg.bucket || ''}${cfg.prefix ? `/${cfg.prefix}` : ''}${cfg.endpoint ? ` at ${cfg.endpoint}` : ''}. Filing copies only.`
+                : isGdrive
                 ? `Google Drive${typeof cfg.account === 'string' && cfg.account && cfg.account !== cfg.label ? ` (${cfg.account})` : ''}, folder ${typeof cfg.folderId === 'string' && cfg.folderId ? cfg.folderId : 'root'}${backend.treePath ? `, mirrored at ${backend.treePath}` : ''}.`
                 : isUserMount
                   ? `Local folder${device?.name ? ` on ${device.name}` : ''}, indexed in place${backend.treePath ? ` and mirrored at ${backend.treePath}` : ''}.`
@@ -1559,7 +1559,7 @@ export default function WorkspaceSettingsPage() {
                         />
                       </label>
                     )}
-                    {(backend.driver === 'file' || isGdrive) && canToggle && (
+                    {(backend.driver === 'file' || isGdrive || isS3) && canToggle && (
                       <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground" title={isGdrive ? 'Poll the Drive changes feed so edits made in Drive show up without a manual re-sync.' : undefined}>
                         Watch for changes
                         <Toggle
@@ -1624,6 +1624,7 @@ export default function WorkspaceSettingsPage() {
                     )}
                   </div>
                 </div>
+                {isS3 && <S3BackendForm workspaceId={workspaceId} backend={backend} onSaved={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />}
                 {/* Sync exclusions only apply to enumerable/synced backends —
                     the internal cache is not synced or mirrored. */}
                 {backend.driver === 'file' && supported && !alwaysOn && (
@@ -1659,6 +1660,7 @@ export default function WorkspaceSettingsPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start">
             <AddLocalFolderForm workspaceId={workspaceId} onAdded={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />
             <AddGoogleDriveForm workspaceId={workspaceId} onAdded={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />
+            <S3BackendForm workspaceId={workspaceId} onSaved={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />
           </div>
 
           {/* Trash is where deleted documents are held before they are purged

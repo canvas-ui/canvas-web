@@ -38,15 +38,11 @@ interface FieldSpec {
 const DRIVERS: Record<string, { label: string; icon: string; blurb: string; fields: FieldSpec[] }> = {
   git: {
     label: 'Git repository', icon: 'mdi:git',
-    blurb: 'Create a local repository or clone a remote into the workspace. Branches appear under Backends → Workspace → Git. Only files linked into a virtual tree are extracted and embedded.',
+    blurb: 'Create a local repository or clone a remote into the workspace. Branches appear under Backends → Workspace → Git. Use Auto-Link on a branch or folder afterward to file its documents into a virtual tree.',
     fields: [
       { key: 'address', label: 'Repository name', placeholder: 'company-ui', required: true },
       { key: 'url', label: 'Remote URL', placeholder: 'git@github.com:company/ui.git', hint: 'Leave empty for a local repository. Private repos use the server’s SSH keys or Git credential helper.' },
       { key: 'branches', label: 'Branches to browse (empty means all)', list: true, placeholder: 'main, jira-1234/myusername-int-qf' },
-      { key: 'linkBranch', label: 'Branch to link', placeholder: 'main' },
-      { key: 'linkPath', label: 'Folder in branch', placeholder: 'docs/UI', hint: 'Leave empty to link the whole branch.' },
-      { key: 'targetTree', label: 'Destination tree', placeholder: 'context' },
-      { key: 'targetPath', label: 'Destination path', placeholder: '/company/Branding/UI', hint: 'New files and commits follow this link. Leave empty to browse without automatic filing.' },
     ],
   },
   github: {
