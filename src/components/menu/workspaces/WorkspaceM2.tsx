@@ -363,7 +363,7 @@ function WorkspaceM2Content() {
     const parts = splitBackendsPath(path)
     if (!parts) throw new Error('Not a backend folder')
     const hookFile = findBackendTreeSyncHook(await listHooks(wsName))
-    if (!hookFile) throw new Error('No backend-tree-sync hook in this workspace (git/hooks/started/). Recreate the seed hooks from Settings → Hooks.')
+    if (!hookFile) throw new Error('No backend-tree-sync hook in this workspace (Git/internal/hooks/started/). Recreate the seed hooks from Settings → Hooks.')
     const res = await runHook(wsName, {
       hookFile,
       payload: { backend: parts.backend, subdir: parts.rel, target: defaultMirrorTarget(path) },

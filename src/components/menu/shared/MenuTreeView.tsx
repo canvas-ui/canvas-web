@@ -120,6 +120,7 @@ const ACCORDION_STICKY_DEPTH = 4
 function fileBackendTarget(path: string, isBackendsTree: boolean): { address: string; key: string } | null {
   if (!isBackendsTree) return null
   const parts = String(path || '').split('/').filter(Boolean)
+  if (parts[0] === 'workspace' && parts[1] === 'git') return null
   if (parts[0] === 'workspace' && parts.length >= 2) return { address: `workspace:${parts[1]}`, key: parts.slice(2).join('/') }
   if (parts[0] === 'device' && parts.length >= 3) return { address: parts[2], key: parts.slice(3).join('/') }
   if (parts[0] === 'file' && parts.length >= 2) return { address: parts[1], key: parts.slice(2).join('/') }
@@ -129,6 +130,7 @@ function fileBackendTarget(path: string, isBackendsTree: boolean): { address: st
 function backendNameForPath(path: string, isBackendsTree: boolean): string | null {
   if (!isBackendsTree) return null
   const parts = String(path || '').split('/').filter(Boolean)
+  if (parts[0] === 'workspace' && parts[1] === 'git') return parts[2] || null
   if (parts[0] === 'workspace' && parts.length >= 2) return `workspace:${parts[1]}`
   if (parts[0] === 'device') return parts.length >= 3 ? parts[2] : null
   return parts.length >= 2 ? parts[1] : null // /imap/<account>, legacy /file/<address>

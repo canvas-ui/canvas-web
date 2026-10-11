@@ -12,7 +12,7 @@ const OPTIONS = [
     icon: FolderTree,
     title: 'Standard',
     blurb: 'Everything in one folder: your files in home/, alongside db/, data/, git/.',
-    tree: ['workspace.json', 'home/  ← your files', 'db/  data/  cache/  git/'],
+    tree: ['workspace.json', 'home/  ← your files', 'db/  data/  cache/  Git/'],
   },
   {
     value: 'home' as const,

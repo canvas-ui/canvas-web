@@ -338,7 +338,7 @@ export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed, initia
   }
 
   const groups = section === 'hooks' ? groupHooksByEvent(files) : { scripts: files }
-  const gitUrl = `${API_URL}/workspaces/${workspaceId}/git`
+  const gitUrl = `${API_URL}/workspaces/${workspaceId}/git/internal`
 
   return (
     // @container: this panel lives inside the settings column, which the docked

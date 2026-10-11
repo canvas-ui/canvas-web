@@ -63,7 +63,7 @@ test('new backend folder is created physically, refreshed, and selected for imme
 
 test('structural groups, read-only mounts, and blob stores cannot create destination folders', () => {
   const { context } = harness()
-  for (const path of ['/', '/workspace', '/device/server', '/device/server/disk', '/workspace/cache']) assert.equal(context.canCreateAt(path), false, path)
+  for (const path of ['/', '/workspace', '/device/server', '/device/server/disk', '/workspace/cache', '/workspace/git', '/workspace/git/internal/main']) assert.equal(context.canCreateAt(path), false, path)
   context.saving = true
   assert.equal(context.canCreateAt('/workspace/home'), false)
 })

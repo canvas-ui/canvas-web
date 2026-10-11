@@ -36,6 +36,19 @@ interface FieldSpec {
 }
 
 const DRIVERS: Record<string, { label: string; icon: string; blurb: string; fields: FieldSpec[] }> = {
+  git: {
+    label: 'Git repository', icon: 'mdi:git',
+    blurb: 'Create a local repository or clone a remote into the workspace. Branches appear under Backends → Workspace → Git. Only files linked into a virtual tree are extracted and embedded.',
+    fields: [
+      { key: 'address', label: 'Repository name', placeholder: 'company-ui', required: true },
+      { key: 'url', label: 'Remote URL', placeholder: 'git@github.com:company/ui.git', hint: 'Leave empty for a local repository. Private repos use the server’s SSH keys or Git credential helper.' },
+      { key: 'branches', label: 'Branches to browse (empty means all)', list: true, placeholder: 'main, jira-1234/myusername-int-qf' },
+      { key: 'linkBranch', label: 'Branch to link', placeholder: 'main' },
+      { key: 'linkPath', label: 'Folder in branch', placeholder: 'docs/UI', hint: 'Leave empty to link the whole branch.' },
+      { key: 'targetTree', label: 'Destination tree', placeholder: 'context' },
+      { key: 'targetPath', label: 'Destination path', placeholder: '/company/Branding/UI', hint: 'New files and commits follow this link. Leave empty to browse without automatic filing.' },
+    ],
+  },
   github: {
     label: 'GitHub Issues',
     icon: 'mdi:github',
@@ -198,6 +211,7 @@ export function ConnectorsSection({ workspaceId }: { workspaceId: string }) {
       config.readOnly = config.writeBack !== true
       delete config.writeBack
     }
+    if (adding === 'git') config.enabled = true
     setBusy(true)
     try {
       if (editing) await updateBackend(workspaceId, editing.driver, editing.address, config)
@@ -214,7 +228,8 @@ export function ConnectorsSection({ workspaceId }: { workspaceId: string }) {
 
   const sync = async (c: Backend) => {
     try {
-      await syncBackend(workspaceId, c.driver, c.address)
+      if (c.driver === 'git' && c.enabled === false) await updateBackend(workspaceId, c.driver, c.address, { enabled: true })
+      else await syncBackend(workspaceId, c.driver, c.address)
       showToast({ title: `Syncing ${c.driver}/${c.address}` })
       setTimeout(() => { void load() }, 1500)
     } catch (err) {
@@ -223,7 +238,10 @@ export function ConnectorsSection({ workspaceId }: { workspaceId: string }) {
   }
 
   const remove = async (c: Backend) => {
-    if (!window.confirm(`Remove ${c.driver}/${c.address}? Synced documents stay in the backends tree until purged.`)) return
+    const prompt = c.driver === 'git'
+      ? `Stop syncing ${c.address}? Its checkout and existing tree documents will stay available.`
+      : `Remove ${c.driver}/${c.address}? Synced documents stay in the backends tree until purged.`
+    if (!window.confirm(prompt)) return
     try {
       await removeBackend(workspaceId, c.driver, c.address)
       await load()
@@ -238,7 +256,7 @@ export function ConnectorsSection({ workspaceId }: { workspaceId: string }) {
         <div>
           <h2 className="text-sm font-semibold">Connectors</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            GitHub issues, Slack, Google Calendar, CalDAV and MS Teams, polled into the backends tree (read-only unless write-back is enabled).
+            Git repositories, GitHub issues, Slack, Google Calendar, CalDAV and MS Teams, polled into the backends tree (read-only unless write-back is enabled).
           </p>
         </div>
         <Button type="button" variant="outline" size="sm" disabled={refreshing} onClick={() => { void refresh() }} title="Refresh">
@@ -260,12 +278,12 @@ export function ConnectorsSection({ workspaceId }: { workspaceId: string }) {
                   <span className="flex-1" />
                   <Button type="button" variant="outline" size="sm" disabled={c.status === 'syncing'} onClick={() => { void sync(c) }}>
                     <RefreshCw className={`mr-1 h-3 w-3 ${c.status === 'syncing' ? 'animate-spin' : ''}`} />
-                    {c.status === 'syncing' ? 'Syncing' : 'Sync now'}
+                    {c.status === 'syncing' ? 'Syncing' : c.driver === 'git' && c.enabled === false ? 'Resume sync' : 'Sync now'}
                   </Button>
                   <Button type="button" variant="ghost" size="sm" onClick={() => openEdit(c)} title="Edit connector">
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => { void remove(c) }} title="Remove connector">
+                  <Button type="button" variant="ghost" size="sm" onClick={() => { void remove(c) }} disabled={c.driver === 'git' && c.enabled === false} title={c.driver === 'git' ? 'Stop syncing' : 'Remove connector'}>
                     <Trash2 className="h-3.5 w-3.5 text-destructive" />
                   </Button>
                 </div>

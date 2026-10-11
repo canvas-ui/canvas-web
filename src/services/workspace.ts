@@ -1820,6 +1820,7 @@ export function backendFolderTarget(path: string, backends?: Backend[]): { drive
   // Structural fallback for the anchor-first grammar (and the legacy
   // driver-first /file/<address> form) when no backends list is at hand.
   const parts = String(path || '').split('/').filter(Boolean);
+  if (parts[0] === 'workspace' && parts[1] === 'git') return null;
   if (parts[0] === 'workspace' && parts.length >= 2) return { driver: 'file', address: `workspace:${parts[1]}`, key: parts.slice(2).join('/') };
   if (parts[0] === 'device' && parts.length >= 3) return { driver: 'file', address: parts[2], key: parts.slice(3).join('/') };
   if (parts[0] === 'file' && parts.length >= 2) return { driver: 'file', address: parts[1], key: parts.slice(2).join('/') };
@@ -1861,6 +1862,7 @@ export function backendAddressFromTreePath(path: string, backends?: Backend[]): 
   // (/imap/<account>/…) keep driver-first shape.
   const parts = String(path || '').split('/').filter(Boolean);
   if (parts.length < 2) return null;
+  if (parts[0] === 'workspace' && parts[1] === 'git') return null;
   if (parts[0] === 'workspace') return { driver: 'file', address: `workspace:${parts[1]}` };
   if (parts[0] === 'device') return parts.length >= 3 ? { driver: 'file', address: parts[2] } : null;
   return { driver: parts[0], address: parts[1] };
