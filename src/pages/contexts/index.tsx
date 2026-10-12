@@ -74,6 +74,7 @@ export default function ContextsPage() {
   const [newContextTreeType, setNewContextTreeType] = useState<'context' | 'directory'>('context')
   const [newContextUrl, setNewContextUrl] = useState("/")
   const [newContextDescription, setNewContextDescription] = useState("")
+  const [newContextColor, setNewContextColor] = useState<string | null>(null)
   const [newContextBaseUrl, setNewContextBaseUrl] = useState("/")
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>("")
   const [isCreating, setIsCreating] = useState(false)
@@ -264,7 +265,8 @@ export default function ContextsPage() {
         id: newContextId,
         name: newContextName.trim() || undefined,
         url: newContextUrl,
-        description: newContextDescription || undefined,
+        description: newContextDescription.trim() || undefined,
+        metadata: { ui: { color: newContextColor } },
         workspaceId: selectedWorkspaceId,
         baseUrl: newContextBaseUrl || undefined,
         treeType: newContextTreeType,
@@ -275,6 +277,7 @@ export default function ContextsPage() {
       setNewContextName("");
       setNewContextUrl("/");
       setNewContextDescription("");
+      setNewContextColor(null);
       setNewContextBaseUrl("/");
       // Refresh the list to ensure it's up-to-date
       await fetchData();
@@ -508,6 +511,14 @@ export default function ContextsPage() {
                 disabled={isCreating}
               />
             </div>
+          </div>
+          <div>
+            <label htmlFor="contextColor" className="block text-sm font-medium mb-1">Color (Optional)</label>
+            <div className="flex items-center gap-2">
+              <Input id="contextColor" type="color" value={newContextColor || '#808080'} onChange={e => setNewContextColor(e.target.value)} className="h-10 w-16 p-1" disabled={isCreating} />
+              <Button type="button" variant="outline" size="sm" disabled={isCreating || newContextColor === null} onClick={() => setNewContextColor(null)}>Use inherited color</Button>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">{newContextColor === null ? 'Uses the tree folder or workspace color.' : 'Applies only to this context.'}</p>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div>

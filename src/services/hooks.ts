@@ -404,6 +404,7 @@ export interface BackfillResult {
   event: string
   dryRun: boolean
   processed: number
+  total?: number
   nextOffset?: number | null
   matched: number
   failed: number

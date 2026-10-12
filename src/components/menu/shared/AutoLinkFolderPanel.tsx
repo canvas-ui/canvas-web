@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { LinkToCard } from './LinkToCard'
 import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from './LinkToSidePanel'
 import { buildAutoLinkRules, type AutoLinkDirection, type AutoLinkDestination } from '@/lib/auto-link'
-import { addAutoLinkRule, backfillHook } from '@/services/hooks'
+import { addAutoLinkRule, backfillHook, getBackfillLimit } from '@/services/hooks'
 import { listBackends } from '@/services/workspace'
 import { backendUploadTarget } from '@/lib/backend-upload'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
@@ -30,6 +30,11 @@ export function AutoLinkFolderPanel({ workspaceId, sourcePath, onClose, onManage
   const [offset, setOffset] = useState(0)
   const [linked, setLinked] = useState(0)
   const [failed, setFailed] = useState(0)
+  const [batchLimit] = useState(getBackfillLimit)
+  const [ruleCount, setRuleCount] = useState(1)
+  const [processed, setProcessed] = useState(0)
+  const [total, setTotal] = useState<number | undefined>()
+  const [checked, setChecked] = useState(0)
   useEscapeClose(onClose, !busy && !picker)
   const close = () => { if (!busy) onClose() }
 
@@ -41,6 +46,7 @@ export function AutoLinkFolderPanel({ workspaceId, sourcePath, onClose, onManage
       const storage = direction === 'forward' ? undefined : backendUploadTarget(sourcePath, await listBackends(workspaceId))
       if (storage?.driver === 'cacache') throw new Error('Choose a backend that preserves folder paths.')
       const rules = buildAutoLinkRules(ruleId, sourcePath, destinations, recursive, direction, mode, storage)
+      setRuleCount(rules.length)
       if (!saved) {
         await addAutoLinkRule(workspaceId, rules)
         setSaved(true)
@@ -48,10 +54,18 @@ export function AutoLinkFolderPanel({ workspaceId, sourcePath, onClose, onManage
       if (includeExisting) {
         for (let index = ruleIndex; index < rules.length; index++) {
           let next: number | null = index === ruleIndex ? offset : 0
+          setProcessed(next)
+          setTotal(undefined)
+          // Discover the full count before the first batch performs actions.
+          const preview = await backfillHook(workspaceId, { ruleId: rules[index].id, limit: 1, offset: next, dryRun: true })
+          setTotal(preview.total)
           while (next !== null) {
-            const page = await backfillHook(workspaceId, { ruleId: rules[index].id, limit: 100, offset: next })
+            const page = await backfillHook(workspaceId, { ruleId: rules[index].id, limit: batchLimit, offset: next })
             setLinked(count => count + page.matched - page.failed)
             setFailed(count => count + page.failed)
+            setProcessed(next + page.processed)
+            setChecked(count => count + page.processed)
+            setTotal(page.total)
             // Older servers do not expose continuation; never silently claim
             // the entire folder was processed when only its first batch ran.
             if (page.nextOffset === undefined) throw new Error('The rule is enabled, but applying the full folder needs an updated server. Use Rules to rerun existing documents after updating.')
@@ -105,8 +119,10 @@ export function AutoLinkFolderPanel({ workspaceId, sourcePath, onClose, onManage
             <label className="flex items-start gap-2"><input type="checkbox" checked={includeExisting} onChange={e => setIncludeExisting(e.target.checked)} className="mt-1" />Apply to existing documents</label>
           </fieldset>
           <p className="text-xs text-muted-foreground">Without Recursive, only direct folder contents are included. Context paths keep their usual layer membership. Both creates two independently manageable rules in workspace Rules. Removing rules keeps existing files and links. Renames and deletions are not synchronized. Filename conflicts stop the transfer without overwriting.</p>
-          {busy && <p role="status" className="text-sm">{saved ? `Applying to existing documents… ${linked} processed` : 'Saving Auto-Link…'}</p>}
-          {done && <p role="status" className="text-sm">Auto-Link is enabled for future documents.{includeExisting ? ` ${linked} existing document matches processed.` : ''}</p>}
+          {busy && <p role="status" className="text-sm">{saved
+            ? `${ruleCount > 1 ? `Rule ${Math.min(ruleIndex + 1, ruleCount)}/${ruleCount}: ` : ''}Processing ${processed}${total === undefined ? '' : `/${total}`} existing documents… ${linked} matches applied.`
+            : 'Saving Auto-Link…'}</p>}
+          {done && <p role="status" className="text-sm">Auto-Link is enabled for future documents.{includeExisting ? ` ${checked} document${ruleCount > 1 ? ` checks across ${ruleCount} rules` : 's checked'}. ${linked} matches applied.` : ''}</p>}
           {failed > 0 && <p role="alert" className="text-sm text-destructive">{failed} document operations failed. Check the rule’s run log in Rules and rerun it after resolving the errors.</p>}
           {error && <p role="alert" className="text-sm text-destructive">{saved ? 'Auto-Link is enabled. ' : ''}{error}</p>}
         </div>

@@ -10,7 +10,7 @@ import type { TreeNode, ContextQueryOptions, GeoSelection } from '@/types/worksp
 // Global Context type already includes most of these. We need to ensure `workspace` is `workspaceId` for the POST.
 // And make sure other non-provided fields are optional or handled.
 type CreateContextPayload = Pick<Context, 'id' | 'url'> &
-                            Partial<Pick<Context, 'name' | 'description' | 'baseUrl'>> &
+                            Partial<Pick<Context, 'name' | 'description' | 'baseUrl' | 'metadata'>> &
                             { workspaceId: string; treeType?: 'context' | 'directory'; treeId?: string };
 
 type UnknownRecord = Record<string, unknown>;
