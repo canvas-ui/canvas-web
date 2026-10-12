@@ -1,5 +1,5 @@
 import type { Document } from '@/types/workspace'
-import { IDENTITY_SCHEMA, schemaLeaf } from '@/components/renderers/types'
+import { IDENTITY_SCHEMA, LINK_SCHEMA, schemaLeaf } from '@/components/renderers/types'
 
 const EMAIL_SCHEMA = 'data/schema/message/email'
 const TAB_SCHEMA = 'data/schema/tab'
@@ -227,9 +227,9 @@ export function getDocumentDisplayInfo(document: Document): {
     }
   }
 
-  if (isTab) {
-    const title = String(document.data.title || document.data.name || '').trim()
-    const url = String(document.data.url || '').trim()
+  if (isTab || document.schema === LINK_SCHEMA) {
+    const title = String(document.data.title || document.data.name || document.data.label || '').trim()
+    const url = String(document.data.url || document.data.uri || '').trim()
     return {
       title: title || getTabTitle(url) || `Document ${document.id}`,
       preview: truncate(document.data.description || document.data.summary || url, 140),
@@ -278,7 +278,7 @@ export function getDocumentDisplayInfo(document: Document): {
       Number.isFinite(size) ? `${size} bytes` : '',
     ].filter(Boolean)
     return {
-      title: truncate(filename, 160) || `File ${document.id}`,
+      title: truncate(filename || document.data.title || document.data.name, 160) || `File ${document.id}`,
       preview: previewParts.join(' · '),
       subtitle: filename,
       icon: 'file',

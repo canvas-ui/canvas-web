@@ -69,7 +69,7 @@ export function RelationFields({ f, idPrefix }: { f: RelationFieldsState; idPref
                   ))}
                 </select>
                 {row.document ? <DocumentIcon document={row.document} size={3.5} /> : null}
-                <span className={cn('min-w-0 flex-1 truncate', !row.document && 'italic text-muted-foreground')} title={`#${row.targetId}`}>
+                <span className={cn('min-w-0 flex-1 truncate', !row.document && 'italic text-muted-foreground')} title={title}>
                   {title}
                 </span>
                 <button

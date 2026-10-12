@@ -39,6 +39,7 @@ function RelationRow({
   const canvasRow = useCanvasRow()
   const otherId = direction === 'out' ? relation.to : relation.from
   const doc = relation.document ?? null
+  const title = doc ? getDocumentDisplayInfo(doc).title : ''
   const [opening, setOpening] = useState(false)
   const { showErrorToast } = useToastHelpers()
   const openDocument = async () => {
@@ -69,9 +70,9 @@ function RelationRow({
           onClick={() => void openDocument()}
           disabled={opening}
           className="min-w-0 flex-1 truncate text-left hover:underline"
-          title={`Open document ${otherId}`}
+          title={title}
         >
-          {getDocumentDisplayInfo(doc).title}
+          {title}
         </button>
       ) : (
         // Edges to documents that no longer exist are legal in synapsd — show
