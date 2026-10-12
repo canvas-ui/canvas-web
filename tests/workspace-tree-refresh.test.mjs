@@ -35,11 +35,23 @@ function events() {
   }
   vm.runInNewContext(compile(read('services/workspace-tree-events.ts')), context)
   return {
-    watch: context.exports.watchWorkspaceTreeChanges, refreshed, invalidated, timers, handlers,
+    watch: context.exports.watchWorkspaceTreeChanges, afterImport: context.exports.refreshWorkspaceAfterImport, window, refreshed, invalidated, timers, handlers,
     emit: (event, payload) => handlers.get(event)?.forEach(handler => handler(payload)),
     flush() { const pending = [...timers.values()]; timers.clear(); pending.forEach(fn => fn()) },
   }
 }
+
+test('completed imports retire cached trees and notify both tree and document views without socket events', () => {
+  const bus = events()
+  const documents = []
+  bus.window.addEventListener('workspace:documents:refresh', event => documents.push(event.detail))
+  bus.afterImport('universe', 'context', '/Edu/Astronomy/Apps')
+  assert.deepEqual(bus.invalidated, [['universe', 'context']])
+  assert.equal(bus.refreshed[0].cacheInvalidated, true)
+  assert.equal(documents[0].path, '/Edu/Astronomy/Apps')
+  bus.afterImport('universe', 'context')
+  assert.equal(documents[1].path, undefined, 'subtree imports refresh all affected paths')
+})
 
 test('ingestion, membership and relation updates do not reload any tree', () => {
   const bus = events()

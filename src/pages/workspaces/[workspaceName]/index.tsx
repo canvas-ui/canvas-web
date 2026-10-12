@@ -53,7 +53,7 @@ import {
   backendAddressFromTreePath,
   type Backend,
 } from '@/services/workspace';
-import { documentEventScope, eventTouchesView, treeNameLookup, type EventScope, type ViewScope } from '@/lib/document-event-scope';
+import { documentEventScope, documentRefreshScope, eventTouchesView, treeNameLookup, type EventScope, type ViewScope } from '@/lib/document-event-scope';
 import { Document, TreeNode, buildDatetimeFilters, buildGeoFilters, buildLensFilters, DEFAULT_TOOLBOX_SORT } from '@/types/workspace';
 import { sanitizeUrlPath, buildWorkspaceUrl, parseWorkspacePathFromUrl } from '@/utils/url-params';
 import { rememberWorkspacePath } from '@/lib/last-path';
@@ -66,7 +66,7 @@ import { useQueryDebug, type QueryDebugData } from '@/lib/query-debug';
 import { QueryDebugPanel } from '@/components/common/query-debug-panel';
 import { cn } from '@/lib/utils';
 import socketService from '@/lib/socket';
-import { watchWorkspaceTreeChanges, type TreeRefreshDetail } from '@/services/workspace-tree-events';
+import { refreshWorkspaceAfterImport, watchWorkspaceTreeChanges, type TreeRefreshDetail } from '@/services/workspace-tree-events';
 
 // File-manager folders for the content view of a directory tree: the node's
 // children (already client-side in the tree JSON) plus a ".." parent entry.
@@ -147,12 +147,7 @@ function invalidateCacheForEvent(workspaceName: string, scope: EventScope) {
 // serve stale data — even when no mounted pane currently shows that target.
 // treeName without path drops the whole tree's cached paths.
 function invalidateRefreshTarget(fallbackWorkspaceName: string, detail?: { workspaceName?: string; path?: string; treeName?: string }) {
-  if (!detail?.treeName) return;
-  const ws = detail.workspaceName ?? fallbackWorkspaceName;
-  const prefix = detail.path ? paneKey(ws, detail.treeName, detail.path) : `${ws}\0${detail.treeName}\0`;
-  for (const key of documentCache.keys()) {
-    if (key.startsWith(prefix)) documentCache.delete(key);
-  }
+  invalidateCacheForEvent(detail?.workspaceName ?? fallbackWorkspaceName, documentRefreshScope(detail));
 }
 
 export default function WorkspaceDetailPage() {
@@ -747,17 +742,17 @@ function WorkspaceContent() {
       const detail = (event as CustomEvent).detail as { workspaceName?: string; path?: string; treeName?: string } | undefined;
       if (detail?.workspaceName && detail.workspaceName !== workspaceName) return;
       if (workspaceName) invalidateRefreshTarget(workspaceName, detail);
-      // Refetch only when this pane shows the event's target (no detail →
-      // broad refresh of the current view).
-      if (detail?.treeName && detail.treeName !== selectedTreeName) return;
-      if (detail?.path && detail.path !== selectedPath) return;
+      if (!eventTouchesView(documentRefreshScope(detail), {
+        tree: selectedTreeName, kind: treeTypeForName(selectedTreeName), path: selectedPath, wholeWorkspace: docScope === 'workspace',
+      })) return;
       if (workspaceName) invalidateDocumentCache(workspaceName, selectedTreeName, selectedPath);
+      if (sessionActiveRef.current) { void resyncSession(); return; }
       fetchDocuments({ silent: true });
     };
 
     window.addEventListener('workspace:documents:refresh', onDocumentsRefresh);
     return () => window.removeEventListener('workspace:documents:refresh', onDocumentsRefresh);
-  }, [fetchDocuments, workspaceName, selectedPath, selectedTreeName]);
+  }, [fetchDocuments, workspaceName, selectedPath, selectedTreeName, docScope, resyncSession]);
 
   // Live-refresh the content area when documents change in the DB (CLI, agents,
   // hooks, other clients). The backend forwards synapsd document events over the
@@ -830,7 +825,7 @@ function WorkspaceContent() {
     };
 
     const events = [
-      'document.inserted', 'document.updated', 'document.removed', 'document.deleted',
+      'document.inserted', 'document.inserted.batch', 'document.updated', 'document.removed', 'document.deleted',
       'document.removed.batch', 'document.deleted.batch',
       // Membership. document.updated/removed also fire on a link/unlink, but
       // only as deprecated aliases scheduled for removal — these are the ones
@@ -1180,9 +1175,7 @@ function WorkspaceContent() {
       const ids = await importDocumentsToWorkspacePath(workspaceName, contextPath, docs, selectedTreeName, selectedTreeType);
       const success = ids.length > 0;
       if (success) {
-        window.dispatchEvent(new CustomEvent('workspace:documents:refresh', {
-          detail: { workspaceName, path: contextPath, treeName: selectedTreeName },
-        }));
+        refreshWorkspaceAfterImport(workspaceName, selectedTreeName, contextPath);
         showToast({ title: 'Success', description: `Imported ${docs.length} document(s) to "${contextPath}"` });
       }
       return success;
@@ -1826,8 +1819,7 @@ function SideWorkspaceCanvas({
       const detail = (event as CustomEvent).detail as { workspaceName?: string; path?: string; treeName?: string } | undefined;
       if (detail?.workspaceName && detail.workspaceName !== workspaceName) return;
       invalidateRefreshTarget(workspaceName, detail);
-      if (detail?.treeName && detail.treeName !== pane.treeName) return;
-      if (detail?.path && detail.path !== pane.path) return;
+      if (!eventTouchesView(documentRefreshScope(detail), { tree: pane.treeName, kind: treeTypeForName(pane.treeName), path: pane.path })) return;
       invalidateDocumentCache(workspaceName, pane.treeName, pane.path);
       fetchPaneDocuments();
     };

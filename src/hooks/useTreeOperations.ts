@@ -7,6 +7,7 @@
  *   const ops = useTreeOperations({ workspaceId: 'myWs', treeName: 'directory', onRefresh })
  */
 import { useCallback } from 'react'
+import { refreshWorkspaceAfterImport } from '@/services/workspace-tree-events'
 import {
   insertContextPath, removeContextPath, moveContextPath, copyContextPath,
   mergeContextLayer, subtractContextLayer, updateContextPath,
@@ -244,7 +245,10 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
   const transferSubtree = useCallback(async (mode: 'export' | 'import', path: string) => {
     if (!workspaceId) return
     const { showSubtreeTransfer } = await import('@/components/workspace/subtree-transfer-dialog')
-    showSubtreeTransfer({ mode, path, workspaceId, treeName: wsTree, onImported: refresh })
+    showSubtreeTransfer({ mode, path, workspaceId, treeName: wsTree, onImported: () => {
+      refreshWorkspaceAfterImport(workspaceId, wsTree)
+      refresh()
+    } })
   }, [workspaceId, wsTree, refresh])
 
   return {

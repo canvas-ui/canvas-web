@@ -88,6 +88,7 @@ function SubtreeTransfer({ mode, workspaceId, treeName, path, onImported, onClos
       {mode === 'import' && !imported && <>
         <Input type="file" accept=".json,application/json" disabled={busy || job?.status === 'running'} aria-label="Subtree export file" onChange={event => void load(event.target.files?.[0])} />
         {archive && <label className="grid gap-2 text-sm">Folder name<Input value={name} disabled={busy || job?.status === 'running'} onChange={event => setName(event.target.value)} /></label>}
+        {archive?.source.tree.type === 'context' && <p className="text-xs text-muted-foreground">Existing context layers are reused by name. Documents are added to their shared membership; existing documents, layer settings, and saved views are kept.</p>}
       </>}
       {archive && <p className="text-sm">{archive.nodes.length} folders, {selectedCount} subtree documents, and {archive.documents.length - selectedCount} supporting records.
         {archive.summary?.externalRelations > 0 && ` ${archive.summary.externalRelations} references point outside this export.`}
@@ -105,6 +106,7 @@ function SubtreeTransfer({ mode, workspaceId, treeName, path, onImported, onClos
       </div>}
       {imported && <div role="status" className="space-y-2 text-sm">
         <p>Imported {imported.documents} documents into {imported.path}. Reused {imported.reused} matching records.</p>
+        {!!imported.reusedLayers && <p>Merged into {imported.reusedLayers} existing layers, keeping their settings and documents.</p>}
         <p>Copy the files into the destination backend and run its sync. Matching checksums reconnect the imported file records.</p>
         {imported.unresolvedRelations > 0 && <p>{imported.unresolvedRelations} external references were kept as migration metadata because their target records are not present.</p>}
       </div>}

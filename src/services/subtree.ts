@@ -17,6 +17,7 @@ export interface SubtreeArchive {
 export interface SubtreeImportResult {
   path: string
   folders: number
+  reusedLayers?: number
   documents: number
   created: number
   reused: number

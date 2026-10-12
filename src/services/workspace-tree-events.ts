@@ -27,6 +27,15 @@ interface Watcher {
 }
 const watchers = new Map<string, Watcher>()
 
+/** Imports can add paths and memberships, even when document events are suppressed. */
+export function refreshWorkspaceAfterImport(workspaceName: string, treeName: string, path?: string): void {
+  invalidateWorkspaceTreeCache(workspaceName, treeName)
+  window.dispatchEvent(new CustomEvent<TreeRefreshDetail>('workspace:tree:refresh', {
+    detail: { workspaceName, treeName, cacheInvalidated: true },
+  }))
+  window.dispatchEvent(new CustomEvent('workspace:documents:refresh', { detail: { workspaceName, treeName, path } }))
+}
+
 /**
  * One socket listener/batch per workspace, shared by the page and sidebar.
  * Invalidate once before notifying either view so they share the same fetch.

@@ -13,6 +13,7 @@ import {
 } from '@/services/context';
 import socketService from '@/lib/socket';
 import { DefaultCanvas } from '@/components/canvas/DefaultCanvas';
+import { refreshWorkspaceAfterImport } from '@/services/workspace-tree-events';
 import { ContentViewTabs } from '@/components/common/content-view-tabs';
 import { viewsFromLayerMetadata, DEFAULT_VIEW, type ContentView } from '@/components/common/content-views';
 import { SchemaColumnsBoard } from '@/components/common/schema-columns-board';
@@ -501,7 +502,7 @@ export default function ContextDetailPage() {
     try {
       const success = await importDocumentsToContext(context.workspaceId, contextPath, docs);
       if (success) {
-        await fetchDocuments();
+        refreshWorkspaceAfterImport(context.workspaceName || context.workspaceId, 'context', contextPath);
         showToast({ title: 'Success', description: `Imported ${docs.length} document(s) to "${contextPath}"` });
       }
       return success;

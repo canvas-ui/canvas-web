@@ -3,6 +3,7 @@ import { parseDocumentIdQuery } from '@/lib/document-id-query'
 import { backendTransferFailureMessage } from '@/lib/backend-transfer-errors'
 import { useLongPressContextMenu } from '@/hooks/use-long-press-context-menu'
 import { selectDocumentRange } from '@/lib/document-selection'
+import { DocumentSelectionArea } from './document-selection-area'
 import { CopyToWorkspacePanel } from '@/components/menu/shared/CopyToWorkspacePanel'
 import { BulkEditDialog } from './BulkEditDialog'
 import { Document, TreeNode } from '@/types/workspace'
@@ -969,6 +970,7 @@ function FolderTableRow({ folder, onOpen, onMenu, onPasteDocuments, contextPath,
   const drop = useFolderDrop(folder, onPasteDocuments, contextPath, treeName)
   return (
     <TableRow
+      data-selection-ignore=""
       className={`cursor-pointer ${drop.over ? 'bg-accent ring-1 ring-inset ring-info' : ''} ${folder.isParent ? 'text-muted-foreground' : ''}`}
       onClick={() => onOpen?.(folder.path)}
       onContextMenu={(e) => openFolderMenu(e, folder, onMenu)}
@@ -1338,6 +1340,10 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   ).map(document => document.id), [view, sortedDocuments, showDateGroups, dateGroups, collapsedGroups, filteredDocuments])
   const selectionAnchor = useRef<{ scope: string; id: number } | null>(null)
   const selectionScope = JSON.stringify([workspaceId, contextPath, treeName, currentPage])
+  const handleRectangleSelection = useCallback((ids: Set<number>) => {
+    selectionAnchor.current = null
+    setSelectedDocuments(previous => previous.size === ids.size && [...previous].every(id => ids.has(id)) ? previous : ids)
+  }, [])
   const handleDocumentSelect = useCallback((documentId: number, isSelected: boolean, isCtrlClick: boolean, isShiftClick = false) => {
     const previousAnchor = selectionAnchor.current
     const anchor = previousAnchor?.scope === selectionScope && visibleSelectionOrder.includes(previousAnchor.id) ? previousAnchor.id : null
@@ -1688,7 +1694,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
       // (paste, select all, Shift+F10) work without first focusing a row.
       tabIndex={-1}
       onKeyDown={handleListKeyDown}
-      className={`flex-1 flex flex-col min-h-0 p-4 rounded-lg outline-none transition-colors ${isDragOver ? 'ring-2 ring-inset ring-primary bg-primary/5' : ''}`}
+      className={`flex-1 flex flex-col min-h-0 min-w-0 p-4 rounded-lg outline-none transition-colors ${isDragOver ? 'ring-2 ring-inset ring-primary bg-primary/5' : ''}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -2000,8 +2006,10 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
         )}
       </div>
 
+      <DocumentSelectionArea scope={JSON.stringify([selectionScope, view, visibleSelectionOrder])}
+        selected={selectedDocuments} onSelectionChange={handleRectangleSelection} onContextMenu={handleEmptyAreaRightClick}>
       {filteredDocuments.length === 0 && !hasFolders ? (
-        <div className="flex-1 flex items-center justify-center" onContextMenu={handleEmptyAreaRightClick}>
+        <div className="min-h-full flex items-center justify-center">
           <div className="text-center space-y-2">
             <File className="h-12 w-12 text-muted-foreground/50 mx-auto" />
             <p className="text-sm text-muted-foreground">
@@ -2028,7 +2036,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
           </div>
         </div>
       ) : view === 'tile' ? (
-        <div className="flex-1 overflow-y-auto" onContextMenu={handleEmptyAreaRightClick}>
+        <div>
           {/* Masonry via CSS columns: image tiles keep their natural aspect,
               so column heights interleave into a 500px-style mosaic. Wide
               columns (fewer per row) make photos read big, like a feed.
@@ -2048,7 +2056,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
           ))}
         </div>
       ) : view === 'table' ? (
-        <div className="flex-1 overflow-y-auto" onContextMenu={handleEmptyAreaRightClick}>
+        <div>
           <Table>
             <TableHeader>
               <TableRow>
@@ -2086,7 +2094,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
           </Table>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto" onContextMenu={handleEmptyAreaRightClick}>
+        <div>
           <FolderStrip {...folderStripProps} />
           {filteredDocuments.length === 0 && (
             <p className="py-6 text-center text-xs text-muted-foreground">No documents in this folder</p>
@@ -2102,7 +2110,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
           ))}
         </div>
       )}
-
+      </DocumentSelectionArea>
       {menu && (
         <ActionMenuHost
           anchor={menu.anchor}

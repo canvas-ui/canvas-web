@@ -126,7 +126,21 @@ export function pathsOverlap(a: string, b: string): boolean {
 function targetMatchesView(target: EventTarget, view: ViewScope): boolean {
   if (target.kind && target.kind !== view.kind) return false
   if (target.tree && target.tree !== view.tree) return false
+  if (view.kind === 'context') {
+    // A context path intersects shared, case-insensitive layers. Updating
+    // /Edu/Astronomy/Apps also changes /Apps and /Other/Apps, not just ancestors.
+    const layers = (path: string) => normalizePath(path).split('/').filter(Boolean).map(name =>
+      name.normalize('NFKC').trim().replace(/\s+/g, ' ').replace(/[^\p{L}\p{N}\p{M} .+_@-]/gu, '_').replace(/_+/g, '_').toLowerCase() || '_')
+    const changed = new Set(layers(target.path))
+    const viewed = layers(view.path)
+    return changed.size === 0 || viewed.length === 0 || viewed.some(layer => changed.has(layer))
+  }
   return pathsOverlap(target.path, view.path)
+}
+
+/** Explicit UI refreshes use the same placement rules as socket events. */
+export function documentRefreshScope(detail?: { treeName?: string; path?: string }): EventScope {
+  return documentEventScope('tree.refresh', { treeName: detail?.treeName, path: detail?.path || '/' })
 }
 
 /**

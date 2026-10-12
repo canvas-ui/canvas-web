@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { documentEventScope, eventTouchesView, treeNameLookup } from '../src/lib/document-event-scope.ts'
+import { documentEventScope, documentRefreshScope, eventTouchesView, treeNameLookup } from '../src/lib/document-event-scope.ts'
 
 const trees = treeNameLookup([{ id: 't-ctx', name: 'context' }, { id: 't-be', name: 'backends' }])
 const workView = { tree: 'context', kind: 'context', path: '/work' }
@@ -40,4 +40,25 @@ test('link events place by `changed`; /a does not overlap /ab', () => {
   const scope = documentEventScope('document.linked', { id: 9, changed: { context: ['/work/p'], directory: null } }, trees)
   assert.equal(eventTouchesView(scope, workView), true)
   assert.equal(eventTouchesView(scope, { ...workView, path: '/workshop' }), false)
+})
+
+test('context writes refresh shared layers across branches, including case and Unicode aliases', () => {
+  for (const scope of [
+    documentEventScope('document.inserted.batch', { context: { tree: 't-ctx', path: '/Edu/Astronomy/Apps' } }, trees),
+    documentRefreshScope({ treeName: 'context', path: '/Edu/Astronomy/Apps' }),
+  ]) {
+    for (const path of ['/Apps', '/Other/apps', '/Ａpps', '/Edu', '/Astronomy', '/']) {
+      assert.equal(eventTouchesView(scope, { ...workView, path }), true, path)
+    }
+    assert.equal(eventTouchesView(scope, { ...workView, path: '/Appstore' }), false)
+    assert.equal(eventTouchesView(scope, { ...workView, tree: 'another-context', path: '/Apps' }), false)
+  }
+})
+
+test('directory paths with the same leaf remain independent and tree-wide refreshes stay scoped', () => {
+  const view = { tree: 'directory', kind: 'directory', path: '/Apps' }
+  assert.equal(eventTouchesView(documentRefreshScope({ treeName: 'directory', path: '/Edu/Astronomy/Apps' }), view), false)
+  assert.equal(eventTouchesView(documentRefreshScope({ treeName: 'directory' }), view), true)
+  assert.equal(eventTouchesView(documentRefreshScope({ treeName: 'context' }), view), false)
+  assert.equal(eventTouchesView(documentRefreshScope(), view), true)
 })
