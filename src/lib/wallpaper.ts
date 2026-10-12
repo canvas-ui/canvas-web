@@ -182,15 +182,57 @@ export function wallpaperSizeCss(fit: WallpaperFit): string {
   return fit === 'fill' ? '100% 100%' : fit === 'center' ? 'auto' : 'cover'
 }
 
+let appliedUpload: { dataUrl: string; objectUrl: string } | null = null
+
+function wallpaperBlob(dataUrl: string): Blob {
+  const comma = dataUrl.indexOf(',')
+  if (comma < 0) throw new Error('Invalid wallpaper data URL')
+  const header = dataUrl.slice(5, comma)
+  const content = dataUrl.slice(comma + 1)
+  let bytes: Uint8Array<ArrayBuffer>
+  if (header.endsWith(';base64')) {
+    const decoded = atob(content)
+    bytes = new Uint8Array(decoded.length)
+    for (let index = 0; index < decoded.length; index++) bytes[index] = decoded.charCodeAt(index)
+  } else {
+    bytes = new TextEncoder().encode(decodeURIComponent(content))
+  }
+  return new Blob([bytes], { type: header.split(';')[0] })
+}
+
 /** Push the settings into the CSS vars `surface-desk` consumes. */
 export function applyWallpaper(settings: WallpaperSettings = loadWallpaper()): void {
   const style = document.documentElement.style
-  const image = wallpaperImageCss(settings.image)
+  const previousUpload = appliedUpload
+  let source = settings.image
+  if (source?.startsWith('data:')) {
+    try {
+      if (appliedUpload?.dataUrl !== source) {
+        appliedUpload = { dataUrl: source, objectUrl: URL.createObjectURL(wallpaperBlob(source)) }
+      }
+      // CSS custom properties have a size limit (~2 MiB in Chromium). Only
+      // the short URL goes into CSS; IndexedDB keeps the original image, and
+      // the Blob preserves every GIF frame. Reuse it when only the fit changes.
+      source = appliedUpload.objectUrl
+    } catch {
+      // A malformed legacy value must not stop the app from starting.
+      appliedUpload = null
+      source = null
+    }
+  } else {
+    appliedUpload = null
+  }
+  const image = wallpaperImageCss(source)
   if (!image) {
     style.removeProperty('--wallpaper-image')
     style.removeProperty('--wallpaper-size')
-    return
+  } else {
+    style.setProperty('--wallpaper-image', image)
+    style.setProperty('--wallpaper-size', wallpaperSizeCss(settings.fit))
   }
-  style.setProperty('--wallpaper-image', image)
-  style.setProperty('--wallpaper-size', wallpaperSizeCss(settings.fit))
+  // Replace the style before releasing the old image. Object URLs are runtime
+  // resources: never persist them, and keep only the current upload alive.
+  if (previousUpload && previousUpload !== appliedUpload) {
+    URL.revokeObjectURL(previousUpload.objectUrl)
+  }
 }

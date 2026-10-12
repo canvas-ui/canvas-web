@@ -34,7 +34,7 @@ export async function getFieldSortedDocuments<T extends Document, E extends { pa
   let response: E
   let offset = 0
   let batchSize = 500
-  do {
+  for (;;) {
     // Use offset alone: a fixed page=1 can override it on older endpoints.
     response = await fetchPage({ limit: batchSize, offset, page: undefined })
     // Learn an endpoint's response cap once, then keep a stable scan stride.
@@ -56,7 +56,7 @@ export async function getFieldSortedDocuments<T extends Document, E extends { pa
     if (response.payload.length && !added) throw new Error('Document pagination did not advance')
     offset += batchSize
     if (response.totalCount != null && offset >= response.totalCount) break
-  } while (true)
+  }
   const sorted = sortDocuments(documents, options.sortBy!, options.order)
   const limit = options.limit ?? 50
   const start = Math.max(0, options.offset ?? ((options.page ?? 1) - 1) * (limit || 100))
