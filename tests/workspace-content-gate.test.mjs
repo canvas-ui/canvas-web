@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { canManageWorkspace } from '../src/lib/workspace-access.ts'
 
 test('content survives navigation and refreshes but hides on stop or workspace switch', async () => {
   const slots = []
@@ -34,6 +35,7 @@ test('content survives navigation and refreshes but hides on stop or workspace s
   }
   const jsx = (type, props) => ({ type, props })
   const dependencies = {
+    '@/lib/workspace-access': { canManageWorkspace },
     react,
     'react/jsx-runtime': { jsx, jsxs: jsx },
     'react-router-dom': { useLocation: () => location, Link: 'link' },

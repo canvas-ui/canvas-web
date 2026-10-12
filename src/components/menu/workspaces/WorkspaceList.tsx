@@ -1,3 +1,4 @@
+import { canManageWorkspace } from '@/lib/workspace-access'
 import { useRuntimeCapabilities } from '@/hooks/useRuntimeCapabilities'
 import { workspaceAddress } from '@/lib/workspace-address'
 import { useIsMobile } from '@/hooks/use-mobile'
@@ -138,6 +139,7 @@ export function WorkspaceList() {
           <div className="space-y-1.5 px-2">
             {orderedWorkspaces.map((ws, index) => {
               const isActive = state.selectedEntityId === workspaceAddress(ws)
+              const canManage = canManageWorkspace(ws)
               const isBusy = busyIds.has(workspaceAddress(ws))
               const isInactive = ws.status !== 'active'
               const style = styleFor(ws)
@@ -179,17 +181,18 @@ export function WorkspaceList() {
                   <div className="flex items-start gap-2">
                     <button
                       type="button"
-                      title="Change icon"
+                      title={canManage ? 'Change icon' : 'Workspace appearance requires admin access'}
                       // Touch: a plain tap on the logo opens the workspace
                       // like the rest of the row — the icon/color picker is
                       // reached via long-press (contextmenu) so it can't be
                       // triggered accidentally.
                       onClick={(e) => {
-                        if (isCoarsePointer()) return // bubbles to the row → open workspace
+                        if (!canManage || isCoarsePointer()) return // bubbles to the row → open workspace
                         e.stopPropagation()
                         setPicker({ x: Math.min(e.clientX, window.innerWidth - 290), y: Math.min(e.clientY, window.innerHeight - 360), name: workspaceAddress(ws) })
                       }}
                       onContextMenu={(e) => {
+                        if (!canManage) return
                         e.preventDefault()
                         e.stopPropagation()
                         setPicker({ x: Math.min(e.clientX, window.innerWidth - 290), y: Math.min(e.clientY, window.innerHeight - 360), name: workspaceAddress(ws) })
@@ -248,8 +251,9 @@ export function WorkspaceList() {
                           if (isMobile) { openM2('settings', workspaceAddress(ws)) }
                           else { navigate(`/workspaces/${workspaceAddress(ws)}/settings/general`) }
                         }}
-                        className="flex items-center justify-center w-6 h-6 rounded hover:bg-muted-foreground/10 text-muted-foreground transition-colors"
-                        title="Settings"
+                        className="flex items-center justify-center w-6 h-6 rounded hover:bg-muted-foreground/10 text-muted-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        disabled={!canManage}
+                        title={canManage ? 'Settings' : 'Workspace settings require admin access'}
                       >
                         <Settings className="w-3.5 h-3.5" />
                       </button>

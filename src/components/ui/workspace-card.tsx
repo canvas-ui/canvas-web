@@ -1,3 +1,4 @@
+import { canManageWorkspace } from '@/lib/workspace-access'
 import { workspaceAddress } from '@/lib/workspace-address'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./card";
 import { Button } from "./button";
@@ -145,9 +146,9 @@ export function WorkspaceCard({ workspace, onStart, onStop, onEnter, onEdit, onS
                 variant="outline"
                 size="icon"
                 onClick={() => onSettings(workspace)}
-                title="Workspace settings"
+                title={canManageWorkspace(workspace) ? 'Workspace settings' : 'Workspace settings require admin access'}
                 aria-label="Workspace settings"
-                disabled={isNotFound}
+                disabled={isNotFound || !canManageWorkspace(workspace)}
               >
                 <Settings className="h-4 w-4" />
               </Button>

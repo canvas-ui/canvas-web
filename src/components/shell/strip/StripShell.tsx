@@ -8,6 +8,7 @@ import { Maximize2, Minimize2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { matchesNavModifier, useLayoutNavModifier } from '@/lib/layout-mode'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
+import { useWorkspaceListData } from '@/hooks/useWorkspaceListData'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { MenuBar, MobileMenuToggle } from '../MenuBar'
 import { M2Content } from '../MenuPanelArea'
@@ -96,7 +97,7 @@ function M1List({ section }: { section: ReturnType<typeof useMenu>['state']['act
   return null
 }
 
-function titleOf(entry: CanvasEntry | null, pathname: string): string {
+function titleOf(entry: CanvasEntry | null, pathname: string, workspaces: Workspace[]): string {
   if (entry?.kind === 'document') return getDocumentDisplayInfo(entry.document).title
   const path = entry?.kind === 'route' ? entry.location : pathname
   const routePath = path.split(/[?#]/)[0]
@@ -105,6 +106,11 @@ function titleOf(entry: CanvasEntry | null, pathname: string): string {
   if (setting) return setting.label
   const segments = routePath.split('/').filter(Boolean)
   if (segments.length === 0) return 'Desk'
+  if (segments[0] === 'workspaces' && segments.length === 2) {
+    const address = decodeURIComponent(segments[1])
+    const workspace = workspaces.find(ws => ws.id === address) ?? workspaces.find(ws => ws.name === address)
+    return workspace?.label || workspace?.name || 'Workspace'
+  }
   return decodeURIComponent(segments[segments.length - 1])
 }
 
@@ -163,7 +169,7 @@ function pageClass(pathname: string): string {
   return cn('relative flex-1 min-h-0 min-w-0 overflow-auto', !isFullBleed(pathname) && !isBare(pathname) && 'p-page')
 }
 
-function RowCanvases({ row, pathname, rowLabel, onCloseRow }: { row: CanvasRow; pathname: string; rowLabel?: string; onCloseRow?: () => void }) {
+function RowCanvases({ row, pathname, rowLabel, onCloseRow, workspaces }: { row: CanvasRow; pathname: string; rowLabel?: string; onCloseRow?: () => void; workspaces: Workspace[] }) {
   const rowApi = useCanvasRow()!
   const { focus, setFocus, toggleExpanded, closeCanvas, navigateCanvas } = rowApi
   const onNavigate = useCallback((id: string) => (next: string) => navigateCanvas(id, next), [navigateCanvas])
@@ -175,7 +181,7 @@ function RowCanvases({ row, pathname, rowLabel, onCloseRow }: { row: CanvasRow; 
       {hasMain ? (
         <CanvasFrame
           id={MAIN_COLUMN}
-          title={titleOf(null, pathname)}
+          title={titleOf(null, pathname, workspaces)}
           expanded={row.mainExpanded}
           focused={focus === MAIN_COLUMN}
           onFocus={setFocus}
@@ -195,7 +201,7 @@ function RowCanvases({ row, pathname, rowLabel, onCloseRow }: { row: CanvasRow; 
         <CanvasFrame
           key={entry.id}
           id={entry.id}
-          title={titleOf(entry, pathname)}
+          title={titleOf(entry, pathname, workspaces)}
           expanded={!!entry.expanded}
           focused={focus === entry.id}
           onFocus={setFocus}
@@ -221,12 +227,12 @@ function RowCanvases({ row, pathname, rowLabel, onCloseRow }: { row: CanvasRow; 
 // A row that is not active keeps its canvases (state lives in the provider)
 // but renders as a ghost line of chips: walking rows should feel spatial
 // without mounting every page in every row.
-function GhostRow({ row }: { row: CanvasRow }) {
+function GhostRow({ row, workspaces }: { row: CanvasRow; workspaces: Workspace[] }) {
   return (
     <div className="strip-ghost-row" aria-hidden>
-      <span className="strip-ghost-chip strip-ghost-chip--main">{titleOf(null, row.main)}</span>
+      <span className="strip-ghost-chip strip-ghost-chip--main">{titleOf(null, row.main, workspaces)}</span>
       {row.entries.map((e) => (
-        <span key={e.id} className="strip-ghost-chip">{titleOf(e, row.main)}</span>
+        <span key={e.id} className="strip-ghost-chip">{titleOf(e, row.main, workspaces)}</span>
       ))}
     </div>
   )
@@ -237,6 +243,8 @@ export function StripShell() {
   const rowApi = useCanvasRow()!
   const { rows, activeRow, focus, setFocus, moveRow, closeRow } = rowApi
   const { pathname } = useLocation()
+  const { workspaces } = useWorkspaceListData(pathname.startsWith('/workspaces/') || rows.some(row =>
+    row.main.startsWith('/workspaces/') || row.entries.some(entry => entry.kind === 'route' && entry.location.startsWith('/workspaces/'))))
   const navMod = useLayoutNavModifier()
   const scrollerRef = useRef<HTMLDivElement>(null)
 
@@ -349,11 +357,12 @@ export function StripShell() {
                   {i === activeRow ? (
                     <RowCanvases
                       row={row}
+                      workspaces={workspaces}
                       pathname={pathname}
                       rowLabel={rows.length > 1 ? row.label : undefined}
                       onCloseRow={i > 0 ? () => closeRow(row.key) : undefined}
                     />
-                  ) : <GhostRow row={row} />}
+                  ) : <GhostRow row={row} workspaces={workspaces} />}
                 </div>
               </div>
             ))}

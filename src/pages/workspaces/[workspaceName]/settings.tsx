@@ -1,5 +1,6 @@
 import { S3BackendForm } from '@/components/settings/S3BackendForm'
 import { WorkspaceProtectionPanel } from '@/components/workspace/protection-panel'
+import { canManageWorkspace } from '@/lib/workspace-access'
 import { useMenu } from '@/components/shell/use-menu'
 import { useIsMobile } from '@/hooks/use-mobile'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -959,6 +960,11 @@ function DbStatsTab({
 }
 
 export default function WorkspaceSettingsPage() {
+  const { workspaceName } = useParams<{ workspaceName: string }>()
+  return <WorkspaceSettingsContent key={workspaceName} />
+}
+
+function WorkspaceSettingsContent() {
   const { workspaceName, tab } = useParams<{ workspaceName: string; tab?: string }>()
   // ?addRulePath=backends:/workspace/home/foo&addRuleTarget=dir:/foo — deep
   // link from the backends tree's "Add rule" context-menu item.
@@ -999,6 +1005,7 @@ export default function WorkspaceSettingsPage() {
     if (tab !== activeTab) navigate(`/workspaces/${workspaceName}/settings/${activeTab}`, { replace: true })
   }, [tab, activeTab, workspaceName, navigate])
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
+  const canManage = canManageWorkspace(workspace)
   // Bumped by actions that change the workspace's runtime state (export stops
   // it, import adds one) so the loader below re-reads it.
   const [reloadKey, setReloadKey] = useState(0)
@@ -1122,18 +1129,22 @@ export default function WorkspaceSettingsPage() {
   // Keep the "indexing m / n" readout live while any backend scan is running.
   const anyResyncing = dataBackends.some((b) => b.resyncing)
   useEffect(() => {
-    if (!anyResyncing || !workspaceId) return
+    if (!canManage || !anyResyncing || !workspaceId) return
     const timer = setInterval(() => { loadRuntimeSettings() }, 4000)
     return () => clearInterval(timer)
-  }, [anyResyncing, workspaceId, loadRuntimeSettings])
+  }, [canManage, anyResyncing, workspaceId, loadRuntimeSettings])
 
   useEffect(() => {
+    let cancelled = false
     async function load() {
       try {
         const workspaces = await listWorkspaces()
-        const ws = workspaces.find(w => w.name === workspaceName || w.id === workspaceName)
+        if (cancelled) return
+        const ws = workspaces.find(w => w.id === workspaceName) ?? workspaces.find(w => w.name === workspaceName)
+        setWorkspace(ws ?? null)
         if (ws) {
-          setWorkspace(ws)
+          // Check before mounting tabs or issuing any privileged requests.
+          if (!canManageWorkspace(ws)) return
           setLabel(ws.label || '')
           setDescription(ws.description || '')
           setColor(ws.color || '#FFFFFF')
@@ -1141,12 +1152,13 @@ export default function WorkspaceSettingsPage() {
           if (ws.status === 'active') await Promise.all([loadShares(workspaceName || ws.id), loadRuntimeSettings(workspaceName || ws.id)])
         }
       } catch {
-        showToast({ title: 'Error', description: 'Failed to load workspace', variant: 'destructive' })
+        if (!cancelled) showToast({ title: 'Error', description: 'Failed to load workspace', variant: 'destructive' })
       } finally {
-        setIsLoading(false)
+        if (!cancelled) setIsLoading(false)
       }
     }
     load()
+    return () => { cancelled = true }
   }, [workspaceName, loadShares, loadRuntimeSettings, showToast, reloadKey])
 
   useEffect(() => {
@@ -1166,13 +1178,14 @@ export default function WorkspaceSettingsPage() {
   })
 
   useEffect(() => {
+    if (!canManage) return
     if (workspace?.status === 'active' && activeTab === 'db' && workspaceId && !dbTabSatisfiedRef.current) {
       loadDbStats()
     }
     if (workspace?.status === 'active' && activeTab === 'devices' && workspaceId && !devicesTabSatisfiedRef.current) {
       loadDevices()
     }
-  }, [activeTab, workspaceId, workspace?.status, loadDbStats, loadDevices])
+  }, [canManage, activeTab, workspaceId, workspace?.status, loadDbStats, loadDevices])
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1342,6 +1355,11 @@ export default function WorkspaceSettingsPage() {
 
   if (isLoading) return <div className="p-6 text-sm text-muted-foreground">Loading...</div>
   if (!workspace) return <div className="p-6 text-sm text-muted-foreground">Workspace not found</div>
+  if (!canManage) return <div className="space-y-3 p-6">
+    <h1 className="font-semibold">{workspace.label || workspace.name}</h1>
+    <p className="text-sm text-muted-foreground">Workspace settings are available to owners and admins.</p>
+    <Button variant="outline" onClick={() => navigate(`/workspaces/${workspaceName}`)}>Back to workspace</Button>
+  </div>
 
   return (
     <div className="h-full min-h-0 overflow-y-auto">

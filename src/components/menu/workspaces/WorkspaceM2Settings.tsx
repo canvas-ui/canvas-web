@@ -8,6 +8,7 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style'
 import { WORKSPACE_SETTINGS_SECTIONS, resolveWorkspaceSettingsTab } from '@/lib/settings-sections'
 import { getWorkspace } from '@/services/workspace'
+import { canManageWorkspace } from '@/lib/workspace-access'
 
 // M2 while /workspaces/:name/settings/* is open: the section list. The content
 // area renders exactly one section, so this list is the only tab strip — it
@@ -19,8 +20,10 @@ export function WorkspaceM2Settings() {
   const location = useLocation()
   const wsName = state.selectedEntityId
 
-  const [label, setLabel] = useState<string | null>(null)
-  const [style, setStyle] = useState<{ icon: string | null; color: string | null }>({ icon: null, color: null })
+  const [details, setDetails] = useState<{ address: string; workspace: Workspace } | null>(null)
+  const workspace = details?.address === wsName ? details.workspace : null
+  const label = workspace?.label || workspace?.name
+  const canManage = canManageWorkspace(workspace)
 
   useEffect(() => {
     if (!wsName) return
@@ -28,8 +31,7 @@ export function WorkspaceM2Settings() {
     getWorkspace(wsName)
       .then(ws => {
         if (cancelled) return
-        setLabel(ws.label || null)
-        setStyle({ icon: ws.icon ?? null, color: ws.color ?? null })
+        setDetails({ address: wsName, workspace: ws })
       })
       .catch(() => {})
     return () => { cancelled = true }
@@ -57,8 +59,8 @@ export function WorkspaceM2Settings() {
     <div className="flex h-full flex-col">
       <M2Header
         title={`Settings: ${label || wsName || 'Workspace'}`}
-        icon={style.icon || DEFAULT_WORKSPACE_ICON}
-        accentColor={style.color}
+        icon={workspace?.icon || DEFAULT_WORKSPACE_ICON}
+        accentColor={workspace?.color}
         onBack={() => {
           // Mobile: the section list is a step INSIDE the drawer (opened without
           // navigating), so back means "up one step" — slide M2 out and land on
@@ -78,11 +80,11 @@ export function WorkspaceM2Settings() {
           </button>
         }
       />
-      <M2SettingsNav
+      {canManage ? <M2SettingsNav
         items={items}
         activeId={activeTab}
         onSelect={id => wsName && navigate(`/workspaces/${wsName}/settings/${id}`)}
-      />
+      /> : <p className="p-4 text-sm text-muted-foreground">{workspace ? 'Workspace settings are available to owners and admins.' : 'Loading workspace…'}</p>}
     </div>
   )
 }

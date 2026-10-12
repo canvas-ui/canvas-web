@@ -81,6 +81,20 @@ test('breadcrumb controls navigate to ancestors and mark the current location', 
   assert.ok(nodes(TreeBreadcrumbs({ items, onNavigate() {}, disabled: true })).filter(node => node.type === 'button').every(node => node.props.disabled))
 })
 
+test('shared workspace breadcrumbs show the label while retaining UUID navigation', () => {
+  const paths = []
+  const rendered = nodes(DefaultCanvas({
+    urlType: 'context', treeName: 'context', workspaceId: 'shared-workspace-uuid', workspaceLabel: 'Company team',
+    urlDisplay: 'shared-workspace-uuid://Projects', contextPath: '/Projects', documents: [],
+    onNavigatePath: path => paths.push(path),
+  }))
+  const root = rendered.find(node => node.type === 'button' && node.props.children === 'Company team')
+  assert.ok(root)
+  root.props.onClick()
+  assert.deepEqual(paths, ['/'])
+  assert.ok(!rendered.some(node => node.props?.children === 'shared-workspace-uuid'))
+})
+
 test('folder, layer, and canvas headers expose navigation, including pane-local callbacks', () => {
   for (const urlType of ['directory', 'directory-layer', 'canvas']) {
     const navigated = []

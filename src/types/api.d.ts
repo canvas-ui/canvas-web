@@ -46,6 +46,8 @@ interface Workspace {
     addedAt: string | null
   }
   isShared?: boolean
+  /** Effective access returned with workspace details for the current caller. */
+  access?: { permissions: string[]; isOwner: boolean; description?: string }
   /** How a shared workspace reached this user (e-mail or directory-group grant). */
   sharedVia?: string | { type?: 'user' | 'group'; principal?: string; permissions?: string[]; accessLevel?: string; [key: string]: unknown }
   color?: string

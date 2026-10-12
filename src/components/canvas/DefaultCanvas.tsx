@@ -84,6 +84,7 @@ interface DefaultCanvasProps {
   contextPath: string
   treeName?: string
   workspaceId?: string
+  workspaceLabel?: string
   documents: Document[]
   isLoading: boolean
   totalCount: number
@@ -153,6 +154,7 @@ export function DefaultCanvas({
   contextPath,
   treeName,
   workspaceId,
+  workspaceLabel,
   documents,
   isLoading,
   totalCount,
@@ -208,7 +210,7 @@ export function DefaultCanvas({
   const pathBar = <PathBar
     treeName={treeName ? `${treeName}${urlType.endsWith('-layer') ? ':layer' : ''}` : urlType.replace('-', ':')}
     path={contextPath}
-    rootLabel={workspaceId || urlDisplay.split('://')[0] || 'Workspace'}
+    rootLabel={workspaceLabel || workspaceId || urlDisplay.split('://')[0] || 'Workspace'}
     onBrowseTree={onBrowseTree}
     onNavigatePath={onNavigatePath}
   />

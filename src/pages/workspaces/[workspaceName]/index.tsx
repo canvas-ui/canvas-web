@@ -1380,6 +1380,7 @@ function WorkspaceContent() {
       contextPath={selectedPath}
       treeName={selectedTreeName}
       workspaceId={workspaceName || workspace.id}
+      workspaceLabel={workspace.label || workspace.name}
       documents={shownDocuments}
       isLoading={isLoadingDocuments}
       totalCount={listedTotalCount}
@@ -1680,6 +1681,7 @@ function WorkspaceContent() {
         {sidePane && workspaceName && (
           <SideWorkspaceCanvas
             workspaceName={workspaceName}
+            workspaceLabel={workspace.label || workspace.name}
             pane={sidePane}
             isFocused={focusedPane === 'right'}
             clipboard={clipboard}
@@ -1712,6 +1714,7 @@ function findTreeNode(root: TreeNode | null, path: string): TreeNode | null {
 
 function SideWorkspaceCanvas({
   workspaceName,
+  workspaceLabel,
   pane,
   isFocused = false,
   clipboard,
@@ -1722,6 +1725,7 @@ function SideWorkspaceCanvas({
   onClose,
 }: {
   workspaceName: string;
+  workspaceLabel: string;
   pane: WorkspaceSidePane;
   isFocused?: boolean;
   clipboard: WorkspaceClipboard | null;
@@ -1934,6 +1938,7 @@ function SideWorkspaceCanvas({
         contextPath={pane.path}
         treeName={pane.treeName}
         workspaceId={workspaceName}
+        workspaceLabel={workspaceLabel}
         documents={documents}
         isLoading={isLoading}
         totalCount={totalCount}

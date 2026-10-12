@@ -1,3 +1,4 @@
+import { canManageWorkspace } from '@/lib/workspace-access'
 import { restoreBackendTrashPath, discardBackendTrashPath } from '@/services/backend-trash'
 import { WorkspaceContentGate } from '@/components/workspace/workspace-content-gate'
 import { useTreeNavigation } from '@/hooks/useTreeNavigation'
@@ -91,6 +92,7 @@ function WorkspaceM2Content() {
   const urlHasTreeSignal = /\/trees\/|\/path(\/|$)/.test(location.pathname) || !!urlLayerId
   const initialTab: TreeTab = urlHasTreeSignal ? tabForTree(urlTree, urlLayerId) : DEFAULT_TAB_ORDER[0]
 
+  const [canManage, setCanManage] = useState(false)
   const [wsLabel, setWsLabel] = useState<string | null>(null)
   const [wsId, setWsId] = useState<string | null>(null)
   const [wsStyle, setWsStyle] = useState<{ icon: string | null; color: string | null }>({ icon: null, color: null })
@@ -251,7 +253,7 @@ function WorkspaceM2Content() {
 
     async function loadAll() {
       // Fetch workspace details for label (non-blocking).
-      getWorkspace(name).then(ws => { if (!cancelled) { setWsLabel(ws.label || null); setWsId(ws.id || null); setWsStyle({ icon: ws.icon ?? null, color: ws.color ?? null }) } }).catch(() => {})
+      getWorkspace(name).then(ws => { if (!cancelled) { setWsLabel(ws.label || ws.name); setCanManage(canManageWorkspace(ws)); setWsId(ws.id || null); setWsStyle({ icon: ws.icon ?? null, color: ws.color ?? null }) } }).catch(() => {})
       await Promise.all([
         loadTree(name, 'context'), loadTree(name, 'directory'), loadTree(name, 'backends'),
         loadLayers(name), loadPins(name),
@@ -547,6 +549,7 @@ function WorkspaceM2Content() {
             </button>
             <button
               type="button"
+              disabled={!canManage}
               // Desktop: M2 stays open and the URL sync swaps it to the settings
               // section list, so the sections stay on screen next to the page.
               // Mobile: the drawer is an overlay that any navigation closes, so
@@ -557,8 +560,8 @@ function WorkspaceM2Content() {
                 if (isMobile) openM2('settings', wsName ?? null)
                 else navigate(`/workspaces/${wsName}/settings/general`)
               }}
-              className="flex items-center justify-center w-8 h-8 rounded hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors"
-              title="Settings"
+              className="flex items-center justify-center w-8 h-8 rounded hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title={canManage ? 'Settings' : 'Workspace settings require admin access'}
             >
               <Settings className="w-3.5 h-3.5" />
             </button>

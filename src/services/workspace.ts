@@ -142,9 +142,9 @@ function getWorkspaceTreePathRoute(workspaceId: string, treeName: string, path: 
 }
 
 export async function getWorkspace(id: string): Promise<Workspace> {
-  const response = await api.get<{ workspace: Workspace } | Workspace>(`${API_ROUTES.workspaces}/${id}`)
+  const response = await api.get<{ workspace: Workspace; access?: Workspace['access'] } | Workspace>(`${API_ROUTES.workspaces}/${id}`)
   const p = response
-  return (p && 'workspace' in p) ? p.workspace : p as Workspace
+  return (p && 'workspace' in p) ? { ...p.workspace, access: p.access } : p as Workspace
 }
 
 /** Lightweight lifecycle check; does not load workspace metadata or trees. */

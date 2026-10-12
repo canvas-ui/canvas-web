@@ -4,6 +4,7 @@ import { getWorkspace, getWorkspaceStatus, startWorkspace } from '@/services/wor
 import { Button } from '@/components/ui/button'
 import socketService from '@/lib/socket'
 import { isOffline, isNetworkErrorMessage, onConnectivityChange } from '@/lib/connectivity'
+import { canManageWorkspace } from '@/lib/workspace-access'
 
 /** Do not mount content readers (including their caches) until status is known. */
 export function WorkspaceContentGate({ workspaceName, children }: { workspaceName: string; children: ReactNode }) {
@@ -13,6 +14,7 @@ export function WorkspaceContentGate({ workspaceName, children }: { workspaceNam
   const [error, setError] = useState('')
   const [starting, setStarting] = useState(false)
   const [revision, setRevision] = useState(0)
+  const [management, setManagement] = useState<{ identity: string; allowed: boolean } | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -26,7 +28,10 @@ export function WorkspaceContentGate({ workspaceName, children }: { workspaceNam
       try {
         const workspace = workspaceId ? await getWorkspaceStatus(workspaceName) : await getWorkspace(workspaceName)
         if (!cancelled && request === sequence) {
-          if ('id' in workspace) workspaceId = workspace.id as string
+          if ('id' in workspace) {
+            workspaceId = workspace.id as string
+            setManagement({ identity, allowed: canManageWorkspace(workspace as Workspace) })
+          }
           // Cached lifecycle metadata is not evidence of a live stop. Offline
           // readers must mount so the PWA can serve their cached content.
           setChecked({ identity, state: isOffline() || workspace.status === 'active' ? 'active'
@@ -106,7 +111,7 @@ export function WorkspaceContentGate({ workspaceName, children }: { workspaceNam
           setStarting(false)
         }
       }}>{starting ? (stopped ? 'Starting…' : 'Checking…') : stopped ? 'Start workspace' : 'Retry'}</Button>
-      <Link className="text-sm underline" to={`/workspaces/${encodeURIComponent(workspaceName)}/settings`}>Workspace settings</Link>
+      {management?.identity === identity && management.allowed && <Link className="text-sm underline" to={`/workspaces/${encodeURIComponent(workspaceName)}/settings`}>Workspace settings</Link>}
     </div>
   )
 }
