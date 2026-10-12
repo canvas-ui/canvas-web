@@ -77,8 +77,12 @@ export function ContextM2Detail() {
         if (!cancelled) showToast({ title: 'Error', description: 'Failed to load context', variant: 'destructive' })
       }
     }
-    load()
-    return () => { cancelled = true }
+    void load()
+    const refresh = (event: Event) => {
+      if ((event as CustomEvent).detail?.contextId === id) void load()
+    }
+    window.addEventListener('contexts:refresh', refresh)
+    return () => { cancelled = true; window.removeEventListener('contexts:refresh', refresh) }
     // showToast is stable (useCallback with no deps in ToastContainer).
   }, [entityId, showToast])
 
@@ -87,15 +91,14 @@ export function ContextM2Detail() {
     onRefresh: () => { if (entityId) loadTree(entityId) },
   })
 
-  // Tree click previews into the single URL input (with the pending tint in
-  // the tree) — the one Set button commits whatever the input holds.
+  // Tree clicks preview the breadcrumb path; Set commits the new binding.
   const handleTreeSelect = (path: string) => {
     setDestinationTree(undefined)
     setPendingPath(path)
     setUrl(context?.workspaceName ? `${context.workspaceName}://${path.replace(/^\//, '')}` : path)
   }
 
-  // Selected/typed but not committed yet — tint the input amber until Set.
+  // Selected but not committed yet — tint the trail amber until Set.
   const isDirtyUrl = context != null && (url.trim() !== (context.url || '') || destinationTree !== undefined)
 
   const handleSave = async () => {
@@ -152,11 +155,12 @@ export function ContextM2Detail() {
         }
       />
 
-      {/* URL editor */}
+      {/* Context binding: preview the path, then apply it with Set. */}
       <div className="p-3 border-b border-border shrink-0">
         <div className="text-[10px] text-muted-foreground mb-1.5 font-medium uppercase tracking-wide">Context URL</div>
         <div className="flex gap-2">
           <PathPickerField
+            presentation="breadcrumbs"
             value={url}
             fixedWorkspaceName={context?.workspaceName}
             pickerTitle="Switch context to…"
@@ -165,15 +169,19 @@ export function ContextM2Detail() {
               setDestinationTree(target.treeName)
               setPendingPath(null)
             }}
-            onChange={setUrl}
+            onChange={value => {
+              setUrl(value)
+              setPendingPath(destinationTree ? null : '/' + value.replace(/^.*?:\/\//, '').replace(/^\/+/, ''))
+            }}
+            disabled={isSaving}
             className="min-w-0 flex-1"
             inputClassName={cn(
-              'text-xs h-7 font-mono transition-colors',
+              'text-xs transition-colors',
               isDirtyUrl && 'border-warning/60 bg-warning/10',
             )}
             placeholder="workspace://path"
           />
-          <Button size="sm" className="h-7 px-2 text-xs shrink-0" onClick={handleSave} disabled={isSaving}>
+          <Button size="sm" className="h-9 px-2 text-xs shrink-0" onClick={handleSave} disabled={isSaving || !isDirtyUrl}>
             {isSaving ? '…' : 'Set'}
           </Button>
         </div>

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { File, Folder, RefreshCw, RotateCcw, Trash2, MoreHorizontal } from 'lucide-react'
+import { TreeBreadcrumbs } from '@/components/common/tree-breadcrumbs'
+import { treeBreadcrumbs } from '@/lib/tree-breadcrumbs'
 import { ContextMenuShell } from '@/components/common/context-menu-shell'
 import { backendTrashLocation, backendTrashPath, backendTrashRows, type BackendTrashItem, type TrashRow } from '@/lib/backend-trash'
 import { listBackendTrash, restoreBackendTrash, discardBackendTrash, confirmTrashDiscard } from '@/services/backend-trash'
@@ -81,15 +83,11 @@ function TrashBrowser({ workspace, path, onNavigate }: TrashBrowserProps) {
 
   const openMenu = (x: number, y: number, row: TrashRow) => setMenu({ x, y, row })
   return <section className="flex h-full min-h-0 flex-col bg-background" aria-label="Backend Trash">
-    <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
-      <Trash2 className="h-4 w-4 text-muted-foreground" />
-      <button className="text-sm font-medium hover:underline" onClick={() => onNavigate('/Trash')}>Trash</button>
-      {backend && <><span className="text-muted-foreground">/</span><button className="text-sm hover:underline" onClick={() => onNavigate(backendTrashPath(backend))}>{backend}</button></>}
-      {prefix.split('/').filter(Boolean).map((segment, i, parts) => <span key={i} className="flex items-center gap-2 text-sm">
-        <span className="text-muted-foreground">/</span>
-        <button className="hover:underline" onClick={() => onNavigate(backendTrashPath(backend, parts.slice(0, i + 1).join('/')))}>{segment}</button>
-      </span>)}
-      <div className="ml-auto flex items-center gap-2">
+    <div className="flex min-w-0 flex-wrap items-center gap-2 border-b px-4 py-3">
+      <Trash2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <TreeBreadcrumbs items={treeBreadcrumbs(path, workspace).map((item, index) =>
+        index === 2 && backend ? { ...item, label: backend } : item)} onNavigate={onNavigate} className="basis-48" />
+      <div className="ml-auto flex max-w-full flex-wrap items-center gap-2">
         {selected.size > 0 && <><button className="flex items-center gap-1 rounded border px-2 py-1 text-sm disabled:opacity-50" disabled={Boolean(busy) || loading}
           onClick={() => void mutate('restore', rows.filter(row => selected.has(row.id)).flatMap(row => row.items))}><RotateCcw className="h-3.5 w-3.5" />Restore selected</button>
           <button className="flex items-center gap-1 rounded border px-2 py-1 text-sm text-destructive disabled:opacity-50" disabled={Boolean(busy) || loading}

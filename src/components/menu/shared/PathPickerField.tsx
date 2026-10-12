@@ -3,6 +3,8 @@ import { FolderTree } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { TreeBreadcrumbs } from '@/components/common/tree-breadcrumbs'
+import { treeBreadcrumbs } from '@/lib/tree-breadcrumbs'
 import { LinkToCard, type LinkToTarget } from './LinkToCard'
 import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from './LinkToSidePanel'
 import type { PickerTab } from './tree-picker-utils'
@@ -33,6 +35,8 @@ interface PathPickerFieldProps {
   disabled?: boolean
   className?: string
   inputClassName?: string
+  /** Browsing surfaces use breadcrumbs; configuration forms can still type. */
+  presentation?: 'input' | 'breadcrumbs'
 }
 
 export function PathPickerField({
@@ -48,8 +52,11 @@ export function PathPickerField({
   disabled,
   className,
   inputClassName,
+  presentation = 'input',
 }: PathPickerFieldProps) {
   const [open, setOpen] = useState(false)
+  const scheme = value.match(/^(.*?):\/\//)?.[0] || ''
+  const path = scheme ? value.slice(scheme.length) : value
 
   const handleConfirm = (paths: string[], ctx: LinkToTarget) => {
     setOpen(false)
@@ -64,14 +71,21 @@ export function PathPickerField({
 
   return (
     <div className={cn('flex gap-2', className)}>
-      <Input
+      {presentation === 'breadcrumbs' ? (
+        <TreeBreadcrumbs
+          items={treeBreadcrumbs(path, scheme.replace('://', '') || fixedWorkspaceName || 'Workspace')}
+          onNavigate={path => onChange(scheme ? `${scheme}${path.replace(/^\/+/, '')}` : path)}
+          disabled={disabled}
+          className={cn('rounded border px-1', inputClassName)}
+        />
+      ) : <Input
         id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         disabled={disabled}
         className={cn('font-mono', inputClassName)}
-      />
+      />}
       <Button
         type="button"
         variant="outline"

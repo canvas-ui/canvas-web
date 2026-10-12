@@ -1399,8 +1399,8 @@ function WorkspaceContent() {
       onImportDocuments={isBackendsPath ? undefined : handleImportDocuments}
       onSelectionChange={setLeftSelection}
       selectedCount={leftSelection.length}
-      onUrlClick={() => openM2Drawer('workspaces', 'detail', workspaceName ?? null)}
-      onUrlSubmit={(p) => navigate(buildWorkspaceUrl(workspaceName!, sanitizeUrlPath('/' + p), selectedTreeName))}
+      onBrowseTree={() => openM2Drawer('workspaces', 'detail', workspaceName ?? null)}
+      onNavigatePath={(path) => navigate(buildWorkspaceUrl(workspaceName!, path, selectedTreeName))}
       folders={contentFolders}
       onOpenFolder={(p) => navigate(buildWorkspaceUrl(workspaceName!, sanitizeUrlPath(p), selectedTreeName))}
       scope={docScope}
@@ -1961,6 +1961,7 @@ function SideWorkspaceCanvas({
         linkTree={tree}
         folders={paneFolders}
         onOpenFolder={onNavigate}
+        onNavigatePath={onNavigate}
         canvasInfo={isCanvas ? {
           label: selectedNode?.label,
           description: selectedNode?.description,

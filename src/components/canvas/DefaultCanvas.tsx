@@ -1,4 +1,6 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
+import { TreeBreadcrumbs } from '@/components/common/tree-breadcrumbs'
+import { treeBreadcrumbs } from '@/lib/tree-breadcrumbs'
 import { LayoutDashboard, BookMarked, Share2, Unlink, Save, Trash2, Plus, Link2, FolderTree, Pin, PinOff } from 'lucide-react'
 import { Document, TreeNode } from '@/types/workspace'
 import { DocumentList, type FolderEntry } from '@/components/common/document-list'
@@ -6,7 +8,7 @@ import type { DocumentPasteOptions } from '@/components/common/document-list'
 import { useToolbox } from '@/components/toolbox/use-toolbox'
 
 // Right-most round "+" in the content header — opens the side AddPanel picker so
-// a note/link/file is created at the path shown in the URL bar.
+// a note/link/file is created at the path shown in the breadcrumbs.
 function AddButton() {
   const { openAddPicker } = useToolbox()
   return (
@@ -46,103 +48,26 @@ function LinkSelectionButton({ count }: { count: number }) {
 // while keeping autocomplete for the well-known ones.
 type CanvasUrlType = 'context' | 'canvas' | 'directory' | 'backends' | 'context-layer' | 'directory-layer' | (string & {})
 
-// The content-area address bar: a `[treeType]` chip that opens the tree drawer
-// (browse), plus an editable URL. Typing a path and pressing Enter navigates
-// the content area to that path's directory listing. Falls back to a plain
-// read-only label when neither handler is wired (e.g. multi-pane, public).
-function UrlBar({
-  urlType,
-  urlDisplay,
-  onUrlClick,
-  onUrlSubmit,
+// Shared by workspace, context, canvas, and split-pane content headers.
+function PathBar({
+  treeName, path, rootLabel, onBrowseTree, onNavigatePath,
 }: {
-  urlType: CanvasUrlType
-  urlDisplay: string
-  onUrlClick?: () => void
-  onUrlSubmit?: (path: string) => void
+  treeName: string
+  path: string
+  rootLabel: string
+  onBrowseTree?: () => void
+  onNavigatePath?: (path: string) => void
 }) {
-  // Split "workspace://foo/bar" into a fixed scheme prefix + the editable path.
-  const schemeMatch = urlDisplay.match(/^(.*?:\/\/)(.*)$/)
-  const scheme = schemeMatch?.[1] ?? ''
-  const initialPath = schemeMatch?.[2] ?? urlDisplay
-
-  // UNCONTROLLED input (the DOM owns the text): a controlled `value` write-back
-  // fights mobile IMEs (Gboard composes even latin text), which mangled
-  // selected/typed paths — "Nas Domcek" came out "N Domcek". `submit` reads the
-  // ref; navigation re-seeds the DOM value via the effect below.
-  const inputRef = useRef<HTMLInputElement>(null)
-  useEffect(() => {
-    if (inputRef.current) inputRef.current.value = initialPath
-  }, [initialPath])
-
-  const chip = (
-    <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-muted border text-muted-foreground shrink-0">
-      [{urlType.replace('-', ':')}]
-    </span>
-  )
-
-  // The [treeType] chip always browses the tree when we can.
-  const chipEl = onUrlClick ? (
-    <button
-      type="button"
-      onClick={onUrlClick}
-      title="Browse tree"
-      aria-label="Browse tree"
-      className="shrink-0 flex items-center gap-1 rounded hover:opacity-80 transition-opacity"
-    >
-      <FolderTree className="w-3.5 h-3.5 text-muted-foreground" />
-      {chip}
-    </button>
-  ) : chip
-
-  // Editable address bar when a submit handler is provided; otherwise the old
-  // read-only URL (kept clickable to browse the tree if onUrlClick is set).
-  // Omnibox pill (Chrome-style): the tree chip plays the site-info role at
-  // the left, the scheme+path are the address. Focus lifts it to an input.
-  if (onUrlSubmit) {
-    return (
-      <div className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-full border border-transparent bg-muted/60 px-3 transition-colors hover:bg-muted focus-within:border-border focus-within:bg-background focus-within:shadow-elevation-1">
-        {chipEl}
-        <form
-          className="flex flex-1 min-w-0 items-center"
-          onSubmit={(e) => {
-            e.preventDefault()
-            onUrlSubmit(inputRef.current?.value ?? initialPath)
-          }}
-        >
-          {scheme && (
-            <span className="shrink-0 font-mono text-sm text-muted-foreground select-none">{scheme}</span>
-          )}
-          <input
-            ref={inputRef}
-            type="text"
-            defaultValue={initialPath}
-            onKeyDown={(e) => { if (e.key === 'Escape' && inputRef.current) inputRef.current.value = initialPath }}
-            spellCheck={false}
-            autoComplete="off"
-            title="Edit path; press Enter to go"
-            className="w-full min-w-0 flex-1 truncate bg-transparent px-1 py-1 font-mono text-sm text-foreground focus:outline-none"
-          />
-        </form>
-      </div>
-    )
-  }
-
+  const chip = <span className="font-mono text-xs text-muted-foreground">[{treeName}]</span>
   return (
-    <div className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-full bg-muted/60 px-3">
-      {chipEl}
-      {onUrlClick ? (
-        <button
-          type="button"
-          onClick={onUrlClick}
-          title="Browse tree"
-          className="flex-1 truncate rounded px-1 -mx-1 text-left text-sm text-foreground transition-colors hover:bg-accent active:bg-accent"
-        >
-          {urlDisplay}
+    <div className="flex min-h-9 min-w-0 flex-1 items-center gap-2">
+      {onBrowseTree ? (
+        <button type="button" onClick={onBrowseTree} title="Browse tree" aria-label="Browse tree"
+          className="flex shrink-0 items-center gap-1 rounded border bg-muted px-1.5 py-1 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <FolderTree className="h-3.5 w-3.5 text-muted-foreground" />{chip}
         </button>
-      ) : (
-        <span className="text-sm text-foreground truncate flex-1">{urlDisplay}</span>
-      )}
+      ) : <span className="shrink-0 rounded border bg-muted px-1.5 py-1">{chip}</span>}
+      <TreeBreadcrumbs items={treeBreadcrumbs(path, rootLabel)} onNavigate={onNavigatePath} />
     </div>
   )
 }
@@ -203,12 +128,9 @@ interface DefaultCanvasProps {
   canSaveChanges?: boolean
   isSavingChanges?: boolean
   onSaveChanges?: () => Promise<void> | void
-  // Makes the header URL tappable — e.g. the mobile context page opens the
-  // workspace tree drawer from it so the URL can be navigated by touch.
-  onUrlClick?: () => void
-  // Turns the URL into an editable address bar: submitting a path (Enter)
-  // navigates the content area to that path's directory listing.
-  onUrlSubmit?: (path: string) => void
+  // The tree chip opens the full tree; breadcrumbs navigate to ancestors.
+  onBrowseTree?: () => void
+  onNavigatePath?: (path: string) => void
   // When provided, enables the document list's "Link to…" path picker.
   linkTree?: TreeNode | null
   // When provided, replaces the document list body (e.g. the canvas widget grid)
@@ -273,8 +195,8 @@ export function DefaultCanvas({
   canSaveChanges,
   isSavingChanges,
   onSaveChanges,
-  onUrlClick,
-  onUrlSubmit,
+  onBrowseTree,
+  onNavigatePath,
   linkTree,
   selectedCount = 0,
   children,
@@ -283,11 +205,20 @@ export function DefaultCanvas({
   onOpenFolder,
 }: DefaultCanvasProps) {
   const isCanvas = urlType === 'canvas'
+  const pathBar = <PathBar
+    treeName={treeName ? `${treeName}${urlType.endsWith('-layer') ? ':layer' : ''}` : urlType.replace('-', ':')}
+    path={contextPath}
+    rootLabel={workspaceId || urlDisplay.split('://')[0] || 'Workspace'}
+    onBrowseTree={onBrowseTree}
+    onNavigatePath={onNavigatePath}
+  />
 
   return (
     <div className="flex flex-col h-full min-h-0 bg-background">
       {/* Header */}
       {isCanvas && canvasInfo ? (
+        <>
+        <div className="flex min-w-0 shrink-0 items-center border-b bg-muted/20 px-4 py-1">{pathBar}</div>
         <div className="flex items-center gap-3 px-4 py-2.5 border-b bg-muted/20 shrink-0 min-w-0">
           {canvasInfo.color && (
             <div
@@ -368,14 +299,10 @@ export function DefaultCanvas({
           <LinkSelectionButton count={selectedCount} />
           <AddButton />
         </div>
+        </>
       ) : (
-        <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/20 shrink-0">
-          <UrlBar
-            urlType={urlType}
-            urlDisplay={urlDisplay}
-            onUrlClick={onUrlClick}
-            onUrlSubmit={onUrlSubmit}
-          />
+        <div className="flex min-w-0 items-center gap-2 px-4 py-2.5 border-b bg-muted/20 shrink-0">
+          {pathBar}
           {onSaveAsCanvas && (
             <button
               type="button"

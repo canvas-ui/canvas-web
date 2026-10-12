@@ -1,6 +1,6 @@
 // Global UI wallpaper — an optional background image on the desk surface
 // (the backdrop every sheet/panel rests on). Defaults to no image, i.e. the
-// theme's plain desk color. Stored in localStorage so it works offline and
+// theme's plain desk color. Stored in IndexedDB so it works offline and
 // needs no server round-trip; applied via CSS custom properties consumed by
 // the `surface-desk` utility.
 //
@@ -8,7 +8,8 @@
 //   · built-in — shipped by @augmentd-labs/canvas-wallpapers and served from
 //     /wallpapers; stored as the reference `builtin:<id>`, never as a URL, so
 //     the paths and formats stay ours to change between releases.
-//   · custom — the user's own image, stored inline as a data URL.
+//   · custom — the user's own image, stored unchanged as a data URL. Keeping
+//     the original bytes also preserves animated GIFs.
 
 import { getWallpaper, wallpaperThumbUrl, wallpaperUrl, wallpapers } from '@augmentd-labs/canvas-wallpapers'
 import type { Wallpaper } from '@augmentd-labs/canvas-wallpapers'
@@ -28,8 +29,11 @@ export const WALLPAPER_FIT_OPTIONS: Array<{ id: WallpaperFit; label: string; des
 ]
 
 const KEY = 'canvas:wallpaper'
-// localStorage quota is ~5 MB; leave room for everything else stored there.
-export const WALLPAPER_MAX_BYTES = 3.5 * 1024 * 1024
+// File bytes, before base64 encoding. Large images belong in IndexedDB, not
+// the small localStorage quota shared by auth, theme, and other preferences.
+export const WALLPAPER_MAX_BYTES = 10 * 1024 * 1024
+const DB_NAME = 'canvas-wallpaper'
+const STORE = 'settings'
 
 const BUILTIN_PREFIX = 'builtin:'
 
@@ -51,23 +55,97 @@ export function builtinIdOf(image: string | null): string | null {
   return image?.startsWith(BUILTIN_PREFIX) ? image.slice(BUILTIN_PREFIX.length) : null
 }
 
-export function loadWallpaper(): WallpaperSettings {
+function normalizeSettings(value: unknown): WallpaperSettings | null {
+  if (!value || typeof value !== 'object') return null
+  const parsed = value as Partial<WallpaperSettings>
+  if (typeof parsed.image !== 'string' && parsed.image !== null) return null
+  return { image: parsed.image, fit: parsed.fit === 'fill' || parsed.fit === 'center' ? parsed.fit : 'cover' }
+}
+
+function loadLegacyWallpaper(): WallpaperSettings {
   try {
     const raw = localStorage.getItem(KEY)
     if (raw) {
-      const parsed = JSON.parse(raw) as Partial<WallpaperSettings>
-      if (typeof parsed.image === 'string' || parsed.image === null) {
-        const fit: WallpaperFit = parsed.fit === 'fill' || parsed.fit === 'center' ? parsed.fit : 'cover'
-        return { image: parsed.image ?? null, fit }
-      }
+      const settings = normalizeSettings(JSON.parse(raw))
+      if (settings) return settings
     }
   } catch { /* fall through to default */ }
   return { image: null, fit: 'cover' }
 }
 
-export function saveWallpaper(settings: WallpaperSettings): void {
-  localStorage.setItem(KEY, JSON.stringify(settings))
+let currentSettings = loadLegacyWallpaper()
+let restorePromise: Promise<WallpaperSettings> | null = null
+
+/** Synchronous snapshot for React's initial state and the legacy first paint. */
+export function loadWallpaper(): WallpaperSettings {
+  return currentSettings
+}
+
+async function storedWallpaper(settings?: WallpaperSettings): Promise<unknown> {
+  const db = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1)
+    let blocked = false
+    request.onupgradeneeded = () => request.result.createObjectStore(STORE)
+    request.onsuccess = () => {
+      if (blocked) { request.result.close(); return }
+      request.result.onversionchange = () => request.result.close()
+      resolve(request.result)
+    }
+    request.onerror = () => reject(request.error)
+    request.onblocked = () => { blocked = true; reject(new Error('Close other Canvas tabs and try again.')) }
+  })
+  try {
+    return await new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORE, settings ? 'readwrite' : 'readonly')
+      const store = transaction.objectStore(STORE)
+      const request = settings ? store.put(settings, KEY) : store.get(KEY)
+      // A successful put request isn't durable until its transaction commits.
+      transaction.oncomplete = () => resolve(request.result)
+      transaction.onerror = () => reject(transaction.error)
+      transaction.onabort = () => reject(transaction.error)
+    })
+  } finally { db.close() }
+}
+
+function clearLegacyWallpaper(): void {
+  try { localStorage.removeItem(KEY) } catch { /* IndexedDB is already committed. */ }
+}
+
+/** Restore once, migrating older localStorage wallpapers only after a commit. */
+export function restoreWallpaper(): Promise<WallpaperSettings> {
+  if (!restorePromise) restorePromise = (async () => {
+    try {
+      const stored = normalizeSettings(await storedWallpaper())
+      if (stored) currentSettings = stored
+      else await storedWallpaper(currentSettings)
+      clearLegacyWallpaper()
+    } catch { /* Keep the legacy wallpaper if storage is unavailable. */ }
+    applyWallpaper(currentSettings)
+    return currentSettings
+  })()
+  return restorePromise.then(() => currentSettings)
+}
+
+export async function saveWallpaper(settings: WallpaperSettings): Promise<void> {
+  await restoreWallpaper()
+  await storedWallpaper(settings)
+  currentSettings = settings
+  clearLegacyWallpaper()
   applyWallpaper(settings)
+}
+
+/** Read without resizing or re-encoding, which would flatten an animated GIF. */
+export function readWallpaperFile(file: File): Promise<string> {
+  if (file.size > WALLPAPER_MAX_BYTES) return Promise.reject(new Error('Image too large. Choose one up to 10 MB.'))
+  const type = file.type || (/\.gif$/i.test(file.name) ? 'image/gif' : '')
+  if (!type.startsWith('image/')) return Promise.reject(new Error('Pick an image file (animated GIFs are supported).'))
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(new Error('Could not read the image. Try selecting it again.'))
+    reader.onabort = () => reject(new Error('Reading the image was cancelled.'))
+    reader.readAsDataURL(file.type ? file : file.slice(0, file.size, type))
+  })
 }
 
 // `image-set()` lets the browser pick the first format it can decode, so the

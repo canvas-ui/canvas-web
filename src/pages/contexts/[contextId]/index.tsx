@@ -4,6 +4,7 @@ import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useToast } from '@/components/ui/use-toast';
 import {
   getContext,
+  updateContextUrl,
   getContextDocuments,
   removeDocumentsFromContext,
   deleteDocumentsFromContext,
@@ -32,6 +33,8 @@ import { Filter } from 'lucide-react';
 import { visibleAccentColor } from '@/utils/color';
 import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style';
 import { cn } from '@/lib/utils';
+import { TreeBreadcrumbs } from '@/components/common/tree-breadcrumbs';
+import { treeBreadcrumbs } from '@/lib/tree-breadcrumbs';
 
 function contextUrlToPath(url: string, workspaceName?: string): string {
   if (!url || !workspaceName) return '/';
@@ -113,6 +116,11 @@ export default function ContextDetailPage() {
   const [pageSize, setPageSize] = useState(50);
   const [serverSearchQueries, setServerSearchQueries] = useState<string[]>(urlSearchQueries);
   const [ignoreSavedSearch, setIgnoreSavedSearch] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<{ id: string; url: string; path: string } | null>(null);
+  const [isSettingPath, setIsSettingPath] = useState(false);
+  const settingPath = useRef(false);
+  const pendingPath = pendingNavigation?.id === context?.id && pendingNavigation?.url === context?.url
+    ? pendingNavigation?.path : null;
 
   const layerParam = new URLSearchParams(location.search).get('layer');
   const isSharedContext = Boolean(ownerId);
@@ -266,11 +274,12 @@ export default function ContextDetailPage() {
     [documents, geoSelection, toolboxState.filters.geo.includeUnlocated],
   );
   const loadedContextId = context?.id;
+  const loadedContextUrl = context?.url;
   useEffect(() => {
     if (!loadedContextId) return;
     const run = () => fetchDocuments();
     void run();
-  }, [loadedContextId, fetchDocuments]);
+  }, [loadedContextId, loadedContextUrl, fetchDocuments]);
   useEffect(() => {
     const onRefresh = () => fetchDocuments();
     window.addEventListener('workspace:documents:refresh', onRefresh);
@@ -502,6 +511,27 @@ export default function ContextDetailPage() {
     }
   };
 
+  const applyNavigation = async () => {
+    if (!context || !pendingPath || isSharedContext || settingPath.current) return;
+    const target = { id: context.id, url: context.url, path: pendingPath };
+    settingPath.current = true;
+    setIsSettingPath(true);
+    try {
+      const result = await updateContextUrl(target.id, `${context.workspaceName}://${target.path.replace(/^\/+/, '')}`);
+      setContext(previous => previous?.id === target.id && previous.url === target.url
+        ? { ...previous, url: result.url, path: target.path } : previous);
+      setPendingNavigation(null);
+      setCurrentPage(1);
+      window.dispatchEvent(new CustomEvent('contexts:refresh', { detail: { contextId: target.id } }));
+      showToast({ title: 'Saved', description: 'Context path updated' });
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Could not update context path', variant: 'destructive' });
+    } finally {
+      settingPath.current = false;
+      setIsSettingPath(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -639,10 +669,20 @@ export default function ContextDetailPage() {
         canSaveChanges={canSaveChanges}
         isSavingChanges={toolboxState.isSaving}
         onSaveChanges={saveFilters}
-        // Mobile: tapping the context URL opens the workspace tree drawer
-        // (M2 detail) so the URL can be navigated by touch. Desktop already
-        // has the tree visible in the side panel.
-        onUrlClick={isMobile && contextId ? () => openM2Drawer('contexts', 'detail', contextId) : undefined}
+        onBrowseTree={!isSharedContext && contextId ? () => openM2Drawer('contexts', 'detail', contextId) : undefined}
+        onNavigatePath={!isSharedContext ? path => {
+          if (!settingPath.current) setPendingNavigation({ id: context.id, url: context.url, path });
+        } : undefined}
+        contentBanner={pendingPath ? (
+          <div className="border-b bg-warning/10 px-4 py-2" role="status">
+            <p className="text-xs text-muted-foreground">Set this context to the selected path? Contents stay at the current path until you apply it.</p>
+            <div className="flex min-w-0 items-center gap-2">
+              <TreeBreadcrumbs items={treeBreadcrumbs(pendingPath, context.workspaceName)} label="Selected context path" />
+              <button type="button" disabled={isSettingPath} onClick={() => void applyNavigation()} className="shrink-0 rounded border px-3 py-1 text-sm hover:bg-accent disabled:opacity-50">{isSettingPath ? 'Setting…' : 'Set'}</button>
+              <button type="button" disabled={isSettingPath} onClick={() => setPendingNavigation(null)} className="shrink-0 rounded px-2 py-1 text-sm hover:bg-accent disabled:opacity-50">Cancel</button>
+            </div>
+          </div>
+        ) : undefined}
       >
         {/* Board views replace the document list (see DefaultCanvas children
             contract); the default 'documents' view passes null through. */}

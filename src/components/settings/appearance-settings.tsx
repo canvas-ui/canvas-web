@@ -1,5 +1,5 @@
 import { setDocumentOpenMode, useDocumentOpenMode } from '@/lib/document-open-mode'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Check, Monitor, Moon, Sun } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -8,11 +8,12 @@ import {
   builtinThumbUrl,
   BUILTIN_WALLPAPERS,
   loadWallpaper,
+  restoreWallpaper,
+  readWallpaperFile,
   saveWallpaper,
   wallpaperImageCss,
   wallpaperSizeCss,
   WALLPAPER_FIT_OPTIONS,
-  WALLPAPER_MAX_BYTES,
   type WallpaperSettings,
 } from '@/lib/wallpaper'
 import { TREE_STYLE_OPTIONS, setTreeStyle, useTreeStyle } from '@/lib/tree-style'
@@ -218,30 +219,36 @@ export function AppearanceSettings() {
 function WallpaperSection() {
   const [settings, setSettings] = useState(loadWallpaper)
   const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const pending = useRef(false)
+  useEffect(() => {
+    let cancelled = false
+    void restoreWallpaper().then(() => {
+      if (!cancelled) { setSettings(loadWallpaper()); setLoading(false) }
+    })
+    return () => { cancelled = true }
+  }, [])
 
-  const update = (next: WallpaperSettings) => {
+  const update = async (next: WallpaperSettings, file?: File) => {
+    if (pending.current) return
+    pending.current = true
+    setSaving(true)
     try {
-      saveWallpaper(next)
-      setSettings(next)
+      const settings = file ? { ...next, image: await readWallpaperFile(file) } : next
+      await saveWallpaper(settings)
+      setSettings(settings)
       setError(null)
-    } catch {
-      setError('Could not store the wallpaper (browser storage full?). Try a smaller image.')
+    } catch (err) {
+      setError(err instanceof Error && err.name !== 'QuotaExceededError' ? err.message : 'Could not store the wallpaper. Free some browser storage or try a smaller image.')
+    } finally {
+      pending.current = false
+      setSaving(false)
     }
   }
 
   const onPick = (file: File | undefined) => {
-    if (!file) return
-    if (!file.type.startsWith('image/')) { setError('Pick an image file.'); return }
-    const reader = new FileReader()
-    reader.onload = () => {
-      const dataUrl = String(reader.result || '')
-      if (dataUrl.length > WALLPAPER_MAX_BYTES) {
-        setError('Image too large for browser storage. Use one under ~2.5 MB.')
-        return
-      }
-      update({ ...settings, image: dataUrl })
-    }
-    reader.readAsDataURL(file)
+    if (file) void update(settings, file)
   }
 
   const isCustom = settings.image !== null && builtinIdOf(settings.image) === null
@@ -249,95 +256,99 @@ function WallpaperSection() {
 
   return (
     <section>
-      <SectionHeading
-        title="Wallpaper"
-        description="Background image for the desk behind all panels. Without one, the theme's desk color shows (the default)."
-      />
-
-      <div role="radiogroup" aria-label="Wallpaper" className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-        <WallpaperTile
-          label="None"
-          isActive={settings.image === null}
-          onSelect={() => update({ ...settings, image: null })}
-        >
-          {/* `surface-desk` carries the live wallpaper, which is exactly what
-              this tile must not show — it previews the bare desk color. */}
-          <span
-            className="flex size-full items-center justify-center surface-desk text-xs text-muted-foreground"
-            style={{ backgroundImage: 'none' }}
-          >
-            None
-          </span>
-        </WallpaperTile>
-
-        {BUILTIN_WALLPAPERS.map((wallpaper) => (
-          <WallpaperTile
-            key={wallpaper.id}
-            label={wallpaper.title}
-            title={`${wallpaper.title} — suits the ${wallpaper.scheme} scheme`}
-            isActive={builtinIdOf(settings.image) === wallpaper.id}
-            onSelect={() => update({ ...settings, image: builtinRef(wallpaper.id) })}
-          >
-            <img
-              src={builtinThumbUrl(wallpaper)}
-              alt=""
-              loading="lazy"
-              className="size-full object-cover"
-              style={{ backgroundColor: wallpaper.background }}
-            />
-          </WallpaperTile>
-        ))}
-
-        {isCustom && (
-          <WallpaperTile label="Your image" isActive onSelect={() => {}}>
-            <img src={settings.image ?? undefined} alt="" className="size-full object-cover" />
-          </WallpaperTile>
-        )}
-      </div>
-
-      <WallpaperCredits />
-
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        {/* Live thumbnail of the current desk look, including the fit mode */}
-        <div
-          className="h-20 w-32 shrink-0 rounded-md border surface-desk"
-          style={previewImage ? {
-            backgroundImage: previewImage,
-            backgroundSize: wallpaperSizeCss(settings.fit),
-            backgroundPosition: 'center',
-            backgroundRepeat: 'no-repeat',
-          } : undefined}
-          aria-hidden
+      <fieldset disabled={loading || saving} className="min-w-0">
+        <SectionHeading
+          title="Wallpaper"
+          description="Background image for the desk behind all panels. Without one, the theme's desk color shows (the default)."
         />
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap gap-2">
-            <label className="focus-ring inline-flex cursor-pointer items-center rounded-md border px-3 py-1.5 text-sm hover:bg-accent/50">
-              {isCustom ? 'Change image…' : 'Use your own image…'}
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => { onPick(e.target.files?.[0]); e.target.value = '' }}
+
+        <div role="radiogroup" aria-label="Wallpaper" className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+          <WallpaperTile
+            label="None"
+            isActive={settings.image === null}
+            onSelect={() => update({ ...settings, image: null })}
+          >
+            {/* `surface-desk` carries the live wallpaper, which is exactly what
+                this tile must not show — it previews the bare desk color. */}
+            <span
+              className="flex size-full items-center justify-center surface-desk text-xs text-muted-foreground"
+              style={{ backgroundImage: 'none' }}
+            >
+              None
+            </span>
+          </WallpaperTile>
+
+          {BUILTIN_WALLPAPERS.map((wallpaper) => (
+            <WallpaperTile
+              key={wallpaper.id}
+              label={wallpaper.title}
+              title={`${wallpaper.title} — suits the ${wallpaper.scheme} scheme`}
+              isActive={builtinIdOf(settings.image) === wallpaper.id}
+              onSelect={() => update({ ...settings, image: builtinRef(wallpaper.id) })}
+            >
+              <img
+                src={builtinThumbUrl(wallpaper)}
+                alt=""
+                loading="lazy"
+                className="size-full object-cover"
+                style={{ backgroundColor: wallpaper.background }}
               />
-            </label>
-            {settings.image && (
-              <button
-                type="button"
-                onClick={() => update({ ...settings, image: null })}
-                className="focus-ring rounded-md border px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-              >
-                Remove
-              </button>
-            )}
-          </div>
-          <SegmentedControl
-            options={WALLPAPER_FIT_OPTIONS.map((option) => ({ id: option.id, label: option.label, title: option.description }))}
-            value={settings.fit}
-            onChange={(fit) => update({ ...settings, fit })}
-          />
-          {error && <p className="text-xs text-destructive">{error}</p>}
+            </WallpaperTile>
+          ))}
+
+          {isCustom && (
+            <WallpaperTile label="Your image" isActive onSelect={() => {}}>
+              <img src={settings.image ?? undefined} alt="" className="size-full object-cover" />
+            </WallpaperTile>
+          )}
         </div>
-      </div>
+
+        <WallpaperCredits />
+
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          {/* Live thumbnail of the current desk look, including the fit mode */}
+          <div
+            className="h-20 w-32 shrink-0 rounded-md border surface-desk"
+            style={previewImage ? {
+              backgroundImage: previewImage,
+              backgroundSize: wallpaperSizeCss(settings.fit),
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat',
+            } : undefined}
+            aria-hidden
+          />
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap gap-2">
+              <label className="focus-ring inline-flex cursor-pointer items-center rounded-md border px-3 py-1.5 text-sm hover:bg-accent/50">
+                {isCustom ? 'Change image…' : 'Use your own image…'}
+                <input
+                  type="file"
+                  accept="image/*,.gif"
+                  className="hidden"
+                  onChange={(e) => { onPick(e.target.files?.[0]); e.target.value = '' }}
+                />
+              </label>
+              {settings.image && (
+                <button
+                  type="button"
+                  onClick={() => update({ ...settings, image: null })}
+                  className="focus-ring rounded-md border px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">Images and animated GIFs up to 10 MB. Stored on this device.</p>
+            <SegmentedControl
+              options={WALLPAPER_FIT_OPTIONS.map((option) => ({ id: option.id, label: option.label, title: option.description }))}
+              value={settings.fit}
+              onChange={(fit) => update({ ...settings, fit })}
+            />
+            {error && <p className="text-xs text-destructive">{error}</p>}
+            {saving && <p role="status" className="text-xs text-muted-foreground">Saving wallpaper…</p>}
+          </div>
+        </div>
+      </fieldset>
     </section>
   )
 }

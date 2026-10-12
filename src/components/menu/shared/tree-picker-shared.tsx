@@ -8,6 +8,8 @@ import { cn } from '@/lib/utils'
 import { getCachedWorkspaceTreeByName, getCanvasPathDocuments, getWorkspaceDocuments, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { DocumentIcon } from '@/components/common/DocumentIcon'
+import { TreeBreadcrumbs } from '@/components/common/tree-breadcrumbs'
+import { treeBreadcrumbs } from '@/lib/tree-breadcrumbs'
 import { buildPath, matchesSearch, useRowMenu, TAB_ICONS, TAB_LABELS, type TreeTab, type RowMenuEvent } from './tree-picker-utils'
 // Workspace is a global type declared in src/types/api.d.ts
 
@@ -311,12 +313,6 @@ export function DocumentPathBrowser({
     return () => { cancelled = true }
   }, [workspaceName, activeTab, browsePath, step, docSearch])
 
-  // `ctx://` + `/work` would read `ctx:///work`; the rest of the app (rule
-  // builder scopes, the address bar) strips the leading slash, so root is a
-  // bare `ctx://`.
-  const scopeLabel = (path: string) =>
-    `${activeTab === 'directory' ? 'dir' : 'ctx'}://${path.replace(/^\/+/, '')}`
-
   const selectFolder = (path: string) => {
     setBrowsePath(path)
     onNavigate?.(path)
@@ -361,6 +357,7 @@ export function DocumentPathBrowser({
               Next <ChevronRight className="h-3.5 w-3.5" />
             </button>
           </div>
+          <TreeBreadcrumbs items={treeBreadcrumbs(browsePath, workspaceName)} onNavigate={selectFolder} label="Folder path" />
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -427,9 +424,13 @@ export function DocumentPathBrowser({
             title="Back to folders"
           >
             <ChevronRight className="h-3.5 w-3.5 shrink-0 rotate-180" />
-            <span className="truncate font-mono">{scopeLabel(browsePath)}</span>
+            <span>Folders</span>
           </button>
           <span className="ml-auto shrink-0 text-xs text-muted-foreground">Step 2 of 2 · Pick a document</span>
+        </div>
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="shrink-0 font-mono text-xs text-muted-foreground">[{activeTab}]</span>
+          <TreeBreadcrumbs items={treeBreadcrumbs(browsePath, workspaceName)} onNavigate={selectFolder} label="Document folder path" />
         </div>
         {/* Server-side search, not a filter over the page below — see the
             docSearch state. Scoped to the folder picked in step 1. */}
