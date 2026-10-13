@@ -24,7 +24,7 @@ import type { Layer, WorkspacePin } from '@/services/workspace'
 import { getWebuiConfig, putWebuiConfig } from '@/services/user-config'
 import { WorkspacePinsTab } from './WorkspacePinsTab'
 import { useTreeOperations } from '@/hooks/useTreeOperations'
-import { listHooks, runHook, findBackendTreeSyncHook, splitBackendsPath, defaultMirrorTarget, defaultStoreFolder, rulePrefillParams, type RulePrefill } from '@/services/hooks'
+import { splitBackendsPath, defaultStoreFolder, rulePrefillParams, type RulePrefill } from '@/services/hooks'
 import { useToast } from '@/components/ui/use-toast'
 import type { TreeNode } from '@/types/workspace'
 import socketService from '@/lib/socket'
@@ -368,27 +368,7 @@ function WorkspaceM2Content() {
     setContentPath(path !== '/' ? path : null)
   }
 
-  const { showToast, showProgress } = useToast()
-  // Folder-skeleton sync for one backends subtree: runs the shipped
-  // started/…backend-tree-sync.js hook by hand with the subtree as payload
-  // (backend + subdir → dir:/<rel>), so empty folders land in the directory
-  // tree even though no document ever passes through a rule for them.
-  const handleSyncFolderTree = useCallback(async (path: string): Promise<boolean> => {
-    if (!wsName) return false
-    const parts = splitBackendsPath(path)
-    if (!parts) throw new Error('Not a backend folder')
-    const hookFile = findBackendTreeSyncHook(await listHooks(wsName))
-    if (!hookFile) throw new Error('No backend-tree-sync hook in this workspace (Git/internal/hooks/started/). Recreate the seed hooks from Settings → Hooks.')
-    const res = await runHook(wsName, {
-      hookFile,
-      payload: { backend: parts.backend, subdir: parts.rel, target: defaultMirrorTarget(path) },
-    })
-    if (res.status === 'error') throw new Error(res.error || 'Sync failed')
-    showToast({ title: 'Folders synced', description: `${parts.backend}${parts.rel ? `/${parts.rel}` : ''} → ${defaultMirrorTarget(path)} (see Hooks → Runs)` })
-    refreshAll(wsName)
-    return true
-  }, [wsName, showToast, refreshAll])
-
+  const { showProgress } = useToast()
   const ops = useTreeOperations({
     workspaceId: wsName ?? undefined,
     treeName: treeNameForTab(activeTab),
@@ -694,7 +674,6 @@ function WorkspaceM2Content() {
             searchQuery={searchQuery}
             resyncingPaths={activeTab === 'backends' ? resyncingPaths : undefined}
             onAddRule={wsName && activeTab === 'backends' ? setAutoLinkPath : undefined}
-            onSyncFolderTree={wsName && activeTab === 'backends' ? handleSyncFolderTree : undefined}
             onAddStoreRule={wsName ? (path, kind: 'store' | 'download' = 'store') => {
               // Storage rule prefilled from either side: a backends folder is
               // the DESTINATION (backend + folder below its root); a context /

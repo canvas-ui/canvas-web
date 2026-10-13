@@ -35,6 +35,7 @@ export type AutoLinkDirection = 'forward' | 'reverse' | 'both'
 export function buildAutoLinkRules(id: string, source: string, destinations: AutoLinkDestination[], recursive = false, direction: AutoLinkDirection = 'forward', mode: 'copy' | 'move' = 'copy', storage?: { address: string; key: string }): HookRule[] {
   const forward = buildAutoLinkRule(id, source, destinations, recursive)
   if (direction === 'forward') return [forward]
+  if (recursive && destinations.some(target => target.tree === 'context')) throw new Error('Recursive storage requires a directory source. Context paths can store files in a fixed backend folder.')
   const parts = source.split('/').filter(Boolean)
   if (parts.length < 2 || source.includes('{{') || parts.some(part => part === '.' || part === '..')) throw new Error('Choose a backend folder with a valid storage address.')
   if (!storage) throw new Error('Choose a writable backend folder.')

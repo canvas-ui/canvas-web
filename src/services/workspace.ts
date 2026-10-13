@@ -1180,6 +1180,7 @@ export interface BackendTransferResult {
 export type BackendTransferConflict = 'error' | 'rename' | 'overwrite'
 
 export interface BackendTransferOptions {
+  deleteFrom?: { backend: string; folder: string }
   to: string[]
   mode?: BackendTransferMode
   keepDocument?: boolean
@@ -1204,6 +1205,7 @@ export async function transferDocumentsToBackends(
       documentIds: normalizeDocumentIds(documentIds),
       to: options.to,
       mode: options.mode ?? 'copy',
+      ...(options.deleteFrom ? { deleteFrom: options.deleteFrom } : {}),
       ...(options.keepDocument ? { keepDocument: true } : {}),
       ...(folder ? { folder } : {}),
       ...(filename ? { filename } : {}),

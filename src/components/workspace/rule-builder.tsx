@@ -264,6 +264,11 @@ const RECIPES: Recipe[] = [
 
 // ── form → rule ──────────────────────────────────────────────────────────────
 
+function canKeepStorageSubfolders(conditions: ConditionRow[]): boolean {
+  const paths = conditions.filter(c => c.field === 'path' || c.field === 'pathExact').flatMap(c => splitAlternatives(c.value))
+  return paths.length > 0 && paths.every(path => /^(dir|directory|backends):\//.test(path))
+}
+
 function buildRule(form: RuleForm): HookRule {
   const when: HookRule['when'] = { event: form.events.length === 1 ? form.events[0] : form.events }
   if (form.schema) when.schema = form.schema
@@ -322,7 +327,7 @@ function buildRule(form: RuleForm): HookRule {
         ...(row.storeFrom ? { from: row.storeFrom } : {}),
         mode: row.storeMode,
         ...(folder ? { folder } : {}),
-        ...recursive,
+        ...(row.recursive && canKeepStorageSubfolders(form.conditions) ? { recursive: true } : {}),
         ...(key ? { key } : {}),
         onConflict: row.storeConflict,
       })
@@ -647,7 +652,7 @@ function formFromPrefill(prefill: RulePrefill): RuleForm {
       schema: 'file',
       events: ['document.inserted', 'document.linked'],
       conditions: [{ field: 'path', value: prefill.path || '' }],
-      actions: [{ ...emptyAction('store'), a: prefill.storeTo || '', storeFolder: prefill.storeFolder || '', recursive: true }],
+      actions: [{ ...emptyAction('store'), a: prefill.storeTo || '', storeFolder: prefill.storeFolder || '', recursive: canKeepStorageSubfolders([{ field: 'path', value: prefill.path || '' }]) }],
     }
   }
   return {
@@ -948,6 +953,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
     </Button>
   )
 
+  const canRecreateStorageStructure = canKeepStorageSubfolders(form?.conditions || [])
   const hasPathCondition = Boolean(form?.conditions.some((c) => (c.field === 'path' || c.field === 'pathExact') && c.value.trim()))
   const backendLabel = (b: Backend) => `${b.address}${b.address === 'workspace:data' ? ' — managed blob store (default)' : b.address === 'workspace:home' ? ' — workspace home folder' : b.driver ? ` — ${b.driver}` : ''}`
 
@@ -1194,7 +1200,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
               )
               const storeFolder = row.storeFolder.trim().replace(/^\/+|\/+$/g, '')
               const storePreview = row.kind === 'store' && row.a
-                ? `${row.a}/${[storeFolder, row.recursive && hasPathCondition ? '<sub-folders>' : '', row.storeName === 'keep' ? '<original name>' : row.storeName === 'title' ? '<title>.<ext>' : row.storeName === 'dated' ? DATED_NAME : (row.b || '<name>')].filter(Boolean).join('/')}`
+                ? `${row.a}/${[storeFolder, row.recursive && canRecreateStorageStructure ? '<sub-folders>' : '', row.storeName === 'keep' ? '<original name>' : row.storeName === 'title' ? '<title>.<ext>' : row.storeName === 'dated' ? DATED_NAME : (row.b || '<name>')].filter(Boolean).join('/')}`
                 : ''
               return (
                 <div key={i} className="space-y-4 rounded-xl border bg-background p-4">
@@ -1263,10 +1269,10 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                         )}
                       </div>
                       <Toggle
-                        checked={row.recursive} onChange={(v) => set({ recursive: v })}
+                        checked={row.recursive && canRecreateStorageStructure} onChange={(v) => set({ recursive: v })}
                         label="Keep sub-folders"
-                        hint={hasPathCondition ? 'Filed under …/UI/mobile → stored under Folder/mobile. Needs the "is under the folder" condition above.' : 'Add an "is under the folder" condition to mirror sub-folders.'}
-                        disabled={!hasPathCondition}
+                        hint={canRecreateStorageStructure ? 'A directory path such as …/UI/mobile is stored under Folder/mobile. Missing destination folders are created.' : 'Choose a directory source to preserve subfolders. Context paths store files in the fixed destination folder.'}
+                        disabled={!canRecreateStorageStructure}
                       />
                       {storePreview && (
                         <p className="flex flex-wrap items-center gap-2 rounded-lg bg-muted/60 px-3 py-2 text-sm">

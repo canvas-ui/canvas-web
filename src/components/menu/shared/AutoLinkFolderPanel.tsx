@@ -18,6 +18,7 @@ export function AutoLinkFolderPanel({ workspaceId, sourcePath, onClose, onManage
   const [destinations, setDestinations] = useState<AutoLinkDestination[]>([])
   const [picker, setPicker] = useState(false)
   const [direction, setDirection] = useState<AutoLinkDirection>('forward')
+  const canRecreateStructure = direction === 'forward' || !destinations.some(target => target.tree === 'context')
   const [mode, setMode] = useState<'copy' | 'move'>('copy')
   const [ruleIndex, setRuleIndex] = useState(0)
   const [recursive, setRecursive] = useState(false)
@@ -95,12 +96,16 @@ export function AutoLinkFolderPanel({ workspaceId, sourcePath, onClose, onManage
           <div><p className="text-xs text-muted-foreground">Backend folder</p><p className="mt-1 break-words text-sm">{sourcePath}</p></div>
           <fieldset disabled={busy || saved} className="space-y-2 text-sm">
             <label className="block font-medium" htmlFor="autolink-direction">Direction</label>
-            <select id="autolink-direction" className="w-full rounded-md border bg-background p-2" value={direction} onChange={e => setDirection(e.target.value as AutoLinkDirection)}>
+            <select id="autolink-direction" className="w-full rounded-md border bg-background p-2" value={direction} onChange={e => {
+              const next = e.target.value as AutoLinkDirection
+              setDirection(next)
+              if (next !== 'forward' && destinations.some(target => target.tree === 'context')) setRecursive(false)
+            }}>
               <option value="forward">Backend → virtual tree</option>
               <option value="reverse">Virtual tree → backend</option>
               <option value="both">Both</option>
             </select>
-            <p className="text-xs text-muted-foreground">{direction === 'forward' ? 'Link indexed files into your virtual paths. Files stay where they are.' : 'Store files explicitly added to these virtual paths in the backend folder. Documents appearing through context filters are not copied.'}</p>
+            <p className="text-xs text-muted-foreground">{direction === 'forward' ? 'Link indexed files into your virtual paths. Files stay where they are.' : 'Store matching files in the backend folder. Only directory sources can preserve their subfolder structure.'}</p>
             {direction !== 'forward' && <details><summary className="cursor-pointer">Advanced: storage operation</summary>
               <label className="mt-2 flex items-start gap-2"><input type="checkbox" checked={mode === 'move'} onChange={e => setMode(e.target.checked ? 'move' : 'copy')} />Move instead of copy — release the source only after the destination is safely stored.</label>
             </details>}
@@ -115,7 +120,8 @@ export function AutoLinkFolderPanel({ workspaceId, sourcePath, onClose, onManage
             <p className="text-xs text-muted-foreground">Choose a context path, a directory path, or both.</p>
           </div>
           <fieldset disabled={busy || saved} className="space-y-3 text-sm">
-            <label className="flex items-start gap-2"><input type="checkbox" checked={recursive} onChange={e => setRecursive(e.target.checked)} className="mt-1" />Recursive — include subfolders and recreate their structure at each destination</label>
+            <label className="flex items-start gap-2"><input type="checkbox" checked={recursive} disabled={!canRecreateStructure} onChange={e => setRecursive(e.target.checked)} className="mt-1" />Recursive — include subfolders and recreate their structure at each destination</label>
+            {!canRecreateStructure && <p className="text-xs text-muted-foreground">Context membership has no single folder path. To preserve subfolders on a backend, choose a directory source. Context paths store files directly in the selected backend folder.</p>}
             <label className="flex items-start gap-2"><input type="checkbox" checked={includeExisting} onChange={e => setIncludeExisting(e.target.checked)} className="mt-1" />Apply to existing documents</label>
           </fieldset>
           <p className="text-xs text-muted-foreground">Without Recursive, only direct folder contents are included. Context paths keep their usual layer membership. Both creates two independently manageable rules in workspace Rules. Removing rules keeps existing files and links. Renames and deletions are not synchronized. Filename conflicts stop the transfer without overwriting.</p>
@@ -133,7 +139,8 @@ export function AutoLinkFolderPanel({ workspaceId, sourcePath, onClose, onManage
       </section>
     </LinkToSidePanel>
     {picker && <LinkToSidePanel onClose={() => setPicker(false)}>
-      <LinkToCard fixedWorkspaceName={workspaceId} title="Choose virtual paths" confirmLabel="Add paths" sizeClassName={LINK_TO_SIDE_SIZE} onClose={() => setPicker(false)} onConfirm={(paths, target) => {
+      <LinkToCard fixedWorkspaceName={workspaceId} tabs={direction !== 'forward' && recursive ? ['directory'] : ['context', 'directory']} title="Choose virtual paths" confirmLabel="Add paths" sizeClassName={LINK_TO_SIDE_SIZE} onClose={() => setPicker(false)} onConfirm={(paths, target) => {
+        if (direction !== 'forward' && target.treeType === 'context') setRecursive(false)
         setDestinations(prev => {
           const next = [...prev]
           for (const path of paths) if (!next.some(item => item.tree === target.treeType && item.path === path)) next.push({ tree: target.treeType, path })

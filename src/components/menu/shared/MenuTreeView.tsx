@@ -65,7 +65,6 @@ export interface MenuTreeViewProps {
   // under this folder into context and/or directory destinations, and run
   // the folder-skeleton sync hook for this subtree.
   onAddRule?: (path: string) => void
-  onSyncFolderTree?: (path: string) => Promise<boolean>
   // Any tree: open the rule builder prefilled with a storage rule — files
   // filed under this folder keep their bytes on a real backend (context /
   // directory trees: this path is the condition; backends tree: this folder
@@ -150,6 +149,7 @@ interface CtxMenuProps {
   node: TreeNode
   path: string
   isBackendsTree: boolean
+  isDirectoryTree: boolean
   onClose: () => void
   onShowContent?: (path: string, layerId?: string) => void
   onOpenToSide?: (path: string) => void
@@ -173,7 +173,6 @@ interface CtxMenuProps {
   onSubtractDown?: MenuTreeViewProps['onSubtractDown']
   onResyncBackend?: MenuTreeViewProps['onResyncBackend']
   onAddRule?: MenuTreeViewProps['onAddRule']
-  onSyncFolderTree?: MenuTreeViewProps['onSyncFolderTree']
   onAddStoreRule?: MenuTreeViewProps['onAddStoreRule']
   onStoragePolicy?: MenuTreeViewProps['onStoragePolicy']
   onRenameBackendFolder?: MenuTreeViewProps['onRenameBackendFolder']
@@ -190,12 +189,12 @@ interface CtxMenuProps {
 }
 
 function CtxMenu({
-  x, y, node, path, isBackendsTree, onClose, onShowContent, onOpenToSide,
+  x, y, node, path, isBackendsTree, isDirectoryTree, onClose, onShowContent, onOpenToSide,
   sourceLayer, targetLayers, clipboard,
   onStartInlineCreate, onChangeIcon, onNewCanvas, onShareCanvas, onRemove, onRename,
   onExportSubtree, onImportSubtree,
   onLock, onUnlock, onDestroy, onMerge, onSubtract, onMergeDown, onSubtractDown, onResyncBackend,
-  onAddRule, onSyncFolderTree, onAddStoreRule, onStoragePolicy,
+  onAddRule, onAddStoreRule, onStoragePolicy,
   onRenameBackendFolder, onDeleteBackendFolder, onRestoreTrash, onDiscardTrash,
   onCopy, onCut, onPaste,
   pastedDocumentIds, onPasteDocuments,
@@ -277,16 +276,13 @@ function CtxMenu({
             prefilled with a recursive link of this folder into the directory
             tree; "Sync folders" runs the skeleton hook for this subtree so
             empty folders show up too. */}
-        {isBackendsTree && backendNameForPath(path, isBackendsTree) && (onAddRule || onSyncFolderTree || onAddStoreRule) && (
+        {isBackendsTree && backendNameForPath(path, isBackendsTree) && (onAddRule || onAddStoreRule) && (
           <>
             {onAddRule && item(<FolderSymlink className="w-3 h-3" />, 'Auto-Link documents to…', async () => {
               onAddRule(path)
             })}
             {onAddStoreRule && fileBackendTarget(path, isBackendsTree) && item(<HardDrive className="w-3 h-3" />, 'Create storage rule…', async () => {
               onAddStoreRule(path)
-            })}
-            {onSyncFolderTree && item(<FolderTree className="w-3 h-3" />, 'Sync folders into Directory', async () => {
-              await onSyncFolderTree(path)
             })}
             <div className="my-1 h-px bg-border" />
           </>
@@ -334,7 +330,7 @@ function CtxMenu({
           },
         )}
         {onDeleteBackendFolder && fileBackendTarget(path, isBackendsTree)?.key && item(
-          <Trash2 className="w-3 h-3" />, 'Delete folder', async () => {
+          <Trash2 className="w-3 h-3" />, 'Delete from backend', async () => {
             if (confirm(`Delete folder "${path.split('/').pop()}" and its contents from the backend?`)) await onDeleteBackendFolder(path)
           }, true,
         )}
@@ -403,36 +399,21 @@ function CtxMenu({
         {onExportSubtree && node.type !== 'canvas' && item(<Download className="w-3 h-3" />, 'Export subtree…', () => onExportSubtree(path))}
         {onImportSubtree && !isBackendsTree && node.type !== 'canvas' && item(<FolderTree className="w-3 h-3" />, 'Import subtree here…', () => onImportSubtree(path))}
 
-        {/* Remove — disabled for locked layers */}
-        {path !== '/' && !node.locked && onRemove && (
+        {/* Context removal may preserve children; directory removal includes them. */}
+        {!isBackendsTree && path !== '/' && !node.locked && onRemove && (
           <>
             <div className="my-1 h-px bg-border" />
             {item(<Trash2 className="w-3 h-3" />, 'Remove', async () => {
-              if (confirm(`Remove "${path}"?`)) await onRemove(path, false)
+              if (confirm(`Remove "${path}"${isDirectoryTree ? ' and all children' : ''}?`)) await onRemove(path, isDirectoryTree)
             }, true)}
-            {item(<Trash2 className="w-3 h-3" />, 'Remove recursive', async () => {
+            {!isDirectoryTree && item(<Trash2 className="w-3 h-3" />, 'Remove recursive', async () => {
               if (confirm(`Remove "${path}" and all children?`)) await onRemove(path, true)
             }, true)}
-            {/* Backends tree only: also purge the ingested documents from
-                the index. Plain Remove above keeps them (an agent/user may have
-                filed the keepers elsewhere; backends re-sync the rest if
-                re-enabled). "…and destroy" additionally deletes the mirrored
-                resources on the backend itself (rw backends only). */}
-            {isBackendsTree && (
-              <>
-                {item(<Trash2 className="w-3 h-3" />, 'Remove and purge documents', async () => {
-                  if (confirm(`Remove "${path}" and all children, and PERMANENTLY purge every document under it from the index?`)) await onRemove(path, true, true)
-                }, true)}
-                {item(<Trash2 className="w-3 h-3" />, 'Remove, purge and destroy on backend', async () => {
-                  if (confirm(`Remove "${path}" and all children, purge every document under it from the index, and PERMANENTLY DELETE the mirrored files/messages on the backend?`)) await onRemove(path, true, true, true)
-                }, true)}
-              </>
-            )}
           </>
         )}
 
         {/* Lock / unlock / destroy */}
-        {(onLock || onUnlock || onDestroy) && (
+        {!isBackendsTree && (onLock || onUnlock || onDestroy) && (
           <>
             <div className="my-1 h-px bg-border" />
             {node.locked
@@ -1003,7 +984,7 @@ function CardNode({
 
 export function MenuTreeView({
   root, treeName = 'context', isBackendsTree = false, onRestoreTrash, onDiscardTrash, selectedPath, pendingPath, onSelect, isLoading = false, readOnly = false,
-  onAddRule, onSyncFolderTree, onAddStoreRule, onStoragePolicy, policyBadgeFor,
+  onAddRule, onAddStoreRule, onStoragePolicy, policyBadgeFor,
   rootLabel, contentPath, onShowContent, onOpenToSide, onShiftSelect,
   onInsertPath, onNewCanvas, onShareCanvas, onRemovePath, onRenamePath, onMovePath, onCopyPath,
   onExportSubtree, onImportSubtree,
@@ -1027,12 +1008,12 @@ export function MenuTreeView({
   const [removingPaths, setRemovingPaths] = useState<Map<string, string>>(new Map())
   const removingRef = useRef(new Set<string>())
   const handleRemovePath = useCallback(async (path: string, recursive = false, purge = false, destroy = false) => {
-    if (!onRemovePath || [...removingRef.current].some(p => p === path || p.startsWith(path + '/') || path.startsWith(p + '/'))) return false
+    if (!(isBackendsTree ? onDeleteBackendFolder : onRemovePath) || [...removingRef.current].some(p => p === path || p.startsWith(path + '/') || path.startsWith(p + '/'))) return false
     removingRef.current.add(path)
-    const message = destroy ? 'Removing documents and backend files…' : purge ? 'Removing and purging documents…' : 'Removing folder…'
+    const message = isBackendsTree ? 'Deleting from backend…' : destroy ? 'Removing documents and backend files…' : purge ? 'Removing and purging documents…' : 'Removing folder…'
     setRemovingPaths(previous => new Map(previous).set(path, message))
     try {
-      return await onRemovePath(path, recursive, purge, destroy)
+      return isBackendsTree ? await onDeleteBackendFolder!(path) : await onRemovePath!(path, treeName === 'directory' || recursive, purge, destroy)
     } finally {
       removingRef.current.delete(path)
       setRemovingPaths(previous => {
@@ -1041,7 +1022,7 @@ export function MenuTreeView({
         return next
       })
     }
-  }, [onRemovePath])
+  }, [onRemovePath, onDeleteBackendFolder, isBackendsTree, treeName])
   const [picker, setPicker] = useState<{ x: number; y: number; path: string; node: TreeNode } | null>(null)
   // Live style preview keyed by path; persistence is debounced. Cleared on
   // every tree refetch (root identity change) so server data takes over.
@@ -1358,16 +1339,16 @@ export function MenuTreeView({
       copyPath(selectedPath, event.key.toLowerCase() === 'x' ? 'cut' : 'copy')
       return
     }
-    if (!onRemovePath) return
+    if (isBackendsTree ? !onDeleteBackendFolder || !fileBackendTarget(selectedPath || '', true)?.key : !onRemovePath) return
     if (event.key !== 'Delete' && event.key !== 'Backspace') return
     if (!selectedPath || selectedPath === '/') return
     event.preventDefault()
     const node = findTreeNodeByPath(root, selectedPath)
-    if (node?.locked) { alert(`"${selectedPath}" is locked`); return }
-    if (confirm(`Remove "${selectedPath}"?`)) {
+    if (!isBackendsTree && node?.locked) { alert(`"${selectedPath}" is locked`); return }
+    if (confirm(isBackendsTree ? `Delete "${selectedPath}" and its contents from this backend?` : `Remove "${selectedPath}"${treeName === 'directory' ? ' and all children' : ''}?`)) {
       handleRemovePath(selectedPath, false).catch(err => alert(err instanceof Error ? err.message : String(err)))
     }
-  }, [readOnly, onRemovePath, handleRemovePath, selectedPath, root, pastedDocumentIds, onPasteDocuments, clipboard, handlePaste, isBackendsTree, copyPath, treeName])
+  }, [readOnly, onRemovePath, onDeleteBackendFolder, handleRemovePath, selectedPath, root, pastedDocumentIds, onPasteDocuments, clipboard, handlePaste, isBackendsTree, copyPath, treeName])
 
   const toggleCopyMode = useCallback(() => {
     setCopyModeSticky(v => {
@@ -1542,6 +1523,7 @@ export function MenuTreeView({
           node={ctxMenu.node}
           path={ctxMenu.path}
           isBackendsTree={isBackendsTree}
+          isDirectoryTree={treeName === 'directory'}
           onClose={() => setCtxMenu(null)}
           onShowContent={ctxMenu.node.metadata?.backendTrash ? onSelect : onShowContent}
           onRestoreTrash={!readOnly ? onRestoreTrash : undefined}
@@ -1567,11 +1549,10 @@ export function MenuTreeView({
           onSubtractDown={!readOnly ? onSubtractDown : undefined}
           onResyncBackend={onResyncBackend}
           onAddRule={onAddRule}
-          onSyncFolderTree={onSyncFolderTree}
           onAddStoreRule={onAddStoreRule}
           onStoragePolicy={!readOnly && !isBackendsTree ? onStoragePolicy : undefined}
           onRenameBackendFolder={onRenameBackendFolder}
-          onDeleteBackendFolder={onDeleteBackendFolder}
+          onDeleteBackendFolder={!readOnly && onDeleteBackendFolder && ![...removingPaths.keys()].some(p => p === ctxMenu.path || p.startsWith(ctxMenu.path + '/') || ctxMenu.path.startsWith(p + '/')) ? path => handleRemovePath(path, true) : undefined}
           onCopy={path => copyPath(path, 'copy')}
           onCut={path => copyPath(path, 'cut')}
           onPaste={handlePaste}

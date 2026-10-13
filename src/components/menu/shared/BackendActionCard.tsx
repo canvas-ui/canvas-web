@@ -45,6 +45,10 @@ export interface BackendActionCardProps {
   onClose: () => void
   saving?: boolean
   sizeClassName?: string
+  deleteFrom?: { backend: string; folder: string }
+  progress?: { completed: number; total: number } | null
+  stopping?: boolean
+  onStop?: () => void
 }
 
 const CONFLICT_OPTIONS: Array<{ value: BackendTransferConflict; label: string }> = [
@@ -77,7 +81,7 @@ export function BackendActionCard({
   onConfirm,
   onClose,
   saving = false,
-  sizeClassName,
+  sizeClassName, deleteFrom, progress, stopping = false, onStop,
 }: BackendActionCardProps) {
   const { showErrorToast } = useToastHelpers()
   const [browsing, setBrowsing] = useState(false)
@@ -87,7 +91,7 @@ export function BackendActionCard({
   const [mode, setMode] = useState<BackendTransferMode>(initialMode)
   const [backends, setBackends] = useState<Backend[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(initialMode === 'delete' && deleteFrom ? [deleteFrom.backend] : []))
   const [keepDocument, setKeepDocument] = useState(false)
   const [folder, setFolder] = useState('')
   const [filename, setFilename] = useState(defaultFilename)
@@ -96,7 +100,12 @@ export function BackendActionCard({
   useEffect(() => {
     let cancelled = false
     listBackends(workspaceId)
-      .then(list => { if (!cancelled) setBackends(list.filter(b => b.kind === 'storage')) })
+      .then(list => {
+        if (cancelled) return
+        setBackends(list.filter(b => b.kind === 'storage'))
+        const writable = new Set(list.filter(b => b.kind === 'storage' && b.enabled !== false && b.config?.readOnly !== true && b.config?.supported !== false).map(b => b.address))
+        setSelected(previous => new Set([...previous].filter(address => writable.has(address))))
+      })
       .catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)) })
     return () => { cancelled = true }
   }, [workspaceId])
@@ -106,7 +115,6 @@ export function BackendActionCard({
   const single = mode === 'move'
 
   const isDisabled = (backend: Backend): string | null => {
-    if (mode === 'delete') return null
     if (backend.enabled === false) return 'disabled'
     if (backend.config?.readOnly === true) return 'read-only'
     if (backend.config?.supported === false) return 'unsupported'
@@ -125,7 +133,7 @@ export function BackendActionCard({
       // Drop anything the new mode can't target (and trim to one for a move) —
       // silently sending an invalid target would fail per document later.
       const allowed = (backends || [])
-        .filter(b => (next === 'delete' ? true : !(b.enabled === false || b.config?.readOnly === true || b.config?.supported === false)))
+        .filter(b => !(b.enabled === false || b.config?.readOnly === true || b.config?.supported === false))
         .map(b => b.address)
       const kept = [...prev].filter(a => allowed.includes(a))
       return new Set(next === 'move' ? kept.slice(0, 1) : kept)
@@ -295,11 +303,12 @@ export function BackendActionCard({
               type="checkbox"
               checked={keepDocument}
               onChange={e => setKeepDocument(e.target.checked)}
+              disabled={saving}
               className="mt-0.5 h-3.5 w-3.5 accent-destructive"
             />
             <span>
               Keep the index entry when its <strong>last</strong> copy is deleted.
-              <span className="block text-muted-foreground">Otherwise the document is removed from the index once no locations remain.</span>
+              <span className="block text-muted-foreground">Otherwise the document moves to workspace Trash once no locations remain.</span>
             </span>
           </label>
         )}
@@ -371,6 +380,12 @@ export function BackendActionCard({
         )}
       </div>
 
+      {saving && progress && (
+        <div role="status" className="flex items-center justify-between gap-2 border-t px-4 py-2 text-xs">
+          <span>{stopping ? 'Stopping after current file' : 'Processing'} · {progress.completed}/{progress.total}</span>
+          {onStop && <Button size="sm" variant="outline" onClick={onStop} disabled={stopping}>Stop</Button>}
+        </div>
+      )}
       <div className="flex shrink-0 items-center justify-between gap-2 border-t px-4 py-3">
         <span className="text-xs text-muted-foreground">
           {selected.size} backend{selected.size !== 1 ? 's' : ''} selected
@@ -395,7 +410,9 @@ export function BackendActionCard({
       {mode === 'delete' && (
         <div className="flex items-start gap-2 border-t bg-destructive/5 px-4 py-2 text-[11px] text-muted-foreground">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
-          <span>Deletes the file data from the selected backends. Copies on other backends are untouched.</span>
+          <span>{deleteFrom && selected.has(deleteFrom.backend)
+            ? `Deletes selected files in ${deleteFrom.backend}/${deleteFrom.folder}. Copies in other folders are kept.${selected.size > 1 ? ' Other selected backends are also targeted.' : ' Copies on other backends are kept.'}`
+            : 'Deletes the file data from the selected backends. Copies on other backends are untouched.'}</span>
         </div>
       )}
 

@@ -1,3 +1,5 @@
+import { runBackendDeletionBatch } from '@/lib/backend-transfer-batch'
+import { splitBackendsPath } from '@/services/hooks'
 import { documentType, isDocumentFieldSort } from '@/lib/document-sort'
 import { parseDocumentIdQuery } from '@/lib/document-id-query'
 import { backendTransferFailureMessage } from '@/lib/backend-transfer-errors'
@@ -1091,6 +1093,12 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   // Copy to / Move to / Delete from backend — the backend twin of the link panel.
   const [backendPanel, setBackendPanel] = useState<{ ids: number[]; mode: BackendTransferMode } | null>(null)
   const [backendSaving, setBackendSaving] = useState(false)
+  const [backendProgress, setBackendProgress] = useState<{ completed: number; total: number } | null>(null)
+  const [backendStopping, setBackendStopping] = useState(false)
+  const backendStop = useRef(false)
+  const backendRunning = useRef(false)
+  const backendFolder = treeName === 'backends' && scope === 'path' ? splitBackendsPath(contextPath) : null
+  useEffect(() => () => { backendStop.current = true }, [])
   const [pickDocsOpen, setPickDocsOpen] = useState(false)
   const [copyWorkspaceIds, setCopyWorkspaceIds] = useState<number[] | null>(null)
   const [bulkEditIds, setBulkEditIds] = useState<number[] | null>(null)
@@ -1420,17 +1428,27 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     mode: BackendTransferMode,
     options: BackendTransferConfirmOptions,
   ) => {
-    if (!workspaceId || !backendPanel) return
+    if (!workspaceId || !backendPanel || backendRunning.current) return
+    backendRunning.current = true
+    backendStop.current = false
+    setBackendStopping(false)
     setBackendSaving(true)
     try {
-      const result = await transferDocumentsToBackends(workspaceId, backendPanel.ids, {
+      const request = (ids: number[]) => transferDocumentsToBackends(workspaceId, ids, {
         to: backends,
         mode,
         keepDocument: options.keepDocument,
+        ...(mode === 'delete' && backendFolder ? { deleteFrom: { backend: backendFolder.backend, folder: backendFolder.rel } } : {}),
         folder: options.folder,
         filename: options.filename,
         onConflict: options.onConflict,
       })
+      const result = mode === 'delete'
+        ? await runBackendDeletionBatch(backendPanel.ids, request, {
+          shouldStop: () => backendStop.current,
+          onProgress: (completed, total) => setBackendProgress({ completed, total }),
+        })
+        : { ...await request(backendPanel.ids), pending: [] as number[] }
       // A document already living on the target is a no-op, not a transfer —
       // counting it as done would make a repeat click look like work happened.
       const unchanged = result.successful.filter(s => s.transfers?.every(t => t.state === 'unchanged')).length
@@ -1441,6 +1459,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
       const notes = [
         unchanged ? `${unchanged} already there` : null,
         failed ? `${failed} skipped` : null,
+        result.pending.length ? `${result.pending.length} not processed` : null,
       ].filter(Boolean).join(' · ')
 
       if (done > 0) showSuccessToast(`${verb} ${where}: ${done} document${done !== 1 ? 's' : ''}${notes ? ` · ${notes}` : ''}`)
@@ -1452,15 +1471,17 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
 
       window.dispatchEvent(new CustomEvent('workspace:documents:refresh'))
       // Retain only failures for retry; never repeat a successful move.
-      const failedIds = result.failed.map(failure => failure.id)
+      const failedIds = [...result.failed.map(failure => failure.id), ...result.pending]
       setBackendPanel(failedIds.length ? { ids: failedIds, mode } : null)
       setSelectedDocuments(new Set(failedIds))
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : String(err))
     } finally {
+      backendRunning.current = false
       setBackendSaving(false)
+      setBackendProgress(null)
     }
-  }, [workspaceId, backendPanel, documents, showSuccessToast, showErrorToast])
+  }, [workspaceId, backendPanel, backendFolder, documents, showSuccessToast, showErrorToast])
 
   const handleSelectAll = useCallback(() => {
     if (selectedDocuments.size === filteredDocuments.length) {
@@ -1521,12 +1542,12 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
 
     // Delete key = the safe, reversible one (unlink). Deleting from the index
     // has no confirmation upstream, so it gets no shortcut.
-    add((removeDocument || removeDocuments) && {
+    add(treeName !== 'backends' && (removeDocument || removeDocuments) && {
       id: 'remove', group: 'remove', label: `Remove (unlink) from folder${count}`, icon: Move, shortcut: 'Delete',
       hint: 'Unlinks from this folder; the document stays in the index',
       run: () => { if (n === 1 && removeDocument) removeDocument(ids[0]); else removeDocuments?.(ids); done() },
     })
-    add((onDeleteDocument || onDeleteDocuments) && {
+    add(treeName !== 'backends' && (onDeleteDocument || onDeleteDocuments) && {
       id: 'delete', group: 'remove', label: `Delete from index${count}`, icon: Trash2, destructive: true,
       hint: 'Removes the document from the index entirely; file data stays on its backend(s)',
       run: () => { if (n === 1 && onDeleteDocument) onDeleteDocument(ids[0]); else onDeleteDocuments?.(ids); done() },
@@ -2170,6 +2191,10 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
               ? getLocationFilename(documents.find(d => d.id === backendPanel.ids[0]) ?? ({} as Document))
               : ''}
             saving={backendSaving}
+            progress={backendProgress}
+            stopping={backendStopping}
+            onStop={() => { backendStop.current = true; setBackendStopping(true) }}
+            deleteFrom={backendFolder ? { backend: backendFolder.backend, folder: backendFolder.rel } : undefined}
             onConfirm={handleBackendTransfer}
             onClose={() => { if (!backendSaving) setBackendPanel(null) }}
           />

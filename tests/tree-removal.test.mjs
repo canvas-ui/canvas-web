@@ -87,25 +87,27 @@ test('virtual Trash exposes restore and rejects ordinary tree drag and drop', as
 })
 
 for (const outcome of ['success', 'error']) {
-  test(`purge shows pending status, releases menu overlay, prevents duplicates and clears on ${outcome}`, async () => {
+  test(`backend deletion shows pending status, releases menu overlay, prevents duplicates and clears on ${outcome}`, async () => {
     const ui = setup()
+    ui.props.onDeleteBackendFolder = ui.props.onRemovePath
     const menu = ui.open()
-    const remove = menu.props.onRemove
+    menu.props.path = '/workspace/home/Photos'
+    const remove = menu.props.onDeleteBackendFolder
     const content = menu.type(menu.props)
-    const button = ui.find(content, element => element.type === 'button' && element.props.children?.includes('Remove and purge documents'))
+    const button = ui.find(content, element => element.type === 'button' && element.props.children?.includes('Delete from backend'))
     const running = button.props.onClick()
     let view = ui.render()
     assert.equal(ui.requests.length, 1)
-    assert.deepEqual(Array.from(ui.requests[0].args), ['/mail', true, true, false])
+    assert.deepEqual(Array.from(ui.requests[0].args), ['/workspace/home/Photos'])
     assert.ok(ui.find(view, element => element.props?.role === 'status'))
     assert.equal(ui.find(view, element => element.type?.name === 'CtxMenu'), undefined, 'overlay closes before request finishes')
-    assert.equal(ui.card(view).props.removingPaths.get('/mail'), 'Removing and purging documents…')
+    assert.equal(ui.card(view).props.removingPaths.get('/workspace/home/Photos'), 'Deleting from backend…')
     ui.card(view).props.onSelect('/other/sent')
     assert.deepEqual(ui.selected, ['/other/sent'], 'navigation remains available')
-    assert.equal(await remove('/mail', true, true), false)
-    assert.equal(await remove('/mail/child', true, true), false)
+    assert.equal(await remove('/workspace/home/Photos'), false)
+    assert.equal(await remove('/workspace/home/Photos/child'), false)
     assert.equal(ui.requests.length, 1)
-    assert.equal(ui.open().props.onRemove, undefined, 'menu cannot repeat pending removal')
+    assert.equal(await remove('/workspace/home'), false, 'cannot remove a parent while its child is being deleted')
     if (outcome === 'success') ui.requests[0].resolve(true)
     else ui.requests[0].reject(new Error('Purge failed'))
     await running
@@ -113,6 +115,38 @@ for (const outcome of ['success', 'error']) {
     assert.equal(ui.find(view, element => element.props?.role === 'status'), undefined)
     assert.equal(ui.card(view).props.removingPaths.size, 0)
     assert.equal(ui.alerts.length, outcome === 'error' ? 1 : 0)
-    assert.equal(typeof ui.open().props.onRemove, 'function', 'removal becomes available again')
+    assert.equal(typeof ui.open().props.onDeleteBackendFolder, 'function', 'removal becomes available again')
+  })
+}
+
+const buttons = menu => children(menu.type(menu.props)).filter(e => e.type === 'button')
+const label = button => (button.props.children || []).filter(c => typeof c === 'string').join('')
+
+test('backend menu exposes one physical deletion and no virtual layer operations', () => {
+  const ui = setup()
+  Object.assign(ui.props, { onDeleteBackendFolder: async () => true, onLockLayer: async () => true, onUnlockLayer: async () => true, onDestroyLayer: async () => true, onAddRule: () => {} })
+  const menu = ui.open()
+  menu.props.path = '/workspace/home/Photos'
+  const labels = buttons(menu).map(label)
+  assert.ok(labels.includes('Delete from backend'))
+  assert.ok(labels.includes('Auto-Link documents to…'))
+  for (const name of ['Remove', 'Remove recursive', 'Remove and purge documents', 'Remove, purge and destroy on backend', 'Lock layer', 'Unlock layer', 'Destroy layer', 'Sync folders into Directory']) assert.ok(!labels.includes(name), name)
+  menu.props.node = { ...menu.props.node, locked: true }
+  assert.ok(!buttons(menu).map(label).includes('Unlock layer'))
+  menu.props.path = '/workspace/home'
+  assert.ok(!buttons(menu).map(label).includes('Delete from backend'), 'backend root is not a folder deletion target')
+})
+
+for (const treeName of ['context', 'directory']) {
+  test(`${treeName} removal retains the appropriate recursion semantics`, async () => {
+    const ui = setup()
+    Object.assign(ui.props, { treeName, isBackendsTree: false })
+    const menu = ui.open()
+    const entries = buttons(menu)
+    assert.equal(entries.map(label).includes('Remove recursive'), treeName === 'context')
+    const running = entries.find(b => label(b) === 'Remove').props.onClick()
+    assert.equal(ui.requests[0].args[1], treeName === 'directory')
+    ui.requests[0].resolve(true)
+    await running
   })
 }

@@ -138,7 +138,7 @@ export function FolderContextMenu({ x, y, workspaceName, treeName, path, onClose
         backendFolder?.key && (
           <>
             {sep}
-            {item(<Trash2 className="w-3 h-3" />, 'Delete folder', async () => {
+            {item(<Trash2 className="w-3 h-3" />, 'Delete from backend', async () => {
               if (confirm(`Delete folder "${name}" and its contents from the backend?`)) await ops.onDeleteBackendFolder?.(path)
             }, true)}
           </>
@@ -147,9 +147,6 @@ export function FolderContextMenu({ x, y, workspaceName, treeName, path, onClose
         <>
           {sep}
           {item(<Trash2 className="w-3 h-3" />, 'Remove', async () => {
-            if (confirm(`Remove "${path}"?`)) await ops.onRemovePath(path, false)
-          }, true)}
-          {item(<Trash2 className="w-3 h-3" />, 'Remove recursive', async () => {
             if (confirm(`Remove "${path}" and all children?`)) await ops.onRemovePath(path, true)
           }, true)}
         </>

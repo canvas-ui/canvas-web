@@ -35,12 +35,34 @@ test('thread roots and replies share a scoped rule, WhatsApp offers its stored c
 
 // Exercise the real builder serialization without mounting the settings page.
 const source = ts.createSourceFile('rule-builder.tsx', readFileSync(new URL('../src/components/workspace/rule-builder.tsx', import.meta.url), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
-const names = new Set(['EVENT_OPTIONS', 'CONDITION_FIELDS', 'EXACT_FIELDS', 'conditionKey', 'TITLE_NAME', 'DATED_NAME', 'DOWNLOAD_KINDS', 'emptyAction', 'EMPTY_FORM', 'splitAlternatives', 'splitList', 'slugify', 'buildRule', 'parseRule', 'formFromPrefill'])
+const names = new Set(['EVENT_OPTIONS', 'CONDITION_FIELDS', 'EXACT_FIELDS', 'conditionKey', 'TITLE_NAME', 'DATED_NAME', 'DOWNLOAD_KINDS', 'emptyAction', 'EMPTY_FORM', 'splitAlternatives', 'splitList', 'slugify', 'canKeepStorageSubfolders', 'buildRule', 'parseRule', 'formFromPrefill'])
 const statements = source.statements.filter(node => ts.isFunctionDeclaration(node) ? names.has(node.name.text) : ts.isVariableStatement(node) && node.declarationList.declarations.some(d => names.has(d.name.getText(source))))
 const context = {}
 vm.runInNewContext(ts.transpileModule(statements.map(s => s.getText(source)).join('\n') + '\nglobalThis.builder = { buildRule, parseRule, formFromPrefill }', { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, context)
 const { buildRule, parseRule, formFromPrefill } = context.builder
 const plain = value => JSON.parse(JSON.stringify(value))
+
+test('storage wizard enables subfolders only for directory sources', () => {
+  for (const path of ['context:/Architecture', 'ctx:/Architecture', '/Architecture', 'directory:/Files | context:/Architecture', '']) {
+    const form = formFromPrefill({ kind: 'store', path, storeTo: 'workspace:home', storeFolder: '/foo/bar/baz/baf/' })
+    assert.equal(form.actions[0].recursive, false, path)
+    form.actions[0].recursive = true
+    if (!path) form.conditions = []
+    const action = buildRule(form).then[0]
+    assert.equal(action.recursive, undefined, path)
+    assert.equal(action.folder, 'foo/bar/baz/baf')
+  }
+  for (const path of ['dir:/Architecture', 'directory:/Architecture', 'backends:/workspace/home/Architecture']) {
+    const form = formFromPrefill({ kind: 'store', path, storeTo: 'workspace:home', storeFolder: 'Architecture' })
+    assert.equal(form.actions[0].recursive, true, path)
+    assert.equal(buildRule(form).then[0].recursive, true, path)
+  }
+})
+
+test('recursive linking from a backend into a context tree is preserved by the rule wizard', () => {
+  const form = parseRule({ id: 'forward', enabled: true, when: { event: 'document.linked', path: 'backends:/workspace/home/Architecture' }, then: [{ action: 'link', paths: ['ctx:/Architecture'], recursive: true }] })
+  assert.deepEqual(plain(buildRule(form).then), [{ action: 'link', paths: ['ctx:/Architecture'], recursive: true }])
+})
 
 test('email and chat presets survive edit/save/reopen with all conditions intact', () => {
   for (const document of [email, slack, whatsapp, doc('tab', { url: 'https://example.com/a?q=(b)' })]) {
