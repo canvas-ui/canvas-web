@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link2, Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { LinkToCard } from './LinkToCard'
 import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from './LinkToSidePanel'
 import { buildAutoLinkRules, type AutoLinkDirection, type AutoLinkDestination } from '@/lib/auto-link'
 import { addAutoLinkRule, backfillHook, getBackfillLimit } from '@/services/hooks'
-import { listBackends } from '@/services/workspace'
+import { listBackends, type Backend } from '@/services/workspace'
 import { backendUploadTarget } from '@/lib/backend-upload'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 
@@ -20,6 +20,8 @@ export function AutoLinkFolderPanel({ workspaceId, sourcePath, onClose, onManage
   const [direction, setDirection] = useState<AutoLinkDirection>('forward')
   const canRecreateStructure = direction === 'forward' || !destinations.some(target => target.tree === 'context')
   const [mode, setMode] = useState<'copy' | 'move'>('copy')
+  const [from, setFrom] = useState('')
+  const [backends, setBackends] = useState<Backend[]>([])
   const [ruleIndex, setRuleIndex] = useState(0)
   const [recursive, setRecursive] = useState(false)
   const [includeExisting, setIncludeExisting] = useState(true)
@@ -39,6 +41,14 @@ export function AutoLinkFolderPanel({ workspaceId, sourcePath, onClose, onManage
   useEscapeClose(onClose, !busy && !picker)
   const close = () => { if (!busy) onClose() }
 
+  useEffect(() => {
+    let cancelled = false
+    listBackends(workspaceId).then(list => {
+      if (!cancelled) setBackends(list.filter(b => b.kind === 'storage' && b.enabled && b.config?.readOnly !== true))
+    }).catch(() => { if (!cancelled) setError('Could not load source backends. Reopen Auto-Link to retry.') })
+    return () => { cancelled = true }
+  }, [workspaceId])
+
   const save = async () => {
     if (busy) return
     setBusy(true)
@@ -46,7 +56,7 @@ export function AutoLinkFolderPanel({ workspaceId, sourcePath, onClose, onManage
     try {
       const storage = direction === 'forward' ? undefined : backendUploadTarget(sourcePath, await listBackends(workspaceId))
       if (storage?.driver === 'cacache') throw new Error('Choose a backend that preserves folder paths.')
-      const rules = buildAutoLinkRules(ruleId, sourcePath, destinations, recursive, direction, mode, storage)
+      const rules = buildAutoLinkRules(ruleId, sourcePath, destinations, recursive, direction, mode, storage, from)
       setRuleCount(rules.length)
       if (!saved) {
         await addAutoLinkRule(workspaceId, rules)
@@ -107,7 +117,15 @@ export function AutoLinkFolderPanel({ workspaceId, sourcePath, onClose, onManage
             </select>
             <p className="text-xs text-muted-foreground">{direction === 'forward' ? 'Link indexed files into your virtual paths. Files stay where they are.' : 'Store matching files in the backend folder. Only directory sources can preserve their subfolder structure.'}</p>
             {direction !== 'forward' && <details><summary className="cursor-pointer">Advanced: storage operation</summary>
-              <label className="mt-2 flex items-start gap-2"><input type="checkbox" checked={mode === 'move'} onChange={e => setMode(e.target.checked ? 'move' : 'copy')} />Move instead of copy — release the source only after the destination is safely stored.</label>
+              <label className="mt-2 flex items-start gap-2"><input type="checkbox" checked={mode === 'move'} onChange={e => setMode(e.target.checked ? 'move' : 'copy')} />Move instead of copy</label>
+              {mode === 'move' && <div className="mt-2 space-y-2">
+                <label className="block" htmlFor="autolink-source-backend">Move bytes from</label>
+                <select id="autolink-source-backend" className="w-full rounded-md border bg-background p-2" value={from} onChange={e => setFrom(e.target.value)}>
+                  <option value="">Choose a source backend…</option>
+                  {backends.map(backend => <option key={backend.address} value={backend.address}>{backend.address}</option>)}
+                </select>
+                <p className="text-xs text-muted-foreground">Only the copy on this backend is moved, after the destination is stored. No source copy means no move. Multiple copies on that backend make the move ambiguous; use copy. Context membership does not imply a copy in workspace:data.</p>
+              </div>}
             </details>}
           </fieldset>
           <div className="space-y-2">
@@ -134,7 +152,7 @@ export function AutoLinkFolderPanel({ workspaceId, sourcePath, onClose, onManage
         </div>
         <div className="flex shrink-0 justify-end gap-2 border-t p-3">
           <Button variant="ghost" disabled={busy} onClick={onManageRules}>Manage rules</Button>
-          {done ? <Button onClick={onClose}>Done</Button> : <Button disabled={busy || !destinations.length} onClick={save}>{busy ? 'Applying…' : saved ? 'Retry existing documents' : 'Enable Auto-Link'}</Button>}
+          {done ? <Button onClick={onClose}>Done</Button> : <Button disabled={busy || !destinations.length || (direction !== 'forward' && mode === 'move' && !from)} onClick={save}>{busy ? 'Applying…' : saved ? 'Retry existing documents' : 'Enable Auto-Link'}</Button>}
         </div>
       </section>
     </LinkToSidePanel>

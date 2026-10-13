@@ -156,7 +156,7 @@ interface ActionRow {
 }
 
 const emptyAction = (kind: ActionKey): ActionRow => ({
-  kind, a: '', b: '', recursive: false, storeFrom: '', storeFolder: '', storeName: 'keep', storeMode: 'move', storeConflict: 'rename',
+  kind, a: '', b: '', recursive: false, storeFrom: '', storeFolder: '', storeName: 'keep', storeMode: 'copy', storeConflict: 'rename',
   dlKind: 'auto', dlDepth: '2', dlTags: '', keepLast: true,
   notePath: '', noteTitle: '', filePath: '', fileBackend: 'home', fileInsert: '', notifyReply: false,
 })
@@ -319,12 +319,13 @@ function buildRule(form: RuleForm): HookRule {
     if (row.kind === 'unlink' && a) then.push({ action: 'unlink', paths: splitList(a), ...recursive })
     if (row.kind === 'tag' && a) then.push({ action: 'tag', tags: splitList(a) })
     if (row.kind === 'store' && a) {
+      if (row.storeMode === 'move' && !row.storeFrom.trim()) throw new Error('Choose the source backend whose copy should be moved.')
       const folder = row.storeFolder.trim().replace(/^\/+|\/+$/g, '')
       const key = row.storeName === 'title' ? TITLE_NAME : row.storeName === 'dated' ? DATED_NAME : row.storeName === 'custom' ? b : ''
       then.push({
         action: 'store',
         to: a,
-        ...(row.storeFrom ? { from: row.storeFrom } : {}),
+        ...(row.storeFrom.trim() ? { from: row.storeFrom.trim() } : {}),
         mode: row.storeMode,
         ...(folder ? { folder } : {}),
         ...(row.recursive && canKeepStorageSubfolders(form.conditions) ? { recursive: true } : {}),
@@ -478,7 +479,7 @@ function parseRule(rule: HookRule): RuleForm | null {
         recursive: act.recursive === true,
         storeName: !key ? 'keep' : key === TITLE_NAME ? 'title' : key === DATED_NAME ? 'dated' : 'custom',
         storeFrom: typeof act.from === 'string' ? act.from : (Array.isArray(act.from) ? String(act.from[0] ?? '') : ''),
-        storeMode: act.mode === 'copy' ? 'copy' : 'move',
+        storeMode: act.mode === 'move' ? 'move' : 'copy',
         storeConflict: act.onConflict === 'error' || act.onConflict === 'overwrite' ? act.onConflict : 'rename',
       })
     } else if (act.action === 'download') {
@@ -1259,9 +1260,12 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                             {STORE_NAME_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                           </select>
                         </Field>
-                        <Field label="Move or copy" hint={row.storeMode === 'move' ? 'The blob-store copy is removed once the file is safely there.' : 'The file stays in the blob store as well.'}>
-                          <Segmented value={row.storeMode} onChange={(v) => set({ storeMode: v })} options={[{ value: 'move', label: 'Move' }, { value: 'copy', label: 'Copy' }]} />
+                        <Field label="Move or copy" hint={row.storeMode === 'move' ? 'Remove only the selected source copy after the destination is safely stored.' : 'Preserve every existing copy.'}>
+                          <Segmented value={row.storeMode} onChange={(v) => set({ storeMode: v })} options={[{ value: 'copy', label: 'Copy' }, { value: 'move', label: 'Move' }]} />
                         </Field>
+                        {row.storeMode === 'move' && <Field className="sm:col-span-2" label="Move bytes from (required)" hint="Context membership does not identify a source copy. If the file is absent here, nothing is moved. Multiple locations on this backend make the move ambiguous; use copy.">
+                          {backendSelect(row.storeFrom, (v) => set({ storeFrom: v }), 'choose a source backend…', 'workspace:data')}
+                        </Field>}
                         {row.storeName === 'custom' && (
                           <Field className="sm:col-span-2" label="Name template" hint={'Tokens: {{YYYY}} {{MM}} {{DD}} {{HH}} {{mm}} {{ss}} (photo capture time when present), {{ext}} {{basename}} {{filename}} {{title}} {{id}}, plus {{doc.…}} fields. Slashes create sub-folders.'}>
                             <Input className={cn(inputClass, 'font-mono')} placeholder={'{{YYYY}}-{{MM}}-{{DD}} {{title}}{{ext}}'} value={row.b} onChange={(e) => set({ b: e.target.value })} />
@@ -1285,9 +1289,9 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                           <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /> More options
                         </summary>
                         <div className="grid gap-4 border-t p-3 sm:grid-cols-2">
-                          <Field label="Only when the file is currently on" hint="Guard that keeps the rule idempotent. Default: any backend other than the target.">
-                            {backendSelect(row.storeFrom, (v) => set({ storeFrom: v }), 'any other backend', 'workspace:data (optional)')}
-                          </Field>
+                          {row.storeMode === 'copy' && <Field label="Copy bytes from" hint="Optional source restriction. Default: any readable copy outside the destination backend.">
+                            {backendSelect(row.storeFrom, (v) => set({ storeFrom: v }), 'any readable source', 'workspace:data (optional)')}
+                          </Field>}
                           <Field label="If the name is already taken">
                             <select className={selectClass} value={row.storeConflict} onChange={(e) => set({ storeConflict: e.target.value as 'rename' | 'error' | 'overwrite' })}>
                               <option value="rename">add -1, -2, … to the name</option>
@@ -1297,7 +1301,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                           </Field>
                         </div>
                       </details>
-                      <p className="text-xs text-muted-foreground">Moves the stored bytes only — the item keeps its id, tags and every folder it is filed in.</p>
+                      <p className="text-xs text-muted-foreground">The item keeps its id and virtual tree memberships. A move removes the chosen physical source location from the backend tree.</p>
                     </div>
                   )}
 

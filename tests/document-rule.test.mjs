@@ -42,6 +42,17 @@ vm.runInNewContext(ts.transpileModule(statements.map(s => s.getText(source)).joi
 const { buildRule, parseRule, formFromPrefill } = context.builder
 const plain = value => JSON.parse(JSON.stringify(value))
 
+test('store wizard defaults to copy and cannot save a move without its source', () => {
+  const form = formFromPrefill({ kind: 'store', path: 'ctx:/Architecture', storeTo: 'workspace:home' })
+  assert.equal(buildRule(form).then[0].mode, 'copy')
+  form.actions[0].storeMode = 'move'
+  assert.throws(() => buildRule(form), /Choose the source backend/)
+  form.actions[0].storeFrom = 'workspace:data'
+  const saved = buildRule(form)
+  assert.equal(saved.then[0].from, 'workspace:data')
+  assert.deepEqual(plain(buildRule(parseRule(saved))), plain(saved))
+})
+
 test('storage wizard enables subfolders only for directory sources', () => {
   for (const path of ['context:/Architecture', 'ctx:/Architecture', '/Architecture', 'directory:/Files | context:/Architecture', '']) {
     const form = formFromPrefill({ kind: 'store', path, storeTo: 'workspace:home', storeFolder: '/foo/bar/baz/baf/' })

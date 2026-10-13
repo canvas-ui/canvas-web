@@ -32,9 +32,10 @@ export function buildAutoLinkRule(id: string, source: string, destinations: Auto
 export type AutoLinkDirection = 'forward' | 'reverse' | 'both'
 
 /** Related rules share an ID prefix; each remains independently manageable. */
-export function buildAutoLinkRules(id: string, source: string, destinations: AutoLinkDestination[], recursive = false, direction: AutoLinkDirection = 'forward', mode: 'copy' | 'move' = 'copy', storage?: { address: string; key: string }): HookRule[] {
+export function buildAutoLinkRules(id: string, source: string, destinations: AutoLinkDestination[], recursive = false, direction: AutoLinkDirection = 'forward', mode: 'copy' | 'move' = 'copy', storage?: { address: string; key: string }, from?: string): HookRule[] {
   const forward = buildAutoLinkRule(id, source, destinations, recursive)
   if (direction === 'forward') return [forward]
+  if (mode === 'move' && !from?.trim()) throw new Error('Choose the source backend whose copy should be moved.')
   if (recursive && destinations.some(target => target.tree === 'context')) throw new Error('Recursive storage requires a directory source. Context paths can store files in a fixed backend folder.')
   const parts = source.split('/').filter(Boolean)
   if (parts.length < 2 || source.includes('{{') || parts.some(part => part === '.' || part === '..')) throw new Error('Choose a backend folder with a valid storage address.')
@@ -50,7 +51,7 @@ export function buildAutoLinkRules(id: string, source: string, destinations: Aut
     cascade: false,
     when: { event: ['document.inserted', 'document.linked'],
       [recursive ? 'path' : 'pathExact']: targets.map(target => `${target.tree}:${target.path}`) },
-    then: [{ action: 'store', to: backend, folder, mode, autoLink: true, onConflict: 'error', ...(recursive ? { recursive: true } : {}) }],
+    then: [{ action: 'store', to: backend, folder, mode, ...(mode === 'move' ? { from: from!.trim() } : {}), autoLink: true, onConflict: 'error', ...(recursive ? { recursive: true } : {}) }],
   }
   return direction === 'both' ? [forward, reverse] : [reverse]
 }

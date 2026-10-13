@@ -40,13 +40,22 @@ test('reverse defaults to copy, direct membership, and conflict refusal', () => 
   assert.deepEqual(rule.then, [{ action: 'store', to: 'workspace:home', folder: 'foo/bar', mode: 'copy', autoLink: true, onConflict: 'error' }])
 })
 test('both creates independently controllable related rules with recursive storage', () => {
-  const rules = buildAutoLinkRules('a', '/workspace/home/foo/bar', [{ tree: 'directory', path: '/files' }], true, 'both', 'move', storage)
+  const rules = buildAutoLinkRules('a', '/workspace/home/foo/bar', [{ tree: 'directory', path: '/files' }], true, 'both', 'move', storage, 'workspace:data')
   assert.deepEqual(rules.map(rule => rule.id), ['a', 'a-reverse'])
   assert.equal(rules[1].then[0].recursive, true)
   assert.equal(rules[1].then[0].mode, 'move')
+  assert.equal(rules[1].then[0].from, 'workspace:data')
   assert.deepEqual(rules[1].when.path, ['directory:/files'])
   assert.throws(() => buildAutoLinkRules('a', '/workspace/home', targets, false, 'reverse'))
   assert.throws(() => buildAutoLinkRules('a', '/workspace/home/{{id}}', targets, false, 'reverse', 'copy', storage))
+})
+
+test('Auto-Link moves require an explicit source backend', () => {
+  for (const from of [undefined, '', '   ']) {
+    assert.throws(() => buildAutoLinkRules('a', '/workspace/home/foo/bar', targets, false, 'reverse', 'move', storage, from), /Choose the source backend/)
+  }
+  const [rule] = buildAutoLinkRules('a', '/workspace/home/foo/bar', targets, false, 'reverse', 'move', storage, 'workspace:data')
+  assert.equal(rule.then[0].from, 'workspace:data')
 })
 
 test('context destinations allow forward recursion but cannot be recursive storage sources', () => {
