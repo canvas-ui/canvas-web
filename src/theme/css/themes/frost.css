@@ -35,7 +35,7 @@
   --card: oklch(0.985 0.003 250 / 0.6);
   --card-foreground: oklch(0.28 0.02 255);
   /* Popovers float over arbitrary content — more opaque so text stays legible. */
-  --popover: oklch(0.985 0.005 250 / 0.82);
+  --popover: oklch(0.985 0.005 250 / 0.97);
   /* Same colour, no alpha: the browser-drawn select popup cannot blur what is
      behind it, so glass would just read as washed-out. */
   --native-popup: oklch(0.985 0.005 250);
@@ -89,7 +89,7 @@
   --foreground: oklch(0.95 0.008 250);
   --card: oklch(0.33 0.025 255 / 0.52);
   --card-foreground: oklch(0.95 0.008 250);
-  --popover: oklch(0.3 0.028 255 / 0.85);
+  --popover: oklch(0.3 0.028 255 / 0.97);
   --popover-foreground: oklch(0.95 0.008 250);
   --native-popup: oklch(0.3 0.028 255);
   --desk: oklch(0.26 0.025 258);

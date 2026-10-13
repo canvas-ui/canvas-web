@@ -155,7 +155,9 @@ export function defaultMirrorTarget(backendsPath: string): string {
  *    `storeFolder` on `storeTo`.
  */
 export interface RulePrefill {
-  kind?: 'mirror' | 'store' | 'download'
+  kind?: 'mirror' | 'store' | 'download' | 'document'
+  /** In-memory document draft; never put message content in a URL. */
+  rule?: HookRule
   /** Tree-qualified source prefix, e.g. `backends:/workspace/home/foo` or `ctx:/projects/canvas/UI`. */
   path?: string
   /** Link target, e.g. `dir:/foo` (mirror). */
@@ -492,13 +494,15 @@ export async function generateHook(
 }
 
 /** Append without treating a failed read or malformed rules file as empty. */
-export async function addAutoLinkRule(workspaceId: string, rule: HookRule | HookRule[]): Promise<void> {
+export async function appendHookRules(workspaceId: string, rule: HookRule | HookRule[]): Promise<void> {
   const content = await getHook(workspaceId, RULES_PATH)
   const parsed = JSON.parse(content)
   const rules = Array.isArray(parsed) ? parsed : parsed?.rules
-  if (!Array.isArray(rules)) throw new Error('The workspace rules file is invalid. Fix it in Rules before adding an Auto-Link.')
+  if (!Array.isArray(rules)) throw new Error('The workspace rules file is invalid. Fix it in Rules before adding a rule.')
   const additions = (Array.isArray(rule) ? rule : [rule]).filter(item => !rules.some((existing: HookRule) => existing.id === item.id))
   if (!additions.length) return
   const next = Array.isArray(parsed) ? [...rules, ...additions] : { ...parsed, rules: [...rules, ...additions] }
   await saveHook(workspaceId, RULES_PATH, JSON.stringify(next, null, 2) + '\n')
 }
+
+export const addAutoLinkRule = appendHookRules

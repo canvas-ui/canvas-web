@@ -1387,6 +1387,10 @@ function WorkspaceSettingsContent() {
         <div className="space-y-6">
           <form onSubmit={handleSave} className="space-y-4 rounded-lg border p-4">
             <div>
+              <label htmlFor="ws-id" className="text-sm font-medium">Workspace ID</label>
+              <Input id="ws-id" value={workspace.id} readOnly className="font-mono text-sm" onFocus={e => e.currentTarget.select()} />
+            </div>
+            <div>
               <label htmlFor="ws-label" className="text-sm font-medium">Label</label>
               <Input id="ws-label" value={label} onChange={e => setLabel(e.target.value)} placeholder="Workspace Label" />
             </div>

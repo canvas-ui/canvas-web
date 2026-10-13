@@ -71,7 +71,7 @@ export function ActionMenu({ anchor, items, onClose, label }: {
       x={anchor.x}
       y={anchor.y}
       onClose={onClose}
-      className="min-w-[200px] rounded-lg border bg-background py-1 shadow-elevation-3"
+      className="min-w-[200px] rounded-lg border bg-popover text-popover-foreground py-1 shadow-elevation-3"
     >
       <div ref={listRef} role="menu" aria-label={label} onKeyDown={onKeyDown} onContextMenu={(e) => e.preventDefault()}>
         {grouped(items).map((group, gi) => (
@@ -126,7 +126,7 @@ export function ActionSheet({ items, onClose, header }: {
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-fullscreen flex flex-col bg-background animate-in slide-in-from-bottom-10 fade-in duration-200"
+      className="fixed inset-0 z-fullscreen flex flex-col bg-popover text-popover-foreground animate-in slide-in-from-bottom-10 fade-in duration-200"
       onClick={onClose}
       onContextMenu={(e) => e.preventDefault()}
     >

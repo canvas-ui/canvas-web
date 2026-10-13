@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/use-toast'
 import { cn } from '@/lib/utils'
 import {
-  getRules, saveRules, backfillHook, getHooksMeta, listRuns, ruleEvents, rulePaths, splitBackendsPath,
+  getRules, saveRules, appendHookRules, backfillHook, getHooksMeta, listRuns, ruleEvents, rulePaths, splitBackendsPath,
   type HookRule, type HookRuleAction, type HookRun, type RulePrefill,
 } from '@/services/hooks'
 import { listScripts } from '@/services/scripts'
@@ -25,6 +25,9 @@ import { PathPickerField } from '@/components/menu/shared/PathPickerField'
 
 interface RuleBuilderProps {
   workspaceId: string
+  createOnly?: boolean
+  onCreated?: () => void
+  onCancel?: () => void
   /** Open rules.json in the advanced editor (Hooks section). */
   onOpenJson?: () => void
   /** Show the Runs section filtered to one rule (its execution log). */
@@ -41,6 +44,7 @@ interface RuleBuilderProps {
 const SCHEMA_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: '', label: 'any item' },
   { value: 'email', label: 'an email' },
+  { value: 'message', label: 'a message' },
   { value: 'tab', label: 'a browser tab / link' },
   { value: 'note', label: 'a note' },
   { value: 'file', label: 'a file' },
@@ -54,9 +58,18 @@ const EVENT_OPTIONS = [
   { value: 'document.unlinked', label: 'is removed from a folder', hint: 'Fires when the item leaves a tree path.' },
 ] as const
 
-type ConditionKey = 'fromRegex' | 'toRegex' | 'subjectRegex' | 'urlRegex' | 'from' | 'to' | 'subject' | 'urlHost' | 'urlContains' | 'path' | 'pathExact' | 'mime' | 'attachment'
+type ConditionKey = 'fromExact' | 'senderExact' | 'threadExact' | 'channelExact' | 'platformExact' | 'body' | 'bodyRegex' | 'sender' | 'senderRegex' | 'fromRegex' | 'toRegex' | 'subjectRegex' | 'urlRegex' | 'from' | 'to' | 'subject' | 'urlHost' | 'urlContains' | 'path' | 'pathExact' | 'mime' | 'attachment'
 
 const CONDITION_FIELDS: Array<{ key: ConditionKey; label: string; hint: string }> = [
+  { key: 'fromExact', label: 'email sender is', hint: 'person@example.com' },
+  { key: 'senderExact', label: 'message sender is', hint: 'Sender ID' },
+  { key: 'sender', label: 'message sender contains', hint: 'Sender ID or name' },
+  { key: 'senderRegex', label: 'message sender matches regex', hint: 'Sender ID or name pattern' },
+  { key: 'body', label: 'body / text contains', hint: 'Words in the email body or message text' },
+  { key: 'bodyRegex', label: 'body / text matches regex', hint: 'invoice\\s+\\d+' },
+  { key: 'threadExact', label: 'thread is', hint: 'Thread ID' },
+  { key: 'channelExact', label: 'channel / conversation is', hint: 'Channel or conversation ID' },
+  { key: 'platformExact', label: 'platform is', hint: 'slack, whatsapp, teams' },
   { key: 'pathExact', label: 'is directly in the folder', hint: 'Only this folder, excluding subfolders' },
   { key: 'path', label: 'is under the folder', hint: '/projects/canvas/UI or backends:/workspace/home/foo' },
   { key: 'mime', label: 'file type is', hint: 'image/*, application/pdf' },
@@ -71,6 +84,9 @@ const CONDITION_FIELDS: Array<{ key: ConditionKey; label: string; hint: string }
   { key: 'urlContains', label: 'URL contains', hint: '/watch?v=' },
   { key: 'attachment', label: 'has an attachment of type', hint: 'application/pdf, or * for any' },
 ]
+
+const EXACT_FIELDS = new Set(['fromExact', 'senderExact', 'threadExact', 'channelExact', 'platformExact'])
+const conditionKey = (field: ConditionKey) => EXACT_FIELDS.has(field) ? field.replace(/Exact$/, '') : field.replace(/Regex$/, '')
 
 type ActionKey = 'link' | 'unlink' | 'tag' | 'store' | 'download' | 'unstore' | 'notify' | 'agent' | 'script' | 'delete' | 'destroy'
 
@@ -256,17 +272,18 @@ function buildRule(form: RuleForm): HookRule {
   const url: Record<string, unknown> = {}
   for (const row of form.conditions) {
     const regex = row.field.endsWith('Regex')
-    const values = regex ? (row.value.trim() ? [row.value] : []) : splitAlternatives(row.value)
+    const exact = EXACT_FIELDS.has(row.field)
+    const values = regex || exact ? (row.value.trim() ? [row.value] : []) : splitAlternatives(row.value)
     if (regex && values.length) {
       try { new RegExp(row.value, 'i') } catch { throw new Error(`Invalid regular expression for ${CONDITION_FIELDS.find(field => field.key === row.field)?.label}: ${row.value}`) }
     }
-    if (!values.length) continue
+    if (!values.length) throw new Error(`Enter a value for ${CONDITION_FIELDS.find(field => field.key === row.field)?.label || row.field}, or remove that condition.`)
     if (row.field === 'urlHost' || row.field === 'urlContains' || row.field === 'urlRegex') {
       const key = row.field === 'urlHost' ? 'host' : row.field === 'urlRegex' ? 'regex' : 'contains'
       const prev = url[key]
       const merged = [...(Array.isArray(prev) ? prev : prev != null ? [prev] : []), ...values]
       url[key] = merged.length === 1 ? merged[0] : merged
-    } else (multi[row.field.replace(/Regex$/, '')] ||= []).push(...(regex ? values.map(regex => ({ regex })) : values))
+    } else (multi[conditionKey(row.field)] ||= []).push(...(regex ? values.map(regex => ({ regex })) : exact ? values.map(equals => ({ equals })) : values))
   }
   for (const [key, values] of Object.entries(multi)) {
     if (values?.length) when[key] = values.length === 1 ? values[0] : values
@@ -361,7 +378,7 @@ function buildRule(form: RuleForm): HookRule {
 // ── rule → form (only shapes the builder emits; others are JSON-only) ────────
 
 function parseRule(rule: HookRule): RuleForm | null {
-  const { event, schema, from, to, subject, path, pathExact, mime, url, attachment, ...restWhen } = rule.when
+  const { event, schema, from, to, subject, body, sender, thread, channel, platform, path, pathExact, mime, url, attachment, ...restWhen } = rule.when
   if (Object.keys(restWhen).length > 0) return null
   const events = Array.isArray(event) ? event : [event]
   if (!events.length || !events.every((e) => typeof e === 'string' && EVENT_OPTIONS.some((o) => o.value === e))) return null
@@ -373,9 +390,15 @@ function parseRule(rule: HookRule): RuleForm | null {
     if (field.endsWith('Regex')) {
       if (!values.every(value => typeof value === 'string')) return false
       for (const value of values) conditions.push({ field, value: value as string })
-    } else if (['from', 'to', 'subject'].includes(field)) {
+    } else if (EXACT_FIELDS.has(field)) {
+      for (const value of values) {
+        if (!value || typeof value !== 'object' || Object.keys(value).length !== 1 || typeof value.equals !== 'string') return false
+        conditions.push({ field, value: value.equals })
+      }
+    } else if (['from', 'to', 'subject', 'body', 'sender'].includes(field)) {
       for (const value of values) {
         if (typeof value === 'string') conditions.push({ field, value })
+        else if ((field === 'from' || field === 'sender') && value && typeof value === 'object' && Object.keys(value).length === 1 && typeof value.equals === 'string') conditions.push({ field: `${field}Exact` as ConditionKey, value: value.equals })
         else if (value && typeof value === 'object' && Object.keys(value).length === 1 && typeof value.regex === 'string') conditions.push({ field: `${field}Regex` as ConditionKey, value: value.regex })
         else return false
       }
@@ -391,6 +414,11 @@ function parseRule(rule: HookRule): RuleForm | null {
   if (from !== undefined && !push('from', from)) return null
   if (to !== undefined && !push('to', to)) return null
   if (subject !== undefined && !push('subject', subject)) return null
+  if (body !== undefined && !push('body', body)) return null
+  if (sender !== undefined && !push('sender', sender)) return null
+  if (thread !== undefined && !push('threadExact', thread)) return null
+  if (channel !== undefined && !push('channelExact', channel)) return null
+  if (platform !== undefined && !push('platformExact', platform)) return null
   if (attachment !== undefined && !push('attachment', attachment)) return null
   if (url !== undefined) {
     if (typeof url === 'string') conditions.push({ field: 'urlContains', value: url })
@@ -510,8 +538,8 @@ function summarizeWhen(rule: HookRule, options: ReadonlyArray<{ value: string; l
   const eventLabel = ruleEvents(rule).map((e) => EVENT_OPTIONS.find((o) => o.value === e)?.label || e).join(' or ')
   const parts: string[] = [`When ${schemaLabel(w.schema, options)} ${eventLabel}`]
   const fmt = (v: unknown) => (Array.isArray(v) ? v.join(' or ') : typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v))
-  const labels: Record<string, string> = { path: 'under', pathExact: 'directly in', mime: 'type', from: 'from', to: 'to', subject: 'subject', url: 'url', attachment: 'attachment' }
-  for (const key of ['path', 'pathExact', 'mime', 'from', 'to', 'subject', 'url', 'attachment']) {
+  const labels: Record<string, string> = { path: 'under', pathExact: 'directly in', mime: 'type', from: 'from', to: 'to', subject: 'subject', body: 'body / text', sender: 'sender', thread: 'thread', channel: 'conversation', platform: 'platform', url: 'url', attachment: 'attachment' }
+  for (const key of Object.keys(labels)) {
     if (w[key] !== undefined) parts.push(`${labels[key]} ${fmt(w[key])}`)
   }
   return parts.join(' · ')
@@ -597,6 +625,7 @@ function preferredBackend(backends: Backend[]): string {
 
 // Form for a tree context-menu prefill (mirror / store rule).
 function formFromPrefill(prefill: RulePrefill): RuleForm {
+  if (prefill.kind === 'document' && prefill.rule) return { ...(parseRule(prefill.rule) || EMPTY_FORM), id: null }
   if (prefill.kind === 'download') {
     const where = prefill.path ? ` filed under ${prefill.path.replace(/^(ctx|dir):/, '')}` : ''
     return {
@@ -712,7 +741,7 @@ function IconBadge({ icon: Icon, tone, size = 'md' }: { icon: LucideIcon; tone: 
 
 // ── component ────────────────────────────────────────────────────────────────
 
-export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit, prefill, onPrefillConsumed }: RuleBuilderProps) {
+export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit, prefill, onPrefillConsumed, createOnly = false, onCreated, onCancel }: RuleBuilderProps) {
   const { showToast } = useToast()
   const [rules, setRules] = useState<HookRule[]>([])
   const [runStats, setRunStats] = useState<Record<string, RunStat>>({})
@@ -807,7 +836,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
   }
 
   const submit = async () => {
-    if (!form) return
+    if (!form || isLoading || isSaving) return
     let rule: HookRule
     try { rule = buildRule(form) } catch (error) {
       showToast({ title: 'Invalid condition', description: error instanceof Error ? error.message : 'Invalid regular expression', variant: 'destructive' })
@@ -817,10 +846,25 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
       showToast({ title: 'Add an action', description: 'Pick at least one "then" action and fill in its fields.', variant: 'destructive' })
       return
     }
+    if (createOnly) {
+      // Re-read before appending: another editor may have saved while this
+      // draft was open. Never replace a failed read with an empty rules file.
+      rule.id = `${rule.id}-${Math.random().toString(36).slice(2, 10)}`
+      setIsSaving(true)
+      try {
+        await appendHookRules(workspaceId, rule)
+        showToast({ title: 'Rule created', description: 'The rule will run for matching new items.' })
+        onCreated?.()
+      } catch (error) {
+        showToast({ title: 'Could not create rule', description: error instanceof Error ? error.message : 'Failed to save rule', variant: 'destructive' })
+      } finally { setIsSaving(false) }
+      return
+    }
+    if (!form.id && rules.some(existing => existing.id === rule.id)) rule.id = `${rule.id}-${Math.random().toString(36).slice(2, 10)}`
     const next = form.id
       ? rules.map((r) => (r.id === form.id ? { ...rule, enabled: r.enabled !== false } : r))
       : [...rules, rule]
-    if (await persist(next, form.id ? 'Rule updated' : 'Rule created')) setForm(null)
+    if (await persist(next, form.id ? 'Rule updated' : 'Rule created')) { setForm(null); onCreated?.() }
   }
 
   const toggleRule = (id: string) =>
@@ -1010,7 +1054,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      {!createOnly && <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold">Rules</h2>
           <p className="text-sm text-muted-foreground">
@@ -1028,7 +1072,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
             <Plus className="mr-1.5 h-4 w-4" /> New rule
           </Button>
         </div>
-      </div>
+      </div>}
 
       {choosing && !form && gallery}
 
@@ -1078,7 +1122,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                   return (
                     <div key={i} className="grid grid-cols-[2.25rem_1fr_auto] items-center gap-2 sm:grid-cols-[2.25rem_minmax(0,240px)_1fr_auto]">
                       <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground" title="Same condition again = either may match (OR); different conditions must all match (AND)">
-                        {form.conditions.slice(0, i).some((c) => c.field.replace(/Regex$/, '') === row.field.replace(/Regex$/, '')) ? 'or' : i === 0 ? 'and' : 'and'}
+                        {form.conditions.slice(0, i).some((c) => conditionKey(c.field) === conditionKey(row.field)) ? 'or' : 'and'}
                       </span>
                       <select
                         className={selectClass}
@@ -1379,10 +1423,10 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
           </section>
 
           <div className="flex flex-wrap gap-2 border-t pt-4">
-            <Button className="h-10 px-5" onClick={submit} disabled={isSaving}>
+            <Button className="h-10 px-5" onClick={submit} disabled={isSaving || isLoading}>
               {isSaving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />} {form.id ? 'Save changes' : 'Create rule'}
             </Button>
-            <Button className="h-10" variant="outline" onClick={() => setForm(null)}>Cancel</Button>
+            <Button className="h-10" variant="outline" onClick={() => { setForm(null); onCancel?.() }}>Cancel</Button>
           </div>
         </div>
       )}
@@ -1402,7 +1446,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
         </LinkToSidePanel>
       )}
 
-      {isLoading ? (
+      {!createOnly && (isLoading ? (
         <p className="rounded-xl border p-6 text-center text-sm text-muted-foreground">Loading…</p>
       ) : rules.length === 0 ? (
         !choosing && !form && (
@@ -1434,7 +1478,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
             </section>
           )}
         </div>
-      )}
+      ))}
     </div>
   )
 }

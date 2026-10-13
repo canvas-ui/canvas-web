@@ -41,7 +41,7 @@ export function ContextMenuShell({ x, y, onClose, className, children }: {
       <div
         ref={menuRef}
         style={{ left: pos.x, top: pos.y }}
-        className={cn('fixed z-menu max-h-viewport-modal overflow-y-auto', className)}
+        className={cn('fixed z-menu max-h-viewport-modal overflow-y-auto', className, 'bg-popover text-popover-foreground')}
       >
         {children}
       </div>

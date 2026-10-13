@@ -3,11 +3,12 @@ import { parseDocumentIdQuery } from '@/lib/document-id-query'
 import { backendTransferFailureMessage } from '@/lib/backend-transfer-errors'
 import { useLongPressContextMenu } from '@/hooks/use-long-press-context-menu'
 import { selectDocumentRange } from '@/lib/document-selection'
+import { DocumentRuleDialog } from '@/components/workspace/document-rule-dialog'
 import { DocumentSelectionArea } from './document-selection-area'
 import { CopyToWorkspacePanel } from '@/components/menu/shared/CopyToWorkspacePanel'
 import { BulkEditDialog } from './BulkEditDialog'
 import { Document, TreeNode } from '@/types/workspace'
-import { File, Calendar, CalendarDays, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, MoreHorizontal, Play, Table as TableIcon, HardDrive, ArrowRightLeft, Loader2, Folder, FolderOpen, CornerLeftUp, Plus } from 'lucide-react'
+import { File, Calendar, CalendarDays, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, MoreHorizontal, Play, Table as TableIcon, HardDrive, ArrowRightLeft, Loader2, Folder, FolderOpen, CornerLeftUp, Plus, Sparkles } from 'lucide-react'
 import { LinkToCard, type LinkToTarget, type LinkToRelation } from '@/components/menu/shared/LinkToCard'
 import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from '@/components/menu/shared/LinkToSidePanel'
 import { BackendActionCard, type BackendTransferConfirmOptions } from '@/components/menu/shared/BackendActionCard'
@@ -1094,6 +1095,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   const [copyWorkspaceIds, setCopyWorkspaceIds] = useState<number[] | null>(null)
   const [bulkEditIds, setBulkEditIds] = useState<number[] | null>(null)
   const bulkEditAllowed = usePublicShareCode() == null && !!workspaceId
+  const [ruleDocument, setRuleDocument] = useState<Document | null>(null)
   const [detailModal, setDetailModal] = useState<{ document: Document; edit?: boolean } | null>(null)
   const canLink = Boolean(linkTree && onPasteDocuments)
   // Backend actions need a workspace to address; the picker is otherwise
@@ -1508,6 +1510,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     add(onCutDocuments && { id: 'cut', group: 'clipboard', label: `Cut${count}`, icon: Scissors, shortcut: 'Mod+X', run: () => onCutDocuments(ids) })
     add(single && { id: 'copy-id', group: 'clipboard', label: 'Copy ID', icon: Link, run: () => copyText(String(single.id)) })
 
+    add(single && bulkEditAllowed && { id: 'create-rule', group: 'organize', label: 'Create rule…', icon: Sparkles, run: () => setRuleDocument(single) })
     add(canLink && { id: 'link-to', group: 'organize', label: `Link to…${count}`, icon: Link2, run: () => setLinkPanelIds(ids) })
     add(canAddRelated && { id: 'add-related', group: 'organize', label: `Add related document…${count}`, icon: Plus, run: () => addRelated(ids) })
     add(bulkEditAllowed && { id: 'bulk-edit', group: 'organize', label: `Bulk edit…${count}`, icon: Pencil, run: () => setBulkEditIds(ids) })
@@ -2194,6 +2197,8 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
         </>,
         window.document.body,
       )}
+
+      {ruleDocument && workspaceId && <DocumentRuleDialog key={`${workspaceId}:${ruleDocument.id}`} workspaceId={workspaceId} document={ruleDocument} onClose={() => setRuleDocument(null)} />}
 
       {bulkEditIds && workspaceId && <BulkEditDialog workspaceId={workspaceId} documentIds={bulkEditIds} onClose={() => setBulkEditIds(null)} />}
 
