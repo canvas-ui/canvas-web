@@ -117,6 +117,9 @@ published from [canvas-common](https://github.com/canvas-ui/canvas-common);
   **`@augmentd-labs/canvas-web`** (prebuilt `dist/`, no dependencies).
 - `pnpm run release patch` bumps the version and pushes; release.yml then
   publishes it to npm and creates the `vX.Y.Z` tag + GitHub Release.
+- The [latest prebuilt tarball](https://github.com/canvas-ui/canvas-web/releases/latest/download/canvas-web.tgz)
+  and [checksums](https://github.com/canvas-ui/canvas-web/releases/latest/download/SHA256SUMS)
+  have stable URLs. Versioned tarball filenames remain available for pinned downloads.
 - To develop the server against a local build, point it at this checkout:
   `CANVAS_WEB_ROOT=../canvas-web/dist npm run dev` in canvas-server.
 

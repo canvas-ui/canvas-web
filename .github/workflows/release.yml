@@ -46,7 +46,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VER: ${{ steps.npm.outputs.published }}
         run: |
-          cd artifacts && sha256sum *.tgz > SHA256SUMS
-          gh release create "v$VER" --target "$GITHUB_SHA" --title "canvas-web v$VER" \
+          cd artifacts
+          cp "augmentd-labs-canvas-web-$VER.tgz" canvas-web.tgz
+          sha256sum *.tgz > SHA256SUMS
+          gh release create "v$VER" --latest --target "$GITHUB_SHA" --title "canvas-web v$VER" \
             --notes "npm: \`@augmentd-labs/canvas-web@$VER\`. Prebuilt, dependency-free web UI for canvas-server." \
             ./*.tgz SHA256SUMS
