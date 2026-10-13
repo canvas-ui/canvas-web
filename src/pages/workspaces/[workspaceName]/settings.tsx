@@ -1,3 +1,5 @@
+import { BackendRemovalSettings } from '@/components/workspace/backend-removal-settings'
+import type { RemovalPolicy } from '@/services/trash-operations'
 import { S3BackendForm } from '@/components/settings/S3BackendForm'
 import { WorkspaceProtectionPanel } from '@/components/workspace/protection-panel'
 import { canManageWorkspace } from '@/lib/workspace-access'
@@ -1646,6 +1648,8 @@ function WorkspaceSettingsContent() {
                     )}
                   </div>
                 </div>
+                {supported && <BackendRemovalSettings value={cfg.removalPolicy as RemovalPolicy} backends={dataBackends} source={backendId} destination={cfg.propagatedRemovalSupported === true}
+                  onSave={async removalPolicy => { await updateBackend(workspaceId, backend.driver, backend.address, { removalPolicy }); await loadRuntimeSettings() }} />}
                 {isS3 && <S3BackendForm workspaceId={workspaceId} backend={backend} onSaved={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />}
                 {/* Sync exclusions only apply to enumerable/synced backends —
                     the internal cache is not synced or mirrored. */}

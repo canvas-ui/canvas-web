@@ -1599,6 +1599,7 @@ export interface BackendCapabilities {
 }
 
 export interface BackendContainer {
+  removalPolicy?: import('./trash-operations').RemovalPolicy;
   name: string;
   id?: string;
   mailboxId?: string;
@@ -2170,8 +2171,8 @@ export async function restoreFromTrash(
 export async function emptyTrash(
   workspaceId: string,
   documentIds?: readonly (string | number)[]
-): Promise<{ destroyed: number[]; failed: unknown[] }> {
-  const response = await api.delete<{ destroyed: number[]; failed: unknown[] }>(
+): Promise<{ destroyed: number[]; preserved?: number[]; failed: unknown[] }> {
+  const response = await api.delete<{ destroyed: number[]; preserved?: number[]; failed: unknown[] }>(
     `${API_ROUTES.workspaces}/${workspaceId}/trash`,
     documentIds?.length
       ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ documentIds: normalizeDocumentIds(documentIds) }) }

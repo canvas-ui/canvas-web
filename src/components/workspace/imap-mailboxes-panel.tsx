@@ -1,3 +1,5 @@
+import { BackendRemovalSettings } from './backend-removal-settings'
+import { saveMailboxRemovalPolicy, type RemovalPolicy } from '@/services/trash-operations'
 import { MessageComposerDialog } from '@/components/common/MessageComposerDialog';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -63,6 +65,8 @@ function formFromBackend(b: Backend): AccountForm {
 
 export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelProps) {
   const [accounts, setAccounts] = useState<Backend[]>([]);
+  const [storageBackends, setStorageBackends] = useState<Backend[]>([]);
+  useEffect(() => { let live = true; listBackends(workspaceId).then(list => { if (live) setStorageBackends(list.filter(b => b.kind === 'storage')) }).catch(() => {}); return () => { live = false } }, [workspaceId]);
   const [smtpTestAccount, setSmtpTestAccount] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null); // address of the expanded account
   const [showNew, setShowNew] = useState(false); // new-account form visible
@@ -412,6 +416,8 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
                         ))}
                       </div>
 
+                      {(acc.containers || []).map(c => <div key={`removal:${c.name}`} className="rounded border p-2"><p className="mb-2 font-medium">{c.name}</p><BackendRemovalSettings value={c.removalPolicy as RemovalPolicy} backends={storageBackends} source={`imap:${c.mailboxId}`} destination={false}
+                        onSave={async removalPolicy => { await saveMailboxRemovalPolicy(workspaceId, acc.address, c.name, removalPolicy); await load() }} /></div>)}
                       {configForm}
 
                       <div className="flex flex-wrap gap-2">

@@ -1,3 +1,4 @@
+import { TrashPanel } from '@/components/workspace/trash-panel';
 import { BackendTrashBrowser } from '@/components/workspaces/BackendTrashBrowser';
 import { backendTrashLocation } from '@/lib/backend-trash';
 import { WorkspaceContentGate } from '@/components/workspace/workspace-content-gate';
@@ -1363,7 +1364,7 @@ function WorkspaceContent() {
   const showCanvasGrid = selectedNodeType === 'canvas' && !isLayerView && !!selectedNode;
 
   const currentCanvas = backendTrashLocation(selectedTreeName, selectedPath) ? (
-    <BackendTrashBrowser key={workspaceName} workspace={workspaceName || workspace.id} path={selectedPath}
+    selectedPath === '/Trash' ? <div className="h-full overflow-auto p-4"><TrashPanel workspaceName={workspaceName || workspace.id} /></div> : <BackendTrashBrowser key={workspaceName} workspace={workspaceName || workspace.id} path={selectedPath}
       onNavigate={path => navigate(buildWorkspaceUrl(workspaceName!, path, 'backends'))} />
   ) : (
     <DefaultCanvas
@@ -1924,7 +1925,7 @@ function SideWorkspaceCanvas({
           Close
         </button>
       )}
-      {backendTrashLocation(pane.treeName, pane.path) ? <BackendTrashBrowser workspace={workspaceName} path={pane.path} onNavigate={onNavigate || (() => {})} /> : <DefaultCanvas
+      {backendTrashLocation(pane.treeName, pane.path) ? pane.path === '/Trash' ? <div className="h-full overflow-auto p-4"><TrashPanel workspaceName={workspaceName} /></div> : <BackendTrashBrowser workspace={workspaceName} path={pane.path} onNavigate={onNavigate || (() => {})} /> : <DefaultCanvas
         urlType={isCanvas ? 'canvas' : (treeType === 'directory' ? pane.treeName : 'context')}
         urlDisplay={urlDisplay}
         contextPath={pane.path}
