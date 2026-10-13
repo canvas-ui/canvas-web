@@ -1,18 +1,23 @@
 name: housekeeping
 
-# Keeps the Actions history and the Releases page short: at most KEEP_RUNS
-# completed runs per workflow and KEEP_RELEASES releases per app (grouped by
-# tag prefix). Older releases
-# are deleted together with their tags. Runs after every ci/release/dist run
-# and once a day.
-
+# Seven completed runs per workflow, including removed workflows and CodeQL;
+# seven published releases per repository (prereleases included). Preserve tags.
+# Identical policy across Canvas repos; tests live in canvas-common/.github/tests.
+# Add new workflow names below for immediate cleanup; the daily sweep covers all.
 on:
   workflow_run:
-    workflows: [ci, release]
+    workflows: ["CodeQL", "ci", "release"]
     types: [completed]
+  release:
+    types: [published]
   schedule:
-    - cron: '17 4 * * *'
+    - cron: '20 4 * * *'
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Preview deletions without changing anything
+        type: boolean
+        default: true
 
 permissions:
   actions: write
@@ -23,47 +28,93 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  KEEP_RUNS: 5
-  KEEP_RELEASES: 5
+  KEEP_RUNS: 7
+  KEEP_RELEASES: 7
+  DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
 
 jobs:
   prune:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - name: Prune workflow runs
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          R: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          for wf in $(gh api "repos/$R/actions/workflows" --jq '.workflows[].id'); do
-            name=$(gh api "repos/$R/actions/workflows/$wf" --jq .name)
-            # newest first from the API; skip anything still running
-            ids=$(gh api --paginate "repos/$R/actions/workflows/$wf/runs?per_page=100" \
-              --jq '.workflow_runs[] | select(.status == "completed") | .id')
-            n=0
-            for id in $ids; do
-              n=$((n + 1))
-              [ "$n" -le "$KEEP_RUNS" ] && continue
-              gh api -X DELETE "repos/$R/actions/runs/$id" >/dev/null && echo "deleted run $id ($name)"
-            done
-          done
-      - name: Prune releases (and their tags)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          R: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          # id, tag, created_at — grouped by the tag's app prefix, newest first
-          gh api --paginate "repos/$R/releases?per_page=100" \
-            --jq '.[] | select(.draft == false) | [.id, .tag_name, .created_at] | @tsv' \
-          | sort -t$'\t' -k3,3r \
-          | while IFS=$'\t' read -r id tag created; do
-              prefix=$(printf '%s' "$tag" | sed -E 's/-?v?[0-9].*$//')
-              printf '%s\t%s\t%s\n' "$prefix" "$id" "$tag"
-            done \
-          | awk -F'\t' -v keep="$KEEP_RELEASES" '{ c[$1]++; if (c[$1] > keep) print $2 "\t" $3 }' \
-          | while IFS=$'\t' read -r id tag; do
-              gh api -X DELETE "repos/$R/releases/$id" >/dev/null && echo "deleted release $tag"
-              gh api -X DELETE "repos/$R/git/refs/tags/$tag" >/dev/null 2>&1 && echo "deleted tag $tag" || true
-            done
+      # No checkout or upstream artifacts: workflow_run can follow untrusted PRs.
+      - name: Retain seven runs and releases
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const scope = { owner: context.repo.owner, repo: context.repo.repo };
+            const keepRuns = Number(process.env.KEEP_RUNS);
+            const keepReleases = Number(process.env.KEEP_RELEASES);
+            const dryRun = process.env.DRY_RUN === 'true';
+            if (![keepRuns, keepReleases].every(n => Number.isSafeInteger(n) && n > 0)) {
+              throw new Error('Retention limits must be positive integers');
+            }
+            const current = context.runId
+              ? (await github.rest.actions.getWorkflowRun({ ...scope, run_id: context.runId })).data
+              : null;
+            // No status filter: filtered run searches are capped at 1,000 results.
+            // Enumerate repository runs so removed workflows and CodeQL are included.
+            // Finish all pagination before deleting anything (deletion shifts pages).
+            const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, { ...scope, per_page: 100 });
+            const releases = await github.paginate(github.rest.repos.listReleases, { ...scope, per_page: 100 });
+            const unique = items => [...new Map(items.map(item => [item.id, item])).values()];
+            const newest = field => (a, b) => Date.parse(b[field]) - Date.parse(a[field]) || b.id - a.id;
+            const completed = unique(runs).filter(run => run.status === 'completed' && run.id !== current?.id)
+              .sort(newest('created_at'));
+            const counts = new Map();
+            const oldRuns = completed.filter(run => {
+              const count = (counts.get(run.workflow_id) || 0) + 1;
+              counts.set(run.workflow_id, count);
+              // Reserve a slot for this housekeeping run when it completes.
+              const limit = keepRuns - (run.workflow_id === current?.workflow_id ? 1 : 0);
+              return count > limit;
+            });
+            const published = unique(releases).filter(release => !release.draft)
+              .sort(newest('published_at'));
+            const oldReleases = published.slice(keepReleases);
+            const activeProducer = runs.some(run => run.id !== current?.id && run.status !== 'completed');
+            // Empty drafts left by failed publishing jobs aren't useful releases. Wait
+            // while any other workflow is active so an ongoing upload can finish.
+            const emptyDrafts = activeProducer ? [] : unique(releases).filter(release => release.draft && release.assets.length === 0);
+            core.info(`${dryRun ? 'Preview' : 'Cleanup'}: ${oldRuns.length} runs, ${oldReleases.length} old releases, ${emptyDrafts.length} empty drafts`);
+            if (activeProducer) core.info('Deferring empty-draft cleanup while other workflows are active');
+            let deletedRuns = 0;
+            let deletedReleases = 0;
+            async function tolerateMissing(operation) {
+              try { return await operation(); }
+              catch (error) {
+                if (error.status !== 404) throw error;
+                core.info('Already removed by another cleanup');
+              }
+            }
+            for (const run of oldRuns) {
+              core.info(`${dryRun ? 'Would delete' : 'Checking'} run ${run.id} (${run.name})`);
+              if (dryRun) continue;
+              await tolerateMissing(async () => {
+                const { data: live } = await github.rest.actions.getWorkflowRun({ ...scope, run_id: run.id });
+                // A user may have re-run an old job since the inventory was read.
+                if (live.status !== 'completed' || live.run_attempt !== run.run_attempt) return;
+                await github.rest.actions.deleteWorkflowRun({ ...scope, run_id: run.id });
+                deletedRuns++;
+              });
+            }
+            // Run cleanup can take a while. Check again before touching empty drafts in
+            // case a publisher started after the initial inventory.
+            const producerStarted = !dryRun && emptyDrafts.length > 0
+              && (await github.paginate(github.rest.actions.listWorkflowRunsForRepo, { ...scope, per_page: 100 }))
+                .some(run => run.id !== current?.id && run.status !== 'completed');
+            if (producerStarted) core.info('Deferring empty-draft cleanup because another workflow started');
+            for (const release of [...oldReleases, ...(producerStarted ? [] : emptyDrafts)]) {
+              core.info(`${dryRun ? 'Would delete' : 'Checking'} release ${release.id} (${release.tag_name})`);
+              if (dryRun) continue;
+              await tolerateMissing(async () => {
+                const { data: live } = await github.rest.repos.getRelease({ ...scope, release_id: release.id });
+                if (live.draft !== release.draft || live.published_at !== release.published_at
+                    || live.updated_at !== release.updated_at || (live.draft && live.assets.length !== 0)) return;
+                // Delete release metadata/assets only. Git tags are source history and
+                // don't consume Actions artifact storage; never delete them here.
+                await github.rest.repos.deleteRelease({ ...scope, release_id: release.id });
+                deletedReleases++;
+              });
+            }
+            core.info(`Deleted ${deletedRuns} runs (including their logs/artifacts) and ${deletedReleases} releases/drafts`);
