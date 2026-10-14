@@ -267,7 +267,7 @@ export interface TreeNode {
   children: TreeNode[]
 }
 
-// Where a document's location came from. Ranked server-side (core/workspace/lib/geo.js)
+// Where a document's location came from. Ranked server-side (core/workspace/documents/geo.js)
 // as manual > exif > device, so re-indexing a photo never reverts a hand-fixed pin:
 // `exif` is where the shot was TAKEN, `device` where the client was when it uploaded.
 export type GeoSource = 'device' | 'exif' | 'manual'

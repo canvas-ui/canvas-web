@@ -119,7 +119,7 @@ export function useGeotag(): Geotag {
       if (!enabledRef.current) setEnabledState(false)
       return
     }
-    // 'manual' outranks device/exif server-side (core/workspace/lib/geo.js), so a
+    // 'manual' outranks device/exif server-side (core/workspace/documents/geo.js), so a
     // hand-placed pin survives re-indexing instead of being reverted to a fix.
     const geo: DocumentGeo = { lat: point.lat, lon: point.lon, source: 'manual' }
     manualRef.current = geo
