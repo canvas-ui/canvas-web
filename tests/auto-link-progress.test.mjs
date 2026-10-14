@@ -12,7 +12,7 @@ test('Auto-Link displays scan totals, uses the saved batch size and resumes a fa
   let cursor = 0
   const jsx = (type, props) => ({ type, props })
   const dependencies = {
-    react: { useState(initial) {
+    react: { useEffect() {}, useState(initial) {
       const index = cursor++
       if (!slots[index]) slots[index] = { value: typeof initial === 'function' ? initial() : initial }
       return [slots[index].value, value => { slots[index].value = typeof value === 'function' ? value(slots[index].value) : value }]

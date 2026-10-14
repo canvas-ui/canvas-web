@@ -612,23 +612,21 @@ function WorkspaceContent() {
     const seq = ++fetchSeqRef.current;
     // Live-feed ticks bypass the cache: every frame is a fresh id-set, so
     // caching would balloon the map with single-use entries.
-    // Debug reads bypass the cache too: a cache hit skips the request entirely,
-    // so the distances would never arrive and the panel would stay empty right
-    // after switching the toggle on.
+    // Debug reads bypass the cache too: cached rows carry no distance data.
     // A refresh must hit the server even if an older in-flight response has
     // repopulated the cache since the event invalidated it.
     const cached = (opts?.silent || lensActive || queryDebug) ? undefined : documentCache.get(cacheKey);
     if (cached) {
-      documentFetchRef.current = null;
       setDocuments(cached.documents);
       setDocumentsTotalCount(cached.totalCount);
       setIsLoadingDocuments(false);
-      return;
     }
     // Background refreshes (socket events, post-mutation reconcile) and live
     // lens ticks update the list in place. Skipping the loading spinner keeps
     // the previous results rendered — no blink.
-    const silent = opts?.silent ?? lensTickOnly;
+    // Paint cached metadata immediately, then revalidate against the local
+    // index. Connector polling and socket updates remain independent of this read.
+    const silent = opts?.silent ?? (lensTickOnly || !!cached);
     if (!silent) setIsLoadingDocuments(true);
     const activeFetch = { key: requestKey, refreshPending: false };
     documentFetchRef.current = activeFetch;

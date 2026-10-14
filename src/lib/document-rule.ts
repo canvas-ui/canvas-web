@@ -33,7 +33,7 @@ export function documentRulePresets(document: Document): DocumentRulePreset[] {
     const senderName = text(object(data.sender).name) || text(object(data.sender).username) || sender
     if (sender) add('sender', `Messages from ${senderName}`, { ...scope, sender: { equals: sender } })
   }
-  const body = text(data.body) || text(data.text) || text(data.content) || text(data.bodyHtml)
+  const body = text(data.body) || text(data.text) || text(data.content) || text(data.bodyHtml) || text(data.bodyPreview)
   // A short literal excerpt is a useful starting expression; it stays editable.
   if (email || message || body) add('body', email ? 'Email body matches regex' : 'Text matches regex', { ...scope, body: { regex: escapeRegex(body.slice(0, 160)) } })
   if (message) {

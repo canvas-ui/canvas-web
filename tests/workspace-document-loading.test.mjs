@@ -129,15 +129,20 @@ for (const newestFirst of [false, true]) {
   })
 }
 
-test('a cache hit superseding a pending load clears its spinner', async () => {
+test('cached inbox metadata paints immediately while a fresh index read runs in the background', async () => {
   const { fetch, state, pending, cache, context } = build()
   const initial = fetch()
   cache.set(context.selectedPath, { documents: [{ id: 2 }], totalCount: 1 })
-  await fetch()
+  const refresh = fetch()
   assert.equal(state.loading, false)
+  assert.equal(state.documents[0].id, 2)
+  assert.equal(pending.length, 2)
   pending[0].resolve({ payload: [{ id: 1 }] })
   await initial
   assert.equal(state.documents[0].id, 2)
+  pending[1].resolve({ payload: [{ id: 3 }], totalCount: 1 })
+  await refresh
+  assert.equal(state.documents[0].id, 3)
 })
 
 test('a failed initial load releases its spinner and still reconciles queued changes', async () => {

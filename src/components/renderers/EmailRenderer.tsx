@@ -4,6 +4,7 @@ import { Download, FileText, Code, Image, ImageOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useDocumentContent } from './public-share'
 import type { RendererProps } from './types'
+import { useEmailBody } from './use-email-body'
 
 interface EmailParty { address?: string; name?: string }
 interface EmailAttachment {
@@ -107,15 +108,18 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   })
 }
 
-export function EmailRenderer({ workspaceId, document: doc, className = '' }: RendererProps) {
+export function EmailRenderer(props: RendererProps) {
+  return <EmailMessage key={`${props.workspaceId}:${props.document.id}`} {...props} />
+}
+
+function EmailMessage({ workspaceId, document: doc, className = '' }: RendererProps) {
   const { fetchBlob, download } = useDocumentContent(workspaceId)
   const data = (doc.data || {}) as Record<string, unknown>
   const attachments = (Array.isArray(data.attachments) ? data.attachments : []) as EmailAttachment[]
-  const bodyHtml = typeof data.bodyHtml === 'string' && data.bodyHtml.trim() ? data.bodyHtml : null
-  const bodyText = typeof data.body === 'string' ? data.body : ''
+  const { body: bodyText, bodyHtml, loading, error: bodyError } = useEmailBody(workspaceId, doc)
 
   const [htmlUrl, setHtmlUrl] = useState<string | null>(null)
-  const [showPlain, setShowPlain] = useState(!bodyHtml)
+  const [showPlain, setShowPlain] = useState(false)
   const [showRemoteImages, setShowRemoteImages] = useState(false)
   const [remoteImageCount, setRemoteImageCount] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -215,11 +219,15 @@ export function EmailRenderer({ workspaceId, document: doc, className = '' }: Re
         </div>
       </div>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {(error || bodyError) && <p className="text-sm text-destructive">{error || bodyError}</p>}
 
       {/* Fill the space below the header; the sandboxed frame scrolls its own body.
           The minimum keeps it usable in short readers, with outer scrolling for attachments. */}
-      {!showPlain && bodyHtml ? (
+      {loading ? (
+        <p className="text-sm text-muted-foreground">Loading message…</p>
+      ) : bodyError ? (
+        <p className="text-sm text-muted-foreground">{String(data.bodyPreview || 'Message content could not be loaded.')}</p>
+      ) : !showPlain && bodyHtml ? (
         htmlUrl
           // Literal white, not a token: this is the email's own canvas, and
           // real-world HTML mail assumes a white ground (dark text, no

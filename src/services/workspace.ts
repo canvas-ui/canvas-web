@@ -1394,7 +1394,7 @@ export async function removeDocumentRelation(
   return true
 }
 
-function buildContentApiPath(workspaceId: string, documentId: number | string, opts: { download?: boolean; url?: string; version?: string | null } = {}): string {
+function buildContentApiPath(workspaceId: string, documentId: number | string, opts: { download?: boolean; url?: string; version?: string | null; format?: 'email' } = {}): string {
   const params = new URLSearchParams()
   // Cache identity for mutable-content docs (drawings): the offline SW keys
   // its content cache on the full URL, so the checksum in the URL rolls it.
@@ -1402,6 +1402,7 @@ function buildContentApiPath(workspaceId: string, documentId: number | string, o
   if (opts.download) params.set('download', '1')
   // Target a specific location/attachment URL (must belong to the document).
   if (opts.url) params.set('url', opts.url)
+  if (opts.format) params.set('format', opts.format)
   const qs = params.toString()
   return `${API_ROUTES.workspaces}/${workspaceId}/documents/${documentId}/content${qs ? `?${qs}` : ''}`
 }
@@ -1426,9 +1427,10 @@ export async function fetchDocumentThumbnail(workspaceId: string, documentId: nu
  * to drop into <img>, <audio>, <video>, <iframe>. Caller is responsible for
  * calling URL.revokeObjectURL when the URL is no longer needed.
  */
-export async function fetchDocumentBlob(workspaceId: string, documentId: number | string, opts: { url?: string; version?: string | null } = {}): Promise<{ blob: Blob; mime: string }> {
+export async function fetchDocumentBlob(workspaceId: string, documentId: number | string, opts: { url?: string; version?: string | null; format?: 'email'; signal?: AbortSignal } = {}): Promise<{ blob: Blob; mime: string }> {
   const token = localStorage.getItem('authToken')
   const res = await fetch(buildContentApiPath(workspaceId, documentId, opts), {
+    signal: opts.signal,
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)

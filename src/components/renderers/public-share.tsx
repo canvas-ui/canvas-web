@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react'
+import { createContext, useContext, useMemo } from 'react'
 import { API_URL } from '@/config/api'
 import { fetchDocumentBlob, downloadDocument, fetchDocumentThumbnail, documentStreamUrl, requestContentTicket } from '@/services/workspace'
 
@@ -13,10 +13,12 @@ export function usePublicShareCode(): string | null {
   return useContext(PublicShareContext)
 }
 
-export function publicDocumentContentUrl(code: string, documentId: number | string, opts: { url?: string; download?: boolean } = {}): string {
+export function publicDocumentContentUrl(code: string, documentId: number | string, opts: { url?: string; download?: boolean; version?: string | null; format?: 'email' } = {}): string {
   const params = new URLSearchParams()
   if (opts.download) params.set('download', '1')
   if (opts.url) params.set('url', opts.url)
+  if (opts.format) params.set('format', opts.format)
+  if (opts.version) params.set('v', opts.version)
   const qs = params.toString()
   return `${API_URL}/pub/c/${encodeURIComponent(code)}/documents/${documentId}/content${qs ? `?${qs}` : ''}`
 }
@@ -28,8 +30,8 @@ async function fetchPublicThumbnail(code: string, documentId: number | string, s
   return { blob: await res.blob(), mime }
 }
 
-async function fetchPublicBlob(code: string, documentId: number | string, opts: { url?: string; version?: string | null } = {}): Promise<{ blob: Blob; mime: string }> {
-  const res = await fetch(publicDocumentContentUrl(code, documentId, opts))
+async function fetchPublicBlob(code: string, documentId: number | string, opts: { url?: string; version?: string | null; format?: 'email'; signal?: AbortSignal } = {}): Promise<{ blob: Blob; mime: string }> {
+  const res = await fetch(publicDocumentContentUrl(code, documentId, opts), { signal: opts.signal })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const mime = res.headers.get('content-type') || 'application/octet-stream'
   return { blob: await res.blob(), mime }
@@ -54,9 +56,9 @@ async function downloadPublicDocument(code: string, documentId: number | string,
  */
 export function useDocumentContent(workspaceId: string) {
   const code = usePublicShareCode()
-  return {
+  return useMemo(() => ({
     isPublic: code != null,
-    fetchBlob: (documentId: number | string, opts: { url?: string; version?: string | null } = {}) =>
+    fetchBlob: (documentId: number | string, opts: { url?: string; version?: string | null; format?: 'email'; signal?: AbortSignal } = {}) =>
       code ? fetchPublicBlob(code, documentId, opts) : fetchDocumentBlob(workspaceId, documentId, opts),
     fetchThumbnail: (documentId: number | string, size = 256, version?: string | null) =>
       code ? fetchPublicThumbnail(code, documentId, size) : fetchDocumentThumbnail(workspaceId, documentId, size, version),
@@ -69,5 +71,5 @@ export function useDocumentContent(workspaceId: string) {
       code ? publicDocumentContentUrl(code, documentId, opts) : documentStreamUrl(workspaceId, documentId, opts),
     mintTicket: (documentId: number | string) =>
       code ? Promise.resolve(true) : requestContentTicket(workspaceId, documentId),
-  }
+  }), [workspaceId, code])
 }
