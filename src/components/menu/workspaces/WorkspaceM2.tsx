@@ -20,7 +20,7 @@ import { useCanvasRow } from '@/components/shell/strip/use-canvas-row'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { workspaceResumeUrl } from '@/lib/last-path'
 import { getWorkspace, getCachedWorkspaceTreeByName, invalidateWorkspaceTreeCache, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer, pasteDocumentsToWorkspacePath, createPublicCanvasShare, listBackends, listWorkspacePins, pinWorkspacePath, unpinWorkspacePin, reorderWorkspacePins, workspacePinKey as pinKey, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
-import type { Layer, WorkspacePin } from '@/services/workspace'
+import type { Layer, WorkspacePin, Backend } from '@/services/workspace'
 import { getWebuiConfig, putWebuiConfig } from '@/services/user-config'
 import { WorkspacePinsTab } from './WorkspacePinsTab'
 import { useTreeOperations } from '@/hooks/useTreeOperations'
@@ -109,6 +109,7 @@ function WorkspaceM2Content() {
   // Backends-tree mirror roots with a resync (initial/catch-up scan) in flight
   // — badged with a spinner in the tree. Seeded from the backends list, kept
   // live via the backend.resync.changed ws event.
+  const [backends, setBackends] = useState<Backend[]>([])
   const [resyncingPaths, setResyncingPaths] = useState<Set<string>>(new Set())
   const [contentPath, setContentPath] = useState<string | null>(urlIsLayer && urlPath !== '/' ? urlPath : null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -293,13 +294,21 @@ function WorkspaceM2Content() {
   useEffect(() => {
     if (!wsName) return
     let cancelled = false
-    listBackends(wsName)
+    const load = () => listBackends(wsName)
       .then(backends => {
         if (cancelled) return
+        setBackends(backends)
         setResyncingPaths(new Set(backends.filter(b => b.resyncing && b.treePath).map(b => b.treePath as string)))
       })
       .catch(() => {})
-    return () => { cancelled = true }
+    void load()
+    const refresh = (event: Event) => {
+      const detail = (event as CustomEvent<TreeRefreshDetail>).detail
+      if (detail?.workspaceName && detail.workspaceName !== wsName) return
+      if (!detail?.treeName || detail.treeName === 'backends') void load()
+    }
+    window.addEventListener('workspace:tree:refresh', refresh)
+    return () => { cancelled = true; window.removeEventListener('workspace:tree:refresh', refresh) }
   }, [wsName])
 
   // Subscribe to structural updates, sharing a listener with the detail page.
@@ -673,6 +682,7 @@ function WorkspaceM2Content() {
             isLoading={isLoadingTree}
             rootLabel={wsName ?? undefined}
             searchQuery={searchQuery}
+            backends={backends}
             resyncingPaths={activeTab === 'backends' ? resyncingPaths : undefined}
             onAddRule={wsName && activeTab === 'backends' ? setAutoLinkPath : undefined}
             onAddStoreRule={wsName ? (path, kind: 'store' | 'download' = 'store') => {

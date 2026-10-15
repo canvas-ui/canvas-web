@@ -12,12 +12,13 @@ export interface CanvasSearchProps {
   onScopeChange?: (scope: 'path' | 'workspace') => void
 }
 
-export function SearchInput({ onSearch, onDraftChange, inputRef, label = 'Search documents', clearOnSubmit = true }: {
+export function SearchInput({ onSearch, onDraftChange, inputRef, label = 'Search documents', clearOnSubmit = true, showSubmitButton = true }: {
   onSearch: (query: string) => void
   onDraftChange?: (query: string) => void
   inputRef?: React.RefObject<HTMLInputElement | null>
   label?: string
   clearOnSubmit?: boolean
+  showSubmitButton?: boolean
 }) {
   return <form className="canvas-search-input" role="search" onSubmit={event => {
     event.preventDefault()
@@ -34,7 +35,7 @@ export function SearchInput({ onSearch, onDraftChange, inputRef, label = 'Search
     <input ref={inputRef} name="query" type="search" aria-label={label} placeholder={label}
       autoComplete="off" enterKeyHint="search" onChange={event => onDraftChange?.(event.target.value)}
       onKeyDown={event => { if (event.key === 'Enter' && event.nativeEvent.isComposing) event.preventDefault() }} />
-    <button type="submit" className="canvas-nav-button" aria-label="Run search" title="Run search"><Search size={17} /></button>
+    {showSubmitButton && <button type="submit" className="canvas-nav-button" aria-label="Run search" title="Run search"><Search size={17} /></button>}
   </form>
 }
 

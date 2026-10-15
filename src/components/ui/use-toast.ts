@@ -17,6 +17,7 @@ export type ToastInput = Omit<ToastType, 'id' | 'busy'> & {
 
 /** Handle for a long-running operation's toast; settle it exactly once. */
 export type ProgressToast = {
+  update: (toast: ToastInput) => void
   done: (toast?: ToastInput) => void
   fail: (toast: ToastInput) => void
 }

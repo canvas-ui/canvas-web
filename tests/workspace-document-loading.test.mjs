@@ -26,7 +26,8 @@ function build() {
   const context = {
     workspaceName: 'universe', selectedTreeName: 'backends', selectedPath: '/imap/me/inbox',
     sessionActiveRef: { current: false }, fetchSeqRef: { current: 0 }, fetchIdentityRef: { current: '' },
-    documentFetchRef: { current: null },
+    documentFetchRef: { current: null }, purgeSelectionKey: 'loaded',
+    setLoadedSelectionKey: value => { state.selectionKey = value },
     backendTrashLocation,
     unfiledOnly: false, backendTarget: null, docScope: 'path', tbLensIds: null,
     currentPage: 1, pageSize: 50, serverSearchQueries: [], tbFiltersKey: '', tbFiltersKeyNoLens: '',

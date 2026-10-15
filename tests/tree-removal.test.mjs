@@ -6,6 +6,11 @@ import ts from 'typescript'
 import { backendTrashLocation } from '../src/lib/backend-trash.ts'
 import { isSameDocumentFolder } from '../src/lib/document-drag.ts'
 
+const serviceSource = ts.createSourceFile('workspace.ts', readFileSync(new URL('../src/services/workspace.ts', import.meta.url), 'utf8'), ts.ScriptTarget.Latest, true)
+const targetCode = ts.transpileModule(serviceSource.statements.filter(node => ts.isFunctionDeclaration(node) && ['matchBackendByTreePath', 'backendFolderTarget', 'backendRemovalTarget'].includes(node.name?.text)).map(node => node.getText(serviceSource)).join('\n'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText
+const targets = { exports: {} }
+vm.runInNewContext(targetCode, targets)
+
 function children(element) {
   if (Array.isArray(element)) return element.flatMap(children)
   if (!element || typeof element !== 'object') return []
@@ -37,7 +42,7 @@ function setup() {
     '@/lib/layer-style': {}, './LayerIconPicker': {},
     '@/components/common/context-menu-shell': { ContextMenuShell: 'menu' },
     '@/components/common/action-menu': {},
-    '@/services/workspace': {}, '@/lib/tree-style': { useTreeAccordion: () => false }, '@/utils/color': {},
+    '@/services/workspace': targets.exports, '@/lib/tree-style': { useTreeAccordion: () => false }, '@/utils/color': {},
   }
   const source = readFileSync(new URL('../src/components/menu/shared/MenuTreeView.tsx', import.meta.url), 'utf8')
   const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText
@@ -152,3 +157,21 @@ for (const treeName of ['context', 'directory']) {
     await running
   })
 }
+
+
+test('Drive folder deletion is available only for writable descendants', () => {
+  const ui = setup()
+  ui.props.onDeleteBackendFolder = async () => true
+  ui.props.backends = [{driver:'gdrive', address:'drive', enabled:true, treePath:'/gdrive/drive', capabilities:{mutableContainers:true}, config:{readOnly:false}}]
+  const menu = ui.open()
+  menu.props.path = '/gdrive/drive/Photos'
+  assert.ok(buttons(menu).map(label).includes('Delete from backend'))
+  menu.props.path = '/gdrive/drive'
+  assert.ok(!buttons(menu).map(label).includes('Delete from backend'))
+  menu.props.path = '/gdrive/drive/Photos'
+  menu.props.backends[0].config.readOnly = true
+  assert.ok(!buttons(menu).map(label).includes('Delete from backend'))
+  menu.props.backends[0].config.readOnly = false
+  menu.props.backends[0].enabled = false
+  assert.ok(!buttons(menu).map(label).includes('Delete from backend'))
+})

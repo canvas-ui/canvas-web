@@ -68,7 +68,7 @@ export function CanvasAddressBar({ workspace, workspaceIcon, tree, path, documen
       <div className="canvas-address-field" onDoubleClick={event => {
         if (search && !(event.target as HTMLElement).closest('button')) setSearching(true)
       }} onKeyDown={event => { if (event.key === 'Escape' && searching) { event.preventDefault(); event.stopPropagation(); closeSearch() } }}>
-        {searching && search ? <SearchInput inputRef={inputRef} onSearch={search.onSearch} onDraftChange={onDraftChange} clearOnSubmit={!search.localOnly} label={search.queries.length ? 'Refine search…' : 'Search documents…'} /> : <>
+        {searching && search ? <SearchInput inputRef={inputRef} onSearch={search.onSearch} onDraftChange={onDraftChange} clearOnSubmit={!search.localOnly} showSubmitButton={false} label={search.queries.length ? 'Refine search…' : 'Search documents…'} /> : <>
             {crumb(<><Icon icon={workspaceIcon || DEFAULT_WORKSPACE_ICON} className="h-4 w-4 shrink-0" aria-hidden="true" /><span className="truncate">{workspace}</span></>, 'canvas-address-workspace', onBrowseWorkspaces, 'Browse workspaces')}
           <div ref={addressRef} className={`canvas-address-crumbs${scrolled ? " is-scrolled" : ""}`} onScroll={event => setScrolled(event.currentTarget.scrollLeft > 1)} role="navigation" aria-label="Canvas address" tabIndex={0}
             onKeyDown={event => { if (event.key === 'Enter' && event.target === event.currentTarget && search) setSearching(true) }}>
@@ -81,10 +81,10 @@ export function CanvasAddressBar({ workspace, workspaceIcon, tree, path, documen
             {documentTitle && <span className="canvas-address-segment"><span aria-hidden="true">{items.length ? '/' : ''}</span>{crumb(documentTitle, '', onDocument, documentTitle)}</span>}
             {section && crumb(`#${section}`, 'canvas-address-section', onSection, section, true)}
           </div>
-          {search && <button ref={searchButtonRef} type="button" className="canvas-nav-button canvas-address-search" onClick={() => setSearching(true)} aria-label="Search this canvas" aria-expanded={false} title="Search this canvas">
-            <Search size={17} />{search.queries.length > 0 && <span className="canvas-nav-dot" />}
-          </button>}
         </>}
+        {search && <button ref={searchButtonRef} type="button" className="canvas-nav-button canvas-address-search" onClick={searching ? closeSearch : () => setSearching(true)} aria-label={searching ? 'Close search' : 'Search this canvas'} aria-expanded={searching} title={searching ? 'Close search' : 'Search this canvas'}>
+          <Search size={17} />{search.queries.length > 0 && <span className="canvas-nav-dot" />}
+        </button>}
       </div>
       {onFilter && <button type="button" className="canvas-nav-button canvas-filter-button" onClick={onFilter} aria-label={filtersActive ? 'Filters active' : 'Filters'} aria-expanded={!!filtersOpen} data-active={!!filtersActive} title={filtersActive ? 'Filters active' : 'Filters'}><SlidersHorizontal size={19} />{filtersActive && <span className="canvas-nav-dot" />}</button>}
       {onAdd && <button type="button" className="canvas-nav-button canvas-add-button" onClick={onAdd} aria-label="Add here" title="Add here"><Plus size={21} /></button>}

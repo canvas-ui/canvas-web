@@ -23,7 +23,7 @@ import {
 import { LayerIconPicker } from './LayerIconPicker'
 import { ContextMenuShell } from '@/components/common/context-menu-shell'
 import { isTextInteraction, matchesShortcut } from '@/components/common/action-menu'
-import { findTreeNodeByPath } from '@/services/workspace'
+import { findTreeNodeByPath, backendRemovalTarget, type Backend } from '@/services/workspace'
 import { useTreeAccordion } from '@/lib/tree-style'
 import { onAccentTextClass, onAccentSolidTextClass } from '@/utils/color'
 
@@ -103,6 +103,7 @@ export interface MenuTreeViewProps {
   onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
   // Backends tree only: mirror-root paths with a resync scan in flight — their
   // nodes get a spinner badge.
+  backends?: Backend[]
   resyncingPaths?: Set<string>
 }
 
@@ -152,6 +153,7 @@ interface CtxMenuProps {
   path: string
   isBackendsTree: boolean
   isDirectoryTree: boolean
+  backends?: Backend[]
   onClose: () => void
   onShowContent?: (path: string, layerId?: string) => void
   onOpenToSide?: (path: string) => void
@@ -191,7 +193,7 @@ interface CtxMenuProps {
 }
 
 function CtxMenu({
-  x, y, node, path, isBackendsTree, isDirectoryTree, onClose, onShowContent, onOpenToSide,
+  x, y, node, path, isBackendsTree, isDirectoryTree, backends, onClose, onShowContent, onOpenToSide,
   sourceLayer, targetLayers, clipboard,
   onStartInlineCreate, onChangeIcon, onNewCanvas, onShareCanvas, onRemove, onRename,
   onExportSubtree, onImportSubtree,
@@ -331,7 +333,7 @@ function CtxMenu({
             await onRenameBackendFolder(path, n)
           },
         )}
-        {onDeleteBackendFolder && fileBackendTarget(path, isBackendsTree)?.key && item(
+        {onDeleteBackendFolder && isBackendsTree && backendRemovalTarget(path, backends) && item(
           <Trash2 className="w-3 h-3" />, 'Delete from backend', async () => {
             if (confirm(`Delete folder "${path.split('/').pop()}" and its contents from the backend?`)) await onDeleteBackendFolder(path)
           }, true,
@@ -583,6 +585,7 @@ interface CardNodeProps {
   onDragLeave: (path: string, e: React.DragEvent) => void
   onDragEnd: () => void
   onDrop: (path: string, e: React.DragEvent) => void
+  backends?: Backend[]
   resyncingPaths?: Set<string>
   policyBadgeFor?: (path: string) => string | null
   removingPaths: Map<string, string>
@@ -1013,7 +1016,7 @@ export function MenuTreeView({
   isPathPinned,
   onTogglePin,
   searchQuery = '',
-  resyncingPaths,
+  resyncingPaths, backends,
 }: MenuTreeViewProps) {
   const accordion = useTreeAccordion()
 
@@ -1357,7 +1360,7 @@ export function MenuTreeView({
       copyPath(selectedPath, event.key.toLowerCase() === 'x' ? 'cut' : 'copy')
       return
     }
-    if (isBackendsTree ? !onDeleteBackendFolder || !fileBackendTarget(selectedPath || '', true)?.key : !onRemovePath) return
+    if (isBackendsTree ? !onDeleteBackendFolder || !backendRemovalTarget(selectedPath || '', backends) : !onRemovePath) return
     if (event.key !== 'Delete' && event.key !== 'Backspace') return
     if (!selectedPath || selectedPath === '/') return
     event.preventDefault()
@@ -1366,7 +1369,7 @@ export function MenuTreeView({
     if (confirm(isBackendsTree ? `Delete "${selectedPath}" and its contents from this backend?` : `Remove "${selectedPath}"${treeName === 'directory' ? ' and all children' : ''}?`)) {
       handleRemovePath(selectedPath, false).catch(err => alert(err instanceof Error ? err.message : String(err)))
     }
-  }, [readOnly, onRemovePath, onDeleteBackendFolder, handleRemovePath, selectedPath, root, pastedDocumentIds, onPasteDocuments, clipboard, handlePaste, isBackendsTree, copyPath, treeName])
+  }, [readOnly, onRemovePath, onDeleteBackendFolder, handleRemovePath, selectedPath, root, pastedDocumentIds, onPasteDocuments, clipboard, handlePaste, isBackendsTree, copyPath, treeName, backends])
 
   const toggleCopyMode = useCallback(() => {
     setCopyModeSticky(v => {
@@ -1401,7 +1404,7 @@ export function MenuTreeView({
     onDragLeave: handleDragLeave,
     onDragEnd: handleDragEnd,
     onDrop: handleDrop,
-    resyncingPaths,
+    resyncingPaths, backends,
     policyBadgeFor: isBackendsTree ? undefined : policyBadgeFor,
     removingPaths,
   }
@@ -1541,6 +1544,7 @@ export function MenuTreeView({
           node={ctxMenu.node}
           path={ctxMenu.path}
           isBackendsTree={isBackendsTree}
+          backends={backends}
           isDirectoryTree={treeName === 'directory'}
           onClose={() => setCtxMenu(null)}
           onShowContent={ctxMenu.node.metadata?.backendTrash ? onSelect : onShowContent}

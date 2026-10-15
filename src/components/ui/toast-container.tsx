@@ -67,7 +67,12 @@ export function ToastContainer({ children }: { children?: React.ReactNode }) {
       }).catch(() => {})
       if (result) showToast(result, false)
     }
-    return { done: result => settle(result), fail: result => settle(result, true) }
+    return {
+      update: next => {
+        if (!settled) setToasts(prev => prev.map(toast => toast.id === id ? { ...toast, ...next } : toast))
+      },
+      done: result => settle(result), fail: result => settle(result, true),
+    }
   }, [showToast])
 
   const contextValue = useMemo(() => ({ showToast, showProgress }), [showToast, showProgress])

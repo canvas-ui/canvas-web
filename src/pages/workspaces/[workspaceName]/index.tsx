@@ -41,6 +41,7 @@ import {
   deleteWorkspaceDocuments,
   destroyWorkspaceDocuments,
   purgeWorkspaceDocuments,
+  buildWorkspaceDocumentSelection,
   startWorkspace,
   DEFAULT_WORKSPACE_TREE_NAME,
   treeTypeForName,
@@ -568,6 +569,21 @@ function WorkspaceContent() {
     [listedDocuments, geoSelection, toolboxState.filters.geo.includeUnlocated],
   );
 
+  const purgeSelection = buildWorkspaceDocumentSelection(selectedPath, viewAllOf, {
+    treeName: selectedTreeName, treeType: treeTypeForName(selectedTreeName),
+    scope: docScope, queries: serverSearchQueries,
+    anyOf: tbAnyOf, noneOf: tbNoneOf, filters: tbScopeFilters, ids: tbLensIds,
+    layerId: isLayerView && selectedLayerId ? selectedLayerId : undefined,
+  });
+  const purgeSelectionKey = JSON.stringify([workspaceName, purgeSelection]);
+  const [loadedSelectionKey, setLoadedSelectionKey] = useState('');
+  const [isPurgingDocuments, setIsPurgingDocuments] = useState(false);
+  const purgePendingRef = useRef(false);
+  // A live ranking session and a browser-only map selection are not the same
+  // server query as the list endpoint. Do not silently purge a broader set.
+  const disablePurgeDocuments = isLoadingDocuments || isPurgingDocuments
+    || loadedSelectionKey !== purgeSelectionKey || sessionActive || Boolean(geoSelection);
+
   // Fetch documents when path, tree, pagination, or workspace status changes.
   // A monotonic sequence guards against out-of-order responses: during a reembed
   // (or any socket storm) many overlapping fetches are in flight, and on a slow
@@ -617,6 +633,7 @@ function WorkspaceContent() {
     if (cached) {
       setDocuments(cached.documents);
       setDocumentsTotalCount(cached.totalCount);
+      setLoadedSelectionKey(purgeSelectionKey);
       setIsLoadingDocuments(false);
     }
     // Background refreshes (socket events, post-mutation reconcile) and live
@@ -702,6 +719,7 @@ function WorkspaceContent() {
         setDocuments(nextDocuments);
       }
       setDocumentsTotalCount(nextTotalCount);
+      setLoadedSelectionKey(purgeSelectionKey);
     } catch (err) {
       if (seq !== fetchSeqRef.current) return;
       const message = err instanceof Error ? err.message : 'Failed to fetch documents';
@@ -1024,74 +1042,80 @@ function WorkspaceContent() {
 
   const handleRemoveDocument = async (documentId: number) => {
     if (!workspace) return;
+    const progress = showProgress({ title: 'Removing…', description: `Document from "${selectedPath}"` });
     try {
       await removeWorkspaceDocuments(workspaceName || workspace.id, [documentId], selectedPath, [], selectedTreeName, selectedTreeType, { trashIfOrphaned: true });
       invalidateDocumentCache(workspaceName || workspace.id, selectedTreeName, selectedPath);
       setDocuments(prev => prev.filter(doc => doc.id !== documentId));
       setDocumentsTotalCount(prev => Math.max(0, prev - 1));
-      showToast({ title: 'Success', description: 'Document removed from workspace path.' });
+      progress.done({ title: 'Success', description: 'Document removed from workspace path.' });
     } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to remove document', variant: 'destructive' });
+      progress.fail({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to remove document', variant: 'destructive' });
     }
   };
 
   const handleDeleteDocument = async (documentId: number) => {
     if (!workspace) return;
+    const progress = showProgress({ title: 'Deleting…', description: `Document from "${selectedPath}"` });
     try {
       await deleteWorkspaceDocuments(workspaceName || workspace.id, [documentId], selectedPath, [], selectedTreeName, selectedTreeType);
       invalidateDocumentCache(workspaceName || workspace.id, selectedTreeName, selectedPath);
       setDocuments(prev => prev.filter(doc => doc.id !== documentId));
       setDocumentsTotalCount(prev => Math.max(0, prev - 1));
-      showToast({ title: 'Success', description: 'Document deleted.' });
+      progress.done({ title: 'Success', description: 'Document deleted.' });
     } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to delete document', variant: 'destructive' });
+      progress.fail({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to delete document', variant: 'destructive' });
     }
   };
 
   const handleRemoveDocuments = async (documentIds: number[]) => {
     if (!workspace) return;
+    const progress = showProgress({ title: 'Removing…', description: `${documentIds.length} document(s) from "${selectedPath}"` });
     try {
       await removeWorkspaceDocuments(workspaceName || workspace.id, documentIds, selectedPath, [], selectedTreeName, selectedTreeType, { trashIfOrphaned: true });
       invalidateDocumentCache(workspaceName || workspace.id, selectedTreeName, selectedPath);
       setDocuments(prev => prev.filter(doc => !documentIds.includes(doc.id)));
       setDocumentsTotalCount(prev => Math.max(0, prev - documentIds.length));
-      showToast({ title: 'Success', description: `${documentIds.length} document(s) removed.` });
+      progress.done({ title: 'Success', description: `${documentIds.length} document(s) removed.` });
     } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to remove documents', variant: 'destructive' });
+      progress.fail({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to remove documents', variant: 'destructive' });
     }
   };
 
   const handleDeleteDocuments = async (documentIds: number[]) => {
     if (!workspace) return;
+    const progress = showProgress({ title: 'Deleting…', description: `${documentIds.length} document(s)` });
     try {
       await deleteWorkspaceDocuments(workspaceName || workspace.id, documentIds, selectedPath, [], selectedTreeName, selectedTreeType);
       invalidateDocumentCache(workspaceName || workspace.id, selectedTreeName, selectedPath);
       setDocuments(prev => prev.filter(doc => !documentIds.includes(doc.id)));
       setDocumentsTotalCount(prev => Math.max(0, prev - documentIds.length));
-      showToast({ title: 'Success', description: `${documentIds.length} document(s) deleted.` });
+      progress.done({ title: 'Success', description: `${documentIds.length} document(s) deleted.` });
     } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to delete documents', variant: 'destructive' });
+      progress.fail({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to delete documents', variant: 'destructive' });
     }
   };
 
   const handleDestroyDocument = async (documentId: number) => {
     if (!workspace) return;
+    const progress = showProgress({ title: 'Destroying…', description: `Document and its backend copies` });
     try {
       const result = await destroyWorkspaceDocuments(workspaceName || workspace.id, [documentId]);
       if (result.failed?.length) {
-        showToast({ title: 'Error', description: result.failed[0].reason, variant: 'destructive' });
+        progress.fail({ title: 'Error', description: result.failed[0].reason, variant: 'destructive' });
         return;
       }
       setDocuments(prev => prev.filter(doc => doc.id !== documentId));
       setDocumentsTotalCount(prev => Math.max(0, prev - 1));
-      showToast({ title: 'Destroyed', description: 'Document removed from all backends.' });
+      progress.done({ title: 'Destroyed', description: 'Document removed from all backends.' });
     } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to destroy document', variant: 'destructive' });
+      progress.fail({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to destroy document', variant: 'destructive' });
     }
   };
 
   const handleDestroyDocuments = async (documentIds: number[]) => {
     if (!workspace) return;
+    const progress = showProgress({ title: 'Destroying…', description: `${documentIds.length} document(s) and their backend copies` });
     try {
       const result = await destroyWorkspaceDocuments(workspaceName || workspace.id, documentIds);
       const succeededIds = new Set(result.successful?.filter(r => r.docDeleted).map(r => r.id) ?? []);
@@ -1101,9 +1125,10 @@ function WorkspaceContent() {
         result.successful?.length ? `${result.successful.length} destroyed` : null,
         result.failed?.length ? `${result.failed.length} failed` : null,
       ].filter(Boolean).join(', ');
-      showToast({ title: 'Done', description: msg || 'No documents destroyed' });
+      if (result.failed?.length) progress.fail({ title: 'Destroy incomplete', description: msg, variant: 'destructive' });
+      else progress.done({ title: 'Destroyed', description: msg || 'No documents destroyed' });
     } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to destroy documents', variant: 'destructive' });
+      progress.fail({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to destroy documents', variant: 'destructive' });
     }
   };
 
@@ -1183,15 +1208,27 @@ function WorkspaceContent() {
   };
 
   const handlePurgeDocuments = async () => {
-    if (!workspace || documentsTotalCount === 0) return;
-    const confirmation = window.prompt(`Type PURGE to permanently delete all ${documentsTotalCount} matching documents.`);
+    if (!workspace || listedTotalCount === 0 || disablePurgeDocuments || purgePendingRef.current) return;
+    const confirmation = window.prompt(`Type PURGE to permanently delete all ${listedTotalCount} matching documents across all pages.`);
     if (confirmation !== 'PURGE') return;
+    purgePendingRef.current = true;
+    setIsPurgingDocuments(true);
+    const progress = showProgress({ title: 'Purging…', description: `${listedTotalCount} matching document(s)` });
     try {
-      const result = await purgeWorkspaceDocuments(workspaceName || workspace.id, selectedPath, [], [], {}, selectedTreeName);
-      await fetchDocuments();
-      showToast({ title: 'Success', description: `${result.deleted} document(s) purged.` });
+      const result = await purgeWorkspaceDocuments(workspaceName || workspace.id, purgeSelection, listedTotalCount);
+      if (result.deleted !== result.requested) {
+        progress.fail({ title: 'Purge incomplete', description: `${result.deleted} of ${result.requested} document(s) purged. Refresh and review the remaining results before retrying.` });
+      } else {
+        progress.done({ title: 'Success', description: `${result.deleted} document(s) purged.` });
+      }
     } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to purge documents', variant: 'destructive' });
+      progress.fail({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to purge documents', variant: 'destructive' });
+    } finally {
+      // Reconcile count conflicts and partial failures as well as success.
+      invalidateDocumentCache(workspaceName || workspace.id, selectedTreeName, selectedPath);
+      await fetchDocuments({ silent: true });
+      purgePendingRef.current = false;
+      setIsPurgingDocuments(false);
     }
   };
 
@@ -1418,7 +1455,7 @@ function WorkspaceContent() {
       pastedDocumentIds={clipboard?.documentIds}
       linkTree={tree}
       onPurgeDocuments={isBackendsPath ? undefined : handlePurgeDocuments}
-      disablePurgeDocuments={false}
+      disablePurgeDocuments={disablePurgeDocuments}
       canvasInfo={canvasInfo ?? undefined}
       isCanvasPinned={isCanvasPinned}
       onTogglePinCanvas={pinAddress ? handleTogglePin : undefined}
@@ -1763,38 +1800,43 @@ function SideWorkspaceCanvas({
   }, [workspaceName, pane.treeName, pane.path, fetchPaneDocuments]);
 
   const removeDocs = useCallback(async (ids: number[]) => {
+    const progress = showProgress({ title: 'Removing…', description: `${ids.length} document(s) from "${pane.path}"` });
     try {
       await removeWorkspaceDocuments(workspaceName, ids, pane.path, [], pane.treeName, treeType);
       refreshPane();
-      showToast({ title: 'Removed', description: `${ids.length} document(s) removed from "${pane.path}"` });
+      progress.done({ title: 'Removed', description: `${ids.length} document(s) removed from "${pane.path}"` });
     } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to remove documents', variant: 'destructive' });
+      progress.fail({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to remove documents', variant: 'destructive' });
     }
-  }, [workspaceName, pane.path, pane.treeName, treeType, refreshPane, showToast]);
+  }, [workspaceName, pane.path, pane.treeName, treeType, refreshPane, showProgress]);
 
   const deleteDocs = useCallback(async (ids: number[]) => {
+    const progress = showProgress({ title: 'Deleting…', description: `${ids.length} document(s)` });
     try {
       await deleteWorkspaceDocuments(workspaceName, ids, pane.path, [], pane.treeName, treeType);
       refreshPane();
-      showToast({ title: 'Deleted', description: `${ids.length} document(s) deleted.` });
+      progress.done({ title: 'Deleted', description: `${ids.length} document(s) deleted.` });
     } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to delete documents', variant: 'destructive' });
+      progress.fail({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to delete documents', variant: 'destructive' });
     }
-  }, [workspaceName, pane.path, pane.treeName, treeType, refreshPane, showToast]);
+  }, [workspaceName, pane.path, pane.treeName, treeType, refreshPane, showProgress]);
 
   const destroyDocs = useCallback(async (ids: number[]) => {
+    const progress = showProgress({ title: 'Destroying…', description: `${ids.length} document(s) and their backend copies` });
     try {
       const result = await destroyWorkspaceDocuments(workspaceName, ids);
       if (result.failed?.length && !result.successful?.length) {
-        showToast({ title: 'Error', description: result.failed[0].reason, variant: 'destructive' });
+        progress.fail({ title: 'Error', description: result.failed[0].reason, variant: 'destructive' });
         return;
       }
       refreshPane();
-      showToast({ title: 'Destroyed', description: `${result.successful?.length ?? ids.length} document(s) removed from all backends.` });
+      const description = `${result.successful?.length ?? 0} document(s) destroyed${result.failed?.length ? ` · ${result.failed.length} failed` : ''}.`;
+      if (result.failed?.length) progress.fail({ title: 'Destroy incomplete', description, variant: 'destructive' });
+      else progress.done({ title: 'Destroyed', description });
     } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to destroy documents', variant: 'destructive' });
+      progress.fail({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to destroy documents', variant: 'destructive' });
     }
-  }, [workspaceName, refreshPane, showToast]);
+  }, [workspaceName, refreshPane, showProgress]);
 
   return (
     <div

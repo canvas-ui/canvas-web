@@ -7,6 +7,9 @@
  *   const ops = useTreeOperations({ workspaceId: 'myWs', treeName: 'directory', onRefresh })
  */
 import { useCallback } from 'react'
+import { useOperationProgress } from './useOperationProgress'
+import { useToast } from '@/components/ui/use-toast'
+import { syncBackendWithProgress } from '@/services/backend-sync-progress'
 import { refreshWorkspaceAfterImport } from '@/services/workspace-tree-events'
 import {
   insertContextPath, removeContextPath, moveContextPath, copyContextPath,
@@ -21,13 +24,13 @@ import {
   mergeDownWorkspacePath, subtractDownWorkspacePath,
   lockWorkspaceLayer, unlockWorkspaceLayer, destroyWorkspaceLayer,
   updateWorkspacePath,
-  syncBackend,
   listBackends,
   backendAddressFromTreePath,
   addBackendContainers,
   removeBackendContainer,
   renameBackendContainer,
   backendFolderTarget,
+  backendRemovalTarget,
   DEFAULT_WORKSPACE_TREE_NAME,
 } from '@/services/workspace'
 
@@ -39,6 +42,8 @@ interface UseTreeOperationsOptions {
 }
 
 export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh }: UseTreeOperationsOptions) {
+  const runOperation = useOperationProgress()
+  const { showProgress } = useToast()
   const wsTree = treeName || DEFAULT_WORKSPACE_TREE_NAME
   const isDirectoryTree = wsTree === 'directory'
 
@@ -77,15 +82,18 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
   }, [contextId, workspaceId, wsTree, refresh])
 
   const onRemovePath = useCallback(async (path: string, recursive = false, purge = false, destroy = false): Promise<boolean> => {
-    try {
-      if (contextId) return await removeContextPath(contextId, path, recursive)
-      if (workspaceId) return await removeWorkspacePath(workspaceId, path, recursive, wsTree, purge, destroy)
-      return false
-    } finally {
-      // A batched purge may have committed some deletions before an error.
-      refresh()
-    }
-  }, [contextId, workspaceId, wsTree, refresh])
+    return runOperation(destroy ? 'Destroying…' : purge ? 'Purging…' : 'Removing…', path,
+      destroy ? 'Destroyed' : purge ? 'Purged' : 'Removed', async () => {
+        try {
+          if (contextId) return await removeContextPath(contextId, path, recursive)
+          if (workspaceId) return await removeWorkspacePath(workspaceId, path, recursive, wsTree, purge, destroy)
+          return false
+        } finally {
+          // A batched purge can commit some deletions before failing.
+          refresh()
+        }
+      })
+  }, [contextId, workspaceId, wsTree, refresh, runOperation])
 
   // Rename = move to same parent with a new last segment
   const onRenamePath = useCallback(async (fromPath: string, newName: string): Promise<boolean> => {
@@ -101,13 +109,15 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
   }, [contextId, workspaceId, wsTree, refresh])
 
   const onMovePath = useCallback(async (from: string, to: string, recursive = false, sourceTreeName = wsTree, targetTreeName = wsTree, options: { mergeDown?: boolean } = {}): Promise<boolean> => {
-    let result: boolean
-    if (contextId) result = await moveContextPath(contextId, from, to, recursive, options)
-    else if (workspaceId) result = await moveWorkspacePath(workspaceId, from, to, recursive, sourceTreeName, targetTreeName, options)
-    else return false
-    refresh()
-    return result
-  }, [contextId, workspaceId, wsTree, refresh])
+    return runOperation('Moving…', `${from} → ${to}`, 'Moved', async () => {
+      let result: boolean
+      if (contextId) result = await moveContextPath(contextId, from, to, recursive, options)
+      else if (workspaceId) result = await moveWorkspacePath(workspaceId, from, to, recursive, sourceTreeName, targetTreeName, options)
+      else return false
+      refresh()
+      return result
+    })
+  }, [contextId, workspaceId, wsTree, refresh, runOperation])
 
   // Path-scoped bitmap ops: leaf of `path` → its ancestors. Context trees only.
   const onMergeDown = useCallback(async (path: string): Promise<unknown> => {
@@ -129,13 +139,15 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
   }, [contextId, workspaceId, wsTree, refresh])
 
   const onCopyPath = useCallback(async (from: string, to: string, recursive = false, sourceTreeName = wsTree, targetTreeName = wsTree): Promise<boolean> => {
-    let result: boolean
-    if (contextId) result = await copyContextPath(contextId, from, to, recursive)
-    else if (workspaceId) result = await copyWorkspacePath(workspaceId, from, to, recursive, sourceTreeName, targetTreeName)
-    else return false
-    refresh()
-    return result
-  }, [contextId, workspaceId, wsTree, refresh])
+    return runOperation('Copying…', `${from} → ${to}`, 'Copied', async () => {
+      let result: boolean
+      if (contextId) result = await copyContextPath(contextId, from, to, recursive)
+      else if (workspaceId) result = await copyWorkspacePath(workspaceId, from, to, recursive, sourceTreeName, targetTreeName)
+      else return false
+      refresh()
+      return result
+    })
+  }, [contextId, workspaceId, wsTree, refresh, runOperation])
 
   // Style-only updates (icon/color) are rendered optimistically by the tree,
   // so we deliberately skip the refetch to avoid a disruptive full re-render.
@@ -203,10 +215,10 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     const backends = await listBackends(workspaceId).catch(() => [])
     const target = backendAddressFromTreePath(path, backends)
     if (!target) return false
-    await syncBackend(workspaceId, target.driver, target.address)
+    await syncBackendWithProgress(showProgress, workspaceId, target.driver, target.address)
     refresh(300)
     return true
-  }, [workspaceId, refresh])
+  }, [workspaceId, refresh, showProgress])
 
   // ── Backend file-folder ops (writable file backends in the backends tree) ──
   // Real fs directories on the backend; the server mirrors them into the tree
@@ -234,13 +246,16 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
 
   const onDeleteBackendFolder = useCallback(async (path: string): Promise<boolean> => {
     if (!workspaceId) return false
-    const backends = await listBackends(workspaceId).catch(() => [])
-    const t = backendFolderTarget(path, backends)
-    if (!t || !t.key) return false
-    await removeBackendContainer(workspaceId, t.driver, t.address, t.key)
-    refresh(200)
-    return true
-  }, [workspaceId, refresh])
+    return runOperation('Deleting folder…', path, 'Folder deleted', async () => {
+      const backends = await listBackends(workspaceId)
+      const t = backendRemovalTarget(path, backends)
+      if (!t) throw new Error('This folder is not on a writable backend, or is a backend root.')
+      try {
+        await removeBackendContainer(workspaceId, t.driver, t.address, t.key)
+        return true
+      } finally { refresh(200) }
+    })
+  }, [workspaceId, refresh, runOperation])
 
   const transferSubtree = useCallback(async (mode: 'export' | 'import', path: string) => {
     if (!workspaceId) return

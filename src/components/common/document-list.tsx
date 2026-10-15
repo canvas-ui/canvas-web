@@ -19,6 +19,7 @@ import { BackendActionCard, type BackendTransferConfirmOptions } from '@/compone
 import { PickDocumentsCard } from '@/components/menu/shared/PickDocumentsCard'
 import { transferDocumentsToBackends, createDocumentRelations, type BackendTransferMode } from '@/services/workspace'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
+import { useToast } from '@/components/ui/use-toast'
 import { useSideView } from '@/components/shell/use-side-view'
 import { useState, useCallback, useMemo, useEffect, useRef, useDeferredValue } from 'react'
 import { createPortal } from 'react-dom'
@@ -1113,6 +1114,7 @@ export function DocumentList({ externalSearchQuery, toolbarActions, documents, i
   // identical in every view that lists documents.
   const canUseBackends = Boolean(workspaceId)
   const { showSuccessToast, showErrorToast } = useToastHelpers()
+  const { showProgress } = useToast()
   const sideView = useSideView()
   const openToSide = workspaceId ? (doc: Document) => sideView.open(doc, workspaceId) : undefined
   // "Remove from folder" is path-scoped: in whole-workspace scope the listed docs
@@ -1249,7 +1251,7 @@ export function DocumentList({ externalSearchQuery, toolbarActions, documents, i
     if (!(event.currentTarget as Node).contains(event.relatedTarget as Node)) setIsDragOver(false)
   }, [])
 
-  // Fuse.js configuration for fuzzy search
+  // Search document text and URLs; schema/type belongs to the explicit filters.
   const fuseOptions = useMemo(() => ({
     keys: [
       { name: 'data.title', weight: 0.4 },
@@ -1257,8 +1259,7 @@ export function DocumentList({ externalSearchQuery, toolbarActions, documents, i
       { name: 'locations.url', weight: 0.4 },
       { name: 'data.url', weight: 0.3 },
       { name: 'data.content', weight: 0.2 },
-      { name: 'data.description', weight: 0.2 },
-      { name: 'schema', weight: 0.1 }
+      { name: 'data.description', weight: 0.2 }
     ],
     threshold: 0.4,
     location: 0,
@@ -1430,6 +1431,7 @@ export function DocumentList({ externalSearchQuery, toolbarActions, documents, i
     backendStop.current = false
     setBackendStopping(false)
     setBackendSaving(true)
+    const progress = showProgress({ title: mode === 'delete' ? 'Deleting…' : mode === 'move' ? 'Moving…' : 'Copying…', description: `${backendPanel.ids.length} document(s) · ${backends.join(', ')}` })
     try {
       const request = (ids: number[]) => transferDocumentsToBackends(workspaceId, ids, {
         to: backends,
@@ -1443,28 +1445,32 @@ export function DocumentList({ externalSearchQuery, toolbarActions, documents, i
       const result = mode === 'delete'
         ? await runBackendDeletionBatch(backendPanel.ids, request, {
           shouldStop: () => backendStop.current,
-          onProgress: (completed, total) => setBackendProgress({ completed, total }),
+          onProgress: (completed, total) => {
+            setBackendProgress({ completed, total })
+            progress.update({ title: 'Deleting…', description: `${completed} / ${total} document(s) · ${backends.join(', ')}` })
+          },
         })
         : { ...await request(backendPanel.ids), pending: [] as number[] }
       // A document already living on the target is a no-op, not a transfer —
       // counting it as done would make a repeat click look like work happened.
       const unchanged = result.successful.filter(s => s.transfers?.every(t => t.state === 'unchanged')).length
-      const done = result.successful.length - unchanged
+      const queued = result.successful.filter(s => s.transfers?.some(t => t.state === 'pending')).length
+      const done = result.successful.length - unchanged - queued
       const failed = result.failed.length
       const verb = mode === 'delete' ? 'Deleted from' : mode === 'move' ? 'Moved to' : 'Copied to'
       const where = backends.join(', ')
       const notes = [
         unchanged ? `${unchanged} already there` : null,
+        queued ? `${queued} queued for backend sync` : null,
         failed ? `${failed} skipped` : null,
         result.pending.length ? `${result.pending.length} not processed` : null,
       ].filter(Boolean).join(' · ')
 
-      if (done > 0) showSuccessToast(`${verb} ${where}: ${done} document${done !== 1 ? 's' : ''}${notes ? ` · ${notes}` : ''}`)
-      else if (unchanged > 0) showSuccessToast(`Nothing to do — already on ${where}`)
+      const description = `${verb} ${where}: ${done} document${done !== 1 ? 's' : ''}${notes ? ` · ${notes}` : ''}`
       if (failed > 0) {
-        showErrorToast(backendTransferFailureMessage(result.failed, new Map(documents.map(doc => [doc.id, getDocumentDisplayInfo(doc).title]))), `${failed} file${failed === 1 ? '' : 's'} skipped`)
+        progress.fail({ title: 'Operation incomplete', description: `${description}. ${backendTransferFailureMessage(result.failed, new Map(documents.map(doc => [doc.id, getDocumentDisplayInfo(doc).title])))}`, variant: 'destructive' })
         console.warn('Backend transfer skipped documents:', result.failed)
-      }
+      } else progress.done({ title: result.pending.length ? 'Operation stopped' : queued ? 'Transfer queued' : 'Operation complete', description })
 
       window.dispatchEvent(new CustomEvent('workspace:documents:refresh'))
       // Retain only failures for retry; never repeat a successful move.
@@ -1472,13 +1478,13 @@ export function DocumentList({ externalSearchQuery, toolbarActions, documents, i
       setBackendPanel(failedIds.length ? { ids: failedIds, mode } : null)
       setSelectedDocuments(new Set(failedIds))
     } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : String(err))
+      progress.fail({ title: 'Operation failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' })
     } finally {
       backendRunning.current = false
       setBackendSaving(false)
       setBackendProgress(null)
     }
-  }, [workspaceId, backendPanel, backendFolder, documents, showSuccessToast, showErrorToast])
+  }, [workspaceId, backendPanel, backendFolder, documents, showProgress])
 
   const handleSelectAll = useCallback(() => {
     if (selectedDocuments.size === filteredDocuments.length) {
@@ -1591,7 +1597,7 @@ export function DocumentList({ externalSearchQuery, toolbarActions, documents, i
     add(onPurgeDocuments && totalCount > 0 && {
       id: 'purge', group: 'purge', label: `Purge all (${totalCount})`, icon: Trash2, destructive: true,
       disabled: disablePurgeDocuments || Boolean(searchQuery),
-      hint: disablePurgeDocuments || searchQuery ? 'Purge is disabled while local search is active' : 'Delete all documents matching the current server-side filters across all pages',
+      hint: searchQuery ? 'Purge is disabled while local search is active' : disablePurgeDocuments ? 'Purge requires loaded server results with no browser-only or live selection' : 'Delete all documents matching the current server-side filters across all pages',
       run: onPurgeDocuments,
     })
     return items

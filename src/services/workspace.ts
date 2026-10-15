@@ -587,11 +587,47 @@ export async function getCachedWorkspaceTreeByName(
 }
 
 // Get workspace documents
+export interface WorkspaceDocumentSelectionOptions {
+  treeName?: string; treeType?: string; q?: string; queries?: string[];
+  anyOf?: string[]; noneOf?: string[]; filters?: string[]; rel?: RelFilter[];
+  ids?: number[] | null; scope?: 'path' | 'workspace'; applyCanvasSpec?: boolean;
+  layerId?: string;
+}
+
+export interface WorkspaceDocumentSelection {
+  treeNameOrTreeId: string; treeType?: string; context: string;
+  scope: 'path' | 'workspace'; allOf: string[]; anyOf: string[]; noneOf: string[];
+  filters: string[]; rel: string[]; q: string[]; ids?: number[];
+  applyCanvasSpec: boolean; layerId?: string;
+}
+
+// The list and all-pages purge serialize the same selection. Pagination and
+// presentation sorting never belong to a destructive selection.
+export function buildWorkspaceDocumentSelection(
+  contextSpec: string, allOf: string[], options: WorkspaceDocumentSelectionOptions,
+): WorkspaceDocumentSelection {
+  const relations = new URLSearchParams();
+  appendRel(relations, options.rel);
+  const queries = new URLSearchParams();
+  appendQueries(queries, options.queries, options.q);
+  return {
+    treeNameOrTreeId: options.treeName || DEFAULT_WORKSPACE_TREE_NAME,
+    ...(options.treeType ? { treeType: options.treeType } : {}),
+    context: contextSpec || '/', scope: options.scope ?? 'path',
+    allOf: allOf.filter(Boolean), anyOf: (options.anyOf ?? []).filter(Boolean),
+    noneOf: (options.noneOf ?? []).filter(Boolean), filters: (options.filters ?? []).filter(Boolean),
+    rel: relations.getAll('rel'), q: queries.getAll('q'),
+    ...(options.ids?.length ? { ids: [...options.ids] } : {}),
+    applyCanvasSpec: options.applyCanvasSpec !== false,
+    ...(options.layerId && options.scope !== 'workspace' ? { layerId: options.layerId } : {}),
+  };
+}
+
 export async function getWorkspaceDocuments(
   id: string,
   contextSpec: string = '/',
   featureArray: string[] = [],
-  options: { limit?: number; offset?: number; page?: number; treeName?: string; treeType?: string; q?: string; queries?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[]; rel?: RelFilter[]; ids?: number[] | null; scope?: 'path' | 'workspace'; sortBy?: string; order?: 'asc' | 'desc'; applyCanvasSpec?: boolean; debug?: boolean; debugLimit?: number } = {}
+  options: WorkspaceDocumentSelectionOptions & { limit?: number; offset?: number; page?: number; sortBy?: string; order?: 'asc' | 'desc'; debug?: boolean; debugLimit?: number } = {}
 ): Promise<DocumentsEnvelopeWithDebug> {
   if (isDocumentFieldSort(options.sortBy)) {
     return getFieldSortedDocuments(options, pagination => getWorkspaceDocuments(id, contextSpec, featureArray, {
@@ -600,20 +636,11 @@ export async function getWorkspaceDocuments(
   }
   try {
     const params = new URLSearchParams();
-    const wholeWorkspace = options.scope === 'workspace'
-    if (wholeWorkspace) params.append('scope', 'workspace')
-    // Live canvas preview: opt out of server-side canvas querySpec folding so the
-    // client's (toolbox) filters fully drive the read, incl. removing a filter.
-    if (options.applyCanvasSpec === false) params.append('applyCanvasSpec', 'false')
-    params.append('treeNameOrTreeId', options.treeName || DEFAULT_WORKSPACE_TREE_NAME)
-    if (options.treeType) params.append('treeType', options.treeType)
-    if (contextSpec && !wholeWorkspace) params.append('context', contextSpec)
-    appendAllOf(params, featureArray)
-    appendAnyOf(params, options.anyOf)
-    appendNoneOf(params, options.noneOf)
-    appendFilters(params, options.filters)
-    appendRel(params, options.rel)
-    appendIds(params, options.ids)
+    const selection = buildWorkspaceDocumentSelection(contextSpec, featureArray, options);
+    for (const [key, value] of Object.entries(selection)) {
+      if (Array.isArray(value)) value.forEach(item => params.append(key, String(item)));
+      else params.append(key, String(value));
+    }
     if (options.limit !== undefined) params.append('limit', options.limit.toString());
     if (options.offset !== undefined) params.append('offset', options.offset.toString());
     if (options.page !== undefined) params.append('page', options.page.toString());
@@ -626,7 +653,6 @@ export async function getWorkspaceDocuments(
     if (options.debug && options.debugLimit) params.append('debugLimit', String(options.debugLimit));
     if (options.sortBy) params.append('sortBy', options.sortBy);
     if (options.order) params.append('order', options.order);
-    appendQueries(params, options.queries, options.q);
 
     const queryString = params.toString();
     const url = `${API_ROUTES.workspaces}/${id}/documents${queryString ? '?' + queryString : ''}`;
@@ -1491,24 +1517,14 @@ export async function downloadDocument(workspaceId: string, documentId: number |
 
 export async function purgeWorkspaceDocuments(
   workspaceId: string,
-  contextSpec: string = '/',
-  featureArray: string[] = [],
-  filterArray: string[] = [],
-  _options: Record<string, never> = {},
-  treeName: string = DEFAULT_WORKSPACE_TREE_NAME
+  selection: WorkspaceDocumentSelection,
+  expectedCount: number,
 ): Promise<{ requested: number; deleted: number }> {
-  const params = new URLSearchParams()
-  // Send the tree NAME only (no treeType): the server resolves the type from the
-  // name, which also works for virtual directory trees. Omitting treeName here was
-  // why "Purge All" silently no-op'd on directory trees (defaulted to context).
-  params.append('treeNameOrTreeId', treeName)
-  if (contextSpec) params.append('context', contextSpec)
-  appendAllOf(params, featureArray)
-  appendFilters(params, filterArray)
-  const response = await api.delete<{ requested: number; deleted: number }>(
-    `${API_ROUTES.workspaces}/${workspaceId}/documents/purge?${params.toString()}`
-  )
-  return response
+  // No fallback to DELETE: older servers must reject this new contract.
+  return api.post<{ requested: number; deleted: number }>(
+    `${API_ROUTES.workspaces}/${workspaceId}/documents/purge`,
+    { selection, expectedCount },
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -1639,6 +1655,7 @@ export interface Backend {
   // Live resync state (initial/catch-up scan running in the background).
   resyncing?: boolean;
   resyncStartedAt?: string | null;
+  resyncCancelledAt?: string | null;
   progress?: { scanned: number; total: number | null } | null;
   lastSyncAt: string | null;
   lastError: string | null;
@@ -1830,6 +1847,22 @@ export function backendFolderTarget(path: string, backends?: Backend[]): { drive
   if (parts[0] === 'device' && parts.length >= 3) return { driver: 'file', address: parts[2], key: parts.slice(3).join('/') };
   if (parts[0] === 'file' && parts.length >= 2) return { driver: 'file', address: parts[1], key: parts.slice(2).join('/') };
   return null;
+}
+
+// Folder removal also supports Drive's native Trash. Creation/rename retain
+// their own driver support; roots and read-only mounts are never removable.
+export function backendRemovalTarget(path: string, backends?: Backend[]): { driver: string; address: string; key: string } | null {
+  const match = matchBackendByTreePath(path, backends);
+  if (match) {
+    const { backend, key } = match;
+    if (!key || !['file', 'gdrive'].includes(backend.driver) || !backend.enabled || !backend.capabilities.mutableContainers || backend.config?.readOnly === true) return null;
+    return { driver: backend.driver, address: backend.address, key };
+  }
+  if (backends) return null;
+  const parts = String(path || '').split('/').filter(Boolean);
+  if (parts[0] === 'gdrive' && parts.length > 2) return { driver: 'gdrive', address: parts[1], key: parts.slice(2).join('/') };
+  const file = backendFolderTarget(path);
+  return file?.key ? file : null;
 }
 
 // Documents mirrored under a backend address, filtered by linkage into other

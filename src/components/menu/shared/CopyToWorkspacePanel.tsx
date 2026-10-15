@@ -5,6 +5,7 @@ import { LinkToCard, type LinkToTarget } from './LinkToCard'
 import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from './LinkToSidePanel'
 import { Button } from '@/components/ui/button'
 import { copyDocumentToWorkspace } from '@/services/workspace'
+import { useToast } from '@/components/ui/use-toast'
 
 interface CopyJob {
   ids: number[]
@@ -22,6 +23,7 @@ function queueKey(workspace: string) {
 }
 
 export function CopyToWorkspacePanel({ workspaceId, ids, onClose, modal = false }: { workspaceId: string; ids: number[]; onClose: () => void; modal?: boolean }) {
+  const { showProgress } = useToast()
   useEscapeClose(onClose, modal)
   const [storageKey] = useState(() => { try { return queueKey(workspaceId) } catch { return '' } })
   const [job, setJob] = useState<CopyJob | null>(() => {
@@ -48,6 +50,8 @@ export function CopyToWorkspacePanel({ workspaceId, ids, onClose, modal = false 
     setBusy(true)
     setError('')
     let current = initial
+    const description = () => `${current.index} / ${current.ids.length} document(s) → ${current.target.workspaceName}`
+    const progress = showProgress({ title: 'Copying to workspace…', description: description() })
     save(current)
     try {
       while (current.index < current.ids.length && !stopped.current) {
@@ -59,10 +63,13 @@ export function CopyToWorkspacePanel({ workspaceId, ids, onClose, modal = false 
         })
         current = { ...current, index: current.index + 1 }
         save(current)
+        progress.update({ title: 'Copying to workspace…', description: description() })
       }
+      progress.done({ title: current.index >= current.ids.length ? 'Copy complete' : 'Copy paused', description: description() })
       window.dispatchEvent(new CustomEvent('workspace:documents:refresh'))
       window.dispatchEvent(new CustomEvent('workspace:tree:refresh'))
     } catch (cause) {
+      progress.fail({ title: 'Copy incomplete', description: `${description()}. ${cause instanceof Error ? cause.message : 'Copy failed'}`, variant: 'destructive' })
       if (!stopped.current) setError(`Document ${current.ids[current.index]}: ${cause instanceof Error ? cause.message : 'Copy failed'}. Resume to retry.`)
     } finally {
       running.current = false

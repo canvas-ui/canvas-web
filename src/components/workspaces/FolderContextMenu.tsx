@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { Clipboard, Copy, Download, Edit2, Eye, FolderOpen, HardDrive, Pin, PinOff, Plus, Trash2, RotateCcw } from 'lucide-react'
 import { ContextMenuShell } from '@/components/common/context-menu-shell'
 import { useTreeOperations } from '@/hooks/useTreeOperations'
-import { backendFolderTarget, listWorkspacePins, pinWorkspacePath, unpinWorkspacePin, type WorkspacePin } from '@/services/workspace'
+import { backendFolderTarget, backendRemovalTarget, listBackends, listWorkspacePins, pinWorkspacePath, unpinWorkspacePin, type WorkspacePin, type Backend } from '@/services/workspace'
 import { defaultStoreFolder, rulePrefillParams, splitBackendsPath, type RulePrefill } from '@/services/hooks'
 import { cn } from '@/lib/utils'
 
@@ -31,6 +31,14 @@ export function FolderContextMenu({ x, y, workspaceName, treeName, path, onClose
   const ops = useTreeOperations({ workspaceId: workspaceName, treeName })
   const isBackends = treeName === 'backends'
   const backendFolder = isBackends ? backendFolderTarget(path) : null
+  const [backends, setBackends] = useState<Backend[]>([])
+  useEffect(() => {
+    if (!isBackends) return
+    let cancelled = false
+    listBackends(workspaceName).then(value => { if (!cancelled) setBackends(value) }).catch(() => {})
+    return () => { cancelled = true }
+  }, [workspaceName, isBackends])
+  const removableFolder = isBackends ? backendRemovalTarget(path, backends) : null
   const name = path.split('/').filter(Boolean).pop() || path
 
   // Pin state is fetched per open — the page doesn't hold workspace pins.
@@ -135,7 +143,7 @@ export function FolderContextMenu({ x, y, workspaceName, treeName, path, onClose
       )}
 
       {isBackends ? (
-        backendFolder?.key && (
+        removableFolder && (
           <>
             {sep}
             {item(<Trash2 className="w-3 h-3" />, 'Delete from backend', async () => {

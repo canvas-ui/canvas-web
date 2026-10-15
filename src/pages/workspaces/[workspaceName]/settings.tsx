@@ -1,3 +1,4 @@
+import { syncBackendWithProgress } from '@/services/backend-sync-progress'
 import { BackendRemovalSettings } from '@/components/workspace/backend-removal-settings'
 import type { RemovalPolicy } from '@/services/trash-operations'
 import { S3BackendForm } from '@/components/settings/S3BackendForm'
@@ -40,7 +41,6 @@ import {
   testBackend,
   removeBackend,
   updateBackend,
-  syncBackend,
   cancelBackendSync,
   getWorkspaceDbStats,
   setWorkspaceSearchTuning,
@@ -995,7 +995,7 @@ function WorkspaceSettingsContent() {
     }, { replace: true })
   }, [setSearchParams])
   const navigate = useNavigate()
-  const { showToast } = useToast()
+  const { showToast, showProgress } = useToast()
   // Tab is URL-driven (/workspaces/:name/settings/:tab); bare or invalid tab
   // segments normalize to /settings/general below.
   // Bare, invalid and retired tab segments (embedding, trash) normalize to the
@@ -1276,11 +1276,12 @@ function WorkspaceSettingsContent() {
   const resyncBackend = async (backend: Backend) => {
     setBusyAction(`resync:${backend.address}`)
     try {
-      await syncBackend(workspaceId, backend.driver, backend.address)
+      await syncBackendWithProgress(showProgress, workspaceId, backend.driver, backend.address, current => {
+        setDataBackends(prev => prev.map(item => item.driver === current.driver && item.address === current.address ? current : item))
+      })
       await loadRuntimeSettings()
-      showToast({ title: 'Re-syncing', description: `${backend.address} scan started` })
-    } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Re-sync failed', variant: 'destructive' })
+    } catch {
+      // The scan monitor records and displays the failure.
     } finally {
       setBusyAction(null)
     }
