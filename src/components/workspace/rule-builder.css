@@ -1,0 +1,45 @@
+/* Settings can be narrow even on a desktop with both sidebars open. */
+.rule-builder {
+  container: rule-builder / inline-size;
+}
+
+.rule-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: .75rem 1rem;
+}
+
+.rule-card-content {
+  overflow-wrap: anywhere;
+}
+
+.rule-card-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .25rem;
+  min-width: 0;
+}
+
+.rule-card-action-label {
+  display: none;
+}
+
+@container rule-builder (min-width: 24rem) {
+  .rule-card-action-label {
+    display: inline;
+  }
+}
+
+@container rule-builder (min-width: 48rem) {
+  .rule-card {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .rule-card-actions {
+    grid-column: auto;
+  }
+}

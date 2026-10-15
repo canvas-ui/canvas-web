@@ -1925,52 +1925,54 @@ export function DocumentList({ externalSearchQuery, toolbarActions, documents, i
                   <span className="document-toolbar-label">per page</span>
                 </div>
               )}
+            </div>
+            <div className="document-toolbar-secondary">
               {showSort && (
                 <div className="document-toolbar-sort flex min-w-0 items-center gap-1.5">
                   <span className="document-toolbar-label">Sort</span>
                   <TimelineSortControl workspaceId={workspaceId!} value={serverSort!} onChange={onServerSortChange!} />
                 </div>
               )}
-            </div>
-            <div className="document-toolbar-actions">
-              {/* Actions row. Everything lives in the shared action menu (right-click,
-                  long-press, Shift+F10, a row's ⋯); this button opens the same menu
-                  for the selection — or the folder when nothing is selected — so
-                  nothing depends on knowing to right-click. Paste stays visible:
-                  pending clipboard state is easy to forget. */}
-              {(documents.length > 0 || onImportDocuments || onPasteDocuments) && (
-                <div className="contents">
-                  <Button variant="outline" size="sm" onClick={openToolbarMenu} aria-haspopup="menu" className="flex items-center gap-1.5" title={`Actions (${formatShortcut('Shift+F10')} or right-click)`}>
-                    <MoreHorizontal className="h-4 w-4" />
-                    Actions{selectedDocuments.size > 0 ? ` (${selectedDocuments.size} selected)` : ''}
+              <div className="document-toolbar-actions">
+                {/* Actions row. Everything lives in the shared action menu (right-click,
+                    long-press, Shift+F10, a row's ⋯); this button opens the same menu
+                    for the selection — or the folder when nothing is selected — so
+                    nothing depends on knowing to right-click. Paste stays visible:
+                    pending clipboard state is easy to forget. */}
+                {(documents.length > 0 || onImportDocuments || onPasteDocuments) && (
+                  <div className="contents">
+                    <Button variant="outline" size="sm" onClick={openToolbarMenu} aria-haspopup="menu" aria-label={selectedDocuments.size > 0 ? `Actions (${selectedDocuments.size} selected)` : 'Actions'} className="document-toolbar-action-button flex items-center gap-1.5 touch-target" title={`Actions (${formatShortcut('Shift+F10')} or right-click)`}>
+                      <MoreHorizontal className="h-4 w-4" />
+                      <span className="document-toolbar-action-label">Actions{selectedDocuments.size > 0 ? ` (${selectedDocuments.size} selected)` : ''}</span>
+                    </Button>
+                    {selectedDocuments.size > 0 && (
+                      <Button variant="ghost" size="sm" onClick={() => setSelectedDocuments(new Set())} aria-label="Clear selection" className="document-toolbar-action-button touch-target" title="Clear selection (Esc)">
+                        <X className="h-3.5 w-3.5" /><span className="document-toolbar-action-label">Clear</span>
+                      </Button>
+                    )}
+                    {pastedDocumentIds && pastedDocumentIds.length > 0 && onPasteDocuments && (
+                      <Button variant="outline" size="sm" onClick={() => onPasteDocuments(contextPath, pastedDocumentIds)} className="flex items-center gap-1.5" title={`Paste into this folder (${formatShortcut('Mod+V')})`}>
+                        <Clipboard className="h-4 w-4" />
+                        Paste ({pastedDocumentIds.length})
+                      </Button>
+                    )}
+                  </div>
+                )}
+                {canSaveChanges && onSaveChanges && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={onSaveChanges}
+                    disabled={isSavingChanges}
+                    className="w-control-sm shrink-0 px-0 touch-target"
+                    aria-label={isSavingChanges ? 'Saving filters' : 'Save current query and filters'}
+                    title="Save current query and filters"
+                  >
+                    <Save className="h-3.5 w-3.5" />
                   </Button>
-                  {selectedDocuments.size > 0 && (
-                    <Button variant="ghost" size="sm" onClick={() => setSelectedDocuments(new Set())} title="Clear selection (Esc)">
-                      <X className="mr-1 h-3.5 w-3.5" />Clear
-                    </Button>
-                  )}
-                  {pastedDocumentIds && pastedDocumentIds.length > 0 && onPasteDocuments && (
-                    <Button variant="outline" size="sm" onClick={() => onPasteDocuments(contextPath, pastedDocumentIds)} className="flex items-center gap-1.5" title={`Paste into this folder (${formatShortcut('Mod+V')})`}>
-                      <Clipboard className="h-4 w-4" />
-                      Paste ({pastedDocumentIds.length})
-                    </Button>
-                  )}
-                </div>
-              )}
-              {canSaveChanges && onSaveChanges && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={onSaveChanges}
-                  disabled={isSavingChanges}
-                  className="w-control-sm shrink-0 px-0 touch-target"
-                  aria-label={isSavingChanges ? 'Saving filters' : 'Save current query and filters'}
-                  title="Save current query and filters"
-                >
-                  <Save className="h-3.5 w-3.5" />
-                </Button>
-              )}
-              {toolbarActions}
+                )}
+                {toolbarActions}
+              </div>
             </div>
           </div>
         </div>

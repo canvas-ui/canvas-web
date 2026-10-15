@@ -1,3 +1,4 @@
+import { CacheMaintenancePanel } from '@/components/workspace/cache-maintenance-panel'
 import { syncBackendWithProgress } from '@/services/backend-sync-progress'
 import { BackendRemovalSettings } from '@/components/workspace/backend-removal-settings'
 import type { RemovalPolicy } from '@/services/trash-operations'
@@ -1664,26 +1665,9 @@ function WorkspaceSettingsContent() {
               </section>
             )
           })}
-          {/* Stored cache — stored's internal working store, not a data
-              backend: local copies of remote resources + derived artifacts
-              (thumbnails). Rendered as its own control, not a backend row. */}
-          <section className="rounded-lg border p-4">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <Icon icon="ph:lightning-fill" width={16} height={16} className="shrink-0 text-warning" />
-                  <h2 className="text-sm font-semibold">Stored Cache</h2>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Internal working store: local copies of remote resources and derived artifacts (thumbnails).
-                  Regenerable; safe to clear.
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-3 max-sm:w-full max-sm:flex-wrap">
-                <ClearThumbnailsButton workspaceId={workspaceId} />
-              </div>
-            </div>
-          </section>
+          <CacheMaintenancePanel key={workspaceId} workspaceId={workspaceId}>
+            <ClearThumbnailsButton workspaceId={workspaceId} />
+          </CacheMaintenancePanel>
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start">
             <AddLocalFolderForm workspaceId={workspaceId} onAdded={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />
             <AddGoogleDriveForm workspaceId={workspaceId} onAdded={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />

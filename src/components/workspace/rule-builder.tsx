@@ -1,3 +1,4 @@
+import './rule-builder.css'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Plus, Pencil, Trash2, Save, X, Braces, PlayCircle, FolderTree, FolderSymlink, HardDrive, Image, Mail, Bot,
@@ -981,9 +982,9 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
     const primary = actionMeta(rule.then?.[0]?.action || 'link')
     const paths = rulePaths(rule)
     return (
-      <div className={cn('flex flex-col gap-3 rounded-xl border bg-card p-4 transition-opacity sm:flex-row sm:items-start sm:gap-4', !enabled && 'opacity-60')}>
+      <div className={cn('rule-card rounded-xl border bg-card p-4 transition-opacity', !enabled && 'opacity-60')}>
         <IconBadge icon={primary.icon} tone={primary.tone} />
-        <div className="min-w-0 flex-1 space-y-1.5">
+        <div className="rule-card-content min-w-0 space-y-1.5">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <h3 className="text-base font-semibold leading-6">{rule.description || rule.id}</h3>
             {rule.approval === true && <span className="rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning">needs approval</span>}
@@ -999,7 +1000,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
             {stat ? (
               <button
                 type="button"
-                className={cn('underline-offset-2 hover:underline', stat.last.status === 'error' && 'text-destructive', !onShowRuns && 'cursor-default hover:no-underline')}
+                className={cn('text-left underline-offset-2 hover:underline', stat.last.status === 'error' && 'text-destructive', !onShowRuns && 'cursor-default hover:no-underline')}
                 title={onShowRuns ? 'Show this rule\'s run log' : (stat.last.error || stat.last.skipReason || '')}
                 onClick={() => onShowRuns?.(rule.id)}
               >
@@ -1008,7 +1009,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
             ) : 'not run yet'}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-1 self-end sm:self-start">
+        <div className="rule-card-actions">
           <button
             type="button" role="switch" aria-checked={enabled} disabled={isSaving}
             title={enabled ? 'Enabled — click to pause' : 'Paused — click to enable'}
@@ -1019,11 +1020,11 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
           </button>
           <Button size="sm" variant="ghost" className="h-9 px-2.5" title="Apply this rule to existing items (dry-run first)" disabled={backfillingId !== null} onClick={() => backfillRule(rule.id)}>
             {backfillingId === rule.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlayCircle className="h-4 w-4" />}
-            <span className="ml-1.5 hidden md:inline">Apply</span>
+            <span className="rule-card-action-label ml-1.5">Apply</span>
           </Button>
           <Button size="sm" variant="ghost" className="h-9 px-2.5" title={editable ? 'Edit rule' : 'Edit as JSON'} onClick={() => editRule(rule)}>
             {editable ? <Pencil className="h-4 w-4" /> : <Braces className="h-4 w-4" />}
-            <span className="ml-1.5 hidden md:inline">Edit</span>
+            <span className="rule-card-action-label ml-1.5">Edit</span>
           </Button>
           <Button size="sm" variant="ghost" className="h-9 px-2.5 text-destructive hover:text-destructive" title="Delete rule" onClick={() => deleteRule(rule.id)}>
             <Trash2 className="h-4 w-4" />
@@ -1060,9 +1061,9 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
   )
 
   return (
-    <div className="space-y-5">
-      {!createOnly && <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+    <div className="rule-builder min-w-0 space-y-5">
+      {!createOnly && <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0 flex-[1_1_20rem]">
           <h2 className="text-lg font-semibold">Rules</h2>
           <p className="text-sm text-muted-foreground">
             Rules run automatically as items arrive or get filed — no code needed. Stored in{' '}
@@ -1472,10 +1473,12 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
         <div className="space-y-6">
           {folderRules.length > 0 && (
             <section className="space-y-3">
-              <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                <FolderSymlink className="h-4 w-4" /> Folder &amp; storage rules
-                <span className="font-normal normal-case tracking-normal">· right-click a folder in the tree to add one</span>
-              </h3>
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-muted-foreground">
+                <h3 className="flex items-center gap-2 font-semibold uppercase tracking-wide">
+                  <FolderSymlink className="h-4 w-4 shrink-0" /> Folder &amp; storage rules
+                </h3>
+                <p>Right-click a folder in the tree to add one</p>
+              </div>
               <div className="space-y-3">{folderRules.map((rule) => <RuleCard key={rule.id} rule={rule} />)}</div>
             </section>
           )}
