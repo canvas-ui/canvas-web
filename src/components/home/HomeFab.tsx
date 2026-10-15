@@ -1,3 +1,4 @@
+import { draftKey } from '@/lib/durable-draft'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useIsMobile } from '@/hooks/use-mobile'
@@ -33,7 +34,21 @@ interface HomeFabProps {
 interface OpenCard {
   id: string
   kind: InsertKind
+  noteDraftId?: string
   initialData?: QuickAddInitialData
+}
+
+// Home has no save destination yet. Reopen its independently stored note cards
+// after refresh, or resume a closed draft when the user asks for another note.
+function homeNoteDraftIds(): string[] {
+  const prefix = draftKey('new:home-card:')
+  try {
+    return Object.keys(localStorage).filter(key => key.startsWith(prefix) && key.endsWith(':home'))
+      .filter(key => {
+        const value = JSON.parse(localStorage.getItem(key) || 'null')?.value
+        return value && (value.title || value.content || value.comment || value.tags?.length)
+      }).map(key => key.slice(prefix.length, -':home'.length))
+  } catch { return [] }
 }
 
 let cardSeq = 0
@@ -52,7 +67,8 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose, onCardsO
   const toolbox = useToolboxOptional()
   const panelOpen = Boolean(toolbox?.state.t1Open || toolbox?.state.addOpen)
   const [openCards, setOpenCards] = useState<OpenCard[]>(() =>
-    initialKind ? [{ id: 'initial', kind: initialKind, initialData }] : [],
+    initialKind ? [{ id: 'initial', kind: initialKind, initialData, noteDraftId: crypto.randomUUID() }]
+      : homeNoteDraftIds().map(id => ({ id, kind: 'note', noteDraftId: id })),
   )
 
   // Notify only on open/close transitions; the callback rides in a ref so a
@@ -82,7 +98,8 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose, onCardsO
       navigate(sketchEditor.createUrl(null))
       return
     }
-    setOpenCards((prev) => [...prev, { id: nextCardId(), kind }])
+    const noteDraftId = kind === 'note' ? homeNoteDraftIds().find(id => !openCards.some(card => card.noteDraftId === id)) || crypto.randomUUID() : undefined
+    setOpenCards((prev) => [...prev, { id: nextCardId(), kind, noteDraftId }])
     setStackOpen(false)
   }
 
@@ -108,7 +125,7 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose, onCardsO
       >
         <div
           className={cn(
-            'flex flex-col items-end gap-2 transition-all duration-150',
+            'flex flex-col items-end gap-2 transition-all duration-fast',
             stackOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none translate-y-2 opacity-0',
           )}
         >
@@ -116,7 +133,7 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose, onCardsO
               picker, minus Folder: on home a folder has no natural location,
               so folders are created inside the Link to… destination tree
               (long-press / right-click a row) instead. */}
-          <InsertMenu variant="stack" omit={['folder', 'message']} onSelect={addCard} />
+          <InsertMenu variant="stack" omit={['plaintext', 'folder', 'message']} onSelect={addCard} />
         </div>
 
         {/* Center the smaller + over the toolbox FAB's column (both dock at
@@ -149,7 +166,7 @@ export function HomeFab({ initialKind, initialData, onInitialCardClose, onCardsO
         {openCards.map((c) => {
           const onClose = () => closeCard(c.id)
           switch (c.kind) {
-            case 'note': return <NoteCardBody key={c.id} onClose={onClose} initialData={c.initialData} />
+            case 'note': return <NoteCardBody key={c.id} draftId={c.noteDraftId!} onClose={onClose} initialData={c.initialData} />
             case 'link': return <LinkCardBody key={c.id} onClose={onClose} initialData={c.initialData} />
             case 'todo': return <TodoCardBody key={c.id} onClose={onClose} initialData={c.initialData} />
             case 'identity': return <IdentityCardBody key={c.id} onClose={onClose} initialData={c.initialData} />

@@ -29,9 +29,11 @@
   scroll-snap-align: start;
 }
 
-/* Menus are part of the desk: square, no panel surface, no outline. A faint
+/* Menus are part of the desk: no panel surface or outline. A faint
    tint keeps list text legible over a wallpaper. */
 .strip-menu-col {
+  border-radius: var(--panel-radius);
+  overflow: hidden;
   background-color: color-mix(in srgb, var(--color-card) 40%, transparent);
   -webkit-backdrop-filter: var(--glass-backdrop, none);
   backdrop-filter: var(--glass-backdrop, none);
@@ -65,6 +67,11 @@
 .strip-canvas [data-canvas-pane] {
   border-radius: 0;
   border-width: 0;
+}
+.strip-canvas .canvas-surface-body.is-framed {
+  margin: 0;
+  border-width: 0;
+  border-radius: 0;
 }
 
 /* Rows of canvases: stacked vertically, translated to the active one. */

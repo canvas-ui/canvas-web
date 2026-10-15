@@ -13,11 +13,12 @@
 
 @theme inline {
   /* ── Durations ───────────────────────────────────────────────────────── */
-  --duration-instant: calc(70ms * var(--motion-scale));
-  --duration-fast: calc(120ms * var(--motion-scale));
-  --duration-normal: calc(200ms * var(--motion-scale));
-  --duration-slow: calc(320ms * var(--motion-scale));
-  --duration-deliberate: calc(480ms * var(--motion-scale));
+  --duration-instant: calc(20ms * var(--motion-scale));
+  --duration-fast: calc(40ms * var(--motion-scale));
+  --duration-normal: calc(70ms * var(--motion-scale));
+  --duration-slow: calc(90ms * var(--motion-scale));
+  --duration-deliberate: calc(100ms * var(--motion-scale));
+  --default-transition-duration: var(--duration-normal);
 
   /* ── Easings ─────────────────────────────────────────────────────────── */
   /* standard   — the default for anything that starts and ends on screen

@@ -76,7 +76,7 @@ export function WorkspaceM2() {
 }
 
 function WorkspaceM2Content() {
-  const { state, closeM2, openM2 } = useMenu()
+  const { state, closeM2, openM2, navigateFromMenu } = useMenu()
   const canvasRow = useCanvasRow()
   const isMobile = useIsMobile()
   const wsName = state.selectedEntityId
@@ -414,8 +414,8 @@ function WorkspaceM2Content() {
     const url = buildWorkspaceUrl(wsName, pin.path, pin.tree)
     // Strip layout: a pin is a task container — its own row of canvases.
     if (canvasRow) { canvasRow.activateRow(`pin:${wsName}:${pin.id}`, pin.label || pin.name || pin.path, url); return }
-    navigate(url)
-  }, [wsName, navigate, canvasRow])
+    navigateFromMenu(url)
+  }, [wsName, navigateFromMenu, canvasRow])
 
   const handleShowPinInTree = useCallback((pin: WorkspacePin) => {
     if (!wsName || pin.resolvable === false) return
@@ -427,8 +427,8 @@ function WorkspaceM2Content() {
     setSearchQuery('')
     revealPinRef.current = true
     canvasRow?.setFocus('main')
-    navigate(buildWorkspaceUrl(wsName, pin.path, pin.tree))
-  }, [wsName, navigate, canvasRow])
+    navigateFromMenu(buildWorkspaceUrl(wsName, pin.path, pin.tree))
+  }, [wsName, navigateFromMenu, canvasRow])
 
   const activeTree = activeTab === 'context' ? contextTree
     : activeTab === 'directory' ? directoryTree
@@ -469,7 +469,7 @@ function WorkspaceM2Content() {
     // Path is the URL truth — leaf type / canvas id are derived from the path
     // by the workspace page itself. No type-specific query params here.
     canvasRow?.setFocus('main')
-    navigate(buildWorkspaceUrl(wsName!, path, treeName))
+    navigateFromMenu(buildWorkspaceUrl(wsName!, path, treeName))
   }
 
   const handleShowContent = useCallback((path: string, layerId?: string) => {
@@ -483,8 +483,8 @@ function WorkspaceM2Content() {
     // already shows per-folder layers and doesn't offer this action.
     if (layerId) uiParams.set('layerId', layerId)
     canvasRow?.setFocus('main')
-    navigate(`${buildWorkspaceUrl(wsName!, path, treeName)}?${uiParams.toString()}`)
-  }, [wsName, activeTab, navigate, canvasRow])
+    navigateFromMenu(`${buildWorkspaceUrl(wsName!, path, treeName)}?${uiParams.toString()}`)
+  }, [wsName, activeTab, navigateFromMenu, canvasRow])
 
   const handleOpenToSide = useCallback((path: string, treeName: string) => {
     if (!wsName) return
@@ -521,7 +521,7 @@ function WorkspaceM2Content() {
           <div className="flex items-center gap-0.5">
             <button
               type="button"
-              onClick={() => wsName && navigate(workspaceResumeUrl(wsName))}
+              onClick={() => wsName && navigateFromMenu(workspaceResumeUrl(wsName))}
               className="flex items-center justify-center w-8 h-8 rounded hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors"
               title="Open workspace"
             >
@@ -629,7 +629,7 @@ function WorkspaceM2Content() {
               const uiParams = new URLSearchParams()
               uiParams.set('layerId', layer.id)
               uiParams.set('layer', '1')
-              navigate(`${buildWorkspaceUrl(wsName!, '/')}?${uiParams.toString()}`)
+              navigateFromMenu(`${buildWorkspaceUrl(wsName!, '/')}?${uiParams.toString()}`)
             }}
             onLock={async layer => {
               await lockWorkspaceLayer(wsName!, layer.id, wsName!, 'context')
@@ -652,6 +652,7 @@ function WorkspaceM2Content() {
         ) : (
           <MenuTreeView
             root={activeTree}
+            workspaceId={wsName ?? undefined}
             treeName={activeTab}
             isBackendsTree={activeTab === 'backends'}
             onRestoreTrash={wsName ? path => restoreBackendTrashPath(wsName, path) : undefined}

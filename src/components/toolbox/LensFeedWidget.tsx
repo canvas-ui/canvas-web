@@ -23,7 +23,7 @@ export function LensFeedWidget() {
   return (
     <div
       className={cn(
-        'fixed right-4 w-56 overflow-hidden rounded-xl border border-border bg-card shadow-elevation-4 z-panel animate-fade-in',
+        'fixed right-4 w-56 overflow-hidden rounded-(--panel-radius) border border-border bg-card shadow-elevation-4 z-panel animate-fade-in',
         // Clear of the FAB, which occupies the same corner once the toolbox is
         // closed (and is hidden below md, where the widget sits low instead).
         'bottom-fab-inset md:bottom-[calc(var(--spacing-fab-inset)+5rem)]',

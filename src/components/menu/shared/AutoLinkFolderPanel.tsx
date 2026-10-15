@@ -97,7 +97,7 @@ export function AutoLinkFolderPanel({ workspaceId, sourcePath, onClose, onManage
 
   return <>
     <LinkToSidePanel onClose={close}>
-      <section role="dialog" aria-modal="true" aria-labelledby="autolink-title" className={`${LINK_TO_SIDE_SIZE} flex flex-col overflow-hidden rounded-2xl border bg-card shadow-elevation-4`}>
+      <section role="dialog" aria-modal="true" aria-labelledby="autolink-title" className={`${LINK_TO_SIDE_SIZE} flex flex-col overflow-hidden rounded-(--panel-radius) border bg-card shadow-elevation-4`}>
         <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
           <h2 id="autolink-title" className="flex items-center gap-2 text-sm font-medium"><Link2 className="h-4 w-4" />Auto-Link folder</h2>
           <button type="button" onClick={close} disabled={busy} aria-label="Close" className="p-1 disabled:opacity-40"><X className="h-4 w-4" /></button>

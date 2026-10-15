@@ -1,4 +1,3 @@
-import { CloseSectionButton, SectionBackButton } from '@/components/common/page-header';
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useToast } from '@/components/ui/use-toast';
@@ -15,25 +14,23 @@ import socketService from '@/lib/socket';
 import { DefaultCanvas } from '@/components/canvas/DefaultCanvas';
 import { refreshWorkspaceAfterImport } from '@/services/workspace-tree-events';
 import { ContentViewTabs } from '@/components/common/content-view-tabs';
-import { viewsFromLayerMetadata, DEFAULT_VIEW, type ContentView } from '@/components/common/content-views';
+import { viewsFromLayerMetadata, contentViewSchema, DEFAULT_VIEW, type ContentView } from '@/components/common/content-views';
 import { SchemaColumnsBoard } from '@/components/common/schema-columns-board';
 import { ContentAppView } from '@/components/common/content-app-view';
+import type { DocumentPasteOptions } from '@/components/common/document-list';
+import { useWorkspaceIdentity } from '@/hooks/use-workspace-identity';
 import {
   getCachedWorkspaceTreeByName,
   updateWorkspacePath,
   findTreeNodeByPath,
   DEFAULT_WORKSPACE_TREE_NAME,
+  pasteDocumentsToWorkspacePath,
 } from '@/services/workspace';
 import { Document as WorkspaceDocument, buildDatetimeFilters, buildGeoFilters, buildLensFilters, type TreeNode } from '@/types/workspace';
 import { docInGeoSelection } from '@/utils/geo';
 import { useToolbox } from '@/components/toolbox/use-toolbox';
 import { useMenu } from '@/components/shell/use-menu';
-import { useIsMobile } from '@/hooks/use-mobile';
-import { Icon } from '@iconify/react';
-import { Filter } from 'lucide-react';
 import { visibleAccentColor } from '@/utils/color';
-import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style';
-import { cn } from '@/lib/utils';
 import { TreeBreadcrumbs } from '@/components/common/tree-breadcrumbs';
 import { treeBreadcrumbs } from '@/lib/tree-breadcrumbs';
 
@@ -86,9 +83,8 @@ export default function ContextDetailPage() {
     return stack.length ? stack : (legacy ? [legacy] : []);
   }, [location.search]);
   const { showToast, showProgress } = useToast();
-  const { state: toolboxState, saveFilters, setSort, setAccentColor, setMapDocuments, toggleView, hasActiveFilters } = useToolbox();
-  const { openM2Drawer } = useMenu();
-  const isMobile = useIsMobile();
+  const { state: toolboxState, saveFilters, setSort, setAccentColor, setMapDocuments } = useToolbox();
+  const { openM1Drawer, openM2Drawer, goBack } = useMenu();
   const tbAllOf = toolboxState.filters.features.allOf;
   const tbAnyOf = toolboxState.filters.features.anyOf;
   const tbNoneOf = toolboxState.filters.features.noneOf;
@@ -125,6 +121,7 @@ export default function ContextDetailPage() {
 
   const layerParam = new URLSearchParams(location.search).get('layer');
   const isSharedContext = Boolean(ownerId);
+  const workspace = useWorkspaceIdentity(!isSharedContext ? context?.workspaceName || context?.workspaceId : undefined);
   const selectedPath = context ? contextUrlToPath(context.url, context.workspaceName) : '/';
   const urlType = layerParam ? 'context-layer' : 'context';
   const savedContextSearchQuery = !toolboxState.liveEnabled && typeof context?.metadata?.toolboxSearchQuery === 'string' ? context.metadata.toolboxSearchQuery : '';
@@ -156,8 +153,10 @@ export default function ContextDetailPage() {
   const contentViews = viewsState?.key === viewsKey ? viewsState.views : viewsFromLayerMetadata(nodeForViews?.metadata);
   const activeContentViewId = viewsState?.key === viewsKey ? viewsState.activeId : contentViews[0]?.id ?? DEFAULT_VIEW.id;
   const activeContentView = contentViews.find(v => v.id === activeContentViewId) ?? contentViews[0] ?? DEFAULT_VIEW;
-  const selectContentView = (id: string) => setViewsState({ key: viewsKey, views: contentViews, activeId: id });
+  const documentSchema = contentViewSchema(activeContentView);
+  const selectContentView = (id: string) => { setCurrentPage(1); setViewsState({ key: viewsKey, views: contentViews, activeId: id }); };
   const saveContentViews = (views: ContentView[], nextActiveId?: string) => {
+    if (nextActiveId && nextActiveId !== activeContentViewId) setCurrentPage(1);
     setViewsState({ key: viewsKey, views, activeId: nextActiveId ?? activeContentViewId });
     if (!context?.workspaceName) return;
     // metadata is REPLACED server-side — carry the layer's other keys along.
@@ -183,7 +182,7 @@ export default function ContextDetailPage() {
     try {
       const data = await getContextDocuments(
         contextId,
-        tbFilters.a,
+        documentSchema ? [...tbFilters.a, documentSchema] : tbFilters.a,
         tbFilters.d,
         { ...tbFilters.sort, geoSelection: tbFilters.geoSelection, includeUnlocated: tbFilters.includeUnlocated, ids: tbFilters.ids, signal: controller.signal, limit: pageSize, page: currentPage, queries: serverSearchQueries.length ? serverSearchQueries : undefined, anyOf: tbFilters.b, noneOf: tbFilters.c, applyContextSpec: false },
         ownerId,
@@ -199,7 +198,7 @@ export default function ContextDetailPage() {
     } finally {
       if (!controller.signal.aborted) setIsLoadingDocuments(false);
     }
-  }, [contextId, currentPage, pageSize, ownerId, serverSearchQueries, tbFilters, showToast]);
+  }, [contextId, currentPage, pageSize, ownerId, serverSearchQueries, tbFilters, showToast, documentSchema]);
 
   const fetchContextDetails = useCallback(async () => {
     if (!contextId) return;
@@ -314,7 +313,7 @@ export default function ContextDetailPage() {
     prevSavedSearch.savedContextSearchQuery !== savedContextSearchQuery
   ) {
     setPrevSavedSearch({ urlSearchQueries, ignoreSavedSearch, savedContextSearchQuery });
-    if (!urlSearchQueries.length && !ignoreSavedSearch) {
+    if (!new URLSearchParams(location.search).has('q') && !urlSearchQueries.length && !ignoreSavedSearch) {
       setServerSearchQueries(savedContextSearchQuery ? [savedContextSearchQuery] : []);
       setCurrentPage(1);
     }
@@ -326,8 +325,8 @@ export default function ContextDetailPage() {
     params.delete('search');
     for (const term of queries) params.append('q', term);
     const next = params.toString();
-    navigate(`${location.pathname}${next ? `?${next}` : ''}`);
-  }, [location.pathname, location.search, navigate]);
+    navigate(`${location.pathname}${next ? `?${next}` : ''}${location.hash}`);
+  }, [location.pathname, location.search, location.hash, navigate]);
 
   // Appends to the refinement stack (dedupes); the URL is the source of truth.
   const handleBackendSearch = useCallback((query: string) => {
@@ -480,11 +479,13 @@ export default function ContextDetailPage() {
     showToast({ title: 'Copied', description: `${documentIds.length} document(s) copied to clipboard` });
   };
 
-  const handlePasteDocuments = async (path: string, documentIds: number[]): Promise<boolean> => {
+  const handlePasteDocuments = async (path: string, documentIds: number[], options: DocumentPasteOptions = {}): Promise<boolean> => {
     if (!context) return false;
     const progress = showProgress({ title: 'Pasting…', description: `${documentIds.length} document(s) → "${path}"` });
     try {
-      const success = await pasteDocumentsToContext(context.id, path, documentIds, ownerId);
+      const success = options.targetTreeName && !isSharedContext
+        ? await pasteDocumentsToWorkspacePath(context.workspaceName || context.workspaceId, path, documentIds, options.targetTreeName, options.targetTreeType)
+        : await pasteDocumentsToContext(context.id, path, documentIds, ownerId);
       progress.done(success ? { title: 'Success', description: `${documentIds.length} document(s) pasted to "${path}"` } : undefined);
       if (success) {
         setCopiedDocuments([]);
@@ -556,97 +557,20 @@ export default function ContextDetailPage() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* Workspace indicator — a context is bound to exactly one workspace;
-          icon + color keep that visible even when only the content area is
-          shown (mobile). Mirrors the workspace view's status bar, incl. the
-          internal accent divider the active view tab connects through. */}
-      <div className="relative shrink-0 max-sm:border-b">
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] bg-border max-sm:hidden"
-          style={accent ? { backgroundColor: accent } : undefined}
-        />
-        {/* Mobile: tabs get their own top row, same as the workspace view. */}
-        {nodeForViews && (
-          <div className="relative px-2 pt-1.5 sm:hidden">
-            <span
-              aria-hidden
-              className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] bg-border"
-              style={accent ? { backgroundColor: accent } : undefined}
-            />
-            <ContentViewTabs
-              accentColor={accent}
-              views={contentViews}
-              activeId={activeContentViewId}
-              onSelect={selectContentView}
-              onSave={saveContentViews}
-              readOnly={false}
-            />
-          </div>
-        )}
-        <div className="flex h-12 items-center gap-2 px-4">
-        {/* Same gesture as a settings page — see the workspace view. */}
-        <SectionBackButton
-          title={isMobile ? 'Back to context menu' : 'Back to contexts'}
-          onBack={() => (isMobile
-            ? openM2Drawer('contexts', 'detail', context.id)
-            : navigate('/contexts'))}
-        />
-        <Icon
-          icon={context.icon || DEFAULT_WORKSPACE_ICON}
-          width={16}
-          height={16}
-          color={accent}
-          className={cn('shrink-0', !accent && 'text-muted-foreground')}
-        />
-        <span className="min-w-0 truncate text-sm font-medium">{context.name || context.id}</span>
-        <span className="min-w-0 truncate text-xs text-muted-foreground">
-          @ {context.workspaceName || context.workspaceId}
-        </span>
-        {/* Desktop: browser-style, the view tabs ride the title row. */}
-        {nodeForViews ? (
-          <>
-            <ContentViewTabs
-              className="min-w-0 flex-1 self-stretch max-sm:hidden"
-              accentColor={accent}
-              views={contentViews}
-              activeId={activeContentViewId}
-              onSelect={selectContentView}
-              onSave={saveContentViews}
-              readOnly={false}
-            />
-            <div className="flex-1 sm:hidden" />
-          </>
-        ) : (
-          <div className="flex-1" />
-        )}
-        {/* Mirrors the workspace status bar — opens the toolbox Filters panel.
-            Especially needed on mobile, where the toolbox FAB is easy to miss. */}
-        <button
-          onClick={() => toggleView('tools')}
-          className={cn(
-            'flex shrink-0 items-center gap-1.5 px-3 py-1 text-xs border rounded-md transition-colors',
-            // Filters narrow every read - keep the button colored while any
-            // are active so an empty context is explainable at a glance.
-            hasActiveFilters
-              ? 'border-info bg-info text-info-foreground hover:bg-info/90'
-              : toolboxState.t1Open && toolboxState.t1View === 'tools'
-                ? 'bg-accent text-foreground'
-                : 'hover:bg-accent text-muted-foreground hover:text-foreground',
-          )}
-          title={hasActiveFilters ? 'Toolbox filters are active and narrow this view' : 'Open the toolbox filters'}
-        >
-          <Filter className="w-3 h-3" />
-          Filter{hasActiveFilters ? ' on' : ''}
-        </button>
-        <CloseSectionButton />
-        </div>
-      </div>
       <DefaultCanvas
+        onBack={goBack}
+        accentColor={accent}
+        navigationTabs={nodeForViews ? <ContentViewTabs views={contentViews} activeId={activeContentViewId}
+          onSelect={selectContentView} onSave={saveContentViews} accentColor={accent} /> : undefined}
+        workspaceLabel={workspace?.label || context.workspaceName || context.workspaceId}
+        workspaceIcon={workspace?.icon}
+        treeName={DEFAULT_WORKSPACE_TREE_NAME}
         urlType={urlType}
         urlDisplay={context.url}
         contextPath={selectedPath}
         workspaceId={context.workspaceName || context.workspaceId}
+        documentSchema={documentSchema}
+        linkTree={wsTree}
         documents={shownDocuments}
         isLoading={isLoadingDocuments}
         totalCount={documentsTotalCount}
@@ -671,6 +595,7 @@ export default function ContextDetailPage() {
         isSavingChanges={toolboxState.isSaving}
         onSaveChanges={saveFilters}
         onBrowseTree={!isSharedContext && contextId ? () => openM2Drawer('contexts', 'detail', contextId) : undefined}
+        onBrowseWorkspaces={() => openM1Drawer('workspaces')}
         onNavigatePath={!isSharedContext ? path => {
           if (!settingPath.current) setPendingNavigation({ id: context.id, url: context.url, path });
         } : undefined}
@@ -696,9 +621,10 @@ export default function ContextDetailPage() {
               contentViews.map(v => (v.id === activeContentView.id ? { ...v, columns } : v)),
             )}
           />
-        ) : activeContentView.kind === 'app' && activeContentView.app ? (
+        ) : activeContentView.kind === 'app' && activeContentView.app && activeContentView.app !== 'notes' ? (
           <ContentAppView
             app={activeContentView.app}
+            contextId={contextId}
             workspaceId={context.workspaceName || context.workspaceId}
             treeName={DEFAULT_WORKSPACE_TREE_NAME}
             path={selectedPath}

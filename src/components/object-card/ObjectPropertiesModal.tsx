@@ -76,8 +76,8 @@ function DocumentModal({ document: opened, isOpen, onClose, workspaceId, initial
         className={cn(
           'flex w-full flex-col border bg-background max-md:h-full max-md:max-w-none',
           fullscreen
-            ? 'h-full max-w-none rounded-none md:rounded-lg md:m-2 md:h-[calc(var(--viewport-h)-1rem)]'
-            : 'h-viewport-card max-w-3xl rounded-lg',
+            ? 'h-full max-w-none rounded-none md:rounded-(--panel-radius) md:m-2 md:h-[calc(var(--viewport-h)-1rem)]'
+            : 'h-viewport-card max-w-3xl rounded-(--panel-radius)',
         )}
         onClick={(e) => e.stopPropagation()}
       >

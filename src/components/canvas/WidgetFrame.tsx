@@ -51,7 +51,7 @@ export function WidgetFrame({
           ? (contentHost
               ? 'absolute inset-0 z-40 flex flex-col bg-background'
               : 'fixed inset-0 z-50 flex flex-col bg-background')
-          : 'flex flex-col h-full rounded-lg border bg-background overflow-hidden'
+          : 'flex flex-col h-full rounded-(--card-radius) border bg-background overflow-hidden'
       }
     >
       <div

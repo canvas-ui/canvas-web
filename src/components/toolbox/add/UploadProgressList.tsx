@@ -47,7 +47,7 @@ function ProgressBar({ item }: { item: UploadItem }) {
     <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
       <div
         className={cn(
-          'h-full rounded-full transition-[width] duration-200',
+          'h-full rounded-full transition-[width] duration-normal',
           item.status === 'error' ? 'bg-destructive' : item.status === 'done' ? 'bg-green-600 dark:bg-green-500' : 'bg-primary',
         )}
         style={{ width: `${Math.round(fraction * 100)}%` }}

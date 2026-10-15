@@ -16,26 +16,37 @@ import type { Document } from '@/types/workspace'
 export function useLiveDocument(workspaceId: string | undefined, document: Document | null) {
   const [fresh, setFresh] = useState<Document | null>(null)
   const id = document?.id ?? null
+  const identity = `${workspaceId}:${id}`
 
   // Render-time reset: a host that swaps to another document must not keep
   // showing the previous one's refreshed copy.
-  const [lastId, setLastId] = useState(id)
-  if (id !== lastId) {
-    setLastId(id)
+  const [lastIdentity, setLastIdentity] = useState(identity)
+  if (identity !== lastIdentity) {
+    setLastIdentity(identity)
     setFresh(null)
   }
 
   // In-flight fetches are tagged with the id they were issued for: a slow read
   // that lands after the host moved on would otherwise overwrite the new doc.
-  const wantedId = useRef(id)
-  useEffect(() => { wantedId.current = id }, [id])
+  const wantedIdentity = useRef(identity)
+  const request = useRef(0)
+  useEffect(() => {
+    wantedIdentity.current = identity
+    request.current++
+    return () => { wantedIdentity.current = '' }
+  }, [identity])
 
-  const refresh = useCallback(() => {
-    if (!workspaceId || id == null) return
-    getWorkspaceDocument(workspaceId, id)
-      .then((doc) => { if (wantedId.current === id && doc) setFresh(doc) })
+  const currentId = fresh?.id ?? id
+  const refresh = useCallback((saved?: Document) => {
+    if (!workspaceId || currentId == null || wantedIdentity.current !== identity) return
+    const sequence = ++request.current
+    // The save has already read the committed row. Apply it before leaving the
+    // editor, including a successor id when shared-content files split on edit.
+    if (saved) { setFresh(saved); return }
+    getWorkspaceDocument(workspaceId, currentId)
+      .then((doc) => { if (wantedIdentity.current === identity && request.current === sequence && doc) setFresh(doc) })
       .catch(() => {})
-  }, [workspaceId, id])
+  }, [workspaceId, currentId, identity])
 
   return { document: fresh ?? document, refresh }
 }

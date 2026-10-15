@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { parentCanvasPath } from '../src/lib/canvas-navigation.ts'
 import { treeBreadcrumbs } from '../src/lib/tree-breadcrumbs.ts'
 import { buildWorkspaceUrl, parseWorkspacePathFromUrl } from '../src/utils/url-params.ts'
 import { backendTrashLocation, backendTrashPath } from '../src/lib/backend-trash.ts'
@@ -38,13 +39,19 @@ test('Trash ancestors preserve encoded backend addresses and permit leaving Tras
 // dependencies. Hooks only manage scrolling; JSX remains a traversable tree.
 const jsx = (type, props) => ({ type, props })
 const dependencies = {
-  react: { useEffect: () => {}, useRef: () => ({ current: null }) },
+  react: { useEffect: () => {}, useRef: () => ({ current: null }), useState: initial => [initial, () => {}] },
   'react/jsx-runtime': { jsx, jsxs: jsx },
   '@/lib/utils': { cn: (...classes) => classes.filter(Boolean).join(' ') },
   '@/lib/tree-breadcrumbs': { treeBreadcrumbs },
+  '@/lib/canvas-navigation': { parentCanvasPath },
+  './canvas-search': { SearchInput: 'search-input', SearchOptions: 'search-options' },
+  './canvas-navigation.css': {},
   'lucide-react': {},
+  '@iconify/react': { Icon: 'icon' },
+  '@/lib/layer-style': { DEFAULT_WORKSPACE_ICON: 'ph:stack-fill' },
   '@/components/common/document-list': { DocumentList: 'documents' },
-  '@/components/toolbox/use-toolbox': { useToolbox: () => ({}) },
+  '@/components/toolbox/use-toolbox': { useToolbox: () => ({ state: {} }) },
+  '@/components/shell/use-side-view': { useSideView: () => ({ entry: null }) },
 }
 function load(file) {
   const { outputText } = ts.transpileModule(readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8'), {
@@ -59,6 +66,7 @@ function load(file) {
 }
 const { TreeBreadcrumbs } = load('components/common/tree-breadcrumbs.tsx')
 dependencies['@/components/common/tree-breadcrumbs'] = { TreeBreadcrumbs }
+dependencies['@/components/common/canvas-address-bar'] = load('components/common/canvas-address-bar.tsx')
 const { DefaultCanvas } = load('components/canvas/DefaultCanvas.tsx')
 
 function nodes(node) {
@@ -83,14 +91,20 @@ test('breadcrumb controls navigate to ancestors and mark the current location', 
 
 test('shared workspace breadcrumbs show the label while retaining UUID navigation', () => {
   const paths = []
+  let workspaceListOpened = false
   const rendered = nodes(DefaultCanvas({
     urlType: 'context', treeName: 'context', workspaceId: 'shared-workspace-uuid', workspaceLabel: 'Company team',
     urlDisplay: 'shared-workspace-uuid://Projects', contextPath: '/Projects', documents: [],
     onNavigatePath: path => paths.push(path),
+    onBrowseWorkspaces: () => { workspaceListOpened = true },
   }))
-  const root = rendered.find(node => node.type === 'button' && node.props.children === 'Company team')
+  const root = rendered.find(node => node.type === 'button' && node.props.title === 'Browse workspaces')
   assert.ok(root)
+  assert.ok(nodes(root).some(node => node.props?.children === 'Company team'))
   root.props.onClick()
+  assert.equal(workspaceListOpened, true)
+  assert.deepEqual(paths, [], 'workspace selection does not jump to the tree root')
+  rendered.find(node => node.type === 'button' && node.props.title === 'Go to tree root').props.onClick()
   assert.deepEqual(paths, ['/'])
   assert.ok(!rendered.some(node => node.props?.children === 'shared-workspace-uuid'))
 })
@@ -99,17 +113,22 @@ test('folder, layer, and canvas headers expose navigation, including pane-local 
   for (const urlType of ['directory', 'directory-layer', 'canvas']) {
     const navigated = []
     let browsed = false
+    let listedWorkspaces = false
     const rendered = nodes(DefaultCanvas({
       urlType, treeName: 'My tree', workspaceId: 'home', urlDisplay: 'home://one/two', contextPath: '/one/two',
       canvasInfo: { label: 'My canvas' }, documents: [], onNavigatePath: path => navigated.push(path),
       onBrowseTree: () => { browsed = true },
+      onBrowseWorkspaces: () => { listedWorkspaces = true },
     }))
     assert.equal(rendered.filter(node => node.type === 'input').length, 0)
-    const nav = rendered.find(node => node.type === 'nav' && node.props['aria-label'] === 'Tree path')
+    rendered.find(node => node.type === 'button' && node.props.title === 'Browse workspaces').props.onClick()
+    assert.equal(listedWorkspaces, true)
+    assert.equal(browsed, false, 'workspace and tree have separate destinations')
+    const nav = rendered.find(node => node.props?.role === 'navigation' && node.props['aria-label'] === 'Canvas address')
     nodes(nav).find(node => node.type === 'button' && node.props.children === 'one').props.onClick()
     assert.deepEqual(navigated, ['/one'])
-    rendered.find(node => node.props?.['aria-label'] === 'Browse tree').props.onClick()
+    rendered.find(node => node.props?.title?.startsWith('Browse tree: My tree')).props.onClick()
     assert.equal(browsed, true)
-    assert.ok(rendered.some(node => node.type === 'span' && JSON.stringify(node.props.children).includes(urlType.endsWith('-layer') ? 'My tree:layer' : 'My tree')))
+    assert.ok(rendered.some(node => node.props?.className === 'canvas-address-tree' && JSON.stringify(node.props.children).includes(urlType.endsWith('-layer') ? 'My tree:layer' : 'My tree')))
   }
 })

@@ -11,6 +11,7 @@ import { updateContext } from '@/services/context'
 import { moveItem, persistSequentialOrder, useListReorder } from '@/lib/list-order'
 import { useToast } from '@/components/ui/use-toast'
 import { useNavigate } from 'react-router-dom'
+import { MenuBackButton } from '@/components/menu/shared/MenuBackButton'
 
 export function ContextList() {
   const { state, selectEntity, openM2, closeM2 } = useMenu()
@@ -45,7 +46,7 @@ export function ContextList() {
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-4 h-12 border-b border-border shrink-0">
-        <span className="text-sm font-semibold">Contexts</span>
+        <div className="flex min-w-0 items-center"><MenuBackButton /><span className="text-sm font-semibold">Contexts</span></div>
         {/* Creation is a content-area job — see WorkspaceList. */}
         <button
           type="button"
@@ -77,7 +78,7 @@ export function ContextList() {
                   {...rowProps(index)}
                   data-active={isActive || undefined}
                   className={cn(
-                    'group relative rounded-md py-2.5 pl-3 pr-7 transition-all shadow-elevation-1',
+                    'group relative rounded-(--card-radius) py-2.5 pl-3 pr-7 transition-all shadow-elevation-1',
                     isWorkspaceActive
                       ? 'cursor-pointer hover:shadow ' + (isActive ? 'bg-accent shadow' : 'bg-card hover:bg-accent/50')
                       : 'cursor-not-allowed opacity-50 bg-card',
@@ -91,7 +92,7 @@ export function ContextList() {
                       the strip as a passive color cue (not reorderable). */}
                   {isShared ? (
                     <div
-                      className={cn('absolute inset-y-0 right-0 w-4 rounded-r-md', !accent && 'bg-muted')}
+                      className={cn('absolute inset-y-0 right-0 w-4 rounded-r-(--card-radius)', !accent && 'bg-muted')}
                       style={accent ? { backgroundColor: accent } : undefined}
                     />
                   ) : (
@@ -101,7 +102,7 @@ export function ContextList() {
                       title="Drag to reorder"
                       aria-label="Drag to reorder"
                       className={cn(
-                        'absolute inset-y-0 right-0 flex w-4 cursor-grab items-center justify-center rounded-r-md active:cursor-grabbing',
+                        'absolute inset-y-0 right-0 flex w-4 cursor-grab items-center justify-center rounded-r-(--card-radius) active:cursor-grabbing',
                         !accent && 'bg-muted',
                       )}
                       style={accent ? { backgroundColor: accent } : undefined}

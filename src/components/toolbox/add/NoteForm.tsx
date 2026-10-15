@@ -1,3 +1,4 @@
+import { NoteSaveStatus } from '@/components/common/note-save-status'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,8 +17,8 @@ export function NoteForm() {
   const { closeAdd, state } = useToolbox()
   const target = useAddTarget()
   const { showSuccessToast, showErrorToast } = useToastHelpers()
-  const f = useNoteFields()
   const rel = useRelationFields(target, state.addRelateTo)
+  const f = useNoteFields(target, rel.write, state.addRelateTo ? `related:${state.addRelateTo.documents.map(doc => doc.id).sort().join(",")}` : "add")
   const suggestions = useTagSuggestions(state.activeWorkspaceName)
 
   const canSave = !!target && f.canSave
@@ -28,6 +29,7 @@ export function NoteForm() {
       const ids = await f.save(target)
       const failed = await rel.write(ids)
       showSuccessToast(failed ? 'Note created; some relations failed' : 'Note created')
+      f.finish()
       closeAdd()
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to create note')
@@ -74,12 +76,13 @@ export function NoteForm() {
 
       <p className="text-xs text-muted-foreground">{describeTarget(target)}</p>
 
+      <NoteSaveStatus {...f} onRetry={f.retry} />
       <div className="flex justify-end gap-2">
         <Button variant="outline" size="sm" onClick={closeAdd} disabled={f.saving}>
-          Cancel
+          Close
         </Button>
         <Button size="sm" onClick={handleSave} disabled={!canSave}>
-          {f.saving ? 'Saving…' : 'Save note'}
+          {f.saving ? 'Saving…' : 'Done'}
         </Button>
       </div>
     </div>

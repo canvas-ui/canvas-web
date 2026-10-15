@@ -51,7 +51,7 @@ export function dispatchActionShortcut(event: ReactKeyboardEvent, actions: Actio
   if (!action) return false
   event.preventDefault()
   event.stopPropagation()
-  void action.run()
+  void action.run({ shiftKey: event.shiftKey })
   return true
 }
 

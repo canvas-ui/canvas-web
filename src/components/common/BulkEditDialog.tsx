@@ -45,7 +45,7 @@ export function BulkEditDialog({ workspaceId, documentIds, onClose }: {
   }
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-4">
-      <section role="dialog" aria-modal="true" aria-labelledby="bulk-edit-title" className="max-h-viewport-modal overflow-y-auto w-full max-w-md space-y-4 rounded-xl border bg-background p-5 shadow-elevation-4">
+      <section role="dialog" aria-modal="true" aria-labelledby="bulk-edit-title" className="max-h-viewport-modal overflow-y-auto w-full max-w-md space-y-4 rounded-(--panel-radius) border bg-background p-5 shadow-elevation-4">
         <h2 id="bulk-edit-title" className="font-semibold">Bulk Edit · {pending.length} documents</h2>
         <p className="text-sm text-muted-foreground">Add tags to all selected documents. Choosing a location replaces their existing geotags; leaving it unset keeps them.</p>
         <fieldset disabled={saving} className="space-y-4">

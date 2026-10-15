@@ -1,0 +1,64 @@
+/* Use the content pane's width: an open sidebar or a split view can make a
+   desktop pane just as narrow as a phone. Older browsers keep the stacked form. */
+.document-toolbar {
+  container-type: inline-size;
+  container-name: document-toolbar;
+}
+
+.document-toolbar-row,
+.document-toolbar-controls,
+.document-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem;
+  min-width: 0;
+}
+
+.document-toolbar-controls {
+  flex: 1 1 100%;
+  color: var(--muted-foreground);
+  font-size: .875rem;
+}
+
+.document-toolbar-actions {
+  flex: 1 1 100%;
+  justify-content: flex-end;
+  margin-left: auto;
+  border-top: 1px solid var(--border);
+  padding-top: .5rem;
+}
+
+.document-toolbar-actions:empty {
+  display: none;
+}
+
+.document-toolbar-label {
+  display: none;
+}
+
+.document-toolbar-sort > div {
+  min-width: 0;
+}
+
+.document-toolbar-sort select {
+  min-width: 0;
+  max-width: 12rem;
+}
+
+@container document-toolbar (min-width: 48rem) {
+  .document-toolbar-controls {
+    flex-basis: auto;
+    column-gap: .75rem;
+  }
+
+  .document-toolbar-actions {
+    flex: 0 1 auto;
+    border-top: 0;
+    padding-top: 0;
+  }
+
+  .document-toolbar-label {
+    display: inline;
+  }
+}

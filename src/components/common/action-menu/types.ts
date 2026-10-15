@@ -22,7 +22,7 @@ export interface ActionItem {
   disabled?: boolean
   // Tooltip — why an item does what it does, or why it is disabled.
   hint?: string
-  run: () => void | Promise<void>
+  run: (invocation?: { shiftKey: boolean }) => void | Promise<void>
 }
 
 export type ActionAnchor = { x: number; y: number }

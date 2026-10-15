@@ -1,5 +1,5 @@
-import { createContext, useContext, useCallback, useEffect, useRef } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { createContext, useContext, useCallback, useEffect, useLayoutEffect, useRef } from 'react'
+import { useLocation, useNavigate, type To } from 'react-router-dom'
 import { MOBILE_BREAKPOINT } from '@/hooks/use-mobile'
 import { PERSONAL_SETTINGS_PATHS } from '@/lib/settings-catalog'
 import { loadLayoutMode } from '@/lib/layout-mode'
@@ -25,6 +25,13 @@ export interface MenuState {
   user: { id: string; email: string; userType: string } | null
 }
 
+export type MenuSnapshot = Omit<MenuState, 'user'>
+
+/** Drawers are views too: keep them in browser history on phones. */
+export function isMobileNavigation() {
+  return window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`).matches && loadLayoutMode() !== 'strip'
+}
+
 export type MenuAction =
   | { type: 'SET_SECTION'; section: MenuSection }
   | { type: 'TOGGLE_SECTION'; section: MenuSection }
@@ -38,6 +45,7 @@ export type MenuAction =
   | { type: 'SELECT_ENTITY'; entityId: string | null }
   | { type: 'SYNC_FROM_URL'; section: MenuSection; entityId: string | null; m2View: M2View; mobile?: boolean }
   | { type: 'SET_USER'; user: MenuState['user'] }
+  | { type: 'RESTORE_MENU'; menu: MenuSnapshot }
 
 export interface MenuContextValue {
   state: MenuState
@@ -52,6 +60,8 @@ export interface MenuContextValue {
   openM1Drawer: (section: MenuSection) => void
   closeM2: () => void
   selectEntity: (entityId: string | null) => void
+  goBack: () => void
+  navigateFromMenu: (to: To) => void
 }
 
 // ─── Context ─────────────────────────────────────────────────────────────────
@@ -96,7 +106,7 @@ export function useMenuUrlSync(state: MenuState, dispatch: React.Dispatch<MenuAc
   useEffect(() => { stateRef.current = state }, [state])
 
   // URL → State: when the URL changes externally (browser back/forward, direct nav)
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (isInternalNav.current) {
       isInternalNav.current = false
       return
@@ -117,14 +127,16 @@ export function useMenuUrlSync(state: MenuState, dispatch: React.Dispatch<MenuAc
     // correct on first render, but subscribing here would re-dispatch on every
     // resize across the breakpoint, which is not what SYNC_FROM_URL means.)
     // The strip layout has no drawers — its columns stay put on a phone too.
-    const mobile = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`).matches && loadLayoutMode() !== 'strip'
-    dispatch({ type: 'SYNC_FROM_URL', section, entityId, m2View, mobile })
+    const mobile = isMobileNavigation()
+    const menu = mobile ? location.state?.canvasMenu as MenuSnapshot | undefined : undefined
+    if (menu) dispatch({ type: 'RESTORE_MENU', menu })
+    else dispatch({ type: 'SYNC_FROM_URL', section, entityId, m2View, mobile })
     // Keyed on location.key, not pathname: re-selecting the already-current
     // tree node navigates to the SAME pathname (mobile back button reopens the
     // drawer without changing the URL), and the drawer must still close. Every
     // navigate() call gets a fresh key, so this fires once per navigation; the
     // reducer's unchanged-guard makes same-state dispatches a no-op.
-  }, [location.key, location.pathname, dispatch])
+  }, [location.key, location.pathname, location.state, dispatch])
 
   // State → URL: navigate when entity selection changes from menu interaction
   const navigateToEntity = useCallback((path: string) => {

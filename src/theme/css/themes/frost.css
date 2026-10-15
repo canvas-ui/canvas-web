@@ -68,9 +68,9 @@
   --info-foreground: oklch(0.985 0.003 250);
   --info-subtle: oklch(0.6 0.09 240 / 0.14);
 
-  /* The bright top-edge catchlight of glass, not a drawn line. */
-  --border: oklch(1 0 0 / 0.55);
-  --input: oklch(0.4 0.02 255 / 0.35);
+  /* Slate edges stay visible on white sheets as well as tinted glass. */
+  --border: oklch(0.5 0.02 255 / 0.5);
+  --input: oklch(0.4 0.02 255 / 0.5);
   --ring: oklch(0.55 0.05 250);
   /* Lighter than usual — the scrim blur does the separating. */
   --scrim: oklch(0.3 0.02 255 / 0.25);
@@ -142,6 +142,39 @@
 }
 
 [data-theme='frost'] .bg-scrim {
+  -webkit-backdrop-filter: var(--glass-scrim-backdrop);
+  backdrop-filter: var(--glass-scrim-backdrop);
+}
+
+/* Light-theme dialogs share Bulk Edit's translucent sheet, rather than the
+   nearly opaque popover fill. Cover native/Radix dialogs and legacy scrim
+   shells; a side picker may have one transparent spacing wrapper. Menus and
+   date popovers retain their more opaque fill for text legibility. */
+:is([data-theme='frost'][data-scheme='light'], [data-theme='frost'] [data-scheme='light']) :is(
+  dialog,
+  [role='alertdialog'],
+  [role='dialog'][aria-modal='true']:not(.bg-scrim),
+  .bg-scrim > :is(.bg-background, .bg-card, .bg-popover),
+  .bg-scrim > div:not(.bg-background, .bg-card, .bg-popover) > :is(.bg-background, .bg-card, .bg-popover)
+) {
+  background-color: var(--background);
+  -webkit-backdrop-filter: var(--glass-backdrop);
+  backdrop-filter: var(--glass-backdrop);
+}
+
+/* The shared action dialog owns the glass. Its embedded Add/Link/Copy panel
+   supplies the controls, without stacking another tint, blur or frame. */
+:is([data-theme='frost'][data-scheme='light'], [data-theme='frost'] [data-scheme='light'])
+[data-dialog-surface] > :is(div, section):is(.bg-background, .bg-card, .bg-popover) {
+  background-color: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:is([data-theme='frost'][data-scheme='light'], [data-theme='frost'] [data-scheme='light']) dialog::backdrop {
+  background-color: var(--scrim);
   -webkit-backdrop-filter: var(--glass-scrim-backdrop);
   backdrop-filter: var(--glass-scrim-backdrop);
 }

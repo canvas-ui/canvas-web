@@ -1,8 +1,9 @@
 import type { ComponentType } from 'react'
-import { Brush, ListTodo, ScanEye, StickyNote, type LucideIcon } from 'lucide-react'
+import { Brush, ListTodo, ScanEye, StickyNote, SlidersHorizontal, type LucideIcon } from 'lucide-react'
 import { NotesApplet } from './NotesApplet'
 import { TodosApplet } from './TodosApplet'
 import { LensApplet } from './LensApplet'
+import { FiltersApplet } from './FiltersApplet'
 import { SketchApplet } from './SketchApplet'
 
 // Applets are small self-contained apps hosted by the toolbox Apps tab, the
@@ -35,6 +36,7 @@ export interface AppletDescriptor {
 }
 
 export const APPLETS: AppletDescriptor[] = [
+  { id: 'filters', label: 'Filters', icon: SlidersHorizontal, modes: ['context', 'global'], description: 'Search and filter a workspace or a live context', Component: FiltersApplet },
   {
     id: 'notes',
     label: 'Notes',

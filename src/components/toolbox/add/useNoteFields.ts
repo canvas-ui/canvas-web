@@ -1,48 +1,55 @@
-import { useState } from 'react'
+import { useDurableDraft } from '@/hooks/use-durable-draft'
+import { draftKey } from '@/lib/durable-draft'
+import { updateWorkspaceDocument } from '@/services/workspace'
 import { tagsToFeatures } from './tags'
-import { submitDocuments, type AddTarget } from './useAddTarget'
+import { submitDocuments, resolveUploadWorkspace, notifyWorkspaceDocumentsChanged, type AddTarget } from './useAddTarget'
 import { useGeotag } from '@/hooks/useGeotag'
 
-const NOTE_SCHEMA = 'data/schema/note'
-const NOTE_SCHEMA_VERSION = '2.0'
+type NoteFields = { title: string; content: string; comment: string; tags: string[] }
+const EMPTY_NOTE: NoteFields = { title: '', content: '', comment: '', tags: [] }
 
-// Field state + doc-building + submit for the note abstraction, shared by
-// NoteForm (AddPanel sidebar) and NoteCardBody (home FAB B5 card) — the two
-// containers differ only in chrome (target source, close/toast handling).
-export function useNoteFields() {
-  const [title, setTitle] = useState('')
-  const [content, setContent] = useState('')
-  // Top-level doc field (BaseDocument.comment) — user-authored context that
-  // isn't part of the note body; FTS'd and ticks feature/has-comment. Mirrors
-  // the Comment field in the object-card EditForm.
-  const [comment, setComment] = useState('')
-  const [tags, setTags] = useState<string[]>([])
-  const [saving, setSaving] = useState(false)
+// Bound notes save to the server automatically. Home quick-add has no destination
+// yet, so it keeps a durable local draft until the user chooses where to save it.
+export function useNoteFields(target?: AddTarget, afterSave?: (ids: number[]) => Promise<unknown>, scope = 'add') {
   const geotag = useGeotag()
-
-  const canSave = content.trim().length > 0 && !saving
-
-  async function save(target: AddTarget): Promise<number[]> {
-    setSaving(true)
-    try {
-      // Off by default; capture() resolves null unless the user opted in, and
-      // never rejects — a missing fix must not block saving the note.
-      const geo = await geotag.capture()
-      const doc = {
-        schema: NOTE_SCHEMA,
-        schemaVersion: NOTE_SCHEMA_VERSION,
-        ...(comment.trim() ? { comment: comment.trim() } : {}),
-        data: {
-          ...(title.trim() ? { title: title.trim() } : {}),
-          content,
-        },
-        metadata: { features: tagsToFeatures(tags), ...(geo ? { geo } : {}) },
-      }
-      return await submitDocuments(target, [doc])
-    } finally {
-      setSaving(false)
+  const key = draftKey(`new:${scope}:${target?.mode === 'workspace' ? `${target.workspaceName}:${target.treeName}:${target.path}` : target?.contextId ?? 'home'}`)
+  const writer = (destination: AddTarget) => async (value: NoteFields, meta: Record<string, unknown>, checkpoint: (meta: Record<string, unknown>) => void) => {
+    const workspace = typeof meta.workspace === 'string' ? meta.workspace : (await resolveUploadWorkspace(destination)).workspaceName
+    const geo = await geotag.capture()
+    const doc = {
+      schema: 'data/schema/note', schemaVersion: '2.0', comment: value.comment,
+      data: { title: value.title.trim(), content: value.content },
+      metadata: { features: tagsToFeatures(value.tags), ...(geo ? { geo } : {}) },
     }
+    let id = typeof meta.id === 'number' ? meta.id : undefined
+    if (id == null) {
+      const ids = await submitDocuments(destination, [doc], { refresh: false })
+      if (!ids.length) throw new Error('The server did not return the saved note')
+      id = ids[0]
+      // Persist the identity immediately: subsequent edits and manual Save update
+      // this note, including after a refresh, instead of creating another copy.
+      checkpoint({ id, workspace })
+    } else {
+      await updateWorkspaceDocument(workspace, { ...doc, id })
+    }
+    await afterSave?.([id])
+    notifyWorkspaceDocumentsChanged(destination)
   }
-
-  return { title, setTitle, content, setContent, comment, setComment, tags, setTags, saving, canSave, save, geotag }
+  const draft = useDurableDraft(key, EMPTY_NOTE, {
+    retainAfterSave: true, valid: value => !!value.content.trim(),
+    save: target ? writer(target) : undefined,
+  })
+  async function save(destination: AddTarget): Promise<number[]> {
+    await draft.saveWith(writer(destination))
+    const id = draft.getSnapshot().meta.id
+    if (typeof id !== 'number') throw new Error('Write a note before saving')
+    return [id]
+  }
+  return {
+    ...draft.value, status: draft.status, error: draft.error, storageError: draft.storageError,
+    setTitle: (title: string) => draft.update({ title }), setContent: (content: string) => draft.update({ content }),
+    setComment: (comment: string) => draft.update({ comment }), setTags: (tags: string[]) => draft.update({ tags }),
+    saving: draft.status === 'saving', canSave: !!draft.value.content.trim() && draft.status !== 'saving',
+    save, finish: draft.clear, retry: draft.flush, geotag,
+  }
 }

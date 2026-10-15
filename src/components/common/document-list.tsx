@@ -1,3 +1,4 @@
+import './document-list-toolbar.css'
 import { runBackendDeletionBatch } from '@/lib/backend-transfer-batch'
 import { splitBackendsPath } from '@/services/hooks'
 import { documentType, isDocumentFieldSort } from '@/lib/document-sort'
@@ -12,7 +13,8 @@ import { BulkEditDialog } from './BulkEditDialog'
 import { Document, TreeNode } from '@/types/workspace'
 import { File, Calendar, CalendarDays, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, MoreHorizontal, Play, Table as TableIcon, HardDrive, ArrowRightLeft, Loader2, Folder, FolderOpen, CornerLeftUp, Plus, Sparkles } from 'lucide-react'
 import { LinkToCard, type LinkToTarget, type LinkToRelation } from '@/components/menu/shared/LinkToCard'
-import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from '@/components/menu/shared/LinkToSidePanel'
+import { DocumentActionDialog } from './document-action-dialog'
+import { isSameDocumentFolder, type DocumentDragPayload } from '@/lib/document-drag'
 import { BackendActionCard, type BackendTransferConfirmOptions } from '@/components/menu/shared/BackendActionCard'
 import { PickDocumentsCard } from '@/components/menu/shared/PickDocumentsCard'
 import { transferDocumentsToBackends, createDocumentRelations, type BackendTransferMode } from '@/services/workspace'
@@ -83,6 +85,8 @@ interface DocumentListProps {
   onPageSizeChange?: (pageSize: number) => void
   onPurgeDocuments?: () => void
   disablePurgeDocuments?: boolean
+  externalSearchQuery?: string
+  toolbarActions?: React.ReactNode
   backendSearchQueries?: string[]
   onBackendSearch?: (query: string) => void
   onRemoveBackendQuery?: (index: number) => void
@@ -212,10 +216,9 @@ function ExportModal({ isOpen, onClose, documents, selectedDocuments }: ExportMo
     }
   }
 
-  return createPortal(
-    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-scrim flex items-center justify-center z-50 p-4 max-md:p-2">
-      <div className="bg-background border rounded-lg max-w-3xl w-full max-h-viewport-card overflow-y-auto max-md:h-full max-md:max-h-none max-md:max-w-none">
-        <div className="p-6">
+  return (
+    <DocumentActionDialog label="Export Documents" onClose={handleClose}>
+        <div className="flex h-full min-h-0 flex-col p-4 sm:p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-2xl font-bold">Export Documents</h2>
@@ -228,9 +231,9 @@ function ExportModal({ isOpen, onClose, documents, selectedDocuments }: ExportMo
             <button onClick={handleClose} className="p-2 hover:bg-muted rounded-sm" title="Close">✕</button>
           </div>
 
-          <div className="space-y-4">
-            <div>
-              <div className="flex items-center justify-between mb-2">
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                 <h3 className="font-semibold">JSON Data (Press Ctrl+A to select all, Ctrl+C to copy)</h3>
                 <Button onClick={copyToClipboard} size="sm" className="flex items-center gap-2">
                   <Copy className="h-4 w-4" />
@@ -238,7 +241,7 @@ function ExportModal({ isOpen, onClose, documents, selectedDocuments }: ExportMo
                 </Button>
               </div>
             <textarea
-              className="w-full h-96 p-4 bg-muted border rounded-lg text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full min-h-24 flex-1 p-4 bg-muted border rounded-lg text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-primary"
               value={jsonString}
               readOnly
               autoFocus
@@ -252,9 +255,7 @@ function ExportModal({ isOpen, onClose, documents, selectedDocuments }: ExportMo
             <Button onClick={handleClose}>Close</Button>
           </div>
         </div>
-      </div>
-    </div>,
-    window.document.body,
+    </DocumentActionDialog>
   )
 }
 
@@ -307,7 +308,7 @@ function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
 
   return createPortal(
     <div role="dialog" aria-modal="true" className="fixed inset-0 bg-scrim flex items-center justify-center z-50 p-4 max-md:p-2">
-      <div className="bg-background border rounded-lg max-w-3xl w-full max-h-viewport-card overflow-y-auto max-md:h-full max-md:max-h-none max-md:max-w-none">
+      <div className="bg-background border rounded-(--panel-radius) max-w-3xl w-full max-h-viewport-card overflow-y-auto max-md:h-full max-md:max-h-none max-md:max-w-none">
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
@@ -590,7 +591,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRightClick
         data-document-id={document.id}
         aria-selected={!!isSelected}
         onKeyDown={(e) => rowKeyDown(e, () => (isTabDocument && tabUrl ? window.open(tabUrl, '_blank', 'noopener,noreferrer') : setShowDetailModal(true)), () => onSelect?.(document.id, !isSelected, true))}
-        className={`border rounded-lg p-4 transition cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring ${replicating ? 'opacity-60' : ''} ${isSelected ? 'bg-info-subtle border-info ring-1 ring-info' : ''} ${isTabDocument && !isSelected ? 'hover:bg-info-subtle hover:border-info' : !isSelected ? 'hover:bg-accent/50' : ''}`}
+        className={`border rounded-(--card-radius) p-4 transition cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring ${replicating ? 'opacity-60' : ''} ${isSelected ? 'bg-info-subtle border-info ring-1 ring-info' : ''} ${isTabDocument && !isSelected ? 'hover:bg-info-subtle hover:border-info' : !isSelected ? 'hover:bg-accent/50' : ''}`}
         onClick={handleDocumentClick}
         onMouseDown={handleMouseDown}
         {...longPressMenu}
@@ -615,7 +616,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRightClick
               <DocumentIcon document={document} chip />
               <h4 className="font-medium truncate min-w-0 flex-1 max-w-[640px]" title={display.title}>{display.title}</h4>
               {display.isExternal && (<ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />)}
-              <span className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded border flex-shrink-0">{display.schemaLabel}</span>
+              <span className="ml-auto px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded border flex-shrink-0">{display.schemaLabel}</span>
               <ReplicatingBadge document={document} />
             </div>
 
@@ -748,7 +749,7 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
         data-document-id={document.id}
         aria-selected={!!isSelected}
         onKeyDown={(e) => rowKeyDown(e, () => (isTabDocument && tabUrl ? window.open(tabUrl, '_blank', 'noopener,noreferrer') : setShowDetailModal(true)), () => onSelect?.(document.id, !isSelected, true))}
-        className={`group relative mb-3 flex break-inside-avoid flex-col overflow-hidden rounded-lg border transition cursor-pointer outline-none hover:shadow-elevation-2 focus-visible:ring-2 focus-visible:ring-ring ${replicating ? 'opacity-60' : ''} ${isSelected ? 'ring-2 ring-info border-info' : ''}`}
+        className={`group relative mb-3 flex break-inside-avoid flex-col overflow-hidden rounded-(--card-radius) border transition cursor-pointer outline-none hover:shadow-elevation-2 focus-visible:ring-2 focus-visible:ring-ring ${replicating ? 'opacity-60' : ''} ${isSelected ? 'ring-2 ring-info border-info' : ''}`}
         onClick={handleClick}
         onMouseDown={event => { if (event.shiftKey) event.preventDefault() }}
         {...longPressMenu}
@@ -841,7 +842,7 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
 // Shared drop handling for folder entries: the same `application/json`
 // document payload the tree accepts, linked into the folder via the paste
 // handler (move:false — mirrors the tree drop; Cut+Paste is the explicit move).
-function useFolderDrop(folder: FolderEntry, onPasteDocuments?: DocumentListProps['onPasteDocuments'], contextPath?: string, treeName?: string) {
+function useFolderDrop(folder: FolderEntry, onPasteDocuments?: DocumentListProps['onPasteDocuments'], contextPath?: string, treeName?: string, workspaceId?: string) {
   const [over, setOver] = useState(false)
   const hasDocPayload = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes('application/json')
   const onDragOver = (e: React.DragEvent) => {
@@ -856,9 +857,10 @@ function useFolderDrop(folder: FolderEntry, onPasteDocuments?: DocumentListProps
     if (!onPasteDocuments || !hasDocPayload(e)) return
     e.preventDefault()
     e.stopPropagation()
-    let payload: { type?: string; documentIds?: number[]; sourcePath?: string; sourceTreeName?: string } | null = null
+    let payload: DocumentDragPayload | null = null
     try { payload = JSON.parse(e.dataTransfer.getData('application/json')) } catch { payload = null }
     if (payload?.type !== 'document' || !Array.isArray(payload.documentIds) || payload.documentIds.length === 0) return
+    if (isSameDocumentFolder(payload, workspaceId, treeName, folder.path)) return
     try {
       await onPasteDocuments(folder.path, payload.documentIds, { move: false, sourcePath: payload.sourcePath ?? contextPath, sourceTreeName: payload.sourceTreeName ?? treeName })
     } catch { /* toast raised by the caller */ }
@@ -885,8 +887,8 @@ function FolderIcon({ folder, className = 'h-4 w-4' }: { folder: FolderEntry; cl
 const folderTitle = (folder: FolderEntry) => folder.isParent ? 'Parent folder' : (folder.label && folder.label !== folder.name ? `${folder.label} (${folder.name})` : folder.name)
 
 // Card + tile views: a wrapped strip of folder chips above the documents.
-function FolderChip({ folder, onOpen, onMenu, onPasteDocuments, contextPath, treeName }: { folder: FolderEntry; onOpen?: (path: string) => void; onMenu?: FolderMenuHandler; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string }) {
-  const drop = useFolderDrop(folder, onPasteDocuments, contextPath, treeName)
+function FolderChip({ folder, onOpen, onMenu, onPasteDocuments, contextPath, treeName, workspaceId }: { folder: FolderEntry; onOpen?: (path: string) => void; onMenu?: FolderMenuHandler; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string; workspaceId?: string }) {
+  const drop = useFolderDrop(folder, onPasteDocuments, contextPath, treeName, workspaceId)
   return (
     <button
       type="button"
@@ -912,8 +914,8 @@ function FolderChip({ folder, onOpen, onMenu, onPasteDocuments, contextPath, tre
 
 // Tile view: folders as proper tiles in a responsive grid, so they read at the
 // same weight as the photo/text tiles below them instead of as small chips.
-function FolderTile({ folder, onOpen, onMenu, onPasteDocuments, contextPath, treeName }: { folder: FolderEntry; onOpen?: (path: string) => void; onMenu?: FolderMenuHandler; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string }) {
-  const drop = useFolderDrop(folder, onPasteDocuments, contextPath, treeName)
+function FolderTile({ folder, onOpen, onMenu, onPasteDocuments, contextPath, treeName, workspaceId }: { folder: FolderEntry; onOpen?: (path: string) => void; onMenu?: FolderMenuHandler; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string; workspaceId?: string }) {
+  const drop = useFolderDrop(folder, onPasteDocuments, contextPath, treeName, workspaceId)
   const iconStyle = folder.color ? { color: folder.color } : undefined
   return (
     <button
@@ -924,7 +926,7 @@ function FolderTile({ folder, onOpen, onMenu, onPasteDocuments, contextPath, tre
       onDragOver={drop.onDragOver}
       onDragLeave={drop.onDragLeave}
       onDrop={drop.onDrop}
-      className={`folder-surface group flex min-w-0 flex-col items-center gap-1.5 rounded-lg border px-2 py-3 text-sm transition hover:bg-accent hover:shadow-elevation-2 ${drop.over ? 'ring-2 ring-info border-info bg-accent' : ''} ${folder.isParent ? 'text-muted-foreground' : ''}`}
+      className={`folder-surface group flex min-w-0 flex-col items-center gap-1.5 rounded-(--card-radius) border px-2 py-3 text-sm transition hover:bg-accent hover:shadow-elevation-2 ${drop.over ? 'ring-2 ring-info border-info bg-accent' : ''} ${folder.isParent ? 'text-muted-foreground' : ''}`}
     >
       <span className="relative flex h-14 w-14 items-center justify-center">
         {folder.isParent ? (
@@ -944,23 +946,23 @@ function FolderTile({ folder, onOpen, onMenu, onPasteDocuments, contextPath, tre
   )
 }
 
-function FolderTileGrid({ folders, onOpen, onMenu, onPasteDocuments, contextPath, treeName }: { folders: FolderEntry[]; onOpen?: (path: string) => void; onMenu?: FolderMenuHandler; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string }) {
+function FolderTileGrid({ folders, onOpen, onMenu, onPasteDocuments, contextPath, treeName, workspaceId }: { folders: FolderEntry[]; onOpen?: (path: string) => void; onMenu?: FolderMenuHandler; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string; workspaceId?: string }) {
   if (folders.length === 0) return null
   return (
     <div className="mb-4 grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3 pr-2" onContextMenu={(e) => e.stopPropagation()}>
       {folders.map((folder) => (
-        <FolderTile key={folder.path} folder={folder} onOpen={onOpen} onMenu={onMenu} onPasteDocuments={onPasteDocuments} contextPath={contextPath} treeName={treeName} />
+        <FolderTile key={folder.path} folder={folder} onOpen={onOpen} onMenu={onMenu} onPasteDocuments={onPasteDocuments} contextPath={contextPath} treeName={treeName} workspaceId={workspaceId} />
       ))}
     </div>
   )
 }
 
-function FolderStrip({ folders, onOpen, onMenu, onPasteDocuments, contextPath, treeName }: { folders: FolderEntry[]; onOpen?: (path: string) => void; onMenu?: FolderMenuHandler; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string }) {
+function FolderStrip({ folders, onOpen, onMenu, onPasteDocuments, contextPath, treeName, workspaceId }: { folders: FolderEntry[]; onOpen?: (path: string) => void; onMenu?: FolderMenuHandler; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string; workspaceId?: string }) {
   if (folders.length === 0) return null
   return (
     <div className="mb-3 flex flex-wrap gap-2 pr-2" onContextMenu={(e) => e.stopPropagation()}>
       {folders.map((folder) => (
-        <FolderChip key={folder.path} folder={folder} onOpen={onOpen} onMenu={onMenu} onPasteDocuments={onPasteDocuments} contextPath={contextPath} treeName={treeName} />
+        <FolderChip key={folder.path} folder={folder} onOpen={onOpen} onMenu={onMenu} onPasteDocuments={onPasteDocuments} contextPath={contextPath} treeName={treeName} workspaceId={workspaceId} />
       ))}
     </div>
   )
@@ -969,8 +971,8 @@ function FolderStrip({ folders, onOpen, onMenu, onPasteDocuments, contextPath, t
 // Table view: folders as leading rows, Explorer style. The cells line up with
 // the document columns (checkbox / type / title / schema / id / checksum /
 // created / actions) so the eye reads one list.
-function FolderTableRow({ folder, onOpen, onMenu, onPasteDocuments, contextPath, treeName }: { folder: FolderEntry; onOpen?: (path: string) => void; onMenu?: FolderMenuHandler; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string }) {
-  const drop = useFolderDrop(folder, onPasteDocuments, contextPath, treeName)
+function FolderTableRow({ folder, onOpen, onMenu, onPasteDocuments, contextPath, treeName, workspaceId }: { folder: FolderEntry; onOpen?: (path: string) => void; onMenu?: FolderMenuHandler; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string; workspaceId?: string }) {
+  const drop = useFolderDrop(folder, onPasteDocuments, contextPath, treeName, workspaceId)
   return (
     <TableRow
       data-selection-ignore=""
@@ -1031,7 +1033,7 @@ function DateGroupHeader({ label, count, collapsed, allSelected, someSelected, o
   )
 }
 
-export function DocumentList({ documents, isLoading, contextPath, treeName, workspaceId, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, onSelectionChange, pastedDocumentIds, viewMode = 'card', allowViewToggle = false, activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQueries = [], onBackendSearch, onRemoveBackendQuery, serverSort, onServerSortChange, scope = 'path', onScopeChange, canSaveChanges = false, isSavingChanges = false, onSaveChanges, linkTree, folders, onOpenFolder }: DocumentListProps) {
+export function DocumentList({ externalSearchQuery, toolbarActions, documents, isLoading, contextPath, treeName, workspaceId, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, onSelectionChange, pastedDocumentIds, viewMode = 'card', allowViewToggle = false, activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQueries = [], onBackendSearch, onRemoveBackendQuery, serverSort, onServerSortChange, scope = 'path', onScopeChange, canSaveChanges = false, isSavingChanges = false, onSaveChanges, linkTree, folders, onOpenFolder }: DocumentListProps) {
   // View switcher (table/tile/card). Only active when allowViewToggle; the
   // chosen view is remembered in localStorage. Widgets that hardcode viewMode
   // leave the toggle off and pin their view.
@@ -1083,11 +1085,11 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   // Optional provider: the list also renders on public shares without a shell.
   const toolbox = useToolboxOptional()
   const canAddRelated = Boolean(toolbox && workspaceId)
-  const addRelated = useCallback((ids: number[]) => {
+  const addRelated = useCallback((ids: number[], modal = false) => {
     if (!toolbox || !workspaceId) return
     const picked = ids.map(id => documents.find(d => d.id === id)).filter((d): d is Document => !!d)
     if (picked.length === 0) return
-    toolbox.openAddRelated({ workspaceName: workspaceId, documents: picked })
+    toolbox.openAddRelated({ workspaceName: workspaceId, documents: picked }, modal)
   }, [toolbox, workspaceId, documents])
   const [relationSaving, setRelationSaving] = useState(false)
   // Copy to / Move to / Delete from backend — the backend twin of the link panel.
@@ -1101,6 +1103,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   useEffect(() => () => { backendStop.current = true }, [])
   const [pickDocsOpen, setPickDocsOpen] = useState(false)
   const [copyWorkspaceIds, setCopyWorkspaceIds] = useState<number[] | null>(null)
+  const [copyWorkspaceModal, setCopyWorkspaceModal] = useState(false)
   const [bulkEditIds, setBulkEditIds] = useState<number[] | null>(null)
   const bulkEditAllowed = usePublicShareCode() == null && !!workspaceId
   const [ruleDocument, setRuleDocument] = useState<Document | null>(null)
@@ -1123,7 +1126,9 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
   // The input is a buffer for the NEXT query to add to the stack (not a mirror of
   // a single active query) — submitting appends a chip and clears it. It also
   // drives the local fuse filter over the loaded page while you type.
-  const [searchQuery, setSearchQuery] = useState('')
+  const [localSearchQuery, setSearchQuery] = useState('')
+  const searchQuery = externalSearchQuery ?? localSearchQuery
+  const externalSearch = externalSearchQuery !== undefined
   const [isDragOver, setIsDragOver] = useState(false)
   const hasServerSearch = backendSearchQueries.length > 0
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -1166,16 +1171,6 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     setMenu(null)
   }
 
-  // Content-header "Link selection" button (DefaultCanvas) — selection + the
-  // LinkTo modal live here, so it just pings us.
-  useEffect(() => {
-    const onLinkSelection = () => {
-      if (canLink && selectedDocuments.size > 0) setLinkPanelIds(Array.from(selectedDocuments))
-    }
-    window.addEventListener('workspace:documents:link-selection', onLinkSelection)
-    return () => window.removeEventListener('workspace:documents:link-selection', onLinkSelection)
-  }, [canLink, selectedDocuments])
-
   // Expose selection to parent (for cross-pane F5/F6 transfers)
   useEffect(() => {
     onSelectionChange?.(Array.from(selectedDocuments))
@@ -1211,8 +1206,9 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
     const dragData = {
       type: 'document',
       documentIds: draggedIds,
-      sourcePath: contextPath,
+      sourcePath: scope === 'path' ? contextPath : undefined,
       sourceTreeName: treeName,
+      sourceWorkspaceId: workspaceId,
     };
 
     e.dataTransfer.setData('application/json', JSON.stringify(dragData));
@@ -1220,25 +1216,26 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
 
     // Add visual feedback for dragging
     e.dataTransfer.setDragImage(e.currentTarget as Element, 0, 0);
-  }, [selectedDocuments, contextPath, treeName])
+  }, [selectedDocuments, contextPath, treeName, workspaceId, scope])
 
   const handleDrop = useCallback(async (event: React.DragEvent) => {
     if (!onPasteDocuments) return
     const raw = event.dataTransfer.getData('application/json')
     if (!raw) return
-    let dragData: { type?: string; documentIds?: number[]; sourcePath?: string; sourceTreeName?: string } | null = null
+    let dragData: DocumentDragPayload | null = null
     try { dragData = JSON.parse(raw) } catch { return }
     if (dragData?.type !== 'document' || !Array.isArray(dragData.documentIds) || dragData.documentIds.length === 0) return
     event.preventDefault()
     event.stopPropagation()
     setIsDragOver(false)
+    if (isSameDocumentFolder(dragData, workspaceId, treeName, contextPath)) return
     await onPasteDocuments(contextPath, dragData.documentIds, {
       move: event.shiftKey,
       sourcePath: dragData.sourcePath,
       sourceTreeName: dragData.sourceTreeName,
     })
     setSelectedDocuments(new Set())
-  }, [contextPath, onPasteDocuments])
+  }, [contextPath, treeName, workspaceId, onPasteDocuments])
 
   const handleDragOver = useCallback((event: React.DragEvent) => {
     if (!onPasteDocuments) return
@@ -1305,7 +1302,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
       ? (path, e) => setFolderMenu({ x: e.clientX, y: e.clientY, path })
       : undefined
   ), [workspaceId, treeName, onOpenFolder])
-  const folderStripProps = { folders: visibleFolders, onOpen: onOpenFolder, onMenu: onFolderMenu, onPasteDocuments, contextPath, treeName }
+  const folderStripProps = { folders: visibleFolders, onOpen: onOpenFolder, onMenu: onFolderMenu, onPasteDocuments, contextPath, treeName, workspaceId }
 
   // Column sort for the table view
   const sortAccessors = useMemo(() => ({
@@ -1533,9 +1530,9 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
 
     add(single && bulkEditAllowed && { id: 'create-rule', group: 'organize', label: 'Create rule…', icon: Sparkles, run: () => setRuleDocument(single) })
     add(canLink && { id: 'link-to', group: 'organize', label: `Link to…${count}`, icon: Link2, run: () => setLinkPanelIds(ids) })
-    add(canAddRelated && { id: 'add-related', group: 'organize', label: `Add related document…${count}`, icon: Plus, run: () => addRelated(ids) })
+    add(canAddRelated && { id: 'add-related', group: 'organize', label: `Add related document…${count}`, icon: Plus, run: invocation => addRelated(ids, invocation?.shiftKey) })
     add(bulkEditAllowed && { id: 'bulk-edit', group: 'organize', label: `Bulk edit…${count}`, icon: Pencil, run: () => setBulkEditIds(ids) })
-    add(bulkEditAllowed && { id: 'copy-workspace', group: 'organize', label: 'Copy to workspace…', icon: Copy, run: () => setCopyWorkspaceIds(ids) })
+    add(bulkEditAllowed && { id: 'copy-workspace', group: 'organize', label: 'Copy to workspace…', icon: Copy, run: invocation => { setCopyWorkspaceModal(!!invocation?.shiftKey); setCopyWorkspaceIds(ids) } })
     // The export modal exports the current selection, which opening this menu
     // has already narrowed to `ids`.
     add({ id: 'export', group: 'organize', label: `Export…${count}`, icon: Download, run: () => setShowExportModal(true) })
@@ -1718,7 +1715,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
       // (paste, select all, Shift+F10) work without first focusing a row.
       tabIndex={-1}
       onKeyDown={handleListKeyDown}
-      className={`flex-1 flex flex-col min-h-0 min-w-0 p-4 rounded-lg outline-none transition-colors ${isDragOver ? 'ring-2 ring-inset ring-primary bg-primary/5' : ''}`}
+      className={`flex-1 flex flex-col min-h-0 min-w-0 p-4 rounded-(--card-radius) outline-none transition-colors ${isDragOver ? 'ring-2 ring-inset ring-primary bg-primary/5' : ''}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -1736,7 +1733,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
             </p>
           </div>
           <div className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
-            <p className="min-w-0 truncate">Context: <span className="font-mono">{contextPath}</span>{activeContextUrl && currentContextUrl && activeContextUrl !== currentContextUrl && (<span className="text-warning ml-2">(not yet active)</span>)}</p>
+            <p hidden={externalSearch} className="min-w-0 truncate">Context: <span className="font-mono">{contextPath}</span>{activeContextUrl && currentContextUrl && activeContextUrl !== currentContextUrl && (<span className="text-warning ml-2">(not yet active)</span>)}</p>
             <p className="shrink-0">
               {selectedDocuments.size > 0 && (
                 <span className="text-info">{selectedDocuments.size} selected</span>
@@ -1751,13 +1748,13 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
           </div>
         </div>
 
-        {/* Search Input */}
-        <div className="mt-3 space-y-2">
+        {/* Standalone lists keep their own search; workspace lists use the address bar. */}
+        {!externalSearch && <div className="mt-3 space-y-2">
           {/* flex-wrap: on narrow screens the scope toggle stays on top and the
               search input wraps to its own full-width line (min-w forces the
               wrap) instead of being squeezed to a sliver. */}
           <div className="relative flex flex-wrap items-center gap-2">
-            {onScopeChange && (
+            {!externalSearch && onScopeChange && (
               <div className="flex shrink-0 rounded-md border border-input overflow-hidden text-xs font-medium">
                 <button
                   type="button"
@@ -1778,43 +1775,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                 </button>
               </div>
             )}
-            {/* Sits with the scope toggle rather than in the actions row: on a
-                phone that row collapses behind "Actions", and switching view is
-                a navigation control, not a bulk action. */}
-            {allowViewToggle && (
-              <div className="flex shrink-0 items-center rounded-md border p-0.5 touch-target">
-                {([
-                  ['table', TableIcon, 'Table view'],
-                  ['tile', LayoutGrid, 'Tile view'],
-                  ['card', LayoutList, 'Card view'],
-                ] as const).map(([mode, Icon, label]) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => changeView(mode)}
-                    title={label}
-                    aria-pressed={view === mode}
-                    className={`rounded-sm p-1.5 transition-colors ${view === mode ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/50'}`}
-                  >
-                    <Icon className="h-4 w-4" />
-                  </button>
-                ))}
-              </div>
-            )}
-            {/* Date bands on/off. Only offered for the two views that carry
-                them — the table has its own column sorting and stays flat. */}
-            {allowViewToggle && view !== 'table' && !isDocumentFieldSort(serverSort?.sortBy) && (
-              <button
-                type="button"
-                onClick={toggleGroupDates}
-                title={groupDates ? 'Grouping by date — click for a flat list' : 'Group by date (Today, Yesterday, …)'}
-                aria-pressed={groupDates}
-                className={`touch-target shrink-0 rounded-md border p-1.5 transition-colors ${groupDates ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/50'}`}
-              >
-                <CalendarDays className="h-4 w-4" />
-              </button>
-            )}
-            <div className="relative flex-1 min-w-[12rem]">
+            {!externalSearch && <div className="relative flex-1 min-w-[12rem]">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
               <input
                 ref={searchInputRef}
@@ -1855,8 +1816,8 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                   <X className="h-4 w-4" />
                 </button>
               )}
-            </div>
-            {onBackendSearch && searchQuery.trim() && !backendSearchQueries.includes(searchQuery.trim()) && (
+            </div>}
+            {!externalSearch && onBackendSearch && searchQuery.trim() && !backendSearchQueries.includes(searchQuery.trim()) && (
               <Button
                 size="sm"
                 variant="default"
@@ -1868,21 +1829,9 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                 {hasServerSearch ? 'Refine' : 'Search server'}
               </Button>
             )}
-            {canSaveChanges && onSaveChanges && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={onSaveChanges}
-                disabled={isSavingChanges}
-                className="shrink-0"
-                title="Save current query and filters"
-              >
-                <Save className="h-3.5 w-3.5 mr-1" />
-                {isSavingChanges ? 'Saving...' : 'Save filters'}
-              </Button>
-            )}
+
           </div>
-          {hasServerSearch && (
+          {!externalSearch && hasServerSearch && (
             <div className="flex flex-wrap items-center gap-1.5 text-xs">
               <span className="text-muted-foreground">Server search:</span>
               {backendSearchQueries.map((q, i) => (
@@ -1913,19 +1862,49 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
               )}
             </div>
           )}
-        </div>
+        </div>}
 
-        {/* View row: page size + server sort on the left, paging on the right.
-            Sort sits with paging because it orders the whole result set
-            across pages, not the rows on screen. Shows whenever there is
-            anything to page — the page-size select is how you ASK for more —
-            and wraps rather than overflowing on a 360px screen. */}
-        {((onPageChange && totalCount > 0) || showSort) && (
-          <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-3 border-t max-sm:gap-1">
-            <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+        <div className="document-toolbar mt-3">
+          <div className="document-toolbar-row">
+            <div className="document-toolbar-controls">
+              <div className="flex shrink-0 items-center gap-2" role="group" aria-label="Document layout">
+                {allowViewToggle && (
+                  <div className="flex shrink-0 items-center rounded-md border p-0.5 touch-target">
+                    {([
+                      ['table', TableIcon, 'Table view'],
+                      ['tile', LayoutGrid, 'Tile view'],
+                      ['card', LayoutList, 'Card view'],
+                    ] as const).map(([mode, Icon, label]) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => changeView(mode)}
+                        title={label}
+                        aria-pressed={view === mode}
+                        className={`rounded-sm p-1.5 transition-colors focus-ring ${view === mode ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent/50'}`}
+                      >
+                        <Icon className="h-4 w-4" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {/* Date bands on/off. Only offered for the two views that carry
+                    them — the table has its own column sorting and stays flat. */}
+                {allowViewToggle && view !== 'table' && !isDocumentFieldSort(serverSort?.sortBy) && (
+                  <button
+                    type="button"
+                    onClick={toggleGroupDates}
+                    title={groupDates ? 'Grouping by date — click for a flat list' : 'Group by date (Today, Yesterday, …)'}
+                    aria-pressed={groupDates}
+                    className={`touch-target shrink-0 rounded-md border p-1.5 transition-colors focus-ring ${groupDates ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent/50'}`}
+                  >
+                    <CalendarDays className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
               {onPageChange && totalCount > 0 && (
-                <div className="flex items-center gap-1.5">
-                  <span className="max-sm:sr-only">Show:</span>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <span className="document-toolbar-label">Show:</span>
                   <select
                     value={pageSize}
                     onChange={(e) => onPageSizeChange?.(Number(e.target.value))}
@@ -1937,95 +1916,114 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                     <option value={100}>100</option>
                     <option value={200}>200</option>
                   </select>
-                  <span className="max-sm:sr-only">per page</span>
+                  <span className="document-toolbar-label">per page</span>
                 </div>
               )}
               {showSort && (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs max-sm:sr-only">Sort</span>
+                <div className="document-toolbar-sort flex min-w-0 items-center gap-1.5">
+                  <span className="document-toolbar-label">Sort</span>
                   <TimelineSortControl workspaceId={workspaceId!} value={serverSort!} onChange={onServerSortChange!} />
                 </div>
               )}
             </div>
-
-            {onPageChange && totalCount > 0 && (
-              <div className="flex min-w-0 items-center gap-2 max-sm:gap-0.5">
-                {/* Redundant with "Page N of M" beside the arrows, so it is the
-                    first thing to go when space is tight. */}
-                <span className="text-sm text-muted-foreground max-md:hidden">
-                  Showing {Math.min((currentPage - 1) * pageSize + 1, totalCount)} - {Math.min(currentPage * pageSize, totalCount)} of {totalCount}
-                </span>
-
-                <div className="flex items-center gap-1 max-sm:gap-0.5">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onPageChange(1)}
-                    disabled={currentPage === 1}
-                    className="p-1 touch-target"
-                  >
-                    <ChevronsLeft className="h-4 w-4" />
+            <div className="document-toolbar-actions">
+              {/* Actions row. Everything lives in the shared action menu (right-click,
+                  long-press, Shift+F10, a row's ⋯); this button opens the same menu
+                  for the selection — or the folder when nothing is selected — so
+                  nothing depends on knowing to right-click. Paste stays visible:
+                  pending clipboard state is easy to forget. */}
+              {(documents.length > 0 || onImportDocuments || onPasteDocuments) && (
+                <div className="contents">
+                  <Button variant="outline" size="sm" onClick={openToolbarMenu} aria-haspopup="menu" className="flex items-center gap-1.5" title={`Actions (${formatShortcut('Shift+F10')} or right-click)`}>
+                    <MoreHorizontal className="h-4 w-4" />
+                    Actions{selectedDocuments.size > 0 ? ` (${selectedDocuments.size} selected)` : ''}
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onPageChange(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    className="p-1 touch-target"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-
-                  <span className="whitespace-nowrap px-3 py-1 text-sm font-medium max-sm:px-1 max-sm:text-xs">
-                    <span className="max-sm:sr-only">Page </span>{currentPage}<span className="max-sm:hidden"> of </span><span className="sm:hidden">/</span>{Math.ceil(totalCount / pageSize)}
-                  </span>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onPageChange(currentPage + 1)}
-                    disabled={currentPage >= Math.ceil(totalCount / pageSize)}
-                    className="p-1 touch-target"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onPageChange(Math.ceil(totalCount / pageSize))}
-                    disabled={currentPage >= Math.ceil(totalCount / pageSize)}
-                    className="p-1 touch-target"
-                  >
-                    <ChevronsRight className="h-4 w-4" />
-                  </Button>
+                  {selectedDocuments.size > 0 && (
+                    <Button variant="ghost" size="sm" onClick={() => setSelectedDocuments(new Set())} title="Clear selection (Esc)">
+                      <X className="mr-1 h-3.5 w-3.5" />Clear
+                    </Button>
+                  )}
+                  {pastedDocumentIds && pastedDocumentIds.length > 0 && onPasteDocuments && (
+                    <Button variant="outline" size="sm" onClick={() => onPasteDocuments(contextPath, pastedDocumentIds)} className="flex items-center gap-1.5" title={`Paste into this folder (${formatShortcut('Mod+V')})`}>
+                      <Clipboard className="h-4 w-4" />
+                      Paste ({pastedDocumentIds.length})
+                    </Button>
+                  )}
                 </div>
-              </div>
-            )}
+              )}
+              {canSaveChanges && onSaveChanges && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={onSaveChanges}
+                  disabled={isSavingChanges}
+                  className="w-control-sm shrink-0 px-0 touch-target"
+                  aria-label={isSavingChanges ? 'Saving filters' : 'Save current query and filters'}
+                  title="Save current query and filters"
+                >
+                  <Save className="h-3.5 w-3.5" />
+                </Button>
+              )}
+              {toolbarActions}
+            </div>
           </div>
-        )}
+        </div>
 
-        {/* Actions row. Everything lives in the shared action menu (right-click,
-            long-press, Shift+F10, a row's ⋯); this button opens the same menu
-            for the selection — or the folder when nothing is selected — so
-            nothing depends on knowing to right-click. Paste stays visible:
-            pending clipboard state is easy to forget. */}
-        {(documents.length > 0 || onImportDocuments || onPasteDocuments) && (
-          <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3">
-            <Button variant="outline" size="sm" onClick={openToolbarMenu} aria-haspopup="menu" className="flex items-center gap-1.5" title={`Actions (${formatShortcut('Shift+F10')} or right-click)`}>
-              <MoreHorizontal className="h-4 w-4" />
-              Actions{selectedDocuments.size > 0 ? ` (${selectedDocuments.size} selected)` : ''}
-            </Button>
-            {selectedDocuments.size > 0 && (
-              <Button variant="ghost" size="sm" onClick={() => setSelectedDocuments(new Set())} title="Clear selection (Esc)">
-                <X className="mr-1 h-3.5 w-3.5" />Clear
+        {onPageChange && totalCount > pageSize && (
+          <div className="document-pagination mt-3 flex min-w-0 flex-wrap items-center justify-end gap-2 border-t pt-3 max-sm:gap-0.5">
+            {/* Redundant with "Page N of M" beside the arrows, so it is the
+                first thing to go when space is tight. */}
+            <span className="text-sm text-muted-foreground max-md:hidden">
+              Showing {Math.min((currentPage - 1) * pageSize + 1, totalCount)} - {Math.min(currentPage * pageSize, totalCount)} of {totalCount}
+            </span>
+
+            <div className="flex items-center gap-1 max-sm:gap-0.5">
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label="First page"
+                onClick={() => onPageChange(1)}
+                disabled={currentPage === 1}
+                className="p-1 touch-target"
+              >
+                <ChevronsLeft className="h-4 w-4" />
               </Button>
-            )}
-            {pastedDocumentIds && pastedDocumentIds.length > 0 && onPasteDocuments && (
-              <Button variant="outline" size="sm" onClick={() => onPasteDocuments(contextPath, pastedDocumentIds)} className="flex items-center gap-1.5" title={`Paste into this folder (${formatShortcut('Mod+V')})`}>
-                <Clipboard className="h-4 w-4" />
-                Paste ({pastedDocumentIds.length})
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label="Previous page"
+                onClick={() => onPageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="p-1 touch-target"
+              >
+                <ChevronLeft className="h-4 w-4" />
               </Button>
-            )}
+
+              <span className="whitespace-nowrap px-3 py-1 text-sm font-medium max-sm:px-1 max-sm:text-xs">
+                <span className="max-sm:sr-only">Page </span>{currentPage}<span className="max-sm:hidden"> of </span><span className="sm:hidden">/</span>{Math.ceil(totalCount / pageSize)}
+              </span>
+
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label="Next page"
+                onClick={() => onPageChange(currentPage + 1)}
+                disabled={currentPage >= Math.ceil(totalCount / pageSize)}
+                className="p-1 touch-target"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label="Last page"
+                onClick={() => onPageChange(Math.ceil(totalCount / pageSize))}
+                disabled={currentPage >= Math.ceil(totalCount / pageSize)}
+                className="p-1 touch-target"
+              >
+                <ChevronsRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         )}
       </div>
@@ -2046,7 +2044,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
                 <>Path: <span className="font-mono">{contextPath}</span></>
               )}
             </p>
-            {searchQuery && (
+            {!externalSearch && searchQuery && (
               <button
                 onClick={resetSearchInput}
                 className="text-xs text-primary hover:text-primary/80 underline mt-1"
@@ -2109,7 +2107,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
             </TableHeader>
             <TableBody>
               {visibleFolders.map((folder) => (
-                <FolderTableRow key={folder.path} folder={folder} onOpen={onOpenFolder} onMenu={onFolderMenu} onPasteDocuments={onPasteDocuments} contextPath={contextPath} treeName={treeName} />
+                <FolderTableRow key={folder.path} folder={folder} onOpen={onOpenFolder} onMenu={onFolderMenu} onPasteDocuments={onPasteDocuments} contextPath={contextPath} treeName={treeName} workspaceId={workspaceId} />
               ))}
               {sortedDocuments.map((document) => (
                 <DocumentTableRow key={document.id} document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onOpenToSide={openToSide} onRightClick={handleDocumentRightClick} onOpenActions={handleOpenRowActions} onDragStart={handleMultiDragStart} />
@@ -2158,14 +2156,12 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
         onImport={handleImport}
       />
 
-      {copyWorkspaceIds && workspaceId && <CopyToWorkspacePanel workspaceId={workspaceId} ids={copyWorkspaceIds} onClose={() => setCopyWorkspaceIds(null)} />}
+      {copyWorkspaceIds && workspaceId && <CopyToWorkspacePanel modal={copyWorkspaceModal} workspaceId={workspaceId} ids={copyWorkspaceIds} onClose={() => setCopyWorkspaceIds(null)} />}
 
       {linkPanelIds && linkTree && (
-        // Side panel, not a centred modal: the modal covered the very list the
-        // selection lives in, so you could not see what you were linking.
-        <LinkToSidePanel onClose={() => setLinkPanelIds(null)}>
+        <DocumentActionDialog label="Link to" onClose={() => setLinkPanelIds(null)}>
           <LinkToCard
-            sizeClassName={LINK_TO_SIDE_SIZE}
+            sizeClassName="h-full w-full rounded-none border-0 bg-popover text-popover-foreground shadow-none"
             documentCount={linkPanelIds.length}
             fixedWorkspaceName={workspaceId}
             // Relations sit beside the two trees: "where does this belong" and
@@ -2178,7 +2174,7 @@ export function DocumentList({ documents, isLoading, contextPath, treeName, work
             onConfirmRelation={(relation) => handleRelationConfirm(relation, linkPanelIds)}
             onClose={() => setLinkPanelIds(null)}
           />
-        </LinkToSidePanel>
+        </DocumentActionDialog>
       )}
 
       {backendPanel && workspaceId && createPortal(

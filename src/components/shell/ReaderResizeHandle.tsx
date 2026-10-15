@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { useReaderWidth, setWidth } from '@/lib/reader-width'
+import { DEFAULT_SIDE_PANEL_WIDTH } from '@/lib/panel-size'
 
 const MIN = 320
 const MAX = 1600
@@ -16,7 +17,7 @@ export function ReaderResizeHandle({ edge }: { edge: 'left' | 'right' }) {
       aria-orientation="vertical"
       aria-valuemin={MIN}
       aria-valuemax={MAX}
-      aria-valuenow={current ?? 560}
+      aria-valuenow={current ?? DEFAULT_SIDE_PANEL_WIDTH}
       tabIndex={0}
       title="Drag to resize; arrow keys adjust width; double-click to reset"
       className={`absolute inset-y-0 ${edge === 'left' ? 'left-0' : 'right-0'} z-20 hidden w-2 touch-none cursor-col-resize select-none hover:bg-primary/20 focus-visible:bg-primary/20 focus-visible:outline-none md:block`}
@@ -25,7 +26,7 @@ export function ReaderResizeHandle({ edge }: { edge: 'left' | 'right' }) {
         event.preventDefault()
         event.stopPropagation()
         const pane = event.currentTarget.closest<HTMLElement>('[data-reader-pane]')!
-        const max = edge === 'left' ? (pane.parentElement?.clientWidth ?? window.innerWidth) - 240 : window.innerWidth
+        const max = edge === 'left' ? (pane.parentElement?.clientWidth ?? window.innerWidth) - 248 : window.innerWidth
         drag.current = { x: event.clientX, width: pane.getBoundingClientRect().width, max: Math.max(MIN, max) }
         event.currentTarget.setPointerCapture(event.pointerId)
       }}

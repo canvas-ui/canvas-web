@@ -206,7 +206,7 @@ export function BackendActionCard({
 
   return (
     <div className={cn(
-      'flex flex-col overflow-hidden rounded-2xl border bg-card shadow-elevation-4',
+      'flex flex-col overflow-hidden rounded-(--panel-radius) border bg-card shadow-elevation-4',
       // Sized to its content (a workspace has a handful of backends, not a
       // tree), capped so a long list scrolls instead of overflowing the screen.
       sizeClassName || 'max-h-viewport-card w-[min(420px,90vw)] max-md:h-full max-md:w-full max-md:shadow-elevation-5',

@@ -128,7 +128,7 @@ export function SchemaColumnsBoard({ documents, workspaceId, columns, onColumnsC
             // applies below `sm`.
             <div
               key={column.id}
-              className={`relative flex h-full min-h-0 min-w-0 shrink-0 grow-0 basis-full snap-start flex-col rounded-lg border bg-muted/20 ${
+              className={`relative flex h-full min-h-0 min-w-0 shrink-0 grow-0 basis-full snap-start flex-col rounded-(--card-radius) border bg-muted/20 ${
                 draggedWidth ? 'sm:basis-[var(--col-w)]' : 'sm:basis-[48%] lg:basis-[32%] xl:basis-[24%]'
               }`}
               style={draggedWidth ? ({ '--col-w': `${draggedWidth}px` } as React.CSSProperties) : undefined}

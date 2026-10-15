@@ -87,7 +87,7 @@ function WorkspacePinsList({ workspaceId }: { workspaceId: string }) {
                   {missing && <p className="text-xs text-warning">Folder no longer exists</p>}
                 </div>
               </>
-              const className = 'flex items-center gap-3 rounded-lg border border-l-4 bg-card p-3'
+              const className = 'flex items-center gap-3 rounded-(--card-radius) border border-l-4 bg-card p-3'
               const style = { borderLeftColor: color || 'transparent' }
               return <li key={pin.id}>{missing
                 ? <div className={`${className} opacity-60`} style={style}>{content}</div>

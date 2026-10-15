@@ -1,3 +1,4 @@
+import { NoteSaveStatus } from '@/components/common/note-save-status'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,7 +17,7 @@ export function EditNoteForm() {
 
   if (!doc || !workspaceId) return null
 
-  return <EditNoteFormBody doc={doc} workspaceId={workspaceId} onCancel={closeAdd} onSaved={closeAdd} showSuccessToast={showSuccessToast} showErrorToast={showErrorToast} />
+  return <EditNoteFormBody key={`${workspaceId}:${doc.id}`} doc={doc} workspaceId={workspaceId} onCancel={closeAdd} onSaved={closeAdd} showSuccessToast={showSuccessToast} showErrorToast={showErrorToast} />
 }
 
 // Exported so DocumentSideCard (open-to-side view) can reuse the exact same
@@ -67,12 +68,13 @@ export function EditNoteFormBody({ doc, workspaceId, onCancel, onSaved, showSucc
         <TagInput tags={f.tags} onChange={f.setTags} suggestions={suggestions} />
       </div>
 
+      <NoteSaveStatus {...f} onRetry={f.save} />
       <div className="flex shrink-0 justify-end gap-2">
         <Button variant="outline" size="sm" onClick={onCancel} disabled={f.saving}>
-          Cancel
+          Close
         </Button>
         <Button size="sm" onClick={handleSave} disabled={!f.canSave}>
-          {f.saving ? 'Saving…' : 'Save note'}
+          {f.saving ? 'Saving…' : 'Done'}
         </Button>
       </div>
     </div>

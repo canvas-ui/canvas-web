@@ -1,9 +1,12 @@
 import { createContext, useContext } from 'react'
-import type { AppNotification } from '@/services/notifications'
+import type { LocalNotification } from '@/lib/notification-history'
 
 export interface NotificationsContextType {
-  notifications: AppNotification[]
+  notifications: LocalNotification[]
+  loading: boolean
+  storageError: boolean
   clear: () => Promise<void>
+  remove: (id: string) => Promise<void>
 }
 
 export const NotificationsContext = createContext<NotificationsContextType | null>(null)

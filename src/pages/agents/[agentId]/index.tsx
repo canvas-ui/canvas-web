@@ -6,7 +6,6 @@ import { useAgentSessions } from '@/components/agent/use-agent-sessions'
 import { useMenu } from '@/components/shell/use-menu'
 import { Button } from '@/components/ui/button'
 import { CloseSectionButton, SectionBackButton } from '@/components/common/page-header'
-import { useIsMobile } from '@/hooks/use-mobile'
 import { useToast } from '@/components/ui/use-toast'
 import { useAgentChat } from '@/hooks/useAgentChat'
 import { cn } from '@/lib/utils'
@@ -280,8 +279,7 @@ export default function AgentDetailPage() {
   const location = useLocation()
   const navigate = useNavigate()
   const { showToast } = useToast()
-  const { selectEntity, openM2Drawer } = useMenu()
-  const isMobile = useIsMobile()
+  const { selectEntity, goBack } = useMenu()
   const [agent, setAgent] = useState<Agent | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isStarting, setIsStarting] = useState(false)
@@ -476,10 +474,8 @@ export default function AgentDetailPage() {
           <div className="flex items-center gap-3">
             {/* Same gesture as a settings page — see the workspace view. */}
             <SectionBackButton
-              title={isMobile ? 'Back to agent sessions' : 'Back to agents'}
-              onBack={() => (isMobile
-                ? openM2Drawer('agents', 'detail', agent.id)
-                : navigate('/agents'))}
+              title="Back to previous view"
+              onBack={goBack}
             />
             <span
               className="h-3 w-3 shrink-0 rounded-full"

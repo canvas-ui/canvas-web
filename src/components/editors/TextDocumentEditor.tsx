@@ -1,3 +1,5 @@
+import { useEditNoteFields } from '@/components/toolbox/add/useEditNoteFields'
+import { NoteSaveStatus } from '@/components/common/note-save-status'
 import { useState } from 'react'
 import { Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -8,7 +10,6 @@ import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { getLocationFilename } from '@/lib/document-display'
 import { documentBodyKind, isTextBackedFile, textFileTooLarge, MAX_EDITABLE_TEXT_BYTES } from '@/lib/text-document'
 import { saveTextFileContent } from '@/services/text-documents'
-import { updateWorkspaceDocument } from '@/services/workspace'
 import { NOTE_SCHEMA } from '@/components/renderers/types'
 import type { Document } from '@/types/workspace'
 
@@ -22,7 +23,7 @@ export default function TextDocumentEditor({
 }: {
   doc: Document
   workspaceName: string
-  onSaved: () => void
+  onSaved: (saved?: Document) => void
   onClose: () => void
   onDetails?: () => void
 }) {
@@ -38,7 +39,10 @@ export default function TextDocumentEditor({
     maxTextLength: MAX_EDITABLE_TEXT_BYTES,
     version: doc.checksumArray?.[0] ?? null,
   })
-  const [content, setContent] = useState<string>(isNote ? String(doc.data?.content ?? '') : '')
+  const [fileContent, setFileContent] = useState<string>(isNote ? String(doc.data?.content ?? '') : '')
+  const note = useEditNoteFields(doc, workspaceName, isNote)
+  const content = isNote ? note.content : fileContent
+  const setContent = isNote ? note.setContent : setFileContent
   const [seededFor, setSeededFor] = useState<string | null>(null)
   const seedKey = `${doc.id}:${doc.checksumArray?.[0] ?? ''}`
   if (isFile && body.text != null && seededFor !== seedKey) {
@@ -51,17 +55,15 @@ export default function TextDocumentEditor({
   const handleSave = async () => {
     setSaving(true)
     try {
+      let saved: Document | undefined
       if (isNote) {
-        await updateWorkspaceDocument(workspaceName, {
-          id: doc.id, schema: doc.schema, schemaVersion: doc.schemaVersion,
-          data: { ...doc.data, content },
-        })
+        await note.save()
       } else {
-        await saveTextFileContent(workspaceName, doc, content)
+        saved = await saveTextFileContent(workspaceName, doc, content)
       }
       showSuccessToast('Document saved')
       window.dispatchEvent(new CustomEvent('workspace:documents:refresh'))
-      onSaved()
+      onSaved(saved)
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to save document')
     } finally {
@@ -77,10 +79,13 @@ export default function TextDocumentEditor({
       onDetails={onDetails}
       title={<span className="truncate text-sm font-medium">{name}</span>}
       actions={
+        <>
+        {isNote && <NoteSaveStatus {...note} onRetry={note.save} />}
         <Button size="sm" onClick={handleSave} disabled={saving || !ready || tooLarge}>
           <Save className="mr-1.5 h-4 w-4" />
           {saving ? 'Saving…' : 'Save'}
         </Button>
+        </>
       }
     >
       <div className="flex h-full min-h-0 flex-col px-4 py-4 md:px-8">

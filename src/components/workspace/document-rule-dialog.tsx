@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import type { Document } from '@/types/workspace'
 import { getWorkspace, getWorkspaceDocument } from '@/services/workspace'
 import { canManageWorkspace } from '@/lib/workspace-access'
 import { documentRulePresets } from '@/lib/document-rule'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
+import { DocumentActionDialog } from '@/components/common/document-action-dialog'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { RuleBuilder } from './rule-builder'
 
@@ -30,9 +30,9 @@ export function DocumentRuleDialog({ workspaceId, document, onClose }: {
   const presets = useMemo(() => source ? documentRulePresets(source) : [], [source])
   const preset = presets.find(item => item.id === selected) || presets[0]
   const prefill = useMemo(() => preset ? { kind: 'document' as const, rule: preset.rule } : null, [preset])
-  return createPortal(
-    <div className="fixed inset-0 z-dialog flex items-center justify-center bg-scrim p-4">
-      <section role="dialog" aria-modal="true" aria-labelledby="document-rule-title" className="max-h-viewport-modal w-full max-w-3xl overflow-y-auto rounded-xl border bg-popover p-5 text-popover-foreground shadow-elevation-4">
+  return (
+    <DocumentActionDialog label="Create rule" onClose={onClose}>
+      <div className="p-5">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 id="document-rule-title" className="text-lg font-semibold">Create rule</h2>
@@ -49,7 +49,7 @@ export function DocumentRuleDialog({ workspaceId, document, onClose }: {
           </label>
           <RuleBuilder workspaceId={workspaceId} prefill={prefill} createOnly onCreated={onClose} onCancel={onClose} />
         </>}
-      </section>
-    </div>, window.document.body,
+      </div>
+    </DocumentActionDialog>
   )
 }

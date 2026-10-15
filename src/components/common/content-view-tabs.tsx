@@ -1,7 +1,7 @@
-import { useState } from 'react'
-import { Plus, X, LayoutList, Columns3, ListTodo, StickyNote, PanelRight } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Plus, X, LayoutList, Columns3, ListTodo, StickyNote, PanelRight, SlidersHorizontal, Brush, ScanEye } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { relativeLuminance } from '@/utils/color'
+import { onAccentSolidTextClass } from '@/utils/color'
 import { CONTENT_APPS, DEFAULT_VIEW, defaultBoardColumns, type ContentAppId, type ContentView, type ContentViewKind } from './content-views'
 
 /**
@@ -17,22 +17,15 @@ interface ContentViewTabsProps {
   onSave: (views: ContentView[], nextActiveId?: string) => void
   readOnly?: boolean
   className?: string
-  /**
-   * Workspace/context accent the host's divider is painted with — the active
-   * tab fills with it so it visibly grows out of the line. A user-picked hex,
-   * not a theme token: text contrast is derived from its own luminance.
-   */
+  /** Workspace/context accent shared by the divider and active tab. */
   accentColor?: string
   /** Show a hover affordance that opens the tab's view in a side pane. */
   onOpenToSide?: (viewId: string) => void
 }
 
+const appIcons = { todos: ListTodo, 'todo-app': ListTodo, notes: StickyNote, 'notes-app': StickyNote, filters: SlidersHorizontal, sketch: Brush, lens: ScanEye }
+
 export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = false, className, accentColor, onOpenToSide }: ContentViewTabsProps) {
-  // Full-strength contrast (unlike onAccentTextClass's muted glyphs): the tab
-  // label is primary UI, so it goes plain black/white on the accent fill.
-  const accentTextClass = accentColor
-    ? ((relativeLuminance(accentColor) ?? 0) > 0.5 ? 'text-black' : 'text-white')
-    : ''
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [adding, setAdding] = useState(false)
@@ -40,6 +33,25 @@ export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = 
   // is persisted once, on drop.
   const [dragId, setDragId] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<{ id: string; before: boolean } | null>(null)
+
+  const stripRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const strip = stripRef.current
+    if (!strip) return
+    const wheel = (event: WheelEvent) => {
+      if (event.ctrlKey || strip.scrollWidth <= strip.clientWidth) return
+      const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY
+      const scale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? strip.clientWidth : 1
+      event.preventDefault()
+      strip.scrollLeft += delta * scale
+    }
+    strip.addEventListener('wheel', wheel, { passive: false })
+    return () => strip.removeEventListener('wheel', wheel)
+  }, [])
+
+  useEffect(() => {
+    stripRef.current?.querySelector<HTMLElement>('[aria-pressed="true"], input')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [activeId, editingId])
 
   const endDrag = () => { setDragId(null); setDropTarget(null) }
 
@@ -68,7 +80,7 @@ export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = 
     const id = `view-${Date.now().toString(36)}`
     const name = kind === 'columns' ? 'Board'
       : kind === 'app' ? (CONTENT_APPS.find((a) => a.id === app)?.label ?? 'App')
-      : `View ${views.length + 1}`
+      : 'List'
     const view: ContentView = kind === 'columns' ? { id, name, kind, columns: defaultBoardColumns() }
       : kind === 'app' ? { id, name, kind, app }
       : { id, name, kind }
@@ -84,22 +96,21 @@ export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = 
   }
 
   return (
-    // Paper tabs: the ACTIVE tab connects through the header's main divider
-    // (the accent line the host renders at the strip's bottom edge) — a
-    // physical tab extending from a binder. The host draws the line; active
-    // tabs sit on top of it (z-[1], opaque background), inactive tabs rest
-    // above it (mb-[3px], the line runs beneath them uninterrupted).
-    <div className={cn('flex min-w-0 items-end', className)}>
+    // All tabs share one borderless shape. The divider runs over inactive
+    // fills; the active workspace fill joins it from above.
+    <div className={cn('relative flex h-full min-w-0 items-end', className)}>
       {/* Only the tab list scrolls — the add control stays pinned outside the
           scroll region so it can never drift out of view. */}
-      <div className="flex min-w-0 items-end gap-0.5 overflow-x-auto pt-1">
+      <div ref={stripRef} className="flex min-w-0 items-end gap-0.5 overflow-x-auto overscroll-x-contain pt-1 [scrollbar-width:none]">
       {views.map((view) => {
         const isActive = view.id === activeId
+        const ViewIcon = view.kind === 'columns' ? Columns3 : view.kind === 'app' && view.app ? appIcons[view.app] : LayoutList
         if (editingId === view.id) {
           return (
             <input
               key={view.id}
               autoFocus
+              aria-label="Tab name"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onBlur={commitRename}
@@ -107,7 +118,9 @@ export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = 
                 if (e.key === 'Enter') commitRename()
                 if (e.key === 'Escape') setEditingId(null)
               }}
-              className="relative z-[1] h-8 w-28 rounded-t-md border border-b-0 border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className={cn('relative h-[2.3rem] w-28 shrink-0 rounded-t-[.5rem] border-0 px-3 pb-1 text-xs outline-none ring-0',
+                isActive ? cn('z-[2] bg-background font-medium', accentColor ? onAccentSolidTextClass(accentColor) : 'text-foreground') : 'bg-muted text-muted-foreground')}
+              style={{ backgroundColor: isActive ? accentColor : undefined }}
             />
           )
         }
@@ -115,6 +128,7 @@ export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = 
           <button
             key={view.id}
             type="button"
+            aria-pressed={isActive}
             onClick={() => onSelect(view.id)}
             onDoubleClick={() => { if (!readOnly) { setEditingId(view.id); setDraft(view.name) } }}
             title={readOnly ? view.name : `${view.name}: double-click to rename, drag to reorder`}
@@ -135,27 +149,20 @@ export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = 
             onDrop={(e) => { e.preventDefault(); handleDrop() }}
             onDragEnd={endDrag}
             className={cn(
-              'group flex h-8 shrink-0 items-center gap-1.5 rounded-t-md px-3 text-xs transition-colors',
+              'group relative flex h-[2.3rem] shrink-0 items-center gap-1.5 rounded-t-[.5rem] border-0 px-3 pb-1 text-xs transition-colors',
               isActive
-                // Opaque bg + no bottom border + z above the host's divider =
-                // the tab visibly "opens into" the content below the line.
-                // With an accent it fills with the divider's own color.
-                ? cn('relative z-[1] border border-b-0 font-medium',
-                    accentColor ? accentTextClass : 'border-border bg-background text-foreground')
-                : 'mb-[3px] border border-b-0 border-transparent bg-muted/40 text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+                // The workspace fill joins the divider without a bottom seam.
+                ? cn('z-[2] bg-background font-medium', accentColor ? onAccentSolidTextClass(accentColor) : 'text-foreground')
+                : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground',
               dragId === view.id && 'opacity-50',
-              // Insertion indicator on the side the drop would land on.
-              dropTarget?.id === view.id && (dropTarget.before ? 'border-l-2 border-l-primary' : 'border-r-2 border-r-primary'),
             )}
-            // Inline borderColor would trump the drop-indicator classes, so
-            // it is skipped while this tab is the drag target.
-            style={isActive && accentColor
-              ? { backgroundColor: accentColor, ...(dropTarget?.id === view.id ? {} : { borderColor: accentColor }) }
-              : undefined}
+            // An inset drop indicator does not shift the tab's contents.
+            style={{
+              backgroundColor: isActive ? accentColor : undefined,
+              boxShadow: dropTarget?.id === view.id ? `inset ${dropTarget.before ? '2px' : '-2px'} 0 0 var(--primary)` : undefined,
+            }}
           >
-            {view.kind === 'columns' ? <Columns3 className="h-3 w-3 shrink-0" />
-              : view.kind === 'app' ? (view.app === 'todos' ? <ListTodo className="h-3 w-3 shrink-0" /> : <StickyNote className="h-3 w-3 shrink-0" />)
-              : <LayoutList className="h-3 w-3 shrink-0" />}
+            <ViewIcon className="h-3 w-3 shrink-0" />
             <span className="max-w-32 truncate">{view.name}</span>
             {onOpenToSide && (
               <PanelRight
@@ -182,41 +189,34 @@ export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = 
       </div>
 
       {!readOnly && (adding ? (
-        <span className="relative z-[1] mb-1.5 ml-1 flex shrink-0 items-center gap-1">
-          {/* Deleted the default "All" view? Offer it back verbatim. */}
-          {!views.some((v) => v.id === DEFAULT_VIEW.id) && (
-            <button
-              type="button"
-              onClick={() => { setAdding(false); onSave([{ ...DEFAULT_VIEW }, ...views], DEFAULT_VIEW.id) }}
-              className="flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-            >
-              <LayoutList className="h-3 w-3" /> All
-            </button>
-          )}
+        <span className="absolute left-0 top-full z-30 flex w-full min-w-64 flex-wrap items-center gap-2 rounded-b-xl border bg-card p-2 shadow-lg">
           <button
             type="button"
             onClick={() => addView('documents')}
-            className="flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+            className="flex h-10 items-center gap-1.5 rounded-md border px-2 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground"
           >
             <LayoutList className="h-3 w-3" /> List
           </button>
           <button
             type="button"
             onClick={() => addView('columns')}
-            className="flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+            className="flex h-10 items-center gap-1.5 rounded-md border px-2 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground"
           >
             <Columns3 className="h-3 w-3" /> Board
           </button>
-          {CONTENT_APPS.map((app) => (
-            <button
-              key={app.id}
-              type="button"
-              onClick={() => addView('app', app.id)}
-              className="flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-            >
-              {app.id === 'todos' ? <ListTodo className="h-3 w-3" /> : <StickyNote className="h-3 w-3" />} {app.label}
-            </button>
-          ))}
+          {CONTENT_APPS.map((app) => {
+            const AppIcon = appIcons[app.id]
+            return (
+              <button
+                key={app.id}
+                type="button"
+                onClick={() => addView('app', app.id)}
+                className="flex h-10 items-center gap-1.5 rounded-md border px-2 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+              >
+                <AppIcon className="h-3 w-3" /> {app.label}
+              </button>
+            )
+          })}
           <button type="button" onClick={() => setAdding(false)} className="p-1 text-muted-foreground hover:text-foreground" aria-label="Cancel">
             <X className="h-3 w-3" />
           </button>
@@ -227,7 +227,7 @@ export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = 
           onClick={() => setAdding(true)}
           title="Add view"
           aria-label="Add view"
-          className="relative z-[1] mb-1.5 ml-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+          className="relative ml-1 flex h-[2.3rem] w-10 shrink-0 items-center justify-center rounded-md pb-1 text-muted-foreground hover:bg-accent/50 hover:text-foreground"
         >
           <Plus className="h-3.5 w-3.5" />
         </button>

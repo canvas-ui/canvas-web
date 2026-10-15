@@ -4,7 +4,7 @@ import { NOTE_SCHEMA, type RendererProps } from './types'
 
 // Plaintext file body — monospace card, capped at 200k chars.
 export function PlaintextRenderer({ workspaceId, document, className = '' }: RendererProps) {
-  const { text, error, loading } = useDocumentBlobUrl(workspaceId, document.id, { mode: 'text' })
+  const { text, error, loading } = useDocumentBlobUrl(workspaceId, document.id, { mode: 'text', version: document.checksumArray?.[0] })
   if (error) return <p className="text-sm text-destructive">{error}</p>
   if (loading || text == null) return <p className="text-sm text-muted-foreground">Loading...</p>
   return (
@@ -16,7 +16,7 @@ export function PlaintextRenderer({ workspaceId, document, className = '' }: Ren
 // blob text first. Both go through the shared MarkdownView.
 export function MarkdownRenderer({ workspaceId, document, className = '' }: RendererProps) {
   const isNote = document.schema === NOTE_SCHEMA
-  const { text, error, loading } = useDocumentBlobUrl(workspaceId, document.id, { mode: 'text', enabled: !isNote })
+  const { text, error, loading } = useDocumentBlobUrl(workspaceId, document.id, { mode: 'text', enabled: !isNote, version: document.checksumArray?.[0] })
 
   if (isNote) {
     return (

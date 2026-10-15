@@ -88,7 +88,7 @@ function buildEmailHtmlBlob(
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="${csp}">
-<style>body{margin:12px;font:14px/1.5 system-ui,sans-serif;color:#1a1a1a;background:#fff;word-break:break-word}img{max-width:100%;height:auto}@media(max-width:480px){body{margin:8px}table{max-width:100%!important;width:100%!important}td,th{overflow-wrap:anywhere}}</style>
+<style>html{overflow:auto}body{margin:12px;font:14px/1.5 system-ui,sans-serif;color:#1a1a1a;background:#fff}@media(max-width:480px){body{margin:8px}}</style>
 </head><body>${clean}</body></html>`
     // charset both in the blob type and as <meta>: without either, the blob
     // document defaults to the locale charset and UTF-8 bodies render mojibake.
@@ -170,11 +170,11 @@ function EmailMessage({ workspaceId, document: doc, className = '' }: RendererPr
   }
 
   return (
-    <div className={`flex h-full min-h-0 flex-col gap-3 ${className}`}>
+    <div className={`flex h-full min-h-0 min-w-0 flex-col gap-3 ${className}`}>
       {/* Header */}
       <div className="shrink-0 rounded-md border bg-muted/30 p-2 text-sm sm:p-3">
-        <div className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:gap-3">
-          <div className="min-w-0 w-full space-y-1">
+        <div className="flex flex-wrap items-start justify-between gap-2 sm:gap-3">
+          <div className="min-w-0 flex-1 basis-64 space-y-1">
             <div className="truncate text-base font-semibold">{String(data.subject ?? '(no subject)')}</div>
             <details className="sm:hidden">
               <summary className="cursor-pointer text-xs">
@@ -196,7 +196,7 @@ function EmailMessage({ workspaceId, document: doc, className = '' }: RendererPr
             </div>
           </div>
           {bodyHtml && (
-            <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
+            <div className="flex max-w-full flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={() => setShowPlain(!showPlain)}>
                 {showPlain ? <Code className="mr-1.5 h-3.5 w-3.5" /> : <FileText className="mr-1.5 h-3.5 w-3.5" />}
                 {showPlain ? 'HTML' : 'Plain text'}
@@ -221,7 +221,9 @@ function EmailMessage({ workspaceId, document: doc, className = '' }: RendererPr
 
       {(error || bodyError) && <p className="text-sm text-destructive">{error || bodyError}</p>}
 
-      {/* Fill the space below the header; the sandboxed frame scrolls its own body.
+      {/* Keep authored table/image widths; the sandboxed frame scrolls its own
+          body horizontally when a formatted email is wider than this pane.
+          Fill the space below the header.
           The minimum keeps it usable in short readers, with outer scrolling for attachments. */}
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading message…</p>

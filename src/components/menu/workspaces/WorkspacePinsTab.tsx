@@ -108,7 +108,7 @@ export function WorkspacePinsTab({ pins, isLoading, searchQuery = '', activeKey,
             onKeyDown={e => { if (e.target !== e.currentTarget) return; if ((e.key === 'Enter' || e.key === ' ') && !unresolved) { e.preventDefault(); onOpen(pin) } }}
             title={unresolved ? `${pin.path} — folder no longer exists` : `Open ${pin.tree}:${pin.path}`}
             className={cn(
-              'group relative flex items-stretch gap-2.5 rounded-lg border bg-card shadow-elevation-1 text-left transition-colors',
+              'group relative flex items-stretch gap-2.5 rounded-(--card-radius) border bg-card shadow-elevation-1 text-left transition-colors',
               unresolved ? 'opacity-70 cursor-default' : 'cursor-pointer hover:bg-accent/40',
               isActive && 'ring-1 ring-primary/60',
               dragId === pin.id && 'opacity-40',

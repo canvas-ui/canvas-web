@@ -31,7 +31,7 @@ function build() {
     unfiledOnly: false, backendTarget: null, docScope: 'path', tbLensIds: null,
     currentPage: 1, pageSize: 50, serverSearchQueries: [], tbFiltersKey: '', tbFiltersKeyNoLens: '',
     isLayerView: false, selectedLayerId: null, queryDebug: false,
-    tbAllOf: [], tbAnyOf: [], tbNoneOf: [], tbScopeFilters: [], tbSort: { order: 'desc' },
+    documentSchema: undefined, viewAllOf: [], tbAllOf: [], tbAnyOf: [], tbNoneOf: [], tbScopeFilters: [], tbSort: { order: 'desc' },
     documentKey: (_workspace, _tree, path) => path, documentCache: cache,
     getWorkspaceDocuments: () => new Promise((resolve, reject) => pending.push({ resolve, reject })),
     setIsLoadingDocuments: value => { state.loading = value },
@@ -167,4 +167,27 @@ test('a delayed invalidation refresh bypasses a repopulated cache', async () => 
   pending[0].resolve({ payload: [{ id: 2 }], totalCount: 1 })
   await refresh
   assert.equal(state.documents[0].id, 2)
+})
+
+test('Notes queries keep server search and paging and cannot reuse the unfiltered cache', async () => {
+  const { fetch, state, context, cache } = build()
+  context.documentKey = (...args) => JSON.stringify(args)
+  const calls = []
+  context.getWorkspaceDocuments = async (...args) => {
+    calls.push(args)
+    return { payload: [{ id: args[2].includes('data/schema/note') ? 2 : 1 }], totalCount: 1 }
+  }
+  await fetch()
+  context.documentSchema = 'data/schema/note'
+  context.viewAllOf = ['data/schema/note']
+  context.serverSearchQueries = ['navigation']
+  context.currentPage = 2
+  context.pageSize = 10
+  await fetch()
+  assert.deepEqual(calls[1][2], ['data/schema/note'])
+  assert.deepEqual(calls[1][3].queries, ['navigation'])
+  assert.equal(calls[1][3].page, 2)
+  assert.equal(calls[1][3].limit, 10)
+  assert.equal(state.documents[0].id, 2)
+  assert.equal(cache.size, 2)
 })

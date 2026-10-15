@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react'
 import type { Document } from '@/types/workspace'
+import type { DocumentSideLocation } from '@/lib/document-side-location'
 
 export interface SideViewEntry {
   document: Document
@@ -9,9 +10,16 @@ export interface SideViewEntry {
 export interface SideViewContextValue {
   entry: SideViewEntry | null
   open: (document: Document, workspaceId: string) => void
+  /** Follow a saved revision in the current pane and its browser URL. */
+  replace?: (document: Document, workspaceId: string) => void
   /** Reuse the reading pane for default document activation. */
   preview?: (document: Document, workspaceId: string) => void
   close: () => void
+  location?: DocumentSideLocation | null
+  loading?: boolean
+  error?: string
+  retry?: () => void
+  update?: (change: Partial<Pick<DocumentSideLocation, 'section' | 'maximized'>>) => void
 }
 
 export const SideViewContext = createContext<SideViewContextValue | null>(null)

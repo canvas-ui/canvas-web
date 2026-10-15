@@ -200,6 +200,7 @@ export function ContextM2Detail() {
         )}
         <MenuTreeView
           root={tree}
+          workspaceId={context?.workspaceName}
           searchQuery={searchQuery}
           selectedPath={selectedPath}
           pendingPath={pendingPath}

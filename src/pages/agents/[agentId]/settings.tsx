@@ -87,7 +87,7 @@ export default function AgentSettingsPage() {
   const { agentId, tab } = useParams<{ agentId: string; tab?: string }>()
   const navigate = useNavigate()
   const { showToast } = useToast()
-  const { selectEntity, openM2Drawer } = useMenu()
+  const { selectEntity, goBack } = useMenu()
   const isMobile = useIsMobile()
 
   const activeTab: AgentSettingsTab = resolveAgentSettingsTab(tab)
@@ -449,7 +449,7 @@ export default function AgentSettingsPage() {
         // reopens it at the section list rather than leaving settings — the
         // step the tab strip used to stand in for. On desktop M2 is already
         // visible, so Back means "leave settings".
-          onBack={isMobile ? () => openM2Drawer('agents', 'settings', agent.id) : undefined}
+          onBack={isMobile ? goBack : undefined}
         />
 
         <form onSubmit={handleSave} className="space-y-6">

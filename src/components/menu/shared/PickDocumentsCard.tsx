@@ -78,7 +78,7 @@ export function PickDocumentsCard({ onClose, onConfirm, fixedWorkspaceName, savi
   }
 
   return (
-    <div className={cn('flex flex-col overflow-hidden rounded-2xl border bg-card shadow-elevation-4', sizeClassName || 'h-viewport-card max-h-full w-[min(420px,90vw)] max-md:h-full max-md:w-full max-md:shadow-elevation-5')}>
+    <div className={cn('flex flex-col overflow-hidden rounded-(--panel-radius) border bg-card shadow-elevation-4', sizeClassName || 'h-viewport-card max-h-full w-[min(420px,90vw)] max-md:h-full max-md:w-full max-md:shadow-elevation-5')}>
       <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
         <span className="flex items-center gap-2 text-sm font-medium">
           <FileSearch className="h-4 w-4" />
@@ -91,7 +91,7 @@ export function PickDocumentsCard({ onClose, onConfirm, fixedWorkspaceName, savi
 
       <div className="flex-1 overflow-hidden">
         <div
-          className="grid h-full w-[200%] grid-cols-2 transition-transform duration-200"
+          className="grid h-full w-[200%] grid-cols-2 transition-transform duration-normal"
           style={{ transform: step === 'workspace' ? 'translateX(0)' : 'translateX(-50%)' }}
         >
           {/* Step 1: workspace list */}

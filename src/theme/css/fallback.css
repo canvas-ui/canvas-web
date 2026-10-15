@@ -445,8 +445,8 @@
     --info: #4a87b1;
     --info-foreground: #f9fafc;
     --info-subtle: rgba(74, 135, 177, 0.14);
-    --border: rgba(255, 255, 255, 0.55);
-    --input: rgba(65, 72, 83, 0.35);
+    --border: rgba(92, 100, 111, 0.5);
+    --input: rgba(65, 72, 83, 0.5);
     --ring: #5b748e;
     --scrim: rgba(39, 46, 56, 0.25);
     --scrim-foreground: #ffffff;

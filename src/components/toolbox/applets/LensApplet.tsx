@@ -37,7 +37,7 @@ function LensHit({ workspaceRef, doc, distance, onOpen }: { workspaceRef: string
       type="button"
       onClick={() => onOpen(doc)}
       title={`Open ${info.title}`}
-      className="rounded-lg border border-border bg-card overflow-hidden flex flex-col text-left cursor-pointer transition-colors hover:border-foreground/30 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      className="rounded-(--card-radius) border border-border bg-card overflow-hidden flex flex-col text-left cursor-pointer transition-colors hover:border-foreground/30 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
       <div className="aspect-square bg-muted/40 flex items-center justify-center overflow-hidden">
         {isImage && blobUrl ? (
           <img src={blobUrl} alt={info.title} className="h-full w-full object-cover" />

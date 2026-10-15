@@ -1,3 +1,4 @@
+import { NoteSaveStatus } from '@/components/common/note-save-status'
 import { useEffect } from 'react'
 import { StickyNote } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -9,8 +10,8 @@ import { GeotagToggle } from '@/components/toolbox/add/GeotagToggle'
 import { B5Card, type B5SaveTarget } from '../B5Card'
 import type { QuickAddInitialData } from '../quick-add-types'
 
-export function NoteCardBody({ onClose, initialData }: { onClose: () => void; initialData?: QuickAddInitialData }) {
-  const f = useNoteFields()
+export function NoteCardBody({ onClose, initialData, draftId }: { onClose: () => void; initialData?: QuickAddInitialData; draftId: string }) {
+  const f = useNoteFields(undefined, undefined, `home-card:${draftId}`)
 
   useEffect(() => {
     if (initialData?.title) f.setTitle(initialData.title)
@@ -24,7 +25,7 @@ export function NoteCardBody({ onClose, initialData }: { onClose: () => void; in
       title="New Note"
       icon={StickyNote}
       onClose={onClose}
-      onSave={(target: B5SaveTarget) => f.save({ mode: 'workspace', ...target })}
+      onSave={async (target: B5SaveTarget) => { const ids = await f.save({ mode: 'workspace', ...target }); f.finish(); return ids }}
       canSave={f.canSave}
       saving={f.saving}
       successMessage="Note created"
@@ -52,6 +53,7 @@ export function NoteCardBody({ onClose, initialData }: { onClose: () => void; in
           <TagInput tags={f.tags} onChange={f.setTags} />
         </div>
 
+        <NoteSaveStatus {...f} onRetry={f.retry} />
         <GeotagToggle geotag={f.geotag} idPrefix="qa-note-geotag" />
       </div>
     </B5Card>

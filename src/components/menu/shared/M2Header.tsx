@@ -9,9 +9,8 @@ interface M2HeaderProps {
   onBack: () => void
   action?: React.ReactNode
   className?: string
-  // Workspace/context style cues: icon prepended to the title, accent color as
-  // a left border (M1 rows carry it on the right, so entering M2 keeps the
-  // color flowing left-to-right). Near-white colors fall back to neutral.
+  // Workspace/context cues: icon beside the title and an accent divider.
+  // Near-white colors fall back to neutral.
   icon?: string | null
   accentColor?: string | null
 }
@@ -22,11 +21,10 @@ export function M2Header({ title, onBack, action, className, icon, accentColor }
   return (
     <div
       className={cn('flex items-center h-12 px-2 border-b border-border shrink-0 gap-1', className)}
-      // 3px bottom border matches the content-area header bars (also h-12), so
+      // 4px bottom border matches the content-area header bars (also h-12), so
       // the accent line flows continuously from M2 into the content area.
       style={{
-        ...(accent ? { borderLeft: `6px solid ${accent}` } : {}),
-        borderBottomWidth: 3,
+        borderBottomWidth: 4,
         ...(accent ? { borderBottomColor: accent } : {}),
       }}
     >
@@ -35,6 +33,7 @@ export function M2Header({ title, onBack, action, className, icon, accentColor }
         onClick={onBack}
         className="flex items-center gap-0.5 h-8 rounded px-1 hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors flex-1 min-w-0"
         title="Back"
+        aria-label="Back to previous view"
       >
         <ChevronLeft className="w-4 h-4 shrink-0" />
         {icon && (

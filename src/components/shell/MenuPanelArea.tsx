@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useMenu } from './use-menu'
+import { useMobileViewSlide } from '@/hooks/use-mobile-view-slide'
 import { ContextList } from '@/components/menu/contexts/ContextList'
 import { ContextM2Detail } from '@/components/menu/contexts/ContextM2Detail'
 import { ContextM2Settings } from '@/components/menu/contexts/ContextM2Settings'
@@ -44,8 +45,12 @@ export function MenuPanelArea() {
   // Esc closes the menu layers innermost-first: M2 drawer, then M1 panel.
   // Registration order (M1 hook first) keeps M2 topmost when both open at once.
   useEscapeClose(closeM1, state.m1Open && !state.m2Open)
-  useEscapeClose(closeM2, state.m2Open)
+  useEscapeClose(closeM2, state.m1Open && state.m2Open)
   const isMobile = useIsMobile()
+  const m1Ref = useRef<HTMLDivElement>(null)
+  const m2Ref = useRef<HTMLDivElement>(null)
+  useMobileViewSlide(m1Ref, state.m1Open && !state.m2Open, state.activeSection ?? '')
+  useMobileViewSlide(m2Ref, state.m1Open && state.m2Open, `${state.activeSection}:${state.selectedEntityId}:${state.m2View}`)
   const [width, setWidth] = useState(DEFAULT_WIDTH)
   const [isDragging, setIsDragging] = useState(false)
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
@@ -86,21 +91,24 @@ export function MenuPanelArea() {
         style={state.m1Open && !mobileOverlay ? { width } : undefined}
         className={cn(
           'flex-shrink-0 overflow-hidden bg-card surface-glass',
-          !isDragging && !mobileOverlay && 'transition-[width] duration-200 ease-out',
+          !isDragging && !mobileOverlay && 'transition-[width] duration-normal ease-out',
           state.m1Open ? 'rounded-[var(--panel-radius)] shadow-elevation-2' : 'w-0',
           mobileOverlay
             // Left offset is derived, not hardcoded: the rail is 2.75/3/3.5rem
             // depending on density, so a fixed `left-16` closed the gap to zero
             // at comfortable density. inset + rail + gap.
-            ? 'fixed bottom-2 left-[calc(0.5rem+var(--spacing-rail)+0.5rem)] right-2 top-2 z-40 shadow-elevation-5 animate-fade-in'
+            ? 'fixed bottom-2 left-[calc(0.5rem+var(--spacing-rail)+0.5rem)] right-2 top-2 z-40 shadow-elevation-5'
             : 'relative',
         )}
       >
         {/* M1 layer — fades out while M2 slides over it: with translucent
             themes (frost) M2 no longer occludes, so M1 must yield itself. */}
         <div
+          ref={m1Ref}
+          data-menu-view="list"
+          inert={!state.m1Open || state.m2Open}
           className={cn(
-            'absolute inset-0 flex flex-col transition-opacity duration-200 ease-out',
+            'absolute inset-0 flex flex-col transition-opacity duration-normal ease-out',
             state.m2Open && 'opacity-0 pointer-events-none',
           )}
           style={mobileOverlay ? undefined : { minWidth: width }}
@@ -114,9 +122,12 @@ export function MenuPanelArea() {
 
         {/* M2 layer — slides over M1 */}
         <div
+          ref={m2Ref}
+          data-menu-view="detail"
+          inert={!state.m1Open || !state.m2Open}
           className={cn(
-            'absolute inset-0 z-10 bg-card flex flex-col transition-transform duration-200 ease-out',
-            state.m2Open ? 'translate-x-0' : 'translate-x-full',
+            'absolute inset-0 z-10 bg-card flex flex-col md:transition-transform md:duration-normal md:ease-out',
+            state.m2Open ? 'translate-x-0' : 'translate-x-full max-md:invisible',
           )}
         >
           {state.m2Open && <M2Content />}

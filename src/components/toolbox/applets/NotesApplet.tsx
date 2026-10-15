@@ -1,16 +1,17 @@
+import { useEditNoteFields } from '../add/useEditNoteFields'
+import { useNoteFields } from '../add/useNoteFields'
+import { NoteSaveStatus } from '@/components/common/note-save-status'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, Check, Loader2, Plus, Search, X } from 'lucide-react'
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, Loader2, Plus, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAppletTarget, type AppletTarget } from './use-applet-target'
-import { submitDocuments, describeTarget } from '../add/useAddTarget'
-import { updateWorkspaceDocument } from '@/services/workspace'
+import { describeTarget } from '../add/useAddTarget'
 import { NOTE_SCHEMA } from '@/components/renderers/types'
 import type { Document } from '@/types/workspace'
 import type { AppletProps } from './registry'
 import { GrowingTextarea, ItemActions, LinkDocOverlay } from './shared'
-import { APPLET_AUTOSAVE_MS, formatCreated, useAppletDocs } from './use-applet-docs'
+import { formatCreated, useAppletDocs } from './use-applet-docs'
 
-const NOTE_SCHEMA_VERSION = '2.0'
 
 // The Notes applet: every note visible in the bound target, stacked in one
 // editable document view - as close to a notepad as the data model allows.
@@ -42,55 +43,9 @@ function NoteItem({
   onLinkTo: () => void
   onDelete: () => void
 }) {
-  const [title, setTitle] = useState(String(doc.data?.title ?? ''))
-  const [content, setContent] = useState(String(doc.data?.content ?? ''))
-  const [status, setStatus] = useState<'idle' | 'dirty' | 'saving' | 'saved' | 'error'>('idle')
-  // Baseline = last persisted values; dirty is a comparison, not a flag that
-  // can drift out of sync with what actually saved.
-  const baseline = useRef({ title: String(doc.data?.title ?? ''), content: String(doc.data?.content ?? '') })
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const saveSeq = useRef(0)
-
-  const save = useCallback(async (nextTitle: string, nextContent: string) => {
-    if (!updateWorkspace) return
-    if (nextTitle === baseline.current.title && nextContent === baseline.current.content) return
-    // An emptied body would fail schema-side; keep the last non-empty save.
-    if (!nextContent.trim()) return
-    const seq = ++saveSeq.current
-    setStatus('saving')
-    try {
-      await updateWorkspaceDocument(updateWorkspace, {
-        id: doc.id,
-        schema: doc.schema,
-        schemaVersion: doc.schemaVersion,
-        data: {
-          ...(doc.data || {}),
-          ...(nextTitle.trim() ? { title: nextTitle.trim() } : { title: undefined }),
-          content: nextContent,
-        },
-        metadata: doc.metadata,
-      })
-      if (seq !== saveSeq.current) return
-      baseline.current = { title: nextTitle, content: nextContent }
-      setStatus('saved')
-      setTimeout(() => setStatus((s) => (s === 'saved' ? 'idle' : s)), 1500)
-    } catch {
-      if (seq === saveSeq.current) setStatus('error')
-    }
-  }, [doc.id, doc.schema, doc.schemaVersion, doc.data, doc.metadata, updateWorkspace])
-
-  const scheduleSave = useCallback((nextTitle: string, nextContent: string) => {
-    setStatus('dirty')
-    if (timer.current) clearTimeout(timer.current)
-    timer.current = setTimeout(() => save(nextTitle, nextContent), APPLET_AUTOSAVE_MS)
-  }, [save])
-
-  const flush = useCallback(() => {
-    if (timer.current) { clearTimeout(timer.current); timer.current = null }
-    save(title, content)
-  }, [save, title, content])
-
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
+  const f = useEditNoteFields(doc, updateWorkspace || '', !!updateWorkspace)
+  const { title, content, setTitle, setContent } = f
+  const flush = () => { void f.save().catch(() => {}) }
 
   return (
     <div
@@ -105,17 +60,14 @@ function NoteItem({
         <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
           {formatCreated(doc.createdAt)} · #{doc.id}
         </span>
-        <span className="flex items-center gap-1 text-[10px] text-muted-foreground/70">
-          {status === 'saving' && <Loader2 className="inline h-3 w-3 animate-spin" />}
-          {status === 'saved' && <Check className="inline h-3 w-3 text-success" />}
-          {status === 'dirty' && '·'}
-          {status === 'error' && <span className="text-destructive">save failed</span>}
+        <div className="flex items-center gap-1 text-[10px] text-muted-foreground/70">
+          <NoteSaveStatus {...f} onRetry={f.save} />
           <ItemActions onLinkTo={onLinkTo} onDelete={onDelete} />
-        </span>
+        </div>
       </div>
       <input
         value={title}
-        onChange={(e) => { setTitle(e.target.value); scheduleSave(e.target.value, content) }}
+        onChange={(e) => setTitle(e.target.value)}
         onBlur={flush}
         placeholder="Untitled"
         spellCheck={false}
@@ -123,7 +75,7 @@ function NoteItem({
       />
       <GrowingTextarea
         value={content}
-        onChange={(v) => { setContent(v); scheduleSave(title, v) }}
+        onChange={setContent}
         onBlur={flush}
         innerRef={(el) => registerBody(doc.id, el)}
       />
@@ -134,34 +86,19 @@ function NoteItem({
 // Inline creation - a blank note pinned above the list, saved into the bound
 // target like the toolbox NoteForm.
 function DraftNote({ target, onCreated, onCancel }: { target: AppletTarget; onCreated: () => void; onCancel: () => void }) {
-  const [title, setTitle] = useState('')
-  const [content, setContent] = useState('')
-  const [saving, setSaving] = useState(false)
+  const f = useNoteFields(target, undefined, 'applet')
+  const { title, content, setTitle, setContent, saving } = f
   const [error, setError] = useState<string | null>(null)
-
   const create = async () => {
-    if (!content.trim() || !target || saving) return
-    setSaving(true)
-    setError(null)
-    try {
-      await submitDocuments(target, [{
-        schema: NOTE_SCHEMA,
-        schemaVersion: NOTE_SCHEMA_VERSION,
-        data: { ...(title.trim() ? { title: title.trim() } : {}), content },
-        metadata: { features: [] },
-      }])
-      onCreated()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create note')
-      setSaving(false)
-    }
+    try { await f.save(target); f.finish(); onCreated() }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Failed to save note') }
   }
 
   return (
     <div className="border-t border-border/60 bg-muted/30 px-4 py-3">
       <div className="mb-1 flex items-baseline justify-between">
         <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">New note</span>
-        <button type="button" onClick={onCancel} className="text-muted-foreground hover:text-foreground" aria-label="Discard draft">
+        <button type="button" onClick={onCancel} className="text-muted-foreground hover:text-foreground" aria-label="Close note">
           <X className="h-3 w-3" />
         </button>
       </div>
@@ -174,6 +111,7 @@ function DraftNote({ target, onCreated, onCancel }: { target: AppletTarget; onCr
         className="mb-1 w-full border-0 bg-transparent p-0 text-sm font-semibold text-foreground outline-none placeholder:text-muted-foreground/50"
       />
       <GrowingTextarea value={content} onChange={setContent} placeholder="Write your note…" />
+      <NoteSaveStatus {...f} onRetry={f.retry} />
       {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
       <div className="mt-2 flex justify-end">
         <button
@@ -182,7 +120,7 @@ function DraftNote({ target, onCreated, onCancel }: { target: AppletTarget; onCr
           disabled={!content.trim() || saving}
           className="rounded-md bg-primary px-2.5 py-1 text-xs text-primary-foreground disabled:opacity-50"
         >
-          {saving ? 'Saving…' : 'Save note'}
+          {saving ? 'Saving…' : 'Done'}
         </button>
       </div>
     </div>
@@ -312,7 +250,7 @@ export function NotesApplet({ autoAdd = false }: AppletProps) {
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {adding && (
-          <DraftNote
+          <DraftNote key={JSON.stringify(target)}
             target={target}
             onCreated={() => { setAdding(false); reload() }}
             onCancel={() => setAdding(false)}

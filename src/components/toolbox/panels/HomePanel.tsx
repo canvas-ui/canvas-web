@@ -20,9 +20,7 @@ export function HomePanel() {
         </div>
       </div>
 
-      {/* Notifications — fed by the messaging 'canvas' channel (hooks/rules
-          notify(), agents) over websocket; recent items survive page loads
-          via the server-side buffer. */}
+      {/* The same browser-local history as the Notifications tab. */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -44,13 +42,13 @@ export function HomePanel() {
           )}
         </div>
         {items.length === 0 ? (
-          <div className="text-xs text-muted-foreground text-center py-10 border border-dashed rounded-lg">
+          <div className="text-xs text-muted-foreground text-center py-10 border border-dashed rounded-(--card-radius)">
             No notifications
           </div>
         ) : (
           <div className="space-y-2">
             {[...items].reverse().map((item) => (
-              <div key={item.id} className="rounded-lg border p-2.5">
+              <div key={item.id} className="rounded-(--card-radius) border p-2.5">
                 <p className="text-xs whitespace-pre-wrap break-words">{item.text}</p>
                 <p className="mt-1 text-[10px] text-muted-foreground">
                   {new Date(item.timestamp).toLocaleString()}

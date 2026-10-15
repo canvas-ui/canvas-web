@@ -1,10 +1,13 @@
+import { DocumentActionDialog } from '@/components/common/document-action-dialog'
+import { PlaintextFileForm } from './add/PlaintextFileForm'
+import { FileText } from 'lucide-react'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { sketchEditor } from '@/components/editors/registry'
 import { useAddTarget, useBackendAddTarget } from './add/useAddTarget'
 import { useCallback, useRef, useState } from 'react'
-import { X, MessageSquarePlus, StickyNote, Link as LinkIcon, Upload, Camera, Brush, Plus, Pencil, FileSearch, FolderPlus, ListTodo, User } from 'lucide-react'
+import { ArrowLeft, X, MessageSquarePlus, StickyNote, Link as LinkIcon, Upload, Camera, Brush, Plus, Pencil, FileSearch, FolderPlus, ListTodo, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useIsTooNarrowToDock } from '@/hooks/use-mobile'
 import { MessageComposer } from '@/components/common/MessageComposer'
@@ -32,6 +35,7 @@ const TITLES: Record<AddKind, { label: string; icon: typeof StickyNote }> = {
   todo: { label: 'New Todo', icon: ListTodo },
   identity: { label: 'New Identity', icon: User },
   sketch: { label: 'New Sketch', icon: Brush },
+  plaintext: { label: 'New Plaintext File', icon: FileText },
   file: { label: 'Add Files', icon: Upload },
   photo: { label: 'Photo/Video', icon: Camera },
   existing: { label: 'Add Existing', icon: FileSearch },
@@ -39,17 +43,17 @@ const TITLES: Record<AddKind, { label: string; icon: typeof StickyNote }> = {
 }
 
 export function AddPanel() {
-  const { state, openAdd, closeAdd } = useToolbox()
+  const { state, openAdd, openAddPicker, closeAdd } = useToolbox()
   useEscapeClose(closeAdd, state.addOpen)
-  const { addOpen, addKind, editDocument } = state
+  const { addOpen, addKind, editDocument, addModal } = state
   const target = useAddTarget()
   const backend = useBackendAddTarget(target)
-  const allowedBackendKinds = ['file', 'photo', 'folder', 'message']
+  const allowedBackendKinds = ['file', 'photo', 'folder', 'message', 'plaintext']
   const backendBlockedKind = backend.isBackend && !!addKind && !allowedBackendKinds.includes(addKind)
   const messageWorkspace = state.activeWorkspaceName
   const omitMessage = !messageWorkspace || !!state.addRelateTo
   const blockedKind = backendBlockedKind || (addKind === 'message' && omitMessage)
-  const omittedKinds: AddKind[] = backend.isBackend ? ['note', 'link', 'todo', 'identity', 'sketch', 'existing'] : []
+  const omittedKinds: AddKind[] = backend.isBackend ? ['note', 'link', 'todo', 'identity', 'sketch', 'existing'] : ['plaintext']
   if (omitMessage) omittedKinds.push('message')
   const formKey = target?.mode === 'workspace' ? `${target.workspaceName}:${target.treeName}:${target.path}` : target?.contextId
   const navigate = useNavigate()
@@ -106,41 +110,43 @@ export function AddPanel() {
     HeaderIcon = Plus
   }
 
-  return (
+  const content = (
     <>
       {/* Mobile scrim — same treatment as the M1/M2 menu drawer */}
-      {asDrawer && (
+      {asDrawer && !addModal && (
         <div className="fixed inset-0 z-panel-scrim bg-scrim animate-fade-in" onClick={closeAdd} aria-hidden />
       )}
     <div
-      style={asDrawer ? undefined : { width }}
+      style={asDrawer || addModal ? undefined : { width }}
       className={cn(
         'flex flex-col overflow-hidden rounded-[var(--panel-radius)] border bg-card surface-glass',
         // Mobile: M1/M2-style drawer next to the menubar, above everything
         // (incl. the z-50 toolbox FAB, which would otherwise cover the form's
         // bottom controls). Desktop: a resizable flex sibling that shrinks
         // the main content.
-        asDrawer
+        addModal ? 'h-full w-full' : asDrawer
           ? 'fixed bottom-2 left-2 right-2 top-2 z-panel shadow-elevation-5 animate-fade-in'
           : 'relative shrink-0 shadow-elevation-3',
       )}
     >
-      {!asDrawer && (
+      {!asDrawer && !addModal && (
         <div
           onMouseDown={onDragStart}
           className="absolute left-0 top-0 bottom-0 z-10 w-1 cursor-col-resize transition-colors hover:bg-primary/20"
         />
       )}
 
-      <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
-        <span className="flex items-center gap-2 text-sm font-medium">
+      <div className="flex h-[calc(3rem-1px)] shrink-0 items-center gap-2 border-b-4 px-2"
+        style={state.activeAccentColor ? { borderBottomColor: state.activeAccentColor } : undefined}>
+        <button type="button" className="canvas-nav-button" aria-label="Back one level" onClick={() => isPicker || isEditMode ? closeAdd() : openAddPicker()}><ArrowLeft className="h-5 w-5" /></button>
+        <span className="flex flex-1 items-center gap-2 text-sm font-medium">
           {isEditMode ? <Pencil className="h-4 w-4" /> : <HeaderIcon className="h-4 w-4" />}
           {headerLabel}
         </span>
         <button
           type="button"
           onClick={closeAdd}
-          className="text-muted-foreground transition-colors hover:text-foreground"
+          className="flex h-8 w-8 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           aria-label="Close"
         >
           <X className="h-4 w-4" />
@@ -163,10 +169,11 @@ export function AddPanel() {
         )}
         {!isEditMode && isPicker && (!backend.isBackend || backend.destination) && <InsertMenu onSelect={openAdd} omit={omittedKinds} />}
         {!isEditMode && addKind === 'message' && !omitMessage && messageWorkspace && <MessageComposer key={messageWorkspace} workspaceId={messageWorkspace} onClose={closeAdd} />}
-        {!isEditMode && !backend.isBackend && addKind === 'note' && <NoteForm />}
+        {!isEditMode && !backend.isBackend && addKind === 'note' && <NoteForm key={formKey} />}
         {!isEditMode && !backend.isBackend && addKind === 'link' && <LinkForm />}
         {!isEditMode && !backend.isBackend && addKind === 'todo' && <TodoForm />}
         {!isEditMode && !backend.isBackend && addKind === 'identity' && <IdentityForm />}
+        {!isEditMode && backend.destination && addKind === 'plaintext' && <PlaintextFileForm key={formKey} />}
         {!isEditMode && (!backend.isBackend || backend.destination) && addKind === 'file' && <FileForm key={formKey} />}
         {!isEditMode && (!backend.isBackend || backend.destination) && addKind === 'photo' && <FileForm key={formKey} capture />}
         {!isEditMode && !backend.isBackend && addKind === 'existing' && <ExistingDocsForm />}
@@ -175,4 +182,5 @@ export function AddPanel() {
     </div>
     </>
   )
+  return addModal ? <DocumentActionDialog label={headerLabel} onClose={closeAdd}>{content}</DocumentActionDialog> : content
 }

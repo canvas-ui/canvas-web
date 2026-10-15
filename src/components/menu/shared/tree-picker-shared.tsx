@@ -26,7 +26,7 @@ export function InlineCreateRow({ onConfirm, onCancel, busy }: {
 }) {
   const [name, setName] = useState('')
   return (
-    <div className="flex min-h-11 items-center gap-2 rounded-md bg-card px-3 py-2.5 text-sm shadow-elevation-1">
+    <div className="flex min-h-11 items-center gap-2 rounded-(--card-radius) bg-card px-3 py-2.5 text-sm shadow-elevation-1">
       <CornerDownRight className="h-4 w-4 shrink-0 text-muted-foreground" />
       <input
         type="text"
@@ -176,8 +176,8 @@ export function WorkspaceListStep({
         <div
           key={ws.id || ws.name}
           onClick={() => onPick(ws.name)}
-          className="group relative flex cursor-pointer items-center gap-2 rounded-md bg-card px-3 py-2.5 shadow-elevation-1 transition-all hover:bg-accent/50 hover:shadow"
-          style={{ borderRight: `6px solid ${accent || 'transparent'}`, borderRadius: accent ? '6px 0 0 6px' : undefined }}
+          className="group relative flex cursor-pointer items-center gap-2 rounded-(--card-radius) bg-card px-3 py-2.5 shadow-elevation-1 transition-all hover:bg-accent/50 hover:shadow"
+          style={{ borderRight: `6px solid ${accent || 'transparent'}` }}
         >
           <Icon icon={ws.icon || DEFAULT_WORKSPACE_ICON} width={18} height={18} color={accent} className={cn('shrink-0', !accent && 'text-muted-foreground')} />
           <span className="flex-1 truncate text-sm font-medium">{ws.label || ws.name}</span>

@@ -21,9 +21,9 @@ function grouped(items: ActionItem[]): ActionItem[][] {
 
 // Runs the action after the menu is gone, so an action that opens a dialog
 // does not get its focus stolen back by the menu's focus restore.
-function runAfterClose(item: ActionItem, onClose: () => void) {
+function runAfterClose(item: ActionItem, onClose: () => void, shiftKey: boolean) {
   onClose()
-  setTimeout(() => { void item.run() }, 0)
+  setTimeout(() => { void item.run({ shiftKey }) }, 0)
 }
 
 /**
@@ -90,7 +90,7 @@ export function ActionMenu({ anchor, items, onClose, label }: {
                   tabIndex={-1}
                   aria-disabled={item.disabled || undefined}
                   title={item.hint}
-                  onClick={() => { if (!item.disabled) runAfterClose(item, onClose) }}
+                  onClick={event => { if (!item.disabled) runAfterClose(item, onClose, event.shiftKey) }}
                   className={cn(
                     'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm outline-none',
                     item.disabled ? 'cursor-default opacity-50' : item.destructive
@@ -126,7 +126,7 @@ export function ActionSheet({ items, onClose, header }: {
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-fullscreen flex flex-col bg-popover text-popover-foreground animate-in slide-in-from-bottom-10 fade-in duration-200"
+      className="fixed inset-0 z-fullscreen flex flex-col bg-popover text-popover-foreground animate-in slide-in-from-bottom-10 fade-in duration-normal"
       onClick={onClose}
       onContextMenu={(e) => e.preventDefault()}
     >
@@ -152,7 +152,7 @@ export function ActionSheet({ items, onClose, header }: {
                   key={item.id}
                   type="button"
                   disabled={item.disabled}
-                  onClick={() => runAfterClose(item, onClose)}
+                  onClick={event => runAfterClose(item, onClose, event.shiftKey)}
                   className={cn(itemClass, item.destructive && 'border-destructive/30 text-destructive', item.disabled && 'opacity-50')}
                 >
                   {Icon && <Icon className={cn('h-5 w-5 shrink-0', !item.destructive && 'text-muted-foreground')} />}

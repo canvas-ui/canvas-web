@@ -27,7 +27,7 @@ function SketchTile({ doc, scope, onOpen, onRemove }: {
   })
   const title = String(doc.data?.title ?? 'Sketch')
   return (
-    <div className="group relative overflow-hidden rounded-lg border bg-card shadow-elevation-2 transition-shadow hover:shadow-elevation-3">
+    <div className="group relative overflow-hidden rounded-(--card-radius) border bg-card shadow-elevation-2 transition-shadow hover:shadow-elevation-3">
       <button type="button" onClick={onOpen} className="block w-full text-left">
         <div className="flex aspect-[4/3] items-center justify-center overflow-hidden bg-muted/30">
           {blobUrl

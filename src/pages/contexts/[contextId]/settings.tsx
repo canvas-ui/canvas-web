@@ -40,7 +40,7 @@ export default function ContextSettingsPage() {
   const ownerId = searchParams.get('ownerId') || undefined
   const navigate = useNavigate()
   const { showToast } = useToast()
-  const { selectEntity, openM2Drawer, closeM2 } = useMenu()
+  const { selectEntity, goBack, closeM2 } = useMenu()
   const isMobile = useIsMobile()
 
   const activeTab: ContextSettingsTab = resolveContextSettingsTab(tab)
@@ -219,7 +219,7 @@ export default function ContextSettingsPage() {
         // reopens it at the section list rather than leaving settings — the
         // step the tab strip used to stand in for. On desktop M2 is already
         // visible, so Back means "leave settings".
-          onBack={isMobile ? () => openM2Drawer('contexts', 'settings', context.id) : undefined}
+          onBack={isMobile ? goBack : undefined}
         />
 
         {activeTab === 'general' && (

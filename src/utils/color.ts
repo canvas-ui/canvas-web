@@ -107,7 +107,9 @@ export const onAccentTextClass = (accent?: string): string => {
 // helper above is tuned for small glyphs and is too faint for a label.
 export const onAccentSolidTextClass = (accent: string): string => {
   const lum = relativeLuminance(accent);
-  return lum !== null && lum > 0.45 ? 'text-black' : 'text-white';
+  // Choose the higher WCAG contrast ratio. The crossover guarantees at least
+  // 4.58:1 for either black or white, including saturated mid-tone colours.
+  return lum !== null && (lum + 0.05) / 0.05 >= 1.05 / (lum + 0.05) ? 'text-black' : 'text-white';
 };
 
 // Re-export helpers in case we want them elsewhere

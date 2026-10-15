@@ -45,7 +45,7 @@ export function ImageThumb({ workspaceId, doc, onClick, className = 'aspect-squa
       // The comment is the useful hover text once there is one — the filename
       // is already the alt text and the lightbox caption.
       title={comment || title}
-      className={`canvas-no-drag group relative block w-full overflow-hidden rounded-lg border bg-muted/40 shadow-elevation-1 transition-shadow hover:shadow-elevation-2 hover:ring-2 hover:ring-primary/30 ${className}`}
+      className={`canvas-no-drag group relative block w-full overflow-hidden rounded-(--card-radius) border bg-muted/40 shadow-elevation-1 transition-shadow hover:shadow-elevation-2 hover:ring-2 hover:ring-primary/30 ${className}`}
     >
       {loading && <div className="absolute inset-0 animate-pulse bg-muted/60" />}
       {error && !isVideoDoc(doc) && <div className="absolute inset-0 flex items-center justify-center p-1 text-[10px] text-destructive">{error}</div>}
@@ -54,7 +54,7 @@ export function ImageThumb({ workspaceId, doc, onClick, className = 'aspect-squa
           src={blobUrl}
           alt={title}
           loading="lazy"
-          className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+          className="h-full w-full object-cover transition-transform duration-normal group-hover:scale-105"
         />
       )}
       {isVideoDoc(doc) && <span className="absolute inset-0 flex items-center justify-center"><Play className="h-10 w-10 rounded-full bg-black/60 p-2 text-white" /><span className="sr-only">Play video</span></span>}

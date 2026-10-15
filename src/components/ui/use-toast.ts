@@ -9,7 +9,11 @@ export type ToastType = {
   busy?: boolean
 }
 
-export type ToastInput = Omit<ToastType, 'id' | 'busy'>
+export type ToastInput = Omit<ToastType, 'id' | 'busy'> & {
+  /** Stable delivery identity/time for incoming notifications. */
+  historyId?: string
+  timestamp?: string
+}
 
 /** Handle for a long-running operation's toast; settle it exactly once. */
 export type ProgressToast = {

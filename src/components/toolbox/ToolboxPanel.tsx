@@ -2,6 +2,7 @@ import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { LayoutGrid, SlidersHorizontal, Brain, Bell, X, Maximize2, Minimize2, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { DEFAULT_SIDE_PANEL_WIDTH } from '@/lib/panel-size'
 import { useIsTooNarrowToDock } from '@/hooks/use-mobile'
 import { useToolbox } from './use-toolbox'
 import { type T1View } from './toolbox-context'
@@ -21,7 +22,6 @@ const TABS: Array<{ view: Exclude<T1View, null>; icon: LucideIcon; label: string
 
 // Desktop width bounds. The panel is resizable (drag the left edge) and can be
 // toggled to fill ~half the screen — roomy enough for the map filter.
-const DEFAULT_WIDTH = 420
 const MIN_WIDTH = 340
 const WIDTH_KEY = 'toolbox:width'
 // The content column keeps this much room whatever the panel is dragged to —
@@ -53,7 +53,7 @@ export function ToolboxPanel() {
 
   const [width, setWidth] = useState<number>(() => {
     const raw = typeof window !== 'undefined' ? Number(localStorage.getItem(WIDTH_KEY)) : NaN
-    return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_WIDTH
+    return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_SIDE_PANEL_WIDTH
   })
 
   const persistWidth = useCallback((w: number) => {
@@ -84,7 +84,7 @@ export function ToolboxPanel() {
   }, [width])
 
   const isWide = width >= halfScreen() * 0.9
-  const toggleWide = () => persistWidth(isWide ? DEFAULT_WIDTH : clampWidth(halfScreen()))
+  const toggleWide = () => persistWidth(isWide ? DEFAULT_SIDE_PANEL_WIDTH : clampWidth(halfScreen()))
 
   // Keep the width within the viewport when it shrinks.
   useEffect(() => {
@@ -104,12 +104,12 @@ export function ToolboxPanel() {
     <div
       style={asDrawer ? undefined : { width }}
       className={cn(
-        'flex flex-col overflow-hidden border bg-card surface-glass text-foreground',
+        'flex flex-col overflow-hidden rounded-(--panel-radius) border bg-card surface-glass text-foreground',
         // Mobile: full drawer over the scrim. Desktop: a resizable card that sits
         // as the right-most flex sibling (same chrome as the + AddPanel).
         asDrawer
-          ? 'fixed bottom-2 left-2 right-2 top-2 z-panel rounded-2xl shadow-elevation-5 animate-fade-in'
-          : 'relative shrink-0 rounded-[var(--panel-radius)] shadow-elevation-3',
+          ? 'fixed bottom-2 left-2 right-2 top-2 z-panel shadow-elevation-5 animate-fade-in'
+          : 'relative shrink-0 shadow-elevation-3',
       )}
     >
       {/* Resize handle — desktop only, on the left (content-facing) edge. */}
@@ -126,10 +126,11 @@ export function ToolboxPanel() {
           filtered (workspace/context accent); default border when none (→ black
           once a global section exists). */}
       <div
-        // Always 3px (matches the content header's accent underline); only the
+        // Always 4px (matches the content header's accent underline); only the
         // colour varies — the content accent when there is one, else the default
         // border colour (e.g. a white/no-accent workspace like Universe).
-        className="flex h-12 shrink-0 items-center justify-between gap-1 border-b-[3px] px-2"
+        // Include the panel's 1px top border in the shared 48px header height.
+        className="flex h-[calc(3rem-1px)] shrink-0 items-center justify-between gap-1 border-b-4 px-2"
         style={activeAccentColor ? { borderBottomColor: activeAccentColor } : undefined}
       >
         <div className="flex items-center gap-1">
@@ -141,7 +142,7 @@ export function ToolboxPanel() {
               aria-label={label}
               title={label}
               className={cn(
-                'flex h-8 w-8 items-center justify-center rounded-md transition-colors',
+                'flex h-10 w-11 items-center justify-center rounded-md transition-colors',
                 t1View === view
                   ? 'bg-muted text-foreground'
                   : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',

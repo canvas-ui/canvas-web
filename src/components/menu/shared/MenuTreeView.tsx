@@ -14,6 +14,7 @@ import {
 import { Icon } from '@iconify/react'
 import { cn, isCoarsePointer } from '@/lib/utils'
 import { backendTrashLocation } from '@/lib/backend-trash'
+import { isSameDocumentFolder, type DocumentDragPayload } from '@/lib/document-drag'
 import type { TreeNode, LayerMetadata } from '@/types/workspace'
 import {
   getLayerStyle, mergeLayerStyle, DEFAULT_FOLDER_ICON, DEFAULT_CANVAS_ICON,
@@ -30,6 +31,7 @@ import { onAccentTextClass, onAccentSolidTextClass } from '@/utils/color'
 
 export interface MenuTreeViewProps {
   root: TreeNode | null
+  workspaceId?: string
   treeName?: string
   // The dedicated backends tree: read-only mirror of backend storage. Gates
   // resync / purge / destroy actions and disables generic tree mutations
@@ -521,7 +523,7 @@ function InlineCreateInput({ onConfirm, onCancel, placeholder = 'folder name…'
   }
 
   return (
-    <div className="flex min-h-11 items-center gap-2 rounded-md px-3 py-2.5 bg-card ring-1 ring-primary/50 shadow-elevation-3 text-sm font-medium">
+    <div className="flex min-h-11 items-center gap-2 rounded-(--card-radius) px-3 py-2.5 bg-card ring-1 ring-primary/50 shadow-elevation-3 text-sm font-medium">
       <ChevronRight className="w-4 h-4 opacity-0 shrink-0" />
       <input
         ref={inputRef}
@@ -830,7 +832,7 @@ function CardNode({
       <div
         data-active={isSelected || undefined}
         className={cn(
-          'group relative flex min-h-11 items-center gap-2 rounded-md px-3 py-2.5 cursor-pointer transition-all select-none overflow-hidden',
+          'group relative flex min-h-11 items-center gap-2 rounded-(--card-radius) px-3 py-2.5 cursor-pointer transition-all select-none overflow-hidden',
           'shadow-elevation-3 hover:shadow-elevation-4 text-sm',
           'before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1.5 before:transition-colors',
           isSource && 'ring-1 ring-info/40 bg-info/10 before:bg-info',
@@ -983,7 +985,7 @@ function CardNode({
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export function MenuTreeView({
-  root, treeName = 'context', isBackendsTree = false, onRestoreTrash, onDiscardTrash, selectedPath, pendingPath, onSelect, isLoading = false, readOnly = false,
+  root, workspaceId, treeName = 'context', isBackendsTree = false, onRestoreTrash, onDiscardTrash, selectedPath, pendingPath, onSelect, isLoading = false, readOnly = false,
   onAddRule, onAddStoreRule, onStoragePolicy, policyBadgeFor,
   rootLabel, contentPath, onShowContent, onOpenToSide, onShiftSelect,
   onInsertPath, onNewCanvas, onShareCanvas, onRemovePath, onRenamePath, onMovePath, onCopyPath,
@@ -1157,12 +1159,13 @@ export function MenuTreeView({
 
   const handleDrop = useCallback(async (targetPath: string, e: React.DragEvent) => {
     e.preventDefault()
+    e.stopPropagation()
     if (backendTrashLocation(treeName, targetPath)) return
     // Documents dragged from the content area carry an application/json
     // payload ({ type: 'document', documentIds }) — link them into the
     // drop path instead of treating the drop as a tree-path move.
     const docPayload = (() => {
-      try { return JSON.parse(e.dataTransfer.getData('application/json')) as { type?: string; documentIds?: number[] } }
+      try { return JSON.parse(e.dataTransfer.getData('application/json')) as DocumentDragPayload }
       catch { return null }
     })()
     if (docPayload?.type === 'document' && Array.isArray(docPayload.documentIds) && docPayload.documentIds.length) {
@@ -1170,6 +1173,7 @@ export function MenuTreeView({
       isCopyRef.current = false
       setIsCopyDrag(false)
       setDragOverPath(null)
+      if (isSameDocumentFolder(docPayload, workspaceId, treeName, targetPath)) return
       if (onPasteDocuments) {
         try { await onPasteDocuments(targetPath, docPayload.documentIds) }
         catch (err) { alert(err instanceof Error ? err.message : String(err)) }
@@ -1204,7 +1208,7 @@ export function MenuTreeView({
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err))
     }
-  }, [isValidPathDrop, onCopyPath, onMovePath, onPasteDocuments, treeName, isBackendsTree, onMergeDown])
+  }, [isValidPathDrop, onCopyPath, onMovePath, onPasteDocuments, workspaceId, treeName, isBackendsTree, onMergeDown])
 
   const q = searchQuery.toLowerCase().trim()
 
@@ -1453,7 +1457,7 @@ export function MenuTreeView({
       <div
         data-active={(selectedPath === '/' && !contentPath) || undefined}
         className={cn(
-          'group relative flex min-h-11 items-center gap-2 rounded-md px-3 py-2.5 cursor-pointer transition-all select-none',
+          'group relative flex min-h-11 items-center gap-2 rounded-(--card-radius) px-3 py-2.5 cursor-pointer transition-all select-none',
           'shadow-elevation-3 hover:shadow-elevation-4 text-sm',
           selectedPath === '/' && !contentPath ? 'bg-primary/[0.06]' : 'bg-card hover:bg-primary/[0.04]',
           dragOverPath === '/' && !readOnly && !isCopyDrag && 'ring-2 ring-info bg-info-subtle/50',

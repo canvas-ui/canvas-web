@@ -151,7 +151,7 @@ export function StoragePolicyPanel({ workspaceId, path, policy, onClose, onSaved
 
   return (
     <LinkToSidePanel onClose={close}>
-      <section role="dialog" aria-modal="true" aria-labelledby="storage-policy-title" className={`${LINK_TO_SIDE_SIZE} flex flex-col overflow-hidden rounded-2xl border bg-card shadow-elevation-4`}>
+      <section role="dialog" aria-modal="true" aria-labelledby="storage-policy-title" className={`${LINK_TO_SIDE_SIZE} flex flex-col overflow-hidden rounded-(--panel-radius) border bg-card shadow-elevation-4`}>
         <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
           <h2 id="storage-policy-title" className="flex items-center gap-2 text-sm font-medium"><FolderSync className="h-4 w-4" />{editing ? 'Edit storage policy' : 'Storage policy'}</h2>
           <button type="button" onClick={close} disabled={busy} aria-label="Close" className="p-1 disabled:opacity-40"><X className="h-4 w-4" /></button>

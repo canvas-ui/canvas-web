@@ -8,6 +8,7 @@ import { useAgentListData } from '@/hooks/useAgentListData'
 import { startAgent, stopAgent, type Agent } from '@/services/agent'
 import { useToast } from '@/components/ui/use-toast'
 import { useNavigate } from 'react-router-dom'
+import { MenuBackButton } from '@/components/menu/shared/MenuBackButton'
 
 function StatusDot({ status }: { status: string }) {
   const color =
@@ -66,7 +67,7 @@ export function AgentList() {
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between px-4 h-12 border-b border-border shrink-0">
-        <span className="text-sm font-semibold">Agents</span>
+        <div className="flex min-w-0 items-center"><MenuBackButton /><span className="text-sm font-semibold">Agents</span></div>
         {/* Creation is a content-area job — see WorkspaceList. */}
         {!runtime.local && <button
           type="button"
@@ -96,10 +97,10 @@ export function AgentList() {
                   key={agent.id}
                   data-active={isActive || undefined}
                   className={cn(
-                    'group relative rounded-md px-3 py-2.5 cursor-pointer transition-all shadow-elevation-1 hover:shadow',
+                    'group relative rounded-(--card-radius) px-3 py-2.5 cursor-pointer transition-all shadow-elevation-1 hover:shadow',
                     isActive ? 'bg-accent shadow' : 'bg-card hover:bg-accent/50',
                   )}
-                  style={{ borderRight: `6px solid ${agent.color || 'transparent'}`, borderRadius: agent.color ? '6px 0 0 6px' : undefined }}
+                  style={{ borderRight: `6px solid ${agent.color || 'transparent'}` }}
                   onClick={() => handleSelect(agent)}
                 >
                   {/* Top row: name + controls */}

@@ -1,4 +1,4 @@
-import { StickyNote, Link as LinkIcon, File as FileIcon, Mail, FileQuestion } from 'lucide-react'
+import { StickyNote, Link as LinkIcon, File as FileIcon, Mail, FileQuestion, X } from 'lucide-react'
 import { resolveRenderer } from '@/components/renderers/resolve-renderer'
 import { ImageRenderer } from '@/components/renderers/media'
 import { B5Card, type B5SaveTarget } from '@/components/home/B5Card'
@@ -31,8 +31,22 @@ export function DocumentSideCard({ entry: entryProp, onClose, frame }: { entry?:
   // snapshot, so re-read it after an inline edit instead of rendering pre-edit
   // values (header title included) until the card is re-opened.
   const { document, refresh } = useLiveDocument(entry?.workspaceId, entry?.document ?? null)
-  if (!entry || !document) return null
+  if (!entry || !document) return !entryProp && (sideView.loading || sideView.error) ? (
+    <div className="flex h-full w-full flex-col overflow-hidden rounded-(--card-radius) border bg-card">
+      <div className="flex h-[calc(3rem-1px)] shrink-0 items-center justify-between border-b-[3px] bg-muted pl-4 pr-2">
+        <span className="text-sm">Document</span><button type="button" onClick={close} className="flex h-8 w-8 items-center justify-center rounded hover:bg-accent" aria-label="Close"><X className="h-4 w-4" /></button>
+      </div>
+      <div className="p-4 text-sm" role={sideView.error ? 'alert' : 'status'}>
+        {sideView.error || 'Loading document…'}
+        {sideView.error && <button type="button" className="ml-2 underline" onClick={sideView.retry}>Retry</button>}
+      </div>
+    </div>
+  ) : null
   const { workspaceId } = entry
+  const onChanged = (saved?: Document) => {
+    refresh(saved)
+    if (saved && saved.id !== entry.document.id && !entryProp) sideView.replace?.(saved, workspaceId)
+  }
 
   const onSave = async (target: B5SaveTarget) => {
     await pasteDocumentsToWorkspacePath(workspaceId, target.path, [document.id], target.treeName, target.treeType)
@@ -55,10 +69,14 @@ export function DocumentSideCard({ entry: entryProp, onClose, frame }: { entry?:
       frame={frame}
       fillParent
       fullWidthContent={resolveRenderer(document) === ImageRenderer}
+      maximized={entryProp ? undefined : sideView.location?.maximized}
+      onMaximizedChange={entryProp ? undefined : maximized => sideView.update?.({ maximized })}
     >
-      <div className="document-side-content h-full min-h-0 min-w-0 w-full">
-        <ObjectPropertiesCard key={`${workspaceId}:${document.id}`} document={document} workspaceId={workspaceId} onChanged={refresh} compact />
-      </div>
+      {actions => <div className="document-side-content h-full min-h-0 min-w-0 w-full">
+        <ObjectPropertiesCard key={`${workspaceId}:${document.id}`} document={document} workspaceId={workspaceId} onChanged={onChanged} compact tabActions={actions}
+          initialTab={entryProp ? undefined : sideView.location?.section}
+          onTabChange={entryProp ? undefined : section => sideView.update?.({ section })} />
+      </div>}
     </B5Card>
   )
 }

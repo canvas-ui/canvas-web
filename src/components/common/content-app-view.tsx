@@ -1,22 +1,22 @@
 import { useCallback, useEffect, useState } from 'react'
 import { TODO_SCHEMA } from '@/components/renderers/types'
 import { TodoRow } from '@/components/canvas/widgets/TodosWidget'
-import { DocumentList } from '@/components/common/document-list'
+import { APPLETS } from '@/components/toolbox/applets/registry'
+import { AppletTargetProvider } from '@/components/toolbox/applets/applet-target'
 import { getCanvasPathDocuments } from '@/services/workspace'
 import type { ContentAppId } from './content-views'
 import type { Document } from '@/types/workspace'
 
 /**
  * Full content-page app hosted by a view tab (kind 'app') — an app-shaped
- * lens over the SAME layer/path the tab strip belongs to. Todos renders the
+ * lens over the SAME layer/path the tab strip belongs to. Todo list renders the
  * interactive task list (tick-done writes through, incl. GitHub write-back
- * connectors); Notes a card list of the path's notes.
+ * connectors). Other built-in apps use the same host as the toolbox.
  */
 
-const NOTE_SCHEMA = 'data/schema/note'
-
 interface ContentAppViewProps {
-  app: ContentAppId
+  app: Exclude<ContentAppId, 'notes'>
+  contextId?: string
   workspaceId: string
   treeName: string
   path: string
@@ -55,7 +55,7 @@ function useAppDocuments(workspaceId: string, treeName: string, path: string, sc
   return { docs, isLoading, refresh }
 }
 
-function TodosApp({ workspaceId, treeName, path }: Omit<ContentAppViewProps, 'app'>) {
+function TodoList({ workspaceId, treeName, path }: Omit<ContentAppViewProps, 'app'>) {
   const { docs, isLoading, refresh } = useAppDocuments(workspaceId, treeName, path, TODO_SCHEMA, 'tasks')
   const [hideDone, setHideDone] = useState(false)
   const visible = hideDone
@@ -90,23 +90,17 @@ function TodosApp({ workspaceId, treeName, path }: Omit<ContentAppViewProps, 'ap
   )
 }
 
-function NotesApp({ workspaceId, treeName, path }: Omit<ContentAppViewProps, 'app'>) {
-  const { docs, isLoading } = useAppDocuments(workspaceId, treeName, path, NOTE_SCHEMA)
-  return (
-    <div className="h-full overflow-y-auto p-4">
-      <DocumentList
-        documents={docs}
-        isLoading={isLoading}
-        contextPath={path}
-        treeName={treeName}
-        workspaceId={workspaceId}
-        totalCount={docs.length}
-        viewMode="card"
-      />
-    </div>
-  )
-}
-
-export function ContentAppView({ app, ...scope }: ContentAppViewProps) {
-  return app === 'todos' ? <TodosApp {...scope} /> : <NotesApp {...scope} />
+/** Notes use DefaultCanvas's document list so its search/actions are shared. */
+export function ContentAppView({ app, contextId, ...scope }: ContentAppViewProps) {
+  // Lens accepts a resolved workspace/path; the other applets can follow a
+  // live context directly. Both bindings describe this tab's own canvas.
+  const target = contextId && app !== 'lens'
+    ? { mode: 'context' as const, contextId }
+    : { mode: 'workspace' as const, workspaceName: scope.workspaceId, treeName: scope.treeName, path: scope.path,
+      treeType: (scope.treeName === 'directory' || scope.treeName === 'backends' ? 'directory' : 'context') as 'directory' | 'context' }
+  const appletId = app === 'todo-app' ? 'todo' : app === 'notes-app' ? 'notes' : app
+  const applet = APPLETS.find(item => item.id === appletId)
+  return <AppletTargetProvider target={target}>
+    {app === 'todos' ? <TodoList {...scope} /> : applet ? <applet.Component /> : null}
+  </AppletTargetProvider>
 }

@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { workspacePathUrl } from '@/lib/workspace-path-url'
 import { ImageViewContext } from '@/components/common/image-view-context'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { createPortal } from 'react-dom'
-import { RotateCw, Maximize2, Minimize2, X, type LucideIcon } from 'lucide-react'
+import { Link2, RotateCw, Maximize2, Minimize2, X, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useIsMobile } from '@/hooks/use-mobile'
@@ -37,13 +37,16 @@ interface B5CardProps {
   // (aspect-ratio only makes sense for the fixed-size card) is hidden.
   fillParent?: boolean
   fullWidthContent?: boolean
+  maximized?: boolean
+  onMaximizedChange?: (maximized: boolean) => void
   /** A strip owns the surface and expansion; this card supplies its single header. */
   frame?: { expanded: boolean; onToggleExpanded: () => void }
   // Id of the document this card is showing, when it already exists — enables
   // the picker's relations tab ("what does this point at") alongside the two
   // path trees. Quick-add cards omit it: nothing exists to relate until Save.
   relationSubjectId?: number
-  children: ReactNode
+  // A document host can place these actions alongside its detail tabs.
+  children: ReactNode | ((actions: ReactNode) => ReactNode)
 }
 
 // Material-v2 "paper" — single-purpose B5-aspect card. Lives inline in the
@@ -51,11 +54,13 @@ interface B5CardProps {
 // side) rather than a modal — it only portals to a fullscreen overlay while
 // explicitly maximized.
 export function B5Card({
-  title, icon: Icon, onClose, onSave, navigateAfterSave = false, canSave = false, saving: externalSaving = false, saveProgress, successMessage = 'Saved', lockedWorkspaceName, fillParent = false, fullWidthContent = false, relationSubjectId, frame, children,
+  title, icon: Icon, onClose, onSave, navigateAfterSave = false, canSave = false, saving: externalSaving = false, saveProgress, successMessage = 'Saved', lockedWorkspaceName, fillParent = false, fullWidthContent = false, relationSubjectId, frame, children, maximized: controlledMaximized, onMaximizedChange,
 }: B5CardProps) {
   const navigate = useNavigate()
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait')
-  const [maximized, setMaximized] = useState(false)
+  const [localMaximized, setLocalMaximized] = useState(false)
+  const maximized = controlledMaximized ?? localMaximized
+  const setMaximized = (value: boolean) => { setLocalMaximized(value); onMaximizedChange?.(value) }
   const [pickerOpen, setPickerOpen] = useState(false)
   const [relationSaving, setRelationSaving] = useState(false)
   const [savePending, setSavePending] = useState(false)
@@ -124,10 +129,9 @@ export function B5Card({
     }
   }
 
-  // fillParent width lives in the className below (w-full on mobile, fixed
-  // column width from md up) — everything here would override it inline.
+  // The reader host owns its width; fillParent stretches the card inside it.
   // The mobile full-screen card is positioned entirely by classes.
-  const cardStyle = maximized
+  const cardStyle: CSSProperties | undefined = maximized
     ? (pickerOpen ? { flex: '1 1 auto', minWidth: 0, height: '100%' } : { width: '100%', height: '100%' })
     : fillParent
       ? { height: '100%', flexShrink: 0 }
@@ -160,70 +164,83 @@ export function B5Card({
     />
   )
 
+  const headerActions = (
+    <div className="flex shrink-0 items-center gap-1">
+      {!fillParent && (
+        <button
+          type="button"
+          onClick={() => setOrientation((o) => (o === 'portrait' ? 'landscape' : 'portrait'))}
+          className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground max-md:hidden touch-target"
+          aria-label="Toggle orientation"
+          title="Toggle orientation"
+        >
+          <RotateCw className="h-4 w-4" />
+        </button>
+      )}
+      {onSave && (typeof children === 'function' ? (
+        <button type="button" onClick={() => setPickerOpen(true)} disabled={!canSave || saving}
+          className="flex h-8 w-8 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40 touch-target"
+          aria-label={saving ? 'Saving…' : 'Add relations / Link to…'} title="Add relations / Link to…">
+          <Link2 className="h-4 w-4" />
+        </button>
+      ) : (
+        <Button size="sm" variant="outline" onClick={() => setPickerOpen(true)} disabled={!canSave || saving}>
+          {saving ? 'Saving…' : 'Save / Link to…'}
+        </Button>
+      ))}
+      <button
+        type="button"
+        onClick={() => frame && !maximized ? frame.onToggleExpanded() : setMaximized(!maximized)}
+        className={cn(
+          'rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+          typeof children === 'function' && 'flex h-8 w-8 items-center justify-center',
+          // Already full-screen on mobile; keep Restore reachable if a
+          // desktop-maximized window shrinks below the breakpoint.
+          !maximized && !frame && 'max-md:hidden',
+        )}
+        aria-label={frame && !maximized ? (frame.expanded ? 'Card size' : 'Expand to full width') : maximized ? 'Restore' : 'Maximize'}
+        title={frame && !maximized ? (frame.expanded ? 'Card size' : 'Expand to full width') : maximized ? 'Restore' : 'Maximize'}
+      >
+        {(maximized || frame?.expanded) ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+      </button>
+      <button
+        type="button"
+        onClick={onClose}
+        disabled={saving}
+        className={cn('rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40 touch-target', typeof children === 'function' && 'flex h-8 w-8 items-center justify-center')}
+        aria-label="Close"
+      >
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  )
+
   const card = (
     <div
-      style={frame && !maximized ? { width: '100%', height: '100%', minWidth: 0 } : cardStyle}
+      style={{ ...(frame && !maximized ? { width: '100%', height: '100%', minWidth: 0 } : cardStyle),
+        '--document-reading-width': maximized && !fullWidthContent ? '48rem' : '100%',
+      } as CSSProperties & { '--document-reading-width': string }}
       onAnimationEnd={(e) => {
         if (animateIn && e.target === e.currentTarget) setEntered(true)
       }}
       className={cn(
         'flex flex-col overflow-hidden',
-        frame && !maximized ? 'strip-document-card' : 'rounded-2xl border bg-card shadow-elevation-4 transition-[width,height]',
-        fillParent && !maximized && !frame && 'w-full md:w-[var(--document-card-width,min(560px,90vw))]',
+        frame && !maximized ? 'strip-document-card' : 'rounded-(--card-radius) border bg-card shadow-elevation-4 transition-[width,height]',
+        fillParent && !maximized && !frame && 'w-full',
         mobileFullScreen && 'fixed inset-2 z-40 shadow-elevation-5',
         animateIn && 'animate-card-in',
       )}
     >
-      <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-4">
+      {typeof children !== 'function' && <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-4">
         <span className="flex min-w-0 items-center gap-2 truncate text-sm font-medium">
           <Icon className="h-4 w-4 shrink-0" />
           <span className="truncate">{title}</span>
         </span>
-        <div className="flex shrink-0 items-center gap-1">
-          {!fillParent && (
-            <button
-              type="button"
-              onClick={() => setOrientation((o) => (o === 'portrait' ? 'landscape' : 'portrait'))}
-              className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground max-md:hidden touch-target"
-              aria-label="Toggle orientation"
-              title="Toggle orientation"
-            >
-              <RotateCw className="h-4 w-4" />
-            </button>
-          )}
-          {onSave && (
-            <Button size="sm" variant="outline" onClick={() => setPickerOpen(true)} disabled={!canSave || saving}>
-              {saving ? 'Saving…' : 'Save / Link to…'}
-            </Button>
-          )}
-          <button
-            type="button"
-            onClick={() => frame && !maximized ? frame.onToggleExpanded() : setMaximized((m) => !m)}
-            className={cn(
-              'rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
-              // Already full-screen on mobile; keep Restore reachable if a
-              // desktop-maximized window shrinks below the breakpoint.
-              !maximized && !frame && 'max-md:hidden',
-            )}
-            aria-label={frame && !maximized ? (frame.expanded ? 'Card size' : 'Expand to full width') : maximized ? 'Restore' : 'Maximize'}
-            title={frame && !maximized ? (frame.expanded ? 'Card size' : 'Expand to full width') : maximized ? 'Restore' : 'Maximize'}
-          >
-            {(maximized || frame?.expanded) ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={saving}
-            className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40 touch-target"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
+        {headerActions}
+      </div>}
 
-      <ImageViewContext.Provider value={() => setMaximized((m) => !m)}>
-        <div className={cn('min-h-0 flex-1 overflow-y-auto', maximized && !fullWidthContent && 'mx-auto w-full max-w-3xl')}>{frame && picker ? picker : children}</div>
+      <ImageViewContext.Provider value={() => setMaximized(!maximized)}>
+        <div className={cn('min-h-0 flex-1 overflow-y-auto', maximized && !fullWidthContent && typeof children !== 'function' && 'mx-auto w-full max-w-3xl')}>{frame && picker ? picker : typeof children === 'function' ? children(headerActions) : children}</div>
       </ImageViewContext.Provider>
     </div>
   )
@@ -261,7 +278,9 @@ export function B5Card({
             // relative md:z-panel: paint above the fixed toolbox FAB (z-50),
             // which otherwise covers the picker's Link button when the card
             // sits near the viewport's bottom-right on wide screens.
-            className="relative shrink-0 md:z-panel md:ml-2 max-md:fixed max-md:bottom-2 max-md:left-2 max-md:right-2 max-md:top-2 max-md:z-card-overlay max-md:animate-fade-in"
+            // Keep the trailing gutter inside the scroll target so it remains
+            // visible when scrollIntoView brings the picker to the right edge.
+            className="relative shrink-0 md:z-panel md:ml-2 md:pr-2 max-md:fixed max-md:bottom-2 max-md:left-2 max-md:right-2 max-md:top-2 max-md:z-card-overlay max-md:animate-fade-in"
           >
             {picker}
           </div>

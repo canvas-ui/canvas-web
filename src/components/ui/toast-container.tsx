@@ -3,6 +3,7 @@ import { ToastProvider, ToastViewport, Toast, ToastTitle, ToastDescription, Toas
 import { Loader2 } from 'lucide-react'
 import { ToastContext, type ProgressToast, type ToastInput, type ToastType } from './use-toast'
 import { isNetworkErrorMessage } from '@/lib/connectivity'
+import { addLocalNotification, notificationAccount, updateLocalNotification } from '@/lib/notification-history'
 
 export function ToastContainer({ children }: { children?: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastType[]>([])
@@ -10,7 +11,7 @@ export function ToastContainer({ children }: { children?: React.ReactNode }) {
   // Keep a short-lived set of recent toast keys to avoid accidental spam (e.g. socket events firing multiple times)
   const recentToastKeys = useRef<Set<string>>(new Set())
 
-  const showToast = useCallback((toast: ToastInput) => {
+  const showToast = useCallback((toast: ToastInput, archive = true) => {
     // Network failures are shown by the persistent connection indicator.
     // Component catch-blocks all over the app forward the
     // API's network-error message verbatim via their own showToast calls, so
@@ -21,6 +22,16 @@ export function ToastContainer({ children }: { children?: React.ReactNode }) {
       return
     }
     const key = `${toast.title}:${toast.description ?? ''}`
+    // Archive accepted notices independently of their five-second popup life.
+    // Stable socket IDs deduplicate deliveries across reloads and browser tabs.
+    if (archive && (toast.historyId || !recentToastKeys.current.has(key))) {
+      const time = toast.timestamp ? new Date(toast.timestamp) : new Date()
+      void addLocalNotification(notificationAccount(), {
+        id: toast.historyId || crypto.randomUUID(), title: toast.title, text: toast.description || '',
+        timestamp: Number.isNaN(time.getTime()) ? new Date().toISOString() : time.toISOString(),
+        status: toast.variant === 'destructive' ? 'error' : 'info',
+      }).catch(() => {})
+    }
     // If we already displayed the exact same toast very recently, skip it
     if (recentToastKeys.current.has(key)) {
       return
@@ -39,16 +50,24 @@ export function ToastContainer({ children }: { children?: React.ReactNode }) {
   }, [])
 
   const showProgress = useCallback((toast: ToastInput): ProgressToast => {
-    const id = Math.random().toString(36).substring(2, 9)
+    const id = crypto.randomUUID()
+    const account = notificationAccount()
+    void addLocalNotification(account, {
+      id, title: toast.title, text: toast.description || '', timestamp: new Date().toISOString(), status: 'started',
+    }).catch(() => {})
     setToasts((prev) => [...prev, { ...toast, id, busy: true }])
     let settled = false
-    const settle = (result?: ToastInput) => {
+    const settle = (result?: ToastInput, failed = false) => {
       if (settled) return
       settled = true
       setToasts((prev) => prev.filter((t) => t.id !== id))
-      if (result) showToast(result)
+      void updateLocalNotification(account, id, {
+        ...(result ? { title: result.title, text: result.description || '' } : {}),
+        status: failed || result?.variant === 'destructive' ? 'error' : 'completed',
+      }).catch(() => {})
+      if (result) showToast(result, false)
     }
-    return { done: settle, fail: settle }
+    return { done: result => settle(result), fail: result => settle(result, true) }
   }, [showToast])
 
   const contextValue = useMemo(() => ({ showToast, showProgress }), [showToast, showProgress])

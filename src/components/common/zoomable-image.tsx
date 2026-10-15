@@ -59,7 +59,7 @@ export function ZoomableImage({
   const lastPointerZoom = useRef<number | null>(null)
   // A finger is currently driving the transform. State, not a ref, because the
   // rendered style depends on it: transitions are ON for a double-tap step and
-  // OFF while dragging, where a 160ms ease would trail the finger.
+  // OFF while dragging, where easing would trail the finger.
   const [interacting, setInteracting] = useState(false)
 
   // A new image is a new subject: never inherit the previous one's zoom. Done
@@ -243,7 +243,7 @@ export function ZoomableImage({
           transformOrigin: 'center center',
           // Snap back / step up in one motion, but never animate a live pinch
           // or drag — that lags the finger.
-          transition: interacting ? 'none' : 'transform 160ms ease-out',
+          transition: interacting ? 'none' : 'transform var(--duration-normal) ease-out',
           willChange: 'transform',
         }}
       />

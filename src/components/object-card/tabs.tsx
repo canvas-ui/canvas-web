@@ -2,7 +2,7 @@ import { MessageThread } from '@/components/common/MessageThread'
 import { backendTransferFailureMessage } from '@/lib/backend-transfer-errors'
 import { MessageComposerDialog } from '@/components/common/MessageComposerDialog'
 import type { ComposeMode } from '@/services/messages'
-import { Suspense, useEffect, useState, type ReactNode } from 'react'
+import { Suspense, useEffect, useState, type MouseEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Copy, Download, Trash2, Database, HardDrive, Mail, Globe, FileQuestion, Pencil, Brush, PenLine, ArrowRight, Reply, ReplyAll, Forward } from 'lucide-react'
 import { BackendActionCard, type BackendTransferConfirmOptions } from '@/components/menu/shared/BackendActionCard'
@@ -28,7 +28,7 @@ import type { Document } from '@/types/workspace'
 interface TabProps {
   document: Document
   workspaceId: string
-  onChanged?: () => void
+  onChanged?: (saved?: Document) => void
 }
 
 const COMPOSE_LABELS: Record<ComposeMode, string> = { reply: 'Reply', replyAll: 'Reply all', forward: 'Forward' }
@@ -56,18 +56,45 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
   // top of the metadata form — "Edit" alone would only offer comment/tags.
   const isDrawing = document.schema === DRAWING_SCHEMA
   const [sketchOpen, setSketchOpen] = useState(false)
-  // Notes, markdown files and text files open in the same kind of full
-  // surface a sketch does — "Edit" alone would only offer comment/tags.
+  // The explicit Open editor action offers a full-surface alternative to
+  // editing a note or text file inline in this view.
   const hasTextEditor = document.schema === NOTE_SCHEMA || isTextBackedFile(document)
   const [textEditorOpen, setTextEditorOpen] = useState(false)
   // Render-time state reset: switching documents re-seeds the edit mode.
-  const resetKey = `${document.id}:${initialEdit}`
+  const resetKey = `${workspaceId}:${document.id}:${initialEdit}:${isPublic}`
   const [lastResetKey, setLastResetKey] = useState(resetKey)
   if (resetKey !== lastResetKey) {
     setLastResetKey(resetKey)
     setEditing(initialEdit && isEditableDocument(document))
     setReplying(null)
     setShowThread(false)
+    setSketchOpen(false)
+    setTextEditorOpen(false)
+  }
+
+  const canEditPreview = (event: MouseEvent<HTMLDivElement>) => {
+    if (!canEdit || !isEditableDocument(document) || event.defaultPrevented) return false
+    // Preview links and controls retain their own behavior. Portal content
+    // may also bubble here in React, but does not belong to this preview.
+    const target = event.target
+    return target instanceof Element && event.currentTarget.contains(target)
+      && !target.closest('a, button, input, textarea, select, label, summary, audio, video, [role="button"], [role="checkbox"], [contenteditable]:not([contenteditable="false"])')
+  }
+
+  const preventPreviewSelection = (event: MouseEvent<HTMLDivElement>) => {
+    // Native double-click selection starts on the second mouse-down, before
+    // dblclick fires. Keep ordinary text selection available on single drags.
+    if (event.button === 0 && event.detail > 1 && canEditPreview(event)) event.preventDefault()
+  }
+
+  const editPreview = (event: MouseEvent<HTMLDivElement>) => {
+    if (!canEditPreview(event)) return
+    // Editing takes precedence over a drawing preview's image-zoom gesture.
+    event.preventDefault()
+    event.stopPropagation()
+    event.currentTarget.ownerDocument.getSelection()?.removeAllRanges()
+    // Match the inline Edit action so the side-view remains the editor's host.
+    setEditing(true)
   }
 
   if (editing && canEdit) {
@@ -75,7 +102,7 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
       <DocumentEditForm
         document={document}
         workspaceId={workspaceId}
-        onClose={() => { setEditing(false); onChanged?.() }}
+        onClose={(saved) => { setEditing(false); onChanged?.(saved) }}
       />
     )
   }
@@ -121,7 +148,7 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
           </Button>
         </div>
       )}
-      {sketchOpen && (
+      {sketchOpen && canEdit && (
         <Suspense fallback={
           <div className="fixed inset-0 z-fullscreen flex items-center justify-center bg-background surface-glass">
             <p className="text-sm text-muted-foreground">Loading sketch editor…</p>
@@ -136,7 +163,7 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
           />
         </Suspense>
       )}
-      {textEditorOpen && (
+      {textEditorOpen && canEdit && (
         <Suspense fallback={
           <div className="fixed inset-0 z-fullscreen flex items-center justify-center bg-background surface-glass">
             <p className="text-sm text-muted-foreground">Loading editor…</p>
@@ -145,13 +172,13 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
           <LazyTextDocumentEditor
             doc={document}
             workspaceName={workspaceId}
-            onSaved={() => { setTextEditorOpen(false); onChanged?.() }}
+            onSaved={(saved) => { setTextEditorOpen(false); onChanged?.(saved) }}
             onClose={() => setTextEditorOpen(false)}
             onDetails={() => { setTextEditorOpen(false); setEditing(true) }}
           />
         </Suspense>
       )}
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="min-h-0 flex-1 overflow-auto" onMouseDownCapture={preventPreviewSelection} onDoubleClickCapture={editPreview}>
         {showThread && !isPublic ? <MessageThread key={`${workspaceId}:${document.id}`} workspaceId={workspaceId} documentId={Number(document.id)} /> : <DocumentRenderer workspaceId={workspaceId} document={document} />}
         {replying && canReply && (
           <MessageComposerDialog

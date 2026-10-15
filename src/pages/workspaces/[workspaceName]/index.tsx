@@ -5,10 +5,7 @@ import { WorkspaceContentGate } from '@/components/workspace/workspace-content-g
 import { StorageScanIndicator } from '@/components/notifications/StorageScanIndicator';
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { Filter } from 'lucide-react';
 import type { FolderEntry } from '@/components/common/document-list';
-import { Icon } from '@iconify/react';
-import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style';
 import { visibleAccentColor } from '@/utils/color';
 import { api } from '@/lib/api';
 import { API_ROUTES } from '@/config/api';
@@ -16,12 +13,11 @@ import { useToast } from '@/components/ui/use-toast';
 import { useMenu } from '@/components/shell/use-menu';
 import { Button } from '@/components/ui/button';
 import { FormPanel } from '@/components/common/form-panel';
-import { CloseSectionButton, SectionBackButton } from '@/components/common/page-header';
-import { useIsMobile } from '@/hooks/use-mobile';
+import { CanvasAddressBar } from '@/components/common/canvas-address-bar';
 import { DefaultCanvas } from '@/components/canvas/DefaultCanvas';
 import type { CanvasInfo } from '@/components/canvas/DefaultCanvas';
 import { ContentViewTabs } from '@/components/common/content-view-tabs';
-import { viewsFromLayerMetadata, DEFAULT_VIEW, type ContentView } from '@/components/common/content-views';
+import { viewsFromLayerMetadata, contentViewSchema, DEFAULT_VIEW, type ContentView } from '@/components/common/content-views';
 import { ContentAppView } from '@/components/common/content-app-view';
 import { SchemaColumnsBoard } from '@/components/common/schema-columns-board';
 import { CanvasGrid } from '@/components/canvas/CanvasGrid';
@@ -210,7 +206,7 @@ function WorkspaceContent() {
   const [serverSearchQueries, setServerSearchQueries] = useState<string[]>(urlSearchQueries);
   const [ignoredSavedSearchPath, setIgnoredSavedSearchPath] = useState<string | null>(null);
 
-  const { state: toolboxState, saveFilters, toggleView, setSort, setAccentColor, setMapDocuments, hasActiveFilters } = useToolbox();
+  const { state: toolboxState, saveFilters, setSort, setAccentColor, setMapDocuments } = useToolbox();
   const tbAllOf = toolboxState.filters.features.allOf;
   const tbAnyOf = toolboxState.filters.features.anyOf;
   const tbNoneOf = toolboxState.filters.features.noneOf;
@@ -273,8 +269,7 @@ function WorkspaceContent() {
   useEffect(() => { sidePaneRef.current = sidePane; }, [sidePane]);
   const [focusedPane, setFocusedPane] = useState<FocusedPane>('left');
   const [leftSelection, setLeftSelection] = useState<number[]>([]);
-  const { openM2Drawer } = useMenu();
-  const isMobile = useIsMobile();
+  const { openM1Drawer, openM2Drawer, goBack } = useMenu();
   const [rightSelection, setRightSelection] = useState<number[]>([]);
   const selectedNode = useMemo(() => {
     if (!tree || selectedPath === '/' || isLayerView) return null;
@@ -319,8 +314,11 @@ function WorkspaceContent() {
   const activeContentViewId = viewsState?.key === viewsKey ? viewsState.activeId : contentViews[0]?.id ?? DEFAULT_VIEW.id;
   const activeContentView = contentViews.find(v => v.id === activeContentViewId) ?? contentViews[0] ?? DEFAULT_VIEW;
 
-  const selectContentView = (id: string) => setViewsState({ key: viewsKey, views: contentViews, activeId: id });
+  const documentSchema = !isBackendsPath ? contentViewSchema(activeContentView) : undefined;
+  const viewAllOf = documentSchema ? [...tbAllOf, documentSchema] : tbAllOf;
+  const selectContentView = (id: string) => { setCurrentPage(1); setLeftSelection([]); setViewsState({ key: viewsKey, views: contentViews, activeId: id }); };
   const saveContentViews = (views: ContentView[], nextActiveId?: string) => {
+    if (nextActiveId && nextActiveId !== activeContentViewId) { setCurrentPage(1); setLeftSelection([]); }
     setViewsState({ key: viewsKey, views, activeId: nextActiveId ?? activeContentViewId });
     // metadata is REPLACED server-side — carry the layer's other keys along.
     updateWorkspacePath(
@@ -486,7 +484,7 @@ function WorkspaceContent() {
 
   const sessionSpecs = useMemo(() => {
     const scope: SessionSpec = {
-      features: { allOf: tbAllOf, anyOf: tbAnyOf, noneOf: tbNoneOf },
+      features: { allOf: viewAllOf, anyOf: tbAnyOf, noneOf: tbNoneOf },
       filters: tbScopeFilters,
     };
     // Whole-workspace scope drops the path bucket entirely (backend mirrors
@@ -505,7 +503,7 @@ function WorkspaceContent() {
   // tbFiltersKeyNoLens encodes every tb* array above; the lens id-set is a
   // separate cue on purpose (changing it must not reopen the session).
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tbFiltersKeyNoLens, selectedPath, selectedTreeName, docScope]);
+  }, [tbFiltersKeyNoLens, selectedPath, selectedTreeName, docScope, documentSchema]);
 
   const {
     documents: sessionDocuments,
@@ -595,7 +593,7 @@ function WorkspaceContent() {
     // wrong: it re-fetches every document to answer a question the deltas
     // already answered incrementally.
     if (sessionActiveRef.current) return;
-    const effectiveScope = unfiledOnly && backendTarget ? `${docScope}:unfiled` : docScope;
+    const effectiveScope = `${unfiledOnly && backendTarget ? `${docScope}:unfiled` : docScope}:${documentSchema ?? ''}`;
     const lensActive = (tbLensIds?.length ?? 0) > 0;
     const identity = documentKey(workspaceName, selectedTreeName, selectedPath, currentPage, pageSize, serverSearchQueries.join('␟'), tbFiltersKeyNoLens, (isLayerView && selectedLayerId) ? selectedLayerId : '', effectiveScope);
     const lensTickOnly = lensActive && identity === fetchIdentityRef.current;
@@ -645,7 +643,7 @@ function WorkspaceContent() {
           limit: pageSize,
           page: currentPage,
           queries: serverSearchQueries,
-          allOf: tbAllOf,
+          allOf: viewAllOf,
           anyOf: tbAnyOf,
           noneOf: tbNoneOf,
           filters: tbScopeFilters,
@@ -655,7 +653,7 @@ function WorkspaceContent() {
         });
       } else {
         const selectedTreeType: 'context' | 'directory' = selectedTreeName === 'directory' || selectedTreeName === 'backends' ? 'directory' : 'context';
-        response = await getWorkspaceDocuments(workspaceName, selectedPath, tbAllOf, {
+        response = await getWorkspaceDocuments(workspaceName, selectedPath, viewAllOf, {
           limit: pageSize,
           page: currentPage,
           treeName: selectedTreeName,
@@ -718,7 +716,7 @@ function WorkspaceContent() {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceName, selectedPath, selectedTreeName, selectedLayerId, isLayerView, currentPage, pageSize, workspace?.status, serverSearchQueries, tbFiltersKey, docScope, unfiledOnly, queryDebug]);
+  }, [workspaceName, selectedPath, selectedTreeName, selectedLayerId, isLayerView, currentPage, pageSize, workspace?.status, serverSearchQueries, tbFiltersKey, docScope, unfiledOnly, queryDebug, documentSchema]);
 
   useEffect(() => {
     const run = () => fetchDocuments();
@@ -891,7 +889,7 @@ function WorkspaceContent() {
     const params = new URLSearchParams(location.search);
     params.delete('createCanvas');
     const nextSearch = params.toString();
-    navigate(`${location.pathname}${nextSearch ? `?${nextSearch}` : ''}`, { replace: true });
+    navigate(`${location.pathname}${nextSearch ? `?${nextSearch}` : ''}${location.hash}`, { replace: true });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wantsCreateCanvas, selectedPath]);
 
@@ -902,12 +900,12 @@ function WorkspaceContent() {
     params.delete('search');
     for (const q of queries) { params.append('q', q); }
     const nextSearch = params.toString();
-    navigate(`${location.pathname}${nextSearch ? `?${nextSearch}` : ''}`);
-  }, [location.pathname, location.search, navigate]);
+    navigate(`${location.pathname}${nextSearch ? `?${nextSearch}` : ''}${location.hash}`);
+  }, [location.pathname, location.search, location.hash, navigate]);
 
   // URL is the source of truth for the query stack: when it changes, mirror it
   // into state (state adjustment during render, not an effect).
-  const urlQueriesKey = urlSearchQueries.join('␟');
+  const urlQueriesKey = JSON.stringify([searchParams.has('q'), ...urlSearchQueries]);
   const [prevUrlQueriesKey, setPrevUrlQueriesKey] = useState(urlQueriesKey);
   if (prevUrlQueriesKey !== urlQueriesKey) {
     setPrevUrlQueriesKey(urlQueriesKey);
@@ -921,7 +919,7 @@ function WorkspaceContent() {
   const [prevSavedQueryKey, setPrevSavedQueryKey] = useState(savedQueryKey);
   if (prevSavedQueryKey !== savedQueryKey) {
     setPrevSavedQueryKey(savedQueryKey);
-    if (!(urlSearchQueries.length > 0 || selectedNodeType !== 'canvas' || ignoredSavedSearchPath === selectedPath)) {
+    if (!(searchParams.has('q') || urlSearchQueries.length > 0 || selectedNodeType !== 'canvas' || ignoredSavedSearchPath === selectedPath)) {
       setServerSearchQueries(savedCanvasSearchQuery ? [savedCanvasSearchQuery] : []);
       setCurrentPage(1);
     }
@@ -1130,7 +1128,7 @@ function WorkspaceContent() {
     // of a read-only backends path into a context/directory tree.
     const targetTreeName = options.targetTreeName ?? selectedTreeName;
     const targetTreeType = options.targetTreeType ?? selectedTreeType;
-    const moving = options.move || clipboard?.operation === 'cut';
+    const moving = options.move ?? clipboard?.operation === 'cut';
     const progress = showProgress({ title: moving ? 'Moving…' : 'Pasting…', description: `${documentIds.length} document(s) → "${path}"` });
     try {
       const success = await pasteDocumentsToWorkspacePath(workspaceName, path, documentIds, targetTreeName, targetTreeType);
@@ -1138,7 +1136,7 @@ function WorkspaceContent() {
         invalidateDocumentCache(workspaceName, targetTreeName, path);
         const sourceTreeName = options.sourceTreeName || clipboard?.sourceTreeName;
         const sourcePath = options.sourcePath || clipboard?.sourcePath;
-        const shouldMove = options.move || clipboard?.operation === 'cut';
+        const shouldMove = options.move ?? clipboard?.operation === 'cut';
         if (shouldMove && sourcePath && sourceTreeName) {
           const sourceTreeType: 'context' | 'directory' = treeTypeForName(sourceTreeName);
           await removeWorkspaceDocuments(workspaceName, documentIds, sourcePath, [], sourceTreeName, sourceTreeType);
@@ -1206,10 +1204,11 @@ function WorkspaceContent() {
       const name = saveAsCanvasName.trim();
       const parentPath = createCanvas.parentPath;
       const path = parentPath === '/' ? `/${name}` : `${parentPath}/${name}`;
+      const capturedFilters = { ...toolboxState.filters, features: { ...toolboxState.filters.features, allOf: viewAllOf } };
       await createWorkspaceCanvas(workspaceName, path, selectedTreeName, createCanvas.captureView ? {
-        metadata: { toolbox: toolboxState.filters },
+        metadata: { toolbox: capturedFilters },
         querySpec: {
-          features: toolboxState.filters.features,
+          features: capturedFilters.features,
           filters: [...buildDatetimeFilters(toolboxState.filters.timeline), ...buildGeoFilters(toolboxState.filters.geo)],
           // Canvas querySpec holds a single query; a refine stack collapses to a
           // combined search string on save (reload runs it as one query).
@@ -1361,11 +1360,27 @@ function WorkspaceContent() {
 
   const showCanvasGrid = selectedNodeType === 'canvas' && !isLayerView && !!selectedNode;
 
+  const navigationTabs = !showCanvasGrid && !isBackendsPath && nodeForViews ? <ContentViewTabs
+    views={contentViews} activeId={activeContentViewId} onSelect={selectContentView} onSave={saveContentViews}
+    accentColor={visibleAccentColor(workspace.color)}
+    onOpenToSide={(viewId) => { setSidePane({ treeName: selectedTreeName, path: selectedPath, viewId }); setFocusedPane('right'); }}
+  /> : undefined;
+  const navigationActions = backendTarget || workspace.status !== 'active' ? <>
+    {backendTarget && <button type="button" onClick={() => { setUnfiledOnly(!unfiledOnly); setCurrentPage(1); }}
+      aria-pressed={unfiledOnly} className={cn('min-h-10 rounded-md border px-2 text-xs', unfiledOnly && 'bg-warning/15 text-warning')}>Unfiled only</button>}
+    {workspace.status !== 'active' && <button type="button" onClick={handleStartWorkspace} disabled={isStartingWorkspace}
+      className="min-h-10 rounded-md border px-2 text-xs">{isStartingWorkspace ? 'Starting…' : 'Start'}</button>}
+  </> : undefined;
+
   const currentCanvas = backendTrashLocation(selectedTreeName, selectedPath) ? (
     selectedPath === '/Trash' ? <div className="h-full overflow-auto p-4"><TrashPanel workspaceName={workspaceName || workspace.id} /></div> : <BackendTrashBrowser key={workspaceName} workspace={workspaceName || workspace.id} path={selectedPath}
       onNavigate={path => navigate(buildWorkspaceUrl(workspaceName!, path, 'backends'))} />
   ) : (
     <DefaultCanvas
+      navigationTabs={navigationTabs}
+      navigationActions={navigationActions}
+      onBack={goBack}
+      accentColor={visibleAccentColor(workspace.color)}
       // The chip names the ACTUAL tree ('backends', not its 'directory' type).
       urlType={isLayerView ? (treeTypeForName(selectedTreeName) === 'directory' ? `${selectedTreeName}-layer` : 'context-layer') : (selectedNodeType === 'canvas' ? 'canvas' : treeTypeForName(selectedTreeName) === 'directory' ? selectedTreeName : 'context')}
       urlDisplay={urlDisplay}
@@ -1373,6 +1388,8 @@ function WorkspaceContent() {
       treeName={selectedTreeName}
       workspaceId={workspaceName || workspace.id}
       workspaceLabel={workspace.label || workspace.name}
+      workspaceIcon={workspace.icon}
+      documentSchema={documentSchema}
       documents={shownDocuments}
       isLoading={isLoadingDocuments}
       totalCount={listedTotalCount}
@@ -1391,8 +1408,8 @@ function WorkspaceContent() {
       onPasteDocuments={isBackendsPath ? undefined : handlePasteDocuments}
       onImportDocuments={isBackendsPath ? undefined : handleImportDocuments}
       onSelectionChange={setLeftSelection}
-      selectedCount={leftSelection.length}
       onBrowseTree={() => openM2Drawer('workspaces', 'detail', workspaceName ?? null)}
+      onBrowseWorkspaces={() => openM1Drawer('workspaces')}
       onNavigatePath={(path) => navigate(buildWorkspaceUrl(workspaceName!, path, selectedTreeName))}
       folders={contentFolders}
       onOpenFolder={(p) => navigate(buildWorkspaceUrl(workspaceName!, sanitizeUrlPath(p), selectedTreeName))}
@@ -1449,7 +1466,7 @@ function WorkspaceContent() {
             contentViews.map(v => (v.id === activeContentView.id ? { ...v, columns } : v)),
           )}
         />
-      ) : !isBackendsPath && activeContentView.kind === 'app' && activeContentView.app ? (
+      ) : !isBackendsPath && activeContentView.kind === 'app' && activeContentView.app && activeContentView.app !== 'notes' ? (
         <ContentAppView
           app={activeContentView.app}
           workspaceId={workspaceName || workspace.id}
@@ -1463,142 +1480,13 @@ function WorkspaceContent() {
   return (
     <div className="relative flex flex-col h-full min-h-0">
       <StorageScanIndicator key={workspace.id} workspaceId={workspace.id} workspaceName={workspace.label || workspace.name} />
-      {/* Compact workspace status bar — bottom border carries the workspace
-          color as the primary accent; near-white colors fall back to the
-          theme border so the accent never vanishes on the light background. */}
-      <div className="relative shrink-0 max-sm:border-b">
-        {/* The main divider (workspace accent) is an internal element, not a
-            border, so the active view tab can connect through it — Chrome's
-            tab-strip schema. Desktop: at the wrapper's bottom (tabs share the
-            title row). Mobile: directly under the tabs row; a plain border-b
-            closes the wrapper under the controls. */}
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] bg-border max-sm:hidden"
-          style={visibleAccentColor(workspace.color) ? { backgroundColor: visibleAccentColor(workspace.color)! } : undefined}
-        />
-        {/* Mobile: browser order — tabs first, then the title/controls row,
-            then the URL bar (rendered by DefaultCanvas below). */}
-        {!showCanvasGrid && !isBackendsPath && nodeForViews && (
-          <div className="relative px-2 pt-1.5 sm:hidden">
-            <span
-              aria-hidden
-              className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] bg-border"
-              style={visibleAccentColor(workspace.color) ? { backgroundColor: visibleAccentColor(workspace.color)! } : undefined}
-            />
-            <ContentViewTabs
-              accentColor={visibleAccentColor(workspace.color)}
-              views={contentViews}
-              activeId={activeContentViewId}
-              onSelect={selectContentView}
-              onSave={saveContentViews}
-              // Locked layers still allow metadata-only (presentation) updates
-              // server-side — views are editable everywhere.
-              readOnly={false}
-            />
-          </div>
-        )}
-        <div className="flex h-12 items-center gap-3 px-4">
-        {/* Same gesture as a settings page: reopen the tree panel on mobile
-            (it closed on navigation), step up to the list on desktop. */}
-        <SectionBackButton
-          title={isMobile ? 'Back to workspace tree' : 'Back to workspaces'}
-          onBack={() => (isMobile
-            ? openM2Drawer('workspaces', 'detail', workspaceName || workspace.id)
-            : navigate('/workspaces'))}
-        />
-        <span
-          className={`w-2 h-2 rounded-full shrink-0 ${
-            workspace.status === 'active' ? 'bg-success' :
-            workspace.status === 'error' ? 'bg-destructive' : 'bg-muted-foreground'
-          }`}
-          title={workspace.status}
-        />
-        <button
-          type="button"
-          onClick={() => openM2Drawer('workspaces', 'detail', workspaceName || workspace.id)}
-          title="Browse workspace tree"
-          className="flex min-w-0 items-center gap-1.5 truncate rounded px-1 -mx-1 text-left text-sm font-medium transition-colors hover:bg-accent"
-        >
-          <Icon
-            icon={workspace.icon || DEFAULT_WORKSPACE_ICON}
-            width={16}
-            height={16}
-            color={visibleAccentColor(workspace.color)}
-            className={cn('shrink-0', !visibleAccentColor(workspace.color) && 'text-muted-foreground')}
-          />
-          <span className="truncate">{workspace.label || workspace.name}</span>
-        </button>
-        {/* Desktop: browser-style, the view tabs ride the title row. On
-            mobile they render as their own top row above (max-sm:hidden). */}
-        {!showCanvasGrid && !isBackendsPath && nodeForViews ? (
-          <>
-            <ContentViewTabs
-              className="min-w-0 flex-1 self-stretch max-sm:hidden"
-              accentColor={visibleAccentColor(workspace.color)}
-              views={contentViews}
-              activeId={activeContentViewId}
-              onSelect={selectContentView}
-              onSave={saveContentViews}
-              // Side-by-side: pin this view into the right pane (same path).
-              onOpenToSide={(viewId) => { setSidePane({ treeName: selectedTreeName, path: selectedPath, viewId }); setFocusedPane('right'); }}
-              // Locked layers still allow metadata-only (presentation) updates
-              // server-side — views are editable everywhere.
-              readOnly={false}
-            />
-            <div className="flex-1 sm:hidden" />
-          </>
-        ) : (
-          <div className="flex-1" />
-        )}
-        {/* Backend mirrors: show only docs never filed into another tree
-            (safe-to-purge candidates on the backend). */}
-        {backendTarget && (
-          <button
-            onClick={() => { setUnfiledOnly(!unfiledOnly); setCurrentPage(1); }}
-            className={cn(
-              'flex items-center gap-1.5 px-3 py-1 text-xs border rounded-md transition-colors',
-              unfiledOnly
-                ? 'bg-warning/15 border-warning/40 text-warning'
-                : 'hover:bg-accent text-muted-foreground hover:text-foreground',
-            )}
-            title="Show only documents not filed into any context/directory tree (safe to purge from the backend)"
-          >
-            Unfiled only
-          </button>
-        )}
-        {/* Filtering earns the header slot; stopping a workspace is a rarer
-            action that stays available on the workspace list rows (M1). */}
-        {workspace.status === 'active' ? (
-          <button
-            onClick={() => toggleView('tools')}
-            className={cn(
-              'flex h-7 w-7 items-center justify-center border rounded-md transition-colors touch-target',
-              // Filters narrow every tree read - keep the button colored while
-              // any are active so an empty folder is explainable at a glance.
-              hasActiveFilters
-                ? 'border-info bg-info text-info-foreground hover:bg-info/90'
-                : toolboxState.t1Open && toolboxState.t1View === 'tools'
-                  ? 'bg-accent text-foreground'
-                  : 'hover:bg-accent text-muted-foreground hover:text-foreground',
-            )}
-            aria-label="Filters"
-            title={hasActiveFilters ? 'Toolbox filters are active and narrow this view' : 'Open the toolbox filters'}
-          >
-            <Filter className="h-3.5 w-3.5" />
-          </button>
-        ) : (
-          <button
-            onClick={handleStartWorkspace}
-            disabled={isStartingWorkspace}
-            className="px-3 py-1 text-xs border rounded-md hover:bg-accent disabled:opacity-50 touch-target"
-          >
-            {isStartingWorkspace ? 'Starting…' : 'Start'}
-          </button>
-        )}
-        <CloseSectionButton />
-        </div>
-      </div>
+      {backendTrashLocation(selectedTreeName, selectedPath) && <CanvasAddressBar
+        workspace={workspace.label || workspace.name} workspaceIcon={workspace.icon} tree={selectedTreeName} path={selectedPath}
+        onBack={goBack} onBrowseTree={() => openM2Drawer('workspaces', 'detail', workspaceName || workspace.id)}
+        onBrowseWorkspaces={() => openM1Drawer('workspaces')}
+        onNavigatePath={path => navigate(buildWorkspaceUrl(workspaceName!, path, selectedTreeName))}
+        accentColor={visibleAccentColor(workspace.color)}
+      />}
 
       {createCanvas && (
         <div className="shrink-0 px-2 pt-2">
@@ -1656,11 +1544,11 @@ function WorkspaceContent() {
           the right is self-contained, so switching focus never refetches. */}
       {/* data-canvas-panes / data-canvas-pane: hooks for the strip layout,
           which flattens this framing (its card already frames the page). */}
-      <div data-canvas-panes className="flex-1 min-h-0 flex gap-2 p-2 bg-muted/20">
+      <div data-canvas-panes className="flex-1 min-h-0 flex gap-2">
         <div
           data-canvas-pane
           className={cn(
-            'flex-1 min-w-0 rounded-lg border bg-background overflow-hidden',
+            'flex-1 min-w-0 bg-background overflow-hidden',
             sidePane && (focusedPane === 'left' ? 'ring-2 ring-primary' : 'ring-1 ring-primary/20'),
           )}
           onMouseDown={(e) => {
@@ -1674,6 +1562,7 @@ function WorkspaceContent() {
           <SideWorkspaceCanvas
             workspaceName={workspaceName}
             workspaceLabel={workspace.label || workspace.name}
+            workspaceIcon={workspace.icon}
             pane={sidePane}
             isFocused={focusedPane === 'right'}
             clipboard={clipboard}
@@ -1707,6 +1596,7 @@ function findTreeNode(root: TreeNode | null, path: string): TreeNode | null {
 function SideWorkspaceCanvas({
   workspaceName,
   workspaceLabel,
+  workspaceIcon,
   pane,
   isFocused = false,
   clipboard,
@@ -1718,6 +1608,7 @@ function SideWorkspaceCanvas({
 }: {
   workspaceName: string;
   workspaceLabel: string;
+  workspaceIcon?: string | null;
   pane: WorkspaceSidePane;
   isFocused?: boolean;
   clipboard: WorkspaceClipboard | null;
@@ -1728,6 +1619,7 @@ function SideWorkspaceCanvas({
   onNavigate?: (path: string) => void;
   onClose?: () => void;
 }) {
+  const { openM1Drawer, openM2Drawer } = useMenu();
   const { showToast, showProgress } = useToast();
   const [tree, setTree] = useState<TreeNode | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -1749,9 +1641,10 @@ function SideWorkspaceCanvas({
     : null;
   const urlDisplay = `${workspaceName}://${pane.path === '/' ? '' : pane.path.replace(/^\//, '')}`;
 
+  const documentSchema = contentViewSchema(paneView);
   const fetchPaneDocuments = useCallback(async () => {
     if (backendTrashLocation(pane.treeName, pane.path)) { setDocuments([]); setTotalCount(0); setIsLoading(false); return; }
-    const cacheKey = documentKey(workspaceName, pane.treeName, pane.path, currentPage, pageSize, '', '');
+    const cacheKey = documentKey(workspaceName, pane.treeName, pane.path, currentPage, pageSize, '', documentSchema ?? '');
     const cached = documentCache.get(cacheKey);
     if (cached) {
       setDocuments(cached.documents);
@@ -1760,7 +1653,7 @@ function SideWorkspaceCanvas({
     }
     setIsLoading(true);
     try {
-      const response = await getWorkspaceDocuments(workspaceName, pane.path, [], {
+      const response = await getWorkspaceDocuments(workspaceName, pane.path, documentSchema ? [documentSchema] : [], {
         limit: pageSize,
         page: currentPage,
         treeName: pane.treeName,
@@ -1778,7 +1671,7 @@ function SideWorkspaceCanvas({
     } finally {
       setIsLoading(false);
     }
-  }, [workspaceName, pane.path, pane.treeName, treeType, pageSize, currentPage, showToast]);
+  }, [workspaceName, pane.path, pane.treeName, treeType, pageSize, currentPage, showToast, documentSchema]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1830,7 +1723,7 @@ function SideWorkspaceCanvas({
     // "Link to…" targets an explicit tree; a plain paste targets this pane's tree.
     const targetTreeName = options.targetTreeName ?? pane.treeName;
     const targetTreeType = options.targetTreeType ?? treeType;
-    const moving = options.move || clipboard?.operation === 'cut';
+    const moving = options.move ?? clipboard?.operation === 'cut';
     const progress = showProgress({ title: moving ? 'Moving…' : 'Pasting…', description: `${documentIds.length} document(s) → "${path}"` });
     try {
       const success = await pasteDocumentsToWorkspacePath(workspaceName, path, documentIds, targetTreeName, targetTreeType);
@@ -1838,7 +1731,7 @@ function SideWorkspaceCanvas({
         invalidateDocumentCache(workspaceName, targetTreeName, path);
         const sourcePath = options.sourcePath || clipboard?.sourcePath;
         const sourceTreeName = options.sourceTreeName || clipboard?.sourceTreeName;
-        const shouldMove = options.move || clipboard?.operation === 'cut';
+        const shouldMove = options.move ?? clipboard?.operation === 'cut';
         if (shouldMove && sourcePath && sourceTreeName) {
           const sourceTreeType: 'context' | 'directory' = treeTypeForName(sourceTreeName);
           await removeWorkspaceDocuments(workspaceName, documentIds, sourcePath, [], sourceTreeName, sourceTreeType);
@@ -1906,7 +1799,7 @@ function SideWorkspaceCanvas({
   return (
     <div
       className={cn(
-        'relative flex-1 min-w-0 rounded-lg border bg-background overflow-hidden',
+        'relative flex-1 min-w-0 rounded-(--sheet-radius) border bg-background overflow-hidden',
         isFocused ? 'ring-2 ring-primary' : 'ring-1 ring-primary/20',
       )}
       onMouseDown={(event) => {
@@ -1924,12 +1817,17 @@ function SideWorkspaceCanvas({
         </button>
       )}
       {backendTrashLocation(pane.treeName, pane.path) ? pane.path === '/Trash' ? <div className="h-full overflow-auto p-4"><TrashPanel workspaceName={workspaceName} /></div> : <BackendTrashBrowser workspace={workspaceName} path={pane.path} onNavigate={onNavigate || (() => {})} /> : <DefaultCanvas
+        frameContent={false}
+        onBrowseWorkspaces={() => openM1Drawer('workspaces')}
+        onBrowseTree={() => openM2Drawer('workspaces', 'detail', workspaceName)}
         urlType={isCanvas ? 'canvas' : (treeType === 'directory' ? pane.treeName : 'context')}
         urlDisplay={urlDisplay}
         contextPath={pane.path}
         treeName={pane.treeName}
         workspaceId={workspaceName}
         workspaceLabel={workspaceLabel}
+        workspaceIcon={workspaceIcon}
+        documentSchema={documentSchema}
         documents={documents}
         isLoading={isLoading}
         totalCount={totalCount}
@@ -1972,7 +1870,7 @@ function SideWorkspaceCanvas({
             onColumnsChange={() => {}}
             readOnly
           />
-        ) : paneView?.kind === 'app' && paneView.app ? (
+        ) : paneView?.kind === 'app' && paneView.app && paneView.app !== 'notes' ? (
           <ContentAppView
             app={paneView.app}
             workspaceId={workspaceName}

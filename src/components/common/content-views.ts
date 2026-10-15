@@ -11,11 +11,19 @@ export type ContentViewKind = 'documents' | 'columns' | 'app'
 
 // Full content-page apps a tab can host — each renders the layer's data
 // through an app-shaped lens (see content-app-view.tsx).
-export type ContentAppId = 'todos' | 'notes'
+export type ContentAppId = 'todos' | 'todo-app' | 'notes' | 'notes-app' | 'filters' | 'sketch' | 'lens'
 export const CONTENT_APPS: ReadonlyArray<{ id: ContentAppId; label: string }> = [
-  { id: 'todos', label: 'Todos' },
-  { id: 'notes', label: 'Notes' },
+  { id: 'todos', label: 'Todo list' },
+  { id: 'todo-app', label: 'Todo App' },
+  { id: 'notes', label: 'Notes list' },
+  { id: 'notes-app', label: 'Notes App' },
+  { id: 'sketch', label: 'Sketch' },
 ]
+
+/** Notes use the ordinary document pipeline, including search and actions. */
+export function contentViewSchema(view: ContentView | null): string | undefined {
+  return view?.kind === 'app' && view.app === 'notes' ? 'data/schema/note' : undefined
+}
 
 export interface BoardColumnConfig {
   id: string
@@ -56,7 +64,9 @@ export function viewsFromLayerMetadata(metadata: LayerMetadata | undefined | nul
     const view = v as { id?: unknown; name?: unknown; kind?: unknown; app?: unknown } | null
     if (!view || typeof view.id !== 'string' || typeof view.name !== 'string') return false
     if (view.kind === 'documents' || view.kind === 'columns') return true
-    return view.kind === 'app' && CONTENT_APPS.some((a) => a.id === view.app)
+    // Existing Filters/Lens tabs remain usable, but are no longer offered
+    // in the new-tab picker.
+    return view.kind === 'app' && (CONTENT_APPS.some((a) => a.id === view.app) || view.app === 'filters' || view.app === 'lens')
   })
   return views.length > 0 ? views : [DEFAULT_VIEW]
 }

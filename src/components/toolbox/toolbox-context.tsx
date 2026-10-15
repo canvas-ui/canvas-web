@@ -9,6 +9,7 @@ import {
 } from 'react'
 import socketService from '@/lib/socket'
 import { useNavigate, useLocation } from 'react-router-dom'
+import type { AppletTarget } from './applets/use-applet-target'
 import { ToolboxCtx } from './use-toolbox'
 import type { ToolboxFilters, ToolboxTimelineFilters, ToolboxGeoFilters, ToolboxLensFilters, GeoBBox, GeoSelection, ToolboxSort, Document as WorkspaceDocument } from '@/types/workspace'
 import { DEFAULT_TOOLBOX_FILTERS, normalizeDocumentSort, buildDatetimeFilters, buildGeoFilters, buildContextBinding, type LiveContextQuery } from '@/types/workspace'
@@ -36,7 +37,7 @@ export type ToolsTab = 'features' | 'timeline' | 'map' | 'lens'
 // Maps directly to synapsd feature sigil algebra: anyOf (OR), allOf (+ gate), noneOf (! exclude).
 export type FeatureMode = 'off' | 'anyOf' | 'allOf' | 'noneOf'
 export type ActiveContextType = 'canvas' | 'context' | null
-export type AddKind = 'message' | 'note' | 'link' | 'todo' | 'identity' | 'sketch' | 'file' | 'photo' | 'existing' | 'folder'
+export type AddKind = 'message' | 'note' | 'link' | 'todo' | 'identity' | 'sketch' | 'file' | 'photo' | 'existing' | 'folder' | 'plaintext'
 export type { WorkspaceDocument }
 
 export interface RelateSeed {
@@ -59,6 +60,7 @@ export interface ToolboxState {
   t2Open: boolean
   t2AgentId: string | null
   // Add panel — slim creation section next to main content
+  addModal: boolean
   addOpen: boolean
   addKind: AddKind | null
   // Documents the new document should be related to — seeded by "Add related
@@ -115,7 +117,7 @@ type ToolboxAction =
   | { type: 'CLOSE_T2' }
   // relateTo: undefined keeps the current seed (picking a kind from the
   // picker), null clears it (a fresh open), a value replaces it.
-  | { type: 'OPEN_ADD'; kind: AddKind | null; relateTo?: RelateSeed | null }
+  | { type: 'OPEN_ADD'; kind: AddKind | null; modal?: boolean; relateTo?: RelateSeed | null }
   | { type: 'CLOSE_ADD' }
   | { type: 'OPEN_EDIT'; document: WorkspaceDocument; workspaceId: string }
   | { type: 'SET_TOOLS_TAB'; tab: ToolsTab }
@@ -170,6 +172,7 @@ const initialState: ToolboxState = {
   appsAppletId: null,
   t2Open: false,
   t2AgentId: null,
+  addModal: false,
   addOpen: false,
   addKind: null,
   addRelateTo: null,
@@ -214,15 +217,16 @@ function toolboxReducer(state: ToolboxState, action: ToolboxAction): ToolboxStat
       return {
         ...state,
         addOpen: true,
+        addModal: action.modal ?? (state.addOpen && state.addModal),
         addKind: action.kind,
         addRelateTo: action.relateTo === undefined ? state.addRelateTo : action.relateTo,
         editDocument: null,
         editWorkspaceId: null,
       }
     case 'CLOSE_ADD':
-      return { ...state, addOpen: false, addKind: null, addRelateTo: null, editDocument: null, editWorkspaceId: null }
+      return { ...state, addOpen: false, addModal: false, addKind: null, addRelateTo: null, editDocument: null, editWorkspaceId: null }
     case 'OPEN_EDIT':
-      return { ...state, addOpen: true, addKind: null, addRelateTo: null, editDocument: action.document, editWorkspaceId: action.workspaceId }
+      return { ...state, addOpen: true, addModal: false, addKind: null, addRelateTo: null, editDocument: action.document, editWorkspaceId: action.workspaceId }
     case 'SET_TOOLS_TAB':
       return { ...state, toolsTab: action.tab }
     case 'SET_APPS_APPLET':
@@ -411,9 +415,9 @@ export interface ToolboxContextValue {
   openAgentT2: (agentId: string) => void
   closeT2: () => void
   openAdd: (kind: AddKind) => void
-  openAddPicker: () => void
+  openAddPicker: (options?: { modal?: boolean; fresh?: boolean }) => void
   /** Open the picker with the new document pre-related to `seed.documents`. */
-  openAddRelated: (seed: RelateSeed) => void
+  openAddRelated: (seed: RelateSeed, modal?: boolean) => void
   closeAdd: () => void
   openEdit: (document: WorkspaceDocument, workspaceId: string) => void
   setToolsTab: (tab: ToolsTab) => void
@@ -446,7 +450,7 @@ export interface ToolboxContextValue {
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
-export function ToolboxProvider({ children }: { children: ReactNode }) {
+export function ToolboxProvider({ children, target }: { children: ReactNode; target?: AppletTarget }) {
   const [state, dispatch] = useReducer(toolboxReducer, initialState)
   const location = useLocation()
   const navigate = useNavigate()
@@ -466,9 +470,9 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
     let cancelled = false
     const pathParts = location.pathname.split('/').filter(Boolean)
 
-    const newWorkspaceName = pathParts[0] === 'workspaces' ? (pathParts[1] || null) : null
-    const newContextId = pathParts[0] === 'contexts' ? (pathParts[1] || null) : null
-    const { path: wsPath, treeName: wsTreeName } = newWorkspaceName
+    const newWorkspaceName = target !== undefined ? (target?.mode === 'workspace' ? target.workspaceName : null) : pathParts[0] === 'workspaces' ? decodeURIComponent(pathParts[1] || '') || null : null
+    const newContextId = target !== undefined ? (target?.mode === 'context' ? target.contextId : null) : pathParts[0] === 'contexts' ? decodeURIComponent(pathParts[1] || '') || null : null
+    const { path: wsPath, treeName: wsTreeName } = target?.mode === 'workspace' ? target : newWorkspaceName
       ? parseWorkspacePathFromUrl(location.pathname)
       : { path: '/', treeName: '' }
 
@@ -504,7 +508,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
     }
     dispatchNav(null)
     return () => { cancelled = true }
-  }, [location.pathname])
+  }, [location.pathname, target])
 
   // ── Load bitmaps when workspace changes ───────────────────────────────────
 
@@ -574,7 +578,7 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
       params.delete('q'); params.delete('search')
       for (const query of queries) params.append('q', query)
       const search = params.toString()
-      navigate(`${location.pathname}${search ? `?${search}` : ''}`, { replace: true })
+      navigate(`${location.pathname}${search ? `?${search}` : ''}${window.location.hash}`, { replace: true })
     }
     const applyLive = (live: LiveContextQuery | null, saved: ToolboxFilters | null, savedSearch: string | null, selection: GeoSelection | null = null, savedQueries: string[] = savedSearch ? [savedSearch] : []) => {
       const filters = live?.filters ?? saved ?? DEFAULT_TOOLBOX_FILTERS
@@ -711,8 +715,8 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
   const openAgentT2 = useCallback((agentId: string) => dispatch({ type: 'OPEN_T2_AGENT', agentId }), [])
   const closeT2 = useCallback(() => dispatch({ type: 'CLOSE_T2' }), [])
   const openAdd = useCallback((kind: AddKind) => dispatch({ type: 'OPEN_ADD', kind }), [])
-  const openAddPicker = useCallback(() => dispatch({ type: 'OPEN_ADD', kind: null, relateTo: null }), [])
-  const openAddRelated = useCallback((seed: RelateSeed) => dispatch({ type: 'OPEN_ADD', kind: null, relateTo: seed }), [])
+  const openAddPicker = useCallback((options?: { modal?: boolean; fresh?: boolean }) => dispatch({ type: 'OPEN_ADD', kind: null, modal: options?.modal, relateTo: options?.fresh ? null : undefined }), [])
+  const openAddRelated = useCallback((seed: RelateSeed, modal = false) => dispatch({ type: 'OPEN_ADD', kind: null, relateTo: seed, modal }), [])
   const closeAdd = useCallback(() => dispatch({ type: 'CLOSE_ADD' }), [])
   const openEdit = useCallback((document: WorkspaceDocument, workspaceId: string) => dispatch({ type: 'OPEN_EDIT', document, workspaceId }), [])
   const setToolsTab = useCallback((tab: ToolsTab) => dispatch({ type: 'SET_TOOLS_TAB', tab }), [])
@@ -759,7 +763,13 @@ export function ToolboxProvider({ children }: { children: ReactNode }) {
     const { filters } = stateRef.current
     dispatch({ type: 'SET_GEO_SELECTION', selection: null })
     dispatch({ type: 'SET_FILTERS', filters: { ...DEFAULT_TOOLBOX_FILTERS, timeline: { ...filters.timeline, quickFilter: null, customRanges: [], customRange: null, selectedTimelines: [] } } })
-  }, [])
+    const params = new URLSearchParams(location.search)
+    params.delete('q')
+    params.delete('search')
+    // An explicit empty query also overrides a context's saved search.
+    params.set('q', '')
+    navigate({ pathname: location.pathname, search: params.toString(), hash: location.hash }, { replace: true })
+  }, [location.pathname, location.search, location.hash, navigate])
 
   const setSort = useCallback((sort: ToolboxSort) => {
     const { filters } = stateRef.current

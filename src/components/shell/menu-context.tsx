@@ -1,8 +1,11 @@
-import { useReducer, useCallback, useEffect, type ReactNode } from 'react'
+import { useReducer, useCallback, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
+import { useLocation, useNavigate, type To } from 'react-router-dom'
 import { getCurrentUser, getCurrentUserFromToken } from '@/services/auth'
 import {
   MenuContext,
   useMenuUrlSync,
+  isMobileNavigation,
+  sectionFromPath,
   type MenuAction,
   type MenuContextValue,
   type MenuSection,
@@ -24,6 +27,8 @@ const initialState: MenuState = {
 
 function menuReducer(state: MenuState, action: MenuAction): MenuState {
   switch (action.type) {
+    case 'RESTORE_MENU':
+      return { ...state, ...action.menu, user: state.user }
     case 'SET_SECTION':
       return {
         ...state,
@@ -137,7 +142,56 @@ function menuReducer(state: MenuState, action: MenuAction): MenuState {
 
 export function MenuProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(menuReducer, initialState)
+  const location = useLocation()
+  const navigate = useNavigate()
+  const stateRef = useRef(state)
+  useLayoutEffect(() => { stateRef.current = state }, [state])
   useMenuUrlSync(state, dispatch)
+
+  const changeMenu = useCallback((action: MenuAction, replace = false, backwards = false) => {
+    const next = menuReducer(stateRef.current, action)
+    stateRef.current = next
+    dispatch(action)
+    if (!isMobileNavigation()) return
+    const { activeSection, m0Open, m1Open, m2Open, m2View, selectedEntityId } = next
+    navigate({ pathname: location.pathname, search: location.search, hash: location.hash }, {
+      replace,
+      state: {
+        ...location.state,
+        canvasMenu: { activeSection, m0Open, m1Open, m2Open, m2View, selectedEntityId },
+        canvasMenuBack: backwards,
+      },
+    })
+  }, [location, navigate])
+
+  const navigateFromMenu = useCallback((to: To) => {
+    // The tree is the previous view of this very path. Updating its history
+    // entry before opening the content also restores the selected tree/path
+    // after refresh, Back, or Forward, without putting menu UI in the URL.
+    if (isMobileNavigation() && stateRef.current.m1Open) {
+      const { activeSection, m0Open, m1Open, m2Open, m2View, selectedEntityId } = stateRef.current
+      navigate(to, { replace: true, state: { ...location.state,
+        canvasMenu: { activeSection, m0Open, m1Open, m2Open, m2View, selectedEntityId }, canvasMenuBack: false,
+      } })
+    }
+    navigate(to)
+  }, [location.state, navigate])
+
+  const goBack = useCallback(() => {
+    // React Router starts an app history at index 0. Never send a fresh deep
+    // link out of Canvas; give it the same menu ancestors as a normal visit.
+    if (window.history.state?.idx > 0) { navigate(-1); return }
+    const current = stateRef.current
+    if (current.m1Open && current.m2Open) changeMenu({ type: 'CLOSE_M2' }, true, true)
+    else if (current.m1Open) changeMenu({ type: 'CLOSE_M1' }, true, true)
+    else if (current.m0Open) changeMenu({ type: 'CLOSE_M0' }, true, true)
+    else {
+      const { section, entityId, m2View } = sectionFromPath(location.pathname)
+      if (!isMobileNavigation()) { navigate(section ? `/${section}` : '/'); return }
+      if (section && entityId) changeMenu({ type: 'OPEN_M2_DRAWER', section, view: m2View, entityId }, true, true)
+      else changeMenu({ type: 'TOGGLE_M0' }, true, true)
+    }
+  }, [changeMenu, location.pathname, navigate])
 
   // Load user on mount
   useEffect(() => {
@@ -156,40 +210,41 @@ export function MenuProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const setSection = useCallback((section: MenuSection) => {
-    dispatch({ type: 'SET_SECTION', section })
-  }, [])
+    changeMenu({ type: 'SET_SECTION', section })
+  }, [changeMenu])
 
   const toggleSection = useCallback((section: MenuSection) => {
-    dispatch({ type: 'TOGGLE_SECTION', section })
-  }, [])
+    changeMenu({ type: 'TOGGLE_SECTION', section })
+  }, [changeMenu])
 
   const toggleM0 = useCallback(() => {
-    dispatch({ type: 'TOGGLE_M0' })
-  }, [])
+    changeMenu({ type: 'TOGGLE_M0' }, stateRef.current.m0Open)
+  }, [changeMenu])
 
   const closeM0 = useCallback(() => {
-    dispatch({ type: 'CLOSE_M0' })
-  }, [])
+    changeMenu({ type: 'CLOSE_M0' }, true)
+  }, [changeMenu])
 
   const closeM1 = useCallback(() => {
-    dispatch({ type: 'CLOSE_M1' })
-  }, [])
+    changeMenu({ type: 'CLOSE_M1' }, true)
+  }, [changeMenu])
 
   const openM2 = useCallback((view: M2View, entityId?: string | null) => {
-    dispatch({ type: 'OPEN_M2', view, entityId })
-  }, [])
+    changeMenu({ type: 'OPEN_M2', view, entityId })
+  }, [changeMenu])
 
   const openM2Drawer = useCallback((section: MenuSection, view: M2View, entityId: string | null) => {
-    dispatch({ type: 'OPEN_M2_DRAWER', section, view, entityId })
-  }, [])
+    changeMenu({ type: 'OPEN_M2_DRAWER', section, view, entityId })
+  }, [changeMenu])
 
   const openM1Drawer = useCallback((section: MenuSection) => {
-    dispatch({ type: 'OPEN_M1_DRAWER', section })
-  }, [])
+    changeMenu({ type: 'OPEN_M1_DRAWER', section })
+  }, [changeMenu])
 
   const closeM2 = useCallback(() => {
-    dispatch({ type: 'CLOSE_M2' })
-  }, [])
+    if (isMobileNavigation() && stateRef.current.m1Open && stateRef.current.m2Open) goBack()
+    else dispatch({ type: 'CLOSE_M2' })
+  }, [goBack])
 
   const selectEntity = useCallback((entityId: string | null) => {
     dispatch({ type: 'SELECT_ENTITY', entityId })
@@ -208,6 +263,8 @@ export function MenuProvider({ children }: { children: ReactNode }) {
     openM1Drawer,
     closeM2,
     selectEntity,
+    goBack,
+    navigateFromMenu,
   }
 
   return <MenuContext.Provider value={value}>{children}</MenuContext.Provider>

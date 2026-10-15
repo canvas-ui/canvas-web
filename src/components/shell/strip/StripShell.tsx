@@ -1,4 +1,5 @@
 import { useReaderWidth } from '@/lib/reader-width'
+import { DEFAULT_SIDE_PANEL_WIDTH } from '@/lib/panel-size'
 import { ReaderResizeHandle } from '../ReaderResizeHandle'
 import { SETTINGS_GROUPS } from '@/lib/settings-catalog'
 import { useCallback, useEffect, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'react'
@@ -133,7 +134,7 @@ function CanvasFrame({ id, title, expanded, focused, onFocus, onToggleExpanded, 
   return (
     <section
       data-reader-pane={contentHeader ? true : undefined}
-      style={contentHeader && !expanded && readerWidth ? { '--reader-width': `${readerWidth}px`, transition: 'none' } as CSSProperties : undefined}
+      style={contentHeader && !expanded ? { '--reader-width': `${readerWidth ?? DEFAULT_SIDE_PANEL_WIDTH}px`, ...(readerWidth ? { transition: 'none' } : {}) } as CSSProperties : undefined}
       data-strip-col={id}
       className={cn('strip-canvas surface-sheet relative', expanded && 'strip-canvas--wide', focused && 'strip-canvas--focused')}
       onPointerDownCapture={() => onFocus(id)}

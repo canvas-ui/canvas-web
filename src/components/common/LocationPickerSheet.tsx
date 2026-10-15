@@ -240,14 +240,15 @@ export function LocationPickerSheet({
   return createPortal(
     <>
       <div
-        className={cn('fixed inset-0 z-[60] bg-black/40 transition-opacity duration-200', shown ? 'opacity-100' : 'opacity-0')}
+        className={cn('fixed inset-0 z-[60] bg-scrim transition-opacity duration-normal', shown ? 'opacity-100' : 'opacity-0')}
         onClick={onClose}
       />
       <div
         role="dialog"
+        aria-modal="true"
         aria-label="Pick a location on the map"
         className={cn(
-          'fixed inset-y-0 right-0 z-[61] flex w-[min(560px,100vw)] flex-col bg-background shadow-elevation-4 transition-transform duration-200 ease-out',
+          'fixed inset-y-0 right-0 z-[61] flex w-[min(560px,100vw)] flex-col overflow-hidden rounded-(--panel-radius) bg-background shadow-elevation-4 transition-transform duration-normal ease-out',
           shown ? 'translate-x-0' : 'translate-x-full',
         )}
       >

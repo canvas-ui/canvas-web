@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
 import { backendTrashLocation } from '../src/lib/backend-trash.ts'
+import { isSameDocumentFolder } from '../src/lib/document-drag.ts'
 
 function children(element) {
   if (Array.isArray(element)) return element.flatMap(children)
@@ -32,6 +33,7 @@ function setup() {
     '@/hooks/use-long-press-context-menu': {},
     '@/lib/utils': { cn: (...args) => args.filter(Boolean).join(' ') },
     '@/lib/backend-trash': { backendTrashLocation },
+    '@/lib/document-drag': { isSameDocumentFolder },
     '@/lib/layer-style': {}, './LayerIconPicker': {},
     '@/components/common/context-menu-shell': { ContextMenuShell: 'menu' },
     '@/components/common/action-menu': {},
@@ -79,7 +81,7 @@ test('virtual Trash exposes restore and rejects ordinary tree drag and drop', as
   assert.deepEqual(restored, [path])
   await buttons.find(element => element.props.children?.includes('Empty Trash')).props.onClick()
   assert.deepEqual(discarded, [path])
-  const event = { preventDefault() {}, dataTransfer: { getData() { assert.fail('Trash cannot accept ordinary drops') } } }
+  const event = { preventDefault() {}, stopPropagation() {}, dataTransfer: { getData() { assert.fail('Trash cannot accept ordinary drops') } } }
   await ui.card(ui.render()).props.onDrop(path, event)
   let prevented = false
   ui.card(ui.render()).props.onDragStart(path, { preventDefault() { prevented = true } })

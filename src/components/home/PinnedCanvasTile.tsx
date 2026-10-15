@@ -107,7 +107,7 @@ export function PinnedCanvasTile({ pin, onUnpin, onMinimize, onDropPin }: {
       className={
         isFilled
           ? 'fixed inset-0 z-picker flex flex-col bg-background'
-          : `flex flex-col rounded-lg border bg-background overflow-hidden min-h-0 min-w-0 ${
+          : `flex flex-col rounded-(--card-radius) border bg-background overflow-hidden min-h-0 min-w-0 ${
               dropSide ? 'ring-2 ring-primary/60' : ''
             }`
       }

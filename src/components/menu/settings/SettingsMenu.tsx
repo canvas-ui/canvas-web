@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { useMenu } from '@/components/shell/use-menu'
 import { SETTINGS_GROUPS, matchesSettingsQuery } from '@/lib/settings-catalog'
+import { MenuBackButton } from '@/components/menu/shared/MenuBackButton'
 
 export function SettingsMenu() {
   const location = useLocation()
@@ -27,7 +28,7 @@ export function SettingsMenu() {
   return (
     <nav aria-label="Settings" className="flex h-full flex-col">
       <div className="shrink-0 space-y-3 border-b border-border p-3">
-        <h2 className="text-sm font-semibold">Settings</h2>
+        <div className="flex items-center"><MenuBackButton /><h2 className="text-sm font-semibold">Settings</h2></div>
         <Input type="search" aria-label="Search settings menu" placeholder="Find a setting…" value={query} onChange={event => setQuery(event.target.value)} />
       </div>
       <div ref={listRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-2">

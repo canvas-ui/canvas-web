@@ -1,5 +1,5 @@
 import { uploadWorkspaceBlob, writeBackendObject } from '@/services/blobs'
-import { updateWorkspaceDocument } from '@/services/workspace'
+import { getWorkspaceDocument, updateWorkspaceDocument } from '@/services/workspace'
 import { getLocationFilename } from '@/lib/document-display'
 import { documentBodyKind } from '@/lib/text-document'
 import type { Document } from '@/types/workspace'
@@ -43,7 +43,7 @@ export async function saveTextFileContent(
   doc: Document,
   content: string,
   extra: { comment?: string; metadata?: Record<string, unknown> } = {},
-): Promise<void> {
+): Promise<Document> {
   const filename = getLocationFilename(doc) || `document-${doc.id}.txt`
   const contentType = String(doc.metadata?.contentType ?? '')
     || (documentBodyKind(doc) === 'markdown' ? 'text/markdown' : 'text/plain')
@@ -63,7 +63,7 @@ export async function saveTextFileContent(
     )
     // Checksum, size and location follow from the file itself; only the
     // universal fields the form may have changed are ours to send.
-    const hasExtra = extra.comment !== undefined || extra.metadata !== undefined
+    const hasExtra = (extra.comment !== undefined && extra.comment !== (doc.comment ?? '')) || extra.metadata !== undefined
     if (hasExtra) {
       await updateWorkspaceDocument(workspaceId, {
         id: written.docId ?? doc.id,
@@ -73,7 +73,7 @@ export async function saveTextFileContent(
         ...(extra.metadata !== undefined ? { metadata: extra.metadata } : {}),
       })
     }
-    return
+    return getWorkspaceDocument(workspaceId, written.docId ?? doc.id)
   }
 
   const uploaded = await uploadWorkspaceBlob(workspaceId, blob)
@@ -89,4 +89,5 @@ export async function saveTextFileContent(
     // (features, geo, extracted image meta) stays.
     metadata: { contentType, size: uploaded.size, ...(extra.metadata ?? {}) },
   })
+  return getWorkspaceDocument(workspaceId, doc.id)
 }

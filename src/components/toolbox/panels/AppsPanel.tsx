@@ -75,7 +75,7 @@ export function AppsPanel() {
               key={a.id}
               type="button"
               onClick={() => openApplet(a.id)}
-              className="flex min-h-[4.5rem] flex-col items-center justify-center gap-1.5 rounded-lg border border-border bg-muted/40 p-3 text-foreground transition-colors hover:bg-muted"
+              className="flex min-h-[4.5rem] flex-col items-center justify-center gap-1.5 rounded-(--card-radius) border border-border bg-muted/40 p-3 text-foreground transition-colors hover:bg-muted"
               title={a.description}
             >
               <a.icon className="h-5 w-5 text-muted-foreground" />

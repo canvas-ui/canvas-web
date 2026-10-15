@@ -1,3 +1,5 @@
+import { useEditNoteFields } from '@/components/toolbox/add/useEditNoteFields'
+import { NoteSaveStatus } from '@/components/common/note-save-status'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -61,7 +63,7 @@ async function syncOrganizationEdges(workspaceId: string, documentId: number, or
 // Inline edit form for note/link/tab documents (ported from the old detail
 // modal's DocumentEditForm). Editing a link/tab url upserts the document
 // (checksum recalculated) — accepted.
-export function DocumentEditForm({ document: doc, workspaceId, onClose }: { document: Document; workspaceId: string; onClose: () => void }) {
+export function DocumentEditForm({ document: doc, workspaceId, onClose }: { document: Document; workspaceId: string; onClose: (saved?: Document) => void }) {
   const { showSuccessToast, showErrorToast } = useToastHelpers()
   // Schema-specific fields (url/title/body/tags) only render for note/link/tab.
   // The comment section is universal — every document can carry a user comment,
@@ -79,8 +81,8 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
   const { urlKey, titleKey } = urlTitleKeys(doc.schema)
 
   const [url, setUrl] = useState<string>(urlKey ? String(doc.data?.[urlKey] ?? '') : '')
-  const [title, setTitle] = useState<string>(String(doc.data?.[titleKey] ?? ''))
-  const [content, setContent] = useState<string>(String(doc.data?.content ?? ''))
+  const [localTitle, setLocalTitle] = useState<string>(String(doc.data?.[titleKey] ?? ''))
+  const [localContent, setLocalContent] = useState<string>(String(doc.data?.content ?? ''))
   // Todo-specific fields (seeded from the document; dueDate ISO → local input).
   const [description, setDescription] = useState<string>(String(doc.data?.description ?? ''))
   const [status, setStatus] = useState<TodoStatus>((doc.data?.status as TodoStatus) ?? 'pending')
@@ -89,24 +91,29 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
   // Hooks cannot be conditional, so identity state is always created; it is
   // only read (and only saved) on an identity document.
   const identity = useIdentityFields(identityFieldsFromDocument(doc))
-  const [comment, setComment] = useState<string>(String(doc.comment ?? ''))
+  const [localComment, setLocalComment] = useState<string>(String(doc.comment ?? ''))
   // Location is universal (like the comment), not schema-specific: a photo with
   // no EXIF fix is the main reason this exists. The patch below is sent only
   // when it actually changed, so an unrelated edit never rewrites metadata.geo.
   const initialGeo = ((doc.metadata as Record<string, unknown> | undefined)?.geo as DocumentGeo | undefined) ?? null
-  const [geo, setGeo] = useState<DocumentGeo | null>(initialGeo)
-  const geoChanged = JSON.stringify(geo ?? null) !== JSON.stringify(initialGeo ?? null)
+  const [localGeo, setLocalGeo] = useState<DocumentGeo | null>(initialGeo)
   // Features live at the document's TOP LEVEL since synapsd v3 — reading them
   // from `metadata` (where every add surface still WRITES them, and where
   // Document.update still accepts them) always came back empty, so the form
   // opened with no tags and saving replaced the real ones with []. Read both,
   // newest home first.
   const storedFeatures = (doc.features ?? (doc.metadata as Record<string, unknown>)?.features) as string[] | undefined
-  const [tags, setTags] = useState<string[]>(
+  const [localTags, setLocalTags] = useState<string[]>(
     featuresToTags(storedFeatures).length
       ? featuresToTags(storedFeatures)
       : ((doc.data?.tags as string[] | undefined) ?? [])
   )
+  const note = useEditNoteFields(doc, workspaceId, isNote)
+  const { title, content, comment, tags, geo, setTitle, setContent, setComment, setTags, setGeo } = isNote ? note : {
+    title: localTitle, content: localContent, comment: localComment, tags: localTags, geo: localGeo,
+    setTitle: setLocalTitle, setContent: setLocalContent, setComment: setLocalComment, setTags: setLocalTags, setGeo: setLocalGeo,
+  }
+  const geoChanged = JSON.stringify(geo ?? null) !== JSON.stringify(initialGeo ?? null)
   // Whole file, not the renderer's 200k preview slice: a truncated read that
   // gets saved back would silently cut the file in half.
   const fileBody = useDocumentBlobUrl(workspaceId, doc.id, {
@@ -141,22 +148,27 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
     ? true
     : isIdentity ? (identity.displayName.trim().length > 0 && identity.emailValid)
     : isTodo ? title.trim().length > 0
-    : isNote ? content.trim().length > 0
+    : isNote ? note.canSave
     : urlValid)
 
   const handleSave = async () => {
     setSaving(true)
     try {
+      if (isNote) {
+        await note.save()
+        onClose()
+        return
+      }
       // Blob-backed body: new bytes first, then the same universal fields
       // (comment/geo) every other document saves.
       if (isTextFile) {
-        await saveTextFileContent(workspaceId, doc, content, {
+        const saved = await saveTextFileContent(workspaceId, doc, content, {
           comment: comment.trim(),
           ...(geoChanged ? { metadata: { geo } } : {}),
         })
         showSuccessToast('Document updated')
         window.dispatchEvent(new CustomEvent('workspace:documents:refresh'))
-        onClose()
+        onClose(saved)
         return
       }
       const payload: {
@@ -293,8 +305,9 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
         />
       </div>
 
+      {isNote && <NoteSaveStatus {...note} onRetry={note.save} />}
       <div className="flex justify-end gap-2 pt-2">
-        <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>Cancel</Button>
+        <Button variant="outline" size="sm" onClick={() => onClose()} disabled={saving}>{isNote ? 'Close' : 'Cancel'}</Button>
         <Button size="sm" onClick={handleSave} disabled={!canSave}>
           {saving ? (replicating ? `Replicating to ${mirror!.label}…` : 'Saving…') : 'Save changes'}
         </Button>

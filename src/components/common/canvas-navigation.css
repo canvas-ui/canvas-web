@@ -1,0 +1,57 @@
+.canvas-navigation { flex-shrink: 0; min-width: 0; border-top: 2px solid var(--border); border-bottom: 1px solid var(--border); background: var(--background); }
+.canvas-navigation.has-tabs { border-top: 0; }
+/* The strip belongs to the full sheet. The active tab shares the workspace
+   colour with its divider, joining the tab to the canvas below. */
+.canvas-navigation-tabs { position: relative; display: flex; flex-direction: column; justify-content: flex-end; flex-shrink: 0; height: 3rem; padding: 0 8px; background: var(--background); }
+.canvas-tab-divider { position: absolute; z-index: 1; inset-inline: 0; bottom: 0; height: 4px; background: var(--border); pointer-events: none; }
+.canvas-surface-body { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; background: var(--background); }
+.canvas-surface-body > .canvas-navigation { border-top: 0; }
+@media (min-width: 640px) {
+  .canvas-surface-body.is-framed { margin: 8px; border: 1px solid var(--border); border-radius: var(--sheet-radius); }
+}
+.canvas-address-row { display: flex; align-items: center; gap: 4px; padding: 6px; min-width: 0; }
+.canvas-nav-button { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; height: 44px; border-radius: 10px; color: var(--muted-foreground); cursor: pointer; }
+.canvas-nav-button:hover { background: var(--accent); color: var(--foreground); }
+.canvas-nav-button:focus-visible, .canvas-address-crumbs:focus-visible, .canvas-address-crumbs button:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.canvas-nav-button:disabled { opacity: .35; cursor: default; }
+.canvas-address-field { display: flex; flex: 1 1 0%; min-width: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--muted); }
+.canvas-address-field:focus-within { border-color: var(--ring); }
+.canvas-address-crumbs { display: flex; align-items: center; flex: 1 1 0%; min-width: 0; overflow-x: auto; scrollbar-width: none; padding-left: 8px; font-size: 13px; white-space: nowrap; overscroll-behavior-x: contain; }
+.canvas-address-crumbs::-webkit-scrollbar { display: none; }
+.canvas-address-crumbs button, .canvas-address-label { min-height: 44px; flex-shrink: 0; padding: 0 4px; border-radius: 4px; cursor: pointer; }
+.canvas-address-crumbs button:hover { color: var(--foreground); text-decoration: underline; text-underline-offset: 4px; }
+.canvas-address-label { display: inline-flex; align-items: center; }
+.canvas-address-workspace { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; max-width: 120px; padding: 0 4px 0 10px; white-space: nowrap; font-size: 13px; font-weight: 600; cursor: pointer; }
+.canvas-address-workspace:hover { text-decoration: underline; }
+.canvas-address-crumbs.is-scrolled { mask-image: linear-gradient(to right, transparent, black 12px); }
+@media (max-width: 639px) { .canvas-address-workspace { max-width: 90px; } }
+.canvas-address-tree, .canvas-address-root { color: var(--muted-foreground); font-family: monospace; }
+.canvas-address-segment { display: flex; flex-shrink: 0; align-items: center; gap: 2px; }
+.canvas-address-segment > span { color: var(--muted-foreground); }
+.canvas-address-segment button { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.canvas-address-section { color: var(--primary); }
+.canvas-address-search { border-radius: 0 11px 11px 0; }
+.canvas-add-button { color: var(--primary-foreground); border-radius: 50%; }
+/* A quieter 32px circle inside the same 44px touch target as its neighbours. */
+.canvas-add-button::before { content: ''; position: absolute; inset: 6px; border-radius: 50%; background: var(--primary); }
+.canvas-add-button > svg { position: relative; width: 18px; height: 18px; }
+.canvas-add-button:hover { background: transparent; color: var(--primary-foreground); }
+.canvas-add-button:hover::before { opacity: .85; }
+.canvas-filter-button[data-active="true"] { background: var(--accent); color: var(--foreground); }
+.canvas-nav-dot { position: absolute; top: 7px; right: 7px; width: 5px; height: 5px; border-radius: 50%; background: var(--primary); }
+.canvas-search-input { display: flex; min-width: 0; flex: 1; align-items: center; }
+.canvas-search-input input { flex: 1; width: 100%; min-width: 0; height: 44px; padding: 0 10px; outline: none; background: transparent; font-size: 16px; }
+.canvas-search-dropdown { padding: 0 12px 10px; }
+.canvas-search-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--muted-foreground); }
+.canvas-search-heading .canvas-nav-button { height: 36px; }
+.canvas-search-options { display: flex; flex-direction: column; gap: 8px; }
+.canvas-search-scopes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; }
+.canvas-search-scopes > span { color: var(--muted-foreground); margin-right: 3px; }
+.canvas-search-scopes button { min-height: 40px; border-radius: 8px; padding: 0 12px; border: 1px solid var(--border); cursor: pointer; }
+.canvas-search-scopes button[aria-pressed="true"] { background: var(--foreground); color: var(--background); border-color: var(--foreground); }
+.canvas-search-queries { display: flex; flex-wrap: wrap; gap: 6px; }
+.canvas-search-query { display: inline-flex; align-items: center; max-width: 100%; gap: 6px; padding-left: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--muted); font-size: 12px; }
+.canvas-search-query > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.canvas-search-query button { display: flex; align-items: center; justify-content: center; min-width: 40px; min-height: 40px; cursor: pointer; }
+.canvas-search-clear { font-size: 12px; text-decoration: underline; padding: 8px; }
+@media (min-width: 640px) { .canvas-address-row { gap: 6px; padding: 8px 10px; } }

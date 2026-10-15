@@ -1,11 +1,14 @@
 import { useReaderWidth } from '@/lib/reader-width'
-import type { CSSProperties } from 'react'
+import { DEFAULT_SIDE_PANEL_WIDTH } from '@/lib/panel-size'
+import { useRef, type CSSProperties } from 'react'
 import { ReaderResizeHandle } from './ReaderResizeHandle'
 import { Outlet, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { useSideView } from './use-side-view'
 import { DocumentSideCard } from './DocumentSideCard'
 import { isBare, isFullBleed } from './route-chrome'
+import { useMenu } from './use-menu'
+import { useMobileViewSlide } from '@/hooks/use-mobile-view-slide'
 
 // Shared mobile "drawer" treatment — same prominence as the M1/M2 menu panel
 // overlay (floating card over a scrim, elevation-8). Spans from left-2 since
@@ -14,15 +17,19 @@ import { isBare, isFullBleed } from './route-chrome'
 // drawers fully cover the menu on mobile.
 const MOBILE_DRAWER =
   'max-md:fixed max-md:left-2 max-md:right-2 max-md:top-2 max-md:bottom-2 max-md:z-side ' +
-  'max-md:py-0 max-md:pr-0 max-md:rounded-2xl max-md:shadow-elevation-5 max-md:animate-fade-in'
+  'max-md:py-0 max-md:mr-0 max-md:rounded-(--panel-radius) max-md:shadow-elevation-5 max-md:animate-fade-in'
 const MOBILE_SCRIM = 'fixed inset-0 z-side-scrim bg-scrim animate-fade-in md:hidden'
 
 export function ContentArea() {
   const width = useReaderWidth()
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
+  const { state: menu } = useMenu()
+  const contentRef = useRef<HTMLElement>(null)
+  // M0 is an anchor, not another sheet: toggling it must not move the canvas.
+  useMobileViewSlide(contentRef, !menu.m1Open, pathname + search, !menu.m0Open)
   const fullBleed = isFullBleed(pathname)
   const bare = isBare(pathname)
-  const { entry, close: closeSideView } = useSideView()
+  const { entry, loading, error, close: closeSideView } = useSideView()
 
   return (
     <div className={cn('relative flex flex-col flex-1 min-w-0', !bare && 'surface-sheet')}>
@@ -34,6 +41,7 @@ export function ContentArea() {
             otherwise sit on top of the last row of any list). `rail-stack` is
             the same token the toggle anchors to, so the two cannot drift. */}
         <main
+          ref={contentRef}
           id="content-area"
           className={cn(
             'relative flex-1 min-h-0 min-w-0 overflow-auto',
@@ -44,12 +52,12 @@ export function ContentArea() {
         </main>
         {/* Side panels sit beside the page on desktop; on mobile there's no
             room for a second column, so they become M1/M2-style drawers. */}
-        {entry && (
+        {(entry || loading || error) && (
           <>
             <div className={MOBILE_SCRIM} onClick={closeSideView} aria-hidden />
-            <div data-reader-pane style={{ '--reader-width': `${width ?? 560}px`, '--document-card-width': '100%' } as CSSProperties} className={cn('relative flex shrink-0 items-stretch py-2 pr-2 md:w-[var(--reader-width)] md:max-w-[calc(100%_-_240px)]', MOBILE_DRAWER)}>
+            <div data-reader-pane style={{ '--reader-width': `${width ?? DEFAULT_SIDE_PANEL_WIDTH}px` } as CSSProperties} className={cn('relative z-10 flex shrink-0 items-stretch py-2 mr-2 md:w-[var(--reader-width)] md:max-w-[calc(100%_-_248px)]', MOBILE_DRAWER)}>
               <ReaderResizeHandle edge="left" />
-              <DocumentSideCard />
+              <DocumentSideCard key={entry ? `${entry.workspaceId}:${entry.document.id}` : 'loading'} />
             </div>
           </>
         )}

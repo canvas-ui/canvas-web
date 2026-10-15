@@ -1,3 +1,5 @@
+import { DocumentActionDialog } from '@/components/common/document-action-dialog'
+import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { useEffect, useRef, useState } from 'react'
 import { LinkToCard, type LinkToTarget } from './LinkToCard'
 import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from './LinkToSidePanel'
@@ -19,7 +21,8 @@ function queueKey(workspace: string) {
   return `canvas:workspace-copy:${hash >>> 0}:${workspace}`
 }
 
-export function CopyToWorkspacePanel({ workspaceId, ids, onClose }: { workspaceId: string; ids: number[]; onClose: () => void }) {
+export function CopyToWorkspacePanel({ workspaceId, ids, onClose, modal = false }: { workspaceId: string; ids: number[]; onClose: () => void; modal?: boolean }) {
+  useEscapeClose(onClose, modal)
   const [storageKey] = useState(() => { try { return queueKey(workspaceId) } catch { return '' } })
   const [job, setJob] = useState<CopyJob | null>(() => {
     try {
@@ -68,8 +71,9 @@ export function CopyToWorkspacePanel({ workspaceId, ids, onClose }: { workspaceI
   }
   const close = () => { stopped.current = true; onClose() }
   const done = job != null && job.index >= job.ids.length
-  return <LinkToSidePanel onClose={close}>
-    {job ? <section role="dialog" aria-label="Copy to workspace" className={`${LINK_TO_SIDE_SIZE} flex flex-col rounded-2xl border bg-card p-4 shadow-elevation-4`}>
+  const size = modal ? 'h-full min-h-0 w-full' : LINK_TO_SIDE_SIZE
+  const content = <>
+    {job ? <section role="dialog" aria-label="Copy to workspace" className={`${size} flex flex-col rounded-(--panel-radius) border bg-card p-4 shadow-elevation-4`}>
       <h2 className="text-sm font-semibold">Copy to workspace</h2>
       <p className="mt-3 break-words text-sm">{job.target.workspaceName}: {job.paths.join(', ')}</p>
       <p role="status" className="mt-3 text-sm">{job.index} of {job.ids.length} copied{done ? '.' : busy ? '…' : ' — paused.'}</p>
@@ -81,7 +85,9 @@ export function CopyToWorkspacePanel({ workspaceId, ids, onClose }: { workspaceI
         {!done && !busy && <Button onClick={() => void run(job)}>Resume copy</Button>}
         <Button variant={done ? 'default' : 'outline'} onClick={close}>{done ? 'Done' : busy ? 'Pause & close' : 'Close'}</Button>
       </div>
-    </section> : <LinkToCard title="Copy to workspace…" confirmLabel="Copy documents" excludeWorkspace={workspaceId} documentCount={ids.length} sizeClassName={LINK_TO_SIDE_SIZE} onClose={close}
+    </section> : <LinkToCard title="Copy to workspace…" confirmLabel="Copy documents" excludeWorkspace={workspaceId} documentCount={ids.length} sizeClassName={size} onClose={close}
       onConfirm={(paths, target) => run({ ids, target, paths, index: 0, id: crypto.randomUUID() })} />}
-  </LinkToSidePanel>
+  </>
+  return modal ? <DocumentActionDialog label="Copy to workspace" onClose={close}>{content}</DocumentActionDialog>
+    : <LinkToSidePanel onClose={close}>{content}</LinkToSidePanel>
 }

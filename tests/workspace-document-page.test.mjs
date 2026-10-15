@@ -48,11 +48,15 @@ function setup() {
   const jsx = (type, props) => ({ type, props })
   const dependencies = {
     react, 'react/jsx-runtime': { jsx, jsxs: jsx },
-    'react-router-dom': { useParams: () => params, Link: 'link' },
+    'react-router-dom': { useParams: () => params, useLocation: () => ({ pathname: '', search: '', hash: '' }), useNavigate: () => () => {}, Link: 'link' },
     '@/components/object-card/ObjectPropertiesCard': { ObjectPropertiesCard: 'card' },
     '@/components/workspace/workspace-content-gate': { WorkspaceContentGate: 'gate' },
     '@/components/ui/button': { Button: 'button' },
+    '@/components/common/canvas-address-bar': { CanvasAddressBar: 'address' },
+    '@/utils/url-params': { buildWorkspaceUrl: () => '/' },
     '@/lib/document-display': { getDocumentDisplayInfo: document => ({ title: document.data.title }) },
+    '@/hooks/use-workspace-identity': { useWorkspaceIdentity: () => ({ label: 'Studio', icon: 'ph:planet-fill' }) },
+    '@/components/shell/use-menu': { useMenu: () => ({ goBack() {} }) },
     '@/services/workspace': {
       getWorkspaceDocument: (workspace, id) => new Promise((resolve, reject) => requests.push({ workspace, id, resolve, reject })),
       getWorkspaceDocumentByChecksum: (workspace, algo, checksum) => new Promise((resolve, reject) => requests.push({ workspace, algo, checksum, resolve, reject })),
@@ -81,6 +85,7 @@ test('direct lookup inspects documents, refreshes saved edits, and reports missi
   ui.requests.shift().resolve({ id: 101140, schema: 'data/schema/note', data: { title: 'Inspect me' } })
   await ui.flush()
   assert.equal(ui.find(el => el.type === 'card').props.document.id, 101140)
+  assert.equal(ui.find(el => el.type === 'card').props.navigation.workspaceIcon, 'ph:planet-fill')
   ui.find(el => el.type === 'card').props.onChanged()
   ui.render()
   ui.requests.shift().resolve({ id: 101140, schema: 'data/schema/note', data: { title: 'Saved edit' } })
@@ -105,7 +110,7 @@ test('checksum lookup opens the same document card and refreshes using the check
   lookup.resolve({ id: 101140, schema: 'data/schema/note', data: { title: 'By checksum' } })
   await ui.flush()
   assert.equal(ui.find(el => el.type === 'card').props.document.id, 101140)
-  assert.match(JSON.stringify(ui.render()), /Checksum: sha256\/abc123/)
+  assert.equal(ui.find(el => el.type === 'card').props.navigation.document, 'By checksum')
   ui.find(el => el.type === 'card').props.onChanged()
   ui.render()
   ui.requests.shift().reject(Object.assign(new Error('Not found'), { statusCode: 404 }))

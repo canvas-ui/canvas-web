@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { X, Save, Loader2, Search, Trash2 } from 'lucide-react'
+import { readSearchQueries } from '@/lib/canvas-navigation'
+import { DEFAULT_TOOLBOX_FILTERS } from '@/types/workspace'
 import { cn } from '@/lib/utils'
 import { useToolbox } from '@/components/toolbox/use-toolbox'
 import { type ToolsTab, type FeatureMode } from '@/components/toolbox/toolbox-context'
@@ -113,7 +115,7 @@ function SchemaTypePicker({
               onClick={() => onCycle(key)}
               title={`${key}: ${mode === 'off' ? 'tap to filter' : mode}`}
               className={cn(
-                'relative flex flex-col items-center justify-center gap-1.5 rounded-lg border p-3 min-h-[4.5rem] transition-colors select-none',
+                'relative flex flex-col items-center justify-center gap-1.5 rounded-(--card-radius) border p-3 min-h-[4.5rem] transition-colors select-none',
                 mode === 'off'
                   ? 'border-border bg-muted/40 text-foreground hover:bg-muted'
                   : mode === 'anyOf' ? 'border-info bg-info/10 text-foreground'
@@ -328,9 +330,30 @@ export function ToolsPanel() {
   const { state, setToolsTab, saveFilters, clearFilters, hasActiveFilters, setLiveEnabled } = useToolbox()
   const { toolsTab, isDirty, isSaving, activeContextType, savedSearchQuery } = state
   const location = useLocation()
-  const currentSearchQuery = new URLSearchParams(location.search).get('q') || new URLSearchParams(location.search).get('search') || ''
+  const explicitSearch = new URLSearchParams(location.search).has('q') || new URLSearchParams(location.search).has('search')
+  const queries = explicitSearch ? readSearchQueries(location.search) : savedSearchQuery ? [savedSearchQuery] : []
+  const currentSearchQuery = queries[0] || ''
   const searchDirty = activeContextType !== null && currentSearchQuery.trim() !== (savedSearchQuery || '')
-  const canSave = activeContextType !== null && (isDirty || searchDirty)
+  // Clearing leaves no view to save, even when an inactive timeline option or
+  // an earlier saved preset still differs from the default state.
+  const sort = state.filters.sort ?? DEFAULT_TOOLBOX_FILTERS.sort
+  const hasSort = sort.sortBy !== DEFAULT_TOOLBOX_FILTERS.sort.sortBy || sort.order !== DEFAULT_TOOLBOX_FILTERS.sort.order
+  const hasViewSettings = hasActiveFilters || Boolean(currentSearchQuery.trim()) || hasSort
+  const canSave = activeContextType !== null && hasViewSettings && (isDirty || searchDirty)
+  const filterActions = <>
+    {hasViewSettings && (
+      <button type="button" onClick={clearFilters} title="Clear all active filters"
+        className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+        <X className="h-3 w-3" />Clear
+      </button>
+    )}
+    {canSave && (
+      <button type="button" onClick={saveFilters} disabled={isSaving}
+        className="flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1 text-xs text-primary-foreground transition-colors hover:bg-primary disabled:opacity-60">
+        {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}Save filters
+      </button>
+    )}
+  </>
 
   const tabs: { id: ToolsTab; label: string }[] = [
     { id: 'features', label: 'Features' },
@@ -363,41 +386,23 @@ export function ToolsPanel() {
       </div>
 
       {activeContextType === 'context' && (
-        <div className="space-y-2 border-b border-border px-3 py-2 shrink-0">
-          <label className="flex min-h-10 cursor-pointer items-center justify-between gap-3 text-sm font-medium">
-            <span className="flex items-center gap-2"><span className={cn('h-2 w-2 rounded-full', state.liveEnabled ? 'bg-success' : 'bg-muted-foreground')} />Live</span>
-            <input type="checkbox" className="h-5 w-5 accent-current" checked={state.liveEnabled} disabled={new URLSearchParams(location.search).has('ownerId')} onChange={e => { void setLiveEnabled(e.target.checked) }} />
-          </label>
-          <p className="text-xs text-muted-foreground">{state.liveEnabled ? 'Filters and camera matches update every device bound to this context. Save to keep the current view.' : 'Preview on this device. Turn on Live to update bound devices.'}</p>
+        <div className="shrink-0 space-y-1 border-b border-border px-3 py-1.5">
+          <div className="flex min-h-8 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            <label className="flex min-h-8 cursor-pointer items-center gap-2 text-sm font-medium"
+              title="Live view updates every device bound to this context. Save filters to keep the current view.">
+              <input type="checkbox" className="h-4 w-4 accent-current" checked={state.liveEnabled} disabled={new URLSearchParams(location.search).has('ownerId')} onChange={e => { void setLiveEnabled(e.target.checked) }} />
+              Live view
+            </label>
+            <div className="ml-auto flex items-center gap-2">{filterActions}</div>
+          </div>
           {state.liveError && <p role="status" className="text-xs text-destructive">{state.liveError}</p>}
         </div>
       )}
 
       {/* Contextual action row — only present when there's something to do. */}
-      {(hasActiveFilters || canSave) && (
+      {activeContextType !== 'context' && hasViewSettings && (
         <div className="flex items-center justify-end gap-2 border-b border-border px-3 py-1.5 shrink-0">
-          {hasActiveFilters && (
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              title="Clear all active filters"
-            >
-              <X className="w-3 h-3" />
-              Clear
-            </button>
-          )}
-          {canSave && (
-            <button
-              type="button"
-              onClick={saveFilters}
-              disabled={isSaving}
-              className="flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1 text-xs text-primary-foreground transition-colors hover:bg-primary disabled:opacity-60"
-            >
-              {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-              {activeContextType === 'context' && state.liveEnabled ? 'Save current view' : 'Save filters'}
-            </button>
-          )}
+          {filterActions}
         </div>
       )}
 

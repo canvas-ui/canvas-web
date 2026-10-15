@@ -1001,7 +1001,7 @@ function WorkspaceSettingsContent() {
   // Bare, invalid and retired tab segments (embedding, trash) normalize to the
   // section that now owns them.
   const isMobile = useIsMobile()
-  const { openM2Drawer } = useMenu()
+  const { goBack } = useMenu()
   const activeTab: SettingsTab = resolveWorkspaceSettingsTab(tab)
   useEffect(() => {
     if (tab !== activeTab) navigate(`/workspaces/${workspaceName}/settings/${activeTab}`, { replace: true })
@@ -1378,7 +1378,7 @@ function WorkspaceSettingsContent() {
         // reopens it at the section list rather than leaving settings — the
         // step the tab strip used to stand in for. On desktop M2 is already
         // visible, so Back means "leave settings".
-        onBack={isMobile ? () => openM2Drawer('workspaces', 'settings', workspaceName ?? null) : undefined}
+        onBack={isMobile ? goBack : undefined}
       />
 
       {workspace.status !== 'active' && activeTab !== 'general' && (
