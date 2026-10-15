@@ -642,6 +642,16 @@ function CardNode({
     onSelect(path)
   }
 
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    if (!hasChildren || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return
+    // Row controls already handle their own clicks; a double-click on an
+    // expander, icon picker or menu must not also toggle the row.
+    if ((e.target as Element).closest('button, input, textarea, select, a, [contenteditable="true"]')) return
+    e.preventDefault()
+    e.stopPropagation()
+    setExpanded(value => !value)
+  }
+
   // ── Accordion style ───────────────────────────────────────────────────────
   // Colour is an indicator, not a fill: most layers are uncoloured, so the row
   // itself stays neutral (a tint that steps with depth) and colour lives in the
@@ -707,6 +717,7 @@ function CardNode({
       }}
       draggable={!readOnly && !node.metadata?.backendTrash}
       onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
       {...(!readOnly ? longPressMenu : {})}
       onContextMenu={e => { if (!readOnly) { e.preventDefault(); onCtxMenu(e, path, node) } }}
       onDragStart={e => { if (!readOnly) onDragStart(path, e) }}
@@ -848,6 +859,7 @@ function CardNode({
         style={{ borderRight: style.color ? `4px solid ${style.color}` : '4px solid transparent' }}
         draggable={!readOnly && !node.metadata?.backendTrash}
         onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
         {...(!readOnly ? longPressMenu : {})}
       onContextMenu={e => { if (!readOnly) { e.preventDefault(); onCtxMenu(e, path, node) } }}
         onDragStart={e => { if (!readOnly) onDragStart(path, e) }}
@@ -860,6 +872,8 @@ function CardNode({
         <button
           type="button"
           className={cn('shrink-0 text-muted-foreground hover:text-foreground', !hasChildren && inlineCreateParent !== path && 'invisible')}
+          aria-label={shouldExpand ? 'Collapse' : 'Expand'}
+          aria-expanded={shouldExpand}
           onClick={e => { e.stopPropagation(); setExpanded(v => !v) }}
         >
           {shouldExpand ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
