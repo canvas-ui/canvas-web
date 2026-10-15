@@ -134,6 +134,9 @@ export default defineConfig({
           if (id.includes('@iconify')) return 'icons'
           if (id.includes('fuse.js')) return 'search'
           if (id.includes('socket.io-client')) return 'socket'
+          // Keep the editor and its parsers together, outside the application
+          // chunk, so UI growth stays within Workbox's 2 MiB per-file limit.
+          if (id.includes('@codemirror/') || id.includes('@lezer/') || id.includes('@uiw/')) return 'code-editor'
           // Explicit, or rolldown may hoist them into index and push it past
           // the 2 MiB SW precache limit (happened on the monorepo split).
           if (id.includes('leaflet')) return 'map'
