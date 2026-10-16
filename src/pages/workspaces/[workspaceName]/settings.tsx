@@ -1,3 +1,4 @@
+import { WorkspaceBackupsPanel } from '@/components/workspace/workspace-backups-panel'
 import { CacheMaintenancePanel } from '@/components/workspace/cache-maintenance-panel'
 import { syncBackendWithProgress } from '@/services/backend-sync-progress'
 import { BackendRemovalSettings } from '@/components/workspace/backend-removal-settings'
@@ -1383,9 +1384,11 @@ function WorkspaceSettingsContent() {
         onBack={isMobile ? goBack : undefined}
       />
 
-      {workspace.status !== 'active' && activeTab !== 'general' && (
+      {workspace.status !== 'active' && activeTab !== 'general' && activeTab !== 'backups' && (
         <p className="text-sm text-muted-foreground">Start this workspace to access these settings. General settings and protection remain available while stopped.</p>
       )}
+
+      {activeTab === 'backups' && <WorkspaceBackupsPanel workspaceId={workspaceId} onRestored={() => setReloadKey(k => k + 1)} />}
 
       {activeTab === 'general' && (
         <div className="space-y-6">
