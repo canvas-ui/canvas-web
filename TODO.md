@@ -1,5 +1,10 @@
 # canvas-web
 
+- Calendar
+    - Outlook like views (day-view, weekly, monthly)
+    - Supporting multiple color-coded calendars, events shown with the color of its calendar + priority border-right (red highest, green lowest and some scale in-between)
+
+
 Parked work with enough context to pick it up cold. Not a backlog of
 everything; only what has been thought through.
 
