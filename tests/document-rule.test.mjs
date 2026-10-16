@@ -67,6 +67,18 @@ test('send-file rules round-trip each channel, PDF filters, templates and downlo
   assert.throws(() => buildRule(form), /Download action before/)
 })
 
+test('extract-then-move-to-mail-folder survives edit/save/reopen', () => {
+  const rule = { id: 'expenses', enabled: true, when: { event: 'document.inserted', schema: 'email', to: { equals: 'accounting@augmend.eu' } },
+    then: [
+      { action: 'extractAttachments', to: 'workspace:home', mime: 'application/pdf', folder: 'Accounting', subfolder: '{{YYYY}}/{{MM}}', onConflict: 'rename' },
+      { action: 'moveMessage', folder: 'INBOX/Accounting/{{YYYY}}/Expenses' },
+    ] }
+  assert.deepEqual(plain(buildRule(parseRule(rule), [pathBackend])), rule)
+  const form = parseRule(rule)
+  form.actions[1].a = '  '
+  assert.throws(() => buildRule(form, [pathBackend]), /mail folder/)
+})
+
 test('PDF extraction and exact recipient survive edit/save/reopen', () => {
   const rule = { id: 'accounting', enabled: true, when: { event: 'document.inserted', schema: 'email', to: { equals: 'accounting@augmend.eu' } },
     then: [{ action: 'extractAttachments', to: 'workspace:home', mime: 'application/pdf', folder: 'Accounting', subfolder: '{{YYYY}}/{{MM}}', onConflict: 'rename' }] }

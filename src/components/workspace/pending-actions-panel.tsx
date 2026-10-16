@@ -4,6 +4,9 @@ import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/use-toast'
 import { useSocket } from '@/hooks/useSocket'
 import { useSocketSubscription } from '@/hooks/useSocketSubscription'
+import { useDocumentModal } from '@/components/shell/use-document-modal'
+import { getWorkspaceDocument } from '@/services/workspace'
+import type { Document } from '@/types/workspace'
 import {
   listPendingActions,
   decidePendingActions,
@@ -53,6 +56,48 @@ function fieldLabel(path: string): string {
 }
 
 const LONG_FIELD = /(body|content|message|text|prompt)$/i
+
+// `doc <id>` reference (rule summaries, the handler column) that opens the
+// shared document modal, so a reviewer can check what an action would touch
+// before approving it. The row itself toggles expansion — don't bubble.
+function DocLink({ workspaceId, id, children }: { workspaceId: string; id: number; children?: React.ReactNode }) {
+  const { open } = useDocumentModal()
+  const { showToast } = useToast()
+  const [opening, setOpening] = useState(false)
+  const openDocument = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setOpening(true)
+    try {
+      open(await getWorkspaceDocument(workspaceId, id) as Document, workspaceId)
+    } catch (error) {
+      showToast({ title: `Document ${id} not available`, description: error instanceof Error ? error.message : undefined, variant: 'destructive' })
+    } finally { setOpening(false) }
+  }
+  return (
+    <button
+      type="button"
+      disabled={opening}
+      onClick={(e) => void openDocument(e)}
+      className="text-primary underline-offset-2 hover:underline disabled:opacity-60"
+      title={`Open document ${id}`}
+    >
+      {children ?? `doc ${id}`}
+    </button>
+  )
+}
+
+/** Free-text summary with every `doc <id>` turned into a DocLink. */
+function LinkedSummary({ workspaceId, text }: { workspaceId: string; text: string }) {
+  const parts = text.split(/(\bdoc \d+\b)/)
+  return (
+    <>
+      {parts.map((part, idx) => {
+        const match = /^doc (\d+)$/.exec(part)
+        return match ? <DocLink key={idx} workspaceId={workspaceId} id={Number(match[1])} /> : <Fragment key={idx}>{part}</Fragment>
+      })}
+    </>
+  )
+}
 
 interface AmendEditorProps {
   action: PendingAction
@@ -309,11 +354,16 @@ export function PendingActionsPanel({ workspaceId, onPendingCount }: PendingActi
                             </span>
                           )}
                         </span>
-                        {item.summary && <span className="block text-xs text-muted-foreground pl-4">{item.summary}</span>}
+                        {item.summary && <span className="block text-xs text-muted-foreground pl-4"><LinkedSummary workspaceId={workspaceId} text={item.summary} /></span>}
                       </td>
                       <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">
                         <span className="text-muted-foreground">{item.handlerType}:</span>{item.handler}
-                        {item.event && <span className="block text-muted-foreground">{item.event}{docStub?.id ? ` · doc ${docStub.id}` : ''}</span>}
+                        {item.event && (
+                          <span className="block text-muted-foreground">
+                            {item.event}
+                            {docStub?.id != null && <> · <DocLink workspaceId={workspaceId} id={docStub.id} /></>}
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-2 text-xs whitespace-nowrap" title={item.ts}>{ageOf(item.ts)}</td>
                       <td className="px-3 py-2 text-xs">

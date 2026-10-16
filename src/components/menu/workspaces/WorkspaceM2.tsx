@@ -19,7 +19,7 @@ import { useMenu } from '@/components/shell/use-menu'
 import { useCanvasRow } from '@/components/shell/strip/use-canvas-row'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { workspaceResumeUrl } from '@/lib/last-path'
-import { getWorkspace, getCachedWorkspaceTreeByName, invalidateWorkspaceTreeCache, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer, pasteDocumentsToWorkspacePath, createPublicCanvasShare, listBackends, listWorkspacePins, pinWorkspacePath, unpinWorkspacePin, reorderWorkspacePins, workspacePinKey as pinKey, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
+import { getWorkspace, getCachedWorkspaceTreeByName, invalidateWorkspaceTreeCache, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer, pasteDocumentsToWorkspacePath, imapFolderTarget, moveImapMessages, createPublicCanvasShare, listBackends, listWorkspacePins, pinWorkspacePath, unpinWorkspacePin, reorderWorkspacePins, workspacePinKey as pinKey, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
 import type { Layer, WorkspacePin, Backend } from '@/services/workspace'
 import { getWebuiConfig, putWebuiConfig } from '@/services/user-config'
 import { WorkspacePinsTab } from './WorkspacePinsTab'
@@ -701,10 +701,37 @@ function WorkspaceM2Content() {
             pastedDocumentIds={docClipboard?.documentIds}
             isPathPinned={isPathPinned}
             onTogglePin={wsName ? handleTogglePin : undefined}
-            onPasteDocuments={wsName && activeTab !== 'backends' ? async (path, ids) => {
+            onPasteDocuments={wsName && activeTab === 'backends' ? async (path, ids) => {
+              // The backends tree mirrors backend storage, so a drop there is
+              // a move ON the backend — only mail folders support it (IMAP
+              // MOVE, like dragging a message in a mail client).
+              const target = imapFolderTarget(path)
+              if (!target) return false
+              const folder = path.split('/').filter(Boolean).slice(2).join('/')
+              const progress = showProgress({ title: 'Moving…', description: `${ids.length} message(s) → ${folder}` })
+              try {
+                const { moved, results } = await moveImapMessages(wsName, target.address, ids, path)
+                const failed = results.filter(r => !r.ok)
+                if (failed.length) {
+                  progress.fail({ title: `${failed.length} message(s) not moved`, description: failed[0].error || 'Move failed', variant: 'destructive' })
+                } else {
+                  progress.done({ title: 'Moved', description: `${moved} message(s) → ${folder}` })
+                }
+                if (docClipboard && moved) {
+                  setDocClipboard(null)
+                  window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: null }))
+                }
+                // Account root: overlaps both the source folder (the view the drag
+                // came from) and the target.
+                window.dispatchEvent(new CustomEvent('workspace:documents:refresh', { detail: { workspaceName: wsName, path: `/imap/${target.address}`, treeName: 'backends' } }))
+                return moved > 0
+              } catch (err) {
+                progress.fail({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to move messages', variant: 'destructive' })
+                return false
+              }
+            } : wsName ? async (path, ids) => {
               // Ungated on the clipboard: also serves drag-and-drop from the
-              // content area (no prior "Copy" involved). The backends tree is
-              // read-only (mirrors backend storage) — no paste target there.
+              // content area (no prior "Copy" involved).
               const treeType: 'context' | 'directory' = activeTab === 'directory' ? 'directory' : 'context'
               const treeName = activeTab === 'directory' ? 'directory' : DEFAULT_WORKSPACE_TREE_NAME
               const progress = showProgress({ title: 'Pasting…', description: `${ids.length} document(s) → "${path}"` })

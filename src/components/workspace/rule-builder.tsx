@@ -93,11 +93,12 @@ const CONDITION_FIELDS: Array<{ key: ConditionKey; label: string; hint: string }
 const EXACT_FIELDS = new Set(['toExact', 'fromExact', 'senderExact', 'threadExact', 'channelExact', 'platformExact'])
 const conditionKey = (field: ConditionKey) => EXACT_FIELDS.has(field) ? field.replace(/Exact$/, '') : field.replace(/Regex$/, '')
 
-type ActionKey = 'sendFile' | 'extractAttachments' | 'link' | 'unlink' | 'tag' | 'store' | 'download' | 'unstore' | 'notify' | 'agent' | 'script' | 'delete' | 'destroy'
+type ActionKey = 'sendFile' | 'extractAttachments' | 'moveMessage' | 'link' | 'unlink' | 'tag' | 'store' | 'download' | 'unstore' | 'notify' | 'agent' | 'script' | 'delete' | 'destroy'
 
 const ACTION_FIELDS: Array<{ key: ActionKey; label: string; icon: LucideIcon; tone: string }> = [
   { key: 'sendFile', label: 'Send file(s) via a channel', icon: Mail, tone: 'text-blue-600 dark:text-blue-400 bg-blue-500/10' },
   { key: 'extractAttachments', label: 'Extract email attachments to a folder', icon: Mail, tone: 'text-amber-600 dark:text-amber-400 bg-amber-500/10' },
+  { key: 'moveMessage', label: 'Move the email to a mail folder', icon: Mail, tone: 'text-teal-600 dark:text-teal-400 bg-teal-500/10' },
   { key: 'store', label: 'Copy/Move file(s) to a storage backend', icon: HardDrive, tone: 'text-sky-600 dark:text-sky-400 bg-sky-500/10' },
   { key: 'download', label: 'download what the link points at', icon: Download, tone: 'text-rose-600 dark:text-rose-400 bg-rose-500/10' },
   { key: 'link', label: 'file it into a folder', icon: FolderSymlink, tone: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10' },
@@ -386,6 +387,10 @@ function buildRule(form: RuleForm, backends: Backend[] = []): HookRule {
     if (row.kind === 'link' && a) then.push({ action: 'link', paths: splitList(a), ...recursive, ...(b ? { tags: splitList(b) } : {}) })
     if (row.kind === 'unlink' && a) then.push({ action: 'unlink', paths: splitList(a), ...recursive })
     if (row.kind === 'tag' && a) then.push({ action: 'tag', tags: splitList(a) })
+    if (row.kind === 'moveMessage') {
+      if (!a) throw new Error('Enter the mail folder to move the email to, such as INBOX/Accounting/{{YYYY}}/Expenses.')
+      then.push({ action: 'moveMessage', folder: a })
+    }
     if (row.kind === 'store' && a) {
       if (row.storeMode === 'move' && !row.storeFrom.trim()) throw new Error('Choose the source backend whose copy should be moved.')
       if (row.recursive && !canKeepStorageSubfolders(form.conditions)) throw new Error('Choose a Directory/Backends source path, or one exact Context insertion path, to recreate the path.')
@@ -553,6 +558,9 @@ function parseRule(rule: HookRule): RuleForm | null {
       actions.push({ ...emptyAction('unlink'), a: (act.paths as string[]).join(', '), recursive: act.recursive === true })
     } else if (act.action === 'tag' && Array.isArray(act.tags)) {
       actions.push({ ...emptyAction('tag'), a: (act.tags as string[]).join(', ') })
+    } else if (act.action === 'moveMessage') {
+      if (Object.keys(act).some(key => key !== 'action' && key !== 'folder') || typeof act.folder !== 'string') return null
+      actions.push({ ...emptyAction('moveMessage'), a: act.folder })
     } else if (act.action === 'notify' && typeof act.message === 'string') {
       actions.push({ ...emptyAction('notify'), a: act.message })
     } else if (act.action === 'store' && typeof act.to === 'string') {
@@ -695,6 +703,7 @@ function summarizeAction(a: HookRuleAction): string {
     const destination = [a.to, a.folder, a.subfolder].filter(Boolean).join('/')
     return `extract ${Array.isArray(a.mime) ? a.mime.join(', ') : a.mime || 'all'} attachments to ${destination}${a.filename ? ` (filename contains ${a.filename})` : ''}`
   }
+  if (a.action === 'moveMessage') return `move the email to mail folder ${a.folder}`
   if (a.action === 'download') {
     const what = DOWNLOAD_KINDS.find((k) => k.value === (a.kind || 'auto'))
     const folder = typeof a.folder === 'string' && a.folder ? `/${a.folder}` : ''
@@ -1380,6 +1389,15 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                         hint={hasPathCondition ? 'The part of the item\'s path below the "is under the folder" prefix is appended to the target: …/foo/a/b → target/a/b.' : 'Needs an "is under the folder" condition to know where sub-folders start.'}
                         disabled={!hasPathCondition}
                       />
+                    </div>
+                  )}
+
+                  {row.kind === 'moveMessage' && (
+                    <div className="space-y-2">
+                      <Field label="Mail folder" hint={'The folder on the email\'s own IMAP account, with / between levels (works for servers that use . too). {{YYYY}}, {{MM}}, {{DD}} = the email\'s date.'}>
+                        <Input className={cn(inputClass, 'font-mono')} placeholder="INBOX/Accounting/{{YYYY}}/Expenses" value={row.a} onChange={(e) => set({ a: e.target.value })} />
+                      </Field>
+                      <p className="text-xs text-muted-foreground">Moves the message on the mail server, like dragging it in a mail client. Put this after Extract attachments so the files are copied first. The folder must already exist on the server; subscribe to it in the mailbox settings to see the moved mail in Canvas.</p>
                     </div>
                   )}
 

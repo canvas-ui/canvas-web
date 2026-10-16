@@ -1772,6 +1772,24 @@ export async function syncBackendContainer(workspaceId: string, driver: string, 
   return response;
 }
 
+/**
+ * Backends-tree mail folder (/imap/<account>/<folder…>) a dragged email can be
+ * moved into; null for the account root, attachment sub-folders and anything
+ * that is not a mailbox. `address` is the account's tree segment.
+ */
+export function imapFolderTarget(path: string): { address: string } | null {
+  const parts = String(path || '').split('/').filter(Boolean)
+  if (parts[0] !== 'imap' || parts.length < 3 || parts[parts.length - 1] === 'attachments') return null
+  return { address: parts[1] }
+}
+
+/** Move emails to another folder of the same IMAP account, on the mail server. */
+export async function moveImapMessages(
+  workspaceId: string, address: string, documentIds: number[], targetPath: string,
+): Promise<{ moved: number; results: Array<{ id: number; ok: boolean; skipped?: boolean; error?: string }> }> {
+  return api.post(`${backendPath(workspaceId, 'imap', address)}/messages/move`, { documentIds, targetPath })
+}
+
 // Connector folders (imap boxes, …) — used for the subscribe picker.
 export interface BackendFolder {
   name: string;

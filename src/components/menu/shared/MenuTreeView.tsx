@@ -23,7 +23,7 @@ import {
 import { LayerIconPicker } from './LayerIconPicker'
 import { ContextMenuShell } from '@/components/common/context-menu-shell'
 import { isTextInteraction, matchesShortcut } from '@/components/common/action-menu'
-import { findTreeNodeByPath, backendRemovalTarget, type Backend } from '@/services/workspace'
+import { findTreeNodeByPath, backendRemovalTarget, imapFolderTarget, type Backend } from '@/services/workspace'
 import { useTreeAccordion } from '@/lib/tree-style'
 import { onAccentTextClass, onAccentSolidTextClass } from '@/utils/color'
 
@@ -135,6 +135,15 @@ function fileBackendTarget(path: string, isBackendsTree: boolean): { address: st
   if (parts[0] === 'file' && parts.length >= 2) return { address: parts[1], key: parts.slice(2).join('/') }
   return null
 }
+
+// Documents dragged/pasted into the backends tree are only meaningful where
+// the backend can move them — mail folders (an IMAP move on the server).
+// Every other tree takes them anywhere (a link).
+function acceptsDocuments(path: string, isBackendsTree: boolean): boolean {
+  return !isBackendsTree || imapFolderTarget(path) !== null
+}
+
+const isDocumentDrag = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes('application/json')
 
 function backendNameForPath(path: string, isBackendsTree: boolean): string | null {
   if (!isBackendsTree) return null
@@ -392,9 +401,9 @@ function CtxMenu({
           `Paste (${clipboard.mode})`,
           async () => onPaste(path),
         )}
-        {pastedDocumentIds && pastedDocumentIds.length > 0 && onPasteDocuments && item(
+        {pastedDocumentIds && pastedDocumentIds.length > 0 && onPasteDocuments && acceptsDocuments(path, isBackendsTree) && item(
           <Clipboard className="w-3 h-3" />,
-          `Paste ${pastedDocumentIds.length} document(s)`,
+          isBackendsTree ? `Move ${pastedDocumentIds.length} message(s) here` : `Paste ${pastedDocumentIds.length} document(s)`,
           async () => { await onPasteDocuments(path, pastedDocumentIds) },
         )}
 
@@ -1137,10 +1146,10 @@ export function MenuTreeView({
     if (isCopy !== isCopyRef.current) { isCopyRef.current = isCopy; setIsCopyDrag(isCopy) }
     if (src) {
       if (!isValidPathDrop(src, path, isCopy)) return
-    }
+    } else if (isDocumentDrag(e) && !acceptsDocuments(path, isBackendsTree)) return
     e.preventDefault()
     setDragOverPath(path)
-  }, [isValidPathDrop, treeName])
+  }, [isValidPathDrop, treeName, isBackendsTree])
 
   const handleDragOver = useCallback((path: string, e: React.DragEvent) => {
     if (backendTrashLocation(treeName, path)) { e.dataTransfer.dropEffect = 'none'; return }
@@ -1155,10 +1164,13 @@ export function MenuTreeView({
         e.dataTransfer.dropEffect = 'none'
         return
       }
+    } else if (isDocumentDrag(e) && !acceptsDocuments(path, isBackendsTree)) {
+      e.dataTransfer.dropEffect = 'none'
+      return
     }
     e.preventDefault()
-    e.dataTransfer.dropEffect = isCopy ? 'copy' : 'move'
-  }, [isValidPathDrop, treeName])
+    e.dataTransfer.dropEffect = isCopy && !isBackendsTree ? 'copy' : 'move'
+  }, [isValidPathDrop, treeName, isBackendsTree])
 
   const handleDragLeave = useCallback((path: string, e: React.DragEvent) => {
     if (!(e.currentTarget as Node).contains(e.relatedTarget as Node)) {
@@ -1191,7 +1203,7 @@ export function MenuTreeView({
       setIsCopyDrag(false)
       setDragOverPath(null)
       if (isSameDocumentFolder(docPayload, workspaceId, treeName, targetPath)) return
-      if (onPasteDocuments) {
+      if (onPasteDocuments && acceptsDocuments(targetPath, isBackendsTree)) {
         try { await onPasteDocuments(targetPath, docPayload.documentIds) }
         catch (err) { alert(err instanceof Error ? err.message : String(err)) }
       }
@@ -1346,7 +1358,7 @@ export function MenuTreeView({
   const handleTreeKeyDown = useCallback((event: React.KeyboardEvent) => {
     if (readOnly || isTextInteraction(event.target) || (selectedPath && backendTrashLocation(treeName, selectedPath))) return
     if (matchesShortcut(event, 'Mod+V')) {
-      if (pastedDocumentIds?.length && onPasteDocuments && selectedPath) {
+      if (pastedDocumentIds?.length && onPasteDocuments && selectedPath && acceptsDocuments(selectedPath, isBackendsTree)) {
         event.preventDefault()
         void onPasteDocuments(selectedPath, pastedDocumentIds).catch(() => {})
       } else if (clipboard && selectedPath) {

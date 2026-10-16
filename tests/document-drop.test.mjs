@@ -18,11 +18,14 @@ function loadHandler(path, name, dependencies) {
   visit(source)
   assert.ok(handler, name)
   const context = { ...dependencies }
-  vm.runInNewContext(ts.transpileModule(`globalThis.run = ${handler.getText(source)}`, {
+  vm.runInNewContext(ts.transpileModule(`globalThis.run = ${handler.getText(source).replace(/^export\s+/, '')}`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022 },
   }).outputText, context)
   return context.run
 }
+
+const imapFolderTarget = loadHandler('../src/services/workspace.ts', 'imapFolderTarget', {})
+const acceptsDocuments = loadHandler('../src/components/menu/shared/MenuTreeView.tsx', 'acceptsDocuments', { imapFolderTarget })
 
 const source = { type: 'document', documentIds: [1, 2], sourceWorkspaceId: 'studio', sourceTreeName: 'directory', sourcePath: '/Notes' }
 
@@ -32,7 +35,7 @@ function setup(surface, target = {}) {
   const workspaceId = target.workspaceId ?? 'studio', treeName = target.treeName ?? 'directory', path = target.path ?? '/Notes'
   const paste = async (...args) => { calls.push(args); return true }
   const dependencies = {
-    isSameDocumentFolder, workspaceId, treeName, contextPath: path, onPasteDocuments: paste,
+    isSameDocumentFolder, acceptsDocuments, isBackendsTree: treeName === 'backends', workspaceId, treeName, contextPath: path, onPasteDocuments: paste,
     setIsDragOver: value => feedback.push(value), setSelectedDocuments: () => { cleared = true },
     useState: () => [false, value => feedback.push(value)],
     backendTrashLocation: () => null, draggedPathRef: {}, isCopyRef: {}, setIsCopyDrag() {}, setDragOverPath: value => feedback.push(value),
@@ -101,5 +104,14 @@ test('document drags carry their folder scope, but workspace-wide results do not
     assert.equal(payload.sourceWorkspaceId, 'studio')
     assert.equal(payload.sourceTreeName, 'directory')
     assert.equal(payload.sourcePath, scope === 'path' ? '/Notes' : undefined)
+  }
+})
+
+test('backends tree: emails drop onto mail folders only (an IMAP move), never onto storage folders', async () => {
+  const mail = { ...source, sourceTreeName: 'backends', sourcePath: '/imap/me@x.eu/inbox' }
+  for (const [path, accepted] of [['/imap/me@x.eu/inbox/accounting', true], ['/imap/me@x.eu', false], ['/imap/me@x.eu/inbox/attachments', false], ['/workspace/home/Notes', false]]) {
+    const ui = setup('tree', { treeName: 'backends', path })
+    await ui.drop(mail)
+    assert.equal(ui.calls.length, accepted ? 1 : 0, path)
   }
 })
