@@ -204,7 +204,7 @@ export function StoragePolicyPanel({ workspaceId, path, policy, onClose, onSaved
                     <label className="block text-xs text-muted-foreground" htmlFor={`policy-folder-${index}`}>Folder on the backend</label>
                     <input id={`policy-folder-${index}`} className="mt-1 w-full rounded-md border bg-background p-2" value={target.folder} onChange={e => updateTarget(index, { folder: e.target.value })} placeholder="(backend root)" />
                   </div>
-                  <label className="flex items-start gap-2"><input type="checkbox" checked={target.recursive} onChange={e => updateTarget(index, { recursive: e.target.checked })} className="mt-1" />Keep sub-folder structure</label>
+                  <label className="flex items-start gap-2"><input type="checkbox" checked={target.recursive} onChange={e => updateTarget(index, { recursive: e.target.checked })} className="mt-1" />Recreate sub-folder path in destination</label>
                   <label className={`flex items-start gap-2 ${dirs ? '' : 'opacity-60'}`} title={dirs ? undefined : 'Empty folders require a mirror on a supported file backend.'}>
                     <input type="checkbox" checked={dirs && target.recreateDirectories} disabled={!dirs} onChange={e => updateTarget(index, { recreateDirectories: e.target.checked })} className="mt-1" />Create folders on the backend
                   </label>

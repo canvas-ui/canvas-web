@@ -59,7 +59,7 @@ const EVENT_OPTIONS = [
   { value: 'document.unlinked', label: 'is removed from a folder', hint: 'Fires when the item leaves a tree path.' },
 ] as const
 
-type ConditionKey = 'fromExact' | 'senderExact' | 'threadExact' | 'channelExact' | 'platformExact' | 'body' | 'bodyRegex' | 'sender' | 'senderRegex' | 'fromRegex' | 'toRegex' | 'subjectRegex' | 'urlRegex' | 'from' | 'to' | 'subject' | 'urlHost' | 'urlContains' | 'path' | 'pathExact' | 'mime' | 'attachment'
+type ConditionKey = 'fromExact' | 'senderExact' | 'threadExact' | 'channelExact' | 'platformExact' | 'body' | 'bodyRegex' | 'sender' | 'senderRegex' | 'fromRegex' | 'toRegex' | 'subjectRegex' | 'urlRegex' | 'from' | 'to' | 'subject' | 'urlHost' | 'urlContains' | 'path' | 'pathExact' | 'eventPathExact' | 'mime' | 'attachment'
 
 const CONDITION_FIELDS: Array<{ key: ConditionKey; label: string; hint: string }> = [
   { key: 'fromExact', label: 'email sender is', hint: 'person@example.com' },
@@ -71,7 +71,8 @@ const CONDITION_FIELDS: Array<{ key: ConditionKey; label: string; hint: string }
   { key: 'threadExact', label: 'thread is', hint: 'Thread ID' },
   { key: 'channelExact', label: 'channel / conversation is', hint: 'Channel or conversation ID' },
   { key: 'platformExact', label: 'platform is', hint: 'slack, whatsapp, teams' },
-  { key: 'pathExact', label: 'is directly in the folder', hint: 'Only this folder, excluding subfolders' },
+  { key: 'pathExact', label: 'is directly in the folder', hint: 'Current folder membership' },
+  { key: 'eventPathExact', label: 'is inserted / linked directly into', hint: 'Exact event destination, e.g. ctx:/foo/bar/baz. Descendant inserts do not match.' },
   { key: 'path', label: 'is under the folder', hint: '/projects/canvas/UI or backends:/workspace/home/foo' },
   { key: 'mime', label: 'file type is', hint: 'image/*, application/pdf' },
   { key: 'from', label: 'sender contains', hint: 'boss@company.tld' },
@@ -92,7 +93,7 @@ const conditionKey = (field: ConditionKey) => EXACT_FIELDS.has(field) ? field.re
 type ActionKey = 'link' | 'unlink' | 'tag' | 'store' | 'download' | 'unstore' | 'notify' | 'agent' | 'script' | 'delete' | 'destroy'
 
 const ACTION_FIELDS: Array<{ key: ActionKey; label: string; icon: LucideIcon; tone: string }> = [
-  { key: 'store', label: 'keep the file on a storage backend', icon: HardDrive, tone: 'text-sky-600 dark:text-sky-400 bg-sky-500/10' },
+  { key: 'store', label: 'Copy/Move file(s) to a storage backend', icon: HardDrive, tone: 'text-sky-600 dark:text-sky-400 bg-sky-500/10' },
   { key: 'download', label: 'download what the link points at', icon: Download, tone: 'text-rose-600 dark:text-rose-400 bg-rose-500/10' },
   { key: 'link', label: 'file it into a folder', icon: FolderSymlink, tone: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10' },
   { key: 'unlink', label: 'remove it from a folder', icon: FolderSymlink, tone: 'text-amber-600 dark:text-amber-400 bg-amber-500/10' },
@@ -204,10 +205,10 @@ interface Recipe {
 
 const RECIPES: Recipe[] = [
   {
-    id: 'store', title: 'Keep files in a real folder', icon: HardDrive, tone: 'text-sky-600 dark:text-sky-400 bg-sky-500/10',
-    blurb: 'Uploads land in the managed blob store. Pick a folder in Canvas and a folder on a storage backend — every file filed there is moved across, sub-folders kept.',
+    id: 'store', title: 'Copy/Move file(s) to a storage backend', icon: HardDrive, tone: 'text-sky-600 dark:text-sky-400 bg-sky-500/10',
+    blurb: 'Uploads land in the managed blob store. Pick a folder in Canvas and a folder on a storage backend — copy or move matching files and optionally recreate their sub-folder paths.',
     build: ({ backend }) => ({
-      ...EMPTY_FORM, description: 'Keep files in a real folder', schema: 'file', events: ['document.inserted', 'document.linked'],
+      ...EMPTY_FORM, description: 'Copy/Move file(s) to a storage backend', schema: 'file', events: ['document.inserted', 'document.linked'],
       conditions: [{ field: 'path', value: '' }],
       actions: [{ ...emptyAction('store'), a: backend, recursive: true }],
     }),
@@ -265,12 +266,29 @@ const RECIPES: Recipe[] = [
 
 // ── form → rule ──────────────────────────────────────────────────────────────
 
+function exactContextSource(conditions: ConditionRow[]): string | null {
+  const sources = conditions.filter(c => ['path', 'pathExact', 'eventPathExact'].includes(c.field))
+  if (sources.length !== 1 || sources[0].field !== 'eventPathExact') return null
+  const paths = splitAlternatives(sources[0].value)
+  return paths.length === 1 && /^(ctx|context):\//.test(paths[0]) ? paths[0].replace(/^(ctx|context):/, '').replace(/\/+$/, '') || '/' : null
+}
+
 function canKeepStorageSubfolders(conditions: ConditionRow[]): boolean {
-  const paths = conditions.filter(c => c.field === 'path' || c.field === 'pathExact').flatMap(c => splitAlternatives(c.value))
+  if (exactContextSource(conditions) !== null) return true
+  const paths = conditions.filter(c => ['path', 'pathExact', 'eventPathExact'].includes(c.field)).flatMap(c => splitAlternatives(c.value))
   return paths.length > 0 && paths.every(path => /^(dir|directory|backends):\//.test(path))
 }
 
-function buildRule(form: RuleForm): HookRule {
+function storagePathPreview(row: ActionRow, conditions: ConditionRow[], backend?: Backend): { root: string; recreated: string; result: string } {
+  const clean = (value: string) => value.replace(/\\/g, '/').split('/').filter(part => part && part !== '.' && part !== '..').join('/')
+  const root = `${backend?.treePath ? `backends:${backend.treePath}` : row.a}/${clean(row.storeFolder.trim())}`.replace(/\/+$/, '')
+  const contextPath = exactContextSource(conditions)
+  const recreated = row.recursive ? contextPath !== null ? clean(contextPath) : '<sub-folders>' : ''
+  const name = row.storeName === 'keep' ? '<original filename>' : row.storeName === 'title' ? '<title>.<ext>' : row.storeName === 'dated' ? DATED_NAME : (row.b || '<filename>')
+  return { root, recreated, result: [root, recreated, name].filter(Boolean).join('/') }
+}
+
+function buildRule(form: RuleForm, backends: Backend[] = []): HookRule {
   const when: HookRule['when'] = { event: form.events.length === 1 ? form.events[0] : form.events }
   if (form.schema) when.schema = form.schema
 
@@ -321,6 +339,8 @@ function buildRule(form: RuleForm): HookRule {
     if (row.kind === 'tag' && a) then.push({ action: 'tag', tags: splitList(a) })
     if (row.kind === 'store' && a) {
       if (row.storeMode === 'move' && !row.storeFrom.trim()) throw new Error('Choose the source backend whose copy should be moved.')
+      if (row.recursive && !canKeepStorageSubfolders(form.conditions)) throw new Error('Choose a Directory/Backends source path, or one exact Context insertion path, to recreate the path.')
+      if (row.recursive && backends.find(backend => backend.address === a)?.capabilities?.paths !== true) throw new Error('This destination has not reported support for folder paths. Choose a supported backend or turn off path recreation.')
       const folder = row.storeFolder.trim().replace(/^\/+|\/+$/g, '')
       const key = row.storeName === 'title' ? TITLE_NAME : row.storeName === 'dated' ? DATED_NAME : row.storeName === 'custom' ? b : ''
       then.push({
@@ -329,7 +349,8 @@ function buildRule(form: RuleForm): HookRule {
         ...(row.storeFrom.trim() ? { from: row.storeFrom.trim() } : {}),
         mode: row.storeMode,
         ...(folder ? { folder } : {}),
-        ...(row.recursive && canKeepStorageSubfolders(form.conditions) ? { recursive: true } : {}),
+        ...recursive,
+        ...(row.recursive && exactContextSource(form.conditions) !== null ? { pathMode: 'full' } : {}),
         ...(key ? { key } : {}),
         onConflict: row.storeConflict,
       })
@@ -385,7 +406,7 @@ function buildRule(form: RuleForm): HookRule {
 // ── rule → form (only shapes the builder emits; others are JSON-only) ────────
 
 function parseRule(rule: HookRule): RuleForm | null {
-  const { event, schema, from, to, subject, body, sender, thread, channel, platform, path, pathExact, mime, url, attachment, ...restWhen } = rule.when
+  const { event, schema, from, to, subject, body, sender, thread, channel, platform, path, pathExact, eventPathExact, mime, url, attachment, ...restWhen } = rule.when
   if (Object.keys(restWhen).length > 0) return null
   const events = Array.isArray(event) ? event : [event]
   if (!events.length || !events.every((e) => typeof e === 'string' && EVENT_OPTIONS.some((o) => o.value === e))) return null
@@ -417,6 +438,7 @@ function parseRule(rule: HookRule): RuleForm | null {
   }
   if (path !== undefined && !push('path', path)) return null
   if (pathExact !== undefined && !push('pathExact', pathExact)) return null
+  if (eventPathExact !== undefined && !push('eventPathExact', eventPathExact)) return null
   if (mime !== undefined && !push('mime', mime)) return null
   if (from !== undefined && !push('from', from)) return null
   if (to !== undefined && !push('to', to)) return null
@@ -469,6 +491,8 @@ function parseRule(rule: HookRule): RuleForm | null {
     } else if (act.action === 'notify' && typeof act.message === 'string') {
       actions.push({ ...emptyAction('notify'), a: act.message })
     } else if (act.action === 'store' && typeof act.to === 'string') {
+      if (act.pathMode !== undefined && (act.pathMode !== 'full' || act.recursive !== true || exactContextSource(conditions) === null)) return null
+      if (act.recursive === true && exactContextSource(conditions) !== null && act.pathMode !== 'full') return null
       if (act.folder !== undefined && typeof act.folder !== 'string') return null
       if (act.key !== undefined && typeof act.key !== 'string') return null
       const key = typeof act.key === 'string' ? act.key : ''
@@ -545,7 +569,7 @@ function summarizeWhen(rule: HookRule, options: ReadonlyArray<{ value: string; l
   const eventLabel = ruleEvents(rule).map((e) => EVENT_OPTIONS.find((o) => o.value === e)?.label || e).join(' or ')
   const parts: string[] = [`When ${schemaLabel(w.schema, options)} ${eventLabel}`]
   const fmt = (v: unknown) => (Array.isArray(v) ? v.join(' or ') : typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v))
-  const labels: Record<string, string> = { path: 'under', pathExact: 'directly in', mime: 'type', from: 'from', to: 'to', subject: 'subject', body: 'body / text', sender: 'sender', thread: 'thread', channel: 'conversation', platform: 'platform', url: 'url', attachment: 'attachment' }
+  const labels: Record<string, string> = { path: 'under', pathExact: 'directly in', eventPathExact: 'inserted / linked directly into', mime: 'type', from: 'from', to: 'to', subject: 'subject', body: 'body / text', sender: 'sender', thread: 'thread', channel: 'conversation', platform: 'platform', url: 'url', attachment: 'attachment' }
   for (const key of Object.keys(labels)) {
     if (w[key] !== undefined) parts.push(`${labels[key]} ${fmt(w[key])}`)
   }
@@ -570,7 +594,7 @@ function summarizeAction(a: HookRuleAction): string {
   if (a.action === 'store') {
     const folder = typeof a.folder === 'string' && a.folder ? `/${a.folder}` : ''
     const name = a.key === TITLE_NAME ? ', named by title' : a.key === DATED_NAME ? ', by date' : typeof a.key === 'string' && a.key ? `, as ${a.key}` : ''
-    return `${a.mode === 'copy' ? 'copy' : 'move'} the file to ${a.to}${folder}${a.recursive === true ? ' (sub-folders kept)' : ''}${name}`
+    return `${a.mode === 'move' ? 'move' : 'copy'} the file to ${a.to}${folder}${a.recursive === true ? a.pathMode === 'full' ? ' (full directory path recreated)' : ' (sub-folder path recreated)' : ''}${name}`
   }
   if (a.action === 'download') {
     const what = DOWNLOAD_KINDS.find((k) => k.value === (a.kind || 'auto'))
@@ -645,16 +669,19 @@ function formFromPrefill(prefill: RulePrefill): RuleForm {
     }
   }
   if (prefill.kind === 'store') {
-    const where = prefill.path ? ` filed under ${prefill.path.replace(/^(ctx|dir):/, '')}` : ''
+    const path = prefill.path || ''
+    const contextPath = /^(?:(?:ctx|context):)?\//.test(path)
+    const conditions: ConditionRow[] = [{ field: contextPath ? 'eventPathExact' : 'path', value: contextPath && path.startsWith('/') ? `ctx:${path}` : path }]
+    const where = prefill.path ? `${contextPath ? ' inserted / linked directly into' : ' filed under'} ${prefill.path.replace(/^(ctx|context|dir|directory):/, '')}` : ''
     return {
       ...EMPTY_FORM,
       description: prefill.storeTo
-        ? `Keep files${where} on ${prefill.storeTo}${prefill.storeFolder ? `/${prefill.storeFolder}` : ''}`
-        : `Keep files${where} in a real folder`,
+        ? `Copy files${where} to ${prefill.storeTo}${prefill.storeFolder ? `/${prefill.storeFolder}` : ''}`
+        : `Copy files${where} to a storage backend`,
       schema: 'file',
       events: ['document.inserted', 'document.linked'],
-      conditions: [{ field: 'path', value: prefill.path || '' }],
-      actions: [{ ...emptyAction('store'), a: prefill.storeTo || '', storeFolder: prefill.storeFolder || '', recursive: canKeepStorageSubfolders([{ field: 'path', value: prefill.path || '' }]) }],
+      conditions,
+      actions: [{ ...emptyAction('store'), a: prefill.storeTo || '', storeFolder: prefill.storeFolder || '', recursive: canKeepStorageSubfolders(conditions) }],
     }
   }
   return {
@@ -803,7 +830,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
   useEffect(() => {
     listBackends(workspaceId)
       .then((list) => {
-        const writable = list.filter((b) => b.kind === 'storage' && b.config?.readOnly !== true)
+        const writable = list.filter((b) => b.kind === 'storage' && b.enabled !== false && b.config?.supported !== false && b.config?.readOnly !== true && b.capabilities?.write !== false)
         setBackends(writable)
         const fallback = preferredBackend(writable)
         if (fallback) {
@@ -845,8 +872,8 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
   const submit = async () => {
     if (!form || isLoading || isSaving) return
     let rule: HookRule
-    try { rule = buildRule(form) } catch (error) {
-      showToast({ title: 'Invalid condition', description: error instanceof Error ? error.message : 'Invalid regular expression', variant: 'destructive' })
+    try { rule = buildRule(form, backends) } catch (error) {
+      showToast({ title: 'Invalid rule', description: error instanceof Error ? error.message : 'Check the rule conditions and actions', variant: 'destructive' })
       return
     }
     if (!rule.then.length) {
@@ -939,7 +966,8 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
         : a)))
     } else if (picker.target === 'condition') {
       const prefixed = paths.map((p) => prefixedPath(p, ctx))
-      setField('conditions', form.conditions.map((c, j) => (j === picker.index ? { ...c, value: prefixed.join(' | ') } : c)))
+      const exactContext = ctx.treeType === 'context' && form.actions.some(action => action.kind === 'store')
+      setField('conditions', form.conditions.map((c, j) => (j === picker.index ? { ...c, ...(exactContext ? { field: 'eventPathExact' as const } : {}), value: prefixed.join(' | ') } : c)))
     } else {
       const prefixed = paths.map((p) => prefixedPath(p, ctx))
       setField('actions', form.actions.map((a, j) => (j === picker.index
@@ -955,8 +983,8 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
     </Button>
   )
 
-  const canRecreateStorageStructure = canKeepStorageSubfolders(form?.conditions || [])
-  const hasPathCondition = Boolean(form?.conditions.some((c) => (c.field === 'path' || c.field === 'pathExact') && c.value.trim()))
+  const hasStorageSourcePath = canKeepStorageSubfolders(form?.conditions || [])
+  const hasPathCondition = Boolean(form?.conditions.some((c) => (['path', 'pathExact', 'eventPathExact'].includes(c.field)) && c.value.trim()))
   const backendLabel = (b: Backend) => `${b.address}${b.address === 'workspace:data' ? ' — managed blob store (default)' : b.address === 'workspace:home' ? ' — workspace home folder' : b.driver ? ` — ${b.driver}` : ''}`
 
   const backendSelect = (value: string, onChange: (v: string) => void, emptyLabel: string, placeholder = 'workspace:home') => (
@@ -1018,7 +1046,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
           >
             <span className={cn('h-5 w-5 rounded-full bg-background shadow transition-transform', enabled && 'translate-x-5')} />
           </button>
-          <Button size="sm" variant="ghost" className="h-9 px-2.5" title="Apply this rule to existing items (dry-run first)" disabled={backfillingId !== null} onClick={() => backfillRule(rule.id)}>
+          <Button size="sm" variant="ghost" className="h-9 px-2.5" title={rule.when.eventPathExact !== undefined ? 'Requires an original insert/link event. Current folder membership cannot reconstruct its destination.' : 'Apply this rule to existing items (dry-run first)'} disabled={backfillingId !== null || rule.when.eventPathExact !== undefined} onClick={() => backfillRule(rule.id)}>
             {backfillingId === rule.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlayCircle className="h-4 w-4" />}
             <span className="rule-card-action-label ml-1.5">Apply</span>
           </Button>
@@ -1146,7 +1174,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                           value={row.value}
                           onChange={(e) => setField('conditions', form.conditions.map((c, j) => (j === i ? { ...c, value: e.target.value } : c)))}
                         />
-                        {(row.field === 'path' || row.field === 'pathExact') && browseButton('condition', i, 'Browse the workspace trees')}
+                        {(['path', 'pathExact', 'eventPathExact'].includes(row.field)) && browseButton('condition', i, 'Browse the workspace trees')}
                       </div>
                       <Button size="sm" variant="ghost" className="order-3 h-10 w-10 p-0 text-muted-foreground sm:order-4" title="Remove condition" onClick={() => setField('conditions', form.conditions.filter((_, j) => j !== i))}>
                         <X className="h-4 w-4" />
@@ -1169,6 +1197,9 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
             <SectionHeading step={2} title="Then…" hint="Actions run in order. The item keeps its id, tags and folders unless an action says otherwise." />
             {form.actions.map((row, i) => {
               const set = (patch: Partial<ActionRow>) => setField('actions', form.actions.map((a, j) => (j === i ? { ...a, ...patch } : a)))
+              const destination = backends.find(backend => backend.address === row.a)
+              const destinationSupportsPaths = destination?.capabilities?.paths === true
+              const canRecreateStorageStructure = hasStorageSourcePath && destinationSupportsPaths
               const meta = actionMeta(row.kind)
               const outputControls = (label: string) => (
                 <div className="space-y-3 rounded-lg border border-dashed p-3">
@@ -1200,10 +1231,9 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                   <Toggle checked={row.notifyReply} onChange={(v) => set({ notifyReply: v })} label="Send it to me as a message" />
                 </div>
               )
-              const storeFolder = row.storeFolder.trim().replace(/^\/+|\/+$/g, '')
-              const storePreview = row.kind === 'store' && row.a
-                ? `${row.a}/${[storeFolder, row.recursive && canRecreateStorageStructure ? '<sub-folders>' : '', row.storeName === 'keep' ? '<original name>' : row.storeName === 'title' ? '<title>.<ext>' : row.storeName === 'dated' ? DATED_NAME : (row.b || '<name>')].filter(Boolean).join('/')}`
-                : ''
+              const contextSource = exactContextSource(form.conditions)
+              const storePreview = row.kind === 'store' && row.a && (!row.recursive || canRecreateStorageStructure)
+                ? storagePathPreview(row, form.conditions, destination) : null
               return (
                 <div key={i} className="space-y-4 rounded-xl border bg-background p-4">
                   <div className="flex items-center gap-3">
@@ -1231,7 +1261,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                       )}
                       <Toggle
                         checked={row.recursive} onChange={(v) => set({ recursive: v })}
-                        label="Keep sub-folders"
+                        label="Recreate sub-folder path in destination"
                         hint={hasPathCondition ? 'The part of the item\'s path below the "is under the folder" prefix is appended to the target: …/foo/a/b → target/a/b.' : 'Needs an "is under the folder" condition to know where sub-folders start.'}
                         disabled={!hasPathCondition}
                       />
@@ -1250,7 +1280,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                         <Field label="Storage backend" hint="Where the file's bytes should live. Only writable backends are listed.">
                           {backendSelect(row.a, (v) => set({ a: v }), 'pick a backend…')}
                         </Field>
-                        <Field label="Folder on that backend" hint="Relative to the backend root. Leave empty for the root.">
+                        <Field label="Destination root folder" hint="Choose the folder beneath which the path will be recreated. Leave empty to use the backend root.">
                           <div className="flex gap-2">
                             <Input className={cn(inputClass, 'font-mono')} placeholder="Projects/Canvas/UI" value={row.storeFolder} onChange={(e) => set({ storeFolder: e.target.value })} />
                             {browseButton('storeFolder', i, 'Browse storage backends')}
@@ -1274,16 +1304,24 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                         )}
                       </div>
                       <Toggle
-                        checked={row.recursive && canRecreateStorageStructure} onChange={(v) => set({ recursive: v })}
-                        label="Keep sub-folders"
-                        hint={canRecreateStorageStructure ? 'A directory path such as …/UI/mobile is stored under Folder/mobile. Missing destination folders are created.' : 'Choose a directory source to preserve subfolders. Context paths store files in the fixed destination folder.'}
-                        disabled={!canRecreateStorageStructure}
+                        checked={row.recursive} onChange={(v) => set({ recursive: v })}
+                        label={contextSource !== null ? 'Recreate directory path in destination' : 'Recreate sub-folder path in destination'}
+                        hint={!destinationSupportsPaths
+                          ? 'Choose a destination that reports support for folder paths. Content-addressed blob stores cannot recreate sub-folder paths.'
+                          : !hasStorageSourcePath
+                            ? 'For Context, choose one folder with “is inserted / linked directly into”. Directory and Backends sources can include sub-folders.'
+                            : contextSource !== null
+                              ? `Only inserts or links directly into ctx:${contextSource} trigger this rule. Its full path is appended beneath the destination root; descendant inserts do not match.`
+                              : 'The path below the source folder is appended beneath the destination root: …/UI/mobile → Root/mobile. Missing destination folders are created.'}
+                        disabled={!canRecreateStorageStructure && !row.recursive}
                       />
                       {storePreview && (
-                        <p className="flex flex-wrap items-center gap-2 rounded-lg bg-muted/60 px-3 py-2 text-sm">
-                          <span className="text-muted-foreground">Files land in</span>
-                          <span className="break-all font-mono">{storePreview}</span>
-                        </p>
+                        <div className="space-y-1.5 rounded-lg bg-muted/60 px-3 py-3 text-sm" aria-live="polite">
+                          <p className="font-medium">Destination preview</p>
+                          <p className="text-xs text-muted-foreground">Root folder: <span className="break-all font-mono">{storePreview.root}/</span></p>
+                          {row.recursive && <p className="text-xs text-muted-foreground">Path added beneath it: <span className="break-all font-mono">{storePreview.recreated || '(root)'}/</span></p>}
+                          <p className="break-all font-mono">{storePreview.result}</p>
+                        </div>
                       )}
                       <details className="group rounded-lg border">
                         <summary className="flex cursor-pointer select-none items-center gap-2 px-3 py-2 text-sm font-medium">
@@ -1340,7 +1378,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                       </div>
                       <Toggle
                         checked={row.recursive} onChange={(v) => set({ recursive: v })}
-                        label="Keep sub-folders"
+                        label="Recreate sub-folder path in destination"
                         hint={hasPathCondition ? 'A link filed under …/folder/a/b is downloaded into Folder/a/b.' : 'Add an "is under the folder" condition to mirror sub-folders.'}
                         disabled={!hasPathCondition}
                       />
@@ -1447,9 +1485,9 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
           <LinkToCard
             sizeClassName={LINK_TO_SIDE_SIZE}
             fixedWorkspaceName={workspaceId}
-            multiple={picker.target !== 'storeFolder'}
+            multiple={picker.target !== 'storeFolder' && !(picker.target === 'condition' && form?.actions.some(action => action.kind === 'store'))}
             tabs={picker.target === 'condition' ? ['context', 'directory', 'backends'] : picker.target === 'storeFolder' ? ['backends'] : ['context', 'directory']}
-            title={picker.target === 'condition' ? 'Match items under…' : picker.target === 'storeFolder' ? 'Store files under…' : 'File into…'}
+            title={picker.target === 'condition' ? 'Choose source folder…' : picker.target === 'storeFolder' ? 'Store files under…' : 'File into…'}
             confirmLabel={picker.target === 'storeFolder' ? 'Use folder' : 'Use path'}
             onConfirm={applyPicked}
             onClose={() => setPicker(null)}

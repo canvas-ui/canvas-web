@@ -51,8 +51,11 @@ export function useRowMenu(path: string, onMenu?: (e: RowMenuEvent) => void) {
     if (timer.current) { clearTimeout(timer.current); timer.current = null }
   }
 
-  const guardClick = (fn: () => void) => () => {
+  const guardClick = (fn: () => void) => (event: React.MouseEvent) => {
     if (suppressClick.current) { suppressClick.current = false; return }
+    // A double-click selects once, then expands; its second click must not
+    // undo selection in multi-select pickers.
+    if (event.detail > 1) return
     fn()
   }
 

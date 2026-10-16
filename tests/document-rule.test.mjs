@@ -35,38 +35,73 @@ test('thread roots and replies share a scoped rule, WhatsApp offers its stored c
 
 // Exercise the real builder serialization without mounting the settings page.
 const source = ts.createSourceFile('rule-builder.tsx', readFileSync(new URL('../src/components/workspace/rule-builder.tsx', import.meta.url), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
-const names = new Set(['EVENT_OPTIONS', 'CONDITION_FIELDS', 'EXACT_FIELDS', 'conditionKey', 'TITLE_NAME', 'DATED_NAME', 'DOWNLOAD_KINDS', 'emptyAction', 'EMPTY_FORM', 'splitAlternatives', 'splitList', 'slugify', 'canKeepStorageSubfolders', 'buildRule', 'parseRule', 'formFromPrefill'])
+const names = new Set(['EVENT_OPTIONS', 'CONDITION_FIELDS', 'EXACT_FIELDS', 'conditionKey', 'TITLE_NAME', 'DATED_NAME', 'DOWNLOAD_KINDS', 'emptyAction', 'EMPTY_FORM', 'splitAlternatives', 'splitList', 'slugify', 'canKeepStorageSubfolders', 'exactContextSource', 'storagePathPreview', 'buildRule', 'parseRule', 'formFromPrefill'])
 const statements = source.statements.filter(node => ts.isFunctionDeclaration(node) ? names.has(node.name.text) : ts.isVariableStatement(node) && node.declarationList.declarations.some(d => names.has(d.name.getText(source))))
 const context = {}
-vm.runInNewContext(ts.transpileModule(statements.map(s => s.getText(source)).join('\n') + '\nglobalThis.builder = { buildRule, parseRule, formFromPrefill }', { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, context)
-const { buildRule, parseRule, formFromPrefill } = context.builder
+vm.runInNewContext(ts.transpileModule(statements.map(s => s.getText(source)).join('\n') + '\nglobalThis.builder = { buildRule, parseRule, formFromPrefill, storagePathPreview }', { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, context)
+const { buildRule, parseRule, formFromPrefill, storagePathPreview } = context.builder
 const plain = value => JSON.parse(JSON.stringify(value))
+const pathBackend = { address: 'workspace:home', driver: 'custom', capabilities: { paths: true } }
 
 test('store wizard defaults to copy and cannot save a move without its source', () => {
   const form = formFromPrefill({ kind: 'store', path: 'ctx:/Architecture', storeTo: 'workspace:home' })
-  assert.equal(buildRule(form).then[0].mode, 'copy')
+  assert.equal(buildRule(form, [pathBackend]).then[0].mode, 'copy')
   form.actions[0].storeMode = 'move'
   assert.throws(() => buildRule(form), /Choose the source backend/)
   form.actions[0].storeFrom = 'workspace:data'
-  const saved = buildRule(form)
+  const saved = buildRule(form, [pathBackend])
   assert.equal(saved.then[0].from, 'workspace:data')
-  assert.deepEqual(plain(buildRule(parseRule(saved))), plain(saved))
+  assert.deepEqual(plain(buildRule(parseRule(saved), [pathBackend])), plain(saved))
 })
 
-test('storage wizard enables subfolders only for directory sources', () => {
-  for (const path of ['context:/Architecture', 'ctx:/Architecture', '/Architecture', 'directory:/Files | context:/Architecture', '']) {
-    const form = formFromPrefill({ kind: 'store', path, storeTo: 'workspace:home', storeFolder: '/foo/bar/baz/baf/' })
-    assert.equal(form.actions[0].recursive, false, path)
-    form.actions[0].recursive = true
-    if (!path) form.conditions = []
-    const action = buildRule(form).then[0]
-    assert.equal(action.recursive, undefined, path)
-    assert.equal(action.folder, 'foo/bar/baz/baf')
+test('Context storage uses one explicit insertion destination and recreates its full path', () => {
+  for (const path of ['context:/foo/bar/baz', 'ctx:/foo/bar/baz', '/foo/bar/baz']) {
+    const form = formFromPrefill({ kind: 'store', path, storeTo: 'workspace:home', storeFolder: 'Archive' })
+    const rule = buildRule(form, [pathBackend])
+    assert.equal(rule.when.path, undefined)
+    assert.match(rule.when.eventPathExact, /^(ctx|context):\/foo\/bar\/baz$/)
+    assert.equal(rule.then[0].recursive, true)
+    assert.equal(rule.then[0].pathMode, 'full')
+    assert.deepEqual(plain(buildRule(parseRule(rule), [pathBackend])), plain(rule))
+    const preview = storagePathPreview(form.actions[0], form.conditions, { ...pathBackend, treePath: '/workspace/home' })
+    assert.equal(preview.root, 'backends:/workspace/home/Archive')
+    assert.equal(preview.recreated, 'foo/bar/baz')
+    assert.equal(preview.result, 'backends:/workspace/home/Archive/foo/bar/baz/<original filename>')
+    form.actions[0].storeFolder = ''
+    assert.equal(storagePathPreview(form.actions[0], form.conditions, pathBackend).result, 'workspace:home/foo/bar/baz/<original filename>')
+    form.actions[0].recursive = false
+    assert.equal(storagePathPreview(form.actions[0], form.conditions, pathBackend).result, 'workspace:home/<original filename>')
   }
-  for (const path of ['dir:/Architecture', 'directory:/Architecture', 'backends:/workspace/home/Architecture']) {
-    const form = formFromPrefill({ kind: 'store', path, storeTo: 'workspace:home', storeFolder: 'Architecture' })
-    assert.equal(form.actions[0].recursive, true, path)
-    assert.equal(buildRule(form).then[0].recursive, true, path)
+})
+
+test('Context path recreation refuses inferred membership, multiple folders and missing source paths', () => {
+  for (const [field, value] of [['path', 'ctx:/foo'], ['pathExact', 'ctx:/foo'], ['eventPathExact', 'ctx:/foo | ctx:/bar']]) {
+    const form = formFromPrefill({ kind: 'store', path: 'ctx:/foo', storeTo: 'workspace:home' })
+    form.conditions = [{ field, value }]
+    assert.throws(() => buildRule(form, [pathBackend]), /source path/)
+  }
+})
+
+test('copy and move recreate paths on any backend that advertises support', () => {
+  for (const mode of ['copy', 'move']) {
+    const form = formFromPrefill({ kind: 'store', path: 'dir:/Projects', storeTo: 'workspace:home', storeFolder: 'Archive' })
+    form.actions[0].storeMode = mode
+    form.actions[0].storeFrom = 'source'
+    const rule = buildRule(form, [pathBackend])
+    assert.equal(rule.then[0].recursive, true)
+    assert.equal(rule.then[0].mode, mode)
+    assert.equal(rule.then[0].folder, 'Archive')
+    assert.equal(rule.then[0].from, 'source')
+    assert.deepEqual(plain(buildRule(parseRule(rule), [pathBackend])), plain(rule))
+  }
+})
+
+test('unsupported, unknown or unloaded capabilities cannot silently flatten a recursive rule', () => {
+  for (const backends of [[], [{ ...pathBackend, capabilities: { paths: false } }], [{ ...pathBackend, driver: 'file', capabilities: {} }]]) {
+    const form = formFromPrefill({ kind: 'store', path: 'dir:/Projects', storeTo: 'workspace:home' })
+    assert.throws(() => buildRule(form, backends), /support for folder paths/)
+    form.actions[0].recursive = false
+    assert.equal(buildRule(form, backends).then[0].recursive, undefined)
   }
 })
 

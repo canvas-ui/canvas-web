@@ -57,8 +57,8 @@ export function LinkNode({
   query: string
   selected: Set<string>
   onToggle: (path: string) => void
-  // Double-click "commit" on a row — the folder step of DocumentPathBrowser
-  // uses it as a shortcut past its Next button. Plain hosts omit it.
+  // Document browsers can open a leaf folder's contents. Branches always
+  // expand first, matching destination pickers and the main navigation tree.
   onActivate?: (path: string) => void
   // Right-click / long-press menu + inline "new folder" support — all
   // optional; PickDocumentsCard's browse tree simply doesn't pass them.
@@ -92,14 +92,24 @@ export function LinkNode({
             : 'bg-card hover:bg-primary/[0.04] before:bg-transparent',
         )}
         onClick={guardClick(() => onToggle(path))}
-        onDoubleClick={onActivate ? () => onActivate(path) : undefined}
+        onDoubleClick={e => {
+          if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return
+          if ((e.target as Element).closest('button,input,textarea,select,a,[contenteditable="true"]')) return
+          e.preventDefault()
+          e.stopPropagation()
+          if (hasChildren) setExpanded(v => !v)
+          else onActivate?.(path)
+        }}
         title={path}
         {...menuHandlers}
       >
         <button
           type="button"
+          aria-label={`${shouldExpand ? 'Collapse' : 'Expand'} ${node.label || node.name}`}
+          aria-expanded={hasChildren ? shouldExpand : undefined}
+          disabled={!hasChildren}
           className={cn('shrink-0 text-muted-foreground hover:text-foreground', !hasChildren && 'invisible')}
-          onClick={e => { e.stopPropagation(); setExpanded(v => !v) }}
+          onClick={e => { e.stopPropagation(); if (e.detail <= 1) setExpanded(v => !v) }}
         >
           {shouldExpand ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         </button>
