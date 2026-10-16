@@ -144,3 +144,20 @@ test('desktop and strip menus do not add browser history entries', () => {
     assert.equal(ui.index, 1)
   }
 })
+
+test('desktop M2 stays closed while navigating content in the same workspace', () => {
+  for (const layout of ['standard', 'strip']) {
+    const ui = setup({ mobile: false, layout, url: '/workspaces/studio/trees/email/path/Inbox' })
+    assert.equal(ui.render().state.m2Open, true)
+
+    ui.render().closeM2()
+    assert.equal(ui.render().state.m2Open, false)
+    ui.navigate('/workspaces/studio/trees/email/path/Inbox#document=one&workspace=studio')
+    assert.equal(ui.render().state.m2Open, false)
+    ui.navigate('/workspaces/studio/trees/email/path/Inbox#document=two&workspace=studio')
+    assert.equal(ui.render().state.m2Open, false)
+
+    ui.render().openM2('detail', 'studio')
+    assert.equal(ui.render().state.m2Open, true)
+  }
+})

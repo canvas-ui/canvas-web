@@ -111,6 +111,14 @@ function menuReducer(state: MenuState, action: MenuAction): MenuState {
       return { ...state, selectedEntityId: action.entityId }
 
     case 'SYNC_FROM_URL': {
+      // Moving between items in the current content area changes the URL, but
+      // must not undo an explicit close of its tree. A new section/entity or
+      // an explicit OPEN_M2 still opens the appropriate M2 view.
+      const keepM2Closed = !action.mobile
+        && !state.m2Open
+        && state.m2View === null
+        && action.section === state.activeSection
+        && action.entityId === state.selectedEntityId
       const unchanged =
         action.section === state.activeSection
         && action.entityId === state.selectedEntityId
@@ -125,8 +133,8 @@ function menuReducer(state: MenuState, action: MenuAction): MenuState {
         m0Open: action.mobile ? false : state.m0Open,
         m1Open: action.mobile ? false : action.section !== null,
         selectedEntityId: action.entityId,
-        m2Open: action.m2View !== null,
-        m2View: action.m2View,
+        m2Open: !keepM2Closed && action.m2View !== null,
+        m2View: keepM2Closed ? null : action.m2View,
       }
     }
 
