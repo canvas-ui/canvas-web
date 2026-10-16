@@ -58,6 +58,8 @@ interface LinkToCardProps {
   // connector/storage mirror (folder creation is disabled there), or include
   // 'relations' to offer document-to-document edges alongside the paths.
   tabs?: PickerTab[]
+  // Open a specific tree for a guided flow; ordinary linking starts at Pins.
+  initialTab?: PickerTab
   // Required for the 'relations' tab. Called with the picked predicate, axis
   // and target document ids instead of onConfirm's paths.
   onConfirmRelation?: (relation: LinkToRelation, ctx: { workspaceName: string }) => void | Promise<void>
@@ -89,7 +91,7 @@ interface LinkToCardProps {
 // WorkspaceList-styled row list, slide into the tree-with-tabs view. Renders
 // as a plain card — callers own positioning (inline sibling for B5Card,
 // fixed overlay for document-list's existing usage).
-export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceName, excludeWorkspace, multiple = true, saving = false, savingContent, sizeClassName, tabs = ['context', 'directory'], title, confirmLabel, backendFolderCreation, onConfirmRelation, relationWorkspaceName, relationPredicates, relationExcludeIds }: LinkToCardProps) {
+export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceName, excludeWorkspace, multiple = true, saving = false, savingContent, sizeClassName, tabs = ['context', 'directory'], initialTab, title, confirmLabel, backendFolderCreation, onConfirmRelation, relationWorkspaceName, relationPredicates, relationExcludeIds }: LinkToCardProps) {
   const [step, setStep] = useState<'workspace' | 'tree'>(fixedWorkspaceName ? 'tree' : 'workspace')
   // Esc closes the card (all callers render it as an overlay); disabled while
   // a link is saving so it can't vanish mid-write.
@@ -98,7 +100,8 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
   // workspace) — the fetch effect below only ever clears it.
   const [loadingWorkspaces, setLoadingWorkspaces] = useState(!fixedWorkspaceName)
   const [workspaceName, setWorkspaceName] = useState<string | null>(fixedWorkspaceName ?? null)
-  const [activeTab, setActiveTab] = useState<PickerTab | 'pins'>(tabs.includes('context') || tabs.includes('directory') ? 'pins' : (tabs[0] ?? 'context'))
+  const startTab = initialTab && tabs.includes(initialTab) ? initialTab : tabs.includes('context') || tabs.includes('directory') ? 'pins' : (tabs[0] ?? 'context')
+  const [activeTab, setActiveTab] = useState<PickerTab | 'pins'>(startTab)
   // Relations tab state — the destination is a document + a typed predicate
   // rather than a path, so it keeps its own selection.
   const predicates = relationPredicates?.length ? relationPredicates : [...RELATION_PREDICATES]
@@ -213,7 +216,7 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
       setPins(null)
       setPinsError(false)
     }
-    setActiveTab(tabs.includes('context') || tabs.includes('directory') ? 'pins' : (tabs[0] ?? 'context'))
+    setActiveTab(startTab)
     setWorkspaceName(name)
     setSelected(new Set())
     setSelectedDocIds(new Set())
@@ -379,10 +382,13 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
               </div>
             )}
 
-            {!isRelations && multiple && selected.size > 0 && (
-              <div className="flex shrink-0 flex-wrap gap-1.5 border-b bg-primary/[0.04] px-3 py-2">
+            {/* Keep this row's height stable: showing the first selection must
+                not move the tree away from the second click of a double-click. */}
+            {!isRelations && multiple && (
+              <div className="flex h-10 shrink-0 items-center gap-1.5 overflow-x-auto border-b bg-primary/[0.04] px-3">
+                {!selected.size && <span className="text-xs text-muted-foreground">Selected folders appear here</span>}
                 {Array.from(selected).map(path => (
-                  <span key={path} className="inline-flex max-w-full items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
+                  <span key={path} className="inline-flex max-w-full shrink-0 items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
                     <span className="truncate" title={path}>{path}</span>
                     <button type="button" onClick={() => toggle(path)} className="shrink-0 rounded-full hover:bg-primary-foreground/20" aria-label={`Remove ${path}`}>
                       <X className="h-3 w-3" />

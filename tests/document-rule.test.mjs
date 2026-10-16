@@ -44,6 +44,29 @@ const { buildRule, parseRule, formFromPrefill, storagePathPreview } = context.bu
 const plain = value => JSON.parse(JSON.stringify(value))
 const pathBackend = { address: 'workspace:home', driver: 'custom', capabilities: { paths: true } }
 
+test('send-file rules round-trip each channel, PDF filters, templates and download sources', () => {
+  for (const driver of ['imap', 'slack', 'whatsapp']) {
+    const action = { action: 'sendFile', source: 'attachments', driver, address: 'accounting', mime: 'application/pdf', filename: 'invoice', includeInline: true,
+      message: 'Invoice {{file.name}}', ...(driver === 'imap' ? { to: ['ingest@example.com'], subject: 'Invoice: {{file.name}}' } : { target: 'conversation-1' }) }
+    const rule = { id: 'send-invoice', enabled: true, when: { event: 'document.inserted', schema: 'email' }, then: [action] }
+    assert.deepEqual(plain(buildRule(parseRule(rule))), rule)
+    assert.equal(parseRule({ ...rule, then: [{ ...action, unknown: true }] }), null)
+    const form = parseRule(rule)
+    form.actions[0].a = ''
+    assert.throws(() => buildRule(form), /sending account/)
+    form.actions[0].a = 'accounting'; form.actions[0].b = ''
+    assert.throws(() => buildRule(form), /destination/)
+  }
+  const rule = { id: 'send-download', enabled: true, when: { event: 'document.inserted' }, then: [
+    { action: 'download', to: 'workspace:home' },
+    { action: 'sendFile', source: 'download', driver: 'slack', address: 'acme', target: 'C1' },
+  ] }
+  assert.deepEqual(plain(buildRule(parseRule(rule))), rule)
+  const form = parseRule(rule)
+  form.actions.shift()
+  assert.throws(() => buildRule(form), /Download action before/)
+})
+
 test('PDF extraction and exact recipient survive edit/save/reopen', () => {
   const rule = { id: 'accounting', enabled: true, when: { event: 'document.inserted', schema: 'email', to: { equals: 'accounting@augmend.eu' } },
     then: [{ action: 'extractAttachments', to: 'workspace:home', mime: 'application/pdf', folder: 'Accounting', subfolder: '{{YYYY}}/{{MM}}', onConflict: 'rename' }] }

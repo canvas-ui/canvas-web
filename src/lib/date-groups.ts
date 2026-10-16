@@ -17,6 +17,20 @@
 //     timezone, not by elapsed hours: something saved at 23:50 is still
 //     "Yesterday" at 00:10, the way a person means it.
 
+/** Use content/domain timeline starts; missing dates stay unknown. */
+export function documentTimelineDate(doc: {
+  createdAt?: string
+  updatedAt?: string
+  timelines?: Array<{ timeline?: string; name?: string; start?: string | null; end?: string | null }>
+}, sortBy?: string): number | null {
+  const timeline = sortBy?.replace(/^t:/, '') || 'crud:created'
+  const dates = timeline === 'crud:created' ? [doc.createdAt]
+    : timeline === 'crud:updated' ? [doc.updatedAt]
+      : (doc.timelines ?? []).filter(entry => (entry.timeline || entry.name) === timeline).map(entry => entry.start)
+  const times = dates.map(date => Date.parse(date ?? '')).filter(Number.isFinite)
+  return times.length ? Math.min(...times) : null
+}
+
 export interface DateGroup<T> {
   // Stable across re-renders for the same band (collapse state keys off it).
   key: string
@@ -117,7 +131,7 @@ export function dateBucket(timestamp: number | null, bounds: ReturnType<typeof b
 
 /**
  * Cut `items` into relative-time bands. `dateOf` returns the millisecond
- * timestamp the view is ordered by (created or updated); return null for
+ * timestamp the view's timeline is ordered by; return null for
  * documents that carry no usable date — they collect in a trailing
  * "Unknown date" band instead of silently landing in "Today".
  *

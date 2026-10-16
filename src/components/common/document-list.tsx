@@ -48,7 +48,7 @@ import { DocumentIcon } from '@/components/common/DocumentIcon'
 import { TimelineSortControl } from '@/components/canvas/widgets/sort-control'
 import type { ToolboxSort } from '@/types/workspace'
 import { useToolboxOptional } from '@/components/toolbox/use-toolbox'
-import { groupByDate } from '@/lib/date-groups'
+import { groupByDate, documentTimelineDate } from '@/lib/date-groups'
 import { MarkdownView } from './markdown-view'
 import { FolderContextMenu } from '@/components/workspaces/FolderContextMenu'
 import { classifyMime } from '@/components/renderers/types'
@@ -1316,15 +1316,9 @@ export function DocumentList({ externalSearchQuery, toolbarActions, documents, i
   }), [])
   const { sorted: sortedDocuments, sort, toggleSort } = useSortableData(filteredDocuments, sortAccessors)
 
-  // Which date the bands mean. The list arrives in the server's timeline order,
-  // so the bands must read the same clock: sorting by the "updated" timeline
-  // bands by updatedAt, everything else (created, content, domain timelines)
-  // falls back to createdAt — the only other date the document itself carries.
-  const groupDateOf = useCallback((doc: Document) => {
-    const raw = serverSort?.sortBy === 'crud:updated' ? doc.updatedAt : doc.createdAt
-    const ts = Date.parse(raw ?? '')
-    return Number.isNaN(ts) ? null : ts
-  }, [serverSort?.sortBy])
+  // Bands must use the same timeline as the server's sort, including content
+  // dates on email/photos. Falling back to indexing time reorders the results.
+  const groupDateOf = useCallback((doc: Document) => documentTimelineDate(doc, serverSort?.sortBy), [serverSort?.sortBy])
   const dateGroups = useMemo(
     () => groupByDate(filteredDocuments, groupDateOf, serverSort?.order === 'asc' ? 'asc' : 'desc'),
     [filteredDocuments, groupDateOf, serverSort?.order],

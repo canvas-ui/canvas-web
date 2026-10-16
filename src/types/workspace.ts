@@ -342,6 +342,7 @@ export interface Document {
   // since synapsd v3; the server never returns them under `metadata`.
   features?: string[]
   locations?: Array<{ url: string; metadata?: Record<string, unknown> }>
+  timelines?: Array<{ timeline?: string; name?: string; start?: string | null; end?: string | null }>
   indexOptions: {
     checksumAlgorithms: string[]
     checksumFields: string[]

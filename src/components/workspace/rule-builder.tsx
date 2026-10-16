@@ -15,6 +15,7 @@ import {
   type HookRule, type HookRuleAction, type HookRun, type RulePrefill,
 } from '@/services/hooks'
 import { listScripts } from '@/services/scripts'
+import { messageAccounts, type MessageAccount } from '@/services/messages'
 import { listBackends, type Backend } from '@/services/workspace'
 import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from '@/components/menu/shared/LinkToSidePanel'
 import { LinkToCard, type LinkToTarget } from '@/components/menu/shared/LinkToCard'
@@ -92,9 +93,10 @@ const CONDITION_FIELDS: Array<{ key: ConditionKey; label: string; hint: string }
 const EXACT_FIELDS = new Set(['toExact', 'fromExact', 'senderExact', 'threadExact', 'channelExact', 'platformExact'])
 const conditionKey = (field: ConditionKey) => EXACT_FIELDS.has(field) ? field.replace(/Exact$/, '') : field.replace(/Regex$/, '')
 
-type ActionKey = 'extractAttachments' | 'link' | 'unlink' | 'tag' | 'store' | 'download' | 'unstore' | 'notify' | 'agent' | 'script' | 'delete' | 'destroy'
+type ActionKey = 'sendFile' | 'extractAttachments' | 'link' | 'unlink' | 'tag' | 'store' | 'download' | 'unstore' | 'notify' | 'agent' | 'script' | 'delete' | 'destroy'
 
 const ACTION_FIELDS: Array<{ key: ActionKey; label: string; icon: LucideIcon; tone: string }> = [
+  { key: 'sendFile', label: 'Send file(s) via a channel', icon: Mail, tone: 'text-blue-600 dark:text-blue-400 bg-blue-500/10' },
   { key: 'extractAttachments', label: 'Extract email attachments to a folder', icon: Mail, tone: 'text-amber-600 dark:text-amber-400 bg-amber-500/10' },
   { key: 'store', label: 'Copy/Move file(s) to a storage backend', icon: HardDrive, tone: 'text-sky-600 dark:text-sky-400 bg-sky-500/10' },
   { key: 'download', label: 'download what the link points at', icon: Download, tone: 'text-rose-600 dark:text-rose-400 bg-rose-500/10' },
@@ -102,7 +104,7 @@ const ACTION_FIELDS: Array<{ key: ActionKey; label: string; icon: LucideIcon; to
   { key: 'unlink', label: 'remove it from a folder', icon: FolderSymlink, tone: 'text-amber-600 dark:text-amber-400 bg-amber-500/10' },
   { key: 'tag', label: 'add tags', icon: Tag, tone: 'text-violet-600 dark:text-violet-400 bg-violet-500/10' },
   { key: 'unstore', label: 'delete the file from a storage backend', icon: Trash, tone: 'text-amber-600 dark:text-amber-400 bg-amber-500/10' },
-  { key: 'notify', label: 'send me a message', icon: Bell, tone: 'text-pink-600 dark:text-pink-400 bg-pink-500/10' },
+  { key: 'notify', label: 'Send me a notification', icon: Bell, tone: 'text-pink-600 dark:text-pink-400 bg-pink-500/10' },
   { key: 'agent', label: 'ask an agent', icon: Bot, tone: 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/10' },
   { key: 'script', label: 'run a script', icon: Terminal, tone: 'text-slate-600 dark:text-slate-300 bg-slate-500/10' },
   { key: 'delete', label: 'delete it from Canvas', icon: Trash2, tone: 'text-destructive bg-destructive/10' },
@@ -134,6 +136,10 @@ const STORE_NAME_OPTIONS: Array<{ value: StoreName; label: string }> = [
 interface ConditionRow { field: ConditionKey; value: string }
 interface ActionRow {
   kind: ActionKey
+  sendDriver: MessageAccount['driver']
+  sendSource: 'document' | 'attachments' | 'download'
+  sendSubject: string
+  sendMessage: string
   a: string // primary slot: link/unlink paths / tags / notify message / agent slug / script path / store target backend
   b: string // secondary slot: link tags / agent prompt / store custom name template / unstore ifOn
   // link/unlink/store: append the item's sub-path below the rule's "is under
@@ -165,6 +171,7 @@ interface ActionRow {
 }
 
 const emptyAction = (kind: ActionKey): ActionRow => ({
+  sendDriver: 'imap', sendSource: 'document', sendSubject: '{{file.name}}', sendMessage: '',
   kind, a: '', b: '', recursive: false, storeFrom: '', storeFolder: '', storeName: 'keep', storeMode: 'copy', storeConflict: 'rename',
   attachmentMime: 'application/pdf', attachmentName: '', attachmentPath: '{{YYYY}}/{{MM}}', includeInline: false,
   dlKind: 'auto', dlDepth: '2', dlTags: '', keepLast: true,
@@ -212,6 +219,15 @@ interface Recipe {
 }
 
 const RECIPES: Recipe[] = [
+  {
+    id: 'send-invoices', title: 'Send invoice PDFs to accounting', icon: Mail, tone: 'text-blue-600 dark:text-blue-400 bg-blue-500/10',
+    blurb: 'Send matching PDF attachments to your accounting firm’s ingestion email, or to a Slack / WhatsApp conversation. Keep the original email and files.',
+    build: () => ({
+      ...EMPTY_FORM, description: 'Send invoice PDFs to accounting', schema: 'email',
+      conditions: [{ field: 'toExact', value: '' }],
+      actions: [{ ...emptyAction('sendFile'), sendSource: 'attachments', sendSubject: 'Invoice: {{file.name}}' }],
+    }),
+  },
   {
     id: 'attachments', title: 'File PDF email attachments by month', icon: Mail, tone: 'text-amber-600 dark:text-amber-400 bg-amber-500/10',
     blurb: 'Choose a recipient and extract PDF attachments into Accounting / year / month, using the email date. Add a subject or filename filter to narrow it to invoices.',
@@ -268,7 +284,7 @@ const RECIPES: Recipe[] = [
   },
   {
     id: 'agent', title: 'Ask an agent', icon: Bot, tone: 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/10',
-    blurb: 'Hand new items to an agent with a prompt; save its reply as a note or get it as a message.',
+    blurb: 'Hand new items to an agent with a prompt; save its reply as a note or get it as a notification.',
     build: () => ({
       ...EMPTY_FORM, description: 'Summarize new items',
       actions: [{ ...emptyAction('agent'), b: 'Read document #{{doc.id}} in full with canvas_get, then summarize it in three bullet points.', notifyReply: true }],
@@ -351,6 +367,22 @@ function buildRule(form: RuleForm, backends: Backend[] = []): HookRule {
   for (const row of form.actions) {
     const a = row.a.trim(); const b = row.b.trim()
     const recursive = row.recursive ? { recursive: true } : {}
+    if (row.kind === 'sendFile') {
+      if (!a) throw new Error('Choose a sending account for the file.')
+      if (!b) throw new Error(row.sendDriver === 'imap' ? 'Enter the destination email address.' : 'Enter a configured destination conversation.')
+      if (!['imap', 'slack', 'whatsapp'].includes(row.sendDriver)) throw new Error('Choose email, Slack or WhatsApp.')
+      if (!['document', 'attachments', 'download'].includes(row.sendSource)) throw new Error('Choose which files to send.')
+      if (row.sendSource === 'download' && !then.some(action => action.action === 'download')) throw new Error('Add a Download action before sending its files.')
+      const mime = splitList(row.attachmentMime)
+      if (row.sendSource === 'attachments' && (!mime.length || mime.some(pattern => !/^(\*|[a-z0-9!#$&^_.+-]+\/(\*|[a-z0-9!#$&^_.+-]+)|\*\/\*)$/i.test(pattern)))) throw new Error('Enter attachment MIME types, such as application/pdf.')
+      if (row.sendDriver === 'whatsapp' && row.sendMessage.length > 1024) throw new Error('WhatsApp file captions must be at most 1,024 characters.')
+      then.push({ action: 'sendFile', source: row.sendSource, driver: row.sendDriver, address: a,
+        ...(row.sendDriver === 'imap' ? { to: splitList(b), subject: row.sendSubject } : { target: b }),
+        ...(row.sendMessage ? { message: row.sendMessage } : {}),
+        ...(row.sendSource === 'attachments' ? { mime: mime.length === 1 ? mime[0] : mime,
+          ...(row.attachmentName.trim() ? { filename: row.attachmentName.trim() } : {}), ...(row.includeInline ? { includeInline: true } : {}) } : {}),
+      })
+    }
     if (row.kind === 'link' && a) then.push({ action: 'link', paths: splitList(a), ...recursive, ...(b ? { tags: splitList(b) } : {}) })
     if (row.kind === 'unlink' && a) then.push({ action: 'unlink', paths: splitList(a), ...recursive })
     if (row.kind === 'tag' && a) then.push({ action: 'tag', tags: splitList(a) })
@@ -540,6 +572,21 @@ function parseRule(rule: HookRule): RuleForm | null {
         storeMode: act.mode === 'move' ? 'move' : 'copy',
         storeConflict: act.onConflict === 'error' || act.onConflict === 'overwrite' ? act.onConflict : 'rename',
       })
+    } else if (act.action === 'sendFile') {
+      const known = new Set(['action', 'source', 'driver', 'address', 'to', 'target', 'subject', 'message', 'mime', 'filename', 'includeInline'])
+      if (Object.keys(act).some(key => !known.has(key)) || !['imap', 'slack', 'whatsapp'].includes(String(act.driver)) || typeof act.address !== 'string') return null
+      if (act.source !== undefined && !['document', 'attachments', 'download'].includes(String(act.source))) return null
+      if (['target', 'subject', 'message', 'filename'].some(key => act[key] !== undefined && typeof act[key] !== 'string')) return null
+      if (act.includeInline !== undefined && typeof act.includeInline !== 'boolean') return null
+      const to = Array.isArray(act.to) ? act.to : act.to === undefined ? [] : [act.to]
+      const types = Array.isArray(act.mime) ? act.mime : [act.mime ?? '*']
+      if (!to.every(value => typeof value === 'string') || !types.every(value => typeof value === 'string')) return null
+      if (act.driver === 'imap' ? act.target !== undefined : act.to !== undefined || act.subject !== undefined) return null
+      actions.push({ ...emptyAction('sendFile'), a: act.address, b: act.driver === 'imap' ? to.join(', ') : String(act.target || ''),
+        sendDriver: act.driver as ActionRow['sendDriver'], sendSource: (act.source || 'document') as ActionRow['sendSource'],
+        sendSubject: String(act.subject ?? '{{file.name}}'), sendMessage: String(act.message || ''),
+        attachmentMime: types.join(', '), attachmentName: String(act.filename || ''), includeInline: act.includeInline === true,
+      })
     } else if (act.action === 'extractAttachments') {
       const known = new Set(['action', 'to', 'folder', 'subfolder', 'mime', 'filename', 'includeInline', 'onConflict'])
       if (Object.keys(act).some(key => !known.has(key)) || typeof act.to !== 'string') return null
@@ -655,7 +702,8 @@ function summarizeAction(a: HookRuleAction): string {
     return `download ${what?.value === 'auto' ? 'the link (auto-detected)' : what?.label || a.kind} to ${a.to || 'workspace:home'}${folder}${a.recursive === true ? ' (sub-folders kept)' : ''}${where}`
   }
   if (a.action === 'unstore') return `delete the file from ${Array.isArray(a.from) ? a.from.join(', ') : a.from}${a.ifOn ? ` once it is on ${Array.isArray(a.ifOn) ? a.ifOn.join(', ') : a.ifOn}` : ''}`
-  if (a.action === 'notify') return 'notify me'
+  if (a.action === 'sendFile') return `send ${a.source === 'attachments' ? 'matching attachments' : a.source === 'download' ? 'downloaded files' : 'the file'} via ${a.driver === 'imap' ? 'email' : a.driver} to ${Array.isArray(a.to) ? a.to.join(', ') : a.to || a.target || '…'}`
+  if (a.action === 'notify') return 'send me a notification'
   if (a.action === 'delete') return 'delete from Canvas (keeps stored files/mail)'
   if (a.action === 'destroy') return '⚠ delete everywhere (index + storage)'
   if (a.action === 'agent') { const extras = summarizeOutput(a as Record<string, unknown>); return `ask agent "${a.slug}"${extras ? ` (${extras})` : ''}` }
@@ -840,6 +888,8 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
   const [isSaving, setIsSaving] = useState(false)
   const [scripts, setScripts] = useState<string[]>([])
   const [backends, setBackends] = useState<Backend[]>([])
+  const [sendingAccounts, setSendingAccounts] = useState<MessageAccount[]>([])
+  const [accountsError, setAccountsError] = useState('')
   const formRef = useRef<HTMLDivElement>(null)
 
   const [prevWorkspaceId, setPrevWorkspaceId] = useState(workspaceId)
@@ -873,6 +923,17 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
 
   useEffect(() => {
     listScripts(workspaceId).then((files) => setScripts(files.map((f) => f.path))).catch(() => setScripts([]))
+  }, [workspaceId])
+
+  useEffect(() => {
+    let cancelled = false
+    messageAccounts(workspaceId).then(accounts => {
+      if (!cancelled) {
+        setSendingAccounts([...new Map(accounts.map(account => [`${account.driver}:${account.address}`, account])).values()])
+        setAccountsError('')
+      }
+    }).catch(() => { if (!cancelled) { setSendingAccounts([]); setAccountsError('Sending accounts could not be loaded.') } })
+    return () => { cancelled = true }
   }, [workspaceId])
 
   // Storage backends for the store/unstore pickers (writable ones only — a
@@ -1280,7 +1341,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                       </Field>
                     </>)}
                   </div>
-                  <Toggle checked={row.notifyReply} onChange={(v) => set({ notifyReply: v })} label="Send it to me as a message" />
+                  <Toggle checked={row.notifyReply} onChange={(v) => set({ notifyReply: v })} label="Send me a notification with the result" />
                 </div>
               )
               const contextSource = exactContextSource(form.conditions)
@@ -1502,8 +1563,55 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                     </div>
                   )}
 
+                  {row.kind === 'sendFile' && (
+                    <div className="space-y-4">
+                      <Field label="Files to send">
+                        <select className={selectClass} value={row.sendSource} onChange={e => set({ sendSource: e.target.value as ActionRow['sendSource'] })}>
+                          <option value="document">The file that triggered this rule</option>
+                          <option value="attachments">Matching attachments from the email</option>
+                          <option value="download">Files from an earlier Download action</option>
+                        </select>
+                      </Field>
+                      {row.sendSource === 'attachments' && <div className="grid gap-4 sm:grid-cols-2">
+                        <Field label="Attachment types" hint="application/pdf for invoices; * for all files.">
+                          <Input className={inputClass} value={row.attachmentMime} onChange={e => set({ attachmentMime: e.target.value })} />
+                        </Field>
+                        <Field label="Attachment filename contains" hint="Optional literal filename fragment.">
+                          <Input className={inputClass} placeholder="invoice" value={row.attachmentName} onChange={e => set({ attachmentName: e.target.value })} />
+                        </Field>
+                      </div>}
+                      {row.sendSource === 'attachments' && <Toggle checked={row.includeInline} onChange={v => set({ includeInline: v })} label="Include inline attachments" hint="Signature images are excluded by default." />}
+                      <Field label="Sending account" hint="Enable sending for the account in Connected services.">
+                        <select className={selectClass} value={row.a ? `${row.sendDriver}:${row.a}` : ''} onChange={e => {
+                          const account = sendingAccounts.find(account => `${account.driver}:${account.address}` === e.target.value)
+                          if (account) set({ a: account.address, sendDriver: account.driver, b: '' })
+                        }}>
+                          <option value="" disabled>Choose email, WhatsApp or Slack…</option>
+                          {row.a && !sendingAccounts.some(account => account.driver === row.sendDriver && account.address === row.a) && <option value={`${row.sendDriver}:${row.a}`} disabled>{row.sendDriver}: {row.a} (unavailable)</option>}
+                          {sendingAccounts.map(account => <option key={`${account.driver}:${account.address}`} value={`${account.driver}:${account.address}`} disabled={!account.canSend}>
+                            {account.driver === 'imap' ? 'Email (SMTP)' : account.driver === 'whatsapp' ? 'WhatsApp' : 'Slack'} · {account.from || account.address}{!account.canSend ? ' — sending disabled' : ''}
+                          </option>)}
+                        </select>
+                      </Field>
+                      {accountsError && <p className="text-xs text-destructive" role="status">{accountsError}</p>}
+                      <Field label={row.sendDriver === 'imap' ? 'Destination email address' : 'Destination conversation'} hint={row.sendDriver === 'imap' ? 'The accounting ingestion address; separate multiple recipients with commas.' : row.sendDriver === 'slack' ? 'A configured Slack channel ID or name. The account needs files:write permission.' : 'A configured WhatsApp chat ID, e.g. 421…@s.whatsapp.net or …@g.us.'}>
+                        <Input className={inputClass} value={row.b} placeholder={row.sendDriver === 'imap' ? 'invoices@accounting-firm.example' : row.sendDriver === 'slack' ? 'C0123456789' : '421…@s.whatsapp.net'} onChange={e => set({ b: e.target.value })} />
+                      </Field>
+                      {row.sendDriver === 'imap' && <Field label="Email subject" hint={'{{file.name}} inserts the attachment filename.'}>
+                        <Input className={inputClass} value={row.sendSubject} onChange={e => set({ sendSubject: e.target.value })} />
+                      </Field>}
+                      <Field label={row.sendDriver === 'imap' ? 'Email body (optional)' : 'Message / caption (optional)'} hint={'Templates: {{file.name}}, {{doc.data.subject}}, {{doc.data.title}}.'}>
+                        <textarea className="min-h-20 w-full rounded-md border bg-background p-3 text-sm" value={row.sendMessage} onChange={e => set({ sendMessage: e.target.value })} />
+                      </Field>
+                      <div className="rounded-lg border bg-muted/30 p-3 text-sm" aria-label="File delivery preview">
+                        {row.sendSource === 'attachments' ? 'Each matching email attachment' : row.sendSource === 'download' ? 'Each downloaded file' : 'The triggering file'} → {row.sendDriver === 'imap' ? 'email attachment' : row.sendDriver === 'slack' ? 'Slack file upload' : 'WhatsApp document'} → {row.b || 'choose a destination'}
+                      </div>
+                      <p className="text-xs text-muted-foreground">Sends each file in a separate message and keeps the original. Maximum 18 MB per file. Replaying this rule does not resend the same file version to the same destination. Unconfirmed deliveries are recorded for review, not retried automatically.</p>
+                      {row.sendSource === 'document' && <p className="text-xs text-muted-foreground">For files created by another automation, enable this rule’s option to also run on automation events.</p>}
+                    </div>
+                  )}
                   {row.kind === 'notify' && (
-                    <Field label="Message" hint={'Templates work: {{doc.data.subject}}, {{doc.data.from}}, {{doc.data.url}}, {{doc.data.title}}…'}>
+                    <Field label="Notification" hint={'Notifies you through your bound channel, or in Canvas. Templates: {{doc.data.subject}}, {{doc.data.from}}, {{doc.data.title}}…'}>
                       <Input className={inputClass} placeholder={'New mail from {{doc.data.from}}: {{doc.data.subject}}'} value={row.a} onChange={(e) => set({ a: e.target.value })} />
                     </Field>
                   )}
