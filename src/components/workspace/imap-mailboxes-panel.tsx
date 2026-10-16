@@ -1,7 +1,7 @@
 import { BackendRemovalSettings } from './backend-removal-settings'
 import { saveMailboxRemovalPolicy, type RemovalPolicy } from '@/services/trash-operations'
 import { MessageComposerDialog } from '@/components/common/MessageComposerDialog';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,7 +11,6 @@ import {
   addBackend,
   updateBackend,
   removeBackend,
-  syncBackend,
   testBackend,
   syncBackendContainer,
   removeBackendContainer,
@@ -21,6 +20,7 @@ import {
   type Backend,
   type BackendFolder,
 } from '@/services/workspace';
+import { syncBackendWithProgress } from '@/services/backend-sync-progress';
 import { ChevronDown, ChevronRight, Loader2, Mail, RefreshCw, Save, Trash2, FolderPlus } from 'lucide-react';
 
 interface ImapMailboxesPanelProps {
@@ -63,6 +63,20 @@ function formFromBackend(b: Backend): AccountForm {
   };
 }
 
+// Only explicit credential edits are sent. Browser/password-manager changes
+// to unrelated fields must never replace an existing integration password.
+function accountPatch(form: AccountForm, existing: boolean, replacePassword: boolean, replaceSmtpPassword: boolean) {
+  const { password: smtpPassword, ...smtp } = form.smtp;
+  return {
+    host: form.host.trim(), user: form.user.trim(),
+    port: Number(form.port) || 993, tls: form.tls, allowSelfSigned: form.allowSelfSigned,
+    pollInterval: Number(form.pollInterval) || 60000,
+    initialSyncDays: Math.max(0, Number(form.initialSyncDays) || 0),
+    smtp: { ...smtp, ...((!existing || replaceSmtpPassword) && smtpPassword ? { password: smtpPassword } : {}) },
+    ...((!existing || replacePassword) && form.password ? { password: form.password } : {}),
+  };
+}
+
 export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelProps) {
   const [accounts, setAccounts] = useState<Backend[]>([]);
   const [storageBackends, setStorageBackends] = useState<Backend[]>([]);
@@ -71,13 +85,17 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
   const [selected, setSelected] = useState<string | null>(null); // address of the expanded account
   const [showNew, setShowNew] = useState(false); // new-account form visible
   const [form, setForm] = useState<AccountForm>(EMPTY_FORM);
+  const [replacePassword, setReplacePassword] = useState(false);
+  const [replaceSmtpPassword, setReplaceSmtpPassword] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const discoveryRequest = useRef(0);
   const [folders, setFolders] = useState<BackendFolder[]>([]);
   const [selectedFolders, setSelectedFolders] = useState<string[]>(['INBOX']);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingFolders, setIsLoadingFolders] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [runningAction, setRunningAction] = useState<string | null>(null);
-  const { showToast } = useToast();
+  const { showToast, showProgress } = useToast();
 
   const sorted = useMemo(() => [...accounts].sort((a, b) => a.address.localeCompare(b.address)), [accounts]);
   const current = useMemo(() => accounts.find((a) => a.address === selected) || null, [accounts, selected]);
@@ -104,14 +122,18 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
   if (workspaceId !== prevWorkspaceId) {
     setPrevWorkspaceId(workspaceId);
     setIsLoading(true);
+    setSelected(null); setShowNew(false); setForm(EMPTY_FORM);
+    setFolders([]); setSelectedFolders(['INBOX']); setDirty(false);
+    setReplacePassword(false); setReplaceSmtpPassword(false);
   }
 
   useEffect(() => { void fetchAccounts(); }, [fetchAccounts]);
+  useEffect(() => () => { discoveryRequest.current++; }, [workspaceId]);
 
-  // Discover the account's server-side folder list. For an existing account
-  // this runs automatically on select; for a new one it needs credentials
-  // from the form first.
+  // Discovery authenticates with the mail server, so it is always explicit.
+  // Existing accounts use saved credentials; opening the editor is local.
   const discoverFoldersFor = useCallback(async (account: Backend | null, formForNew?: AccountForm) => {
+    const request = ++discoveryRequest.current;
     setIsLoadingFolders(true);
     try {
       const list = account
@@ -121,34 +143,38 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
             allowSelfSigned: formForNew?.allowSelfSigned !== false, user: (formForNew?.user || '').trim(), password: formForNew?.password || '',
             folder: 'INBOX',
           });
-      setFolders(list.filter((f) => f.selectable));
+      if (request === discoveryRequest.current) setFolders(list.filter((f) => f.selectable));
     } catch (error) {
-      showToast({ title: 'IMAP Error', description: error instanceof Error ? error.message : 'Failed to discover folders', variant: 'destructive' });
+      if (request === discoveryRequest.current) showToast({ title: 'IMAP Error', description: error instanceof Error ? error.message : 'Failed to discover folders', variant: 'destructive' });
     } finally {
-      setIsLoadingFolders(false);
+      if (request === discoveryRequest.current) setIsLoadingFolders(false);
     }
   }, [workspaceId, showToast]);
 
   const resetForm = () => {
+    discoveryRequest.current++;
+    setIsLoadingFolders(false);
     setShowNew(false);
     setSelected(null);
     setForm(EMPTY_FORM);
     setFolders([]);
     setSelectedFolders(['INBOX']);
+    setReplacePassword(false); setReplaceSmtpPassword(false); setDirty(false);
   };
 
   // Clicking a listed account expands its options inline; clicking it again
   // collapses them.
   const selectAccount = (b: Backend) => {
+    if (isSaving) return;
     if (selected === b.address) { resetForm(); return; }
+    discoveryRequest.current++;
+    setIsLoadingFolders(false);
     setShowNew(false);
     setSelected(b.address);
     setForm(formFromBackend(b));
     setFolders([]);
     setSelectedFolders((b.containers || []).map((c) => c.name));
-    // Auto-discover so subscribed folders show checked immediately and can be
-    // unchecked without hunting for a discover button.
-    void discoverFoldersFor(b);
+    setReplacePassword(false); setReplaceSmtpPassword(false); setDirty(false);
   };
 
   const startNewAccount = () => {
@@ -156,10 +182,15 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
     setShowNew(true);
   };
 
-  const change = <K extends keyof AccountForm>(key: K, value: AccountForm[K]) => setForm((f) => ({ ...f, [key]: value }));
+  const change = <K extends keyof AccountForm>(key: K, value: AccountForm[K]) => {
+    setDirty(true);
+    setForm((f) => ({ ...f, [key]: value }));
+  };
 
-  const toggleFolder = (path: string) =>
+  const toggleFolder = (path: string) => {
+    setDirty(true);
     setSelectedFolders((cur) => (cur.includes(path) ? cur.filter((p) => p !== path) : [...cur, path]));
+  };
 
   // Render union of discovered folders + already-subscribed ones, so checked
   // state stays visible even when discovery fails (imap host unreachable).
@@ -175,14 +206,7 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
     setIsSaving(true);
     try {
       const wanted = selectedFolders.length ? selectedFolders : ['INBOX'];
-      const base = {
-        host: form.host.trim(), user: form.user.trim(),
-        port: Number(form.port) || 993, tls: form.tls, allowSelfSigned: form.allowSelfSigned,
-        pollInterval: Number(form.pollInterval) || 60000,
-        initialSyncDays: Math.max(0, Number(form.initialSyncDays) || 0),
-        smtp: form.smtp,
-        ...(form.password ? { password: form.password } : {}),
-      };
+      const base = accountPatch(form, !!current, replacePassword, replaceSmtpPassword);
 
       if (current) {
         // Update shared account settings, then reconcile folder subscriptions.
@@ -202,6 +226,8 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
       await load();
       setShowNew(false);
       setSelected(form.user.trim());
+      setForm({ ...form, password: '', smtp: { ...form.smtp, password: '' } });
+      setReplacePassword(false); setReplaceSmtpPassword(false); setDirty(false);
       showToast({ title: 'Saved', description: `IMAP account ${form.user.trim()} saved; sync runs in the background` });
     } catch (error) {
       showToast({ title: 'Error', description: error instanceof Error ? error.message : 'Failed to save IMAP account', variant: 'destructive' });
@@ -229,9 +255,11 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
     setRunningAction(`${action}:${address}`);
     try {
       if (action === 'test') await testBackend(workspaceId, 'imap', address);
-      else await syncBackend(workspaceId, 'imap', address);
+      else await syncBackendWithProgress(showProgress, workspaceId, 'imap', address, updated => {
+        setAccounts(accounts => accounts.map(account => account.address === address ? updated : account));
+      });
       await load();
-      showToast({ title: 'Success', description: action === 'sync' ? `${address} sync started (runs in the background)` : `${address} test completed` });
+      if (action === 'test') showToast({ title: 'Success', description: `${address} saved account test completed` });
     } catch (error) {
       showToast({ title: 'Error', description: error instanceof Error ? error.message : `Failed to ${action}`, variant: 'destructive' });
     } finally {
@@ -244,7 +272,7 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
     try {
       await syncBackendContainer(workspaceId, 'imap', address, name);
       await load();
-      showToast({ title: 'Synced', description: `${address} · ${name}` });
+      showToast({ title: 'Sync started', description: `${address} · ${name} · rescanning the saved lookback window` });
     } catch (error) {
       showToast({ title: 'Error', description: error instanceof Error ? error.message : 'Failed to sync folder', variant: 'destructive' });
     } finally {
@@ -255,18 +283,23 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
   // Shared account settings form — rendered inline under the expanded account,
   // or in the "new account" card.
   const configForm = (
-    <div className="grid gap-3">
+    <form className="grid gap-3" autoComplete="off" aria-label="IMAP account settings" onSubmit={event => event.preventDefault()}>
         <div className="grid gap-2">
           <Label htmlFor="imap-host">Host</Label>
-          <Input id="imap-host" value={form.host} disabled={!!current} onChange={(e) => change('host', e.target.value)} placeholder="imap.example.com" />
+          <Input id="imap-host" name="imap-host" autoComplete="off" value={form.host} readOnly={!!current} onChange={(e) => change('host', e.target.value)} placeholder="imap.example.com" />
         </div>
         <div className="grid gap-2">
           <Label htmlFor="imap-user">User (account)</Label>
-          <Input id="imap-user" value={form.user} disabled={!!current} onChange={(e) => change('user', e.target.value)} placeholder="me@example.com" />
+          <Input id="imap-user" name="imap-username" autoComplete="section-imap username" value={form.user} readOnly={!!current} onChange={(e) => change('user', e.target.value)} placeholder="me@example.com" />
         </div>
         <div className="grid gap-2">
-          <Label htmlFor="imap-password">Password</Label>
-          <Input id="imap-password" type="password" value={form.password} onChange={(e) => change('password', e.target.value)} placeholder={current ? 'Leave blank to keep current password' : 'Password'} />
+          {!current || replacePassword ? <>
+            <Label htmlFor="imap-password">{current ? 'New IMAP password' : 'Password'}</Label>
+            <Input id="imap-password" name="imap-password" type="password" autoComplete="section-imap new-password" data-lpignore="true" data-1p-ignore="true" value={form.password} onChange={(e) => change('password', e.target.value)} placeholder={current ? 'Leave blank to keep current password' : 'Password'} />
+          </> : <div className="flex items-center gap-3 text-sm">
+            <span className="text-muted-foreground">Saved IMAP password</span>
+            <Button type="button" size="sm" variant="outline" onClick={() => setReplacePassword(true)}>Change IMAP password</Button>
+          </div>}
         </div>
         <div className="grid gap-2">
           <Label htmlFor="imap-port">Port</Label>
@@ -275,7 +308,7 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
         <div className="grid gap-2">
           <div className="flex items-center justify-between">
             <Label>Folders to sync</Label>
-            <Button type="button" size="sm" variant="outline" onClick={() => void discoverFoldersFor(current, form)} disabled={isLoadingFolders || (!current && (!form.host.trim() || !form.user.trim() || !form.password))}>
+            <Button type="button" size="sm" variant="outline" onClick={() => void discoverFoldersFor(current, form)} disabled={isLoadingFolders || (!!current && dirty) || (!current && (!form.host.trim() || !form.user.trim() || !form.password))}>
               {isLoadingFolders ? <Loader2 className="h-3 w-3 animate-spin" /> : <FolderPlus className="h-3 w-3" />} Discover folders
             </Button>
           </div>
@@ -315,10 +348,14 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
           {smtpTestAccount && <MessageComposerDialog workspaceId={workspaceId} initialAccount={{ driver: 'imap', address: smtpTestAccount }} testEmail onClose={() => setSmtpTestAccount(null)} />}
           <label className="flex gap-2 text-xs"><input type="checkbox" checked={form.smtp.enabled} onChange={(e) => change('smtp', { ...form.smtp, enabled: e.target.checked })} />Allow sending from Canvas</label>
           <div className="grid gap-3 sm:grid-cols-2">
-            {(['host', 'user', 'password', 'from', 'sentFolder'] as const).map((field) => <label key={field} className="text-xs">
-              {{ host: 'SMTP host', user: 'SMTP username', password: 'SMTP password (blank keeps current)', from: 'From address', sentFolder: 'Sent folder' }[field]}
-              <Input type={field === 'password' ? 'password' : 'text'} value={form.smtp[field]} autoComplete="off" onChange={(e) => change('smtp', { ...form.smtp, [field]: e.target.value })} />
+            {(['host', 'user', 'from', 'sentFolder'] as const).map((field) => <label key={field} className="text-xs">
+              {{ host: 'SMTP host', user: 'SMTP username', from: 'From address', sentFolder: 'Sent folder' }[field]}
+              <Input name={`smtp-${field}`} value={form.smtp[field]} autoComplete={field === 'user' ? 'section-smtp username' : 'off'} onChange={(e) => change('smtp', { ...form.smtp, [field]: e.target.value })} />
             </label>)}
+            {form.smtp.enabled && (!current || replaceSmtpPassword) && <label className="text-xs">SMTP password (blank keeps current)
+              <Input name="smtp-password" type="password" autoComplete="section-smtp new-password" data-lpignore="true" data-1p-ignore="true" value={form.smtp.password} onChange={e => change('smtp', { ...form.smtp, password: e.target.value })} />
+            </label>}
+            {current && form.smtp.enabled && !replaceSmtpPassword && <Button type="button" size="sm" variant="outline" onClick={() => setReplaceSmtpPassword(true)}>Change SMTP password</Button>}
             <label className="text-xs">Port<Input type="number" min={1} max={65535} value={form.smtp.port} onChange={(e) => change('smtp', { ...form.smtp, port: Number(e.target.value) })} /></label>
           </div>
           <label className="flex gap-2 text-xs"><input type="checkbox" checked={form.smtp.secure} onChange={(e) => change('smtp', { ...form.smtp, secure: e.target.checked })} />Implicit TLS (usually port 465; otherwise STARTTLS is required)</label>
@@ -326,9 +363,9 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
           <label className="flex gap-2 text-xs"><input type="checkbox" checked={form.smtp.allowAgentSend} onChange={(e) => change('smtp', { ...form.smtp, allowAgentSend: e.target.checked })} />Allow agents with workspace write access to send</label>
         </fieldset>
         <div className="grid gap-2">
-          <Label htmlFor="imap-lookback">Initial sync lookback (days)</Label>
+          <Label htmlFor="imap-lookback">Sync lookback (days)</Label>
           <Input id="imap-lookback" type="number" min="0" value={String(form.initialSyncDays)} onChange={(e) => change('initialSyncDays', Number(e.target.value || 0))} />
-          <p className="text-xs text-muted-foreground">First sync only (lastUid 0). Set 0 to import the whole mailbox.</p>
+          <p className="text-xs text-muted-foreground">Used for the first sync and every Resync. Set 0 to import the whole mailbox. Saving a wider window automatically fetches older mail; a narrower window keeps messages already imported.</p>
         </div>
         <div className="grid gap-2">
           <Label htmlFor="imap-poll">Poll interval (ms)</Label>
@@ -342,7 +379,7 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
             <input type="checkbox" checked={form.allowSelfSigned} onChange={(e) => change('allowSelfSigned', e.target.checked)} /> Allow self-signed
           </label>
         </div>
-      </div>
+      </form>
   );
 
   return (
@@ -398,7 +435,7 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
                           <div key={c.name} className="flex items-center justify-between gap-2 rounded bg-background/60 px-2 py-1">
                             <span className="font-mono truncate">{c.name}</span>
                             <div className="flex items-center gap-1 shrink-0">
-                              <button title="Sync folder" className="p-1 hover:bg-accent rounded" onClick={() => syncFolder(acc.address, c.name)} disabled={!!runningAction}>
+                              <button title="Resync folder" className="p-1 hover:bg-accent rounded" onClick={() => syncFolder(acc.address, c.name)} disabled={!!runningAction || dirty || isSaving}>
                                 {runningAction === `folder-sync:${acc.address}:${c.name}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                               </button>
                               <button
@@ -420,15 +457,17 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
                         onSave={async removalPolicy => { await saveMailboxRemovalPolicy(workspaceId, acc.address, c.name, removalPolicy); await load() }} /></div>)}
                       {configForm}
 
+                      <p className="text-xs text-muted-foreground">{dirty ? 'Save changes before testing, discovering folders or resyncing.' : 'Test and Discover folders use the saved connection settings. Resync fetches the saved lookback window again.'}</p>
+
                       <div className="flex flex-wrap gap-2">
-                        <Button size="sm" onClick={handleSave} disabled={isSaving}>
+                        <Button size="sm" onClick={handleSave} disabled={isSaving || !dirty}>
                           {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} Save
                         </Button>
-                        <Button size="sm" variant="outline" disabled={!!runningAction} onClick={() => accountAction('test', acc.address)}>
+                        <Button size="sm" variant="outline" disabled={!!runningAction || dirty || isSaving} onClick={() => accountAction('test', acc.address)}>
                           {runningAction === `test:${acc.address}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Mail className="h-3 w-3" />} Test
                         </Button>
-                        <Button size="sm" variant="outline" disabled={!!runningAction} onClick={() => accountAction('sync', acc.address)}>
-                          {runningAction === `sync:${acc.address}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />} Sync all
+                        <Button size="sm" variant="outline" disabled={!!runningAction || dirty || isSaving} onClick={() => accountAction('sync', acc.address)}>
+                          {runningAction === `sync:${acc.address}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />} Resync all
                         </Button>
                         <Button size="sm" variant="destructive" disabled={!!runningAction} onClick={handleDelete}>
                           {runningAction === `delete:${acc.address}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />} Delete

@@ -29,7 +29,7 @@ export function SettingsMenu() {
     <nav aria-label="Settings" className="flex h-full flex-col">
       <div className="shrink-0 space-y-3 border-b border-border p-3">
         <div className="flex items-center"><MenuBackButton /><h2 className="text-sm font-semibold">Settings</h2></div>
-        <Input type="search" aria-label="Search settings menu" placeholder="Find a setting…" value={query} onChange={event => setQuery(event.target.value)} />
+        <Input type="search" name="settings-menu-filter" autoComplete="off" data-lpignore="true" data-1p-ignore="true" aria-label="Search settings menu" placeholder="Find a setting…" value={query} onChange={event => setQuery(event.target.value)} />
       </div>
       <div ref={listRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-2">
         {groups.map(group => (

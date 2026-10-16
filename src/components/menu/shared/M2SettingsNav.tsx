@@ -28,7 +28,7 @@ export function M2SettingsNav({
   return (
     <div className="flex-1 overflow-y-auto py-2">
       <div className="space-y-1 px-2">
-        <Input type="search" aria-label="Search settings sections" placeholder="Find a setting…" className="mb-3" value={query} onChange={event => setQuery(event.target.value)} />
+        <Input type="search" name="settings-section-filter" autoComplete="off" data-lpignore="true" data-1p-ignore="true" aria-label="Search settings sections" placeholder="Find a setting…" className="mb-3" value={query} onChange={event => setQuery(event.target.value)} />
         {!visibleItems.length && <p role="status" className="p-3 text-sm text-muted-foreground">No matching settings.</p>}
         {visibleItems.map(item => {
           const isActive = item.id === activeId

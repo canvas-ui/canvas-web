@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
 import { documentRulePresets } from '../src/lib/document-rule.ts'
+import { attachmentDestinationPreview } from '../src/lib/attachment-destination.ts'
 
 const doc = (schema, data, metadata = {}) => ({ id: 12, schema: `data/schema/${schema}`, data, metadata })
 const email = doc('message/email', { from: { name: 'Accounts', address: 'accounts+uk@example.com' }, subject: 'Invoice (Q4) [123].', body: 'Total: $42.00\nDue soon' })
@@ -42,6 +43,34 @@ vm.runInNewContext(ts.transpileModule(statements.map(s => s.getText(source)).joi
 const { buildRule, parseRule, formFromPrefill, storagePathPreview } = context.builder
 const plain = value => JSON.parse(JSON.stringify(value))
 const pathBackend = { address: 'workspace:home', driver: 'custom', capabilities: { paths: true } }
+
+test('PDF extraction and exact recipient survive edit/save/reopen', () => {
+  const rule = { id: 'accounting', enabled: true, when: { event: 'document.inserted', schema: 'email', to: { equals: 'accounting@augmend.eu' } },
+    then: [{ action: 'extractAttachments', to: 'workspace:home', mime: 'application/pdf', folder: 'Accounting', subfolder: '{{YYYY}}/{{MM}}', onConflict: 'rename' }] }
+  const form = parseRule(rule)
+  assert.equal(form.conditions[0].field, 'toExact')
+  assert.deepEqual(plain(buildRule(form, [pathBackend])), rule)
+  form.actions[0].attachmentName = 'invoice'
+  form.actions[0].includeInline = true
+  form.actions[0].attachmentMime = 'application/pdf, image/*'
+  const saved = buildRule(form, [pathBackend])
+  assert.deepEqual(plain(saved.then[0].mime), ['application/pdf', 'image/*'])
+  assert.equal(saved.then[0].filename, 'invoice')
+  assert.deepEqual(plain(buildRule(parseRule(saved), [pathBackend])), plain(saved))
+  assert.throws(() => buildRule(form, []), /support for folder paths/)
+  form.actions[0].attachmentMime = ''
+  assert.throws(() => buildRule(form, [pathBackend]), /MIME types/)
+  assert.equal(parseRule({ ...rule, then: [{ ...rule.then[0], unknown: true }] }), null, 'unknown settings stay JSON-only')
+})
+
+test('attachment destination preview shows the selected root, appended month and actual result', () => {
+  const sample = new Date(2026, 9, 16, 12)
+  assert.deepEqual(attachmentDestinationPreview('workspace:home', 'Accounting', '{{YYYY}}/{{MM}}', sample), {
+    root: 'workspace:home/Accounting', added: '2026/10', result: 'workspace:home/Accounting/2026/10/<attachment filename>', date: '2026-10-16',
+  })
+  assert.equal(attachmentDestinationPreview('workspace:home', 'Archive', '', sample).result, 'workspace:home/Archive/<attachment filename>')
+  assert.equal(attachmentDestinationPreview('workspace:home', '', '{{YYYY}}/{{MM}}', sample).result, 'workspace:home/2026/10/<attachment filename>')
+})
 
 test('store wizard defaults to copy and cannot save a move without its source', () => {
   const form = formFromPrefill({ kind: 'store', path: 'ctx:/Architecture', storeTo: 'workspace:home' })

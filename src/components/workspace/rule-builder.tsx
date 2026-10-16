@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/use-toast'
 import { cn } from '@/lib/utils'
+import { attachmentDestinationPreview } from '@/lib/attachment-destination'
 import {
   getRules, saveRules, appendHookRules, backfillHook, getHooksMeta, listRuns, ruleEvents, rulePaths, splitBackendsPath,
   type HookRule, type HookRuleAction, type HookRun, type RulePrefill,
@@ -59,9 +60,10 @@ const EVENT_OPTIONS = [
   { value: 'document.unlinked', label: 'is removed from a folder', hint: 'Fires when the item leaves a tree path.' },
 ] as const
 
-type ConditionKey = 'fromExact' | 'senderExact' | 'threadExact' | 'channelExact' | 'platformExact' | 'body' | 'bodyRegex' | 'sender' | 'senderRegex' | 'fromRegex' | 'toRegex' | 'subjectRegex' | 'urlRegex' | 'from' | 'to' | 'subject' | 'urlHost' | 'urlContains' | 'path' | 'pathExact' | 'eventPathExact' | 'mime' | 'attachment'
+type ConditionKey = 'fromExact' | 'toExact' | 'senderExact' | 'threadExact' | 'channelExact' | 'platformExact' | 'body' | 'bodyRegex' | 'sender' | 'senderRegex' | 'fromRegex' | 'toRegex' | 'subjectRegex' | 'urlRegex' | 'from' | 'to' | 'subject' | 'urlHost' | 'urlContains' | 'path' | 'pathExact' | 'eventPathExact' | 'mime' | 'attachment'
 
 const CONDITION_FIELDS: Array<{ key: ConditionKey; label: string; hint: string }> = [
+  { key: 'toExact', label: 'recipient (To/Cc) is', hint: 'accounting@example.com' },
   { key: 'fromExact', label: 'email sender is', hint: 'person@example.com' },
   { key: 'senderExact', label: 'message sender is', hint: 'Sender ID' },
   { key: 'sender', label: 'message sender contains', hint: 'Sender ID or name' },
@@ -87,12 +89,13 @@ const CONDITION_FIELDS: Array<{ key: ConditionKey; label: string; hint: string }
   { key: 'attachment', label: 'has an attachment of type', hint: 'application/pdf, or * for any' },
 ]
 
-const EXACT_FIELDS = new Set(['fromExact', 'senderExact', 'threadExact', 'channelExact', 'platformExact'])
+const EXACT_FIELDS = new Set(['toExact', 'fromExact', 'senderExact', 'threadExact', 'channelExact', 'platformExact'])
 const conditionKey = (field: ConditionKey) => EXACT_FIELDS.has(field) ? field.replace(/Exact$/, '') : field.replace(/Regex$/, '')
 
-type ActionKey = 'link' | 'unlink' | 'tag' | 'store' | 'download' | 'unstore' | 'notify' | 'agent' | 'script' | 'delete' | 'destroy'
+type ActionKey = 'extractAttachments' | 'link' | 'unlink' | 'tag' | 'store' | 'download' | 'unstore' | 'notify' | 'agent' | 'script' | 'delete' | 'destroy'
 
 const ACTION_FIELDS: Array<{ key: ActionKey; label: string; icon: LucideIcon; tone: string }> = [
+  { key: 'extractAttachments', label: 'Extract email attachments to a folder', icon: Mail, tone: 'text-amber-600 dark:text-amber-400 bg-amber-500/10' },
   { key: 'store', label: 'Copy/Move file(s) to a storage backend', icon: HardDrive, tone: 'text-sky-600 dark:text-sky-400 bg-sky-500/10' },
   { key: 'download', label: 'download what the link points at', icon: Download, tone: 'text-rose-600 dark:text-rose-400 bg-rose-500/10' },
   { key: 'link', label: 'file it into a folder', icon: FolderSymlink, tone: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10' },
@@ -142,6 +145,10 @@ interface ActionRow {
   storeName: StoreName
   storeMode: 'move' | 'copy'
   storeConflict: 'rename' | 'error' | 'overwrite'
+  attachmentMime: string
+  attachmentName: string
+  attachmentPath: string
+  includeInline: boolean
   // download action
   dlKind: DownloadKind
   dlDepth: string // website mirror depth
@@ -159,6 +166,7 @@ interface ActionRow {
 
 const emptyAction = (kind: ActionKey): ActionRow => ({
   kind, a: '', b: '', recursive: false, storeFrom: '', storeFolder: '', storeName: 'keep', storeMode: 'copy', storeConflict: 'rename',
+  attachmentMime: 'application/pdf', attachmentName: '', attachmentPath: '{{YYYY}}/{{MM}}', includeInline: false,
   dlKind: 'auto', dlDepth: '2', dlTags: '', keepLast: true,
   notePath: '', noteTitle: '', filePath: '', fileBackend: 'home', fileInsert: '', notifyReply: false,
 })
@@ -204,6 +212,15 @@ interface Recipe {
 }
 
 const RECIPES: Recipe[] = [
+  {
+    id: 'attachments', title: 'File PDF email attachments by month', icon: Mail, tone: 'text-amber-600 dark:text-amber-400 bg-amber-500/10',
+    blurb: 'Choose a recipient and extract PDF attachments into Accounting / year / month, using the email date. Add a subject or filename filter to narrow it to invoices.',
+    build: () => ({
+      ...EMPTY_FORM, description: 'File accounting PDF attachments by month', schema: 'email',
+      conditions: [{ field: 'toExact', value: '' }],
+      actions: [{ ...emptyAction('extractAttachments'), a: 'workspace:home', storeFolder: 'Accounting' }],
+    }),
+  },
   {
     id: 'store', title: 'Copy/Move file(s) to a storage backend', icon: HardDrive, tone: 'text-sky-600 dark:text-sky-400 bg-sky-500/10',
     blurb: 'Uploads land in the managed blob store. Pick a folder in Canvas and a folder on a storage backend — copy or move matching files and optionally recreate their sub-folder paths.',
@@ -355,6 +372,22 @@ function buildRule(form: RuleForm, backends: Backend[] = []): HookRule {
         onConflict: row.storeConflict,
       })
     }
+    if (row.kind === 'extractAttachments') {
+      if (!a) throw new Error('Choose a destination backend for the attachments.')
+      const backend = backends.find(backend => backend.address === a)
+      if (backend?.capabilities?.paths !== true) throw new Error('Choose an attachment destination with support for folder paths.')
+      const mime = splitList(row.attachmentMime)
+      if (!mime.length || mime.some(pattern => !/^(\*|[a-z0-9!#$&^_.+-]+\/(\*|[a-z0-9!#$&^_.+-]+)|\*\/\*)$/i.test(pattern))) throw new Error('Enter attachment MIME types, such as application/pdf or image/*. Use * for all attachments.')
+      if (!['rename', 'error'].includes(row.storeConflict)) throw new Error('Choose rename or skip for attachment filename conflicts.')
+      then.push({
+        action: 'extractAttachments', to: a, mime: mime.length === 1 ? mime[0] : mime,
+        ...(row.storeFolder.trim() ? { folder: row.storeFolder.trim() } : {}),
+        ...(row.attachmentPath.trim() ? { subfolder: row.attachmentPath.trim() } : {}),
+        ...(row.attachmentName.trim() ? { filename: row.attachmentName.trim() } : {}),
+        ...(row.includeInline ? { includeInline: true } : {}),
+        onConflict: row.storeConflict,
+      })
+    }
     if (row.kind === 'download') {
       const folder = row.storeFolder.trim().replace(/^\/+|\/+$/g, '')
       const depth = Number(row.dlDepth)
@@ -426,7 +459,7 @@ function parseRule(rule: HookRule): RuleForm | null {
     } else if (['from', 'to', 'subject', 'body', 'sender'].includes(field)) {
       for (const value of values) {
         if (typeof value === 'string') conditions.push({ field, value })
-        else if ((field === 'from' || field === 'sender') && value && typeof value === 'object' && Object.keys(value).length === 1 && typeof value.equals === 'string') conditions.push({ field: `${field}Exact` as ConditionKey, value: value.equals })
+        else if ((['from', 'to', 'sender'].includes(field)) && value && typeof value === 'object' && Object.keys(value).length === 1 && typeof value.equals === 'string') conditions.push({ field: `${field}Exact` as ConditionKey, value: value.equals })
         else if (value && typeof value === 'object' && Object.keys(value).length === 1 && typeof value.regex === 'string') conditions.push({ field: `${field}Regex` as ConditionKey, value: value.regex })
         else return false
       }
@@ -506,6 +539,21 @@ function parseRule(rule: HookRule): RuleForm | null {
         storeFrom: typeof act.from === 'string' ? act.from : (Array.isArray(act.from) ? String(act.from[0] ?? '') : ''),
         storeMode: act.mode === 'move' ? 'move' : 'copy',
         storeConflict: act.onConflict === 'error' || act.onConflict === 'overwrite' ? act.onConflict : 'rename',
+      })
+    } else if (act.action === 'extractAttachments') {
+      const known = new Set(['action', 'to', 'folder', 'subfolder', 'mime', 'filename', 'includeInline', 'onConflict'])
+      if (Object.keys(act).some(key => !known.has(key)) || typeof act.to !== 'string') return null
+      if (['folder', 'subfolder', 'filename'].some(key => act[key] !== undefined && typeof act[key] !== 'string')) return null
+      if (act.includeInline !== undefined && typeof act.includeInline !== 'boolean') return null
+      if (act.onConflict !== undefined && act.onConflict !== 'rename' && act.onConflict !== 'error') return null
+      const types = Array.isArray(act.mime) ? act.mime : [act.mime ?? '*']
+      if (!types.every(type => typeof type === 'string')) return null
+      actions.push({
+        ...emptyAction('extractAttachments'), a: act.to,
+        storeFolder: typeof act.folder === 'string' ? act.folder : '',
+        attachmentPath: typeof act.subfolder === 'string' ? act.subfolder : '',
+        attachmentMime: types.join(', '), attachmentName: typeof act.filename === 'string' ? act.filename : '',
+        includeInline: act.includeInline === true, storeConflict: act.onConflict === 'error' ? 'error' : 'rename',
       })
     } else if (act.action === 'download') {
       const known = new Set(['action', 'to', 'folder', 'recursive', 'kind', 'insert', 'tags', 'depth'])
@@ -595,6 +643,10 @@ function summarizeAction(a: HookRuleAction): string {
     const folder = typeof a.folder === 'string' && a.folder ? `/${a.folder}` : ''
     const name = a.key === TITLE_NAME ? ', named by title' : a.key === DATED_NAME ? ', by date' : typeof a.key === 'string' && a.key ? `, as ${a.key}` : ''
     return `${a.mode === 'move' ? 'move' : 'copy'} the file to ${a.to}${folder}${a.recursive === true ? a.pathMode === 'full' ? ' (full directory path recreated)' : ' (sub-folder path recreated)' : ''}${name}`
+  }
+  if (a.action === 'extractAttachments') {
+    const destination = [a.to, a.folder, a.subfolder].filter(Boolean).join('/')
+    return `extract ${Array.isArray(a.mime) ? a.mime.join(', ') : a.mime || 'all'} attachments to ${destination}${a.filename ? ` (filename contains ${a.filename})` : ''}`
   }
   if (a.action === 'download') {
     const what = DOWNLOAD_KINDS.find((k) => k.value === (a.kind || 'auto'))
@@ -1234,6 +1286,8 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
               const contextSource = exactContextSource(form.conditions)
               const storePreview = row.kind === 'store' && row.a && (!row.recursive || canRecreateStorageStructure)
                 ? storagePathPreview(row, form.conditions, destination) : null
+              const attachmentPreview = row.kind === 'extractAttachments' && row.a
+                ? attachmentDestinationPreview(row.a, row.storeFolder, row.attachmentPath) : null
               return (
                 <div key={i} className="space-y-4 rounded-xl border bg-background p-4">
                   <div className="flex items-center gap-3">
@@ -1341,6 +1395,50 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                         </div>
                       </details>
                       <p className="text-xs text-muted-foreground">The item keeps its id and virtual tree memberships. A move removes the chosen physical source location from the backend tree.</p>
+                    </div>
+                  )}
+
+                  {row.kind === 'extractAttachments' && (
+                    <div className="space-y-4">
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <Field label="Attachment types" hint="MIME types, comma-separated. application/pdf for PDFs, image/* for images, or * for all.">
+                          <Input className={cn(inputClass, 'font-mono')} placeholder="application/pdf" value={row.attachmentMime} onChange={e => set({ attachmentMime: e.target.value })} />
+                        </Field>
+                        <Field label="Attachment filename contains" hint="Optional: invoice, faktura, or another literal filename fragment. Every selected attachment must also match its type.">
+                          <Input className={inputClass} placeholder="Any matching filename" value={row.attachmentName} onChange={e => set({ attachmentName: e.target.value })} />
+                        </Field>
+                        <Field label="Storage backend" hint="Choose a writable backend that supports folder paths.">
+                          {backendSelect(row.a, v => set({ a: v }), 'pick a backend…')}
+                        </Field>
+                        <Field label="Destination root folder" hint="Choose the folder beneath which date subfolders will be created. Leave empty to use the backend root.">
+                          <div className="flex gap-2">
+                            <Input className={cn(inputClass, 'font-mono')} placeholder="Accounting" value={row.storeFolder} onChange={e => set({ storeFolder: e.target.value })} />
+                            {browseButton('storeFolder', i, 'Browse storage backends')}
+                          </div>
+                        </Field>
+                        <Field label="Sub-folder path template" hint={'Appended beneath the root folder. {{YYYY}} = year, {{MM}} = month, {{DD}} = day of the email. Leave empty to file directly in the root folder.'}>
+                          <Input className={cn(inputClass, 'font-mono')} placeholder="No subfolders" value={row.attachmentPath} onChange={e => set({ attachmentPath: e.target.value })} />
+                        </Field>
+                        <Field label="If the attachment name is already taken">
+                          <select className={selectClass} value={row.storeConflict} onChange={e => set({ storeConflict: e.target.value as 'rename' | 'error' })}>
+                            <option value="rename">add -1, -2, … to the name</option>
+                            <option value="error">skip the file and report the conflict</option>
+                          </select>
+                        </Field>
+                      </div>
+                      {!destinationSupportsPaths && <p className="text-sm text-amber-700 dark:text-amber-400">This destination has not reported support for folder paths. Select a supported backend before saving.</p>}
+                      {attachmentPreview && (
+                        <div className="space-y-1.5 rounded-lg bg-muted/60 px-3 py-3 text-sm" aria-live="polite">
+                          <p className="font-medium">Destination preview</p>
+                          <p className="text-xs text-muted-foreground">Example email dated {attachmentPreview.date}. Each email supplies its own date.</p>
+                          <p className="text-xs text-muted-foreground">Root folder: <span className="break-all font-mono">{attachmentPreview.root}/</span></p>
+                          <p className="text-xs text-muted-foreground">Path added beneath it: <span className="break-all font-mono">{attachmentPreview.added ? `${attachmentPreview.added}/` : '(none)'}</span></p>
+                          <p className="break-all font-mono">{attachmentPreview.result}</p>
+                        </div>
+                      )}
+                      <Toggle checked={row.includeInline} onChange={v => set({ includeInline: v })} label="Include inline attachments" hint="Off by default, so signature images and embedded resources are excluded." />
+                      <p className="text-xs text-muted-foreground">Copies matching attachments and keeps the email and its original files. Missing folders are created on the backend. Dates use the email's sent date (received/content date, then creation date if absent), in the server's timezone. This does not read the invoice date from the PDF.</p>
+                      <p className="text-xs text-muted-foreground">Use Apply on the saved rule to process existing mail within the selected batch size. Add a subject or attachment filename condition if you need to distinguish invoices from other PDFs.</p>
                     </div>
                   )}
 

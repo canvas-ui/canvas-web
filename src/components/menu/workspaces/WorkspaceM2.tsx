@@ -609,6 +609,7 @@ function WorkspaceM2Content() {
         <div className="flex items-center gap-1.5 rounded-md border bg-muted/40 px-2 py-1">
           <Search className="w-3 h-3 shrink-0 text-muted-foreground" />
           <input
+            type="search" name="workspace-tree-filter" aria-label="Search workspace tree" autoComplete="off" data-lpignore="true" data-1p-ignore="true"
             className="flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground min-w-0"
             placeholder={activeTab === 'layers' ? 'Search layers…' : activeTab === 'pins' ? 'Search pins…' : 'Search paths…'}
             value={searchQuery}

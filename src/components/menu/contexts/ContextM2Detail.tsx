@@ -189,7 +189,7 @@ export function ContextM2Detail() {
 
       {destinationTree && <p className="px-3 py-1 text-xs text-muted-foreground">Destination tree: {destinationTree} · press Set to apply</p>}
       <div className="px-3 py-2 border-b shrink-0">
-        <Input aria-label="Search context tree" placeholder="Search paths…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="h-7 text-xs" />
+        <Input type="search" name="context-tree-filter" autoComplete="off" data-lpignore="true" data-1p-ignore="true" aria-label="Search context tree" placeholder="Search paths…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="h-7 text-xs" />
       </div>
       <div className="flex-1 overflow-y-auto">
         <div className="text-[10px] text-muted-foreground px-3 pt-2 pb-1 font-medium uppercase tracking-wide shrink-0">
