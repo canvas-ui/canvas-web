@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { listWorkspaces } from '@/services/workspace'
+import { listWorkspaces, type WorkspaceScanReport } from '@/services/workspace'
 import { sortByOrder } from '@/lib/list-order'
 import socketService from '@/lib/socket'
 
@@ -69,7 +69,15 @@ export function useWorkspaceListData(enabled: boolean) {
       setWorkspaces(prev => prev.filter(ws => ws.id !== id))
     }
 
+    // A rescan (this tab, another device, or the API) changed the folder set.
+    const handleScanned = (data: unknown) => {
+      const report = (data as { report?: WorkspaceScanReport } | null | undefined)?.report
+      if (!report) return
+      if (report.discovered.length || report.adopted.length || report.updated.length || report.missing.length) void fetch()
+    }
+
     const events: Array<[string, (data: unknown) => void]> = [
+      ['workspaces.scanned', handleScanned],
       ['workspace:status:changed', handleStatusChanged],
       ['workspace.status.changed', handleStatusChanged],
       ['workspace:created', handleCreated],

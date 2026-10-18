@@ -22,7 +22,6 @@ function WorkspaceDiscovery({ disabled }: { disabled: boolean }) {
       const discovered = [...result.discovered, ...result.adopted]
       setFound(previous => [...new Map([...previous, ...discovered].map(workspace => [workspace.id, workspace])).values()])
       setReport(result)
-      if (discovered.length || result.updated.length || result.missing.length) window.dispatchEvent(new CustomEvent('workspaces:refresh'))
     }).catch(err => {
       if (active) setError(err instanceof Error ? err.message : 'Workspace scan failed')
     }).finally(() => { if (active) setScanning(false) })

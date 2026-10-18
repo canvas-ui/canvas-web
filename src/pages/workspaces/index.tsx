@@ -28,6 +28,7 @@ import {
   addRemoteWorkspace,
   removeRemoteWorkspace,
   type RemoteWorkspaceRef,
+  type WorkspaceScanReport,
   startWorkspace,
   stopWorkspace,
   updateWorkspace,
@@ -79,7 +80,12 @@ export default function WorkspacesPage() {
     'workspace:created': (data: { workspace: Workspace }) =>
       setWorkspaces(prev => [...prev, data.workspace as unknown as Workspace]),
     'workspace:deleted': (data: { workspaceId: string }) =>
-      setWorkspaces(prev => prev.filter(ws => ws.id !== data.workspaceId))
+      setWorkspaces(prev => prev.filter(ws => ws.id !== data.workspaceId)),
+    // A rescan (anywhere) changed which workspace folders exist.
+    'workspaces.scanned': ({ report }: { report: WorkspaceScanReport }) => {
+      if (!report.discovered.length && !report.adopted.length && !report.updated.length && !report.missing.length) return
+      void listWorkspaces().then(data => setWorkspaces(sortByOrder(data as Workspace[]))).catch(() => {})
+    },
   })
 
   useEffect(() => {
