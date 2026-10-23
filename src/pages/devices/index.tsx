@@ -1,7 +1,7 @@
 import { PageHeader } from '@/components/common/page-header'
 import { useSettingsMenuBack } from '@/components/common/use-settings-back'
 import { useEffect, useState } from 'react'
-import { Monitor, RefreshCw, Pencil, Check, X as XIcon, Link2, FolderSync, ShieldOff } from 'lucide-react'
+import { Monitor, RefreshCw, Pencil, Check, X as XIcon, Link2, ShieldOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/use-toast'
@@ -28,7 +28,6 @@ function DeviceCard({
   const [confirmingRevoke, setConfirmingRevoke] = useState(false)
   const [revoking, setRevoking] = useState(false)
   const { showToast } = useToast()
-  const mirrors = Object.values(device.mirrors ?? {})
 
   const revoke = async () => {
     setRevoking(true)
@@ -126,22 +125,6 @@ function DeviceCard({
               {device.lastSeen && <span>seen {formatDate(device.lastSeen)}</span>}
             </div>
 
-            {mirrors.length > 0 && (
-              <div className="mt-3 space-y-1.5">
-                {mirrors.map(m => (
-                  <div key={m.workspaceId} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-md bg-muted/50 px-2 py-1.5 text-[11px]">
-                    <FolderSync className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    <span className="font-medium">{m.workspaceName || m.workspaceId}</span>
-                    {m.client && <span className="font-mono uppercase text-muted-foreground">{m.client}</span>}
-                    {m.path && <span className="font-mono text-muted-foreground truncate max-w-[24rem]" title={m.path}>{m.path}</span>}
-                    <span className="text-muted-foreground">{m.state || 'idle'}</span>
-                    {(m.pending ?? 0) > 0 && <span className="text-muted-foreground">pending {m.pending}</span>}
-                    {(m.conflicts ?? 0) > 0 && <span className="text-amber-600 dark:text-amber-400">conflicts {m.conflicts}</span>}
-                    <span className="text-muted-foreground">synced {formatDate(m.lastSync)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
 

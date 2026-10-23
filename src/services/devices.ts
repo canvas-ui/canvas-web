@@ -1,6 +1,5 @@
 import { API_ROUTES } from '@/config/api'
 import { api } from '@/lib/api'
-import type { MirrorStatus } from '@/services/sync'
 
 export interface Device {
   deviceId: string
@@ -12,9 +11,6 @@ export interface Device {
   createdAt?: string
   updatedAt?: string
   lastSeen?: string
-  // Workspaces this device keeps in sync (reported by the device itself),
-  // keyed by workspace id.
-  mirrors?: Record<string, MirrorStatus>
 }
 
 export interface WorkspaceDevice {
@@ -49,10 +45,12 @@ export async function listWorkspaceDevices(workspaceId: string): Promise<Workspa
   return res || []
 }
 
-export async function linkWorkspaceDevice(workspaceId: string, deviceId: string): Promise<WorkspaceDevice[]> {
+/** The workspace keeps its own record of the device (name, platform …), so the account record goes along. */
+export async function linkWorkspaceDevice(workspaceId: string, device: Device): Promise<WorkspaceDevice[]> {
+  const { deviceId, name, description, platform, arch, type } = device
   const res = await api.post<WorkspaceDevice[]>(
     `${API_ROUTES.workspaces}/${workspaceId}/devices`,
-    { deviceId }
+    { devices: [{ deviceId, name, description, platform, arch, type }] }
   )
   return Array.isArray(res) ? res : [res]
 }

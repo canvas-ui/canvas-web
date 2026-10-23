@@ -1082,7 +1082,9 @@ function WorkspaceSettingsContent() {
   const handleLinkDevice = async (deviceId: string) => {
     setDeviceBusy(deviceId)
     try {
-      await linkWorkspaceDevice(workspaceId, deviceId)
+      const device = allDevices.find(d => d.deviceId === deviceId)
+      if (!device) throw new Error('Device not found in your account')
+      await linkWorkspaceDevice(workspaceId, device)
       await loadDevices()
       showToast({ title: 'Linked', description: `Device linked to workspace` })
     } catch (err) {
