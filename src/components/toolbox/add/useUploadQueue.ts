@@ -13,6 +13,8 @@ import { submitDocuments, notifyWorkspaceDocumentsChanged, resolveUploadWorkspac
 //   hash locally → batch-ask the server which checksums it already holds →
 //   skip the byte transfer for those (content-addressed store) → upload the
 //   rest with real progress → insert each File document as its blob lands.
+// Large files upload through resumable sessions (services/blobs.ts): a
+// dropped connection continues where the server's copy ends.
 // A failed batch is re-runnable: retry (or re-selecting the same files later)
 // re-hashes, the exists check marks everything already persisted as done
 // instantly, and only the genuinely missing bytes travel again. Documents
@@ -199,6 +201,7 @@ export function useUploadQueue(initialFiles: File[] = []): UseUploadQueue {
               } else {
                 patch(it.id, { status: 'uploading', progress: 0 })
                 blob = await uploadWorkspaceBlobWithProgress(workspaceName, it.file, {
+                  sha256: checksum,
                   signal: abort.signal,
                   onProgress: (sent, total) => patch(it.id, { progress: total ? sent / total : 0 }),
                 })

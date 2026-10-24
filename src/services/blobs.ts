@@ -78,12 +78,14 @@ export interface UploadProgressOptions {
 // Same endpoint as uploadWorkspaceBlob, but via XMLHttpRequest — fetch() has
 // no upload progress events, and per-file progress is the whole point of the
 // multi-file upload queue. Auth mirrors lib/api: Bearer token from
-// localStorage + credentials included for cookie sessions.
+// localStorage + credentials included for cookie sessions. Large files go
+// through a resumable session; `sha256` lets a later attempt pick it up.
 export function uploadWorkspaceBlobWithProgress(
   workspaceName: string,
-  file: File | Blob,
-  { onProgress, signal }: UploadProgressOptions = {},
+  file: File,
+  { onProgress, signal, sha256 }: UploadProgressOptions & { sha256?: string } = {},
 ): Promise<BlobUploadResult> {
+  if (file.size >= RESUMABLE_MIN_BYTES) return uploadResumable<BlobUploadResult>(workspaceName, file, { sha256, onProgress, signal })
   return uploadWithProgress<BlobUploadResult>(`${API_ROUTES.workspaces}/${workspaceName}/blobs`, 'POST', file, { onProgress, signal })
 }
 
@@ -93,13 +95,84 @@ export function uploadBackendFileWithProgress(
   file: File,
   options: UploadProgressOptions = {},
 ): Promise<{ docId: number | null; key: string }> {
+  if (file.size >= RESUMABLE_MIN_BYTES) {
+    return uploadResumable(workspaceName, file, {
+      ...options,
+      target: { type: 'object', ...target, ifNoneMatch: '*', mtime: file.lastModified, ...(file.type ? { mimeType: file.type } : {}) },
+    })
+  }
   const key = target.key.split('/').map(encodeURIComponent).join('/')
   const url = `${API_ROUTES.workspaces}/${encodeURIComponent(workspaceName)}/backends/${encodeURIComponent(target.driver)}/${encodeURIComponent(target.address)}/objects/${key}`
   return uploadWithProgress(url, 'PUT', file, options, { 'If-None-Match': '*', 'X-Canvas-Mtime': String(file.lastModified) })
 }
 
+export interface UploadSession<T = unknown> {
+  id: string
+  size: number
+  offset: number
+  state: 'open' | 'finalizing' | 'complete' | 'failed'
+  result?: T
+  error?: { code: string; message: string; retryable?: boolean }
+}
+
+export type UploadTarget =
+  | { type: 'blob' }
+  | { type: 'object'; driver: string; address: string; key: string; ifMatch?: string; ifNoneMatch?: string; mtime?: number; mimeType?: string }
+
+/** Files from this size on upload through resumable sessions. */
+export const RESUMABLE_MIN_BYTES = 8 * 1024 * 1024
+const RESUME_ATTEMPTS = 10
+
+const sleep = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, reject) => {
+  if (signal?.aborted) { reject(new DOMException('Upload aborted', 'AbortError')); return }
+  const timer = setTimeout(() => { signal?.removeEventListener('abort', onAbort); resolve() }, ms)
+  const onAbort = () => { clearTimeout(timer); reject(new DOMException('Upload aborted', 'AbortError')) }
+  signal?.addEventListener('abort', onAbort, { once: true })
+})
+
+/**
+ * Upload through a server-side session (POST/PATCH/GET …/uploads): after a
+ * dropped connection it asks the server how much arrived and sends only the
+ * rest, backing off up to 30 s between attempts. Opening the same file again
+ * (same sha256, or for a backend object the same key and size) continues an
+ * unfinished session, so a reloaded page resumes too. Resolves with what the
+ * target write returned: a blob, or the backend object.
+ */
+export async function uploadResumable<T>(
+  workspaceName: string,
+  file: File,
+  { sha256, target = { type: 'blob' }, onProgress, signal }: UploadProgressOptions & { sha256?: string; target?: UploadTarget },
+): Promise<T> {
+  const base = `${API_ROUTES.workspaces}/${encodeURIComponent(workspaceName)}/uploads`
+  let session = await api.post<UploadSession<T>>(base, { size: file.size, ...(sha256 ? { sha256 } : {}), target })
+  const url = `${base}/${session.id}`
+  let failures = 0
+  let stale = false
+  while (session.state === 'open' || session.state === 'finalizing' || (session.state === 'failed' && session.error?.retryable && failures === 0)) {
+    if (signal?.aborted) throw new DOMException('Upload aborted', 'AbortError')
+    try {
+      if (stale) { session = await api.get<UploadSession<T>>(url); stale = false; continue }
+      if (session.state === 'finalizing') { await sleep(1000, signal); stale = true; continue }
+      const from = session.offset
+      const before = session.offset
+      session = await uploadWithProgress<UploadSession<T>>(url, 'PATCH', file.slice(from), {
+        signal, onProgress: onProgress ? (sent) => onProgress(from + sent, file.size) : undefined,
+      }, { 'Content-Type': 'application/offset+octet-stream', 'Upload-Offset': String(from) })
+      if (session.state === 'failed') failures++
+      else if (session.offset > before || session.state !== 'open') failures = 0
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') throw error
+      if (++failures >= RESUME_ATTEMPTS) throw error
+      await sleep(Math.min(30_000, 1000 * 2 ** (failures - 1)), signal)
+      stale = true
+    }
+  }
+  if (session.state !== 'complete') throw new Error(session.error?.message || 'Upload failed')
+  return session.result as T
+}
+
 function uploadWithProgress<T>(
-  url: string, method: 'POST' | 'PUT', file: File | Blob,
+  url: string, method: 'POST' | 'PUT' | 'PATCH', file: File | Blob,
   { onProgress, signal }: UploadProgressOptions,
   headers: Record<string, string> = {},
 ): Promise<T> {
@@ -109,8 +182,7 @@ function uploadWithProgress<T>(
     xhr.open(method, url)
     xhr.withCredentials = true
     xhr.responseType = 'json'
-    xhr.setRequestHeader('Content-Type', 'application/octet-stream')
-    for (const [name, value] of Object.entries(headers)) xhr.setRequestHeader(name, value)
+    for (const [name, value] of Object.entries({ 'Content-Type': 'application/octet-stream', ...headers })) xhr.setRequestHeader(name, value)
     const token = localStorage.getItem('authToken')
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
 
