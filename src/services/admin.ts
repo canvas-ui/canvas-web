@@ -268,41 +268,6 @@ export const adminLogService = {
 
 // ── Database maintenance (admin-only reindex endpoints) ─────────────────────
 
-export interface ReindexResult {
-  message: string
-  payload?: Record<string, unknown>
-}
-
-async function postReindex(workspaceName: string, path: string, body?: Record<string, unknown>): Promise<ReindexResult> {
-  // Envelope variant: the reindex result the UI shows is the envelope's
-  // `message`, which the payload does not carry.
-  const res = await api.postEnvelope<Record<string, unknown>>(
-    `${API_ROUTES.admin.workspaces}/${encodeURIComponent(workspaceName)}/${path}`,
-    body ?? {},
-  )
-  return { message: res.message ?? '', payload: res.payload }
-}
-
-/** Rebuild crud:created/updated timelines from document data (synchronous). */
-export function adminReindexTimelines(workspaceName: string): Promise<ReindexResult> {
-  return postReindex(workspaceName, 'reindex-timelines')
-}
-
-/** FTS (Lance/BM25) backfill; rebuild=true wipes the table + coverage bitmap first. */
-export function adminReindexSearch(workspaceName: string, rebuild = false): Promise<ReindexResult> {
-  return postReindex(workspaceName, `reindex-search${rebuild ? '?rebuild=true' : ''}`)
-}
-
-/** Compact + prune a Lance table and rebuild its ANN index. space: 'fts'|'text'|'image'; omit = all. */
-export function adminOptimize(workspaceName: string, space?: string): Promise<ReindexResult> {
-  return postReindex(workspaceName, 'optimize', space ? { space } : {})
-}
-
-/** Rebuild per-MIME-type presence bitmaps (data/mime/*) from stored docs (synchronous). */
-export function adminReindexMime(workspaceName: string): Promise<ReindexResult> {
-  return postReindex(workspaceName, 'reindex-mime')
-}
-
 // Combined admin service
 export const adminService = {
   users: adminUserService,

@@ -18,7 +18,6 @@ import { LayerIconPicker } from '@/components/menu/shared/LayerIconPicker'
 import { DEFAULT_WORKSPACE_ICON, getBackendStyle, type LayerStyle } from '@/lib/layer-style'
 import { DefaultFoldersPicker } from '@/components/workspaces/DefaultFoldersPicker'
 import { createDefaultFolders, useFolderSelection } from '@/components/workspaces/default-folders'
-import { adminReindexTimelines, adminReindexSearch, adminOptimize, adminReindexMime } from '@/services/admin'
 import { PageHeader } from '@/components/common/page-header'
 import { WORKSPACE_SETTINGS_SECTIONS, resolveWorkspaceSettingsTab, type WorkspaceSettingsTab } from '@/lib/settings-sections'
 import { InferdSettingsPanel } from '@/components/workspace/inferd-settings-panel'
@@ -57,6 +56,10 @@ import {
   clearThumbnailCache,
   invalidateWorkspaceTreeCache,
   formatBytes,
+  reindexTimelines,
+  reindexMime,
+  reindexSearch,
+  optimizeIndexes,
   type Backend,
   type BackendDiskUsage,
   type WorkspaceDiskUsage,
@@ -1844,16 +1847,16 @@ function ReindexSection({ workspaceName, vectorSpaces, onDone }: { workspaceName
     {
       title: 'Bitmaps',
       ops: [
-        { key: 'timelines', label: 'Reindex timelines', description: 'Rebuild the created/updated timelines from document data.', fn: () => adminReindexTimelines(workspaceName) },
-        { key: 'mime', label: 'Reindex MIME types', description: 'Rebuild the per-MIME-type presence bitmaps (data/mime/*) from stored docs. Backfills blobs indexed before mime bitmaps existed.', fn: () => adminReindexMime(workspaceName) },
+        { key: 'timelines', label: 'Reindex timelines', description: 'Rebuild the created/updated timelines from document data.', fn: () => reindexTimelines(workspaceName) },
+        { key: 'mime', label: 'Reindex MIME types', description: 'Rebuild the per-MIME-type presence bitmaps (data/mime/*) from stored docs. Backfills blobs indexed before mime bitmaps existed.', fn: () => reindexMime(workspaceName) },
       ],
     },
     {
       title: 'Full-text (BM25)',
       ops: [
-        { key: 'fts', label: 'Backfill', description: 'Index documents missing from the full-text table. Fast, skips already-indexed.', fn: () => adminReindexSearch(workspaceName) },
-        { key: 'fts-rebuild', label: 'Rebuild', description: 'Wipe the full-text table and rebuild from scratch. Use when counts drift.', confirm: 'Wipe the FTS index and rebuild it from scratch?', fn: () => adminReindexSearch(workspaceName, true) },
-        { key: 'fts-optimize', label: 'Optimize', description: 'Compact fragments + prune old versions of the full-text table.', fn: () => adminOptimize(workspaceName, 'fts') },
+        { key: 'fts', label: 'Backfill', description: 'Index documents missing from the full-text table. Fast, skips already-indexed.', fn: () => reindexSearch(workspaceName) },
+        { key: 'fts-rebuild', label: 'Rebuild', description: 'Wipe the full-text table and rebuild from scratch. Use when counts drift.', confirm: 'Wipe the FTS index and rebuild it from scratch?', fn: () => reindexSearch(workspaceName, true) },
+        { key: 'fts-optimize', label: 'Optimize', description: 'Compact fragments + prune old versions of the full-text table.', fn: () => optimizeIndexes(workspaceName, 'fts') },
       ],
     },
     // Lance table compaction per LIVE vector space — enumerated from what the
@@ -1864,7 +1867,7 @@ function ReindexSection({ workspaceName, vectorSpaces, onDone }: { workspaceName
         key: `${space}-optimize`,
         label: `Optimize ${space}`,
         description: `Compact fragments + prune old versions of the '${space}' vector table and rebuild its ANN index.`,
-        fn: () => adminOptimize(workspaceName, space),
+        fn: () => optimizeIndexes(workspaceName, space),
       })),
     }] : []),
   ]

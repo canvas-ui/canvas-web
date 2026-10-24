@@ -2296,3 +2296,38 @@ export async function copyDocumentToWorkspace(workspaceId: string, documentId: n
 }): Promise<{ sourceId: number; destinationId: number }> {
   return api.post(`${API_ROUTES.workspaces}/${encodeURIComponent(workspaceId)}/documents/copy-to-workspace`, { documentId, ...options })
 }
+
+export interface MaintenanceResult {
+  message: string
+  payload?: Record<string, unknown>
+}
+
+// Index maintenance on the workspace's own database (owner/admin). The result
+// the UI shows is the envelope's `message`, which the payload does not carry.
+async function postMaintenance(workspaceId: string, path: string, body?: Record<string, unknown>): Promise<MaintenanceResult> {
+  const res = await api.postEnvelope<Record<string, unknown>>(
+    `${API_ROUTES.workspaces}/${encodeURIComponent(workspaceId)}/db/${path}`,
+    body ?? {},
+  )
+  return { message: res.message ?? '', payload: res.payload }
+}
+
+/** Rebuild crud:created/updated timelines from document data (synchronous). */
+export function reindexTimelines(workspaceId: string): Promise<MaintenanceResult> {
+  return postMaintenance(workspaceId, 'reindex/timelines')
+}
+
+/** Rebuild per-MIME-type presence bitmaps (data/mime/*) from stored docs (synchronous). */
+export function reindexMime(workspaceId: string): Promise<MaintenanceResult> {
+  return postMaintenance(workspaceId, 'reindex/mime')
+}
+
+/** FTS (Lance/BM25) backfill; rebuild=true wipes the table + coverage bitmap first. */
+export function reindexSearch(workspaceId: string, rebuild = false): Promise<MaintenanceResult> {
+  return postMaintenance(workspaceId, `reindex/search${rebuild ? '?rebuild=true' : ''}`)
+}
+
+/** Compact + prune a Lance table and rebuild its ANN index. space: 'fts' or a vector space; omit = all. */
+export function optimizeIndexes(workspaceId: string, space?: string): Promise<MaintenanceResult> {
+  return postMaintenance(workspaceId, 'optimize', space ? { space } : {})
+}
