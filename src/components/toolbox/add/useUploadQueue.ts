@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { backendUploadKey } from '@/lib/backend-upload'
 import { sha256File } from '@/lib/sha256'
 import {
+  RESUMABLE_MIN_BYTES,
   checkWorkspaceBlobs,
   uploadWorkspaceBlobWithProgress,
   uploadBackendFileWithProgress,
@@ -10,7 +11,7 @@ import {
 import { submitDocuments, notifyWorkspaceDocumentsChanged, resolveUploadWorkspace, resolveBackendUpload, type AddTarget } from './useAddTarget'
 
 // Per-file upload pipeline with resume semantics:
-//   hash locally → batch-ask the server which checksums it already holds →
+//   hash small files locally → batch-ask the server which checksums it already holds →
 //   skip the byte transfer for those (content-addressed store) → upload the
 //   rest with real progress → insert each File document as its blob lands.
 // Large files upload through resumable sessions (services/blobs.ts): a
@@ -160,11 +161,13 @@ export function useUploadQueue(initialFiles: File[] = []): UseUploadQueue {
         }
         await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, pending.length) }, worker))
       } else {
-        // 1. Hash everything locally (sequential — it's disk/CPU bound and fast
-        // relative to upload; progress shows on big files).
+        // 1. Hash small files locally (sequential, disk/CPU bound) for the
+        // exists check. Large files are never hashed in the browser: they
+        // upload through resumable sessions and the server hashes them.
         const checksums = new Map<string, string>()
         for (const it of pending) {
           if (abort.signal.aborted) throw new DOMException('cancelled', 'AbortError')
+          if (it.file.size >= RESUMABLE_MIN_BYTES) continue
           patch(it.id, { status: 'hashing' })
           try {
             const sum = await sha256File(it.file, (f) => patch(it.id, { progress: f }))
@@ -187,15 +190,15 @@ export function useUploadQueue(initialFiles: File[] = []): UseUploadQueue {
         }
 
         // 3. Upload the misses / link the hits, a small pool at a time.
-        const queue = pending.filter((it) => checksums.has(it.id))
+        const queue = pending.filter((it) => checksums.has(it.id) || it.file.size >= RESUMABLE_MIN_BYTES)
         let cursor = 0
         const worker = async () => {
           while (cursor < queue.length) {
             if (abort.signal.aborted) return
             const it = queue[cursor++]
-            const checksum = checksums.get(it.id)!
+            const checksum = checksums.get(it.id)
             try {
-              let blob = existing[checksum] ?? null
+              let blob = checksum ? existing[checksum] ?? null : null
               if (blob) {
                 patch(it.id, { status: 'linking', progress: 1, resumed: true })
               } else {

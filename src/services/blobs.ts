@@ -79,7 +79,7 @@ export interface UploadProgressOptions {
 // no upload progress events, and per-file progress is the whole point of the
 // multi-file upload queue. Auth mirrors lib/api: Bearer token from
 // localStorage + credentials included for cookie sessions. Large files go
-// through a resumable session; `sha256` lets a later attempt pick it up.
+// through a resumable session.
 export function uploadWorkspaceBlobWithProgress(
   workspaceName: string,
   file: File,
@@ -130,13 +130,19 @@ const sleep = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, 
   signal?.addEventListener('abort', onAbort, { once: true })
 })
 
+/** Identifies a local file across page reloads without reading it. */
+export function fileFingerprint(file: File): string {
+  return `${file.name}:${file.size}:${file.lastModified}`
+}
+
 /**
  * Upload through a server-side session (POST/PATCH/GET …/uploads): after a
  * dropped connection it asks the server how much arrived and sends only the
  * rest, backing off up to 30 s between attempts. Opening the same file again
- * (same sha256, or for a backend object the same key and size) continues an
- * unfinished session, so a reloaded page resumes too. Resolves with what the
- * target write returned: a blob, or the backend object.
+ * (same sha256, or else the same name, size and mtime) continues an unfinished
+ * session, so a reloaded page resumes too. Large files are never hashed here:
+ * the server hashes what it receives. Resolves with what the target write
+ * returned: a blob, or the backend object.
  */
 export async function uploadResumable<T>(
   workspaceName: string,
@@ -144,7 +150,7 @@ export async function uploadResumable<T>(
   { sha256, target = { type: 'blob' }, onProgress, signal }: UploadProgressOptions & { sha256?: string; target?: UploadTarget },
 ): Promise<T> {
   const base = `${API_ROUTES.workspaces}/${encodeURIComponent(workspaceName)}/uploads`
-  let session = await api.post<UploadSession<T>>(base, { size: file.size, ...(sha256 ? { sha256 } : {}), target })
+  let session = await api.post<UploadSession<T>>(base, { size: file.size, ...(sha256 ? { sha256 } : { fingerprint: fileFingerprint(file) }), target })
   const url = `${base}/${session.id}`
   let failures = 0
   let stale = false
