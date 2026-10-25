@@ -1,3 +1,4 @@
+import { ContextMenuShell } from '@/components/common/context-menu-shell'
 import { canManageWorkspace } from '@/lib/workspace-access'
 import { useRuntimeCapabilities } from '@/hooks/useRuntimeCapabilities'
 import { workspaceAddress } from '@/lib/workspace-address'
@@ -28,6 +29,7 @@ function StatusDot({ status }: { status: string }) {
 }
 
 export function WorkspaceList() {
+  const [areaMenu, setAreaMenu] = useState<{ x: number; y: number } | null>(null)
   const runtime = useRuntimeCapabilities()
   const { state, selectEntity, openM2, closeM2 } = useMenu()
   const isMobile = useIsMobile()
@@ -113,7 +115,14 @@ export function WorkspaceList() {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" onContextMenu={event => {
+      if (event.defaultPrevented || runtime.local || (event.target as HTMLElement).closest('[data-workspace-row]')) return
+      event.preventDefault()
+      setAreaMenu({ x: event.clientX, y: event.clientY })
+    }}>
+      {areaMenu && <ContextMenuShell {...areaMenu} onClose={() => setAreaMenu(null)} className="rounded-md border bg-popover p-1 shadow-elevation-3">
+        <button type="button" className="px-3 py-1.5 text-xs hover:bg-accent" onClick={() => { setAreaMenu(null); closeM2(); navigate('/workspaces?create=1') }}>Create workspace…</button>
+      </ContextMenuShell>}
       {/* Header */}
       <div className="flex items-center justify-between px-4 h-12 border-b border-border shrink-0">
         <div className="flex min-w-0 items-center"><MenuBackButton /><span className="text-sm font-semibold">Workspaces</span></div>
@@ -149,6 +158,7 @@ export function WorkspaceList() {
               return (
                 <div
                   key={ws.id || ws.name}
+                  data-workspace-row
                   {...rowProps(index)}
                   data-active={isActive || undefined}
                   className={cn(

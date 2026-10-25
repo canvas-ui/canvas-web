@@ -1,3 +1,4 @@
+import { WorkspaceAreaMenu } from '@/components/workspace/workspace-area-menu'
 import { canManageWorkspace } from '@/lib/workspace-access'
 import { restoreBackendTrashPath, discardBackendTrashPath } from '@/services/backend-trash'
 import { WorkspaceContentGate } from '@/components/workspace/workspace-content-gate'
@@ -619,6 +620,7 @@ function WorkspaceM2Content() {
       </div>
 
       <div ref={treeScrollRef} className="flex-1 overflow-y-auto">
+        <WorkspaceAreaMenu workspaceId={wsName!} treeName={treeNameForTab(activeTab)} readOnly={!canManage} className="min-h-full">
         {activeTab === 'pins' ? (
           <WorkspacePinsTab
             pins={pins}
@@ -667,7 +669,7 @@ function WorkspaceM2Content() {
             isBackendsTree={activeTab === 'backends'}
             onRestoreTrash={wsName ? path => restoreBackendTrashPath(wsName, path) : undefined}
             onDiscardTrash={wsName ? path => discardBackendTrashPath(wsName, path) : undefined}
-            onShiftSelect={canvasRow ? (path) => handleOpenToSide(path, treeNameForTab(activeTab)) : undefined}
+            onAltSelect={canvasRow ? (path) => handleOpenToSide(path, treeNameForTab(activeTab)) : undefined}
             selectedPath={selectedPath}
             contentPath={contentPath}
             onSelect={handlePathSelect}
@@ -757,6 +759,7 @@ function WorkspaceM2Content() {
             {...ops}
           />
         )}
+        </WorkspaceAreaMenu>
       </div>
       {autoLinkPath && wsName && <AutoLinkFolderPanel workspaceId={wsName} sourcePath={autoLinkPath} onClose={() => setAutoLinkPath(null)} onManageRules={() => {
         setAutoLinkPath(null)

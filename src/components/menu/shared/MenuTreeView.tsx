@@ -1,3 +1,4 @@
+import { selectTreeRange, topLevelTreeSelection } from '@/lib/tree-selection'
 import { useLongPressContextMenu } from '@/hooks/use-long-press-context-menu'
 /**
  * MenuTreeView — card-style tree for M2 panels.
@@ -48,8 +49,8 @@ export interface MenuTreeViewProps {
   contentPath?: string | null
   onShowContent?: (path: string, layerId?: string) => void
   onOpenToSide?: (path: string, treeName: string) => void
-  // Shift+click on a node (strip layout: open as a second canvas to the right).
-  onShiftSelect?: (path: string) => void
+  // Alt+click on a node (strip layout: open as a second canvas to the right).
+  onAltSelect?: (path: string) => void
   onInsertPath?: (path: string, autoCreateLayers?: boolean) => Promise<boolean>
   // Canvases are created through the content-area form (it carries the view
   // capture and needs the room); the tree only points at the parent path.
@@ -58,6 +59,8 @@ export interface MenuTreeViewProps {
   onRenamePath?: (fromPath: string, newName: string) => Promise<boolean>
   onMovePath?: (from: string, to: string, recursive?: boolean, sourceTreeName?: string, targetTreeName?: string, options?: { mergeDown?: boolean }) => Promise<boolean>
   onCopyPath?: (from: string, to: string, recursive?: boolean, sourceTreeName?: string, targetTreeName?: string) => Promise<boolean>
+  onImportDocuments?: (path: string) => Promise<void>
+  onExportDocuments?: (path: string) => Promise<void>
   onExportSubtree?: (path: string) => Promise<void>
   onImportSubtree?: (path: string) => Promise<void>
   onShareCanvas?: (path: string) => Promise<void>
@@ -173,6 +176,8 @@ interface CtxMenuProps {
   onChangeIcon?: () => void
   onNewCanvas?: (parentPath: string) => void
   onShareCanvas?: MenuTreeViewProps['onShareCanvas']
+  onImportDocuments?: MenuTreeViewProps['onImportDocuments']
+  onExportDocuments?: MenuTreeViewProps['onExportDocuments']
   onExportSubtree?: MenuTreeViewProps['onExportSubtree']
   onImportSubtree?: MenuTreeViewProps['onImportSubtree']
   onRemove?: MenuTreeViewProps['onRemovePath']
@@ -205,7 +210,7 @@ function CtxMenu({
   x, y, node, path, isBackendsTree, isDirectoryTree, backends, onClose, onShowContent, onOpenToSide,
   sourceLayer, targetLayers, clipboard,
   onStartInlineCreate, onChangeIcon, onNewCanvas, onShareCanvas, onRemove, onRename,
-  onExportSubtree, onImportSubtree,
+  onExportSubtree, onImportSubtree, onImportDocuments, onExportDocuments,
   onLock, onUnlock, onDestroy, onMerge, onSubtract, onMergeDown, onSubtractDown, onResyncBackend,
   onAddRule, onAddStoreRule, onStoragePolicy,
   onRenameBackendFolder, onDeleteBackendFolder, onRestoreTrash, onDiscardTrash,
@@ -408,6 +413,8 @@ function CtxMenu({
         )}
 
         {/* Portable document records and tree structure */}
+        {onImportDocuments && item(<FolderTree className="w-3 h-3" />, 'Import documents…', () => onImportDocuments(path))}
+        {onExportDocuments && item(<Download className="w-3 h-3" />, 'Export documents…', () => onExportDocuments(path))}
         {(onExportSubtree || onImportSubtree) && <div className="my-1 h-px bg-border" />}
         {onExportSubtree && node.type !== 'canvas' && item(<Download className="w-3 h-3" />, 'Export subtree…', () => onExportSubtree(path))}
         {onImportSubtree && !isBackendsTree && node.type !== 'canvas' && item(<FolderTree className="w-3 h-3" />, 'Import subtree here…', () => onImportSubtree(path))}
@@ -577,7 +584,9 @@ interface CardNodeProps {
   searchQuery: string
   inlineCreateParent: string | null
   onSelect: (path: string) => void
-  onShiftSelect?: (path: string) => void
+  onAltSelect?: (path: string) => void
+  selectedPaths: Set<string>
+  onRangeSelect: (path: string, event: React.MouseEvent) => void
   onShowContent?: (path: string) => void
   onCtrl: (path: string, id: string) => void
   onCtxMenu: (e: React.MouseEvent, path: string, node: TreeNode) => void
@@ -609,7 +618,7 @@ function CardNode({
   node, parentPath, depth, isLast, selectedPath, pendingPath, contentPath, readOnly,
   sourceLayer, targetLayers, clipboard, searchQuery,
   inlineCreateParent,
-  onSelect, onShiftSelect, onShowContent, onCtrl, onCtxMenu,
+  onSelect, onAltSelect, selectedPaths, onRangeSelect, onShowContent, onCtrl, onCtxMenu,
   onConfirmCreate, onCancelCreate, onOpenPicker, styleOverrides,
   dragOverPath, isCopyDrag, onDragStart, onDragEnter, onDragOver, onDragLeave, onDragEnd, onDrop,
   resyncingPaths, policyBadgeFor, removingPaths, accordion = false, trail = [],
@@ -641,7 +650,7 @@ function CardNode({
   const shouldExpand = expanded || inlineCreateParent === path || (searchQuery.length > 0)
 
   const hasChildren = node.children && node.children.length > 0
-  const isSelected = selectedPath === path
+  const isSelected = selectedPath === path || selectedPaths.has(path)
   const isPending = pendingPath === path
 
   const isSource = sourceLayer?.path === path
@@ -649,8 +658,9 @@ function CardNode({
   const isCanvas = node.type === 'canvas'
 
   const handleClick = (e: React.MouseEvent) => {
+    if (e.shiftKey) { onRangeSelect(path, e); return }
     if (e.ctrlKey || e.metaKey) { onCtrl(path, node.id); return }
-    if (e.shiftKey && onShiftSelect) { onShiftSelect(path); return }
+    if (e.altKey && onAltSelect) { onAltSelect(path); return }
     onSelect(path)
   }
 
@@ -711,6 +721,8 @@ function CardNode({
 
   const accordionRow = (
     <div
+      data-tree-path={path}
+      data-selected={selectedPaths.has(path) || undefined}
       data-active={isSelected || undefined}
       className={cn(
         'group relative flex cursor-pointer select-none items-stretch overflow-hidden text-sm',
@@ -853,7 +865,9 @@ function CardNode({
       />
 
       <div
-        data-active={isSelected || undefined}
+        data-tree-path={path}
+      data-selected={selectedPaths.has(path) || undefined}
+      data-active={isSelected || undefined}
         className={cn(
           'group relative flex min-h-11 items-center gap-2 rounded-(--card-radius) px-3 py-2.5 cursor-pointer transition-all select-none overflow-hidden',
           'shadow-elevation-3 hover:shadow-elevation-4 text-sm',
@@ -979,7 +993,9 @@ function CardNode({
               searchQuery={searchQuery}
               inlineCreateParent={inlineCreateParent}
               onSelect={onSelect}
-              onShiftSelect={onShiftSelect}
+              onAltSelect={onAltSelect}
+              selectedPaths={selectedPaths}
+              onRangeSelect={onRangeSelect}
               onShowContent={onShowContent}
               onCtrl={onCtrl}
               onCtxMenu={onCtxMenu}
@@ -1013,9 +1029,9 @@ function CardNode({
 export function MenuTreeView({
   root, workspaceId, treeName = 'context', isBackendsTree = false, onRestoreTrash, onDiscardTrash, selectedPath, pendingPath, onSelect, isLoading = false, readOnly = false,
   onAddRule, onAddStoreRule, onStoragePolicy, policyBadgeFor,
-  rootLabel, contentPath, onShowContent, onOpenToSide, onShiftSelect,
+  rootLabel, contentPath, onShowContent, onOpenToSide, onAltSelect,
   onInsertPath, onNewCanvas, onShareCanvas, onRemovePath, onRenamePath, onMovePath, onCopyPath,
-  onExportSubtree, onImportSubtree,
+  onExportSubtree, onImportSubtree, onImportDocuments, onExportDocuments,
   pastedDocumentIds, onPasteDocuments,
   onLockLayer, onUnlockLayer, onDestroyLayer, onMergeLayer, onSubtractLayer,
   onMergeDown, onSubtractDown,
@@ -1028,6 +1044,21 @@ export function MenuTreeView({
   resyncingPaths, backends,
 }: MenuTreeViewProps) {
   const accordion = useTreeAccordion()
+  const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set())
+  const selectionAnchor = useRef<string | null>(null)
+  const handleSelect = (path: string) => {
+    selectionAnchor.current = path
+    setSelectedPaths(new Set())
+    onSelect(path)
+  }
+  const handleRangeSelect = (path: string, event: React.MouseEvent) => {
+    event.preventDefault()
+    const rows = event.currentTarget.closest('[data-menu-tree]')?.querySelectorAll<HTMLElement>('[data-tree-path]')
+    const paths = Array.from(rows || [], row => row.dataset.treePath!)
+    const anchor = selectionAnchor.current || selectedPath
+    setSelectedPaths(selectTreeRange(paths, anchor, path))
+    selectionAnchor.current = paths.includes(anchor) ? anchor : path
+  }
 
   const [clipboard, setClipboard] = useState<Clip | null>(null)
   const [sourceLayer, setSourceLayer] = useState<LayerRef | null>(null)
@@ -1404,7 +1435,7 @@ export function MenuTreeView({
     selectedPath, pendingPath, contentPath, readOnly,
     sourceLayer, targetLayers, clipboard, searchQuery: q,
     inlineCreateParent,
-    onSelect, onShiftSelect, onShowContent, onCtrl: handleCtrl, onCtxMenu: openCtxMenu,
+    onSelect: handleSelect, onAltSelect, selectedPaths, onRangeSelect: handleRangeSelect, onShowContent, onCtrl: handleCtrl, onCtxMenu: openCtxMenu,
     onConfirmCreate: handleConfirmCreate, onCancelCreate: handleCancelCreate,
     onOpenPicker: onUpdateNode ? openPicker : undefined,
     styleOverrides,
@@ -1422,7 +1453,12 @@ export function MenuTreeView({
   }
 
   return (
-    <div className="px-3 py-2 space-y-1.5 outline-none" tabIndex={0} onKeyDown={handleTreeKeyDown}>
+    <div data-menu-tree className="px-3 py-2 space-y-1.5 outline-none min-h-full" tabIndex={0} onKeyDown={handleTreeKeyDown}
+      onContextMenu={e => {
+        if (e.defaultPrevented || readOnly) return
+        e.preventDefault()
+        openCtxMenu(e, '/', root)
+      }}>
       {removingPaths.size > 0 && (
         <div role="status" aria-live="polite" className="space-y-1 rounded-md border bg-muted/50 p-2 text-xs">
           {[...removingPaths].map(([path, message]) => (
@@ -1493,7 +1529,7 @@ export function MenuTreeView({
           dragOverPath === '/' && !readOnly && isCopyDrag && 'ring-2 ring-success bg-success-subtle/50',
         )}
         style={{ borderRight: '4px solid transparent' }}
-        onClick={() => onSelect('/')}
+        onClick={() => handleSelect('/')}
         onDragEnter={e => { if (!readOnly) handleDragEnter('/', e) }}
         onDragOver={e => { if (!readOnly) handleDragOver('/', e) }}
         onDragLeave={e => handleDragLeave('/', e)}
@@ -1549,7 +1585,25 @@ export function MenuTreeView({
         )}
       </div>
 
-      {ctxMenu && (
+      {ctxMenu && selectedPaths.size > 1 && selectedPaths.has(ctxMenu.path) ? (
+        <ContextMenuShell x={ctxMenu.x} y={ctxMenu.y} onClose={() => setCtxMenu(null)} className="min-w-44 rounded-md border bg-popover p-1 shadow-elevation-3">
+          <div className="px-3 py-1.5 text-xs text-muted-foreground">{selectedPaths.size} folders selected</div>
+          <button type="button" className="block w-full px-3 py-1.5 text-left text-xs hover:bg-accent" onClick={() => {
+            void navigator.clipboard?.writeText([...selectedPaths].join('\n'))
+            setCtxMenu(null)
+          }}>Copy paths</button>
+          {!readOnly && !isBackendsTree && onRemovePath && <button type="button" className="block w-full px-3 py-1.5 text-left text-xs text-destructive hover:bg-accent" onClick={() => {
+            setCtxMenu(null)
+            const paths = topLevelTreeSelection(selectedPaths)
+            if (!confirm(`Remove ${selectedPaths.size} selected folders and their children?\n${paths.join('\n')}`)) return
+            void (async () => {
+              for (const path of paths) await handleRemovePath(path, true)
+              setSelectedPaths(new Set())
+            })().catch(error => alert(error instanceof Error ? error.message : String(error)))
+          }}>Remove folders…</button>}
+          <button type="button" className="block w-full px-3 py-1.5 text-left text-xs hover:bg-accent" onClick={() => { setSelectedPaths(new Set()); setCtxMenu(null) }}>Clear selection</button>
+        </ContextMenuShell>
+      ) : ctxMenu && (
         <CtxMenu
           x={ctxMenu.x}
           y={ctxMenu.y}
@@ -1570,6 +1624,8 @@ export function MenuTreeView({
           onChangeIcon={onUpdateNode ? () => openPicker({ clientX: ctxMenu.x, clientY: ctxMenu.y, stopPropagation: () => {} } as React.MouseEvent, ctxMenu.path, ctxMenu.node) : undefined}
           onNewCanvas={onNewCanvas}
           onShareCanvas={onShareCanvas}
+          onImportDocuments={!readOnly ? onImportDocuments : undefined}
+          onExportDocuments={onExportDocuments}
           onExportSubtree={onExportSubtree}
           onImportSubtree={!readOnly ? onImportSubtree : undefined}
           onRemove={!readOnly && onRemovePath && ![...removingPaths.keys()].some(p => p === ctxMenu.path || p.startsWith(ctxMenu.path + '/') || ctxMenu.path.startsWith(p + '/')) ? handleRemovePath : undefined}

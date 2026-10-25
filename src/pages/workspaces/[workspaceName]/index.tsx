@@ -1,3 +1,4 @@
+import { WorkspaceAreaMenu } from '@/components/workspace/workspace-area-menu';
 import { TrashPanel } from '@/components/workspace/trash-panel';
 import { BackendTrashBrowser } from '@/components/workspaces/BackendTrashBrowser';
 import { backendTrashLocation } from '@/lib/backend-trash';
@@ -1515,7 +1516,7 @@ function WorkspaceContent() {
   );
 
   return (
-    <div className="relative flex flex-col h-full min-h-0">
+    <WorkspaceAreaMenu workspaceId={workspaceName || workspace.id} treeName={selectedTreeName} path={selectedPath} headerOnly className="relative flex flex-col h-full min-h-0">
       <StorageScanIndicator key={workspace.id} workspaceId={workspace.id} workspaceName={workspace.label || workspace.name} />
       {backendTrashLocation(selectedTreeName, selectedPath) && <CanvasAddressBar
         workspace={workspace.label || workspace.name} workspaceIcon={workspace.icon} tree={selectedTreeName} path={selectedPath}
@@ -1616,7 +1617,7 @@ function WorkspaceContent() {
         )}
       </div>
 
-    </div>
+    </WorkspaceAreaMenu>
   );
 }
 

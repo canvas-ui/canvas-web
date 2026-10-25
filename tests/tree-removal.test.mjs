@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { selectTreeRange, topLevelTreeSelection } from '../src/lib/tree-selection.ts'
 import { backendTrashLocation } from '../src/lib/backend-trash.ts'
 import { isSameDocumentFolder } from '../src/lib/document-drag.ts'
 
@@ -38,6 +39,7 @@ function setup() {
     '@/hooks/use-long-press-context-menu': {},
     '@/lib/utils': { cn: (...args) => args.filter(Boolean).join(' ') },
     '@/lib/backend-trash': { backendTrashLocation },
+    '@/lib/tree-selection': { selectTreeRange, topLevelTreeSelection },
     '@/lib/document-drag': { isSameDocumentFolder },
     '@/lib/layer-style': {}, './LayerIconPicker': {},
     '@/components/common/context-menu-shell': { ContextMenuShell: 'menu' },
@@ -174,4 +176,36 @@ test('Drive folder deletion is available only for writable descendants', () => {
   menu.props.backends[0].config.readOnly = false
   menu.props.backends[0].enabled = false
   assert.ok(!buttons(menu).map(label).includes('Delete from backend'))
+})
+
+test('empty tree space offers document import and export at the root', async () => {
+  const ui = setup()
+  ui.props.isBackendsTree = false
+  ui.props.treeName = 'context'
+  const calls = []
+  ui.props.onImportDocuments = async path => calls.push(['import', path])
+  ui.props.onExportDocuments = async path => calls.push(['export', path])
+  let prevented = false
+  ui.render().props.onContextMenu({ defaultPrevented: false, preventDefault() { prevented = true }, stopPropagation() {}, clientX: 20, clientY: 30 })
+  assert.equal(prevented, true)
+  const menu = ui.find(ui.render(), element => element.type?.name === 'CtxMenu')
+  const content = menu.type(menu.props)
+  const text = element => children(element).filter(el => typeof el === 'object').map(el => el.props?.children).flat().filter(value => typeof value === 'string').join(' ')
+  const buttons = children(content).filter(element => element.type === 'button')
+  await buttons.find(button => text(button).includes('Import documents')).props.onClick()
+  await buttons.find(button => text(button).includes('Export documents')).props.onClick()
+  assert.deepEqual(calls, [['import', '/'], ['export', '/']])
+})
+
+test('range selection exposes a limited bulk menu with no document destruction', () => {
+  const ui = setup()
+  ui.props.selectedPath = '/mail'
+  const card = ui.card(ui.render())
+  card.props.onRangeSelect('/other', { preventDefault() {}, currentTarget: { closest: () => ({ querySelectorAll: () => [ { dataset: { treePath: '/mail' } }, { dataset: { treePath: '/other' } } ] }) } })
+  card.props.onCtxMenu({ stopPropagation() {}, clientX: 10, clientY: 10 }, '/mail', { id: 'mail', name: 'mail', children: [] })
+  const view = ui.render()
+  const labels = children(view).filter(element => element.type === 'button').map(button => button.props.children)
+  assert.ok(labels.includes('Copy paths'))
+  assert.ok(labels.includes('Clear selection'))
+  assert.ok(!labels.some(label => typeof label === 'string' && /destroy|purge/i.test(label)))
 })

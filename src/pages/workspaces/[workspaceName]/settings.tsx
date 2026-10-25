@@ -1213,7 +1213,7 @@ function WorkspaceSettingsContent() {
 
   const handleDestroy = async () => {
     if (!workspace) return
-    if (!window.confirm(`Destroy workspace "${workspace.label || workspace.name}"? This cannot be undone.`)) return
+    if (window.prompt(`Destroy workspace "${workspace.label || workspace.name}" and all its documents? This cannot be undone. Type the workspace name "${workspace.name}" to confirm:`) !== workspace.name) return
     setIsDestroying(true)
     try {
       await removeWorkspace(workspaceId)

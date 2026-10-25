@@ -23,6 +23,8 @@ import { useToast } from '@/components/ui/use-toast'
 import { useSideView } from '@/components/shell/use-side-view'
 import { useState, useCallback, useMemo, useEffect, useRef, useDeferredValue } from 'react'
 import { createPortal } from 'react-dom'
+import { createRoot } from 'react-dom/client'
+import { portableDocument } from '@/lib/document-export'
 import Fuse from 'fuse.js'
 import {
   Table,
@@ -181,12 +183,7 @@ function ExportModal({ isOpen, onClose, documents, selectedDocuments }: ExportMo
     ? documents.filter(doc => selectedDocuments.has(doc.id))
     : documents
 
-  const exportData = documentsToExport.map(doc => ({
-    schema: doc.schema,
-    schemaVersion: doc.schemaVersion,
-    data: doc.data,
-    metadata: doc.metadata
-  }))
+  const exportData = documentsToExport.map(portableDocument)
 
   const jsonString = JSON.stringify(exportData, null, 2)
 
@@ -252,7 +249,15 @@ function ExportModal({ isOpen, onClose, documents, selectedDocuments }: ExportMo
             </div>
           </div>
 
-          <div className="mt-8 pt-4 border-t flex justify-end">
+          <div className="mt-8 pt-4 border-t flex justify-end gap-2">
+            <Button variant="outline" onClick={() => {
+              const url = URL.createObjectURL(new Blob([jsonString], { type: 'application/json' }))
+              const link = window.document.createElement('a')
+              link.href = url
+              link.download = 'canvas-documents.json'
+              link.click()
+              setTimeout(() => URL.revokeObjectURL(url), 1000)
+            }}>Download JSON</Button>
             <Button onClick={handleClose}>Close</Button>
           </div>
         </div>
@@ -280,7 +285,7 @@ function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
 
       // Validate document structure
       for (const doc of documents) {
-        if (!doc.schema || !doc.data) {
+        if (!doc || typeof doc !== 'object' || !doc.schema || !doc.data) {
           setError('Each document must have "schema" and "data" fields')
           return
         }
@@ -294,8 +299,8 @@ function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
       } else {
         setError('Failed to import documents')
       }
-    } catch {
-      setError('Invalid JSON format')
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Import failed')
     } finally {
       setIsImporting(false)
     }
@@ -315,7 +320,7 @@ function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
             <div>
               <h2 className="text-2xl font-bold">Import Documents</h2>
               <p className="text-muted-foreground">
-                Paste JSON data containing documents to import
+                Paste JSON data or choose a document export file
               </p>
             </div>
             <button onClick={handleClose} className="p-2 hover:bg-muted rounded-sm" title="Close">✕</button>
@@ -348,6 +353,13 @@ function ImportModal({ isOpen, onClose, onImport }: ImportModalProps) {
             </div>
           </div>
 
+          <label className="mt-4 block text-sm">
+            Import JSON file
+            <input type="file" accept=".json,application/json" disabled={isImporting} className="mt-2 block w-full text-sm" onChange={event => {
+              const file = event.target.files?.[0]
+              if (file) void file.text().then(text => { setJsonInput(text); setError(null) }).catch(error => setError(String(error)))
+            }} />
+          </label>
           <div className="mt-8 pt-4 border-t flex justify-between">
             <Button variant="outline" onClick={handleClose} disabled={isImporting}>
               Cancel
@@ -2254,3 +2266,21 @@ export function DocumentList({ externalSearchQuery, toolbarActions, documents, i
 }
 
 export default DocumentList
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function showDocumentImport(onImport: ImportModalProps['onImport']) {
+  const host = window.document.createElement('div')
+  window.document.body.appendChild(host)
+  const root = createRoot(host)
+  const close = () => { root.unmount(); host.remove() }
+  root.render(<ImportModal isOpen onClose={close} onImport={onImport} />)
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function showDocumentExport(documents: Document[]) {
+  const host = window.document.createElement('div')
+  window.document.body.appendChild(host)
+  const root = createRoot(host)
+  const close = () => { root.unmount(); host.remove() }
+  root.render(<ExportModal isOpen onClose={close} documents={documents} selectedDocuments={new Set()} />)
+}

@@ -32,6 +32,7 @@ import {
   backendFolderTarget,
   backendRemovalTarget,
   DEFAULT_WORKSPACE_TREE_NAME,
+  getWorkspaceDocuments, importDocumentsToWorkspacePath, treeTypeForName,
 } from '@/services/workspace'
 
 interface UseTreeOperationsOptions {
@@ -266,7 +267,33 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     } })
   }, [workspaceId, wsTree, refresh])
 
+  const transferDocuments = useCallback(async (mode: 'import' | 'export', path: string) => {
+    if (!workspaceId) return
+    const dialogs = await import('@/components/common/document-list')
+    if (mode === 'import') {
+      dialogs.showDocumentImport(async documents => {
+        const ids = await importDocumentsToWorkspacePath(workspaceId, path, documents, wsTree, treeTypeForName(wsTree))
+        if (ids.length !== documents.length) throw new Error('Some documents could not be imported')
+        refreshWorkspaceAfterImport(workspaceId, wsTree)
+        refresh()
+        return true
+      })
+    } else {
+      const documents = []
+      for (let offset = 0; ; ) {
+        const page = await getWorkspaceDocuments(workspaceId, path, [], { treeName: wsTree, treeType: treeTypeForName(wsTree), limit: 500, offset, order: 'asc' })
+        const records = page.payload || []
+        documents.push(...records)
+        offset += records.length
+        if (!records.length || offset >= (page.totalCount ?? page.count ?? Infinity)) break
+      }
+      dialogs.showDocumentExport(documents)
+    }
+  }, [workspaceId, wsTree, refresh])
+
   return {
+    onImportDocuments: workspaceId && wsTree !== 'backends' ? (path: string) => transferDocuments('import', path) : undefined,
+    onExportDocuments: workspaceId ? (path: string) => transferDocuments('export', path) : undefined,
     onInsertPath, onRemovePath, onRenamePath, onMovePath, onCopyPath,
     onExportSubtree: workspaceId ? (path: string) => transferSubtree('export', path) : undefined,
     onImportSubtree: workspaceId && wsTree !== 'backends' ? (path: string) => transferSubtree('import', path) : undefined,

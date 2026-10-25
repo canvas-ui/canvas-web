@@ -135,7 +135,9 @@ export function FolderContextMenu({ x, y, workspaceName, treeName, path, onClose
       )}
 
       {sep}
-      {item(<Copy className="w-3 h-3" />, 'Copy path', () => navigator.clipboard?.writeText(path))}
+      {ops.onImportDocuments && item(<Plus className="w-3 h-3" />, 'Import documents…', () => ops.onImportDocuments!(path))}
+      {ops.onExportDocuments && item(<Download className="w-3 h-3" />, 'Export documents…', () => ops.onExportDocuments!(path))}
+      {item(<Copy className="w-3 h-3" />, 'Copy path' , () => navigator.clipboard?.writeText(path))}
       {!isBackends && onPasteDocuments && pastedDocumentIds && pastedDocumentIds.length > 0 && item(
         <Clipboard className="w-3 h-3" />,
         `Paste ${pastedDocumentIds.length} document(s)`,
