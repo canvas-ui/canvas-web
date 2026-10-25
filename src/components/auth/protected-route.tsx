@@ -38,7 +38,15 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
         // render — the next successful request or socket reconnect gets the
         // real verdict, and a genuine 401 then redirects via handle401.
         if (isNetworkAuthError(error)) {
-          setAuthState(hasPlausibleSession() ? 'authenticated' : 'unauthenticated')
+          if (hasPlausibleSession()) {
+            setAuthState('authenticated')
+            return
+          }
+          // An expired token cannot become valid; drop it so the login page
+          // does not see "a token" and send us straight back here (which
+          // re-ran this check in a tight loop while the server was down).
+          api.clearAuthToken()
+          setAuthState('unauthenticated')
           return
         }
         // Clear token on any authentication error

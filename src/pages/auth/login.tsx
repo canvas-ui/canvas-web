@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AuthLayout } from "@/components/auth/auth-layout"
-import { loginUser, isAuthenticated, getAuthConfig, getCurrentUser, startGoogleLogin } from "@/services/auth"
+import { loginUser, hasPlausibleSession, getAuthConfig, getCurrentUser, startGoogleLogin } from "@/services/auth"
 import { Icon } from "@iconify/react"
 
 import { api } from '@/lib/api'
@@ -49,9 +49,10 @@ export default function LoginPage() {
     strategy: "auto",
   })
 
-  // Check if we're already logged in and load auth config
+  // Already logged in: go to the app. Same judgement as ProtectedRoute, so the
+  // two never bounce a stale credential between them.
   React.useEffect(() => {
-    if (isAuthenticated()) {
+    if (hasPlausibleSession()) {
       navigate('/workspaces');
     }
 
