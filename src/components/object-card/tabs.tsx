@@ -51,7 +51,7 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
   const composeModes: ComposeMode[] = isEmail ? ['reply', 'replyAll', 'forward'] : ['reply']
   const toggleCompose = (mode: ComposeMode) => setReplying((open) => (open === mode ? null : mode))
   const canEdit = !isPublic
-  const [editing, setEditing] = useState(initialEdit && isEditableDocument(document))
+  const [editing, setEditing] = useState(initialEdit && !isPublic)
   // Drawings get a real content editor (full-viewport Excalidraw overlay) on
   // top of the metadata form — "Edit" alone would only offer comment/tags.
   const isDrawing = document.schema === DRAWING_SCHEMA
@@ -65,7 +65,7 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
   const [lastResetKey, setLastResetKey] = useState(resetKey)
   if (resetKey !== lastResetKey) {
     setLastResetKey(resetKey)
-    setEditing(initialEdit && isEditableDocument(document))
+    setEditing(initialEdit && !isPublic)
     setReplying(null)
     setShowThread(false)
     setSketchOpen(false)
@@ -300,6 +300,7 @@ export function MetadataTab({ document }: TabProps) {
               return (
                 <div key={index} className="flex items-baseline gap-2 text-sm font-mono">
                   <span className="font-medium shrink-0">{backend}</span>
+                  {loc.status && loc.status !== 'available' && <span className="shrink-0 rounded border px-1 text-xs" title={loc.statusChangedAt}>{loc.status === 'deleted' ? 'Deleted' : 'Not found'}</span>}
                   {key && <span className="break-all text-muted-foreground">{key}</span>}
                 </div>
               )

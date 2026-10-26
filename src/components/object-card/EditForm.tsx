@@ -65,7 +65,7 @@ async function syncOrganizationEdges(workspaceId: string, documentId: number, or
 // (checksum recalculated) — accepted.
 export function DocumentEditForm({ document: doc, workspaceId, onClose }: { document: Document; workspaceId: string; onClose: (saved?: Document) => void }) {
   const { showSuccessToast, showErrorToast } = useToastHelpers()
-  // Schema-specific fields (url/title/body/tags) only render for note/link/tab.
+  // Body fields depend on the schema; tags, comment and geolocation are universal.
   // The comment section is universal — every document can carry a user comment,
   // including photos/files that are otherwise not editable.
   const editable = isEditableSchema(doc.schema)
@@ -141,7 +141,7 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
   }, [workspaceId])
 
   const urlValid = !urlKey || (() => { try { new URL(url.trim()); return true } catch { return false } })()
-  // Non-editable schemas (photos/files) save comment-only, so they're always valid.
+  // Files without editable bodies can still save tags, comments and geolocation.
   const canSave = !saving && (isTextFile
     ? !bodyTooLarge && fileBody.text != null && !fileBody.loading
     : !editable
@@ -153,6 +153,7 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
 
   const handleSave = async () => {
     setSaving(true)
+    const editedFeatures = [...(storedFeatures || []).filter(feature => !feature.startsWith('tag/')), ...tagsToFeatures(tags)]
     try {
       if (isNote) {
         await note.save()
@@ -160,11 +161,11 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
         return
       }
       // Blob-backed body: new bytes first, then the same universal fields
-      // (comment/geo) every other document saves.
+      // (tags/comment/geo) every other document saves.
       if (isTextFile) {
         const saved = await saveTextFileContent(workspaceId, doc, content, {
           comment: comment.trim(),
-          ...(geoChanged ? { metadata: { geo } } : {}),
+          metadata: { features: editedFeatures, ...(geoChanged ? { geo } : {}) },
         })
         showSuccessToast('Document updated')
         window.dispatchEvent(new CustomEvent('workspace:documents:refresh'))
@@ -179,8 +180,9 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
         schema: doc.schema,
         schemaVersion: doc.schemaVersion,
         comment: comment.trim(),
+        metadata: { features: editedFeatures },
       }
-      // Only send data/metadata for editable schemas — sending `data` would
+      // Only send data for editable schemas — sending `data` would
       // wholesale-replace it (BaseDocument.update), clobbering a photo/file's data.
       if (isIdentity) {
         // Spread the stored data first: the form does not surface links,
@@ -190,11 +192,9 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
         const { type: _type, ...rest } = (doc.data ?? {}) as Record<string, unknown>
         payload.schema = `${IDENTITY_SCHEMA}/${identity.values.type}`
         payload.data = { ...rest, ...buildIdentityData(identity.values) }
-        payload.metadata = { features: tagsToFeatures(tags) }
       } else if (isTodo) {
         // Preserve other data fields (e.g. completedAt) while updating the editable ones.
         payload.data = { ...doc.data, ...buildTodoData({ title, description, status, priority, due }) }
-        payload.metadata = { features: tagsToFeatures(tags) }
       } else if (editable) {
         const cleanTags = tags.map(t => t.trim()).filter(Boolean)
         let data: Record<string, unknown>
@@ -207,7 +207,6 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
           data.tags = cleanTags
         }
         payload.data = data
-        payload.metadata = { features: tagsToFeatures(tags) }
       }
       // metadata is a shallow-MERGE patch server-side (Document.update), so
       // sending geo alone is safe even on a photo — contentType/size/exif and
@@ -282,12 +281,10 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
         </div>
       )}
 
-      {editable && (
-        <div className="space-y-1.5">
-          <Label>Tags</Label>
-          <TagInput tags={tags} onChange={setTags} suggestions={suggestions} />
-        </div>
-      )}
+      <div className="space-y-1.5">
+        <Label>Tags</Label>
+        <TagInput tags={tags} onChange={setTags} suggestions={suggestions} />
+      </div>
 
       {/* Universal: any document can carry a location, whatever its schema. */}
       <DocumentGeoField value={geo} onChange={setGeo} />

@@ -341,7 +341,7 @@ export interface Document {
   // Asserted tags + derived facet keys, `tag/<name>` for user tags. Top-level
   // since synapsd v3; the server never returns them under `metadata`.
   features?: string[]
-  locations?: Array<{ url: string; metadata?: Record<string, unknown> }>
+  locations?: Array<{ url: string; status?: 'available' | 'deleted' | 'not-found'; statusChangedAt?: string; nativeUrl?: string; metadata?: Record<string, unknown> }>
   timelines?: Array<{ timeline?: string; name?: string; start?: string | null; end?: string | null }>
   indexOptions: {
     checksumAlgorithms: string[]

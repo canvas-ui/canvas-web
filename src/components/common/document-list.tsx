@@ -41,7 +41,6 @@ import { ActionMenuHost, anchorFromElement, dispatchActionShortcut, formatShortc
 import { getDocumentDisplayInfo, getLocationFilename } from '@/lib/document-display'
 import { announceRelationsChanged } from '@/lib/relation-events'
 import { ObjectPropertiesModal } from '@/components/object-card/ObjectPropertiesModal'
-import { isEditableDocument } from '@/components/object-card/editable-schema'
 import { useMirrorSaveState } from '@/lib/remote-mirror'
 import { usePublicShareCode } from '@/components/renderers/public-share'
 import { useDocumentThumbnail } from '@/components/renderers/useDocumentThumbnail'
@@ -1522,14 +1521,14 @@ export function DocumentList({ externalSearchQuery, toolbarActions, documents, i
     const count = n > 1 ? ` (${n})` : ''
     const single = n === 1 ? documents.find(d => d.id === ids[0]) : undefined
     const done = () => setSelectedDocuments(new Set())
-    const hasFileData = ids.some(id => ((documents.find(doc => doc.id === id) as { locations?: unknown[] } | undefined)?.locations?.length ?? 0) > 0)
+    const hasFileData = ids.some(id => documents.find(doc => doc.id === id)?.locations?.some(location => location.status == null || location.status === 'available'))
     const items: ActionItem[] = []
     const add = (item: ActionItem | false | undefined | null | '') => { if (item) items.push(item) }
 
     if (single) {
       const tabUrl = single.schema === 'data/schema/tab' ? single.data.url : null
       add({ id: 'view', group: 'open', label: 'View details', icon: Eye, run: () => setDetailModal({ document: single }) })
-      add(isEditableDocument(single) && bulkEditAllowed && { id: 'edit', group: 'open', label: 'Edit', icon: Pencil, run: () => setDetailModal({ document: single, edit: true }) })
+      add(bulkEditAllowed && { id: 'edit', group: 'open', label: 'Edit', icon: Pencil, run: () => setDetailModal({ document: single, edit: true }) })
       add(tabUrl && { id: 'open-url', group: 'open', label: 'Open URL', icon: ExternalLink, run: () => { window.open(tabUrl, '_blank', 'noopener,noreferrer') } })
       add(openToSide && { id: 'open-side', group: 'open', label: 'Open to the side', icon: PanelRight, run: () => openToSide(single) })
     }
