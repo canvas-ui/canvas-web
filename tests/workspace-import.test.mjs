@@ -114,7 +114,7 @@ test('opening import scans once even when effects replay and shows discovered wo
   assert.equal(link.props.children, 'My Photos')
   assert.equal(link.props.to, '/workspaces/photos')
   assert.ok(ui.find(el => el.props?.role === 'status' && el.props.children === 'Found 1 workspace. Added to your workspace list.'))
-  assert.deepEqual(ui.events, ['workspaces:refresh'])
+  assert.deepEqual(ui.events, [], 'discovery leaves list refresh to the server workspaces.scanned event')
   assert.equal(ui.imported.length, 0, 'discovery keeps the dialog open so results are visible')
   ui.render()
   assert.equal(ui.scans.length, 1, 'ordinary renders do not rescan')

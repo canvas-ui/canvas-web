@@ -21,7 +21,7 @@ test('Auto-Link displays scan totals, uses the saved batch size and resumes a fa
     'lucide-react': {},
     '@/components/ui/button': { Button: 'Button' },
     './LinkToCard': { LinkToCard: 'LinkToCard' },
-    './LinkToSidePanel': { LinkToSidePanel: 'SidePanel' },
+    '@/components/common/document-action-dialog': { DocumentActionDialog: 'Dialog' },
     '@/lib/auto-link': { buildAutoLinkRules },
     '@/services/hooks': {
       getBackfillLimit: () => 2,
@@ -34,7 +34,6 @@ test('Auto-Link displays scan totals, uses the saved batch size and resumes a fa
     },
     '@/services/workspace': {},
     '@/lib/backend-upload': {},
-    '@/hooks/useEscapeClose': { useEscapeClose() {} },
   }
   const exports = {}
   vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../src/components/menu/shared/AutoLinkFolderPanel.tsx', import.meta.url), 'utf8'), {
@@ -51,7 +50,7 @@ test('Auto-Link displays scan totals, uses the saved batch size and resumes a fa
   button('Add virtual path…').props.onClick()
   nodes(render()).find(node => node.type === 'LinkToCard').props.onConfirm(['/photos'], { treeType: 'context' })
 
-  const run = button('Enable Auto-Link').props.onClick()
+  const run = button('Enable Autolink').props.onClick()
   await tick()
   assert.match(text(render()), /Processing 0\/4 existing documents/)
   assert.equal(calls.at(-1).limit, 2)
