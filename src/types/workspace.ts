@@ -98,8 +98,8 @@ export interface ToolboxFilters {
   sort: ToolboxSort
 }
 
-// Default view order: displayed name, A–Z.
-export const DEFAULT_TOOLBOX_SORT: ToolboxSort = { sortBy: 'alphabetical', order: 'asc' }
+// Default view order: newest content first.
+export const DEFAULT_TOOLBOX_SORT: ToolboxSort = { sortBy: 'content', order: 'desc' }
 
 export function normalizeDocumentSort(sort?: Partial<ToolboxSort> | null): ToolboxSort {
   if (sort?.sortBy === 'crud:deleted') return { ...DEFAULT_TOOLBOX_SORT }

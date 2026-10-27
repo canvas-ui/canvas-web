@@ -17,7 +17,7 @@
 //     timezone, not by elapsed hours: something saved at 23:50 is still
 //     "Yesterday" at 00:10, the way a person means it.
 
-/** Use content/domain timeline starts; missing dates stay unknown. */
+/** Content dates fall back to creation time; other domain dates stay unknown. */
 export function documentTimelineDate(doc: {
   createdAt?: string
   updatedAt?: string
@@ -28,7 +28,9 @@ export function documentTimelineDate(doc: {
     : timeline === 'crud:updated' ? [doc.updatedAt]
       : (doc.timelines ?? []).filter(entry => (entry.timeline || entry.name) === timeline).map(entry => entry.start)
   const times = dates.map(date => Date.parse(date ?? '')).filter(Number.isFinite)
-  return times.length ? Math.min(...times) : null
+  if (times.length) return Math.min(...times)
+  const created = timeline === 'content' ? Date.parse(doc.createdAt ?? '') : NaN
+  return Number.isFinite(created) ? created : null
 }
 
 export interface DateGroup<T> {

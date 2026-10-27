@@ -8,7 +8,7 @@ export interface TimelineSort {
   order: SortOrder
 }
 
-// Default listing sort: displayed name, A–Z.
+// Default listing sort: newest content first.
 export const DEFAULT_TIMELINE_SORT: TimelineSort = DEFAULT_TOOLBOX_SORT
 
 // Friendly labels for the well-known system timelines; anything else (user or
