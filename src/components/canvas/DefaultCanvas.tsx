@@ -1,3 +1,4 @@
+import { FileDropArea } from './FileDropArea'
 import { useState, type ReactNode } from 'react'
 import { CanvasAddressBar, CanvasTabStrip } from '@/components/common/canvas-address-bar'
 import { LayoutDashboard, BookMarked, Share2, Unlink, Save, Trash2, Pin, PinOff } from 'lucide-react'
@@ -170,7 +171,10 @@ export function DefaultCanvas({
   </>
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-background">
+    <FileDropArea target={onImportDocuments && workspaceId ? {
+      mode: 'workspace', workspaceName: workspaceId, path: contextPath,
+      treeName: treeName || 'context', treeType: treeName === 'directory' ? 'directory' : 'context',
+    } : null}>
       {navigationTabs && <CanvasTabStrip accentColor={accentColor}>{navigationTabs}</CanvasTabStrip>}
       <div className={`canvas-surface-body${frameContent ? ' is-framed' : ''}`}>
       <CanvasAddressBar workspaceIcon={workspaceIcon} workspace={workspaceLabel || workspaceId || urlDisplay.split('://')[0] || 'Workspace'}
@@ -324,6 +328,6 @@ export function DefaultCanvas({
         )}
       </div>
       </div>
-    </div>
+    </FileDropArea>
   )
 }

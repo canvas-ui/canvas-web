@@ -32,6 +32,7 @@ import { onAccentTextClass, onAccentSolidTextClass } from '@/utils/color'
 
 export interface MenuTreeViewProps {
   root: TreeNode | null
+  expansionState?: Map<string, boolean>
   workspaceId?: string
   treeName?: string
   // The dedicated backends tree: read-only mirror of backend storage. Gates
@@ -570,6 +571,7 @@ function nodeMatchesSearch(node: TreeNode, parentPath: string, query: string): b
 }
 
 interface CardNodeProps {
+  expansionState?: Map<string, boolean>
   node: TreeNode
   parentPath: string
   depth: number
@@ -615,7 +617,7 @@ interface CardNodeProps {
 }
 
 function CardNode({
-  node, parentPath, depth, isLast, selectedPath, pendingPath, contentPath, readOnly,
+  expansionState, node, parentPath, depth, isLast, selectedPath, pendingPath, contentPath, readOnly,
   sourceLayer, targetLayers, clipboard, searchQuery,
   inlineCreateParent,
   onSelect, onAltSelect, selectedPaths, onRangeSelect, onShowContent, onCtrl, onCtxMenu,
@@ -630,7 +632,7 @@ function CardNode({
   const style = styleOverrides.get(path) ?? getLayerStyle(node)
 
   const [expanded, setExpanded] = useState(() =>
-    selectedPath !== '/' && (selectedPath === path || selectedPath.startsWith(path + '/'))
+    expansionState?.get(node.id || path) ?? (selectedPath !== '/' && (selectedPath === path || selectedPath.startsWith(path + '/')))
   )
   // Follow the selection: navigating from the content view (folder rows,
   // address bar, back/forward) must reveal the selected node, so expand every
@@ -643,6 +645,8 @@ function CardNode({
     setSeenSelectedPath(selectedPath)
     if (selectedPath !== '/' && selectedPath.startsWith(path + '/')) setExpanded(true)
   }
+
+  useEffect(() => { expansionState?.set(node.id || path, expanded) }, [expansionState, node.id, path, expanded])
 
   if (searchQuery && !nodeMatchesSearch(node, parentPath, searchQuery)) return null
 
@@ -980,6 +984,7 @@ function CardNode({
             <CardNode
               key={child.id || child.name}
               node={child}
+              expansionState={expansionState}
               parentPath={path}
               depth={depth + 1}
               isLast={index === (node.children?.length ?? 0) - 1}
@@ -1027,7 +1032,7 @@ function CardNode({
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export function MenuTreeView({
-  root, workspaceId, treeName = 'context', isBackendsTree = false, onRestoreTrash, onDiscardTrash, selectedPath, pendingPath, onSelect, isLoading = false, readOnly = false,
+  root, expansionState, workspaceId, treeName = 'context', isBackendsTree = false, onRestoreTrash, onDiscardTrash, selectedPath, pendingPath, onSelect, isLoading = false, readOnly = false,
   onAddRule, onAddStoreRule, onStoragePolicy, policyBadgeFor,
   rootLabel, contentPath, onShowContent, onOpenToSide, onAltSelect,
   onInsertPath, onNewCanvas, onShareCanvas, onRemovePath, onRenamePath, onMovePath, onCopyPath,
@@ -1431,6 +1436,7 @@ export function MenuTreeView({
 
   // Shared props for CardNode
   const cardProps = {
+    expansionState,
     accordion,
     selectedPath, pendingPath, contentPath, readOnly,
     sourceLayer, targetLayers, clipboard, searchQuery: q,

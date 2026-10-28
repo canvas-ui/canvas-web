@@ -8,7 +8,7 @@ import { AutoLinkFolderPanel } from '../shared/AutoLinkFolderPanel'
 import { StoragePolicyPanel } from '../shared/StoragePolicyPanel'
 import { useStoragePolicies } from '@/hooks/useStoragePolicies'
 import { describePolicyTargets, policiesForPath, qualifyPolicyPath } from '@/services/storage-policies'
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useLayoutEffect, useState, useCallback, useRef } from 'react'
 import { Settings, ExternalLink, GitBranch, FolderTree, Layers, LayoutDashboard, Search, Lock, Unlock, Edit2, Trash2, Database, Pin } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
@@ -33,6 +33,16 @@ import { watchWorkspaceTreeChanges, type TreeRefreshDetail } from '@/services/wo
 
 type TreeTab = 'pins' | 'context' | 'layers' | 'directory' | 'backends'
 type TreeDataTab = 'context' | 'directory' | 'backends'
+
+type TreeViewState = {
+  selectedPath: string
+  contentPath: string | null
+  searchQuery: string
+  expansion: Map<string, boolean>
+}
+const newTreeViewState = (): TreeViewState => ({
+  selectedPath: '/', contentPath: null, searchQuery: '', expansion: new Map(),
+})
 
 // Default display order: Pins, Context tree, Context layers, Directory tree,
 // Backends tree. The user can drag the tabs into their own order; it is kept
@@ -132,6 +142,17 @@ function WorkspaceM2Content() {
   // tab of the target — this flag keeps the Pins tab in front for that hop.
   const [stayOnPins, setStayOnPins] = useState(false)
   const treeScrollRef = useRef<HTMLDivElement>(null)
+  const scrollPositions = useRef(new Map<TreeTab, number>())
+  const [treeViews, setTreeViews] = useState(() => Object.fromEntries(
+    DEFAULT_TAB_ORDER.map(tab => [tab, newTreeViewState()]),
+  ) as Record<TreeTab, TreeViewState>)
+  useLayoutEffect(() => {
+    if (treeScrollRef.current) treeScrollRef.current.scrollTop = scrollPositions.current.get(activeTab) ?? 0
+  }, [activeTab])
+  const savedView = treeViews[activeTab]
+  if (savedView.selectedPath !== selectedPath || savedView.contentPath !== contentPath || savedView.searchQuery !== searchQuery) {
+    setTreeViews({ ...treeViews, [activeTab]: { ...savedView, selectedPath, contentPath, searchQuery } })
+  }
   const revealPinRef = useRef(false)
   // Once the user picks a tab by hand the stored default no longer applies.
   const [tabTouched, setTabTouched] = useState(false)
@@ -462,10 +483,11 @@ function WorkspaceM2Content() {
   const handleTabChange = useCallback((tab: TreeTab) => {
     setTabTouched(true)
     setActiveTab(tab)
-    setSelectedPath('/')
-    setContentPath(null)
-    setSearchQuery('')
-  }, [])
+    const saved = treeViews[tab]
+    setSelectedPath(saved.selectedPath)
+    setContentPath(saved.contentPath)
+    setSearchQuery(saved.searchQuery)
+  }, [treeViews])
 
   const cycleTab = useCallback((direction: number) => {
     handleTabChange(cycleTree(tabOrder, activeTab, direction))
@@ -619,7 +641,7 @@ function WorkspaceM2Content() {
         </div>
       </div>
 
-      <div ref={treeScrollRef} className="flex-1 overflow-y-auto">
+      <div ref={treeScrollRef} onScroll={event => { scrollPositions.current.set(activeTab, event.currentTarget.scrollTop) }} className="flex-1 overflow-y-auto">
         <WorkspaceAreaMenu workspaceId={wsName!} treeName={treeNameForTab(activeTab)} readOnly={!canManage} className="min-h-full">
         {activeTab === 'pins' ? (
           <WorkspacePinsTab
@@ -663,6 +685,8 @@ function WorkspaceM2Content() {
           />
         ) : (
           <MenuTreeView
+            key={activeTab}
+            expansionState={treeViews[activeTab].expansion}
             root={activeTree}
             workspaceId={wsName ?? undefined}
             treeName={activeTab}

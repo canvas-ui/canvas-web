@@ -39,6 +39,7 @@ test('Trash ancestors preserve encoded backend addresses and permit leaving Tras
 // dependencies. Hooks only manage scrolling; JSX remains a traversable tree.
 const jsx = (type, props) => ({ type, props })
 const dependencies = {
+  './FileDropArea': { FileDropArea: 'file-drop-area' },
   react: { useEffect: () => {}, useRef: () => ({ current: null }), useState: initial => [initial, () => {}] },
   'react/jsx-runtime': { jsx, jsxs: jsx },
   '@/lib/utils': { cn: (...classes) => classes.filter(Boolean).join(' ') },
