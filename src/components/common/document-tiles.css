@@ -1,0 +1,11 @@
+.document-tiles { gap: 0.75rem; }
+.document-tiles[data-tile-style="masonry"] { columns: 300px; }
+.document-tiles[data-tile-style="square"],
+.document-tiles[data-tile-style="original"] { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); align-items: start; }
+.document-tiles[data-tile-style="flickr"] { display: flex; flex-wrap: wrap; }
+.document-tiles:not([data-tile-style="masonry"]) .document-tile { margin-bottom: 0; min-width: 0; }
+.document-tiles[data-tile-style="square"] .document-tile-media { aspect-ratio: 1; overflow: hidden; }
+.document-tiles[data-tile-style="flickr"] .document-tile-media { aspect-ratio: var(--tile-ratio, 1); overflow: hidden; }
+.document-tiles:is([data-tile-style="square"], [data-tile-style="flickr"]) .document-tile-media > img,
+.document-tiles:is([data-tile-style="square"], [data-tile-style="flickr"]) .document-tile-media video { width: 100%; height: 100%; object-fit: cover; }
+.document-tiles[data-tile-style="original"] .document-tile-media > img { width: 100%; height: auto; object-fit: contain; }

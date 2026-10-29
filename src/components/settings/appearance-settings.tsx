@@ -1,3 +1,4 @@
+import { TILE_STYLES, setTileStyle, useTileStyle } from '@/lib/tile-style'
 import { setAlwaysOnReader, useAlwaysOnReader } from '@/lib/always-on-reader'
 import { setDocumentOpenMode, useDocumentOpenMode } from '@/lib/document-open-mode'
 import { useEffect, useRef, useState } from 'react'
@@ -45,6 +46,7 @@ export function AppearanceSettings() {
   const alwaysOnReader = useAlwaysOnReader()
   const documentOpenMode = useDocumentOpenMode()
   const layout = useLayoutMode()
+  const tileStyle = useTileStyle()
   const treeStyle = useTreeStyle()
   const layoutNav = useLayoutNavModifier()
 
@@ -204,6 +206,11 @@ export function AppearanceSettings() {
         <SegmentedControl options={[{ id: 'on', label: 'On' }, { id: 'off', label: 'Off' }]}
           value={alwaysOnReader ? 'on' : 'off'} onChange={value => setAlwaysOnReader(value === 'on')} />
         <p className="mt-2 text-xs text-muted-foreground">On by default. The reader uses roughly half the screen; drag its divider to resize. Phones keep tap-to-open navigation. When enabled, list selections use this pane regardless of the Open documents setting.</p>
+      </section>
+
+      <section>
+        <SectionHeading title="Document tiles" description="Choose the photo and media layout for tile view. Saved on this device." />
+        <SegmentedControl options={TILE_STYLES} value={tileStyle} onChange={setTileStyle} />
       </section>
 
       <WallpaperSection />

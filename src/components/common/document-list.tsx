@@ -1,3 +1,5 @@
+import { useTileStyle } from '@/lib/tile-style'
+import './document-tiles.css'
 import { DocumentReadingLayout } from './document-reading-layout'
 import './document-list-toolbar.css'
 import { runBackendDeletionBatch } from '@/lib/backend-transfer-batch'
@@ -39,7 +41,7 @@ import {
 import { useSortableData } from '@/components/ui/use-sortable-data'
 import { Button } from '@/components/ui/button'
 import { ActionMenuHost, anchorFromElement, dispatchActionShortcut, formatShortcut, isMenuKey, isTextInteraction, type ActionAnchor, type ActionItem } from '@/components/common/action-menu'
-import { getDocumentDisplayInfo, getLocationFilename } from '@/lib/document-display'
+import { getExternalUrl, getDocumentDisplayInfo, getLocationFilename } from '@/lib/document-display'
 import { announceRelationsChanged } from '@/lib/relation-events'
 import { ObjectPropertiesModal } from '@/components/object-card/ObjectPropertiesModal'
 import { useMirrorSaveState } from '@/lib/remote-mirror'
@@ -428,6 +430,14 @@ function rowKeyDown(event: React.KeyboardEvent, onActivate: () => void, onToggle
   else if (event.key === ' ' && onToggle) { event.preventDefault(); onToggle() }
 }
 
+function ExternalDocumentLink({ document }: { document: Document }) {
+  const url = getExternalUrl(document)
+  return url ? <a href={url} target="_blank" rel="noopener noreferrer" title="Open original in browser" aria-label="Open original in browser"
+    className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground" onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>
+    <ExternalLink className="h-3.5 w-3.5" />
+  </a> : null
+}
+
 function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRightClick, onOpenActions, onDragStart }: DocumentTableRowProps) {
   const reader = useSideView()
   const reading = reader.alwaysOn && reader.entry?.workspaceId === workspaceId && reader.entry?.document.id === document.id
@@ -435,8 +445,6 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRight
   const [showDetailModal, setShowDetailModal] = useState(false)
   const { replicating } = useMirrorSaveState(document)
 
-  const isTabDocument = document.schema === 'data/schema/tab'
-  const tabUrl = isTabDocument ? document.data.url : null
   const display = getDocumentDisplayInfo(document)
   // Same preview pipeline as the card/tile views: images (incl. drawings) and
   // PDFs get a small thumbnail in the Type cell, everything else the icon.
@@ -472,11 +480,7 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRight
       }
     }
     if (!isCtrlClick) {
-      if (isTabDocument && tabUrl) {
-        window.open(tabUrl, '_blank', 'noopener,noreferrer')
-      } else {
-        setShowDetailModal(true)
-      }
+      setShowDetailModal(true)
     }
   }
 
@@ -500,7 +504,7 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRight
         data-document-id={document.id}
         data-reading={reading || undefined}
         aria-selected={!!isSelected}
-        onKeyDown={(e) => rowKeyDown(e, () => (isTabDocument && tabUrl ? window.open(tabUrl, '_blank', 'noopener,noreferrer') : setShowDetailModal(true)), () => onSelect?.(document.id, !isSelected, true))}
+        onKeyDown={(e) => rowKeyDown(e, () => setShowDetailModal(true), () => onSelect?.(document.id, !isSelected, true))}
         className={`data-[reading=true]:bg-accent data-[reading=true]:text-accent-foreground cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring transition-opacity ${replicating ? 'opacity-60' : ''} ${isSelected ? 'bg-info-subtle hover:bg-info-subtle' : 'hover:bg-muted/50'}`}
         onClick={handleDocumentClick}
         onMouseDown={handleMouseDown}
@@ -534,7 +538,7 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRight
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="truncate" title={display.title}>{display.title}</span>
-              {display.isExternal && (<ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />)}
+              <ExternalDocumentLink document={document} />
               <ReplicatingBadge document={document} />
             </div>
             {display.subtitle && (
@@ -562,13 +566,12 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRightClick
   const [showDetailModal, setShowDetailModal] = useState(false)
   const isTabDocument = document.schema === 'data/schema/tab'
   const { replicating } = useMirrorSaveState(document)
-  const tabUrl = isTabDocument ? document.data.url : null
   const display = getDocumentDisplayInfo(document)
   const isImage = isImageDocument(document)
-  const hasThumb = isImage || isPdfDocument(document)
-  // Small row preview — 128px render is plenty for a 56px square. Raw PDF
-  // bytes can't render in an <img>, so PDFs skip the full-bytes fallback.
-  const { blobUrl: rowThumbUrl, loading: rowThumbLoading } = useDocumentThumbnail(workspaceId ?? '', document.id, 128, { enabled: hasThumb, blobFallback: isImage, version: document.checksumArray?.[0] ?? null })
+  const isVideo = isVideoDocument(document)
+  const hasThumb = isImage || isPdfDocument(document) || isVideo
+  // Larger card previews use the same cached posters as tiles.
+  const { blobUrl: rowThumbUrl, loading: rowThumbLoading } = useDocumentThumbnail(workspaceId ?? '', document.id, 512, { enabled: hasThumb, blobFallback: isImage, version: document.checksumArray?.[0] ?? null })
 
   const handleDragStart = (e: React.DragEvent) => {
     onDragStart?.(e, document.id);
@@ -592,7 +595,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRightClick
         onSelect(document.id, true, isCtrlClick)
       }
     }
-    if (!isCtrlClick) { if (isTabDocument && tabUrl) { window.open(tabUrl, '_blank', 'noopener,noreferrer') } else { setShowDetailModal(true) } }
+    if (!isCtrlClick) setShowDetailModal(true)
   }
 
   const handleMouseDown = (event: React.MouseEvent) => {
@@ -610,7 +613,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRightClick
         data-document-id={document.id}
         data-reading={reading || undefined}
         aria-selected={!!isSelected}
-        onKeyDown={(e) => rowKeyDown(e, () => (isTabDocument && tabUrl ? window.open(tabUrl, '_blank', 'noopener,noreferrer') : setShowDetailModal(true)), () => onSelect?.(document.id, !isSelected, true))}
+        onKeyDown={(e) => rowKeyDown(e, () => setShowDetailModal(true), () => onSelect?.(document.id, !isSelected, true))}
         className={`data-[reading=true]:bg-accent data-[reading=true]:border-primary border rounded-(--card-radius) p-4 transition cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring ${replicating ? 'opacity-60' : ''} ${isSelected ? 'bg-info-subtle border-info ring-1 ring-info' : ''} ${isTabDocument && !isSelected ? 'hover:bg-info-subtle hover:border-info' : !isSelected ? 'hover:bg-accent/50' : ''}`}
         onClick={handleDocumentClick}
         onMouseDown={handleMouseDown}
@@ -621,21 +624,24 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRightClick
       >
         <div className="flex items-start justify-between gap-4">
           {hasThumb && (
-            <div className="h-14 w-14 shrink-0 overflow-hidden rounded-md border bg-muted/40">
+            <div className="relative h-32 w-40 max-w-[40%] sm:h-40 sm:w-56 shrink-0 overflow-hidden rounded-md border bg-muted/40">
               {rowThumbUrl ? (
                 <img src={rowThumbUrl} alt={display.title} loading="lazy" className="h-full w-full object-cover" />
+              ) : isVideo && workspaceId && !rowThumbLoading ? (
+                <TileVideoPreview workspaceId={workspaceId} documentId={document.id} fallback={<DocumentIcon document={document} />} />
               ) : rowThumbLoading ? (
                 <div className="h-full w-full animate-pulse bg-muted/60" />
               ) : (
                 <div className="flex h-full w-full items-center justify-center"><DocumentIcon document={document} /></div>
               )}
+              {isVideo && <Play className="pointer-events-none absolute bottom-2 right-2 h-5 w-5 rounded bg-scrim text-scrim-foreground" />}
             </div>
           )}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2 overflow-hidden">
               <DocumentIcon document={document} chip />
               <h4 className="font-medium truncate min-w-0 flex-1 max-w-[640px]" title={display.title}>{display.title}</h4>
-              {display.isExternal && (<ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />)}
+              <ExternalDocumentLink document={document} />
               <span className="ml-auto px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded border flex-shrink-0">{display.schemaLabel}</span>
               <ReplicatingBadge document={document} />
             </div>
@@ -679,15 +685,15 @@ function isPdfDocument(document: Document): boolean {
 // First-frame preview for video tiles: a bare <video preload="metadata"> —
 // the browser fetches only the header + first frame over the existing
 // range-capable content endpoint (media-ticket auth via useDocumentStreamSrc).
-// No server-side thumbnailing (no ffmpeg) involved.
+// Used when the server cannot generate a cached video poster.
 function TileVideoPreview({ workspaceId, documentId, fallback }: { workspaceId: string; documentId: number; fallback: React.ReactNode }) {
   const { src, error } = useDocumentStreamSrc(workspaceId, documentId)
   const [failed, setFailed] = useState(false)
   if (error || failed) return <>{fallback}</>
   if (!src) return <div className="aspect-video w-full animate-pulse bg-muted/60" />
   return (
-    <div className="relative">
-      <video src={src} preload="metadata" muted playsInline onError={() => setFailed(true)} className="block h-auto w-full" />
+    <div className="relative h-full w-full">
+      <video src={src} preload="metadata" muted playsInline onError={() => setFailed(true)} className="block h-full w-full object-cover" />
       <span className="pointer-events-none absolute bottom-2 right-2 rounded-sm bg-scrim p-1 text-scrim-foreground">
         <Play className="h-3.5 w-3.5" />
       </span>
@@ -733,17 +739,17 @@ function TileTextPreview({ document, workspaceId, markdown }: { document: Docume
 // icon tile (everything else). Mirrors DocumentRow's click/selection/right-click
 // behavior. Sized for a responsive auto-fill grid, so it reads on mobile too.
 function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSide, onRightClick, onOpenActions, onDragStart }: DocumentRowProps) {
+  const [previewRatio, setPreviewRatio] = useState<number | null>(null)
+  const dimensions = (document.metadata as { dimensions?: { width?: number; height?: number } } | undefined)?.dimensions
+  const ratio = previewRatio ?? (dimensions?.width && dimensions?.height ? Math.max(0.2, Math.min(5, dimensions.width / dimensions.height)) : 1)
   const reader = useSideView()
   const reading = reader.alwaysOn && reader.entry?.workspaceId === workspaceId && reader.entry?.document.id === document.id
   const longPressMenu = useLongPressContextMenu()
   const [showDetailModal, setShowDetailModal] = useState(false)
-  const isTabDocument = document.schema === 'data/schema/tab'
-  const tabUrl = isTabDocument ? document.data.url : null
   const isImage = isImageDocument(document)
   const isVideo = isVideoDocument(document)
-  // Images and PDFs share the thumbnail pipeline (PDFs render page 1
-  // server-side); a PDF with unreachable bytes falls back to the icon tile.
-  const hasThumb = isImage || isPdfDocument(document)
+  // Images, PDF first pages and video posters share the thumbnail cache.
+  const hasThumb = isImage || isPdfDocument(document) || isVideo
   const display = getDocumentDisplayInfo(document)
   // Notes, tabs/URLs, emails, todos: the content IS the picture — render a
   // text tile (title + clamped body, or just title + status subtitle) instead
@@ -760,7 +766,7 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
     const isCtrlClick = e.ctrlKey || e.metaKey
     if (e.shiftKey && onSelect) { e.preventDefault(); onSelect(document.id, true, isCtrlClick, true); return }
     if (onSelect) onSelect(document.id, isCtrlClick ? !isSelected : true, isCtrlClick)
-    if (!isCtrlClick) { if (isTabDocument && tabUrl) { window.open(tabUrl, '_blank', 'noopener,noreferrer') } else { setShowDetailModal(true) } }
+    if (!isCtrlClick) setShowDetailModal(true)
   }
   const handleRightClick = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); if (onSelect && !isSelected) onSelect(document.id, true, false); onRightClick?.(e, document.id) }
 
@@ -769,10 +775,11 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
       <div
         tabIndex={0}
         data-document-id={document.id}
+        style={{ flexGrow: ratio, flexBasis: `${ratio * 220}px`, '--tile-ratio': ratio } as React.CSSProperties}
         data-reading={reading || undefined}
         aria-selected={!!isSelected}
-        onKeyDown={(e) => rowKeyDown(e, () => (isTabDocument && tabUrl ? window.open(tabUrl, '_blank', 'noopener,noreferrer') : setShowDetailModal(true)), () => onSelect?.(document.id, !isSelected, true))}
-        className={`data-[reading=true]:bg-accent data-[reading=true]:border-primary group relative mb-3 flex break-inside-avoid flex-col overflow-hidden rounded-(--card-radius) border transition cursor-pointer outline-none hover:shadow-elevation-2 focus-visible:ring-2 focus-visible:ring-ring ${replicating ? 'opacity-60' : ''} ${isSelected ? 'ring-2 ring-info border-info' : ''}`}
+        onKeyDown={(e) => rowKeyDown(e, () => setShowDetailModal(true), () => onSelect?.(document.id, !isSelected, true))}
+        className={`document-tile data-[reading=true]:bg-accent data-[reading=true]:border-primary group relative mb-3 flex break-inside-avoid flex-col overflow-hidden rounded-(--card-radius) border transition cursor-pointer outline-none hover:shadow-elevation-2 focus-visible:ring-2 focus-visible:ring-ring ${replicating ? 'opacity-60' : ''} ${isSelected ? 'ring-2 ring-info border-info' : ''}`}
         onClick={handleClick}
         onMouseDown={event => { if (event.shiftKey) event.preventDefault() }}
         {...longPressMenu}
@@ -791,11 +798,11 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
         />
         {/* Images, videos and text tiles take their natural height (masonry
             columns); icon tiles stay square. */}
-        <div className={`relative w-full bg-muted/40 ${(hasThumb && blobUrl) || isTextTile || (isTextFile && workspaceId) || (isVideo && workspaceId) ? '' : 'aspect-square'}`}>
+        <div className={`document-tile-media relative w-full bg-muted/40 ${(hasThumb && blobUrl) || isTextTile || (isTextFile && workspaceId) || (isVideo && workspaceId) ? '' : 'aspect-square'}`}>
           {hasThumb && loading && <div className="absolute inset-0 animate-pulse bg-muted/60" />}
           {hasThumb && blobUrl ? (
-            <img src={blobUrl} alt={display.title} loading="lazy" className="block h-auto w-full" />
-          ) : isVideo && workspaceId ? (
+            <img src={blobUrl} alt={display.title} loading="lazy" className="block h-auto w-full" onLoad={event => { const image = event.currentTarget; if (image.naturalHeight) setPreviewRatio(image.naturalWidth / image.naturalHeight) }} />
+          ) : isVideo && workspaceId && !loading ? (
             <TileVideoPreview
               workspaceId={workspaceId}
               documentId={document.id}
@@ -808,6 +815,7 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
               <div className="flex items-center gap-1.5">
                 <DocumentIcon document={document} />
                 <span className="min-w-0 truncate text-[10px] uppercase tracking-wide text-muted-foreground">{display.schemaLabel}</span>
+                <ExternalDocumentLink document={document} />
               </div>
               <div className="line-clamp-2 text-sm font-semibold leading-snug">{display.title}</div>
               {display.subtitle && (
@@ -822,6 +830,7 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
               <DocumentIcon document={document} size={10} chip />
             </div>
           )}
+          {isVideo && blobUrl && <Play className="pointer-events-none absolute bottom-2 right-2 h-5 w-5 rounded bg-scrim text-scrim-foreground" />}
           <div className="absolute right-2 top-2 flex gap-1 reveal-on-hover">
             {onOpenToSide && (
               <button
@@ -849,7 +858,7 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
         {!isTextTile && (
           <div className="flex items-center gap-1.5 border-t bg-card px-2 py-1.5">
             <span className="truncate text-xs font-medium" title={display.title}>{display.title}</span>
-            {display.isExternal && <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />}
+            <ExternalDocumentLink document={document} />
           </div>
         )}
       </div>
@@ -1057,6 +1066,7 @@ function DateGroupHeader({ label, count, collapsed, allSelected, someSelected, o
 }
 
 export function DocumentList({ readingPane = false, externalSearchQuery, toolbarActions, documents, isLoading, contextPath, treeName, workspaceId, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, onSelectionChange, pastedDocumentIds, viewMode = 'card', allowViewToggle = false, activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQueries = [], onBackendSearch, onRemoveBackendQuery, serverSort, onServerSortChange, scope = 'path', onScopeChange, canSaveChanges = false, isSavingChanges = false, onSaveChanges, linkTree, folders, onOpenFolder }: DocumentListProps) {
+  const tileStyle = useTileStyle()
   // View switcher (table/tile/card). Only active when allowViewToggle; the
   // chosen view is remembered in localStorage. Widgets that hardcode viewMode
   // leave the toggle off and pin their view.
@@ -2087,18 +2097,14 @@ export function DocumentList({ readingPane = false, externalSearchQuery, toolbar
         </div>
       ) : view === 'tile' ? (
         <div>
-          {/* Masonry via CSS columns: image tiles keep their natural aspect,
-              so column heights interleave into a 500px-style mosaic. Wide
-              columns (fewer per row) make photos read big, like a feed.
-              Grouped: one masonry per date band — a single set of columns
-              spanning the bands would let a tall tile from Today flow past
-              Yesterday's header. */}
+          {/* Each date band owns its tile layout so media cannot flow into
+              a neighbouring date group. */}
           <FolderTileGrid {...folderStripProps} />
           {filteredDocuments.length === 0 && (
             <p className="py-6 text-center text-xs text-muted-foreground">No documents in this folder</p>
           )}
           {renderBands((docs) => (
-            <div className="columns-[300px] gap-3 pr-2">
+            <div className="document-tiles pr-2" data-tile-style={tileStyle}>
               {docs.map((document) => (
                 <DocumentTile key={document.id} document={document} isSelected={selectedDocuments.has(document.id)} workspaceId={workspaceId} onSelect={handleDocumentSelect} onOpenToSide={openToSide} onRightClick={handleDocumentRightClick} onOpenActions={handleOpenRowActions} onDragStart={handleMultiDragStart} />
               ))}
