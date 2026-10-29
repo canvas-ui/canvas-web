@@ -26,7 +26,7 @@ import { ContextMenuShell } from '@/components/common/context-menu-shell'
 import { isTextInteraction, matchesShortcut } from '@/components/common/action-menu'
 import { findTreeNodeByPath, backendRemovalTarget, imapFolderTarget, type Backend } from '@/services/workspace'
 import { useTreeAccordion } from '@/lib/tree-style'
-import { onAccentTextClass, onAccentSolidTextClass } from '@/utils/color'
+import { onAccentTextClass } from '@/utils/color'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -693,34 +693,19 @@ function CardNode({
   // Overlays are relative to whatever the row ended up as, so they hold at any
   // depth and in both schemes (a fixed mix with --card vanished in dark mode).
   const veil = (pct: number) => `color-mix(in oklab, currentColor ${pct}%, transparent)`
-  // Contrast is the hierarchy. Every level steps the shade, so a whole subtree
-  // reads as one block set apart from its parent's siblings; the open parent is
-  // a touch stronger than its children and acts as the block's header. A
-  // coloured subtree shades with its colour, an uncoloured one with the
-  // foreground. Steps are coarse on purpose — 2-3% was invisible on dark.
+  // Theme surfaces carry hierarchy; folder colours stay in the icon and rail.
   const level = Math.min(depth, 5)
   const isOpenParent = shouldExpand && !!hasChildren
-  // Two clearly different strengths, not a nudge:
-  //  • an OPEN node is the header of its block — near-solid in its own colour
-  //    (or a strong neutral), with text flipped against that colour;
-  //  • everything below it is a low wash of the PARENT's colour, so the block
-  //    reads as one body even when a child has a colour of its own (that one
-  //    shows in the child's swatch, and takes over once the child is opened).
-  const washColor = depth > 0 && inheritedColor ? inheritedColor : effectiveColor
   const headerSolid = plain && !solidSelected && !node.locked && isOpenParent
-  const washShade = washColor
-    ? Math.min(12 + level * 5 + (onSelectedRoute ? 6 : 0), 34)
-    : Math.min(level * 7 + (onSelectedRoute ? 5 : 0) + (isPending ? 3 : 0), 30)
-  // Opaque on purpose: sticky parents slide over their children.
+  const shade = Math.min(3 + level * 2 + (onSelectedRoute ? 4 : 0) + (isPending ? 3 : 0), 18)
+  // Keep sticky headers opaque while using the theme's paired accent colours.
   const accordionBg = solidSelected ? 'var(--primary)'
-    : isSource ? mix('var(--info)', 22)
-    : isTarget ? mix('var(--warning)', 22)
-    : node.locked ? mix('var(--warning)', 20 + level * 4)
-    : headerSolid ? (effectiveColor ? mix(effectiveColor, 84) : mix('var(--foreground)', 38))
-    : mix(washColor || 'var(--foreground)', washShade)
+    : isSource ? mix('var(--info)', 12)
+    : isTarget ? mix('var(--warning)', 12)
+    : headerSolid ? 'var(--accent)'
+    : mix('var(--muted-foreground)', shade)
   const accordionText = solidSelected ? 'text-primary-foreground'
-    : headerSolid && effectiveColor ? onAccentSolidTextClass(effectiveColor)
-    : 'text-foreground'
+    : headerSolid ? 'text-accent-foreground' : 'text-foreground'
   const sticks = accordion && shouldExpand && hasChildren && depth < ACCORDION_STICKY_DEPTH
 
   const accordionRow = (
@@ -740,7 +725,7 @@ function CardNode({
       style={{
         height: ACCORDION_ROW_H,
         background: accordionBg,
-        borderBottom: `1px solid ${veil(14)}`,
+        borderBottom: '1px solid var(--border)',
         ...(sticks ? { position: 'sticky' as const, top: depth * ACCORDION_ROW_H, zIndex: 20 - depth } : {}),
       }}
       draggable={!readOnly && !node.metadata?.backendTrash}
@@ -759,7 +744,7 @@ function CardNode({
       {trail.length > 0 && (
         <span className="flex shrink-0 gap-px" aria-hidden>
           {trail.map((color, i) => (
-            <span key={i} className="w-[3px]" style={{ background: color || veil(28) }} />
+            <span key={i} className="w-[3px]" style={{ background: color ? `color-mix(in oklab, ${color} 35%, var(--border))` : 'var(--border)' }} />
           ))}
         </span>
       )}

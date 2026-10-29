@@ -57,7 +57,7 @@ export function DocumentSideCard({ entry: entryProp, onClose, frame }: { entry?:
     <B5Card
       title={getDocumentDisplayInfo(document).title}
       icon={iconFor(document)}
-      onClose={close}
+      onClose={sideView.alwaysOn ? undefined : close}
       onSave={onSave}
       canSave
       successMessage="Linked"

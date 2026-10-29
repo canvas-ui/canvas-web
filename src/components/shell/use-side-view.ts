@@ -8,6 +8,7 @@ export interface SideViewEntry {
 }
 
 export interface SideViewContextValue {
+  alwaysOn?: boolean
   entry: SideViewEntry | null
   open: (document: Document, workspaceId: string) => void
   /** Follow a saved revision in the current pane and its browser URL. */

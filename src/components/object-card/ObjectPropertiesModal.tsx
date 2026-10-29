@@ -30,7 +30,7 @@ export function ObjectPropertiesModal(props: ObjectPropertiesModalProps) {
   const mode = useDocumentOpenMode()
   const sideView = useContext(SideViewContext)
   const { document, workspaceId, isOpen, onClose, initialEdit, initialTab } = props
-  const toSide = mode === 'side' && !!sideView && !!workspaceId && !initialEdit && !initialTab
+  const toSide = (mode === 'side' || sideView?.alwaysOn === true) && !!sideView && !!workspaceId && !initialEdit && !initialTab
   useLayoutEffect(() => {
     if (!toSide || !isOpen || !document || !workspaceId || !sideView) return
     const open = sideView.preview ?? sideView.open

@@ -1,3 +1,4 @@
+import { DocumentReadingLayout } from './document-reading-layout'
 import './document-list-toolbar.css'
 import { runBackendDeletionBatch } from '@/lib/backend-transfer-batch'
 import { splitBackendsPath } from '@/services/hooks'
@@ -55,6 +56,7 @@ import { FolderContextMenu } from '@/components/workspaces/FolderContextMenu'
 import { classifyMime } from '@/components/renderers/types'
 
 interface DocumentListProps {
+  readingPane?: boolean
   documents: Document[]
   isLoading: boolean
   contextPath: string
@@ -427,6 +429,8 @@ function rowKeyDown(event: React.KeyboardEvent, onActivate: () => void, onToggle
 }
 
 function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRightClick, onOpenActions, onDragStart }: DocumentTableRowProps) {
+  const reader = useSideView()
+  const reading = reader.alwaysOn && reader.entry?.workspaceId === workspaceId && reader.entry?.document.id === document.id
   const longPressMenu = useLongPressContextMenu()
   const [showDetailModal, setShowDetailModal] = useState(false)
   const { replicating } = useMirrorSaveState(document)
@@ -494,9 +498,10 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRight
       <TableRow
         tabIndex={0}
         data-document-id={document.id}
+        data-reading={reading || undefined}
         aria-selected={!!isSelected}
         onKeyDown={(e) => rowKeyDown(e, () => (isTabDocument && tabUrl ? window.open(tabUrl, '_blank', 'noopener,noreferrer') : setShowDetailModal(true)), () => onSelect?.(document.id, !isSelected, true))}
-        className={`cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring transition-opacity ${replicating ? 'opacity-60' : ''} ${isSelected ? 'bg-info-subtle hover:bg-info-subtle' : 'hover:bg-muted/50'}`}
+        className={`data-[reading=true]:bg-accent data-[reading=true]:text-accent-foreground cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring transition-opacity ${replicating ? 'opacity-60' : ''} ${isSelected ? 'bg-info-subtle hover:bg-info-subtle' : 'hover:bg-muted/50'}`}
         onClick={handleDocumentClick}
         onMouseDown={handleMouseDown}
         {...longPressMenu}
@@ -551,6 +556,8 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRight
 }
 
 function DocumentRow({ document, isSelected, workspaceId, onSelect, onRightClick, onOpenActions, onDragStart }: DocumentRowProps) {
+  const reader = useSideView()
+  const reading = reader.alwaysOn && reader.entry?.workspaceId === workspaceId && reader.entry?.document.id === document.id
   const longPressMenu = useLongPressContextMenu()
   const [showDetailModal, setShowDetailModal] = useState(false)
   const isTabDocument = document.schema === 'data/schema/tab'
@@ -601,9 +608,10 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRightClick
       <div
         tabIndex={0}
         data-document-id={document.id}
+        data-reading={reading || undefined}
         aria-selected={!!isSelected}
         onKeyDown={(e) => rowKeyDown(e, () => (isTabDocument && tabUrl ? window.open(tabUrl, '_blank', 'noopener,noreferrer') : setShowDetailModal(true)), () => onSelect?.(document.id, !isSelected, true))}
-        className={`border rounded-(--card-radius) p-4 transition cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring ${replicating ? 'opacity-60' : ''} ${isSelected ? 'bg-info-subtle border-info ring-1 ring-info' : ''} ${isTabDocument && !isSelected ? 'hover:bg-info-subtle hover:border-info' : !isSelected ? 'hover:bg-accent/50' : ''}`}
+        className={`data-[reading=true]:bg-accent data-[reading=true]:border-primary border rounded-(--card-radius) p-4 transition cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring ${replicating ? 'opacity-60' : ''} ${isSelected ? 'bg-info-subtle border-info ring-1 ring-info' : ''} ${isTabDocument && !isSelected ? 'hover:bg-info-subtle hover:border-info' : !isSelected ? 'hover:bg-accent/50' : ''}`}
         onClick={handleDocumentClick}
         onMouseDown={handleMouseDown}
         {...longPressMenu}
@@ -725,6 +733,8 @@ function TileTextPreview({ document, workspaceId, markdown }: { document: Docume
 // icon tile (everything else). Mirrors DocumentRow's click/selection/right-click
 // behavior. Sized for a responsive auto-fill grid, so it reads on mobile too.
 function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSide, onRightClick, onOpenActions, onDragStart }: DocumentRowProps) {
+  const reader = useSideView()
+  const reading = reader.alwaysOn && reader.entry?.workspaceId === workspaceId && reader.entry?.document.id === document.id
   const longPressMenu = useLongPressContextMenu()
   const [showDetailModal, setShowDetailModal] = useState(false)
   const isTabDocument = document.schema === 'data/schema/tab'
@@ -759,9 +769,10 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
       <div
         tabIndex={0}
         data-document-id={document.id}
+        data-reading={reading || undefined}
         aria-selected={!!isSelected}
         onKeyDown={(e) => rowKeyDown(e, () => (isTabDocument && tabUrl ? window.open(tabUrl, '_blank', 'noopener,noreferrer') : setShowDetailModal(true)), () => onSelect?.(document.id, !isSelected, true))}
-        className={`group relative mb-3 flex break-inside-avoid flex-col overflow-hidden rounded-(--card-radius) border transition cursor-pointer outline-none hover:shadow-elevation-2 focus-visible:ring-2 focus-visible:ring-ring ${replicating ? 'opacity-60' : ''} ${isSelected ? 'ring-2 ring-info border-info' : ''}`}
+        className={`data-[reading=true]:bg-accent data-[reading=true]:border-primary group relative mb-3 flex break-inside-avoid flex-col overflow-hidden rounded-(--card-radius) border transition cursor-pointer outline-none hover:shadow-elevation-2 focus-visible:ring-2 focus-visible:ring-ring ${replicating ? 'opacity-60' : ''} ${isSelected ? 'ring-2 ring-info border-info' : ''}`}
         onClick={handleClick}
         onMouseDown={event => { if (event.shiftKey) event.preventDefault() }}
         {...longPressMenu}
@@ -1045,7 +1056,7 @@ function DateGroupHeader({ label, count, collapsed, allSelected, someSelected, o
   )
 }
 
-export function DocumentList({ externalSearchQuery, toolbarActions, documents, isLoading, contextPath, treeName, workspaceId, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, onSelectionChange, pastedDocumentIds, viewMode = 'card', allowViewToggle = false, activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQueries = [], onBackendSearch, onRemoveBackendQuery, serverSort, onServerSortChange, scope = 'path', onScopeChange, canSaveChanges = false, isSavingChanges = false, onSaveChanges, linkTree, folders, onOpenFolder }: DocumentListProps) {
+export function DocumentList({ readingPane = false, externalSearchQuery, toolbarActions, documents, isLoading, contextPath, treeName, workspaceId, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, onSelectionChange, pastedDocumentIds, viewMode = 'card', allowViewToggle = false, activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQueries = [], onBackendSearch, onRemoveBackendQuery, serverSort, onServerSortChange, scope = 'path', onScopeChange, canSaveChanges = false, isSavingChanges = false, onSaveChanges, linkTree, folders, onOpenFolder }: DocumentListProps) {
   // View switcher (table/tile/card). Only active when allowViewToggle; the
   // chosen view is remembered in localStorage. Widgets that hardcode viewMode
   // leave the toggle off and pin their view.
@@ -1711,16 +1722,20 @@ export function DocumentList({ externalSearchQuery, toolbarActions, documents, i
 
   if (isLoading) {
     return (
+      <DocumentReadingLayout enabled={readingPane} workspaceId={workspaceId} scope={JSON.stringify([workspaceId, treeName, contextPath])} documents={[]} loading>
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center space-y-2">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
           <p className="text-sm text-muted-foreground">Loading documents...</p>
         </div>
       </div>
+      </DocumentReadingLayout>
     )
   }
 
   return (
+    <DocumentReadingLayout enabled={readingPane} workspaceId={workspaceId} scope={JSON.stringify([workspaceId, treeName, contextPath])}
+      documents={view === 'table' ? sortedDocuments : filteredDocuments} loading={false}>
     <div
       // tabIndex -1: clicking empty space focuses the list, so its shortcuts
       // (paste, select all, Shift+F10) work without first focusing a row.
@@ -2261,6 +2276,7 @@ export function DocumentList({ externalSearchQuery, toolbarActions, documents, i
         />
       )}
     </div>
+    </DocumentReadingLayout>
   )
 }
 

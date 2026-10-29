@@ -18,7 +18,7 @@ export type B5SaveTarget = LinkToTarget & { path: string }
 interface B5CardProps {
   title: string
   icon: LucideIcon
-  onClose: () => void
+  onClose?: () => void
   // Omit entirely to render a view-only card with no Save/"Link To" button
   // (e.g. DocumentSideCard's read-only peek at an existing document).
   // Must return the created/linked document id(s) — when the picker's tree
@@ -102,7 +102,7 @@ export function B5Card({
         await Promise.all(extraPaths.map((p) => pasteDocumentsToWorkspacePath(ctx.workspaceName, p, ids, ctx.treeName, ctx.treeType)))
       }
       showSuccessToast(successMessage)
-      onClose()
+      onClose?.()
       if (navigateAfterSave) navigate(workspacePathUrl({ ...ctx, path: paths[0] }), { replace: true })
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to save')
@@ -203,7 +203,7 @@ export function B5Card({
       >
         {(maximized || frame?.expanded) ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
       </button>
-      <button
+      {onClose && <button
         type="button"
         onClick={onClose}
         disabled={saving}
@@ -211,7 +211,7 @@ export function B5Card({
         aria-label="Close"
       >
         <X className="h-4 w-4" />
-      </button>
+      </button>}
     </div>
   )
 

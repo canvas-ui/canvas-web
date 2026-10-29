@@ -282,6 +282,7 @@ export function DefaultCanvas({
             contentBanner, which is what it is for. */}
         {children || (
         <DocumentList
+          readingPane
           key={documentSchema ?? 'documents'}
           externalSearchQuery={draft}
           toolbarActions={listActions}

@@ -1,8 +1,9 @@
+import { MenuResizeHandle } from '../MenuResizeHandle'
 import { useReaderWidth } from '@/lib/reader-width'
 import { DEFAULT_SIDE_PANEL_WIDTH } from '@/lib/panel-size'
 import { ReaderResizeHandle } from '../ReaderResizeHandle'
 import { SETTINGS_GROUPS } from '@/lib/settings-catalog'
-import { useCallback, useEffect, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { isBare, isFullBleed } from '../route-chrome'
 import { Outlet, useLocation } from 'react-router-dom'
 import { Maximize2, Minimize2, X } from 'lucide-react'
@@ -241,6 +242,7 @@ function GhostRow({ row, workspaces }: { row: CanvasRow; workspaces: Workspace[]
 
 export function StripShell() {
   const { state, closeM1, closeM2 } = useMenu()
+  const [menuWidth, setMenuWidth] = useState(280)
   const rowApi = useCanvasRow()!
   const { rows, activeRow, focus, setFocus, moveRow, closeRow } = rowApi
   const { pathname } = useLocation()
@@ -332,7 +334,7 @@ export function StripShell() {
     <>
       <div className="strip-shell flex h-viewport w-full overflow-hidden surface-desk gap-shell p-shell">
         <MenuBar />
-        <div ref={scrollerRef} className="strip-scroller">
+        <div ref={scrollerRef} className="strip-scroller" style={{ '--strip-menu-space': `${(state.m1Open ? 280 : 0) + (state.m2Open ? menuWidth : 0)}px` } as CSSProperties}>
           {state.m1Open && (
             <div
               data-strip-col="m1"
@@ -345,10 +347,12 @@ export function StripShell() {
           {state.m2Open && (
             <div
               data-strip-col="m2"
+              style={{ width: menuWidth, position: 'relative' }}
               className={cn('strip-col strip-menu-col', focus === 'm2' && 'strip-col--focused')}
               onPointerDownCapture={() => setFocus('m2')}
             >
               <M2Content />
+              <MenuResizeHandle width={menuWidth} onResize={setMenuWidth} />
             </div>
           )}
           <div className="strip-rows" style={{ transform: `translateY(${-activeRow * 100}%)` }}>

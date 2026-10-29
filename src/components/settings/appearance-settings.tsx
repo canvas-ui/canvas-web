@@ -1,3 +1,4 @@
+import { setAlwaysOnReader, useAlwaysOnReader } from '@/lib/always-on-reader'
 import { setDocumentOpenMode, useDocumentOpenMode } from '@/lib/document-open-mode'
 import { useEffect, useRef, useState } from 'react'
 import { Check, Monitor, Moon, Sun } from 'lucide-react'
@@ -41,6 +42,7 @@ const SCHEME_ICONS: Record<SchemePreference, typeof Sun> = {
 export function AppearanceSettings() {
   const { theme, scheme, density, resolvedScheme, setTheme, setScheme, setDensity, reset } =
     useTheme()
+  const alwaysOnReader = useAlwaysOnReader()
   const documentOpenMode = useDocumentOpenMode()
   const layout = useLayoutMode()
   const treeStyle = useTreeStyle()
@@ -195,6 +197,13 @@ export function AppearanceSettings() {
           onChange={setDocumentOpenMode}
         />
         <p className="mt-2 text-xs text-muted-foreground">The reading pane opens beside the content and updates as you select another document. On small screens it opens as a drawer.</p>
+      </section>
+
+      <section>
+        <SectionHeading title="Always-on content area" description="Keep a reading pane beside document lists on tablets and desktops. Remember the selected item in each folder, or show the first available item." />
+        <SegmentedControl options={[{ id: 'on', label: 'On' }, { id: 'off', label: 'Off' }]}
+          value={alwaysOnReader ? 'on' : 'off'} onChange={value => setAlwaysOnReader(value === 'on')} />
+        <p className="mt-2 text-xs text-muted-foreground">On by default. The reader uses roughly half the screen; drag its divider to resize. Phones keep tap-to-open navigation. When enabled, list selections use this pane regardless of the Open documents setting.</p>
       </section>
 
       <WallpaperSection />

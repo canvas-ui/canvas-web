@@ -1,5 +1,6 @@
+import { MenuResizeHandle } from './MenuResizeHandle'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
-import { useCallback, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useMenu } from './use-menu'
@@ -17,8 +18,6 @@ import { AdminMenu } from '@/components/menu/admin/AdminMenu'
 import { SettingsMenu } from '@/components/menu/settings/SettingsMenu'
 
 const DEFAULT_WIDTH = 280
-const MIN_WIDTH = 220
-const MAX_WIDTH = 560
 
 // Exported: the strip layout renders the same M2 surface as its own column.
 export function M2Content() {
@@ -53,31 +52,6 @@ export function MenuPanelArea() {
   useMobileViewSlide(m2Ref, state.m1Open && state.m2Open, `${state.activeSection}:${state.selectedEntityId}:${state.m2View}`)
   const [width, setWidth] = useState(DEFAULT_WIDTH)
   const [isDragging, setIsDragging] = useState(false)
-  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
-
-  const onDragStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    setIsDragging(true)
-    dragRef.current = { startX: e.clientX, startWidth: width }
-
-    const onMove = (ev: MouseEvent) => {
-      if (!dragRef.current) return
-      const delta = ev.clientX - dragRef.current.startX
-      const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, dragRef.current.startWidth + delta))
-      setWidth(next)
-    }
-
-    const onUp = () => {
-      dragRef.current = null
-      setIsDragging(false)
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-    }
-
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-  }, [width])
-
   const mobileOverlay = isMobile && state.m1Open
 
   return (
@@ -134,12 +108,9 @@ export function MenuPanelArea() {
 
         </div>
 
-        {/* Drag handle — right edge for both M1 and M2 (pointer devices only) */}
+        {/* Resize the right edge of either menu with mouse, pen or touch */}
         {state.m1Open && !mobileOverlay && (
-          <div
-            onMouseDown={onDragStart}
-            className="absolute right-0 top-0 bottom-0 z-20 w-1 cursor-col-resize hover:bg-primary/20 transition-colors"
-          />
+          <MenuResizeHandle width={width} onResize={setWidth} onDragging={setIsDragging} />
         )}
       </div>
     </>
