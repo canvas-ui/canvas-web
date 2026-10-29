@@ -1,3 +1,5 @@
+import AppletHostPage from '@/pages/apps'
+import { AppsMenu } from '@/components/menu/apps/AppsMenu'
 import { Route } from 'react-router-dom'
 import WorkspacesPage from '@/pages/workspaces'
 import WorkspaceDetailPage from '@/pages/workspaces/[workspaceName]'
@@ -49,6 +51,8 @@ export const shellRoutes = (
   <Route key="r3" path="share-target" element={<ShareTargetPage />} />
   {/* Quick-add shortcut landing - the B5 card flow inside the shell,
       same hosting as share-target. */}
+  <Route key="apps-index" path="apps" element={<AppsMenu />} />
+  <Route key="apps-host" path="apps/:appletId" element={<AppletHostPage />} />
   <Route key="r4" path="apps/add/:kind" element={<QuickAddPage />} />
   <Route key="r5" path="workspaces" element={<WorkspacesPage />} />
   <Route key="r6" path="workspaces/:workspaceName" element={<WorkspaceDetailPage />} />

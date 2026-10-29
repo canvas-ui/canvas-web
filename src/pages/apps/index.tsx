@@ -1,24 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { House } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { APPLETS } from '@/components/toolbox/applets/registry'
 import { AppletTargetProvider } from '@/components/toolbox/applets/applet-target'
 import type { AppletTarget } from '@/components/toolbox/applets/use-applet-target'
 import { listWorkspaces, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
-import { DocumentModalProvider } from '@/components/shell/document-modal-context'
-import { LensFeedProvider } from '@/components/toolbox/lens-feed-context'
 import { listContexts } from '@/services/context'
 
 const DEFAULT_WORKSPACE = 'universe'
 
-// Standalone applet host - /apps/<id>. The same applet components the toolbox
-// Apps tab hosts, in a chrome-free page an installed PWA shortcut can open in
-// one click. The binding lives in the URL so a bound applet is bookmarkable:
-//   /apps/notes                       -> universe, path /
-//   /apps/notes?workspace=w&path=/x   -> bind to a path
-//   /apps/notes?context=<id>          -> bind to a context
-//   ...&add=1                         -> open the inline creation draft
+// App host within the shell. URL bindings make scoped apps bookmarkable.
 export default function AppletHostPage() {
   const { appletId } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -69,7 +60,7 @@ export default function AppletHostPage() {
 
   if (!applet) {
     return (
-      <div className="flex h-viewport flex-col items-center justify-center gap-3 surface-desk">
+      <div className="flex h-full min-h-0 flex-col items-center justify-center gap-3 surface-desk">
         <p className="text-sm text-muted-foreground">Unknown app{appletId ? ` "${appletId}"` : ''}.</p>
         <div className="flex gap-2">
           {APPLETS.map(a => (
@@ -85,11 +76,7 @@ export default function AppletHostPage() {
   const bindMode: 'path' | 'context' = contextId ? 'context' : 'path'
 
   return (
-    <DocumentModalProvider>
-    {/* Lens needs its feed hosted above the applet here too — this page has no
-        shell, so nothing else would own the camera. */}
-    <LensFeedProvider>
-    <div className="flex h-viewport flex-col surface-desk p-shell gap-shell">
+    <div className="flex h-full min-h-0 flex-col surface-desk p-shell gap-shell">
       {/* Header: identity + binding. Two binding modes: a workspace path
           (default /) or a context - the applet shows only what the binding
           scopes to, and creates into it. */}
@@ -152,13 +139,7 @@ export default function AppletHostPage() {
         )}
 
         <div className="grow" />
-        <Link
-          to="/home"
-          className="flex items-center gap-1 rounded-md p-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          title="Open the full Canvas app"
-        >
-          <House className="h-3.5 w-3.5" />
-        </Link>
+
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card shadow-elevation-2">
@@ -174,7 +155,5 @@ export default function AppletHostPage() {
         )}
       </div>
     </div>
-    </LensFeedProvider>
-    </DocumentModalProvider>
   )
 }

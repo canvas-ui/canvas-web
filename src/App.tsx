@@ -10,7 +10,6 @@ import GoogleCallbackPage from './pages/auth/google-callback'
 import { ProtectedRoute } from './components/auth/protected-route'
 import { PublicRoute } from './components/auth/public-route'
 import PublicCanvasPage from './pages/pub/canvas'
-import AppletHostPage from './pages/apps'
 import { UpdateBanner } from './components/common/update-banner'
 import { RememberLastScreen } from './components/shell/RememberLastScreen'
 import { AppShell } from './components/shell/AppShell'
@@ -51,12 +50,7 @@ function AppContent() {
         <Route path="/auth/google/callback" element={<PublicRoute><GoogleCallbackPage /></PublicRoute>} />
         <Route path="/pub/c/:code" element={<PublicCanvasPage />} />
 
-        {/* Standalone applet host - chrome-free, one PWA-shortcut click away.
-            /apps/add/:kind is more specific and matches inside the shell below. */}
-        <Route path="/apps/:appletId" element={<ProtectedRoute><AppletHostPage /></ProtectedRoute>} />
-
-        {/* /next — the experimental content-centric shell. Chrome-free like
-            the applet host; auth required (it talks to the same API). */}
+        {/* /next — the experimental content-centric shell. Chrome-free; auth required (it talks to the same API). */}
         <Route path="/next/*" element={<ProtectedRoute><Suspense fallback={null}><NextShell /></Suspense></ProtectedRoute>} />
 
         {/* Dashboard layout for authenticated routes */}

@@ -1,3 +1,4 @@
+import type { AppCategory } from '@/lib/app-catalog'
 import type { ComponentType } from 'react'
 import { Brush, ListTodo, ScanEye, StickyNote, SlidersHorizontal, type LucideIcon } from 'lucide-react'
 import { NotesApplet } from './NotesApplet'
@@ -7,7 +8,7 @@ import { FiltersApplet } from './FiltersApplet'
 import { SketchApplet } from './SketchApplet'
 
 // Applets are small self-contained apps hosted by the toolbox Apps tab, the
-// standalone /apps/<id> route, and eventually the tauri desktop shell - keep
+// /apps/<id> content route, and the desktop shell - keep
 // them portable: no page-level assumptions, all data access through services
 // and the applet-target context.
 //
@@ -29,6 +30,7 @@ export interface AppletDescriptor {
   id: string
   label: string
   icon: LucideIcon
+  category: AppCategory
   modes: AppletMode[]
   // One-liner for the launcher tile.
   description: string
@@ -36,9 +38,10 @@ export interface AppletDescriptor {
 }
 
 export const APPLETS: AppletDescriptor[] = [
-  { id: 'filters', label: 'Filters', icon: SlidersHorizontal, modes: ['context', 'global'], description: 'Search and filter a workspace or a live context', Component: FiltersApplet },
+  { id: 'filters', category: 'utilities', label: 'Filters', icon: SlidersHorizontal, modes: ['context', 'global'], description: 'Search and filter a workspace or a live context', Component: FiltersApplet },
   {
     id: 'notes',
+    category: 'productivity',
     label: 'Notes',
     icon: StickyNote,
     modes: ['context'],
@@ -47,6 +50,7 @@ export const APPLETS: AppletDescriptor[] = [
   },
   {
     id: 'todo',
+    category: 'productivity',
     label: 'Todos',
     icon: ListTodo,
     modes: ['context'],
@@ -55,6 +59,7 @@ export const APPLETS: AppletDescriptor[] = [
   },
   {
     id: 'sketch',
+    category: 'creative',
     label: 'Sketch',
     icon: Brush,
     modes: ['context'],
@@ -63,6 +68,7 @@ export const APPLETS: AppletDescriptor[] = [
   },
   {
     id: 'lens',
+    category: 'media',
     label: 'Lens',
     icon: ScanEye,
     modes: ['context'],

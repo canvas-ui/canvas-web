@@ -6,7 +6,7 @@ import { loadLayoutMode } from '@/lib/layout-mode'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type MenuSection = 'contexts' | 'workspaces' | 'agents' | 'roles' | 'admin' | 'settings' | null
+export type MenuSection = 'contexts' | 'workspaces' | 'agents' | 'roles' | 'apps' | 'admin' | 'settings' | null
 // 'detail' is the entity's own M2 surface (tree, sessions, URL editor);
 // 'settings' is the settings section list. Creation has no M2 view — it
 // happens in the content area.
@@ -93,6 +93,7 @@ export function sectionFromPath(pathname: string): { section: MenuSection; entit
   if (first === 'agents') {
     return { section: 'agents', entityId: second, m2View: third === 'settings' ? 'settings' : second ? 'detail' : null }
   }
+  if (first === 'apps') return { section: 'apps', entityId: null, m2View: null }
   if (first === 'admin') return { section: 'settings', entityId: null, m2View: null }
   if (PERSONAL_SETTINGS_PATHS.includes(`/${first}`)) return { section: 'settings', entityId: null, m2View: null }
   return { section: null, entityId: null, m2View: null }

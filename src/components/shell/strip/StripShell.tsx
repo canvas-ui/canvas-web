@@ -1,3 +1,4 @@
+import { AppsMenu } from '@/components/menu/apps/AppsMenu'
 import { MenuResizeHandle } from '../MenuResizeHandle'
 import { useReaderWidth } from '@/lib/reader-width'
 import { DEFAULT_SIDE_PANEL_WIDTH } from '@/lib/panel-size'
@@ -95,6 +96,7 @@ function M1List({ section }: { section: ReturnType<typeof useMenu>['state']['act
   if (section === 'workspaces') return <WorkspaceList />
   if (section === 'agents') return <AgentList />
   if (section === 'admin') return <AdminMenu />
+  if (section === 'apps') return <AppsMenu />
   if (section === 'settings') return <SettingsMenu />
   return null
 }

@@ -1,3 +1,4 @@
+import { AppsMenu } from '@/components/menu/apps/AppsMenu'
 import { MenuResizeHandle } from './MenuResizeHandle'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { useRef, useState } from 'react'
@@ -91,6 +92,7 @@ export function MenuPanelArea() {
           {state.activeSection === 'workspaces' && <WorkspaceList />}
           {state.activeSection === 'agents' && <AgentList />}
           {state.activeSection === 'admin' && <AdminMenu />}
+          {state.activeSection === 'apps' && <AppsMenu />}
           {state.activeSection === 'settings' && <SettingsMenu />}
         </div>
 

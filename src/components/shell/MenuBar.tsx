@@ -5,6 +5,7 @@ import { useOfflineStatus } from '@/hooks/useOfflineStatus'
 import { useNavigate } from 'react-router-dom'
 import {
   Layers3,
+  AppWindow,
   LayoutGrid,
   Brain,
   Shield,
@@ -196,6 +197,7 @@ export function MenuBar() {
           {(!runtime.local || runtime.workspace !== false) && <MenuItem section="contexts" icon={<Layers3 className="w-5 h-5" />} label="Contexts" />}
           {(!runtime.local || runtime.workspace !== false) && <MenuItem section="workspaces" icon={<LayoutGrid className="w-5 h-5" />} label="Workspaces" />}
           {(!runtime.local || runtime.agent) && <MenuItem section="agents" icon={<Brain className="w-5 h-5" />} label="Agents" />}
+          <MenuItem section="apps" icon={<AppWindow className="w-5 h-5" />} label="Apps" />
           {/* Roles have no M1 list of their own — the page is the surface. */}
           {(!runtime.local || runtime.workspace !== false) && <NavItem path="/roles" section={null} icon={<Shield className="w-5 h-5" />} label="Roles" />}
 

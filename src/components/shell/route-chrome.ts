@@ -15,5 +15,5 @@ export function isBare(pathname: string): boolean {
 // ContentArea and the strip layout's canvas frames.
 export function isFullBleed(pathname: string): boolean {
   const [section, entity] = pathname.split('/').filter(Boolean)
-  return ['contexts', 'workspaces', 'agents'].includes(section) && Boolean(entity)
+  return ['contexts', 'workspaces', 'agents', 'apps'].includes(section) && Boolean(entity)
 }
