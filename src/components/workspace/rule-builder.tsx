@@ -14,6 +14,7 @@ import {
   getRules, saveRules, appendHookRules, backfillHook, getHooksMeta, listRuns, ruleEvents, rulePaths, splitBackendsPath,
   type HookRule, type HookRuleAction, type HookRun, type RulePrefill,
 } from '@/services/hooks'
+import { startRuleBackfill } from '@/services/rule-backfill'
 import { listScripts } from '@/services/scripts'
 import { messageAccounts, type MessageAccount } from '@/services/messages'
 import { listBackends, type Backend } from '@/services/workspace'
@@ -885,7 +886,7 @@ function IconBadge({ icon: Icon, tone, size = 'md' }: { icon: LucideIcon; tone: 
 // ── component ────────────────────────────────────────────────────────────────
 
 export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit, prefill, onPrefillConsumed, createOnly = false, onCreated, onCancel }: RuleBuilderProps) {
-  const { showToast } = useToast()
+  const { showToast, showProgress } = useToast()
   const [rules, setRules] = useState<HookRule[]>([])
   const [runStats, setRunStats] = useState<Record<string, RunStat>>({})
   const loadRunStats = (id: string) => {
@@ -1041,13 +1042,8 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
         showToast({ title: 'Apply to existing items', description: `No matches among ${dry.processed} existing documents (conditions evaluate against each document's current tree placements). Raise the batch size in the toolbar to cover more.` })
         return
       }
-      if (!confirm(`Rule "${id}" matches ${wouldFire} of ${dry.processed} existing documents. Run its actions on them now?`)) return
-      const run = await backfillHook(workspaceId, { ruleId: id, limit: backfillLimit })
-      showToast({
-        title: 'Done',
-        description: `${run.matched} documents processed, ${run.failed} failed. Details in the Runs tab`,
-        ...(run.failed ? { variant: 'destructive' as const } : {}),
-      })
+      if (!confirm(`Rule "${id}" matches ${wouldFire} of the first ${dry.processed} of ${dry.total ?? dry.processed} existing documents. Run its actions on all of them now?`)) return
+      await startRuleBackfill(showProgress, workspaceId, [id])
     } catch (error) {
       showToast({ title: 'Backfill failed', description: error instanceof Error ? error.message : 'Unknown error', variant: 'destructive' })
     } finally {

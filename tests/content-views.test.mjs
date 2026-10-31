@@ -6,8 +6,8 @@ import { onAccentSolidTextClass, relativeLuminance } from '../src/utils/color.ts
 test('every built-in content app survives metadata persistence alongside existing views', () => {
   const views = CONTENT_APPS.map(app => ({ id: app.id, name: app.label, kind: 'app', app: app.id }))
   assert.deepEqual(viewsFromLayerMetadata(JSON.parse(JSON.stringify({ views }))), views)
-  assert.deepEqual(views.map(contentViewSchema), [undefined, undefined, 'data/schema/note', undefined, undefined])
-  assert.deepEqual(CONTENT_APPS.map(app => app.label), ['Todo list', 'Todo App', 'Notes list', 'Notes App', 'Sketch'])
+  assert.deepEqual(views.map(contentViewSchema), [undefined, undefined, 'data/schema/note', undefined, undefined, undefined])
+  assert.deepEqual(CONTENT_APPS.map(app => app.label), ['Todo list', 'Todo App', 'Notes list', 'Notes App', 'Sketch', 'Terminal'])
   assert.equal(contentViewSchema({ id: 'list', name: 'All', kind: 'documents' }), undefined)
   assert.equal(contentViewSchema(null), undefined)
   assert.equal(viewsFromLayerMetadata({ views: [{ id: 'unknown', name: 'Unknown', kind: 'app', app: 'unknown' }] })[0].kind, 'documents')

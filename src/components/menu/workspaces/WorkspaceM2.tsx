@@ -7,6 +7,7 @@ import { cycleTree } from '@/lib/key-bindings'
 import { AutoLinkFolderPanel } from '../shared/AutoLinkFolderPanel'
 import { StoragePolicyPanel } from '../shared/StoragePolicyPanel'
 import { useStoragePolicies } from '@/hooks/useStoragePolicies'
+import { resumeRuleBackfills } from '@/services/rule-backfill'
 import { describePolicyTargets, policiesForPath, qualifyPolicyPath } from '@/services/storage-policies'
 import { useEffect, useLayoutEffect, useState, useCallback, useRef } from 'react'
 import { Settings, ExternalLink, GitBranch, FolderTree, Layers, LayoutDashboard, Search, Lock, Unlock, Edit2, Trash2, Database, Pin } from 'lucide-react'
@@ -400,6 +401,7 @@ function WorkspaceM2Content() {
   }
 
   const { showProgress } = useToast()
+  useEffect(() => { if (wsName) void resumeRuleBackfills(showProgress, wsName) }, [wsName, showProgress])
   const ops = useTreeOperations({
     workspaceId: wsName ?? undefined,
     treeName: treeNameForTab(activeTab),

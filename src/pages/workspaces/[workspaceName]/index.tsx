@@ -1,3 +1,4 @@
+import { useContentWindow } from '@/components/common/content-window-context';
 import { WorkspaceAreaMenu } from '@/components/workspace/workspace-area-menu';
 import { TrashPanel } from '@/components/workspace/trash-panel';
 import { BackendTrashBrowser } from '@/components/workspaces/BackendTrashBrowser';
@@ -310,17 +311,22 @@ function WorkspaceContent() {
   // path-key (no effects); edits are optimistic with a PATCH behind them.
   // Root '/' is the root layer: its node is the tree itself.
   const nodeForViews = !isLayerView ? (selectedPath === '/' ? tree : selectedNode) : null;
+  const contentWindow = useContentWindow();
   const viewsKey = `${selectedTreeName}\0${selectedPath}`;
   const [viewsState, setViewsState] = useState<{ key: string; views: ContentView[]; activeId: string } | null>(null);
-  const contentViews = viewsState?.key === viewsKey ? viewsState.views : viewsFromLayerMetadata(nodeForViews?.metadata);
-  const activeContentViewId = viewsState?.key === viewsKey ? viewsState.activeId : contentViews[0]?.id ?? DEFAULT_VIEW.id;
+  const pathViews = viewsState?.key === viewsKey ? viewsState.views : viewsFromLayerMetadata(nodeForViews?.metadata);
+  const contentViews = contentWindow?.pinned && contentWindow.view ? [contentWindow.view, ...pathViews.filter(view => view.id !== contentWindow.view!.id)] : pathViews;
+  const activeContentViewId = contentWindow?.pinned && contentWindow.view ? contentWindow.view.id : viewsState?.key === viewsKey ? viewsState.activeId : contentViews[0]?.id ?? DEFAULT_VIEW.id;
   const activeContentView = contentViews.find(v => v.id === activeContentViewId) ?? contentViews[0] ?? DEFAULT_VIEW;
 
-  const documentSchema = !isBackendsPath ? contentViewSchema(activeContentView) : undefined;
+  useEffect(() => { contentWindow?.selectView(activeContentView); }, [activeContentView, contentWindow]);
+  const documentSchema = !isBackendsPath ? contentWindow?.schema ?? contentViewSchema(activeContentView) : undefined;
   const viewAllOf = documentSchema ? [...tbAllOf, documentSchema] : tbAllOf;
-  const selectContentView = (id: string) => { setCurrentPage(1); setLeftSelection([]); setViewsState({ key: viewsKey, views: contentViews, activeId: id }); };
+  const selectContentView = (id: string) => { const view = contentViews.find(view => view.id === id); if (view) contentWindow?.selectView(view); setCurrentPage(1); setLeftSelection([]); setViewsState({ key: viewsKey, views: contentViews, activeId: id }); };
   const saveContentViews = (views: ContentView[], nextActiveId?: string) => {
     if (nextActiveId && nextActiveId !== activeContentViewId) { setCurrentPage(1); setLeftSelection([]); }
+    const nextView = views.find(view => view.id === (nextActiveId ?? activeContentViewId));
+    if (nextView) contentWindow?.selectView(nextView);
     setViewsState({ key: viewsKey, views, activeId: nextActiveId ?? activeContentViewId });
     // metadata is REPLACED server-side — carry the layer's other keys along.
     updateWorkspacePath(

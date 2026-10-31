@@ -10,13 +10,14 @@ const jsx = (type, props) => ({ type, props })
 function reader() {
   const storage = new Map(), slots = []
   let cursor = 0
-  const options = { enabled: true, mobile: false, parent: {} }
+  const options = { enabled: true, mobile: false, parent: {}, contentWindow: null }
   const deps = {
     react: {
       useState(initial) { const i = cursor++; slots[i] ??= { value: typeof initial === 'function' ? initial() : initial }; return [slots[i].value, next => { slots[i].value = next }] },
       useCallback: fn => fn, useMemo: fn => fn(),
     },
     'react/jsx-runtime': { jsx, jsxs: jsx },
+    './content-window-context': { useContentWindow: () => options.contentWindow },
     '@/lib/always-on-reader': { useAlwaysOnReader: () => options.enabled },
     '@/lib/reader-width': { useReaderWidth: () => null },
     '@/hooks/use-mobile': { useIsMobile: () => options.mobile },
@@ -83,4 +84,12 @@ test('appearance preference defaults to on and persists explicit opt-out', () =>
   assert.equal(storage.get('canvas:alwaysOnReader'), 'off')
   exports.setAlwaysOnReader(true)
   assert.equal(exports.useAlwaysOnReader(), true)
+})
+
+test('a narrow hosted window keeps a usable list instead of squeezing a reader alongside it', () => {
+  const ui = reader()
+  ui.options.contentWindow = { width: 500 }
+  assert.equal(ui.gate(props), 'list')
+  ui.options.contentWindow.width = 1100
+  assert.notEqual(ui.gate(props), 'list')
 })

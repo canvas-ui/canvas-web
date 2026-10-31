@@ -11,13 +11,14 @@ export type ContentViewKind = 'documents' | 'columns' | 'app'
 
 // Full content-page apps a tab can host — each renders the layer's data
 // through an app-shaped lens (see content-app-view.tsx).
-export type ContentAppId = 'todos' | 'todo-app' | 'notes' | 'notes-app' | 'filters' | 'sketch' | 'lens'
+export type ContentAppId = 'todos' | 'todo-app' | 'notes' | 'notes-app' | 'filters' | 'sketch' | 'lens' | 'terminal'
 export const CONTENT_APPS: ReadonlyArray<{ id: ContentAppId; label: string }> = [
   { id: 'todos', label: 'Todo list' },
   { id: 'todo-app', label: 'Todo App' },
   { id: 'notes', label: 'Notes list' },
   { id: 'notes-app', label: 'Notes App' },
   { id: 'sketch', label: 'Sketch' },
+  { id: 'terminal', label: 'Terminal' },
 ]
 
 /** Notes use the ordinary document pipeline, including search and actions. */

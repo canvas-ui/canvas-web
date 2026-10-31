@@ -363,10 +363,9 @@ export async function explainDocument(
 // ── Backfill + replay + manual run ───────────────────────────────────────────
 
 // Backfill batch size: how many existing documents one backfill/run pass
-// feeds to a rule or hook. The server default (100) keeps an accidental click
-// cheap; the hooks panel exposes the knob for deliberate bulk runs, persisted
-// per browser. Hard server ceiling: BACKFILL_MAX_LIMIT.
-export const DEFAULT_BACKFILL_LIMIT = 100
+// feeds to a rule or hook. The hooks panel exposes the knob, persisted per
+// browser. Hard server ceiling: BACKFILL_MAX_LIMIT.
+export const DEFAULT_BACKFILL_LIMIT = 500
 export const BACKFILL_MAX_LIMIT = 10000
 const BACKFILL_LIMIT_KEY = 'canvas.hooks.backfillLimit'
 
@@ -407,7 +406,7 @@ export interface BackfillResult {
   dryRun: boolean
   processed: number
   total?: number
-  nextOffset?: number | null
+  nextOffset: number | null
   matched: number
   failed: number
   results: Array<{ docId: number; schema: string; matched?: boolean | null; status?: string; checks?: ExplainCheck[] }>
@@ -419,6 +418,31 @@ export async function backfillHook(
 ): Promise<BackfillResult> {
   const res = await api.post<BackfillResult>(`${hooksBase(workspaceId)}/backfill`, body)
   return res
+}
+
+export interface BackfillJob {
+  id: string
+  ruleIds: string[]
+  status: 'running' | 'done' | 'failed' | 'stopped'
+  ruleIndex: number
+  processed: number
+  total: number | null
+  checked: number
+  applied: number
+  failed: number
+  error: string | null
+}
+
+export function startBackfillJob(workspaceId: string, body: { ruleIds: string[]; limit?: number }): Promise<BackfillJob> {
+  return api.post<BackfillJob>(`${hooksBase(workspaceId)}/backfill/jobs`, body)
+}
+
+export function getBackfillJob(workspaceId: string, jobId: string): Promise<BackfillJob> {
+  return api.get<BackfillJob>(`${hooksBase(workspaceId)}/backfill/jobs/${jobId}`)
+}
+
+export function listBackfillJobs(workspaceId: string): Promise<BackfillJob[]> {
+  return api.get<BackfillJob[]>(`${hooksBase(workspaceId)}/backfill/jobs`)
 }
 
 export interface HookRunResult {

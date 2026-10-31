@@ -1,3 +1,4 @@
+import { useContentWindow } from './content-window-context'
 import { useCallback, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { useAlwaysOnReader } from '@/lib/always-on-reader'
 import { useReaderWidth } from '@/lib/reader-width'
@@ -17,11 +18,12 @@ interface Props {
 }
 
 export function DocumentReadingLayout(props: Props) {
+  const contentWindow = useContentWindow()
   const alwaysOn = useAlwaysOnReader()
   const mobile = useIsMobile()
   const parent = useSideView()
   // Explicit document permalinks retain their URL-backed reader and tabs.
-  if (!props.enabled || !props.workspaceId || !alwaysOn || mobile || parent.location) return props.children
+  if (!props.enabled || !props.workspaceId || !alwaysOn || mobile || (contentWindow?.width !== undefined && contentWindow.width < 720) || parent.location) return props.children
   return <ReadingLayout key={props.scope} {...props} workspaceId={props.workspaceId} />
 }
 

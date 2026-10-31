@@ -1,6 +1,7 @@
+import { TerminalApplet } from './TerminalApplet'
 import type { AppCategory } from '@/lib/app-catalog'
 import type { ComponentType } from 'react'
-import { Brush, ListTodo, ScanEye, StickyNote, SlidersHorizontal, type LucideIcon } from 'lucide-react'
+import { TerminalSquare, Brush, ListTodo, ScanEye, StickyNote, SlidersHorizontal, type LucideIcon } from 'lucide-react'
 import { NotesApplet } from './NotesApplet'
 import { TodosApplet } from './TodosApplet'
 import { LensApplet } from './LensApplet'
@@ -38,6 +39,7 @@ export interface AppletDescriptor {
 }
 
 export const APPLETS: AppletDescriptor[] = [
+  { id: 'terminal', category: 'utilities', label: 'Terminal', icon: TerminalSquare, modes: ['context'], description: 'Shell sessions for this context', Component: TerminalApplet },
   { id: 'filters', category: 'utilities', label: 'Filters', icon: SlidersHorizontal, modes: ['context', 'global'], description: 'Search and filter a workspace or a live context', Component: FiltersApplet },
   {
     id: 'notes',

@@ -7,11 +7,78 @@ import { buildAutoLinkRules } from '../src/lib/auto-link.ts'
 
 const tick = () => new Promise(resolve => setImmediate(resolve))
 
-test('Auto-Link displays scan totals, uses the saved batch size and resumes a failed batch', async () => {
-  const slots = [], calls = [], pending = []
-  let cursor = 0
+const load = (file, dependencies, globals = {}) => {
+  const exports = {}
+  vm.runInNewContext(ts.transpileModule(readFileSync(new URL(file, import.meta.url), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
+  }).outputText, { exports, require: name => {
+    assert.ok(name in dependencies, `Unexpected import ${name}`)
+    return dependencies[name]
+  }, ...globals })
+  return exports
+}
+
+function runner(hooks) {
+  const notices = []
+  const showProgress = toast => {
+    notices.push(['start', toast])
+    return { update: t => notices.push(['update', t]), done: t => notices.push(['done', t]), fail: t => notices.push(['fail', t]) }
+  }
+  const service = load('../src/services/rule-backfill.ts', { './hooks': { getBackfillLimit: () => 2, ...hooks } }, {
+    Error, Map, Promise, String, CustomEvent: class {}, window: { dispatchEvent() {} },
+    setTimeout: callback => setImmediate(callback),
+  })
+  return { notices, showProgress, ...service }
+}
+const job = fields => ({ id: 'j1', ruleIds: ['a'], status: 'running', ruleIndex: 0, processed: 0, total: null, checked: 0, applied: 0, failed: 0, error: null, ...fields })
+
+test('the notice follows the server job and reports its result', async () => {
+  const states = [job({ ruleIds: ['a', 'b'], processed: 2, total: 3, checked: 2, applied: 2 }), job({ ruleIds: ['a', 'b'], status: 'done', checked: 6, applied: 4, failed: 2 })]
+  let started
+  const { notices, showProgress, startRuleBackfill } = runner({
+    startBackfillJob: async (_workspace, body) => { started = body; return job({ ruleIds: ['a', 'b'] }) },
+    getBackfillJob: async () => states.shift(),
+  })
+  await startRuleBackfill(showProgress, 'work', ['a', 'b'])
+  assert.deepEqual([...started.ruleIds], ['a', 'b'])
+  assert.equal(started.limit, 2)
+  assert.match(notices.find(([kind]) => kind === 'update')[1].description, /Rule 1\/2: 2 \/ 3 documents · 2 applied/)
+  const [kind, result] = notices.at(-1)
+  assert.equal(kind, 'done')
+  assert.equal(result.variant, 'destructive')
+  assert.match(result.description, /6 checked, 4 applied, 2 failed/)
+})
+
+test('a reload picks running jobs back up and rides out a polling blip', async () => {
+  let polls = 0
+  const { notices, showProgress, resumeRuleBackfills } = runner({
+    listBackfillJobs: async () => [job({ id: 'old', status: 'done' }), job({ processed: 5, total: 9 })],
+    getBackfillJob: async () => {
+      if (++polls === 1) throw new Error('Connection interrupted')
+      return job({ status: 'failed', checked: 5, applied: 5, error: 'db closed' })
+    },
+  })
+  await resumeRuleBackfills(showProgress, 'work')
+  for (let i = 0; i < 5; i++) await tick()
+  assert.equal(notices.filter(([kind]) => kind === 'start').length, 1)
+  assert.match(notices[0][1].description, /5 \/ 9 documents/)
+  const [kind, result] = notices.at(-1)
+  assert.equal(kind, 'fail')
+  assert.match(result.description, /5 checked, 5 applied: db closed/)
+})
+
+test('a run that cannot start says so instead of throwing', async () => {
+  const { notices, showProgress, startRuleBackfill } = runner({ startBackfillJob: async () => { throw new Error('Rule not found') } })
+  await startRuleBackfill(showProgress, 'work', ['a'])
+  assert.equal(notices.at(-1)[0], 'fail')
+  assert.match(notices.at(-1)[1].description, /Rule not found/)
+})
+
+test('enabling Autolink hands existing documents to the server job and closes', async () => {
+  const slots = [], order = []
+  let cursor = 0, closed = 0
   const jsx = (type, props) => ({ type, props })
-  const dependencies = {
+  const { AutoLinkFolderPanel } = load('../src/components/menu/shared/AutoLinkFolderPanel.tsx', {
     react: { useEffect() {}, useState(initial) {
       const index = cursor++
       if (!slots[index]) slots[index] = { value: typeof initial === 'function' ? initial() : initial }
@@ -20,52 +87,26 @@ test('Auto-Link displays scan totals, uses the saved batch size and resumes a fa
     'react/jsx-runtime': { jsx, jsxs: jsx },
     'lucide-react': {},
     '@/components/ui/button': { Button: 'Button' },
+    '@/components/ui/use-toast': { useToast: () => ({ showToast() {}, showProgress() {} }) },
     './LinkToCard': { LinkToCard: 'LinkToCard' },
     '@/components/common/document-action-dialog': { DocumentActionDialog: 'Dialog' },
     '@/lib/auto-link': { buildAutoLinkRules },
-    '@/services/hooks': {
-      getBackfillLimit: () => 2,
-      addAutoLinkRule: async () => {},
-      backfillHook: async (_workspace, body) => {
-        calls.push(body)
-        if (body.dryRun) return { total: 4, processed: 1, matched: 1, failed: 0, nextOffset: body.offset + 1 }
-        return new Promise((resolve, reject) => pending.push({ resolve, reject }))
-      },
-    },
+    '@/services/hooks': { addAutoLinkRule: async () => { order.push('saved') } },
+    '@/services/rule-backfill': { startRuleBackfill: (_progress, workspace, ids) => {
+      order.push(`backfill:${workspace}:${ids.length}`)
+      return new Promise(() => {}) // still running when the panel closes
+    } },
     '@/services/workspace': {},
     '@/lib/backend-upload': {},
-  }
-  const exports = {}
-  vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../src/components/menu/shared/AutoLinkFolderPanel.tsx', import.meta.url), 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
-  }).outputText, { exports, require: name => {
-    assert.ok(name in dependencies, `Unexpected import ${name}`)
-    return dependencies[name]
-  }, crypto: { randomUUID: () => 'test' }, window: { dispatchEvent() {} }, CustomEvent: class {} })
+  }, { crypto: { randomUUID: () => 'test' } })
 
-  const render = () => { cursor = 0; return exports.AutoLinkFolderPanel({ workspaceId: 'work', sourcePath: '/workspace/home/photos', onClose() {}, onManageRules() {} }) }
+  const render = () => { cursor = 0; return AutoLinkFolderPanel({ workspaceId: 'work', sourcePath: '/workspace/home/photos', onClose() { closed++ }, onManageRules() {} }) }
   const nodes = node => Array.isArray(node) ? node.flatMap(nodes) : node && typeof node === 'object' ? [node, ...nodes(node.props?.children)] : []
   const text = node => Array.isArray(node) ? node.map(text).join('') : node && typeof node === 'object' ? text(node.props?.children) : typeof node === 'string' || typeof node === 'number' ? String(node) : ''
   const button = label => nodes(render()).find(node => node.type === 'Button' && text(node) === label)
   button('Add virtual path…').props.onClick()
   nodes(render()).find(node => node.type === 'LinkToCard').props.onConfirm(['/photos'], { treeType: 'context' })
-
-  const run = button('Enable Autolink').props.onClick()
-  await tick()
-  assert.match(text(render()), /Processing 0\/4 existing documents/)
-  assert.equal(calls.at(-1).limit, 2)
-  pending.shift().resolve({ total: 4, processed: 2, matched: 1, failed: 0, nextOffset: 2 })
-  await tick()
-  assert.match(text(render()), /Processing 2\/4 existing documents… 1 matches applied/)
-  pending.shift().reject(new Error('Connection interrupted'))
-  await run
-  const retry = button('Retry existing documents').props.onClick()
-  await tick()
-  assert.equal(calls.at(-1).offset, 2, 'retry must resume after the completed batch')
-  assert.match(text(render()), /Processing 2\/4 existing documents/)
-  pending.shift().resolve({ total: 4, processed: 2, matched: 2, failed: 1, nextOffset: null })
-  await retry
-  assert.match(text(render()), /4 documents checked\. 2 matches applied/)
-  assert.match(text(render()), /1 document operations failed/)
-  assert.ok(button('Done'))
+  await button('Enable Autolink').props.onClick()
+  assert.deepEqual(order, ['saved', 'backfill:work:1'])
+  assert.equal(closed, 1)
 })

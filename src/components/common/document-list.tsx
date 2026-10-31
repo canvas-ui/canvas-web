@@ -1,3 +1,4 @@
+import { useContentWindow } from './content-window-context'
 import { useTileStyle } from '@/lib/tile-style'
 import './document-tiles.css'
 import { DocumentReadingLayout } from './document-reading-layout'
@@ -1066,6 +1067,7 @@ function DateGroupHeader({ label, count, collapsed, allSelected, someSelected, o
 }
 
 export function DocumentList({ readingPane = false, externalSearchQuery, toolbarActions, documents, isLoading, contextPath, treeName, workspaceId, totalCount, onRemoveDocument, onDeleteDocument, onDestroyDocument, onRemoveDocuments, onDeleteDocuments, onDestroyDocuments, onCopyDocuments, onCutDocuments, onPasteDocuments, onImportDocuments, onSelectionChange, pastedDocumentIds, viewMode = 'card', allowViewToggle = false, activeContextUrl, currentContextUrl, currentPage = 1, pageSize = 50, onPageChange, onPageSizeChange, onPurgeDocuments, disablePurgeDocuments = false, backendSearchQueries = [], onBackendSearch, onRemoveBackendQuery, serverSort, onServerSortChange, scope = 'path', onScopeChange, canSaveChanges = false, isSavingChanges = false, onSaveChanges, linkTree, folders, onOpenFolder }: DocumentListProps) {
+  const contentWindow = useContentWindow()
   const tileStyle = useTileStyle()
   // View switcher (table/tile/card). Only active when allowViewToggle; the
   // chosen view is remembered in localStorage. Widgets that hardcode viewMode
@@ -1078,11 +1080,12 @@ export function DocumentList({ readingPane = false, externalSearchQuery, toolbar
     } catch { /* ignore */ }
     return viewMode
   })
-  const view = allowViewToggle ? storedView : viewMode
+  const view = allowViewToggle ? contentWindow?.documentLayout ?? storedView : viewMode
   const changeView = useCallback((v: 'card' | 'table' | 'tile') => {
+    contentWindow?.selectDocumentLayout(v)
     setStoredView(v)
     try { localStorage.setItem('doclist:view', v) } catch { /* ignore */ }
-  }, [])
+  }, [contentWindow])
   // Explorer-style date bands (Today / Yesterday / Earlier this week / …) over
   // the tile and card views. On by default: the folders that hurt are the big
   // dynamic ones (Downloads, an inbox), and there the bands are the difference
