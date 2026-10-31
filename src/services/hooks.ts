@@ -423,12 +423,13 @@ export async function backfillHook(
 export interface BackfillJob {
   id: string
   ruleIds: string[]
-  status: 'running' | 'done' | 'failed' | 'stopped'
+  status: 'running' | 'done' | 'failed' | 'cancelled'
   ruleIndex: number
   processed: number
   total: number | null
   checked: number
   applied: number
+  skipped: number
   failed: number
   error: string | null
 }
@@ -439,6 +440,10 @@ export function startBackfillJob(workspaceId: string, body: { ruleIds: string[];
 
 export function getBackfillJob(workspaceId: string, jobId: string): Promise<BackfillJob> {
   return api.get<BackfillJob>(`${hooksBase(workspaceId)}/backfill/jobs/${jobId}`)
+}
+
+export function cancelBackfillJob(workspaceId: string, jobId: string): Promise<BackfillJob> {
+  return api.delete<BackfillJob>(`${hooksBase(workspaceId)}/backfill/jobs/${jobId}`)
 }
 
 export function listBackfillJobs(workspaceId: string): Promise<BackfillJob[]> {

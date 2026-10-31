@@ -2,6 +2,7 @@ import { createContext, useContext } from 'react'
 
 export type ToastType = {
   id: string
+  action?: { label: string; onClick: () => void }
   title: string
   description?: string
   variant?: 'default' | 'destructive'
@@ -13,6 +14,8 @@ export type ToastInput = Omit<ToastType, 'id' | 'busy'> & {
   /** Stable delivery identity/time for incoming notifications. */
   historyId?: string
   timestamp?: string
+  /** Offered on a running operation, e.g. Cancel. */
+  action?: { label: string; onClick: () => void }
 }
 
 /** Handle for a long-running operation's toast; settle it exactly once. */

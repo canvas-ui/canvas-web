@@ -90,6 +90,7 @@ export function ToastContainer({ children }: { children?: React.ReactNode }) {
               </ToastTitle>
               {toast.description != null && <ToastDescription>{toast.description}</ToastDescription>}
             </div>
+            {toast.busy && toast.action && <button type="button" className="shrink-0 rounded-md border px-2 py-1 text-xs hover:bg-secondary" onClick={toast.action.onClick}>{toast.action.label}</button>}
             {!toast.busy && <ToastClose />}
           </Toast>
         ))}

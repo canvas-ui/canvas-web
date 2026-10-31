@@ -19,49 +19,80 @@ const load = (file, dependencies, globals = {}) => {
 }
 
 function runner(hooks) {
-  const notices = []
+  const notices = [], listeners = new Map(), subscribed = []
+  const socketService = {
+    on(event, handler) { listeners.set(event, [...(listeners.get(event) || []), handler]); return () => socketService.off(event, handler) },
+    off(event, handler) { listeners.set(event, (listeners.get(event) || []).filter(entry => entry !== handler)) },
+    emit(event, payload) { if (event === 'subscribe') subscribed.push(payload.channel) },
+  }
+  const fire = (event, payload) => (listeners.get(event) || []).forEach(handler => handler(payload))
   const showProgress = toast => {
     notices.push(['start', toast])
     return { update: t => notices.push(['update', t]), done: t => notices.push(['done', t]), fail: t => notices.push(['fail', t]) }
   }
-  const service = load('../src/services/rule-backfill.ts', { './hooks': { getBackfillLimit: () => 2, ...hooks } }, {
+  const service = load('../src/services/rule-backfill.ts', { '@/lib/socket': { socketService }, './hooks': { getBackfillLimit: () => 2, ...hooks } }, {
     Error, Map, Promise, String, CustomEvent: class {}, window: { dispatchEvent() {} },
-    setTimeout: callback => setImmediate(callback),
   })
-  return { notices, showProgress, ...service }
+  return { notices, showProgress, fire, listeners, subscribed, ...service }
 }
-const job = fields => ({ id: 'j1', ruleIds: ['a'], status: 'running', ruleIndex: 0, processed: 0, total: null, checked: 0, applied: 0, failed: 0, error: null, ...fields })
+const job = fields => ({ id: 'j1', ruleIds: ['a'], status: 'running', ruleIndex: 0, processed: 0, total: null, checked: 0, applied: 0, skipped: 0, failed: 0, error: null, ...fields })
 
-test('the notice follows the server job and reports its result', async () => {
-  const states = [job({ ruleIds: ['a', 'b'], processed: 2, total: 3, checked: 2, applied: 2 }), job({ ruleIds: ['a', 'b'], status: 'done', checked: 6, applied: 4, failed: 2 })]
+test('the notice follows job events, ignores other jobs and stops listening when finished', async () => {
+  const running = job({ ruleIds: ['a', 'b'] })
   let started
-  const { notices, showProgress, startRuleBackfill } = runner({
-    startBackfillJob: async (_workspace, body) => { started = body; return job({ ruleIds: ['a', 'b'] }) },
-    getBackfillJob: async () => states.shift(),
+  const { notices, showProgress, fire, listeners, subscribed, startRuleBackfill } = runner({
+    startBackfillJob: async (_workspace, body) => { started = body; return running },
+    getBackfillJob: async () => running,
   })
-  await startRuleBackfill(showProgress, 'work', ['a', 'b'])
-  assert.deepEqual([...started.ruleIds], ['a', 'b'])
+  const run = startRuleBackfill(showProgress, 'work', ['a', 'b'])
+  await tick()
   assert.equal(started.limit, 2)
-  assert.match(notices.find(([kind]) => kind === 'update')[1].description, /Rule 1\/2: 2 \/ 3 documents · 2 applied/)
+  assert.equal(subscribed[0], 'workspace:work')
+  fire('job.progress', { job: job({ id: 'other', processed: 99 }) })
+  fire('job.progress', { job: job({ ruleIds: ['a', 'b'], processed: 2, total: 3, applied: 2 }) })
+  assert.ok(notices.some(([kind, toast]) => kind === 'update' && /Rule 1\/2: 2 \/ 3 documents · 2 applied/.test(toast.description)))
+  assert.ok(!notices.some(([, toast]) => /99/.test(toast.description || '')))
+  fire('job.finished', { job: job({ ruleIds: ['a', 'b'], status: 'done', checked: 6, applied: 3, skipped: 1, failed: 2 }) })
+  await run
   const [kind, result] = notices.at(-1)
   assert.equal(kind, 'done')
   assert.equal(result.variant, 'destructive')
-  assert.match(result.description, /6 checked, 4 applied, 2 failed/)
+  assert.match(result.description, /6 checked, 3 applied, 1 already there, 2 failed/)
+  assert.deepEqual(listeners.get('job.progress'), [])
+  assert.deepEqual(listeners.get('connect'), [])
 })
 
-test('a reload picks running jobs back up and rides out a polling blip', async () => {
-  let polls = 0
-  const { notices, showProgress, resumeRuleBackfills } = runner({
+test('skipped documents alone finish cleanly, and Cancel asks the server to stop', async () => {
+  const cancelled = []
+  const { notices, showProgress, fire, startRuleBackfill } = runner({
+    startBackfillJob: async () => job(),
+    getBackfillJob: async () => job(),
+    cancelBackfillJob: async (_workspace, id) => { cancelled.push(id); return job() },
+  })
+  const run = startRuleBackfill(showProgress, 'work', ['a'])
+  await tick()
+  notices[0][1].action.onClick()
+  assert.deepEqual(cancelled, ['j1'])
+  assert.equal(notices.at(-1)[1].title, 'Cancelling…')
+  fire('job.finished', { job: job({ status: 'cancelled', checked: 2, applied: 1, skipped: 1 }) })
+  await run
+  const [kind, result] = notices.at(-1)
+  assert.deepEqual([kind, result.title, result.variant], ['done', 'Cancelled', undefined])
+})
+
+test('a reload picks running jobs up, and a socket reconnect catches up on a missed finish', async () => {
+  let poll = job({ processed: 5, total: 9 })
+  const { notices, showProgress, fire, resumeRuleBackfills } = runner({
     listBackfillJobs: async () => [job({ id: 'old', status: 'done' }), job({ processed: 5, total: 9 })],
-    getBackfillJob: async () => {
-      if (++polls === 1) throw new Error('Connection interrupted')
-      return job({ status: 'failed', checked: 5, applied: 5, error: 'db closed' })
-    },
+    getBackfillJob: async () => poll,
   })
   await resumeRuleBackfills(showProgress, 'work')
-  for (let i = 0; i < 5; i++) await tick()
+  await tick()
   assert.equal(notices.filter(([kind]) => kind === 'start').length, 1)
   assert.match(notices[0][1].description, /5 \/ 9 documents/)
+  poll = job({ status: 'failed', checked: 5, applied: 5, error: 'db closed' })
+  fire('connect')
+  await tick()
   const [kind, result] = notices.at(-1)
   assert.equal(kind, 'fail')
   assert.match(result.description, /5 checked, 5 applied: db closed/)
