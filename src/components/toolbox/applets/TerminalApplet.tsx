@@ -9,7 +9,7 @@ import { useTerminalTransport, type TerminalSession, type TerminalTransport, typ
 function TerminalScreen({ session, transport, report }: { session: TerminalSession; transport: TerminalTransport; report: (error: unknown) => void }) {
   const host = useRef<HTMLDivElement>(null)
   const reportRef = useRef(report)
-  reportRef.current = report
+  useEffect(() => { reportRef.current = report }, [report])
   useEffect(() => {
     if (!host.current) return
     const terminal = new Terminal({ cursorBlink: true, scrollback: 10000, fontSize: 14, fontFamily: 'monospace', theme: { background: '#111418', foreground: '#e4e8ee' }, allowProposedApi: false })
