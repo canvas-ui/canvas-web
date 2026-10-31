@@ -1,3 +1,5 @@
+import { useNavigate } from 'react-router-dom'
+import { buildWorkspaceUrl } from '@/utils/url-params'
 import { useState, type ReactNode } from 'react'
 import { ContextMenuShell } from '@/components/common/context-menu-shell'
 import { useTreeOperations } from '@/hooks/useTreeOperations'
@@ -7,8 +9,18 @@ export function WorkspaceAreaMenu({ workspaceId, treeName = 'context', path = '/
   workspaceId: string; treeName?: string; path?: string; children: ReactNode; className?: string; headerOnly?: boolean; readOnly?: boolean
 }) {
   const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null)
+  const navigate = useNavigate()
   const ops = useTreeOperations({ workspaceId, treeName })
   const actions = [
+    ...(!readOnly && treeName !== 'backends' ? [
+      { label: 'New folder…', run: async () => {
+        const name = prompt('New folder name:')?.trim()
+        if (!name) return
+        if (/[\\/]/.test(name) || name === '.' || name === '..') throw new Error('Enter a folder name without slashes')
+        await ops.onInsertPath(`${path === '/' ? '' : path}/${name}`)
+      } },
+      { label: 'New canvas…', run: async () => { navigate(`${buildWorkspaceUrl(workspaceId, path, treeName)}?createCanvas=1`) } },
+    ] : []),
     ...(!readOnly && ops.onImportDocuments ? [{ label: 'Import documents…', run: () => ops.onImportDocuments!(path) }] : []),
     { label: 'Export documents…', run: () => ops.onExportDocuments!(path) },
   ]

@@ -1,3 +1,4 @@
+import { getLocationFilename } from '@/lib/document-display'
 import { useEditNoteFields } from '@/components/toolbox/add/useEditNoteFields'
 import { NoteSaveStatus } from '@/components/common/note-save-status'
 import { useEffect, useState } from 'react'
@@ -69,6 +70,9 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
   // The comment section is universal — every document can carry a user comment,
   // including photos/files that are otherwise not editable.
   const editable = isEditableSchema(doc.schema)
+  const isFile = doc.schema === 'data/schema/file'
+  const [filename, setFilename] = useState(() => getLocationFilename(doc))
+  const filenameValid = !isFile || (!!filename.trim() && !/[\\/]/.test(filename) && !Array.from(filename).some(char => char.charCodeAt(0) < 32) && filename !== '.' && filename !== '..')
   const isNote = doc.schema === NOTE_SCHEMA
   // A markdown/text FILE edits its body exactly like a note does — same
   // wrapper, same Save button — except the body lives in a blob, so it is
@@ -142,7 +146,7 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
 
   const urlValid = !urlKey || (() => { try { new URL(url.trim()); return true } catch { return false } })()
   // Files without editable bodies can still save tags, comments and geolocation.
-  const canSave = !saving && (isTextFile
+  const canSave = !saving && filenameValid && (isTextFile
     ? !bodyTooLarge && fileBody.text != null && !fileBody.loading
     : !editable
     ? true
@@ -165,7 +169,7 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
       if (isTextFile) {
         const saved = await saveTextFileContent(workspaceId, doc, content, {
           comment: comment.trim(),
-          metadata: { features: editedFeatures, ...(geoChanged ? { geo } : {}) },
+          metadata: { features: editedFeatures, ...(isFile ? { filename: filename.trim() } : {}), ...(geoChanged ? { geo } : {}) },
         })
         showSuccessToast('Document updated')
         window.dispatchEvent(new CustomEvent('workspace:documents:refresh'))
@@ -180,7 +184,7 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
         schema: doc.schema,
         schemaVersion: doc.schemaVersion,
         comment: comment.trim(),
-        metadata: { features: editedFeatures },
+        metadata: { features: editedFeatures, ...(isFile ? { filename: filename.trim() } : {}) },
       }
       // Only send data for editable schemas — sending `data` would
       // wholesale-replace it (BaseDocument.update), clobbering a photo/file's data.
@@ -229,6 +233,11 @@ export function DocumentEditForm({ document: doc, workspaceId, onClose }: { docu
 
   return (
     <div className="flex flex-col gap-4">
+      {isFile && <div className="space-y-2">
+        <Label htmlFor="file-name">File name</Label>
+        <Input id="file-name" value={filename} onChange={event => setFilename(event.target.value)} />
+        <p className="text-xs text-muted-foreground">Changes the object’s name; storage locations stay the same.</p>
+      </div>}
       {editable && urlKey && (
         <div className="space-y-1.5">
           <Label htmlFor="edit-url">URL</Label>

@@ -6,7 +6,8 @@
  *   const ops = useTreeOperations({ contextId: 'myCtx', onRefresh })
  *   const ops = useTreeOperations({ workspaceId: 'myWs', treeName: 'directory', onRefresh })
  */
-import { useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { getRules, type HookRule } from '@/services/hooks'
 import { useOperationProgress } from './useOperationProgress'
 import { useToast } from '@/components/ui/use-toast'
 import { syncBackendWithProgress } from '@/services/backend-sync-progress'
@@ -47,6 +48,31 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
   const { showProgress } = useToast()
   const wsTree = treeName || DEFAULT_WORKSPACE_TREE_NAME
   const isDirectoryTree = wsTree === 'directory'
+  const [sourceRules, setSourceRules] = useState<HookRule[]>([])
+  useEffect(() => {
+    let disposed = false
+    const load = () => { if (workspaceId) void getRules(workspaceId).then(rules => { if (!disposed) setSourceRules(rules) }).catch(() => {}) }
+    load()
+    window.addEventListener('focus', load)
+    return () => { disposed = true; window.removeEventListener('focus', load) }
+  }, [workspaceId, wsTree])
+  const backendSources = useCallback((path: string): string[] => {
+    if (wsTree === 'backends') return [path]
+    const target = `${isDirectoryTree ? 'dir' : 'ctx'}:${path}`
+    return [...new Set(sourceRules.filter(rule => rule.enabled !== false).flatMap(rule => {
+      const source = rule.when.pathExact || rule.when.path
+      const sources = (Array.isArray(source) ? source : [source]).filter((v): v is string => typeof v === 'string' && v.startsWith('backends:'))
+      return rule.then.flatMap(action => {
+        if (action.action !== 'link' || !Array.isArray(action.paths)) return []
+        return action.paths.flatMap(destination => {
+          if (typeof destination !== 'string') return []
+          const suffix = destination === target ? '' : action.recursive && target.startsWith(destination + '/') ? target.slice(destination.length) : null
+          return suffix === null ? [] : sources.map(source => source.slice(9) + suffix)
+        })
+      })
+    }))]
+  }, [sourceRules, wsTree, isDirectoryTree])
+
 
   const refresh = useCallback((delay = 150) => {
     if (onRefresh) setTimeout(onRefresh, delay)
@@ -205,21 +231,24 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     return result
   }, [workspaceId, wsTree, refresh])
 
-  // Resync a backend from its backends-tree mirror node path. Parse the node to
-  // its (driver, address) pair and hit the unified /backends/:driver/:address
-  // /sync endpoint; the server dispatches by driver (imap account fan-out vs
-  // storage scan). MVP resyncs the whole backend/account.
+  // Refresh the selected mailbox, or the backend when its root is selected.
   const onResyncBackend = useCallback(async (path: string): Promise<boolean> => {
     if (!workspaceId) return false
     // Backends list resolves device-scoped mount nodes (/device/<device>/<mount>)
     // by treePath; fetched per op — these are rare, user-triggered actions.
     const backends = await listBackends(workspaceId).catch(() => [])
-    const target = backendAddressFromTreePath(path, backends)
-    if (!target) return false
-    await syncBackendWithProgress(showProgress, workspaceId, target.driver, target.address)
+    const sources = backendSources(path)
+    for (const source of sources) {
+      const target = backendAddressFromTreePath(source, backends)
+      if (!target) continue
+      const backend = backends.find(b => b.driver === target.driver && b.address === target.address)
+      const container = target.driver === 'imap' ? backend?.containers?.find(c => c.treePath === source) : undefined
+      if (target.driver === 'imap' && source !== backend?.treePath && !container) throw new Error('Select a subscribed mailbox folder to refresh')
+      await syncBackendWithProgress(showProgress, workspaceId, target.driver, target.address, undefined, container?.name)
+    }
     refresh(300)
-    return true
-  }, [workspaceId, refresh, showProgress])
+    return sources.length > 0
+  }, [workspaceId, refresh, showProgress, backendSources])
 
   // ── Backend file-folder ops (writable file backends in the backends tree) ──
   // Real fs directories on the backend; the server mirrors them into the tree
@@ -304,6 +333,7 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     onLockLayer: workspaceId ? onLockLayer : undefined,
     onUnlockLayer: workspaceId ? onUnlockLayer : undefined,
     onDestroyLayer: workspaceId && !isDirectoryTree ? onDestroyLayer : undefined,
+    canResyncBackend: (path: string) => backendSources(path).length > 0,
     onResyncBackend: workspaceId ? onResyncBackend : undefined,
     onCreateBackendFolder: workspaceId ? onCreateBackendFolder : undefined,
     onRenameBackendFolder: workspaceId ? onRenameBackendFolder : undefined,

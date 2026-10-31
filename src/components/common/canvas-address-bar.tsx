@@ -82,7 +82,7 @@ export function CanvasAddressBar({ workspace, workspaceIcon, tree, path, documen
             {section && crumb(`#${section}`, 'canvas-address-section', onSection, section, true)}
           </div>
         </>}
-        {search && <button ref={searchButtonRef} type="button" className="canvas-nav-button canvas-address-search" onClick={searching ? closeSearch : () => setSearching(true)} aria-label={searching ? 'Close search' : 'Search this canvas'} aria-expanded={searching} title={searching ? 'Close search' : 'Search this canvas'}>
+        {search && <button ref={searchButtonRef} type="button" className="canvas-nav-button canvas-address-search" onClick={() => { if (searching) inputRef.current?.form?.requestSubmit(); else setSearching(true) }} aria-label={searching ? 'Run search' : 'Search this canvas'} aria-expanded={searching} title={searching ? 'Run search' : 'Search this canvas'}>
           <Search size={17} />{search.queries.length > 0 && <span className="canvas-nav-dot" />}
         </button>}
       </div>

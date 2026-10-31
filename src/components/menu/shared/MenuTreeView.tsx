@@ -66,6 +66,7 @@ export interface MenuTreeViewProps {
   onImportSubtree?: (path: string) => Promise<void>
   onShareCanvas?: (path: string) => Promise<void>
   onLockLayer?: (layerId: string) => Promise<boolean>
+  canResyncBackend?: (path: string) => boolean
   onResyncBackend?: (backendName: string) => Promise<boolean>
   // Backends tree only: open Auto-Link to file everything
   // under this folder into context and/or directory destinations, and run
@@ -190,6 +191,7 @@ interface CtxMenuProps {
   onSubtract?: MenuTreeViewProps['onSubtractLayer']
   onMergeDown?: MenuTreeViewProps['onMergeDown']
   onSubtractDown?: MenuTreeViewProps['onSubtractDown']
+  canResyncBackend?: MenuTreeViewProps['canResyncBackend']
   onResyncBackend?: MenuTreeViewProps['onResyncBackend']
   onAddRule?: MenuTreeViewProps['onAddRule']
   onAddStoreRule?: MenuTreeViewProps['onAddStoreRule']
@@ -212,7 +214,7 @@ function CtxMenu({
   sourceLayer, targetLayers, clipboard,
   onStartInlineCreate, onChangeIcon, onNewCanvas, onShareCanvas, onRemove, onRename,
   onExportSubtree, onImportSubtree, onImportDocuments, onExportDocuments,
-  onLock, onUnlock, onDestroy, onMerge, onSubtract, onMergeDown, onSubtractDown, onResyncBackend,
+  onLock, onUnlock, onDestroy, onMerge, onSubtract, onMergeDown, onSubtractDown, onResyncBackend, canResyncBackend,
   onAddRule, onAddStoreRule, onStoragePolicy,
   onRenameBackendFolder, onDeleteBackendFolder, onRestoreTrash, onDiscardTrash,
   onCopy, onCut, onPaste,
@@ -280,11 +282,10 @@ function CtxMenu({
 
         {node.type === 'canvas' && onShareCanvas && <div className="my-1 h-px bg-border" />}
 
-        {/* Resync backend — backends tree only, where the node maps to a data
-            backend. MVP resyncs the whole backend. */}
-        {onResyncBackend && backendNameForPath(path, isBackendsTree) && (
+        {/* Refresh the backend source of this folder. */}
+        {onResyncBackend && (canResyncBackend?.(path) ?? !!backendNameForPath(path, isBackendsTree)) && (
           <>
-            {item(<RefreshCw className="w-3 h-3" />, `Resync backend (${backendNameForPath(path, isBackendsTree)})`, async () => {
+            {item(<RefreshCw className="w-3 h-3" />, 'Refresh backend', async () => {
               await onResyncBackend(path)
             })}
             <div className="my-1 h-px bg-border" />
@@ -1025,7 +1026,7 @@ export function MenuTreeView({
   pastedDocumentIds, onPasteDocuments,
   onLockLayer, onUnlockLayer, onDestroyLayer, onMergeLayer, onSubtractLayer,
   onMergeDown, onSubtractDown,
-  onResyncBackend,
+  onResyncBackend, canResyncBackend,
   onCreateBackendFolder, onRenameBackendFolder, onDeleteBackendFolder,
   onUpdateNode,
   isPathPinned,
@@ -1628,6 +1629,7 @@ export function MenuTreeView({
           onSubtract={!readOnly ? onSubtractLayer : undefined}
           onMergeDown={!readOnly ? onMergeDown : undefined}
           onSubtractDown={!readOnly ? onSubtractDown : undefined}
+          canResyncBackend={canResyncBackend}
           onResyncBackend={onResyncBackend}
           onAddRule={onAddRule}
           onAddStoreRule={onAddStoreRule}

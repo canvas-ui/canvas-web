@@ -5,7 +5,7 @@ import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { useToolbox } from '../use-toolbox'
 import { useRelationFields } from './useRelationFields'
 import { RelationFields } from './RelationFields'
-import { useAddTarget, describeTarget, resolveUploadWorkspace } from './useAddTarget'
+import { useAddTarget, describeTarget, resolveUploadWorkspace, type AddTarget } from './useAddTarget'
 import { useFileFields, buildFileDocument } from './useFileFields'
 import { FileMetaFields } from './FileMetaFields'
 import { useUploadQueue } from './useUploadQueue'
@@ -19,17 +19,22 @@ import { cn } from '@/lib/utils'
 // `capture` turns the form into the Photo/Video variant: the file input asks
 // the OS for the camera (mobile) or restricts the picker to media (desktop).
 // Upload plumbing is identical either way.
-export function FileForm({ capture = false }: { capture?: boolean } = {}) {
+export function FileForm({ capture = false, target: explicitTarget, initialFiles = [], onClose, onBusyChange }: { capture?: boolean; target?: AddTarget; initialFiles?: File[]; onClose?: () => void; onBusyChange?: (busy: boolean) => void } = {}) {
   const { closeAdd, state } = useToolbox()
-  const target = useAddTarget()
+  const activeTarget = useAddTarget()
+  const target = explicitTarget === undefined ? activeTarget : explicitTarget
+  const close = onClose ?? closeAdd
   const isBackend = target?.mode === 'workspace' && target.treeName === 'backends'
-  const rel = useRelationFields(target, state.addRelateTo)
+  const rel = useRelationFields(target, explicitTarget === undefined ? state.addRelateTo : null)
   const { showSuccessToast, showErrorToast } = useToastHelpers()
 
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
-  const queue = useUploadQueue()
+  const queue = useUploadQueue(initialFiles)
   const { items, running } = queue
+  const busy = useRef(false)
+  const cancelled = useRef(false)
+  const [submitting, setSubmitting] = useState(false)
 
   // Workspace mode already knows where it uploads; only a context has to be
   // resolved to its bound workspace (an API call), and the result is kept keyed
@@ -64,15 +69,20 @@ export function FileForm({ capture = false }: { capture?: boolean } = {}) {
   const failed = items.filter((it) => it.status === 'error').length
   const done = items.filter((it) => it.status === 'done').length
   const pending = items.length - done
-  const canSubmit = !!target && !running && pending > 0
+  const canSubmit = !!target && !submitting && pending > 0
 
   const handleSubmit = async () => {
-    if (!canSubmit || !target) return
+    if (!canSubmit || !target || busy.current) return
+    busy.current = true
+    cancelled.current = false
+    setSubmitting(true)
+    onBusyChange?.(true)
     try {
       // One fix for the whole batch, taken before the uploads start — the
       // same location the user saw in the form, not wherever they are several
       // megabytes later. Resolves null unless they opted in; never rejects.
       const geo = isBackend ? null : await meta.geotag.capture()
+      if (cancelled.current) return
       const summary = await queue.start(target, (blob, file) =>
         buildFileDocument(blob, file, { tags: meta.tags, comment: meta.comment, geo }))
       const relFailed = await rel.write(summary.docIds)
@@ -80,12 +90,16 @@ export function FileForm({ capture = false }: { capture?: boolean } = {}) {
         const resumedNote = summary.resumed ? ` (${summary.resumed} already uploaded)` : ''
         const relNote = relFailed ? '; some relations failed' : ''
         showSuccessToast(`${summary.done} file(s) uploaded${resumedNote}${relNote}`)
-        closeAdd()
+        close()
       } else {
         showErrorToast(`${summary.failed} of ${summary.total} file(s) failed — retry keeps what already made it`)
       }
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to upload files')
+    } finally {
+      busy.current = false
+      setSubmitting(false)
+      onBusyChange?.(false)
     }
   }
 
@@ -133,12 +147,12 @@ export function FileForm({ capture = false }: { capture?: boolean } = {}) {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => (running ? queue.cancel() : closeAdd())}
+          onClick={() => { if (submitting) { cancelled.current = true; queue.cancel() } else close() }}
         >
           Cancel
         </Button>
         <Button size="sm" onClick={handleSubmit} disabled={!canSubmit}>
-          {running
+          {submitting
             ? 'Uploading…'
             : failed > 0
               ? (<span className="flex items-center gap-1"><RotateCcw className="h-3.5 w-3.5" />Retry failed ({failed})</span>)

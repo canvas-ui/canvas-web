@@ -1,3 +1,4 @@
+import { downloadLinkToWorkspace } from '@/services/workspace'
 import { useContentWindow } from './content-window-context'
 import { useTileStyle } from '@/lib/tile-style'
 import './document-tiles.css'
@@ -1553,6 +1554,18 @@ export function DocumentList({ readingPane = false, externalSearchQuery, toolbar
       const tabUrl = single.schema === 'data/schema/tab' ? single.data.url : null
       add({ id: 'view', group: 'open', label: 'View details', icon: Eye, run: () => setDetailModal({ document: single }) })
       add(bulkEditAllowed && { id: 'edit', group: 'open', label: 'Edit', icon: Pencil, run: () => setDetailModal({ document: single, edit: true }) })
+      add(bulkEditAllowed && single.schema === 'data/schema/file' && { id: 'rename', group: 'open', label: 'Rename…', icon: Pencil, run: () => setDetailModal({ document: single, edit: true }) })
+      const sourceUrl = single.data?.url || single.data?.uri
+      add(bulkEditAllowed && workspaceId && single.schema !== 'data/schema/file' && typeof sourceUrl === 'string' && /^https?:\/\//i.test(sourceUrl) && {
+        id: 'download-link', group: 'open', label: 'Download to workspace', icon: Download, run: async () => {
+          const progress = showProgress({ title: 'Downloading file…' })
+          try {
+            await downloadLinkToWorkspace(workspaceId!, single.id)
+            window.dispatchEvent(new CustomEvent('workspace:documents:refresh'))
+            progress.done({ title: 'File saved to workspace' })
+          } catch (error) { progress.fail({ title: 'Download failed', description: error instanceof Error ? error.message : String(error), variant: 'destructive' }) }
+        },
+      })
       add(tabUrl && { id: 'open-url', group: 'open', label: 'Open URL', icon: ExternalLink, run: () => { window.open(tabUrl, '_blank', 'noopener,noreferrer') } })
       add(openToSide && { id: 'open-side', group: 'open', label: 'Open to the side', icon: PanelRight, run: () => openToSide(single) })
     }

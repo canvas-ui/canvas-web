@@ -408,6 +408,18 @@ function WorkspaceM2Content() {
     onRefresh: handleRefresh,
   })
 
+  // Refresh remote sources on folder navigation, at most once a minute per view.
+  const lastSourceRefresh = useRef(new Map<string, number>())
+  useEffect(() => {
+    if (!wsName) return
+    const key = `${wsName}:${activeTab}:${selectedPath}`
+    const operations = ops
+    if (!operations.canResyncBackend(selectedPath)) return
+    if (Date.now() - (lastSourceRefresh.current.get(key) || 0) < 60_000) return
+    lastSourceRefresh.current.set(key, Date.now())
+    void operations.onResyncBackend?.(selectedPath).catch(() => {})
+  }, [wsName, activeTab, selectedPath, ops])
+
   // ── Pins ──
   const pinnedKeys = new Set(pins.map(p => pinKey(p.tree, p.path)))
   const activeTreeName = treeNameForTab(activeTab)

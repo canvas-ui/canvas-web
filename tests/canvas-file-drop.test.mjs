@@ -8,27 +8,23 @@ const source = readFileSync(new URL('../src/components/canvas/FileDropArea.tsx',
 const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText
 function harness(target) {
   const calls = [], errors = [], slots = []
-  let cursor = 0, release
+  let cursor = 0
   const jsx = (type, props) => ({ type, props })
-  const queue = {
-    items: [], running: false,
-    reset() { calls.push(['reset']) }, addFiles(files) { calls.push(['files', files]); queue.items = files.map(file => ({ file, status: 'queued' })) },
-    start(to) { calls.push(['start', to]); return new Promise(resolve => { release = resolve }) },
-  }
   const deps = {
     react: {
       useState(initial) { const i = cursor++; slots[i] ??= { value: initial }; return [slots[i].value, v => { slots[i].value = v }] },
       useRef(initial) { const i = cursor++; return slots[i] ??= { current: initial } },
     },
     'react/jsx-runtime': { jsx, jsxs: jsx },
-    '@/components/toolbox/add/useUploadQueue': { useUploadQueue: () => queue },
+    '@/components/toolbox/add/FileForm': { FileForm: 'SharedFileForm' },
+    '@/components/common/document-action-dialog': { DocumentActionDialog: 'Dialog' },
     '@/hooks/useToastHelpers': { useToastHelpers: () => ({ showErrorToast: text => errors.push(text), showSuccessToast() {} }) },
   }
   const exports = {}
   vm.runInNewContext(compiled, { exports, require: name => deps[name] || {} })
   return {
     render(next = target) { cursor = 0; return exports.FileDropArea({ target: next, children: null }).props },
-    calls, errors, finish() { release({ done: 1, failed: 0, total: 1 }) },
+    calls, errors,
   }
 }
 const event = (types, files = []) => ({ dataTransfer: { types, files }, prevented: false, stopped: false,
@@ -45,19 +41,21 @@ test('OS drops await confirmation and keep the receiving canvas destination whil
   props.onDropCapture(drop)
   assert.equal(drop.prevented, true)
   assert.equal(drop.stopped, true)
-  assert.deepEqual(JSON.parse(JSON.stringify(ui.calls)), [['reset'], ['files', files]])
+  assert.equal(ui.calls.length, 0)
   const elements = value => Array.isArray(value) ? value.flatMap(elements)
     : value && typeof value === 'object' ? [value, ...elements(value.props?.children)] : []
   const dialog = ui.render({ ...target, path: '/Elsewhere' })
-  const confirm = elements(dialog.children).find(el => el.type === 'button' && el.props.children === 'Import files')
-  assert.ok(confirm, 'drop opens import confirmation')
-  confirm.props.onClick()
-  assert.equal(ui.calls.at(-1)[1], target, 'confirmation uses drop-time destination')
-  ui.render({ ...target, path: '/Elsewhere' }).onDropCapture(event(['Files'], files))
-  assert.equal(ui.calls.filter(call => call[0] === 'start').length, 1)
-  assert.equal(ui.errors.length, 1)
-  ui.finish()
-  await new Promise(resolve => setImmediate(resolve))
+  const form = elements(dialog.children).find(el => el.type === 'SharedFileForm')
+  assert.ok(form, 'drop uses the shared Add Files form')
+  assert.equal(form.props.target, target, 'form uses drop-time destination')
+  assert.deepEqual(Array.from(form.props.initialFiles), files)
+  form.props.onBusyChange(true)
+  elements(dialog.children).find(el => el.type === 'Dialog').props.onClose()
+  assert.ok(elements(ui.render().children).find(el => el.type === 'SharedFileForm'), 'busy uploads keep the dialog open')
+  form.props.onBusyChange(false)
+  form.props.onClose()
+  assert.equal(elements(ui.render().children).some(el => el.type === 'SharedFileForm'), false)
+
 })
 
 test('internal document drags remain untouched and read-only canvases do not import', () => {

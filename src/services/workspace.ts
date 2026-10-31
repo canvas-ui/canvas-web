@@ -1619,6 +1619,7 @@ export interface BackendCapabilities {
 }
 
 export interface BackendContainer {
+  treePath?: string;
   removalPolicy?: import('./trash-operations').RemovalPolicy;
   name: string;
   id?: string;
@@ -2330,4 +2331,9 @@ export function reindexSearch(workspaceId: string, rebuild = false): Promise<Mai
 /** Compact + prune a Lance table and rebuild its ANN index. space: 'fts' or a vector space; omit = all. */
 export function optimizeIndexes(workspaceId: string, space?: string): Promise<MaintenanceResult> {
   return postMaintenance(workspaceId, 'optimize', space ? { space } : {})
+}
+
+/** Preserve the link and save its bytes as a related file in workspace:data. */
+export async function downloadLinkToWorkspace(workspaceId: string, documentId: number): Promise<{ documentId: number }> {
+  return api.post<{ documentId: number }>(`${API_ROUTES.workspaces}/${workspaceId}/documents/${documentId}/download`)
 }

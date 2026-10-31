@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { DocumentRenderer } from '@/components/renderers/registry'
 import {
   getDocumentLocations, getDocumentMemberships, destroyWorkspaceDocuments, downloadDocument,
-  transferDocumentsToBackends,
+  transferDocumentsToBackends, downloadLinkToWorkspace,
   type DocumentLocationInfo, type DocumentTreeMembership, type BackendTransferMode,
 } from '@/services/workspace'
 import { getLocationFilename } from '@/lib/document-display'
@@ -38,9 +38,12 @@ const COMPOSE_ICONS: Record<ComposeMode, typeof Reply> = { reply: Reply, replyAl
 
 export function ViewTab({ document, workspaceId, initialEdit = false, onChanged }: TabProps & { initialEdit?: boolean }) {
   const isPublic = usePublicShareCode() != null
-  const { showErrorToast } = useToastHelpers()
+  const { showErrorToast, showSuccessToast } = useToastHelpers()
   // Every non-public document is editable — at minimum the universal comment
   // section; schema-specific fields (url/title/body) render only for note/link/tab.
+  const [downloading, setDownloading] = useState(false)
+  const linkUrl = document.data?.url || document.data?.uri
+  const canDownloadLink = document.schema !== 'data/schema/file' && typeof linkUrl === 'string' && /^https?:\/\//i.test(linkUrl)
   const [showThread, setShowThread] = useState(false)
   const isMessage = ['data/schema/message', 'data/schema/message/email'].includes(document.schema)
   const [replying, setReplying] = useState<ComposeMode | null>(null)
@@ -124,6 +127,16 @@ export function ViewTab({ document, workspaceId, initialEdit = false, onChanged 
           })}
           {/* Best-copy download (server picks the first reachable location);
               the Storage tab keeps its per-location download buttons. */}
+          {canDownloadLink && <Button variant="outline" size="sm" disabled={downloading} onClick={async () => {
+            setDownloading(true)
+            try {
+              await downloadLinkToWorkspace(workspaceId, document.id)
+              window.dispatchEvent(new CustomEvent('workspace:documents:refresh'))
+              onChanged?.()
+              showSuccessToast('File saved to workspace; the original link is preserved')
+            } catch (error) { showErrorToast(error instanceof Error ? error.message : String(error)) }
+            finally { setDownloading(false) }
+          }}><Download className="mr-1 h-3 w-3" />{downloading ? 'Downloading…' : 'Download to workspace'}</Button>}
           {document.schema === 'data/schema/file' && (
             <Button
               variant="outline" size="sm"
