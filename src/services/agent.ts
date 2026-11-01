@@ -929,6 +929,13 @@ export async function chatWithAgentStream(
 ): Promise<void> {
   const { onStart, onMessage, onError, onComplete, context, mcpContext, maxTokens, temperature, images } = options;
   let buffer = '';
+  let streamedText = '';
+  let reportedError = '';
+  const reportError = (message: string) => {
+    if (message === reportedError) return;
+    reportedError = message;
+    onError?.(new Error(message));
+  };
 
   await api.stream(`${API_URL}/agents/${agentId}/prompt/stream`, {
     message,
@@ -952,28 +959,33 @@ export async function chatWithAgentStream(
           if (!line.startsWith('data: ')) continue;
           const payload = line.slice(6).trim();
           if (payload === '[DONE]') continue;
+          let data;
           try {
-            const data = JSON.parse(payload);
-            if (!onMessage) continue;
-            if (data.type === 'chunk') {
-              onMessage(data.delta || '', false, data.metadata || {});
-            } else if (data.type === 'thinking') {
-              onMessage('', false, { ...(data.metadata || {}), reasoningDelta: data.delta || '' });
-            } else if (data.type === 'complete') {
-              const finalMessage = Array.isArray(data.messages)
-                ? [...data.messages].reverse().find((msg: RawAgentMessage) => msg?.role === 'assistant')
-                : null;
-              // Pass empty string for content — the streaming buffer already has the full accumulated text.
-              // Re-appending the final text here would double the message.
-              onMessage('', true, {
-                ...(data.metadata || {}),
-                ...(extractAgentMessageMetadata(finalMessage) || {}),
-              });
-            } else if (data.type === 'error' && onError) {
-              onError(new Error(data.error || 'Prompt stream failed'));
-            }
+            data = JSON.parse(payload);
           } catch {
-            // ignore malformed partial event payloads
+            continue;
+          }
+          if (data.type === 'chunk') {
+            streamedText += data.delta || '';
+            onMessage?.(data.delta || '', false, data.metadata || {});
+          } else if (data.type === 'thinking') {
+            onMessage?.('', false, { ...(data.metadata || {}), reasoningDelta: data.delta || '' });
+          } else if (data.type === 'complete') {
+            const finalMessage = Array.isArray(data.messages)
+              ? [...data.messages].reverse().find((msg: RawAgentMessage) => msg?.role === 'assistant')
+              : null;
+            const failed = finalMessage?.stopReason === 'error';
+            const finalText = extractAgentMessageText(finalMessage);
+            if (failed) reportError(finalText || 'Prompt stream failed');
+            const remainingText = failed
+              ? `${streamedText ? '\n\n' : ''}${finalText || 'Prompt stream failed'}`
+              : streamedText ? '' : finalText;
+            onMessage?.(remainingText, true, {
+              ...(data.metadata || {}),
+              ...(extractAgentMessageMetadata(finalMessage) || {}),
+            });
+          } else if (data.type === 'error') {
+            reportError(data.error || 'Prompt stream failed');
           }
         }
       }

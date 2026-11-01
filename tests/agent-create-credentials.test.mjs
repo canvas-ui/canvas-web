@@ -39,5 +39,5 @@ test('agent creation sends the entered API key and base URL at the API contract 
   assert.equal(payload.baseUrl, 'https://api.anthropic.com')
   assert.equal(payload.config.connectors.anthropic.apiKey, undefined)
   assert.equal(payload.config.connectors.anthropic.maxTokens, 131072)
-  assert.equal(payload.config.connectors.anthropic.temperature, 0)
+  assert.equal(payload.config.connectors.anthropic.temperature, undefined)
 })

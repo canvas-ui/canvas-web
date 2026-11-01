@@ -268,7 +268,7 @@ export default function AgentSettingsPage() {
         },
         prompts: (idSystemPrompt.trim() || compiled) ? { system: idSystemPrompt.trim() || compiled } : undefined,
         connectors: {
-          [provider]: { temperature: mainTemp, maxTokens: mainMaxTokens, topP: mainTopP },
+          [provider]: { ...(provider !== 'anthropic' ? { temperature: mainTemp } : {}), maxTokens: mainMaxTokens, topP: mainTopP },
         },
       },
     }
@@ -572,9 +572,9 @@ export default function AgentSettingsPage() {
                   }} {...modelDiscovery} />
                 </Field>
                 <div className="grid gap-4 sm:grid-cols-3">
-                  <Field label="Temperature">
+                  {provider !== 'anthropic' && <Field label="Temperature">
                     <Input type="number" min={0} max={2} step={0.1} value={mainTemp} onChange={e => setMainTemp(Number.isNaN(e.target.valueAsNumber) ? 0.7 : e.target.valueAsNumber)} />
-                  </Field>
+                  </Field>}
                   <Field label="Max Output Tokens">
                     <Input type="number" min={1} max={selectedModel?.maxTokens} value={mainMaxTokens} onChange={e => setMainMaxTokens(parseInt(e.target.value) || 4096)} />
                   </Field>

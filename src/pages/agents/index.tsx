@@ -176,7 +176,7 @@ export default function AgentsPage() {
           connectors: {
             [newAgentProvider]: {
               maxTokens: newAgentConnectorConfig.maxTokens,
-              temperature: newAgentConnectorConfig.temperature,
+              ...(newAgentProvider !== 'anthropic' ? { temperature: newAgentConnectorConfig.temperature } : {}),
               topP: newAgentConnectorConfig.topP,
               frequencyPenalty: newAgentConnectorConfig.frequencyPenalty,
               presencePenalty: newAgentConnectorConfig.presencePenalty,
@@ -456,7 +456,7 @@ export default function AgentsPage() {
                   disabled={isCreating}
                 />
               </div>
-              <div>
+              {newAgentProvider !== 'anthropic' && <div>
                 <label htmlFor="temperature" className="text-sm font-medium">Temperature</label>
                 <Input
                   id="temperature"
@@ -468,7 +468,7 @@ export default function AgentsPage() {
                   onChange={(e) => setNewAgentConnectorConfig(prev => ({ ...prev, temperature: Number.isNaN(e.target.valueAsNumber) ? 0.7 : e.target.valueAsNumber }))}
                   disabled={isCreating}
                 />
-              </div>
+              </div>}
               <div>
                 <label htmlFor="top-p" className="text-sm font-medium">Top P</label>
                 <Input
