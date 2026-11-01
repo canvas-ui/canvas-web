@@ -1,3 +1,5 @@
+import { ModelPicker } from '@/components/agent/ModelPicker'
+import { useAgentModels } from '@/hooks/useAgentModels'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -123,6 +125,9 @@ export default function AgentSettingsPage() {
   const [mainTemp, setMainTemp] = useState(0.7)
   const [mainMaxTokens, setMainMaxTokens] = useState(4096)
   const [mainTopP, setMainTopP] = useState(1.0)
+
+  const modelDiscovery = useAgentModels(provider, providerApiKey, providerHost, agent?.id)
+  const selectedModel = modelDiscovery.models.find(model => model.id === mainModel)
 
   // Skills
   const [skills, setSkills] = useState<AgentSkill[]>([])
@@ -256,7 +261,7 @@ export default function AgentSettingsPage() {
       color: idColor,
       llmProvider: provider,
       model: mainModel,
-      apiKey: providerApiKey || undefined,
+      apiKey: providerApiKey.trim() || (provider !== agent?.llmProvider ? '' : undefined),
       baseUrl: providerHost || undefined,
       config: {
         type: provider,
@@ -526,6 +531,7 @@ export default function AgentSettingsPage() {
                   onChange={e => {
                     const p = e.target.value as typeof provider
                     setProvider(p)
+                    setProviderApiKey('')
                     setMainModel(DEFAULT_MODELS[p] || '')
                     setProviderHost(getDefaultProviderBaseUrl(p))
                   }}
@@ -565,17 +571,20 @@ export default function AgentSettingsPage() {
               <section className="space-y-4 rounded-lg border p-4">
                 <h2 className="text-sm font-semibold">Main Model</h2>
                 <Field label="Model">
-                  <Input value={mainModel} onChange={e => setMainModel(e.target.value)} placeholder="Model name" />
+                  <ModelPicker value={mainModel} onChange={(id, model) => {
+                    setMainModel(id)
+                    if (model?.maxTokens) setMainMaxTokens(model.maxTokens)
+                  }} {...modelDiscovery} />
                 </Field>
                 <div className="grid gap-4 sm:grid-cols-3">
                   <Field label="Temperature">
-                    <Input type="number" min={0} max={2} step={0.1} value={mainTemp} onChange={e => setMainTemp(parseFloat(e.target.value) || 0.7)} />
+                    <Input type="number" min={0} max={2} step={0.1} value={mainTemp} onChange={e => setMainTemp(Number.isNaN(e.target.valueAsNumber) ? 0.7 : e.target.valueAsNumber)} />
                   </Field>
-                  <Field label="Max Tokens">
-                    <Input type="number" min={1} max={200000} value={mainMaxTokens} onChange={e => setMainMaxTokens(parseInt(e.target.value) || 4096)} />
+                  <Field label="Max Output Tokens">
+                    <Input type="number" min={1} max={selectedModel?.maxTokens} value={mainMaxTokens} onChange={e => setMainMaxTokens(parseInt(e.target.value) || 4096)} />
                   </Field>
                   <Field label="Top P">
-                    <Input type="number" min={0} max={1} step={0.1} value={mainTopP} onChange={e => setMainTopP(parseFloat(e.target.value) || 1.0)} />
+                    <Input type="number" min={0} max={1} step={0.1} value={mainTopP} onChange={e => setMainTopP(Number.isNaN(e.target.valueAsNumber) ? 1.0 : e.target.valueAsNumber)} />
                   </Field>
                 </div>
               </section>

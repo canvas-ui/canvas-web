@@ -1095,3 +1095,15 @@ export async function voicePrompt(
   );
   return response;
 }
+
+export interface AgentProviderModel {
+  id: string
+  name: string
+  contextWindow?: number
+  maxTokens?: number
+  limitsSource: 'provider' | 'runtime' | null
+}
+
+export function discoverAgentModels(options: { provider: string; apiKey?: string; baseUrl?: string; agentIdentifier?: string }, signal?: AbortSignal): Promise<AgentProviderModel[]> {
+  return api.post<AgentProviderModel[]>(`${API_URL}/agents/models`, options, { signal })
+}

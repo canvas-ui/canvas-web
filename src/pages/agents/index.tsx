@@ -1,3 +1,5 @@
+import { ModelPicker } from '@/components/agent/ModelPicker'
+import { useAgentModels } from '@/hooks/useAgentModels'
 import { useRuntimeCapabilities } from '@/hooks/useRuntimeCapabilities'
 import { PageHeader } from '@/components/common/page-header'
 import { useEffect, useState } from "react"
@@ -54,6 +56,8 @@ export default function AgentsPage() {
     presencePenalty: 0.0,
     numCtx: 4096
   })
+  const modelDiscovery = useAgentModels(newAgentProvider, newAgentConnectorConfig.apiKey, newAgentConnectorConfig.baseUrl)
+  const selectedModel = modelDiscovery.models.find(model => model.id === newAgentModel)
   const [newAgentSystemPrompt, setNewAgentSystemPrompt] = useState("")
   const [isCreating, setIsCreating] = useState(false)
   const runtime = useRuntimeCapabilities()
@@ -153,6 +157,8 @@ export default function AgentsPage() {
         color: newAgentColor,
         llmProvider: newAgentProvider,
         model: newAgentModel,
+        apiKey: newAgentConnectorConfig.apiKey.trim() || undefined,
+        baseUrl: newAgentConnectorConfig.baseUrl.trim() || undefined,
         config: {
           type: newAgentProvider,
           model: newAgentModel,
@@ -161,10 +167,6 @@ export default function AgentsPage() {
           } : undefined,
           connectors: {
             [newAgentProvider]: {
-              ...newAgentConnectorConfig,
-              // Clean up empty values
-              ...(newAgentConnectorConfig.apiKey ? { apiKey: newAgentConnectorConfig.apiKey } : {}),
-              ...(newAgentConnectorConfig.baseUrl ? { baseUrl: newAgentConnectorConfig.baseUrl } : {}),
               maxTokens: newAgentConnectorConfig.maxTokens,
               temperature: newAgentConnectorConfig.temperature,
               topP: newAgentConnectorConfig.topP,
@@ -363,13 +365,10 @@ export default function AgentsPage() {
             </div>
             <div>
               <label htmlFor="agent-model" className="text-sm font-medium">Model</label>
-              <Input
-                id="agent-model"
-                value={newAgentModel}
-                onChange={(e) => setNewAgentModel(e.target.value)}
-                placeholder="Model name (e.g., 'gpt-4o')"
-                disabled={isCreating}
-              />
+              <ModelPicker id="agent-model" value={newAgentModel} onChange={(id, model) => {
+                setNewAgentModel(id)
+                if (model?.maxTokens) setNewAgentConnectorConfig(prev => ({ ...prev, maxTokens: model.maxTokens! }))
+              }} {...modelDiscovery} disabled={isCreating} />
             </div>
           </div>
 
@@ -416,12 +415,12 @@ export default function AgentsPage() {
             <h3 className="text-lg font-medium">LLM Parameters</h3>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <div>
-                <label htmlFor="max-tokens" className="text-sm font-medium">Max Tokens</label>
+                <label htmlFor="max-tokens" className="text-sm font-medium">Max Output Tokens</label>
                 <Input
                   id="max-tokens"
                   type="number"
                   min="1"
-                  max="32768"
+                  max={selectedModel?.maxTokens}
                   value={newAgentConnectorConfig.maxTokens}
                   onChange={(e) => setNewAgentConnectorConfig(prev => ({ ...prev, maxTokens: parseInt(e.target.value) || 4096 }))}
                   disabled={isCreating}
@@ -436,7 +435,7 @@ export default function AgentsPage() {
                   max="2"
                   step="0.1"
                   value={newAgentConnectorConfig.temperature}
-                  onChange={(e) => setNewAgentConnectorConfig(prev => ({ ...prev, temperature: parseFloat(e.target.value) || 0.7 }))}
+                  onChange={(e) => setNewAgentConnectorConfig(prev => ({ ...prev, temperature: Number.isNaN(e.target.valueAsNumber) ? 0.7 : e.target.valueAsNumber }))}
                   disabled={isCreating}
                 />
               </div>
@@ -449,7 +448,7 @@ export default function AgentsPage() {
                   max="1"
                   step="0.1"
                   value={newAgentConnectorConfig.topP}
-                  onChange={(e) => setNewAgentConnectorConfig(prev => ({ ...prev, topP: parseFloat(e.target.value) || 1.0 }))}
+                  onChange={(e) => setNewAgentConnectorConfig(prev => ({ ...prev, topP: Number.isNaN(e.target.valueAsNumber) ? 1.0 : e.target.valueAsNumber }))}
                   disabled={isCreating}
                 />
               </div>
@@ -460,7 +459,7 @@ export default function AgentsPage() {
                     id="num-ctx"
                     type="number"
                     min="1024"
-                    max="32768"
+                    max={selectedModel?.contextWindow}
                     value={newAgentConnectorConfig.numCtx}
                     onChange={(e) => setNewAgentConnectorConfig(prev => ({ ...prev, numCtx: parseInt(e.target.value) || 4096 }))}
                     disabled={isCreating}
