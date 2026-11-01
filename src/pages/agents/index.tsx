@@ -1,3 +1,4 @@
+import { buildSystemPrompt } from '@/lib/agent-persona'
 import { ModelPicker } from '@/components/agent/ModelPicker'
 import { useAgentModels } from '@/hooks/useAgentModels'
 import { useRuntimeCapabilities } from '@/hooks/useRuntimeCapabilities'
@@ -58,6 +59,9 @@ export default function AgentsPage() {
   })
   const modelDiscovery = useAgentModels(newAgentProvider, newAgentConnectorConfig.apiKey, newAgentConnectorConfig.baseUrl)
   const selectedModel = modelDiscovery.models.find(model => model.id === newAgentModel)
+  const [newAgentRole, setNewAgentRole] = useState('')
+  const [newAgentIdentity, setNewAgentIdentity] = useState('')
+  const [newAgentInstructions, setNewAgentInstructions] = useState('')
   const [newAgentSystemPrompt, setNewAgentSystemPrompt] = useState("")
   const [isCreating, setIsCreating] = useState(false)
   const runtime = useRuntimeCapabilities()
@@ -150,6 +154,7 @@ export default function AgentsPage() {
 
     setIsCreating(true)
     try {
+      const systemPrompt = newAgentSystemPrompt.trim() || buildSystemPrompt(newAgentRole, newAgentIdentity, newAgentInstructions)
       const agentData: CreateAgentData = {
         name: newAgentName,
         label: newAgentLabel || newAgentName,
@@ -162,9 +167,12 @@ export default function AgentsPage() {
         config: {
           type: newAgentProvider,
           model: newAgentModel,
-          prompts: newAgentSystemPrompt ? {
-            system: newAgentSystemPrompt
-          } : undefined,
+          identity: {
+            role: newAgentRole.trim() || undefined,
+            identity: newAgentIdentity.trim() || undefined,
+            instructions: newAgentInstructions.trim() || undefined,
+          },
+          prompts: systemPrompt ? { system: systemPrompt } : undefined,
           connectors: {
             [newAgentProvider]: {
               maxTokens: newAgentConnectorConfig.maxTokens,
@@ -196,6 +204,9 @@ export default function AgentsPage() {
       setNewAgentColor(generateNiceRandomHexColor())
       setNewAgentLabel("")
       setNewAgentSystemPrompt("")
+      setNewAgentRole('')
+      setNewAgentIdentity('')
+      setNewAgentInstructions('')
       setNewAgentConnectorConfig({
         apiKey: "",
         baseUrl: defaultBaseUrls[newAgentProvider],
@@ -372,14 +383,33 @@ export default function AgentsPage() {
             </div>
           </div>
 
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium">Persona</h3>
+            <div>
+              <label htmlFor="agent-role" className="text-sm font-medium">Role</label>
+              <Input id="agent-role" value={newAgentRole} onChange={event => setNewAgentRole(event.target.value)} placeholder="e.g. Software Engineer" disabled={isCreating} />
+            </div>
+            <div>
+              <label htmlFor="agent-identity" className="text-sm font-medium">Identity</label>
+              <textarea id="agent-identity" value={newAgentIdentity} onChange={event => setNewAgentIdentity(event.target.value)} placeholder="Who this agent is…" disabled={isCreating}
+                className="w-full mt-1 px-3 py-2 border border-input bg-background rounded-md text-sm min-h-[80px] resize-y" />
+            </div>
+            <div>
+              <label htmlFor="agent-instructions" className="text-sm font-medium">Instructions</label>
+              <textarea id="agent-instructions" value={newAgentInstructions} onChange={event => setNewAgentInstructions(event.target.value)} placeholder="Behavioral instructions…" disabled={isCreating}
+                className="w-full mt-1 px-3 py-2 border border-input bg-background rounded-md text-sm min-h-[80px] resize-y" />
+            </div>
+          </div>
+
           {/* System Prompt */}
           <div>
-            <label htmlFor="system-prompt" className="text-sm font-medium">System Prompt (Optional)</label>
+            <label htmlFor="system-prompt" className="text-sm font-medium">System Prompt (Optional Override)</label>
+            <p className="text-xs text-muted-foreground">Built from Role, Identity and Instructions unless you enter an override.</p>
             <textarea
               id="system-prompt"
               value={newAgentSystemPrompt}
               onChange={(e) => setNewAgentSystemPrompt(e.target.value)}
-              placeholder="Enter system prompt to define agent behavior..."
+              placeholder={buildSystemPrompt(newAgentRole, newAgentIdentity, newAgentInstructions) || "System prompt sent to the LLM…"}
               className="w-full mt-1 px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring min-h-[80px] resize-y"
               disabled={isCreating}
             />

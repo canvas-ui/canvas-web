@@ -1,3 +1,4 @@
+import { buildSystemPrompt } from '@/lib/agent-persona'
 import { ModelPicker } from '@/components/agent/ModelPicker'
 import { useAgentModels } from '@/hooks/useAgentModels'
 import { useIsMobile } from '@/hooks/use-mobile'
@@ -59,13 +60,7 @@ function getDefaultProviderBaseUrl(provider: string) {
   return DEFAULT_PROVIDER_BASE_URLS[provider] || ''
 }
 
-function buildSystemPrompt(role: string, identity: string, instructions: string) {
-  return [
-    role.trim() ? `## Role\n${role.trim()}` : '',
-    identity.trim() ? `## Identity\n${identity.trim()}` : '',
-    instructions.trim() ? `## Instructions\n${instructions.trim()}` : '',
-  ].filter(Boolean).join('\n\n')
-}
+
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
