@@ -10,37 +10,14 @@ interface StreamingChatMessageProps {
   connectionStatus?: 'websocket' | 'sse' | 'rest' | 'disconnected';
 }
 
-export function StreamingChatMessageComponent({
+function StreamingChatMessageComponent({
   message,
   isStreaming = false,
   connectionStatus = 'disconnected'
 }: StreamingChatMessageProps) {
-  const [typedContent, setTypedContent] = useState('');
   // Starts visible; the blink interval below toggles it while streaming. The
   // cursor span is only rendered while streaming, so no reset is needed after.
   const [showCursor, setShowCursor] = useState(true);
-
-  // Simulate typing effect for streaming messages
-  useEffect(() => {
-    if (!isStreaming || message.isComplete) return;
-
-    const content = message.content;
-    let index = 0;
-
-    const typewriter = setInterval(() => {
-      if (index < content.length) {
-        setTypedContent(content.substring(0, index + 1));
-        index++;
-      } else {
-        clearInterval(typewriter);
-      }
-    }, 20); // Adjust typing speed
-
-    return () => clearInterval(typewriter);
-  }, [message.content, isStreaming, message.isComplete]);
-
-  // While streaming, show the typewriter output; otherwise the full content.
-  const displayedContent = isStreaming && !message.isComplete ? typedContent : message.content;
 
   // Cursor blinking effect
   useEffect(() => {
@@ -87,8 +64,8 @@ export function StreamingChatMessageComponent({
         />
         <div className="text-sm">
           {message.role === 'assistant'
-            ? <MarkdownView content={displayedContent} />
-            : <span className="whitespace-pre-wrap break-words">{displayedContent}</span>}
+            ? <MarkdownView content={message.content} />
+            : <span className="whitespace-pre-wrap break-words">{message.content}</span>}
           {isStreaming && !message.isComplete && (
             <span className={`inline-block w-2 ${showCursor ? 'bg-current' : 'bg-transparent'}`}>
               |
