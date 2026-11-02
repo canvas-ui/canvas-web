@@ -44,7 +44,7 @@ export const WORKSPACE_SETTINGS_SECTIONS: readonly SettingsSection<WorkspaceSett
   { id: 'general', label: 'Workspace details', description: 'Rename, change appearance or remove this workspace', icon: Settings2 },
   { id: 'backups', label: 'Backups', description: 'Save or restore documents, relations and tree placements', icon: Archive },
   { id: 'data', label: 'Files & storage', description: 'Connect folders and data sources, check disk usage or restore trash', icon: HardDrive },
-  { id: 'db', label: 'Search & indexing', description: 'Rebuild indexes, tune search and choose embedding models', icon: Database },
+  { id: 'db', label: 'Search & indexing', description: 'How documents become searchable: AI models, image descriptions, index repairs', icon: Database },
   { id: 'devices', label: 'Devices', description: 'Link devices to this workspace', icon: Monitor },
   { id: 'sync', label: 'Synchronization', description: 'Manage device copies and resolve sync conflicts', icon: RefreshCw },
   { id: 'services', label: 'Connected services', description: 'Configure Git, WebDAV, IMAP and other connectors', icon: Server },

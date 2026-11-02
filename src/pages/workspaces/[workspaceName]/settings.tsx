@@ -20,6 +20,7 @@ import { DefaultFoldersPicker } from '@/components/workspaces/DefaultFoldersPick
 import { createDefaultFolders, useFolderSelection } from '@/components/workspaces/default-folders'
 import { PageHeader } from '@/components/common/page-header'
 import { WORKSPACE_SETTINGS_SECTIONS, resolveWorkspaceSettingsTab, type WorkspaceSettingsTab } from '@/lib/settings-sections'
+import { spaceLabel } from '@/lib/search-labels'
 import { InferdSettingsPanel } from '@/components/workspace/inferd-settings-panel'
 import { HooksPanel } from '@/components/workspace/hooks-panel'
 import { StoragePoliciesPanel } from '@/components/workspace/storage-policies-panel'
@@ -867,7 +868,7 @@ function DbStatsTab({
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs text-muted-foreground">Live snapshot from synapsd. Click refresh for updated counts.</p>
+        <p className="text-xs text-muted-foreground">Index maintenance and counts from this workspace&apos;s database.</p>
         <Button type="button" variant="outline" size="sm" onClick={onRefresh} disabled={isLoading}>
           <RefreshCw className="mr-2 h-3.5 w-3.5" />
           Refresh
@@ -887,7 +888,7 @@ function DbStatsTab({
           <section className="rounded-lg border p-4">
             <div className="mb-3 flex items-center gap-2">
               <Database className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-sm font-semibold">Core Index</h2>
+              <h2 className="text-sm font-semibold">Document database</h2>
             </div>
             <StatRow label="Backend" value={stats.dbBackend} mono />
             <StatRow label="Status" value={stats.status} />
@@ -904,7 +905,7 @@ function DbStatsTab({
             <section className="rounded-lg border p-4">
               <div className="mb-3 flex items-center gap-2">
                 <Activity className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold">Full-Text Search (LanceDB)</h2>
+                <h2 className="text-sm font-semibold">Word search index</h2>
               </div>
               {'ready' in stats.fts && (
                 <StatRow label="Ready" value={String((stats.fts as { ready?: boolean; rowCount?: number; error?: string }).ready)} />
@@ -922,7 +923,7 @@ function DbStatsTab({
             <section className="rounded-lg border p-4">
               <div className="mb-3 flex items-center gap-2">
                 <Activity className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold">Semantic / Vector Search</h2>
+                <h2 className="text-sm font-semibold">Meaning search</h2>
               </div>
               <StatRow label="Enabled" value={String(stats.semantic.enabled)} />
               {stats.semantic.enabled && (
@@ -933,7 +934,7 @@ function DbStatsTab({
                       default only if the inferd routing isn't available. */}
                   {stats.inferd?.routing
                     ? Object.entries(stats.inferd.routing).map(([space, matchers]) => (
-                        <StatRow key={`route-${space}`} label={`Embeds → ${space}`} value={<span className="font-mono text-[11px]">{matchers.join(', ')}</span>} />
+                        <StatRow key={`route-${space}`} label={`Goes to ${spaceLabel(space).toLowerCase()}`} value={<span className="font-mono text-[11px]">{matchers.join(', ')}</span>} />
                       ))
                     : <StatRow label="Text-embeddable (gap default)" value={stats.semantic.embeddableSchemas?.join(', ')} />}
                   {/* Per-space STORAGE stats — row/doc counts, so a re-embed's
@@ -942,10 +943,10 @@ function DbStatsTab({
                   {stats.semantic.vectorSpaces && Object.entries(stats.semantic.vectorSpaces).map(([name, sp]) => (
                     <StatRow
                       key={name}
-                      label={`Space: ${name} (${sp.dim ?? '?'}-d)`}
+                      label={`${spaceLabel(name)} (${sp.dim ?? '?'}-d)`}
                       value={sp.error
                         ? <span className="text-destructive">{sp.error}</span>
-                        : `${(sp.embeddedDocs ?? 0).toLocaleString()} docs · ${(sp.chunkRows ?? 0).toLocaleString()} vectors`}
+                        : `${(sp.embeddedDocs ?? 0).toLocaleString()} documents indexed · ${(sp.chunkRows ?? 0).toLocaleString()} vectors`}
                     />
                   ))}
                   <StatRow label="Photo relevance" value={stats.semantic.imageFloorMode === 'absolute' ? 'absolute cutoff' : `relative ±${stats.semantic.imageRelativeMargin ?? 0.035}`} mono />
@@ -1694,14 +1695,15 @@ function WorkspaceSettingsContent() {
 
       {workspace.status === 'active' && activeTab === 'db' && (
         <div className="space-y-8">
-          {/* Embeddings lead: this is the part people come here to change.
-              Index maintenance and raw counts are the rarer, mechanical half. */}
+          <SearchPipelineExplainer />
+          {/* Models lead: this is the part people come here to change. Index
+              maintenance and raw counts are the rarer, mechanical half. */}
           {workspaceId && (
             <section className="space-y-3">
               <div>
-                <h2 className="text-sm font-semibold">Embeddings</h2>
+                <h2 className="text-sm font-semibold">Meaning search & image descriptions</h2>
                 <p className="text-xs text-muted-foreground">
-                  Which model turns this workspace's content into vectors, and where those vectors live.
+                  Which AI models read this workspace's text and images, and where they run.
                 </p>
               </div>
               <InferdSettingsPanel workspaceId={workspaceId} workspaceName={workspaceName!} />
@@ -1817,6 +1819,51 @@ function DefaultFoldersSection({ workspaceName }: { workspaceName: string }) {
   )
 }
 
+// Settings → Search & indexing: what happens to a document once it is added,
+// in the order it happens, so the controls below have something to hang on.
+const SEARCH_STEPS: { title: string; body: string; detail: string }[] = [
+  {
+    title: 'Word search',
+    body: 'Every document\'s text is indexed as soon as it is added, so exact words and phrases are found. Always on; no AI involved.',
+    detail: 'full-text index',
+  },
+  {
+    title: 'Meaning search',
+    body: 'An AI model turns each document and image into a numeric fingerprint, so "beach at sunset" finds a matching photo even when those words appear nowhere. Text and images each have their own model.',
+    detail: 'embeddings',
+  },
+  {
+    title: 'Image descriptions',
+    body: 'Optionally, a vision model writes a few sentences about each image. Those sentences become searchable, by words and by meaning.',
+    detail: 'captions',
+  },
+]
+
+function SearchPipelineExplainer() {
+  return (
+    <section className="rounded-lg border bg-muted/30 p-4">
+      <h2 className="text-sm font-semibold">How search works in this workspace</h2>
+      <ol className="mt-3 grid gap-3 sm:grid-cols-3">
+        {SEARCH_STEPS.map((step, i) => (
+          <li key={step.title} className="min-w-0">
+            <p className="text-xs font-medium">
+              <span className="mr-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[10px] tabular-nums text-primary">{i + 1}</span>
+              {step.title}
+              <span className="ml-1.5 font-normal text-muted-foreground">({step.detail})</span>
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">{step.body}</p>
+          </li>
+        ))}
+      </ol>
+      <p className="mt-3 text-xs text-muted-foreground">
+        Results from all three are combined. The models run in Canvas&apos;s inference service on this server by
+        default, with nothing to set up. You can point them at a faster machine, such as a GPU box running Ollama or
+        vLLM, under <span className="font-medium">Where models run</span> below.
+      </p>
+    </section>
+  )
+}
+
 // ── DB maintenance (admin reindex endpoints) ─────────────────────────────────
 // STORAGE-level ops only (bitmaps, FTS, Lance table compaction); every op shows
 // its description inline (tooltips are useless on touch). Destructive variants
@@ -1845,28 +1892,28 @@ function ReindexSection({ workspaceName, vectorSpaces, onDone }: { workspaceName
   interface Op { key: string; label: string; description: string; confirm?: string; fn: () => Promise<{ message: string }> }
   const groups: { title: string; ops: Op[] }[] = [
     {
-      title: 'Bitmaps',
+      title: 'Dates & file types',
       ops: [
-        { key: 'timelines', label: 'Reindex timelines', description: 'Rebuild the created/updated timelines from document data.', fn: () => reindexTimelines(workspaceName) },
-        { key: 'mime', label: 'Reindex MIME types', description: 'Rebuild the per-MIME-type presence bitmaps (data/mime/*) from stored docs. Backfills blobs indexed before mime bitmaps existed.', fn: () => reindexMime(workspaceName) },
+        { key: 'timelines', label: 'Rebuild timelines', description: 'Recompute created and updated dates used by date filters and the timeline.', fn: () => reindexTimelines(workspaceName) },
+        { key: 'mime', label: 'Rebuild file types', description: 'Recompute which documents are images, PDFs, videos and so on (used by type filters and image descriptions).', fn: () => reindexMime(workspaceName) },
       ],
     },
     {
-      title: 'Full-text (BM25)',
+      title: 'Word search (full-text, BM25)',
       ops: [
-        { key: 'fts', label: 'Backfill', description: 'Index documents missing from the full-text table. Fast, skips already-indexed.', fn: () => reindexSearch(workspaceName) },
-        { key: 'fts-rebuild', label: 'Rebuild', description: 'Wipe the full-text table and rebuild from scratch. Use when counts drift.', confirm: 'Wipe the FTS index and rebuild it from scratch?', fn: () => reindexSearch(workspaceName, true) },
-        { key: 'fts-optimize', label: 'Optimize', description: 'Compact fragments + prune old versions of the full-text table.', fn: () => optimizeIndexes(workspaceName, 'fts') },
+        { key: 'fts', label: 'Add missing', description: 'Index documents that word search does not know about yet. Fast; skips what is already indexed.', fn: () => reindexSearch(workspaceName) },
+        { key: 'fts-rebuild', label: 'Rebuild', description: 'Delete the word-search index and build it again. Use when search misses documents it should find.', confirm: 'Delete the word-search index and rebuild it from scratch?', fn: () => reindexSearch(workspaceName, true) },
+        { key: 'fts-optimize', label: 'Optimize', description: 'Tidy the index on disk: merge small pieces and drop old versions.', fn: () => optimizeIndexes(workspaceName, 'fts') },
       ],
     },
     // Lance table compaction per LIVE vector space — enumerated from what the
     // workspace actually runs, never a hardcoded pair with stale dims.
     ...(vectorSpaces.length > 0 ? [{
-      title: 'Vector tables (LanceDB)',
+      title: 'Meaning search (vector tables)',
       ops: vectorSpaces.map((space): Op => ({
         key: `${space}-optimize`,
-        label: `Optimize ${space}`,
-        description: `Compact fragments + prune old versions of the '${space}' vector table and rebuild its ANN index.`,
+        label: `Optimize ${spaceLabel(space).toLowerCase()}`,
+        description: `Tidy the ${spaceLabel(space).toLowerCase()} index on disk and rebuild its fast lookup.`,
         fn: () => optimizeIndexes(workspaceName, space),
       })),
     }] : []),
@@ -1878,7 +1925,7 @@ function ReindexSection({ workspaceName, vectorSpaces, onDone }: { workspaceName
         <RefreshCw className="h-4 w-4 text-muted-foreground" />
         <h2 className="text-sm font-semibold">Index maintenance</h2>
       </div>
-      <p className="mb-3 text-xs text-muted-foreground">Runs against this workspace. Reindex operations are idempotent.</p>
+      <p className="mb-3 text-xs text-muted-foreground">Repairs for when search or filters look wrong. All of these are safe to run again.</p>
       <div className="space-y-4">
         {groups.map((group) => (
           <div key={group.title}>

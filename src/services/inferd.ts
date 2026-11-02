@@ -256,6 +256,8 @@ export interface ImageSummaryStatus {
   abortedReason?: string | null
   /** The operator stopped the run on purpose. */
   cancelled?: boolean
+  /** The path the run was limited to (`ctx://…` / `dir://…`), if any. */
+  scope?: string
   force?: boolean
   startedAt?: string | null
   finishedAt?: string | null
@@ -275,10 +277,11 @@ export async function getWorkspaceInferdStatus(workspaceId: string): Promise<Wor
 /** Start captioning images into metadata.summary (async; poll status.summarize). */
 export async function startWorkspaceImageSummaries(
   workspaceId: string,
-  options: { force?: boolean } = {},
+  options: { force?: boolean; scope?: string } = {},
 ): Promise<ImageSummaryStatus> {
   const body: Record<string, unknown> = {}
   if (options.force !== undefined) { body.force = options.force }
+  if (options.scope) { body.scope = options.scope }
   const res = await api.post<ImageSummaryStatus>(
     `${workspaceInferd(workspaceId)}/summarize/images`,
     body,

@@ -289,7 +289,7 @@ const RECIPES: Recipe[] = [
     blurb: 'Hand new items to an agent with a prompt; save its reply as a note or get it as a notification.',
     build: () => ({
       ...EMPTY_FORM, description: 'Summarize new items',
-      actions: [{ ...emptyAction('agent'), b: 'Read document #{{doc.id}} in full with canvas_get, then summarize it in three bullet points.', notifyReply: true }],
+      actions: [{ ...emptyAction('agent'), b: 'Read document #{{doc.id}} in full with canvas_doc_get_by_id, then summarize it in three bullet points.', notifyReply: true }],
     }),
   },
   {
@@ -1640,10 +1640,10 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                       <Field label="Agent" hint="The agent's slug.">
                         <Input className={cn(inputClass, 'font-mono sm:max-w-xs')} placeholder="assistant" value={row.a} onChange={(e) => set({ a: e.target.value })} />
                       </Field>
-                      <Field label="Prompt" hint={'Templates use indexed fields: {{doc.id}}, {{doc.data.subject}}, {{doc.data.bodyPreview}} (emails), {{doc.data.url}}… Ask the agent to use canvas_get for full email content. Objects are inserted as JSON.'}>
+                      <Field label="Prompt" hint={'Templates use indexed fields: {{doc.id}}, {{doc.data.subject}}, {{doc.data.bodyPreview}} (emails), {{doc.data.url}}… Ask the agent to use canvas_doc_get_by_id for full email content. Objects are inserted as JSON.'}>
                         <textarea
                           className="min-h-28 w-full rounded-md border bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-                          placeholder={'Read email #{{doc.id}} in full with canvas_get and summarize it in plain markdown.\n\nSubject: {{doc.data.subject}}\nPreview: {{doc.data.bodyPreview}}'}
+                          placeholder={'Read email #{{doc.id}} in full with canvas_doc_get_by_id and summarize it in plain markdown.\n\nSubject: {{doc.data.subject}}\nPreview: {{doc.data.bodyPreview}}'}
                           value={row.b}
                           onChange={(e) => set({ b: e.target.value })}
                         />

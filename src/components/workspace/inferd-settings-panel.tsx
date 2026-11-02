@@ -23,9 +23,10 @@ import {
   type WorkspaceInferdQueue,
 } from '@/services/inferd'
 import { setInferdPaused } from '@/services/workspace'
+import { spaceLabel } from '@/lib/search-labels'
 
 /**
- * Workspace → Settings → Database → Embeddings.
+ * Workspace → Settings → Search & indexing → meaning search and image descriptions.
  *
  * The primary surface for choosing embedding backends, because the config lives
  * in this workspace's own workspace.json and therefore travels with it.
@@ -73,6 +74,64 @@ function Fold({
 }
 
 /**
+ * Optional path limit for a bulk run. The tree the user picks from decides the
+ * scheme the server resolves against: `ctx://` for contexts, `dir://` for
+ * directories.
+ */
+function PathScopeInput({
+  workspaceName,
+  value,
+  onChange,
+  disabled,
+}: {
+  workspaceName: string
+  value: string
+  onChange: (next: string) => void
+  disabled?: boolean
+}) {
+  const [picking, setPicking] = useState(false)
+  return (
+    <div className="space-y-1">
+      <label className="text-xs font-medium">Only this folder <span className="font-normal text-muted-foreground">(optional)</span></label>
+      <div className="flex gap-2">
+        <Input
+          value={value}
+          disabled={disabled}
+          onChange={e => onChange(e.target.value)}
+          placeholder="Whole workspace"
+          className="h-8 font-mono text-sm"
+        />
+        <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={() => setPicking(true)} title="Pick a folder or context from the tree">
+          <FolderSearch className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        Includes everything below it. Pick from the tree, or type <span className="font-mono">ctx://work/project</span> or{' '}
+        <span className="font-mono">dir://photos</span>.
+      </p>
+      {picking && (
+        <LinkToSidePanel onClose={() => setPicking(false)}>
+          <LinkToCard
+            sizeClassName={LINK_TO_SIDE_SIZE}
+            fixedWorkspaceName={workspaceName}
+            multiple={false}
+            onClose={() => setPicking(false)}
+            onConfirm={(paths, ctx) => {
+              const picked = paths[0]
+              if (picked) {
+                const scheme = ctx.treeType === 'directory' ? 'dir' : 'ctx'
+                onChange(`${scheme}://${picked.replace(/^\/+/, '')}`)
+              }
+              setPicking(false)
+            }}
+          />
+        </LinkToSidePanel>
+      )}
+    </div>
+  )
+}
+
+/**
  * What the pipeline is doing right now, in one line: queue state on the left,
  * where this config comes from on the right. Polls only while there is
  * something to watch — an idle queue re-checks on the next refresh instead of
@@ -116,14 +175,14 @@ function PipelineStatus({
     try {
       const res = await setInferdPaused(!queue.paused, workspaceName)
       showToast({
-        title: res.paused ? 'Embedding paused' : 'Embedding resumed',
+        title: res.paused ? 'Indexing paused' : 'Indexing resumed',
         description: res.paused
-          ? `${res.pending.toLocaleString()} job(s) held for this workspace. Resume any time; a restart also resumes.`
-          : `${res.pending.toLocaleString()} job(s) draining.`,
+          ? `${res.pending.toLocaleString()} document(s) on hold. Resume any time; a server restart also resumes.`
+          : `${res.pending.toLocaleString()} document(s) being indexed.`,
       })
       await poll()
     } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to toggle the embedding queue (admin only)', variant: 'destructive' })
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to pause or resume indexing (admin only)', variant: 'destructive' })
     } finally {
       setBusy(false)
     }
@@ -149,18 +208,18 @@ function PipelineStatus({
         </span>
         <span className="font-medium">
           {!queue
-            ? 'Queue unavailable'
+            ? 'Inference service not reachable'
             : queue.pending > 0
-              ? <>{queue.pending.toLocaleString()} <span className="font-normal text-muted-foreground">pending</span></>
-              : queue.paused ? 'Paused' : 'Idle'}
+              ? <>{queue.pending.toLocaleString()} <span className="font-normal text-muted-foreground">document(s) waiting to be indexed</span></>
+              : queue.paused ? 'Paused' : 'Up to date'}
         </span>
-        {queue?.paused && queue.pending > 0 && <span className="text-xs text-muted-foreground">held</span>}
+        {queue?.paused && queue.pending > 0 && <span className="text-xs text-muted-foreground">(paused)</span>}
         {queue?.ingestDisabled && (
           <span
             className="rounded bg-warning-subtle px-1.5 py-0.5 text-[10px] font-medium text-warning"
-            title="CANVAS_INFERD_INGEST_DISABLED=true: nothing new is enqueued; existing vectors still serve search"
+            title="CANVAS_INFERD_INGEST_DISABLED=true: new documents are not indexed for meaning search; what is already indexed still works"
           >
-            ingest disabled
+            indexing turned off on the server
           </span>
         )}
       </div>
@@ -174,13 +233,13 @@ function PipelineStatus({
             disabled={busy}
             onClick={toggle}
             title={queue.paused
-              ? 'Resume embedding; the held backlog drains'
-              : 'Pause after the current batch. Stops the CPU-heavy model inference; documents keep indexing and stay searchable by text.'}
+              ? 'Resume; the waiting documents get indexed'
+              : 'Pause after the current batch. Stops the CPU-heavy model work; new documents are still found by word search.'}
           >
             {busy ? '…' : queue.paused ? 'Resume' : 'Pause'}
           </Button>
         )}
-        <Button type="button" size="sm" variant="ghost" onClick={onRefresh} title="Reload config, queue and tables">
+        <Button type="button" size="sm" variant="ghost" onClick={onRefresh} title="Reload">
           <RefreshCw className="h-3.5 w-3.5" />
         </Button>
       </div>
@@ -210,18 +269,18 @@ function SupersededTables({
   const reclaim = async (table: VectorTable) => {
     if (!window.confirm(
       `Reclaim "${table.name}"?\n\n`
-      + `This permanently deletes the vectors for ${table.model || 'that model'} and its "already embedded" ledger. `
-      + `Switching back to it afterwards would cost a full re-embed rather than being instant.\n\n`
-      + `This is the only irreversible step in the whole flow.`,
+      + `This permanently deletes the index built with ${table.model || 'that model'}. `
+      + `Switching back to it afterwards means indexing every document again instead of being instant.\n\n`
+      + `This is the only step here that cannot be undone.`,
     )) { return }
     setDropping(table.name)
     try {
       const result = await dropWorkspaceVectorTable(workspaceId, table.name)
       if (!result.dropped) { throw new Error(result.error || 'Failed to drop the vector table') }
-      showToast({ title: 'Reclaimed', description: `Dropped '${result.name || table.name}'.` })
+      showToast({ title: 'Deleted', description: `Removed '${result.name || table.name}'.` })
       onChanged()
     } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to reclaim', variant: 'destructive' })
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to delete', variant: 'destructive' })
     } finally {
       setDropping(null)
     }
@@ -230,7 +289,7 @@ function SupersededTables({
   if (error) {
     return (
       <section className="rounded-lg border border-destructive/40 bg-destructive-subtle p-4">
-        <p className="text-sm font-medium text-destructive">Vector tables unavailable</p>
+        <p className="text-sm font-medium text-destructive">Stored indexes unavailable</p>
         <p className="mt-1 text-xs text-muted-foreground">{error}</p>
       </section>
     )
@@ -241,7 +300,7 @@ function SupersededTables({
   return (
     <Fold
       title={`Previous models (${superseded.length})`}
-      hint="Kept on disk so switching back is instant. Reclaiming deletes their vectors for good (the only irreversible step here)."
+      hint="Indexes built with models you switched away from. They stay on disk so switching back is instant. Deleting one frees the space for good."
     >
       <div className="divide-y">
         {superseded.map(t => (
@@ -257,10 +316,10 @@ function SupersededTables({
               className="text-destructive hover:text-destructive"
               disabled={dropping === t.name}
               onClick={() => reclaim(t)}
-              title="Permanently delete this model's vectors and ledger"
+              title="Permanently delete the index built with this model"
             >
               <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-              {dropping === t.name ? 'Reclaiming…' : 'Reclaim'}
+              {dropping === t.name ? 'Deleting…' : 'Delete'}
             </Button>
           </div>
         ))}
@@ -270,9 +329,9 @@ function SupersededTables({
 }
 
 /**
- * A broader fill than the per-space button on a row: pick the space, narrow it
- * to a subtree, or redo work already done. Folded away because the common case
- * is now one click on the row that needs it.
+ * A broader fill than the per-space button on a row: pick the content type,
+ * narrow it to a subtree, or redo work already done. Folded away because the
+ * common case is one click on the row that needs it.
  */
 function AdvancedFill({
   workspaceId,
@@ -290,7 +349,6 @@ function AdvancedFill({
   const [scope, setScope] = useState('')
   const [reindex, setReindex] = useState(false)
   const [running, setRunning] = useState(false)
-  const [picking, setPicking] = useState(false)
 
   const run = async () => {
     setRunning(true)
@@ -302,19 +360,19 @@ function AdvancedFill({
       })
       if (result.ingestDisabled) {
         showToast({
-          title: 'Ingest disabled',
-          description: 'CANVAS_INFERD_INGEST_DISABLED=true: nothing was enqueued. Existing vectors still serve search.',
+          title: 'Indexing is turned off on the server',
+          description: 'CANVAS_INFERD_INGEST_DISABLED=true: nothing was queued. What is already indexed still works.',
           variant: 'destructive',
         })
       } else {
         showToast({
-          title: 'Fill enqueued',
-          description: `${result.enqueued.toLocaleString()} document(s) queued${result.scope ? ` under ${result.scope}` : ''}. The status line reports progress.`,
+          title: 'Indexing queued',
+          description: `${result.enqueued.toLocaleString()} document(s) queued${result.scope ? ` under ${result.scope}` : ''}. The status line above shows progress.`,
         })
       }
       onDone()
     } catch (err) {
-      showToast({ title: 'Fill failed', description: err instanceof Error ? err.message : 'Failed to enqueue', variant: 'destructive' })
+      showToast({ title: 'Indexing failed to start', description: err instanceof Error ? err.message : 'Failed to queue', variant: 'destructive' })
     } finally {
       setRunning(false)
     }
@@ -322,76 +380,43 @@ function AdvancedFill({
 
   return (
     <Fold
-      title="Fill a space"
-      hint="Embed documents that are missing from a space. Narrow it to one subtree to try a model on a single project first."
+      title="Index existing documents"
+      hint="Add documents that are not in meaning search yet, for example after switching models. Limit it to one folder to try a model on a small set first."
     >
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
-          <label className="text-xs font-medium">Space</label>
+          <label className="text-xs font-medium">Content type</label>
           <select className={`${selectClass} w-full`} value={space} onChange={e => setSpace(e.target.value)}>
-            <option value="">all spaces</option>
-            {spaces.map(s => <option key={s} value={s}>{s}</option>)}
+            <option value="">All content types</option>
+            {spaces.map(s => <option key={s} value={s}>{spaceLabel(s)}</option>)}
           </select>
         </div>
 
-        <div className="space-y-1">
-          <label className="text-xs font-medium">Limit to a path <span className="font-normal text-muted-foreground">(optional)</span></label>
-          <div className="flex gap-2">
-            <Input
-              value={scope}
-              onChange={e => setScope(e.target.value)}
-              placeholder="ctx://work/project or dir://photos"
-              className="h-8 font-mono text-sm"
-            />
-            <Button type="button" size="sm" variant="outline" onClick={() => setPicking(true)} title="Pick a context or directory path from the tree">
-              <FolderSearch className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        </div>
+        <PathScopeInput workspaceName={workspaceName} value={scope} onChange={setScope} disabled={running} />
       </div>
 
       <label className="mt-3 flex items-start gap-2 text-xs">
         <input type="checkbox" className="mt-0.5" checked={reindex} onChange={e => setReindex(e.target.checked)} />
         <span>
-          Re-embed documents that are already embedded
+          Also redo documents that are already indexed
           {reindex && scope.trim() && (
             <span className="mt-1 block text-[11px] text-warning">
-              Combined with a path limit this clears the WHOLE space, not just that subtree. A partial clear is not
-              expressible in the ledger. Leave this off unless you mean to redo everything.
+              Even with a folder limit, this clears the whole index for the chosen content type, not just that folder.
+              Leave it off unless you want to redo everything.
             </span>
           )}
         </span>
       </label>
 
       <Button type="button" size="sm" className="mt-3" onClick={run} disabled={running}>
-        {running ? 'Queueing…' : 'Start fill'}
+        {running ? 'Queueing…' : 'Start indexing'}
       </Button>
-
-      {picking && (
-        <LinkToSidePanel onClose={() => setPicking(false)}>
-          <LinkToCard
-            sizeClassName={LINK_TO_SIDE_SIZE}
-            fixedWorkspaceName={workspaceName}
-            multiple={false}
-            onClose={() => setPicking(false)}
-            onConfirm={(paths, ctx) => {
-              const picked = paths[0]
-              if (picked) {
-                // The tree tab decides the scheme the server resolves against.
-                const scheme = ctx.treeType === 'directory' ? 'dir' : 'ctx'
-                setScope(`${scheme}://${picked.replace(/^\/+/, '')}`)
-              }
-              setPicking(false)
-            }}
-          />
-        </LinkToSidePanel>
-      )}
     </Fold>
   )
 }
 
 /**
- * Caption backends the summarize.image path actually supports today, worst
+ * Caption backends the summarize.image path actually supports today, best
  * first. All run locally in the forked Transformers.js worker.
  *
  * `task` is the model FAMILY — it decides how the model is driven, so it
@@ -404,38 +429,38 @@ const IMAGE_CAPTION_BACKENDS = [
     provider: 'blip',
     model: 'HuggingFaceTB/SmolVLM-500M-Instruct',
     task: 'instruct' as const,
-    label: 'SmolVLM 500M: prompted description (recommended)',
-    note: '~500 MB. Follows the prompt below, so architecture/materials/setting can be asked for.',
+    label: 'SmolVLM 500M: follows your instructions (recommended)',
+    note: 'About 500 MB. Follows the instructions below, so you can ask for what matters to you, such as style, materials or setting.',
   },
   {
     provider: 'blip',
     model: 'HuggingFaceTB/SmolVLM-256M-Instruct',
     task: 'instruct' as const,
-    label: 'SmolVLM 256M: prompted, smaller',
-    note: '~250 MB. Same prompting, weaker; for memory-tight boxes.',
+    label: 'SmolVLM 256M: smaller, follows your instructions',
+    note: 'About 250 MB. Same instructions, less detail; for servers short on memory.',
   },
   {
     provider: 'blip',
     model: 'onnx-community/Florence-2-base-ft',
     task: 'florence2' as const,
-    label: 'Florence-2 base: detailed caption',
-    note: 'Detailed multi-sentence captions, but not steerable: no prompt, fixed task token.',
+    label: 'Florence-2 base: detailed, fixed style',
+    note: 'Writes several detailed sentences, but ignores instructions.',
   },
   {
     provider: 'blip',
     model: 'Xenova/vit-gpt2-image-captioning',
     task: 'caption' as const,
-    label: 'vit-gpt2: one short sentence (weakest)',
-    note: 'The old default. Terse and repetition-prone; kept for continuity and low memory.',
+    label: 'vit-gpt2: one short sentence (smallest)',
+    note: 'One terse sentence per image, sometimes repetitive. Uses the least memory.',
   },
 ] as const
 
 const CUSTOM_BACKEND_KEY = 'custom'
 
 const CAPTION_TASKS = [
-  { value: 'instruct', label: 'Instruct VLM (image + prompt)' },
-  { value: 'florence2', label: 'Florence-2 (task token)' },
-  { value: 'caption', label: 'Plain captioner (image only)' },
+  { value: 'instruct', label: 'Follows instructions (instruct VLM)' },
+  { value: 'florence2', label: 'Florence-2 family' },
+  { value: 'caption', label: 'Plain captioner, image only' },
 ] as const
 
 const DEFAULT_CAPTION_PROMPT = 'Describe this photograph in two or three sentences. '
@@ -443,16 +468,19 @@ const DEFAULT_CAPTION_PROMPT = 'Describe this photograph in two or three sentenc
   + 'Describe only what is visible.'
 
 /**
- * Image captions via the local Transformers.js worker (`blip` provider).
- * Results land in `metadata.summary` (FTS + reserved text-space chunk).
+ * Image descriptions via the local Transformers.js worker (`blip` provider).
+ * Results land in `metadata.summary`, which word search and text meaning search
+ * both index.
  */
 function SummarizeControls({
   workspaceId,
+  workspaceName,
   config,
   saving,
   onSave,
 }: {
   workspaceId: string
+  workspaceName: string
   config: WorkspaceInferdConfig
   saving: boolean
   onSave: (next: InferdConfig) => Promise<void>
@@ -481,6 +509,7 @@ function SummarizeControls({
   const [starting, setStarting] = useState(false)
   const [stopping, setStopping] = useState(false)
   const [rebuild, setRebuild] = useState(false)
+  const [scope, setScope] = useState('')
 
   const listed = IMAGE_CAPTION_BACKENDS.find(b => `${b.provider}::${b.model}` === backendKey)
   const isCustom = backendKey === CUSTOM_BACKEND_KEY
@@ -532,8 +561,8 @@ function SummarizeControls({
     try {
       setSummaryStatus(await stopWorkspaceImageSummaries(workspaceId))
       showToast({
-        title: 'Stopping image summaries',
-        description: 'The image being captioned finishes first; the rest are left for a later run.',
+        title: 'Stopping image descriptions',
+        description: 'The current image finishes first; the rest are left for a later run.',
       })
     } catch (err) {
       showToast({
@@ -549,15 +578,15 @@ function SummarizeControls({
   const generate = async (force = false) => {
     setStarting(true)
     try {
-      const status = await startWorkspaceImageSummaries(workspaceId, { force })
+      const status = await startWorkspaceImageSummaries(workspaceId, { force, scope: scope.trim() || undefined })
       setSummaryStatus(status)
       showToast({
-        title: force ? 'Rebuilding image summaries' : 'Backfilling image summaries',
-        description: `${status.total.toLocaleString()} candidate image(s). First run downloads model weights.`,
+        title: force ? 'Describing all images again' : 'Describing images',
+        description: `${status.total.toLocaleString()} image(s)${status.scope ? ` under ${status.scope}` : ''}. The first run downloads the model, which can take a few minutes.`,
       })
     } catch (err) {
       showToast({
-        title: 'Summaries failed to start',
+        title: 'Image descriptions failed to start',
         description: err instanceof Error ? err.message : 'Failed to start',
         variant: 'destructive',
       })
@@ -572,8 +601,8 @@ function SummarizeControls({
 
   return (
     <Fold
-      title="Summaries"
-      hint="Generate descriptions for indexed images (metadata.summary); searchable via full-text and dense search"
+      title="Image descriptions"
+      hint="A vision model writes a few sentences about each image, so you can find photos by what is in them."
     >
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -584,7 +613,7 @@ function SummarizeControls({
               disabled={saving}
               onChange={e => { setEnabled(e.target.checked); setDirty(true) }}
             />
-            Images
+            Describe images
           </label>
           <select
             className={selectClass}
@@ -606,7 +635,7 @@ function SummarizeControls({
           <div className="flex flex-wrap items-center gap-2">
             <Input
               className="h-8 w-72 font-mono text-xs"
-              placeholder="org/model-id (Transformers.js / ONNX)"
+              placeholder="org/model-id (Hugging Face, ONNX)"
               value={customModel}
               disabled={saving || !enabled}
               onChange={e => { setCustomModel(e.target.value); setDirty(true) }}
@@ -637,28 +666,31 @@ function SummarizeControls({
               onChange={e => { setPrompt(e.target.value); setDirty(true) }}
             />
             <p className="text-xs text-muted-foreground">
-              What to ask of every image. Empty uses the default shown above. Captions are indexed,
-              so ask for the words you would search by.
+              What to ask about every image. Leave empty to use the default shown above. Descriptions become
+              searchable, so ask for the details you would search by.
             </p>
           </div>
         )}
         {summaryStatus && (summaryStatus.running || summaryStatus.total > 0 || summaryStatus.finishedAt) && (
           <p className={cn('text-xs', summaryStatus.aborted ? 'text-destructive' : 'text-muted-foreground')}>
             {running ? 'Running' : summaryStatus.aborted ? 'Stopped' : summaryStatus.cancelled ? 'Cancelled' : 'Last run'}
+            {summaryStatus.scope ? <> under <span className="font-mono">{summaryStatus.scope}</span></> : null}
             : {summaryStatus.described}/{summaryStatus.total} described
             {summaryStatus.skipped ? `, ${summaryStatus.skipped} skipped` : ''}
             {summaryStatus.failed ? `, ${summaryStatus.failed} failed` : ''}
             {/* An abort says why it stopped and that the rest were never tried —
                 more useful than the first per-image error underneath it. */}
             {summaryStatus.aborted
-              ? `. ${summaryStatus.abortedReason || 'model worker died'}. Remaining images were not attempted; generate again to retry.`
+              ? `. ${summaryStatus.abortedReason || 'The model stopped working'}. The remaining images were not tried; run again to retry.`
               : summaryStatus.cancelled
-                ? '. Stopped by you. The remaining images were left untouched; generate again to continue.'
+                ? '. Stopped by you. The remaining images were left untouched; run again to continue.'
                 : firstError ? `. ${firstError}` : ''}
           </p>
         )}
-        {/* Same two-verb split as the embedding fill above: add what is
-            missing, or redo everything. */}
+        <PathScopeInput workspaceName={workspaceName} value={scope} onChange={setScope} disabled={saving || running} />
+
+        {/* Same two-verb split as the indexing run: add what is missing, or
+            redo everything. */}
         <label className="flex items-start gap-2 text-xs">
           <input
             type="checkbox"
@@ -668,11 +700,11 @@ function SummarizeControls({
             onChange={e => setRebuild(e.target.checked)}
           />
           <span>
-            Re-caption images that already have a summary
+            Also redo images that already have a description
             {rebuild && (
               <span className="mt-1 block text-[11px] text-warning">
-                Replaces every existing <span className="font-mono">metadata.summary</span>, including ones written by a
-                different model. Leave this off to fill in only what is missing.
+                Replaces existing descriptions{scope.trim() ? ' in that folder' : ''}, including ones written by another
+                model. Leave this off to describe only images that have none yet.
               </span>
             )}
           </span>
@@ -680,25 +712,24 @@ function SummarizeControls({
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">
-            Enable + save, then run. Only the local caption provider is wired today.
-            Candidates come from <span className="font-mono">data/mime/image</span>.
+            Turn on and save, then run. Descriptions are generated on this server; the first run downloads the model.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" variant="outline" onClick={() => void save()} disabled={saving || !dirty}>
-              Save summaries
+              Save
             </Button>
             <Button
               size="sm"
               onClick={() => void generate(rebuild)}
               disabled={saving || dirty || starting || running || !imageEnabled}
               title={
-                !imageEnabled ? 'Enable image summaries and save first'
-                  : dirty ? 'Save config first'
-                    : rebuild ? 'Re-caption every image, replacing existing summaries'
-                      : 'Caption images that have no summary yet'
+                !imageEnabled ? 'Turn on image descriptions and save first'
+                  : dirty ? 'Save your changes first'
+                    : rebuild ? 'Describe every image again, replacing existing descriptions'
+                      : 'Describe images that have no description yet'
               }
             >
-              {running || starting ? 'Running…' : rebuild ? 'Rebuild' : 'Backfill'}
+              {running || starting ? 'Running…' : rebuild ? 'Describe all again' : 'Describe missing'}
             </Button>
             {/* Only while there is something to stop — a disabled Stop sitting
                 there permanently reads as broken. */}
@@ -744,14 +775,14 @@ export function InferdSettingsPanel({
   const load = useCallback(() => (
     getWorkspaceInferdConfig(workspaceId)
       .then(cfg => { setConfig(cfg); setLoadError(null) })
-      .catch(err => setLoadError(err instanceof Error ? err.message : 'Failed to load the embedding config'))
+      .catch(err => setLoadError(err instanceof Error ? err.message : 'Failed to load the search settings'))
       .finally(() => setLoading(false))
   ), [workspaceId])
 
   const loadTables = useCallback(() => (
     listWorkspaceVectorTables(workspaceId)
       .then(result => { setTables(result.tables || []); setTablesError(result.error) })
-      .catch(err => setTablesError(err instanceof Error ? err.message : 'Failed to list vector tables'))
+      .catch(err => setTablesError(err instanceof Error ? err.message : 'Failed to list stored indexes'))
   ), [workspaceId])
 
   useEffect(() => { void load(); void loadTables() }, [load, loadTables])
@@ -765,16 +796,16 @@ export function InferdSettingsPanel({
       setMovedSpaces(result.movedSpaces || [])
       if (result.movedSpaces?.length) {
         showToast({
-          title: 'Saved; fill to finish',
-          description: `${result.movedSpaces.join(', ')} now targets a new model. The switch is live, but the new table is empty until you fill it.`,
+          title: 'Saved: now index your existing documents',
+          description: `${result.movedSpaces.map(spaceLabel).join(', ')}: new model in use. New documents use it right away; existing ones need indexing (button on the row).`,
         })
       } else if (result.applied === false) {
         showToast({
-          title: 'Saved; applies on next start',
-          description: 'The workspace is not running, so the new spaces take effect when it starts.',
+          title: 'Saved: applies on next start',
+          description: 'The workspace is not running, so the changes take effect when it starts.',
         })
       } else {
-        showToast({ title: 'Saved', description: 'Embedding config updated.' })
+        showToast({ title: 'Saved', description: 'Search settings updated.' })
       }
       await load()
       await loadTables()
@@ -793,21 +824,21 @@ export function InferdSettingsPanel({
       const result = await reindexWorkspaceEmbeddings(workspaceId, { space })
       if (result.ingestDisabled) {
         showToast({
-          title: 'Ingest disabled',
-          description: 'CANVAS_INFERD_INGEST_DISABLED=true: nothing was enqueued. Existing vectors still serve search.',
+          title: 'Indexing is turned off on the server',
+          description: 'CANVAS_INFERD_INGEST_DISABLED=true: nothing was queued. What is already indexed still works.',
           variant: 'destructive',
         })
         return
       }
       showToast({
-        title: `Filling ${space}`,
-        description: `${result.enqueued.toLocaleString()} document(s) queued. The status line reports progress.`,
+        title: `Indexing ${spaceLabel(space).toLowerCase()}`,
+        description: `${result.enqueued.toLocaleString()} document(s) queued. The status line above shows progress.`,
       })
       setMovedSpaces(prev => prev.filter(s => s !== space))
       setQueueRefresh(n => n + 1)
       void loadTables()
     } catch (err) {
-      showToast({ title: 'Fill failed', description: err instanceof Error ? err.message : 'Failed to enqueue', variant: 'destructive' })
+      showToast({ title: 'Indexing failed to start', description: err instanceof Error ? err.message : 'Failed to queue', variant: 'destructive' })
     }
   }
 
@@ -815,7 +846,7 @@ export function InferdSettingsPanel({
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <RefreshCw className="h-4 w-4 animate-spin" />
-        Loading the embedding config…
+        Loading search settings…
       </div>
     )
   }
@@ -824,7 +855,7 @@ export function InferdSettingsPanel({
     return (
       <div className="space-y-3">
         <div className="rounded-lg border border-destructive/40 bg-destructive-subtle p-4 text-sm">
-          <p className="font-medium text-destructive">Embedding config unavailable</p>
+          <p className="font-medium text-destructive">Search settings unavailable</p>
           <p className="mt-1 text-xs text-muted-foreground">{loadError || 'No config returned.'}</p>
         </div>
         <Button type="button" size="sm" variant="outline" onClick={refresh}>Try again</Button>
@@ -855,7 +886,7 @@ export function InferdSettingsPanel({
         attention={movedSpaces}
         onFill={fillSpace}
         saving={saving}
-        saveLabel="Save embedding config"
+        saveLabel="Save models"
         onSave={save}
       />
 
@@ -864,6 +895,7 @@ export function InferdSettingsPanel({
           // Remount on config reload so the draft resets from saved state.
           key={`summarize:${JSON.stringify(config.workspace?.summarize || {})}`}
           workspaceId={workspaceId}
+          workspaceName={workspaceName}
           config={config}
           saving={saving}
           onSave={save}
@@ -885,9 +917,9 @@ export function InferdSettingsPanel({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Stored in this workspace's own <span className="font-mono">workspace.json</span>, so it travels with the
-        workspace. Settings resolve in layers: built-in, then server, then your defaults, then this workspace, which
-        wins. Changes apply live, with no restart.
+        These settings are saved with the workspace (in its <span className="font-mono">workspace.json</span>), so
+        they move with it. Anything not set here comes from your personal defaults, then the server's. Changes apply
+        immediately, with no restart.
       </p>
     </div>
   )

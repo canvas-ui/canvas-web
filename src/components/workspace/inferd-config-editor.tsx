@@ -16,6 +16,7 @@ import {
   type InferdSpaceSpec,
   type ResolvedSpace,
 } from '@/services/inferd'
+import { providerLabel, providerTypeLabel, spaceHint, spaceLabel } from '@/lib/search-labels'
 
 /**
  * Editor for one layer of the embedding config.
@@ -47,7 +48,7 @@ import {
 
 const selectClass = 'h-8 w-full rounded-md border bg-background px-2 text-sm outline-none focus:ring-2 focus:ring-ring'
 
-/** Machine keys (space names) — set as keys rather than prose. */
+/** Small-caps section heading style. */
 const KEY_LABEL = 'font-semibold uppercase tracking-[0.08em]'
 
 /**
@@ -77,6 +78,7 @@ const PROVIDER_SHAPE: Record<string, {
       hint: 'OpenAI-compatible embeddings endpoint — Ollama, vLLM, TEI, infinity, LM Studio and OpenAI itself all speak this. A trailing /v1 is optional; both http://host:8000 and http://host:8000/v1 work.',
     },
     apiKey: 'Sent as `Authorization: Bearer …`. Leave empty for servers that do not check it.',
+    note: 'Any server that speaks the OpenAI embeddings API: a GPU machine running Ollama, vLLM or TEI, or a hosted service.',
     imageInput: true,
     timeoutMs: true,
     headers: true,
@@ -96,14 +98,19 @@ const PROVIDER_SHAPE: Record<string, {
     where: spec => (spec.host as string) || 'http://127.0.0.1:11434',
   },
   onnx: {
-    cacheDir: 'Where downloaded weights are cached on the server. Empty uses the server default.',
-    note: 'Runs in-process on the server. No endpoint and no credentials.',
-    where: () => 'in-process',
+    cacheDir: 'Where downloaded models are kept on the server. Empty uses the server default.',
+    note: 'Text model that runs inside Canvas on this server. Nothing to connect; the model downloads on first use.',
+    where: () => 'runs on this server',
   },
   clip: {
-    cacheDir: 'Where downloaded weights are cached on the server. Empty uses the server default.',
-    note: 'Runs in-process on the server. No endpoint and no credentials.',
-    where: () => 'in-process',
+    cacheDir: 'Where downloaded models are kept on the server. Empty uses the server default.',
+    note: 'Image model (CLIP) that runs inside Canvas on this server. It also understands text, which is how a typed search finds photos.',
+    where: () => 'runs on this server',
+  },
+  blip: {
+    cacheDir: 'Where downloaded models are kept on the server. Empty uses the server default.',
+    note: 'Vision model that writes image descriptions, inside Canvas on this server. Configured under Image descriptions.',
+    where: () => 'runs on this server',
   },
 }
 
@@ -542,7 +549,7 @@ export function InferdConfigEditor({
     const name = newSpaceName.trim()
     if (!name) { return }
     if (spaceNames.includes(name)) {
-      showToast({ title: 'Space exists', description: `'${name}' already has a row below.`, variant: 'destructive' })
+      showToast({ title: 'Already listed', description: `'${name}' already has a row above.`, variant: 'destructive' })
       return
     }
     setDraft(prev => ({ ...prev, spaces: { ...(prev.spaces || {}), [name]: {} } }))
@@ -553,7 +560,7 @@ export function InferdConfigEditor({
   const addProvider = (id: string, baseUrl?: string) => {
     if (!id) { return }
     if (providerIds.includes(id)) {
-      showToast({ title: 'Backend exists', description: `'${id}' is already declared. Open it below to edit.`, variant: 'destructive' })
+      showToast({ title: 'Already listed', description: `'${id}' is already set up. Open it below to edit.`, variant: 'destructive' })
       return
     }
     setDraft(prev => ({
@@ -578,14 +585,14 @@ export function InferdConfigEditor({
     const providerId = draft.spaces?.[space]?.provider ?? effective.spaces?.[space]?.provider
     const model = draft.spaces?.[space]?.model ?? effective.spaces?.[space]?.model
     if (!providerId) {
-      showToast({ title: 'No backend', description: `Space '${space}' has no backend to test.`, variant: 'destructive' })
+      showToast({ title: 'Nothing to test', description: `${spaceLabel(space)} has no model provider set.`, variant: 'destructive' })
       return
     }
     const spec = resolveProvider(providerId)
     const urlKey = spec.type ? PROVIDER_SHAPE[spec.type as string]?.url?.key : undefined
     const specProblem = urlKey ? urlProblem(spec[urlKey]) : null
     if (specProblem) {
-      showToast({ title: `Backend '${providerId}'`, description: specProblem, variant: 'destructive' })
+      showToast({ title: providerLabel(providerId), description: specProblem, variant: 'destructive' })
       return
     }
     setTesting(space)
@@ -615,17 +622,17 @@ export function InferdConfigEditor({
         setSpaceField(space, 'dim', String(result.dim))
       }
       showToast({
-        title: mismatch ? 'Backend answered; dimensions corrected' : 'Backend answered',
+        title: mismatch ? 'Model answered; vector size corrected' : 'Model answered',
         description: mismatch
-          ? `Returned ${result.dim}-d but '${space}' was set to ${configuredDim}-d. Dimensions updated to ${result.dim}; save to apply. (${result.latencyMs} ms)`
-          : `${result.dim}-d in ${result.latencyMs} ms`,
+          ? `It returned ${result.dim}-d vectors but ${spaceLabel(space)} was set to ${configuredDim}-d. Updated to ${result.dim}; save to apply. (${result.latencyMs} ms)`
+          : `${result.dim}-d vectors in ${result.latencyMs} ms`,
       })
     } catch (err) {
       // A rejected endpoint comes back as a 400 naming the offending provider;
       // show it verbatim rather than flattening it to "failed".
       showToast({
         title: 'Test failed',
-        description: err instanceof Error ? err.message : 'Backend unreachable',
+        description: err instanceof Error ? err.message : 'Model provider unreachable',
         variant: 'destructive',
       })
     } finally {
@@ -682,15 +689,15 @@ export function InferdConfigEditor({
       {/* ── Spaces ─────────────────────────────────────────────────────────── */}
       <section>
         <SectionHead
-          title="Search models"
-          hint="Choose a provider and model for each kind of content. After switching models, fill the new index to make existing documents searchable. Previous model indexes are preserved."
+          title="Meaning-search models"
+          hint="One model per kind of content. After switching a model, index your existing documents so they show up again. The old index is kept, so switching back costs nothing."
         />
 
         {spaceNames.length === 0 ? (
           <div className="rounded-lg border border-dashed p-6 text-center">
-            <p className="text-sm font-medium">No spaces on this layer</p>
+            <p className="text-sm font-medium">No models set here</p>
             <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">
-              A space needs a backend, a model and a dimension count. Add one below to start embedding.
+              Add a content type below and pick where its model runs.
             </p>
           </div>
         ) : (
@@ -724,31 +731,38 @@ export function InferdConfigEditor({
 
                   <div className="flex flex-col gap-2 py-3 pl-4 pr-3 sm:flex-row sm:items-start sm:gap-3">
                     <div className="min-w-0 flex-1">
-                      {/* The chain: space → model → backend → table. */}
+                      {/* The chain: content type → model → where it runs → index. */}
                       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                        <span className={cn('text-[11px]', KEY_LABEL)}>{space}</span>
-                        <span className="truncate font-mono text-sm">{model || 'no model set'}</span>
+                        <span className="text-sm font-medium">{spaceLabel(space)}</span>
+                        <span className="font-mono text-[10px] text-muted-foreground" title="Content type id in the config">{space}</span>
+                      </div>
+                      {spaceHint(space) && <p className="text-[11px] text-muted-foreground">{spaceHint(space)}</p>}
+                      <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                        <span className="truncate font-mono text-xs">{model || 'no model set'}</span>
                         {providerId && (
-                          <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                            via {providerId}
+                          <span
+                            className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                            title={`Provider id: ${providerId}`}
+                          >
+                            {providerLabel(providerId)}
                           </span>
                         )}
                         {dim !== undefined && (
-                          <span className="text-xs tabular-nums text-muted-foreground">{dim}-d</span>
+                          <span className="text-[11px] tabular-nums text-muted-foreground" title="Vector size: how many numbers the model produces per item">{dim}-d</span>
                         )}
-                        {chunk && <span className="text-xs text-muted-foreground">chunked</span>}
+                        {chunk && <span className="text-[11px] text-muted-foreground">long documents split</span>}
                       </div>
 
                       {resolvedSpaces && model && (
-                        <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground" title="Vector table backing this space">
+                        <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground" title="Where this model's index is stored">
                           └─ {resolved?.table ?? <span className="not-italic">not created yet</span>}
                         </p>
                       )}
 
                       {needsFill && (
                         <p className="mt-1 text-[11px] text-warning">
-                          New table, nothing embedded in it yet; dense search stays thin for this space until it is
-                          filled. Reverting the model is still instant.
+                          New model, nothing indexed with it yet. Existing documents of this type won&apos;t show up in
+                          meaning search until you index them. Switching back is still instant.
                         </p>
                       )}
                     </div>
@@ -756,7 +770,7 @@ export function InferdConfigEditor({
                     <div className="flex shrink-0 items-center gap-1 max-sm:justify-end">
                       {needsFill && onFill && (
                         <Button type="button" size="sm" variant="outline" onClick={() => onFill(space)}>
-                          Fill
+                          Index existing
                         </Button>
                       )}
                       <Button
@@ -765,12 +779,12 @@ export function InferdConfigEditor({
                         variant="ghost"
                         disabled={disabled || testing !== null}
                         onClick={() => runTest(space)}
-                        title="Round-trip a real embedding call against this backend and report the dimensions it returns"
+                        title="Send a sample to this model and check that it answers (also reports its vector size)"
                       >
                         <Zap className="mr-1.5 h-3.5 w-3.5" />
                         {testing === space ? (downloading ? 'Downloading…' : 'Testing…') : 'Test'}
                       </Button>
-                      <RowToggle open={open} onClick={() => toggleRow(rowKey)} label={`Edit ${space}`} />
+                      <RowToggle open={open} onClick={() => toggleRow(rowKey)} label={`Edit ${spaceLabel(space)}`} />
                     </div>
                   </div>
 
@@ -779,7 +793,7 @@ export function InferdConfigEditor({
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
-                            <label className="text-xs font-medium">Backend</label>
+                            <label className="text-xs font-medium">Runs on</label>
                             <InheritanceBadge overridden={override.provider !== undefined} source={fallback.provider} />
                           </div>
                           <select
@@ -788,8 +802,8 @@ export function InferdConfigEditor({
                             value={override.provider ?? ''}
                             onChange={e => setSpaceField(space, 'provider', e.target.value)}
                           >
-                            <option value="">{running.provider ? `inherited: ${running.provider}` : 'inherited'}</option>
-                            {providerIds.map(id => <option key={id} value={id}>{id}</option>)}
+                            <option value="">{running.provider ? `Default: ${providerLabel(running.provider)}` : 'Default'}</option>
+                            {providerIds.map(id => <option key={id} value={id}>{providerLabel(id)}{providerLabel(id) !== id ? ` (${id})` : ''}</option>)}
                           </select>
                         </div>
 
@@ -803,35 +817,36 @@ export function InferdConfigEditor({
                         />
 
                         <OverrideField
-                          label="Dimensions"
+                          label="Vector size"
                           type="number"
                           value={override.dim}
                           inheritedValue={running.dim}
                           onChange={raw => setSpaceField(space, 'dim', raw)}
                           disabled={disabled}
-                          hint="Sizes the vector table. Test asks the backend and fills in what it really returns."
+                          hint="How many numbers the model produces per item. Test asks the model and fills in the real value."
                         />
 
                         <OverrideField
-                          label="Max length"
+                          label="Max input length"
                           type="number"
                           value={override.maxLength}
                           inheritedValue={running.maxLength}
                           onChange={raw => setSpaceField(space, 'maxLength', raw)}
                           disabled={disabled}
+                          hint="Longest piece of text, in tokens, the model reads at once."
                         />
                       </div>
 
                       <div className="mt-3 flex flex-wrap gap-4">
                         <FlagToggle
-                          label="Chunk long inputs"
+                          label="Split long documents into parts"
                           checked={chunk}
                           overridden={override.chunk !== undefined}
                           disabled={disabled}
                           onChange={next => setSpaceFlag(space, 'chunk', next)}
                         />
                         <FlagToggle
-                          label="Build ANN index"
+                          label="Fast lookup index (ANN)"
                           checked={override.annIndex ?? running.annIndex ?? true}
                           overridden={override.annIndex !== undefined}
                           disabled={disabled}
@@ -852,12 +867,12 @@ export function InferdConfigEditor({
               value={newSpaceName}
               onChange={e => setNewSpaceName(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSpace() } }}
-              placeholder="new space name (e.g. audio)"
+              placeholder="new content type (e.g. audio)"
               className="h-8 w-full max-w-xs text-sm sm:w-auto"
             />
             <Button type="button" size="sm" variant="ghost" onClick={addSpace}>
               <Plus className="mr-1.5 h-3.5 w-3.5" />
-              Add space
+              Add content type
             </Button>
           </div>
         )}
@@ -866,8 +881,8 @@ export function InferdConfigEditor({
       {/* ── Backends ───────────────────────────────────────────────────────── */}
       <section>
         <SectionHead
-          title="Model providers"
-          hint="Connect a service here, then select it under Search models above. Built-in providers work without an extra connection. Provider changes take effect when you save."
+          title="Where models run"
+          hint="Built-in models run inside Canvas on this server and need no setup. To use a GPU machine or a hosted API, add an OpenAI-compatible server here, then pick it under the models above."
         />
 
         <div className="divide-y overflow-hidden rounded-lg border">
@@ -902,11 +917,12 @@ export function InferdConfigEditor({
                 <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                      <span className="font-mono text-sm font-semibold">{id}</span>
+                      <span className="text-sm font-semibold">{providerLabel(id)}</span>
+                      {providerLabel(id) !== id && <span className="font-mono text-[10px] text-muted-foreground">{id}</span>}
                       <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                        {resolvedType ?? 'no type'}
+                        {resolvedType ? providerTypeLabel(resolvedType) : 'no type'}
                       </span>
-                      {isBuiltin && <span className="text-[10px] text-muted-foreground">built-in</span>}
+                      {isBuiltin && <span className="text-[10px] text-muted-foreground">preset</span>}
                       {merged.apiKeySet && !touchedKeys.has(id) && (
                         <span className="text-[10px] font-medium text-success">key set</span>
                       )}
@@ -916,7 +932,7 @@ export function InferdConfigEditor({
                       {shape ? shape.where(merged) : '—'}
                     </p>
                     {usedBy.length > 0 && (
-                      <p className="mt-1 text-[11px] text-muted-foreground">used by {usedBy.join(', ')}</p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">used for {usedBy.map(spaceLabel).join(', ').toLowerCase()}</p>
                     )}
                   </div>
 
@@ -926,7 +942,7 @@ export function InferdConfigEditor({
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     )}
-                    <RowToggle open={open} onClick={() => toggleRow(rowKey)} label={`Edit ${id}`} />
+                    <RowToggle open={open} onClick={() => toggleRow(rowKey)} label={`Edit ${providerLabel(id)}`} />
                   </div>
                 </div>
 
@@ -944,8 +960,8 @@ export function InferdConfigEditor({
                           value={override.type ?? ''}
                           onChange={e => setProviderField(id, 'type', e.target.value)}
                         >
-                          <option value="">{running.type ? `inherited: ${running.type}` : 'inherited'}</option>
-                          {INFERD_PROVIDER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                          <option value="">{running.type ? `Default: ${providerTypeLabel(running.type)}` : 'Default'}</option>
+                          {INFERD_PROVIDER_TYPES.map(t => <option key={t} value={t}>{providerTypeLabel(t)}</option>)}
                           {/* A retired type still stored somewhere must remain
                               selectable, or opening the row silently rewrites it
                               to whatever the first option happens to be. */}
@@ -1091,12 +1107,12 @@ export function InferdConfigEditor({
               value={newProviderId}
               onChange={e => setNewProviderId(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addProvider(newProviderId.trim()) } }}
-              placeholder="new backend name (e.g. gpu)"
+              placeholder="name for a server (e.g. gpu)"
               className="h-8 w-full max-w-xs text-sm sm:w-auto"
             />
             <Button type="button" size="sm" variant="ghost" onClick={() => addProvider(newProviderId.trim())}>
               <Plus className="mr-1.5 h-3.5 w-3.5" />
-              Add backend
+              Add server
             </Button>
             {/* Presets, because every remote backend is the same `openai` type
                 and only the URL differs — the id and endpoint are the whole
@@ -1109,7 +1125,7 @@ export function InferdConfigEditor({
                 size="sm"
                 variant="outline"
                 onClick={() => addProvider(preset.id, preset.baseUrl)}
-                title={`Add an openai-type backend '${preset.id}' pointed at ${preset.baseUrl}`}
+                title={`Add ${preset.label} at ${preset.baseUrl}`}
               >
                 {preset.label}
               </Button>
