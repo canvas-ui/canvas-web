@@ -1,5 +1,5 @@
 import './canvas-navigation.css'
-import { Search, X } from 'lucide-react'
+import { Quote, Search, X } from 'lucide-react'
 import { useRef } from 'react'
 import { RelationSearchSuggestions } from './relation-search-suggestions'
 
@@ -54,10 +54,15 @@ export function SearchOptions({ queries, onRemoveQuery, scope = 'path', onScopeC
       <button type="button" aria-pressed={scope === 'workspace'} onClick={() => onScopeChange('workspace')}>Workspace</button>
     </div>}
     {queries.length > 0 && <div className="canvas-search-queries" aria-label="Active searches">
-      {queries.map((query, index) => <span className="canvas-search-query" key={`${query}-${index}`}>
-        <Search size={12} aria-hidden="true" /><span title={query}>{query}</span>
-        {onRemoveQuery && <button type="button" onClick={() => onRemoveQuery(index)} aria-label={`Remove search: ${query}`}><X size={14} /></button>}
-      </span>)}
+      {queries.map((query, index) => {
+        // A quoted query is a verbatim phrase on the server (search text grammar).
+        const exact = /"[^"]+/.test(query)
+        return <span className={exact ? 'canvas-search-query canvas-search-query-exact' : 'canvas-search-query'} key={`${query}-${index}`}>
+          {exact ? <Quote size={12} aria-hidden="true" /> : <Search size={12} aria-hidden="true" />}
+          <span title={exact ? `${query} (exact phrase)` : query}>{query}</span>
+          {onRemoveQuery && <button type="button" onClick={() => onRemoveQuery(index)} aria-label={`Remove search: ${query}`}><X size={14} /></button>}
+        </span>
+      })}
       {onRemoveQuery && queries.length > 1 && <button type="button" onClick={() => onRemoveQuery(-1)} className="canvas-search-clear">Clear all</button>}
     </div>}
   </div>

@@ -51,6 +51,7 @@
 .canvas-search-scopes button[aria-pressed="true"] { background: var(--foreground); color: var(--background); border-color: var(--foreground); }
 .canvas-search-queries { display: flex; flex-wrap: wrap; gap: 6px; }
 .canvas-search-query { display: inline-flex; align-items: center; max-width: 100%; gap: 6px; padding-left: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--muted); font-size: 12px; }
+.canvas-search-query-exact { border-style: dashed; }
 .canvas-search-query > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .canvas-search-query button { display: flex; align-items: center; justify-content: center; min-width: 40px; min-height: 40px; cursor: pointer; }
 .canvas-search-clear { font-size: 12px; text-decoration: underline; padding: 8px; }
