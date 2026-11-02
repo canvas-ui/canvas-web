@@ -8,6 +8,7 @@ import { useAgentPromptStream } from '@/hooks/useAgentPromptStream'
 import { useVoiceRecorder } from '@/hooks/useVoiceRecorder'
 import AgentAssistantExtras from '@/components/agent/AgentAssistantExtras'
 import { MarkdownView } from '@/components/common/markdown-view'
+import { CopyReplyButton } from '@/components/agent/CopyReplyButton'
 
 interface AgentChatPanelProps {
   agentId: string
@@ -184,7 +185,7 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
           <div
             key={i}
             className={cn(
-              'text-sm rounded-lg px-3 py-2 max-w-[85%] break-words',
+              'group/agent-reply text-sm rounded-lg px-3 py-2 max-w-[85%] break-words',
               msg.role === 'user'
                 ? 'ml-auto bg-foreground text-background'
                 : 'mr-auto bg-muted text-foreground',
@@ -199,6 +200,7 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
             {msg.role === 'assistant'
               ? <MarkdownView content={msg.content || (!msg.isComplete ? '…' : '')} />
               : <span className="whitespace-pre-wrap">{msg.content}</span>}
+            {msg.role === 'assistant' && <div className="flex justify-end"><CopyReplyButton text={msg.content} /></div>}
           </div>
         ))}
         {(error || recorderError) && (

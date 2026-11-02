@@ -3,6 +3,7 @@ import { StreamingChatMessage } from '@/hooks/useAgentSocket';
 import { Wifi, WifiOff, Radio, Cpu } from 'lucide-react';
 import AgentAssistantExtras from './AgentAssistantExtras';
 import { MarkdownView } from '@/components/common/markdown-view';
+import { CopyReplyButton } from './CopyReplyButton';
 
 interface StreamingChatMessageProps {
   message: StreamingChatMessage;
@@ -51,7 +52,7 @@ function StreamingChatMessageComponent({
       className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
     >
       <div
-        className={`max-w-[70%] p-3 rounded-lg ${
+        className={`group/agent-reply max-w-[70%] p-3 rounded-lg ${
           message.role === 'user'
             ? 'bg-primary text-primary-foreground'
             : 'bg-muted'
@@ -79,7 +80,7 @@ function StreamingChatMessageComponent({
               <span className="text-info">• streaming...</span>
             )}
           </div>
-          {message.role === 'assistant' && getConnectionIcon()}
+          {message.role === 'assistant' && <div className="flex items-center gap-2"><CopyReplyButton text={message.content} />{getConnectionIcon()}</div>}
         </div>
       </div>
     </div>
