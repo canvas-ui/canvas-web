@@ -12,8 +12,8 @@ import { reportNetworkFailure, reportNetworkSuccess } from './connectivity'
 //
 // The one exception is `api.*Envelope()`, which returns the whole
 // ResponseEnvelope, for the few callers that need a field the payload does not
-// carry: `count`/`totalCount` (document lists, lens search) and `message`
-// (admin reindex). Everything else uses the plain methods.
+// carry: `count`/`totalCount` (document lists, lens search). Everything else
+// uses the plain methods.
 //
 // Web-only policy stays here: the redirect guard, token-format gate,
 // 401 → /login. Workspace startup is an explicit user action. stream() keeps a raw

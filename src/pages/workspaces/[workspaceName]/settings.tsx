@@ -1,5 +1,6 @@
 import { WorkspaceBackupsPanel } from '@/components/workspace/workspace-backups-panel'
 import { CacheMaintenancePanel } from '@/components/workspace/cache-maintenance-panel'
+import { dbJobLabel, dbJobSummary, followDbMaintenance, getDbMaintenance, isDbJobActive, startDbMaintenance, type DbMaintenanceAction, type DbMaintenanceJob } from '@/services/db-maintenance'
 import { syncBackendWithProgress } from '@/services/backend-sync-progress'
 import { BackendRemovalSettings } from '@/components/workspace/backend-removal-settings'
 import type { RemovalPolicy } from '@/services/trash-operations'
@@ -57,10 +58,6 @@ import {
   clearThumbnailCache,
   invalidateWorkspaceTreeCache,
   formatBytes,
-  reindexTimelines,
-  reindexMime,
-  reindexSearch,
-  optimizeIndexes,
   type Backend,
   type BackendDiskUsage,
   type WorkspaceDiskUsage,
@@ -1867,43 +1864,60 @@ function SearchPipelineExplainer() {
 // ── DB maintenance (admin reindex endpoints) ─────────────────────────────────
 // STORAGE-level ops only (bitmaps, FTS, Lance table compaction); every op shows
 // its description inline (tooltips are useless on touch). Destructive variants
-// (rebuild) sit behind a confirm. All idempotent server-side. Embedding-level
-// work — backfill/re-embed, model choice, the queue — lives on the Embedding
-// tab, which has the scoped reindex control.
+// (rebuild) sit behind a confirm. All idempotent server-side. The server runs
+// each as a job with a receipt (a rebuild over a large workspace outlasts any
+// request); the notice follows it and the pane reattaches to a job already
+// running. Embedding-level work — backfill/re-embed, model choice, the queue —
+// lives on the Embedding tab, which has the scoped reindex control.
 function ReindexSection({ workspaceName, vectorSpaces, onDone }: { workspaceName: string; vectorSpaces: string[]; onDone: () => void }) {
-  const [busy, setBusy] = useState<string | null>(null)
+  const { showProgress } = useToast()
+  const [active, setActive] = useState<DbMaintenanceJob | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
-  const run = async (key: string, fn: () => Promise<{ message: string }>, confirmText?: string) => {
+  const follow = useCallback((job: DbMaintenanceJob) => {
+    setActive(job)
+    followDbMaintenance(showProgress, workspaceName, job)
+      .then(done => { setMessage(`${dbJobLabel(done)}: ${dbJobSummary(done)}`); onDone() })
+      .catch(err => setMessage(err instanceof Error ? err.message : 'Reindex failed'))
+      .finally(() => setActive(null))
+  }, [showProgress, workspaceName, onDone])
+
+  // Reattach to a job started before this pane opened. followDbMaintenance
+  // keeps one notice per receipt, so a re-run after a re-render is harmless.
+  useEffect(() => {
+    let cancelled = false
+    getDbMaintenance(workspaceName).then(status => {
+      const job = status.jobs.find(isDbJobActive)
+      if (job && !cancelled) follow(job)
+    }).catch(() => { /* the pane still offers to start one */ })
+    return () => { cancelled = true }
+  }, [workspaceName, follow])
+
+  const run = async (action: DbMaintenanceAction, options: { rebuild?: boolean; space?: string } = {}, confirmText?: string) => {
     if (confirmText && !window.confirm(confirmText)) return
-    setBusy(key)
     setMessage(null)
     try {
-      const res = await fn()
-      setMessage(res.message)
-      onDone()
+      follow(await startDbMaintenance(workspaceName, action, options))
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Reindex failed')
-    } finally {
-      setBusy(null)
     }
   }
 
-  interface Op { key: string; label: string; description: string; confirm?: string; fn: () => Promise<{ message: string }> }
+  interface Op { key: string; label: string; description: string; confirm?: string; action: DbMaintenanceAction; options?: { rebuild?: boolean; space?: string } }
   const groups: { title: string; ops: Op[] }[] = [
     {
       title: 'Dates & file types',
       ops: [
-        { key: 'timelines', label: 'Rebuild timelines', description: 'Recompute created and updated dates used by date filters and the timeline.', fn: () => reindexTimelines(workspaceName) },
-        { key: 'mime', label: 'Rebuild file types', description: 'Recompute which documents are images, PDFs, videos and so on (used by type filters and image descriptions).', fn: () => reindexMime(workspaceName) },
+        { key: 'timelines', label: 'Rebuild timelines', description: 'Recompute created and updated dates used by date filters and the timeline.', action: 'reindex:timelines' },
+        { key: 'mime', label: 'Rebuild file types', description: 'Recompute which documents are images, PDFs, videos and so on (used by type filters and image descriptions).', action: 'reindex:mime' },
       ],
     },
     {
       title: 'Word search (full-text, BM25)',
       ops: [
-        { key: 'fts', label: 'Add missing', description: 'Index documents that word search does not know about yet. Fast; skips what is already indexed.', fn: () => reindexSearch(workspaceName) },
-        { key: 'fts-rebuild', label: 'Rebuild', description: 'Delete the word-search index and build it again. Use when search misses documents it should find.', confirm: 'Delete the word-search index and rebuild it from scratch?', fn: () => reindexSearch(workspaceName, true) },
-        { key: 'fts-optimize', label: 'Optimize', description: 'Tidy the index on disk: merge small pieces and drop old versions.', fn: () => optimizeIndexes(workspaceName, 'fts') },
+        { key: 'fts', label: 'Add missing', description: 'Index documents that word search does not know about yet. Fast; skips what is already indexed.', action: 'reindex:search' },
+        { key: 'fts-rebuild', label: 'Rebuild', description: 'Delete the word-search index and build it again. Use when search misses documents it should find, or after a schema change to what gets indexed.', confirm: 'Delete the word-search index and rebuild it from scratch?', action: 'reindex:search', options: { rebuild: true } },
+        { key: 'fts-optimize', label: 'Optimize', description: 'Tidy the index on disk: merge small pieces and drop old versions.', action: 'optimize', options: { space: 'fts' } },
       ],
     },
     // Lance table compaction per LIVE vector space — enumerated from what the
@@ -1914,10 +1928,14 @@ function ReindexSection({ workspaceName, vectorSpaces, onDone }: { workspaceName
         key: `${space}-optimize`,
         label: `Optimize ${spaceLabel(space).toLowerCase()}`,
         description: `Tidy the ${spaceLabel(space).toLowerCase()} index on disk and rebuild its fast lookup.`,
-        fn: () => optimizeIndexes(workspaceName, space),
+        action: 'optimize',
+        options: { space },
       })),
     }] : []),
   ]
+  const busyKey = active ? groups.flatMap(g => g.ops).find(op => op.action === active.action
+    && (op.options?.rebuild ?? false) === (active.options.rebuild ?? false)
+    && (op.options?.space ?? null) === (active.options.space ?? null))?.key ?? active.id : null
 
   return (
     <section className="rounded-lg border p-4">
@@ -1938,10 +1956,10 @@ function ReindexSection({ workspaceName, vectorSpaces, onDone }: { workspaceName
                     variant="outline"
                     size="sm"
                     className="w-44 justify-start"
-                    disabled={busy !== null}
-                    onClick={() => run(op.key, op.fn, op.confirm)}
+                    disabled={active !== null}
+                    onClick={() => run(op.action, op.options, op.confirm)}
                   >
-                    {busy === op.key && <RefreshCw className="mr-2 h-3 w-3 animate-spin" />}
+                    {busyKey === op.key && <RefreshCw className="mr-2 h-3 w-3 animate-spin" />}
                     {op.label}
                   </Button>
                   <span className="min-w-0 flex-1 basis-52 text-xs text-muted-foreground">{op.description}</span>
