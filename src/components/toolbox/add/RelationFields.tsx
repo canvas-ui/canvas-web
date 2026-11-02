@@ -7,7 +7,7 @@ import { LinkToCard } from '@/components/menu/shared/LinkToCard'
 import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from '@/components/menu/shared/LinkToSidePanel'
 import { getDocumentDisplayInfo } from '@/lib/document-display'
 import { cn } from '@/lib/utils'
-import { DEFAULT_RELATION_PREDICATE, type RelationFieldsState } from './useRelationFields'
+import { type RelationFieldsState } from './useRelationFields'
 
 // "Related documents" block shared by the add forms: the pending relation rows
 // (predicate + axis + target) and the picker that adds more. The picker is the
@@ -97,7 +97,7 @@ export function RelationFields({ f, idPrefix }: { f: RelationFieldsState; idPref
             fixedWorkspaceName={f.workspaceName}
             documentCount={1}
             saving={adding}
-            relationPredicates={f.predicates.length ? f.predicates : [DEFAULT_RELATION_PREDICATE]}
+            relationPredicates={f.predicates}
             relationExcludeIds={new Set(f.rows.map((r) => r.targetId))}
             onClose={() => setPicking(false)}
             onConfirm={() => {}}

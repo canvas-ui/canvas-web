@@ -11,10 +11,10 @@ import {
   invalidateWorkspaceTreeCache,
   insertWorkspacePath,
   DEFAULT_WORKSPACE_TREE_NAME,
-  RELATION_PREDICATES,
 } from '@/services/workspace'
 import type { TreeNode } from '@/types/workspace'
 import { LinkNode, WorkspaceListStep, InlineCreateRow, DocumentPathBrowser } from './tree-picker-shared'
+import { useRelationPredicates } from '@/hooks/useRelationPredicates'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { type TreeTab, type PickerTab, type RowMenuEvent, TAB_ICONS, TAB_LABELS, useRowMenu } from './tree-picker-utils'
 // Workspace is a global type declared in src/types/api.d.ts
@@ -68,8 +68,7 @@ interface LinkToCardProps {
   // document's workspace even while the path tabs browse another one. Defaults
   // to whatever workspace the card has selected.
   relationWorkspaceName?: string
-  // Live predicate registry from the server (a relations read echoes it); the
-  // bundled constant is the fallback.
+  // Live predicate registry from a relations read; otherwise fetched for this workspace.
   relationPredicates?: string[]
   // Documents the relation tab must not offer — at minimum the subjects
   // themselves, since a document cannot be related to itself.
@@ -104,8 +103,10 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
   const [activeTab, setActiveTab] = useState<PickerTab | 'pins'>(startTab)
   // Relations tab state — the destination is a document + a typed predicate
   // rather than a path, so it keeps its own selection.
-  const predicates = relationPredicates?.length ? relationPredicates : [...RELATION_PREDICATES]
-  const [predicate, setPredicate] = useState<string>(predicates[0] ?? 'references')
+  const registry = useRelationPredicates(tabs.includes('relations') && !relationPredicates ? relationWorkspaceName ?? workspaceName : null)
+  const predicates = relationPredicates ?? registry.predicates
+  const [selectedPredicate, setPredicate] = useState('')
+  const predicate = predicates.includes(selectedPredicate) ? selectedPredicate : predicates[0] ?? ''
   const [direction, setDirection] = useState<RelationDirection>('out')
   const [selectedDocIds, setSelectedDocIds] = useState<Set<number>>(new Set())
   const [pins, setPins] = useState<WorkspacePin[] | null>(null)
@@ -245,7 +246,7 @@ export function LinkToCard({ onClose, onConfirm, documentCount, fixedWorkspaceNa
     })
   }
 
-  const canConfirm = isRelations ? selectedDocIds.size > 0 && !!onConfirmRelation : selected.size > 0
+  const canConfirm = isRelations ? !!predicate && selectedDocIds.size > 0 && !!onConfirmRelation : selected.size > 0
 
   const confirm = async () => {
     if (!workspaceName || saving || !canConfirm) return

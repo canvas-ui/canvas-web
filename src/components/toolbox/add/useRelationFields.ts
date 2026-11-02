@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   createDocumentRelations,
-  getRelationPredicates,
   getWorkspaceDocument,
-  RELATION_PREDICATES,
 } from '@/services/workspace'
+import { useRelationPredicates } from '@/hooks/useRelationPredicates'
 import { announceRelationsChanged } from '@/lib/relation-events'
 import type { Document } from '@/types/workspace'
 import type { RelateSeed } from '../toolbox-context'
@@ -29,7 +28,7 @@ export interface PendingRelation {
   document: Document | null
 }
 
-export const DEFAULT_RELATION_PREDICATE = 'references'
+const DEFAULT_RELATION_PREDICATE = 'references'
 
 function seedRows(seed: RelateSeed | null | undefined): PendingRelation[] {
   if (!seed) return []
@@ -43,7 +42,6 @@ function seedRows(seed: RelateSeed | null | undefined): PendingRelation[] {
 
 export function useRelationFields(target: AddTarget, seed?: RelateSeed | null) {
   const [rows, setRows] = useState<PendingRelation[]>(() => seedRows(seed))
-  const [predicates, setPredicates] = useState<string[]>([...RELATION_PREDICATES])
   // Relations are workspace-scoped (one edge plane per index). A context is
   // always bound to exactly one workspace, so context-mode targets resolve to
   // it — asynchronously, hence state rather than a derived value.
@@ -63,14 +61,7 @@ export function useRelationFields(target: AddTarget, seed?: RelateSeed | null) {
       ? contextWorkspace.workspaceName
       : seed?.workspaceName ?? null
 
-  // The registry is the server's (synapsd predicates.js), never a local list —
-  // the local constant only covers the request's round trip.
-  useEffect(() => {
-    let cancelled = false
-    if (!workspaceName) return
-    getRelationPredicates(workspaceName).then((list) => { if (!cancelled) setPredicates(list) })
-    return () => { cancelled = true }
-  }, [workspaceName])
+  const { predicates } = useRelationPredicates(workspaceName)
 
   const add = useCallback(async (predicate: string, direction: 'in' | 'out', targetIds: number[]) => {
     const fresh = targetIds.filter((id) => !rows.some((r) => r.targetId === id && r.predicate === predicate && r.direction === direction))

@@ -1,4 +1,5 @@
 import { downloadLinkToWorkspace } from '@/services/workspace'
+import { RelationSearchSuggestions } from './relation-search-suggestions'
 import { useContentWindow } from './content-window-context'
 import { useTileStyle } from '@/lib/tile-style'
 import './document-tiles.css'
@@ -1859,6 +1860,7 @@ export function DocumentList({ readingPane = false, externalSearchQuery, toolbar
                 }}
                 className="w-full pl-10 pr-9 py-2 border border-input rounded-md bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
               />
+              {onBackendSearch && workspaceId && <RelationSearchSuggestions workspaceId={workspaceId} inputRef={searchInputRef} onChange={setSearchQuery} />}
               {(searchQuery || hasServerSearch) && (
                 <button
                   onClick={clearAllSearch}

@@ -16,7 +16,8 @@ function TerminalScreen({ session, transport, report }: { session: TerminalSessi
     const fit = new FitAddon()
     terminal.loadAddon(fit)
     terminal.open(host.current)
-    let disposed = false, offset = 0, timer: ReturnType<typeof setTimeout>
+    let disposed = false, offset = 0
+    let detach: (() => void) | undefined
     const fail = (error: unknown) => { if (!disposed) reportRef.current(error) }
     const resize = () => {
       if (!host.current || host.current.clientWidth === 0 || host.current.clientHeight === 0) return
@@ -37,23 +38,16 @@ function TerminalScreen({ session, transport, report }: { session: TerminalSessi
       if (event.ctrlKey && !event.shiftKey && ['KeyT', 'KeyN', 'KeyW', 'Tab', 'PageUp', 'PageDown'].includes(event.code)) return false
       return true
     })
-    const poll = async () => {
-      try {
-        let next: TerminalRead
-        do {
-          next = await transport.read(session.id, offset)
-          if (disposed) return
-          if (offset < next.start) terminal.reset()
-          offset = next.offset
-          if (next.data.length) await new Promise<void>(resolve => terminal.write(Uint8Array.from(next.data), resolve))
-        } while (next.data.length === 65536 && !disposed)
-        if (!next.running) { terminal.write('\r\n\x1b[90m[Process exited]\x1b[0m\r\n'); return }
-        timer = setTimeout(() => { void poll() }, 50)
-      } catch (error) { fail(error) }
+    const output = (next: TerminalRead) => {
+      if (disposed) return
+      if (offset < next.start) terminal.reset()
+      offset = next.offset
+      if (next.data.length) terminal.write(Uint8Array.from(next.data))
+      if (!next.running) terminal.write('\r\n\x1b[90m[Process exited]\x1b[0m\r\n')
     }
-    void poll()
+    void transport.attach(session.id, output).then(unsubscribe => { if (disposed) unsubscribe(); else detach = unsubscribe }).catch(fail)
     terminal.focus()
-    return () => { disposed = true; clearTimeout(timer); observer.disconnect(); input.dispose(); binary.dispose(); terminal.dispose() }
+    return () => { disposed = true; detach?.(); observer.disconnect(); input.dispose(); binary.dispose(); terminal.dispose() }
   }, [session.id, transport])
   return <div ref={host} className="min-h-0 flex-1 overflow-hidden p-2" style={{ background: '#111418' }} aria-label="Terminal screen" />
 }
@@ -79,19 +73,25 @@ function TerminalSessions({ scope, transport }: { scope: string; transport: Term
   const report = (error: unknown) => setError(String(error))
   useEffect(() => {
     let disposed = false
+    let revision = 0
+    let unwatch: (() => void) | undefined
     const refresh = async () => {
-      try { const rows = await transport.list(scope); if (!disposed) { setSessions(rows); setLoading(false) } }
-      catch (error) { if (!disposed) { report(error); setLoading(false) } }
+      const request = ++revision
+      try { const rows = await transport.list(scope); if (!disposed && request === revision) { setSessions(rows); setLoading(false) } }
+      catch (error) { if (!disposed && request === revision) { report(error); setLoading(false) } }
     }
-    void refresh()
-    const timer = setInterval(() => { void refresh() }, 1000)
-    return () => { disposed = true; clearInterval(timer) }
+    void transport.watch(scope, () => { void refresh() }).then(unsubscribe => {
+      if (disposed) { unsubscribe(); return }
+      unwatch = unsubscribe
+      void refresh()
+    }).catch(error => { if (!disposed) { report(error); setLoading(false) } })
+    return () => { disposed = true; unwatch?.() }
   }, [scope, transport])
   const active = sessions.find(session => session.id === selected) || sessions[0]
   const select = (id: string) => { setSelected(id); localStorage.setItem(selectionKey, id) }
   const add = async () => {
     setBusy(true); setError('')
-    try { const session = await transport.create(scope, cwd || undefined); setSessions(old => [...old, session]); select(session.id) }
+    try { const session = await transport.create(scope, cwd || undefined); setSessions(old => [...old.filter(row => row.id !== session.id), session]); select(session.id) }
     catch (error) { report(error) } finally { setBusy(false) }
   }
   const close = async (id: string) => {

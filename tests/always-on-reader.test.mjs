@@ -88,8 +88,8 @@ test('appearance preference defaults to on and persists explicit opt-out', () =>
 
 test('a narrow hosted window keeps a usable list instead of squeezing a reader alongside it', () => {
   const ui = reader()
-  ui.options.contentWindow = { width: 500 }
+  ui.options.contentWindow = { compact: true }
   assert.equal(ui.gate(props), 'list')
-  ui.options.contentWindow.width = 1100
+  ui.options.contentWindow.compact = false
   assert.notEqual(ui.gate(props), 'list')
 })

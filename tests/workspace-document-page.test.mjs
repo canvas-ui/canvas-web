@@ -11,22 +11,25 @@ const compile = path => ts.transpileModule(readFileSync(new URL(path, import.met
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
 }).outputText
 
-test('the document-by-ID URL and direct alias match a detail page rather than a folder view', () => {
+test('the document-by-ID URL and direct alias match a detail page rather than a folder view', async () => {
   const exports = {}
   vm.runInNewContext(compile('../src/routes/shell-routes.tsx'), { exports, require: name =>
-    name === 'react-router-dom' || name === 'react/jsx-runtime' ? require(name) : { default: name },
+    name === 'react' ? { ...require(name), lazy: load => Object.assign(() => null, { load }) }
+      : name === 'react-router-dom' || name === 'react/jsx-runtime' ? require(name) : { default: name },
   })
   const routes = createRoutesFromChildren(exports.shellRoutes)
   for (const url of ['/workspaces/preprod/documents/by-id/101140', '/workspaces/preprod/documents/101140']) {
     const match = matchRoutes(routes, url).at(-1)
     assert.equal(match.params.documentId, '101140')
-    assert.equal(match.route.element.type, '@/pages/workspaces/[workspaceName]/document')
+    const loaded = await match.route.element.props.children.type.load()
+    assert.equal(loaded.default, '@/pages/workspaces/[workspaceName]/document')
   }
   for (const kind of ['by-hash', 'by-checksum']) {
     const match = matchRoutes(routes, `/workspaces/preprod/documents/${kind}/sha256/abc123`).at(-1)
     assert.equal(match.params.algo, 'sha256')
     assert.equal(match.params.checksum, 'abc123')
-    assert.equal(match.route.element.type, '@/pages/workspaces/[workspaceName]/document')
+    const loaded = await match.route.element.props.children.type.load()
+    assert.equal(loaded.default, '@/pages/workspaces/[workspaceName]/document')
   }
 })
 

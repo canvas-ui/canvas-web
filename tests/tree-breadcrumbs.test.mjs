@@ -51,6 +51,7 @@ const dependencies = {
   '@iconify/react': { Icon: 'icon' },
   '@/lib/layer-style': { DEFAULT_WORKSPACE_ICON: 'ph:stack-fill' },
   '@/components/common/document-list': { DocumentList: 'documents' },
+  '@/components/common/content-window-context': { useContentWindow: () => null },
   '@/components/toolbox/use-toolbox': { useToolbox: () => ({ state: {} }) },
   '@/components/shell/use-side-view': { useSideView: () => ({ entry: null }) },
 }
@@ -76,6 +77,21 @@ function nodes(node) {
   if (typeof node.type === 'function') return nodes(node.type(node.props))
   return [node, ...nodes(node.props?.children)]
 }
+
+test('hosted canvases keep views in the shared address row without an inner tab strip or frame', () => {
+  dependencies['@/components/common/content-window-context'].useContentWindow = () => ({ pinned: false })
+  try {
+    const rendered = nodes(DefaultCanvas({
+      urlType: 'context', workspaceId: 'home', urlDisplay: 'home://Projects', contextPath: '/Projects',
+      navigationTabs: jsx('button', { children: 'All' }), documents: [],
+    }))
+    assert.equal(rendered.filter(node => node.props?.className === 'canvas-navigation-tabs').length, 0)
+    assert.equal(rendered.filter(node => node.props?.className?.includes('is-framed')).length, 0)
+    assert.equal(rendered.find(node => node.type === 'details').props['aria-label'], 'Canvas views')
+    assert.ok(rendered.some(node => node.type === 'summary' && node.props.children === 'Views'))
+    assert.ok(rendered.some(node => node.type === 'button' && node.props.children === 'All'))
+  } finally { dependencies['@/components/common/content-window-context'].useContentWindow = () => null }
+})
 
 test('breadcrumb controls navigate to ancestors and mark the current location', () => {
   const navigated = []

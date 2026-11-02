@@ -4,7 +4,8 @@ export type TerminalRead = { offset: number; start: number; data: number[]; runn
 export interface TerminalTransport {
   list(scope: string): Promise<TerminalSession[]>
   create(scope: string, cwd?: string): Promise<TerminalSession>
-  read(id: string, offset: number): Promise<TerminalRead>
+  attach(id: string, onOutput: (output: TerminalRead) => void): Promise<() => void>
+  watch(scope: string, onChange: () => void): Promise<() => void>
   write(id: string, data: string | Uint8Array): Promise<void>
   resize(id: string, cols: number, rows: number): Promise<void>
   close(id: string): Promise<void>

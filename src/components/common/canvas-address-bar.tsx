@@ -68,7 +68,7 @@ export function CanvasAddressBar({ workspace, workspaceIcon, tree, path, documen
       <div className="canvas-address-field" onDoubleClick={event => {
         if (search && !(event.target as HTMLElement).closest('button')) setSearching(true)
       }} onKeyDown={event => { if (event.key === 'Escape' && searching) { event.preventDefault(); event.stopPropagation(); closeSearch() } }}>
-        {searching && search ? <SearchInput inputRef={inputRef} onSearch={search.onSearch} onDraftChange={onDraftChange} clearOnSubmit={!search.localOnly} showSubmitButton={false} label={search.queries.length ? 'Refine search…' : 'Search documents…'} /> : <>
+        {searching && search ? <SearchInput inputRef={inputRef} workspaceId={search.localOnly ? undefined : search.workspaceId} onSearch={search.onSearch} onDraftChange={onDraftChange} clearOnSubmit={!search.localOnly} showSubmitButton={false} label={search.queries.length ? 'Refine search…' : 'Search documents…'} /> : <>
             {crumb(<><Icon icon={workspaceIcon || DEFAULT_WORKSPACE_ICON} className="h-4 w-4 shrink-0" aria-hidden="true" /><span className="truncate">{workspace}</span></>, 'canvas-address-workspace', onBrowseWorkspaces, 'Browse workspaces')}
           <div ref={addressRef} className={`canvas-address-crumbs${scrolled ? " is-scrolled" : ""}`} onScroll={event => setScrolled(event.currentTarget.scrollLeft > 1)} role="navigation" aria-label="Canvas address" tabIndex={0}
             onKeyDown={event => { if (event.key === 'Enter' && event.target === event.currentTarget && search) setSearching(true) }}>

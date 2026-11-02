@@ -7,6 +7,7 @@ import { DocumentList, type FolderEntry } from '@/components/common/document-lis
 import type { DocumentPasteOptions } from '@/components/common/document-list'
 import { useToolbox } from '@/components/toolbox/use-toolbox'
 import { useSideView } from '@/components/shell/use-side-view'
+import { useContentWindow } from '@/components/common/content-window-context'
 
 // The chip shows the ACTUAL tree name — 'backends' (or a custom tree) rather
 // than its generic 'directory' type — so `(string & {})` admits any tree name
@@ -159,6 +160,7 @@ export function DefaultCanvas({
   onOpenFolder,
 }: DefaultCanvasProps) {
   const isCanvas = urlType === 'canvas'
+  const contentWindow = useContentWindow()
   const { state: toolbox, toggleView, hasActiveFilters, openAddPicker } = useToolbox()
   const sideView = useSideView()
   const [draft, setDraft] = useState('')
@@ -175,9 +177,13 @@ export function DefaultCanvas({
       mode: 'workspace', workspaceName: workspaceId, path: contextPath,
       treeName: treeName || 'context', treeType: treeName === 'directory' ? 'directory' : 'context',
     } : null}>
-      {navigationTabs && <CanvasTabStrip accentColor={accentColor}>{navigationTabs}</CanvasTabStrip>}
-      <div className={`canvas-surface-body${frameContent ? ' is-framed' : ''}`}>
+      {navigationTabs && !contentWindow && <CanvasTabStrip accentColor={accentColor}>{navigationTabs}</CanvasTabStrip>}
+      <div className={`canvas-surface-body${frameContent && !contentWindow ? ' is-framed' : ''}`}>
       <CanvasAddressBar workspaceIcon={workspaceIcon} workspace={workspaceLabel || workspaceId || urlDisplay.split('://')[0] || 'Workspace'}
+        actions={contentWindow && navigationTabs ? <details className="relative shrink-0" aria-label="Canvas views">
+          <summary className="cursor-pointer rounded-md border px-2 py-1 text-xs" title="Choose or manage content views">Views</summary>
+          <div className="absolute right-0 top-full z-30 mt-2 min-w-64 max-w-[80vw] rounded-md border bg-background p-2 shadow-lg">{navigationTabs}</div>
+        </details> : undefined}
         tree={treeName ? `${treeName}${urlType.endsWith('-layer') ? ':layer' : ''}` : urlType.replace('-layer', '')} path={contextPath}
         accentColor={accentColor} onBack={sideView.location
           ? sideView.location.section === 'view' ? sideView.close : () => sideView.update?.({ section: 'view' })
@@ -187,7 +193,7 @@ export function DefaultCanvas({
         onBrowseWorkspaces={onBrowseWorkspaces} onBrowseTree={onBrowseTree} onNavigatePath={onNavigatePath}
         onFilter={() => toggleView('tools')} filtersActive={hasActiveFilters}
         filtersOpen={toolbox.t1Open && toolbox.t1View === 'tools'} onAdd={event => openAddPicker({ modal: event.shiftKey, fresh: true })}
-        search={onBackendSearch || !children ? { queries: backendSearchQueries || [], onSearch: onBackendSearch ?? setDraft, localOnly: !onBackendSearch, onRemoveQuery: onRemoveBackendQuery, scope, onScopeChange } : undefined}
+        search={onBackendSearch || !children ? { workspaceId, queries: backendSearchQueries || [], onSearch: onBackendSearch ?? setDraft, localOnly: !onBackendSearch, onRemoveQuery: onRemoveBackendQuery, scope, onScopeChange } : undefined}
         onDraftChange={children ? undefined : setDraft}
       />
       {isCanvas && canvasInfo ? (

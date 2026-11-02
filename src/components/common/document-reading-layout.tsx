@@ -23,7 +23,7 @@ export function DocumentReadingLayout(props: Props) {
   const mobile = useIsMobile()
   const parent = useSideView()
   // Explicit document permalinks retain their URL-backed reader and tabs.
-  if (!props.enabled || !props.workspaceId || !alwaysOn || mobile || (contentWindow?.width !== undefined && contentWindow.width < 720) || parent.location) return props.children
+  if (!props.enabled || !props.workspaceId || !alwaysOn || mobile || contentWindow?.compact || parent.location) return props.children
   return <ReadingLayout key={props.scope} {...props} workspaceId={props.workspaceId} />
 }
 

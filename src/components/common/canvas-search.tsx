@@ -1,9 +1,12 @@
 import './canvas-navigation.css'
 import { Search, X } from 'lucide-react'
+import { useRef } from 'react'
+import { RelationSearchSuggestions } from './relation-search-suggestions'
 
 // Data-only contracts: these controls work in an address bar, a bound filter
 // app, or a host on another device. Routing and persistence belong to the host.
 export interface CanvasSearchProps {
+  workspaceId?: string
   localOnly?: boolean
   queries: string[]
   onSearch: (query: string) => void
@@ -12,7 +15,8 @@ export interface CanvasSearchProps {
   onScopeChange?: (scope: 'path' | 'workspace') => void
 }
 
-export function SearchInput({ onSearch, onDraftChange, inputRef, label = 'Search documents', clearOnSubmit = true, showSubmitButton = true }: {
+export function SearchInput({ onSearch, onDraftChange, inputRef, workspaceId, label = 'Search documents', clearOnSubmit = true, showSubmitButton = true }: {
+  workspaceId?: string
   onSearch: (query: string) => void
   onDraftChange?: (query: string) => void
   inputRef?: React.RefObject<HTMLInputElement | null>
@@ -20,6 +24,8 @@ export function SearchInput({ onSearch, onDraftChange, inputRef, label = 'Search
   clearOnSubmit?: boolean
   showSubmitButton?: boolean
 }) {
+  const localRef = useRef<HTMLInputElement>(null)
+  const ref = inputRef ?? localRef
   return <form className="canvas-search-input" role="search" onSubmit={event => {
     event.preventDefault()
     const input = event.currentTarget.elements.namedItem('query') as HTMLInputElement
@@ -32,10 +38,11 @@ export function SearchInput({ onSearch, onDraftChange, inputRef, label = 'Search
     }
   }}>
     {/* The DOM owns the buffer so Android IME composition is never rewritten. */}
-    <input ref={inputRef} name="query" type="search" aria-label={label} placeholder={label}
+    <input ref={ref} name="query" type="search" aria-label={label} placeholder={label}
       autoComplete="off" enterKeyHint="search" onChange={event => onDraftChange?.(event.target.value)}
       onKeyDown={event => { if (event.key === 'Enter' && event.nativeEvent.isComposing) event.preventDefault() }} />
     {showSubmitButton && <button type="submit" className="canvas-nav-button" aria-label="Run search" title="Run search"><Search size={17} /></button>}
+    {workspaceId && <RelationSearchSuggestions workspaceId={workspaceId} inputRef={ref} onChange={onDraftChange} />}
   </form>
 }
 

@@ -1,12 +1,6 @@
-import { TerminalApplet } from './TerminalApplet'
 import type { AppCategory } from '@/lib/app-catalog'
-import type { ComponentType } from 'react'
+import { lazy, Suspense, type ComponentType } from 'react'
 import { TerminalSquare, Brush, ListTodo, ScanEye, StickyNote, SlidersHorizontal, type LucideIcon } from 'lucide-react'
-import { NotesApplet } from './NotesApplet'
-import { TodosApplet } from './TodosApplet'
-import { LensApplet } from './LensApplet'
-import { FiltersApplet } from './FiltersApplet'
-import { SketchApplet } from './SketchApplet'
 
 // Applets are small self-contained apps hosted by the toolbox Apps tab, the
 // /apps/<id> content route, and the desktop shell - keep
@@ -37,6 +31,20 @@ export interface AppletDescriptor {
   description: string
   Component: ComponentType<AppletProps>
 }
+
+function loadApplet(load: () => Promise<{ default: ComponentType<AppletProps> }>): ComponentType<AppletProps> {
+  const Applet = lazy(load)
+  return function LoadedApplet(props) {
+    return <Suspense fallback={<p className="p-4 text-sm text-muted-foreground" role="status">Opening app…</p>}><Applet {...props} /></Suspense>
+  }
+}
+
+const TerminalApplet = loadApplet(() => import('./TerminalApplet').then(module => ({ default: module.TerminalApplet })))
+const NotesApplet = loadApplet(() => import('./NotesApplet').then(module => ({ default: module.NotesApplet })))
+const TodosApplet = loadApplet(() => import('./TodosApplet').then(module => ({ default: module.TodosApplet })))
+const LensApplet = loadApplet(() => import('./LensApplet').then(module => ({ default: module.LensApplet })))
+const FiltersApplet = loadApplet(() => import('./FiltersApplet').then(module => ({ default: module.FiltersApplet })))
+const SketchApplet = loadApplet(() => import('./SketchApplet').then(module => ({ default: module.SketchApplet })))
 
 export const APPLETS: AppletDescriptor[] = [
   { id: 'terminal', category: 'utilities', label: 'Terminal', icon: TerminalSquare, modes: ['context'], description: 'Shell sessions for this context', Component: TerminalApplet },

@@ -56,19 +56,6 @@ function appendWorkspaceContext(params: URLSearchParams, contextSpec: string = '
   if (contextSpec) params.append('context', contextSpec)
 }
 
-/**
- * The closed synapsd predicate registry (indexes/edges/predicates.js). Kept in
- * sync by hand — it is append-only there, and the server echoes the live list
- * on every relations read (`DocumentRelations.predicates`), which is what the
- * pickers render. This constant is only the ordering/label fallback.
- */
-export const RELATION_PREDICATES = [
-  'includes', 'references', 'derived-from', 'mentions', 'replies-to', 'depicts', 'authored-by',
-  // affiliation between two identities (person -> organization), synapsd 3.11.0
-  'member-of',
-] as const
-export type RelationPredicate = (typeof RELATION_PREDICATES)[number]
-
 export interface RelFilter {
   p: string
   of: number
@@ -1352,20 +1339,12 @@ export interface DocumentRelations {
   incomingCount?: number
 }
 
-/**
- * The predicate registry on its own (GET …/documents/relations/predicates).
- * The add forms pick relations before a document exists, so they cannot use
- * the per-document read. Falls back to the local mirror on older servers.
- */
+/** The live registry owned by Synapsd; errors must not invent a local list. */
 export async function getRelationPredicates(workspaceId: string): Promise<string[]> {
-  try {
-    const res = await api.get<{ predicates?: string[] }>(
-      `${API_ROUTES.workspaces}/${workspaceId}/documents/relations/predicates`
-    )
-    return res?.predicates?.length ? res.predicates : [...RELATION_PREDICATES]
-  } catch {
-    return [...RELATION_PREDICATES]
-  }
+  const res = await api.get<{ predicates: string[] }>(
+    `${API_ROUTES.workspaces}/${encodeURIComponent(workspaceId)}/documents/relations/predicates`
+  )
+  return res?.predicates ?? []
 }
 
 export async function getDocumentRelations(
@@ -1382,7 +1361,7 @@ export async function getDocumentRelations(
   const response = await api.get<DocumentRelations>(
     `${API_ROUTES.workspaces}/${workspaceId}/documents/${documentId}/relations${qs}`
   )
-  return response ?? { documentId: Number(documentId), predicates: [...RELATION_PREDICATES], outgoing: [], incoming: [] }
+  return response ?? { documentId: Number(documentId), predicates: [], outgoing: [], incoming: [] }
 }
 
 /**
