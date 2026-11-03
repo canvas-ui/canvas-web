@@ -1103,11 +1103,10 @@ export function MenuTreeView({
   const [dragOverPath, setDragOverPath] = useState<string | null>(null)
   const [isCopyDrag, setIsCopyDrag] = useState(false)
   const [copyModeSticky, setCopyModeSticky] = useState(false)
-  // Context trees: when on, a drag-MOVE also merges the moved layer into its
-  // new ancestors (server: movePath { mergeDown }). Off by default — a plain
-  // move leaves bitmaps alone, by design.
-  const [mergeDownOnMove, setMergeDownOnMove] = useState(false)
-  const mergeDownOnMoveRef = useRef(false)
+  // Context moves merge the moved layer into its new ancestors by default
+  // so the destination path continues to show its documents.
+  const [mergeDownOnMove, setMergeDownOnMove] = useState(true)
+  const mergeDownOnMoveRef = useRef(true)
   const draggedPathRef = useRef<string | null>(null)
   const draggedTreeRef = useRef<string>(treeName)
   const isCopyRef = useRef(false)
@@ -1319,7 +1318,8 @@ export function MenuTreeView({
     // target is the parent to paste under; prevent pasting into self or own descendants
     if (clipboard.treeName === treeName && (target === clipboard.path || target.startsWith(clipboard.path + '/'))) return
     if (clipboard.mode === 'cut') {
-      await onMovePath(clipboard.path, target, false, clipboard.treeName, treeName)
+      const mergeDown = mergeDownOnMoveRef.current && !isBackendsTree && Boolean(onMergeDown)
+      await onMovePath(clipboard.path, target, false, clipboard.treeName, treeName, mergeDown ? { mergeDown } : undefined)
       setClipboard(null)
       window.dispatchEvent(new CustomEvent('tree:path-clipboard', { detail: null }))
     } else {
@@ -1327,7 +1327,7 @@ export function MenuTreeView({
       // their document links are mirrored (cross-tree copies included).
       await onCopyPath(clipboard.path, target, true, clipboard.treeName, treeName)
     }
-  }, [clipboard, onMovePath, onCopyPath, treeName])
+  }, [clipboard, onMovePath, onCopyPath, treeName, isBackendsTree, onMergeDown])
 
   useEffect(() => {
     if (readOnly) return
