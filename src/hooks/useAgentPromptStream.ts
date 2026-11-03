@@ -1,3 +1,4 @@
+import type { AgentViewContext } from '@/lib/agent-view-context'
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { api } from '@/lib/api'
 import { API_URL } from '@/config/api'
@@ -67,7 +68,7 @@ export function useAgentPromptStream(agentId: string) {
     }
   }, [agentId])
 
-  const send = useCallback(async (text: string) => {
+  const send = useCallback(async (text: string, viewContext?: AgentViewContext | null) => {
     if (isStreaming || !text.trim() || !agentId) return
     setError(null)
 
@@ -100,7 +101,7 @@ export function useAgentPromptStream(agentId: string) {
     try {
       await api.stream(
         `${API_URL}/agents/${agentId}/prompt/stream`,
-        { message: text },
+        { message: text, viewContext },
         {
           signal: abortRef.current.signal,
           onChunk: (chunk: string) => {
@@ -196,7 +197,7 @@ export function useAgentPromptStream(agentId: string) {
 
   // Voice round-trip: transcribed + answered server-side (non-streaming);
   // appends the transcript as the user message and plays the spoken reply.
-  const sendVoice = useCallback(async (audio: Blob) => {
+  const sendVoice = useCallback(async (audio: Blob, viewContext?: AgentViewContext | null) => {
     if (isStreaming || !agentId) return
     setError(null)
     setIsStreaming(true)
@@ -206,7 +207,7 @@ export function useAgentPromptStream(agentId: string) {
     ])
 
     try {
-      const result = await voicePrompt(agentId, audio)
+      const result = await voicePrompt(agentId, audio, { viewContext })
       setMessages(prev => {
         const copy = [...prev]
         copy[copy.length - 1] = { role: 'user', content: `🎤 ${result.transcript}`, isComplete: true }

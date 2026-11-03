@@ -1,3 +1,4 @@
+import type { AgentViewContext } from '@/lib/agent-view-context';
 import { api } from '@/lib/api';
 import { API_URL } from '@/config/api';
 import { AnthropicConnector, WebSocketStreamingService, StreamMessage } from './streaming';
@@ -1090,10 +1091,11 @@ export async function getVoiceStatus(): Promise<VoiceStatus> {
 export async function voicePrompt(
   agentId: string,
   audio: Blob,
-  options: { tts?: boolean; voice?: string } = {},
+  options: { tts?: boolean; voice?: string; viewContext?: AgentViewContext | null } = {},
 ): Promise<AgentVoiceResult> {
   const form = new FormData();
   const extension = (audio.type.split('/')[1] || 'webm').split(';')[0];
+  if (options.viewContext !== undefined) form.append('viewContext', JSON.stringify(options.viewContext));
   form.append('file', audio, `voice.${extension}`);
 
   const params = new URLSearchParams();

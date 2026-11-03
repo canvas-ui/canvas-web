@@ -1,3 +1,4 @@
+import type { AgentViewContext } from '@/lib/agent-view-context'
 import {
   useReducer,
   useMemo,
@@ -408,6 +409,8 @@ function findTreeNode(root: TreeNode, path: string): TreeNode | null {
 // ─── Context value ────────────────────────────────────────────────────────────
 
 export interface ToolboxContextValue {
+  agentView: { pathname: string; view: AgentViewContext | null } | null
+  setAgentView: (view: { pathname: string; view: AgentViewContext | null } | null) => void
   state: ToolboxState
   setView: (view: T1View) => void
   toggleView: (view: T1View) => void
@@ -451,6 +454,7 @@ export interface ToolboxContextValue {
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function ToolboxProvider({ children, target }: { children: ReactNode; target?: AppletTarget }) {
+  const [agentView, setAgentView] = useState<{ pathname: string; view: AgentViewContext | null } | null>(null)
   const [state, dispatch] = useReducer(toolboxReducer, initialState)
   const location = useLocation()
   const navigate = useNavigate()
@@ -941,7 +945,7 @@ export function ToolboxProvider({ children, target }: { children: ReactNode; tar
 
   return (
     <ToolboxCtx.Provider
-      value={{ state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, openAddRelated, closeAdd, openEdit, setToolsTab, openApplet, setAccentColor, setFilters, setFeatureToggle, setFeatureMode, clearFilters, hasActiveFilters, setTimelineFilter, setGeoBBox, setLensGps, setLensIds, setGeoSelection, setMapDocuments, setSort, setLiveEnabled, saveFilters, deleteBitmap, deleteDataset, createTimeline, deleteTimeline, refreshTimelines }}
+      value={{ agentView, setAgentView, state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, openAddRelated, closeAdd, openEdit, setToolsTab, openApplet, setAccentColor, setFilters, setFeatureToggle, setFeatureMode, clearFilters, hasActiveFilters, setTimelineFilter, setGeoBBox, setLensGps, setLensIds, setGeoSelection, setMapDocuments, setSort, setLiveEnabled, saveFilters, deleteBitmap, deleteDataset, createTimeline, deleteTimeline, refreshTimelines }}
     >
       {children}
     </ToolboxCtx.Provider>

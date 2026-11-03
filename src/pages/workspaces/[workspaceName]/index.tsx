@@ -1,3 +1,5 @@
+import { usePublishAgentView } from '@/hooks/usePublishAgentView';
+import { buildAgentViewContext } from '@/lib/agent-view-context';
 import { useContentWindow } from '@/components/common/content-window-context';
 import { WorkspaceAreaMenu } from '@/components/workspace/workspace-area-menu';
 import { TrashPanel } from '@/components/workspace/trash-panel';
@@ -322,6 +324,13 @@ function WorkspaceContent() {
   useEffect(() => { contentWindow?.selectView(activeContentView); }, [activeContentView, contentWindow]);
   const documentSchema = !isBackendsPath ? contentWindow?.schema ?? contentViewSchema(activeContentView) : undefined;
   const viewAllOf = documentSchema ? [...tbAllOf, documentSchema] : tbAllOf;
+  usePublishAgentView(buildAgentViewContext({
+    workspace: workspaceName ?? null, treeNameOrId: selectedTreeName,
+    treeType: treeTypeForName(selectedTreeName), path: selectedPath,
+    scope: docScope === 'workspace' ? 'workspace' : isLayerView ? 'layer' : 'path',
+    layerId: isLayerView ? selectedLayerId : undefined, unfiledOnly,
+  }, { ...toolboxState.filters, features: { ...toolboxState.filters.features, allOf: viewAllOf } }, toolboxState.geoSelection, serverSearchQueries));
+
   const selectContentView = (id: string) => { const view = contentViews.find(view => view.id === id); if (view) contentWindow?.selectView(view); setCurrentPage(1); setLeftSelection([]); setViewsState({ key: viewsKey, views: contentViews, activeId: id }); };
   const saveContentViews = (views: ContentView[], nextActiveId?: string) => {
     if (nextActiveId && nextActiveId !== activeContentViewId) { setCurrentPage(1); setLeftSelection([]); }

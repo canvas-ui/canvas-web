@@ -1,3 +1,4 @@
+import { useLocation } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Mic, Send, Square, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -26,6 +27,8 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
   const { showToast } = useToast()
   // Context hand-off: the toolbox knows which context the user is looking at.
   const toolbox = useToolboxOptional()
+  const location = useLocation()
+  const viewContext = toolbox?.agentView?.pathname === location.pathname ? toolbox.agentView.view : null
   const activeContextId = toolbox?.state.activeContextType === 'context' ? toolbox.state.activeContextId : null
   const activeContextPath = toolbox?.state.activeContextPath ?? null
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -88,13 +91,13 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
     if (!msg || isStreaming) return
     setInput('')
     textareaRef.current?.focus()
-    await send(msg)
+    await send(msg, viewContext)
   }
 
   const handleMicClick = async () => {
     if (isRecording) {
       const clip = await stopRecording()
-      if (clip) await sendVoice(clip)
+      if (clip) await sendVoice(clip, viewContext)
     } else if (!isStreaming) {
       await startRecording()
     }

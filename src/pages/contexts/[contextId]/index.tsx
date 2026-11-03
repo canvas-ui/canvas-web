@@ -1,3 +1,5 @@
+import { usePublishAgentView } from '@/hooks/usePublishAgentView';
+import { buildAgentViewContext } from '@/lib/agent-view-context';
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useToast } from '@/components/ui/use-toast';
@@ -154,6 +156,12 @@ export default function ContextDetailPage() {
   const activeContentViewId = viewsState?.key === viewsKey ? viewsState.activeId : contentViews[0]?.id ?? DEFAULT_VIEW.id;
   const activeContentView = contentViews.find(v => v.id === activeContentViewId) ?? contentViews[0] ?? DEFAULT_VIEW;
   const documentSchema = contentViewSchema(activeContentView);
+  usePublishAgentView(buildAgentViewContext({
+    workspace: context?.workspaceName || context?.workspaceId || null,
+    treeNameOrId: toolboxState.activeTreeName, path: selectedPath,
+    contextId: contextId ?? null, scope: 'context',
+  }, { ...toolboxState.filters, features: { ...toolboxState.filters.features,
+    allOf: documentSchema ? [...tbAllOf, documentSchema] : tbAllOf } }, toolboxState.geoSelection, serverSearchQueries));
   const selectContentView = (id: string) => { setCurrentPage(1); setViewsState({ key: viewsKey, views: contentViews, activeId: id }); };
   const saveContentViews = (views: ContentView[], nextActiveId?: string) => {
     if (nextActiveId && nextActiveId !== activeContentViewId) setCurrentPage(1);
