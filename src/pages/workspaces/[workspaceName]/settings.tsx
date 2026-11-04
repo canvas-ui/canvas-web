@@ -127,24 +127,26 @@ function Toggle({
 // the human handle (its slug becomes the backend address and the
 // /device/<device>/<mount> node in the backends tree); the path must be an
 // absolute, readable directory on the server host.
-function AddLocalFolderForm({ workspaceId, onAdded }: { workspaceId: string; onAdded: () => Promise<void> | void }) {
+function LocalFolderForm({ workspaceId, backend, onAdded }: { workspaceId: string; backend?: Backend; onAdded: () => Promise<void> | void }) {
+  const cfg = backend?.config || {}
   const [open, setOpen] = useState(false)
-  const [name, setName] = useState('')
-  const [path, setPath] = useState('')
-  const [watch, setWatch] = useState(false)
-  const [readOnly, setReadOnly] = useState(false)
+  const [name, setName] = useState(String(cfg.label || backend?.address || ''))
+  const [path, setPath] = useState(String(cfg.root || ''))
+  const [watch, setWatch] = useState(cfg.watch === true)
+  const [readOnly, setReadOnly] = useState(cfg.readOnly === true)
   const [busy, setBusy] = useState(false)
   const { showToast } = useToast()
 
-  const reset = () => { setName(''); setPath(''); setWatch(false); setReadOnly(false) }
+  const reset = () => { setName(String(cfg.label || backend?.address || '')); setPath(String(cfg.root || '')); setWatch(cfg.watch === true); setReadOnly(cfg.readOnly === true) }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim() || !path.trim()) return
     setBusy(true)
     try {
-      await addBackend(workspaceId, 'file', { name: name.trim(), path: path.trim(), watch, readOnly })
-      showToast({ title: 'Added', description: `${name.trim()} mounted; initial scan running in the background` })
+      if (backend) await updateBackend(workspaceId, 'file', backend.address, { label: name.trim(), root: path.trim(), watch, readOnly })
+      else await addBackend(workspaceId, 'file', { name: name.trim(), path: path.trim(), watch, readOnly })
+      showToast({ title: backend ? 'Saved' : 'Added', description: backend ? 'Folder settings updated' : `${name.trim()} mounted; initial scan running in the background` })
       reset()
       setOpen(false)
       await onAdded()
@@ -157,9 +159,9 @@ function AddLocalFolderForm({ workspaceId, onAdded }: { workspaceId: string; onA
 
   if (!open) {
     return (
-      <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
+      <Button type="button" variant="outline" size="sm" onClick={() => { reset(); setOpen(true) }}>
         <FolderPlus className="mr-2 h-3.5 w-3.5" />
-        Add local folder
+        {backend ? 'Edit folder' : 'Add local folder'}
       </Button>
     )
   }
@@ -168,7 +170,7 @@ function AddLocalFolderForm({ workspaceId, onAdded }: { workspaceId: string; onA
     <form onSubmit={submit} className="w-full space-y-3 rounded-lg border p-4">
       <div className="flex items-center gap-2">
         <FolderPlus className="h-4 w-4 text-muted-foreground" />
-        <h2 className="text-sm font-semibold">Add local folder</h2>
+        <h2 className="text-sm font-semibold">{backend ? 'Edit folder' : 'Add local folder'}</h2>
       </div>
       <p className="text-xs text-muted-foreground">
         Index a folder on the server host as a data source. Files stay in place; the index records them as
@@ -196,7 +198,7 @@ function AddLocalFolderForm({ workspaceId, onAdded }: { workspaceId: string; onA
       </div>
       <div className="flex gap-2">
         <Button type="submit" size="sm" disabled={busy || !name.trim() || !path.trim()}>
-          {busy ? 'Adding…' : 'Add folder'}
+          {busy ? 'Saving…' : backend ? 'Save folder' : 'Add folder'}
         </Button>
         <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => { reset(); setOpen(false) }}>
           Cancel
@@ -210,33 +212,37 @@ function AddLocalFolderForm({ workspaceId, onAdded }: { workspaceId: string; onA
 // offline-access OAuth client + refresh token (same grant as the Calendar
 // connector, with the Drive scope); the server validates them against the API
 // before saving and never returns them in reads.
-function AddGoogleDriveForm({ workspaceId, onAdded }: { workspaceId: string; onAdded: () => Promise<void> | void }) {
+function GoogleDriveForm({ workspaceId, backend, onAdded }: { workspaceId: string; backend?: Backend; onAdded: () => Promise<void> | void }) {
+  const cfg = backend?.config || {}
+  const initial = () => ({ name: String(cfg.label || backend?.address || ''), clientId: String(cfg.clientId || ''), clientSecret: '', refreshToken: '', folderId: String(cfg.folderId || '') })
   const [open, setOpen] = useState(false)
-  const [form, setForm] = useState({ name: '', clientId: '', clientSecret: '', refreshToken: '', folderId: '' })
-  const [watch, setWatch] = useState(false)
-  const [readOnly, setReadOnly] = useState(false)
+  const [form, setForm] = useState(initial)
+  const [watch, setWatch] = useState(cfg.watch === true)
+  const [readOnly, setReadOnly] = useState(cfg.readOnly === true)
   const [busy, setBusy] = useState(false)
   const { showToast } = useToast()
 
   const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [key]: e.target.value }))
-  const reset = () => { setForm({ name: '', clientId: '', clientSecret: '', refreshToken: '', folderId: '' }); setWatch(false); setReadOnly(false) }
-  const valid = form.name.trim() && form.clientId.trim() && form.clientSecret.trim() && form.refreshToken.trim()
+  const reset = () => { setForm(initial()); setWatch(cfg.watch === true); setReadOnly(cfg.readOnly === true) }
+  const valid = form.name.trim() && form.clientId.trim() && (backend || (form.clientSecret.trim() && form.refreshToken.trim()))
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!valid) return
     setBusy(true)
     try {
-      await addBackend(workspaceId, 'gdrive', {
-        name: form.name.trim(),
+      const config = {
+        label: form.name.trim(),
         clientId: form.clientId.trim(),
-        clientSecret: form.clientSecret.trim(),
-        refreshToken: form.refreshToken.trim(),
+        ...(form.clientSecret.trim() ? { clientSecret: form.clientSecret.trim() } : {}),
+        ...(form.refreshToken.trim() ? { refreshToken: form.refreshToken.trim() } : {}),
         folderId: form.folderId.trim() || 'root',
         watch,
         readOnly,
-      })
-      showToast({ title: 'Added', description: `${form.name.trim()} connected; initial scan running in the background` })
+      }
+      if (backend) await updateBackend(workspaceId, 'gdrive', backend.address, config)
+      else await addBackend(workspaceId, 'gdrive', config)
+      showToast({ title: backend ? 'Saved' : 'Added', description: backend ? 'Google Drive connection updated' : `${form.name.trim()} connected; initial scan running in the background` })
       reset()
       setOpen(false)
       await onAdded()
@@ -249,9 +255,9 @@ function AddGoogleDriveForm({ workspaceId, onAdded }: { workspaceId: string; onA
 
   if (!open) {
     return (
-      <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
+      <Button type="button" variant="outline" size="sm" onClick={() => { reset(); setOpen(true) }}>
         <Icon icon="mdi:google-drive" width={14} height={14} className="mr-2" />
-        Add Google Drive
+        {backend ? 'Edit Google Drive' : 'Add Google Drive'}
       </Button>
     )
   }
@@ -260,7 +266,7 @@ function AddGoogleDriveForm({ workspaceId, onAdded }: { workspaceId: string; onA
     <form onSubmit={submit} className="w-full space-y-3 rounded-lg border p-4">
       <div className="flex items-center gap-2">
         <Icon icon="mdi:google-drive" width={16} height={16} className="text-muted-foreground" />
-        <h2 className="text-sm font-semibold">Add Google Drive</h2>
+        <h2 className="text-sm font-semibold">{backend ? 'Edit Google Drive' : 'Add Google Drive'}</h2>
       </div>
       <p className="text-xs text-muted-foreground">
         Index a Drive folder (or the whole My Drive) as a remote data source. Files are hashed from Drive metadata,
@@ -282,12 +288,12 @@ function AddGoogleDriveForm({ workspaceId, onAdded }: { workspaceId: string; onA
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium">OAuth client secret</label>
-          <Input type="password" value={form.clientSecret} onChange={set('clientSecret')} required className="font-mono" autoComplete="off" />
+          <Input type="password" value={form.clientSecret} onChange={set('clientSecret')} required={!backend} placeholder={backend ? 'Leave blank to keep stored value' : ''} className="font-mono" autoComplete="off" />
         </div>
         <div className="space-y-1 sm:col-span-2">
           <label className="text-xs font-medium">Refresh token</label>
-          <Input type="password" value={form.refreshToken} onChange={set('refreshToken')} required className="font-mono" autoComplete="off"
-            placeholder="Sign in below, or paste an offline-access refresh token" />
+          <Input type="password" value={form.refreshToken} onChange={set('refreshToken')} required={!backend} className="font-mono" autoComplete="off"
+            placeholder={backend ? 'Leave blank to keep stored value' : 'Sign in below, or paste an offline-access refresh token'} />
           <GoogleOAuthButton
             clientId={form.clientId}
             clientSecret={form.clientSecret}
@@ -313,7 +319,7 @@ function AddGoogleDriveForm({ workspaceId, onAdded }: { workspaceId: string; onA
       </div>
       <div className="flex gap-2">
         <Button type="submit" size="sm" disabled={busy || !valid}>
-          {busy ? 'Checking…' : 'Add Drive'}
+          {busy ? 'Checking…' : backend ? 'Save Drive' : 'Add Drive'}
         </Button>
         <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => { reset(); setOpen(false) }}>
           Cancel
@@ -1236,7 +1242,7 @@ function WorkspaceSettingsContent() {
   }
 
   const toggleDataBackend = async (backend: Backend) => {
-    if (backend.config?.supported === false) return
+    if (backend.address === 'workspace:data' || backend.config?.supported === false) return
     setBusyAction(`backend:${backend.address}`)
     try {
       await updateBackend(workspaceId, backend.driver, backend.address, { enabled: !backend.enabled })
@@ -1556,6 +1562,10 @@ function WorkspaceSettingsContent() {
                     <div className="flex items-center gap-2">
                       <Icon icon={style.icon} width={16} height={16} color={style.color} className="shrink-0" />
                       <h2 className="text-sm font-semibold">{copy.title}</h2>
+                      <label className="ml-auto flex shrink-0 items-center gap-2 text-xs text-muted-foreground" title={alwaysOn ? 'Required workspace storage; cannot be disabled' : undefined}>
+                        Enabled
+                        <Toggle checked={alwaysOn || !!backend.enabled} disabled={!canToggle || busyAction === `backend:${backendId}`} onClick={() => toggleDataBackend(backend)} />
+                      </label>
                       {!supported && <span className="rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">unsupported</span>}
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">{copy.description}</p>
@@ -1636,11 +1646,6 @@ function WorkspaceSettingsContent() {
                         Re-sync
                       </Button>
                     ))}
-                    {alwaysOn ? (
-                      <span className="rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground" title="Structural workspace store; cannot be disabled">always on</span>
-                    ) : (
-                      <Toggle checked={!!backend.enabled} disabled={!canToggle || busyAction === `backend:${backendId}`} onClick={() => toggleDataBackend(backend)} />
-                    )}
                     {isUserMount && (
                       <Button
                         type="button"
@@ -1658,6 +1663,8 @@ function WorkspaceSettingsContent() {
                 </div>
                 {supported && <BackendRemovalSettings value={cfg.removalPolicy as RemovalPolicy} backends={dataBackends} source={backendId} destination={cfg.propagatedRemovalSupported === true}
                   onSave={async removalPolicy => { await updateBackend(workspaceId, backend.driver, backend.address, { removalPolicy }); await loadRuntimeSettings() }} />}
+                {isGdrive && <GoogleDriveForm workspaceId={workspaceId} backend={backend} onAdded={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />}
+                {backend.driver === 'file' && <LocalFolderForm workspaceId={workspaceId} backend={backend} onAdded={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />}
                 {isS3 && <S3BackendForm workspaceId={workspaceId} backend={backend} onSaved={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />}
                 {/* Sync exclusions only apply to enumerable/synced backends —
                     the internal cache is not synced or mirrored. */}
@@ -1675,8 +1682,8 @@ function WorkspaceSettingsContent() {
             <ClearThumbnailsButton workspaceId={workspaceId} />
           </CacheMaintenancePanel>
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start">
-            <AddLocalFolderForm workspaceId={workspaceId} onAdded={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />
-            <AddGoogleDriveForm workspaceId={workspaceId} onAdded={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />
+            <LocalFolderForm workspaceId={workspaceId} onAdded={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />
+            <GoogleDriveForm workspaceId={workspaceId} onAdded={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />
             <S3BackendForm workspaceId={workspaceId} onSaved={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />
           </div>
 

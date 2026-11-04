@@ -9,7 +9,7 @@ const component = source.statements.find(node => ts.isFunctionDeclaration(node) 
 const context = {
   React: { createElement: (type, props, ...children) => ({ type, props, children }) },
   useState: initial => [initial, () => {}], useEffect: () => {},
-  AgentAssistantExtras: 'extras', MarkdownView: 'markdown', Wifi: 'wifi', WifiOff: 'offline', Radio: 'radio', Cpu: 'cpu',
+  CopyReplyButton: 'copy', AgentAssistantExtras: 'extras', MarkdownView: 'markdown', Wifi: 'wifi', WifiOff: 'offline', Radio: 'radio', Cpu: 'cpu',
 }
 vm.runInNewContext(ts.transpileModule(component.getText(source), { compilerOptions: { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React } }).outputText, context)
 function findMarkdown(node) {

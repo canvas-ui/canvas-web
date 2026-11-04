@@ -35,7 +35,7 @@ function reader() {
     remount() { slots.length = 0 },
   }
 }
-const props = { enabled: true, workspaceId: 'home', scope: 'inbox', documents: [{ id: 1 }, { id: 2 }], loading: false, children: 'list' }
+const props = { autoOpen: true, enabled: true, workspaceId: 'home', scope: 'inbox', documents: [{ id: 1 }, { id: 2 }], loading: false, children: 'list' }
 
 test('first visible document opens and explicit selection survives folder revisits', () => {
   const ui = reader()
@@ -62,7 +62,7 @@ test('the setting, mobile layouts and explicit document permalinks retain existi
   const ui = reader()
   assert.notEqual(ui.gate(props), 'list')
   ui.options.enabled = false
-  assert.equal(ui.gate(props), 'list')
+  assert.notEqual(ui.gate(props), 'list')
   ui.options.enabled = true; ui.options.mobile = true
   assert.equal(ui.gate(props), 'list')
   ui.options.mobile = false; ui.options.parent = { location: { documentId: 7 } }
@@ -92,4 +92,21 @@ test('a narrow hosted window keeps a usable list instead of squeezing a reader a
   assert.equal(ui.gate(props), 'list')
   ui.options.contentWindow.compact = false
   assert.notEqual(ui.gate(props), 'list')
+})
+
+ test('reader closes without disabling the preference and item activation reopens it', () => {
+  const ui = reader()
+  ui.render(props).close()
+  assert.equal(ui.render(props).entry, null)
+  ui.render(props).preview({ id: 2 }, 'home')
+  assert.equal(ui.render(props).entry.document.id, 2)
+})
+
+test('with automatic opening disabled the same reader opens only after activation', () => {
+  const ui = reader(), manual = { ...props, autoOpen: false }
+  assert.equal(ui.render(manual).entry, null)
+  ui.render(manual).preview({ id: 2 }, 'home')
+  assert.equal(ui.render(manual).entry.document.id, 2)
+  ui.render(manual).close()
+  assert.equal(ui.render(manual).entry, null)
 })
