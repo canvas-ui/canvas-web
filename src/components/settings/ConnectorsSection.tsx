@@ -350,6 +350,9 @@ export function ConnectorsSection({ workspaceId }: { workspaceId: string }) {
                       clientSecret={form.clientSecret || ''}
                       scope={field.oauthScope || 'calendar.readonly'}
                       disabled={busy}
+                      backend={editing && form.clientId?.trim() === editing.config?.clientId
+                        ? { workspaceId, driver: editing.driver, address: editing.address }
+                        : undefined}
                       onLinked={({ refreshToken, account }) => setForm((prev) => ({
                         ...prev,
                         [field.key]: refreshToken,

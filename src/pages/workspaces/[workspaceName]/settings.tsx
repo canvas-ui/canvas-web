@@ -297,6 +297,9 @@ function GoogleDriveForm({ workspaceId, backend, onAdded }: { workspaceId: strin
           <GoogleOAuthButton
             clientId={form.clientId}
             clientSecret={form.clientSecret}
+            backend={backend && form.clientId.trim() === cfg.clientId
+              ? { workspaceId, driver: 'gdrive', address: backend.address }
+              : undefined}
             scope={readOnly ? 'drive.readonly' : 'drive'}
             disabled={busy}
             onLinked={({ refreshToken, account }) => setForm((f) => ({

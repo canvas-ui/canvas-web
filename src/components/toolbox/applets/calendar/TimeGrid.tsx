@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
-import { dateKey, formatHour, formatTime, sameDay, startOfDay, WEEKDAY_SHORT } from '@/lib/calendar/dates'
+import { dateKey, formatHour, formatTime, minutesIntoDay, sameDay, startOfDay, WEEKDAY_SHORT } from '@/lib/calendar/dates'
+import { timeGridDrag, type DragRange } from '@/lib/calendar/drag'
 import { groupByDay, isAllDayLane, layoutDay, type Occurrence } from '@/lib/calendar/occurrences'
 import { occurrenceColor, tint } from './calendar-colors'
 import { EntryChip } from './EntryChip'
@@ -8,6 +9,7 @@ import { EntryChip } from './EntryChip'
 const HOUR_PX = 48
 const SNAP_MIN = 30
 const GUTTER = 'w-12'
+const GUTTER_PX = 48
 
 // Day and week share one grid: a day is a week with one column. Timed
 // entries are laid out by layoutDay (overlaps share the width); all-day and
@@ -17,11 +19,47 @@ export function TimeGrid({ days, occurrences, selectedKey, onSelect, onCreate, o
   occurrences: Occurrence[]
   selectedKey: string | null
   onSelect: (o: Occurrence) => void
-  onCreate: (start: Date, allDay: boolean) => void
+  onCreate: (start: Date, allDay: boolean, end?: Date) => void
   onPickDay: (day: Date) => void
   compact: boolean
 }) {
   const scroller = useRef<HTMLDivElement>(null)
+  const body = useRef<HTMLDivElement>(null)
+  // Drag-to-select (Outlook/Google): press on empty grid, move, release. A
+  // press without movement is a click and creates one slot.
+  const [drag, setDrag] = useState<{ fromDay: number; fromMin: number; toDay: number; toMin: number } | null>(null)
+  const dragRef = useRef(drag)
+  useEffect(() => { dragRef.current = drag })
+  const pointAt = (e: React.PointerEvent): { day: number; min: number } | null => {
+    const el = body.current
+    if (!el) return null
+    const rect = el.getBoundingClientRect()
+    const colWidth = (rect.width - GUTTER_PX) / days.length
+    const day = Math.floor((e.clientX - rect.left - GUTTER_PX) / colWidth)
+    const min = Math.max(0, Math.min(1439, ((e.clientY - rect.top) / HOUR_PX) * 60))
+    return day < 0 || day >= days.length ? null : { day, min }
+  }
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0 || (e.target as HTMLElement).closest('button')) return
+    const at = pointAt(e)
+    if (!at) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    setDrag({ fromDay: at.day, fromMin: at.min, toDay: at.day, toMin: at.min })
+  }
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) return
+    const at = pointAt(e)
+    if (at) setDrag({ ...dragRef.current, toDay: at.day, toMin: at.min })
+  }
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = dragRef.current
+    if (!d) return
+    e.currentTarget.releasePointerCapture(e.pointerId)
+    setDrag(null)
+    const range = timeGridDrag(days, d.fromDay, d.fromMin, d.toDay, d.toMin, SNAP_MIN)
+    onCreate(range.start, range.allDay, range.end)
+  }
+  const selection: DragRange | null = drag ? timeGridDrag(days, drag.fromDay, drag.fromMin, drag.toDay, drag.toMin, SNAP_MIN) : null
   const byDay = useMemo(() => groupByDay(occurrences), [occurrences])
   const [now, setNow] = useState(() => new Date())
   useEffect(() => {
@@ -45,15 +83,6 @@ export function TimeGrid({ days, occurrences, selectedKey, onSelect, onCreate, o
   const hours = Array.from({ length: 24 }, (_, h) => h)
   const lane = days.map(day => (byDay.get(dateKey(day)) ?? []).filter(isAllDayLane))
   const laneRows = Math.max(0, ...lane.map(l => l.length))
-
-  const clickToCreate = (day: Date, e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target !== e.currentTarget) return
-    const rect = e.currentTarget.getBoundingClientRect()
-    const minutes = Math.floor(((e.clientY - rect.top) / HOUR_PX) * 60 / SNAP_MIN) * SNAP_MIN
-    const start = startOfDay(day)
-    start.setMinutes(Math.max(0, Math.min(23 * 60 + 30, minutes)))
-    onCreate(start, false)
-  }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -95,7 +124,15 @@ export function TimeGrid({ days, occurrences, selectedKey, onSelect, onCreate, o
 
       {/* Hours */}
       <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
-        <div className="relative flex" style={{ height: 24 * HOUR_PX }}>
+        <div
+          ref={body}
+          className={cn('relative flex select-none', drag && 'cursor-crosshair')}
+          style={{ height: 24 * HOUR_PX }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={() => setDrag(null)}
+        >
           <div className={cn(GUTTER, 'relative shrink-0')}>
             {hours.map(h => (
               <div key={h} className="absolute right-1 -translate-y-1/2 text-[10px] tabular-nums text-muted-foreground" style={{ top: h * HOUR_PX }}>
@@ -111,9 +148,21 @@ export function TimeGrid({ days, occurrences, selectedKey, onSelect, onCreate, o
               <div
                 key={dateKey(day)}
                 className="relative min-w-0 flex-1 cursor-cell border-l border-border/60"
-                onClick={(e) => clickToCreate(day, e)}
                 role="presentation"
               >
+                {selection && selection.end > day && selection.start < startOfDay(new Date(day.getTime() + 86_400_000)) && (
+                  <div
+                    className="pointer-events-none absolute inset-x-0.5 z-[5] rounded-md border border-primary bg-primary/15"
+                    style={{
+                      top: (minutesIntoDay(selection.start, day) / 60) * HOUR_PX,
+                      height: Math.max(8, ((minutesIntoDay(selection.end, day) - minutesIntoDay(selection.start, day)) / 60) * HOUR_PX),
+                    }}
+                  >
+                    <span className="absolute left-1 top-0.5 text-[10px] font-medium text-primary">
+                      {selection.allDay ? 'All day' : `${formatTime(selection.start)} – ${formatTime(selection.end)}`}
+                    </span>
+                  </div>
+                )}
                 {hours.map(h => (
                   <div key={h} className="pointer-events-none absolute inset-x-0 border-t border-border/50" style={{ top: h * HOUR_PX }} />
                 ))}

@@ -5,13 +5,20 @@ import { API_URL } from '@/config/api'
 // refresh token (Drive storage backend, Calendar connector). The server builds
 // the consent URL (POST /oauth/google/start), the browser opens it in a popup,
 // Google redirects to the server's public callback, and the callback page
-// hands the refresh token back to this window via postMessage. Nothing is
+// returns a refresh token, or a code for the workspace to exchange using its
+// saved client secret, via postMessage. Nothing is
 // stored server-side; the token is submitted with the backend/connector form
 // exactly as a hand-pasted one would be.
 
 export type GoogleOAuthScope = 'drive' | 'drive.readonly' | 'calendar' | 'calendar.readonly'
 
-export interface GoogleOAuthResult {
+export interface GoogleOAuthBackend {
+  workspaceId: string
+  driver: string
+  address: string
+}
+
+interface GoogleOAuthResult {
   refreshToken: string
   account: string | null
 }
@@ -25,6 +32,8 @@ interface OAuthMessage {
   refreshToken: string | null
   account: string | null
   error: string | null
+  code?: string | null
+  redirectUri?: string | null
 }
 
 export async function getGoogleRedirectUri(): Promise<string> {
@@ -34,19 +43,18 @@ export async function getGoogleRedirectUri(): Promise<string> {
 
 // Resolves once the popup reports back; rejects on consent error, on an
 // unusable popup (blocked), or when the user closes it without finishing.
-export async function linkGoogleAccount(input: { clientId: string; clientSecret: string; scope: GoogleOAuthScope }): Promise<GoogleOAuthResult> {
+export async function linkGoogleAccount(input: { clientId: string; clientSecret: string; scope: GoogleOAuthScope; backend?: GoogleOAuthBackend }): Promise<GoogleOAuthResult> {
   // Open the window synchronously on the click so popup blockers allow it,
   // then point it at the consent URL once the server has built one.
   const popup = window.open('about:blank', 'canvas-google-oauth', 'popup=yes,width=540,height=720')
+  if (!popup) throw new Error('Popup blocked — allow popups for this site and try again')
+  const { backend, ...credentials } = input
   let started: { url: string; state: string; expiresInMs: number }
   try {
-    started = await api.post<{ url: string; state: string; expiresInMs: number }>('/oauth/google/start', input)
+    started = await api.post<{ url: string; state: string; expiresInMs: number }>('/oauth/google/start', { ...credentials, exchangeInWorkspace: Boolean(backend) })
   } catch (err) {
     popup?.close()
     throw err
-  }
-  if (!popup) {
-    throw new Error('Popup blocked — allow popups for this site and try again')
   }
   popup.location.href = started.url
 
@@ -62,10 +70,17 @@ export async function linkGoogleAccount(input: { clientId: string; clientSecret:
       fn()
     }
     const onMessage = (event: MessageEvent<OAuthMessage>) => {
-      if (event.origin !== apiOrigin) return
+      if (event.origin !== apiOrigin || event.source !== popup) return
       const data = event.data
       if (!data || data.type !== 'canvas:oauth' || data.provider !== 'google' || data.state !== started.state) return
-      if (data.ok && data.refreshToken) finish(() => resolve({ refreshToken: data.refreshToken as string, account: data.account }))
+      if (data.ok && data.code && data.redirectUri && backend) {
+        finish(() => {
+          const base = `/workspaces/${encodeURIComponent(backend.workspaceId)}/backends/${encodeURIComponent(backend.driver)}/${encodeURIComponent(backend.address)}`
+          api.post<GoogleOAuthResult>(`${base}/oauth/google/exchange`, {
+            clientId: input.clientId, code: data.code, redirectUri: data.redirectUri,
+          }).then(resolve, reject)
+        })
+      } else if (data.ok && data.refreshToken) finish(() => resolve({ refreshToken: data.refreshToken as string, account: data.account }))
       else finish(() => reject(new Error(data.error || 'Google sign-in failed')))
     }
     window.addEventListener('message', onMessage)

@@ -917,12 +917,14 @@ export function ToolboxProvider({ children, target }: { children: ReactNode; tar
     if (!wn) throw new Error('No active workspace')
     await createWorkspaceTimeline(wn, name)
     refreshTimelines()
+    window.dispatchEvent(new CustomEvent('workspace:timelines:changed', { detail: { workspaceName: wn } }))
   }, [refreshTimelines])
 
   const deleteTimeline = useCallback(async (name: string) => {
     const wn = stateRef.current.activeWorkspaceName
     if (!wn) throw new Error('No active workspace')
     await deleteWorkspaceTimeline(wn, name)
+    window.dispatchEvent(new CustomEvent('workspace:timelines:changed', { detail: { workspaceName: wn } }))
     const remaining = stateRef.current.availableTimelines.filter(n => n !== name)
     dispatch({ type: 'SET_TIMELINES', names: remaining })
     // Strip from selected if present

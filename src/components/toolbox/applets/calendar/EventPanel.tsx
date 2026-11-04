@@ -21,6 +21,8 @@ const EVENT_SCHEMA_VERSION = '3.0'
 export interface EventDraft {
   start: Date
   allDay: boolean
+  /** Exclusive end from a drag selection; omitted = one hour / one day. */
+  end?: Date
 }
 
 export type PanelSubject = { kind: 'draft'; draft: EventDraft } | { kind: 'occurrence'; occurrence: Occurrence }
@@ -70,11 +72,12 @@ function fieldsFromDoc(doc: Document, defaultCalendar: string): Fields {
 }
 
 function fieldsFromDraft(draft: EventDraft, defaultCalendar: string): Fields {
-  const end = new Date(draft.start.getTime() + 60 * 60_000)
+  const end = draft.end ?? new Date(draft.start.getTime() + 60 * 60_000)
   return {
     title: '', calendar: defaultCalendar, allDay: draft.allDay,
     start: draft.allDay ? dateKey(draft.start) : localInput(draft.start),
-    end: draft.allDay ? dateKey(draft.start) : localInput(end),
+    // All-day ends are exclusive; the form shows the last day inclusively.
+    end: draft.allDay ? dateKey(addDays(end, -1) < draft.start ? draft.start : addDays(end, -1)) : localInput(end),
     location: '', description: '', repeat: 'none', rrule: '',
   }
 }
@@ -142,7 +145,7 @@ export function EventPanel({ subject, target, workspaceName, calendars, defaultC
   const [error, setError] = useState<string | null>(null)
   const [linking, setLinking] = useState(false)
   // Re-seed when the panel is pointed at another subject.
-  const subjectKey = subject.kind === 'draft' ? `draft:${subject.draft.start.getTime()}:${subject.draft.allDay}` : subject.occurrence.key
+  const subjectKey = subject.kind === 'draft' ? `draft:${subject.draft.start.getTime()}:${subject.draft.end?.getTime() ?? ''}:${subject.draft.allDay}` : subject.occurrence.key
   const [prevKey, setPrevKey] = useState(subjectKey)
   if (prevKey !== subjectKey) {
     setPrevKey(subjectKey)
@@ -214,18 +217,7 @@ export function EventPanel({ subject, target, workspaceName, calendars, defaultC
             className="w-full border-0 border-b border-border bg-transparent px-0 py-1 text-base font-semibold outline-none placeholder:text-muted-foreground/60 focus:border-ring"
           />
 
-          <label className="block text-xs">
-            <span className="text-muted-foreground">Calendar</span>
-            <input
-              list="calendar-names"
-              value={fields.calendar}
-              onChange={(e) => patch({ calendar: e.target.value })}
-              placeholder="Personal"
-              spellCheck={false}
-              className="mt-1 h-8 w-full rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            />
-            <datalist id="calendar-names">{calendars.map(c => <option key={c} value={c} />)}</datalist>
-          </label>
+          <CalendarPicker value={fields.calendar} calendars={calendars} onChange={(calendar) => patch({ calendar })} />
 
           <label className="flex items-center gap-2 text-xs">
             <input
@@ -310,6 +302,47 @@ export function EventPanel({ subject, target, workspaceName, calendars, defaultC
 
       {linking && doc && <LinkDocOverlay documentId={doc.id} workspaceName={workspaceName ?? undefined} onClose={() => setLinking(false)} />}
     </div>
+  )
+}
+
+// Workspace calendars (facet + domain timelines) as a real dropdown, with a
+// "New calendar…" entry that turns into a text field. A synced event whose
+// calendar is not in the list keeps its own name as an extra option.
+function CalendarPicker({ value, calendars, onChange }: { value: string; calendars: string[]; onChange: (name: string) => void }) {
+  const known = calendars.some(c => c.toLowerCase() === value.toLowerCase())
+  const [creating, setCreating] = useState(!known && !!value === false && calendars.length === 0)
+  const options = known || !value ? calendars : [value, ...calendars]
+  return (
+    <label className="block text-xs">
+      <span className="text-muted-foreground">Calendar</span>
+      {creating ? (
+        <span className="mt-1 flex gap-1">
+          <input
+            autoFocus
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="New calendar name"
+            spellCheck={false}
+            className="h-8 min-w-0 flex-1 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          />
+          {calendars.length > 0 && (
+            <button type="button" onClick={() => { setCreating(false); onChange(calendars[0]) }} className="rounded-md border border-border px-2 text-xs text-muted-foreground hover:bg-muted" aria-label="Pick an existing calendar">
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </span>
+      ) : (
+        <select
+          value={value}
+          onChange={(e) => { if (e.target.value === '\u0000new') { setCreating(true); onChange('') } else onChange(e.target.value) }}
+          className="mt-1 h-8 w-full rounded-md border border-input bg-transparent px-2 text-sm"
+        >
+          {!value && <option value="">No calendar</option>}
+          {options.map(c => <option key={c} value={c}>{c}</option>)}
+          <option value={'\u0000new'}>New calendar…</option>
+        </select>
+      )}
+    </label>
   )
 }
 

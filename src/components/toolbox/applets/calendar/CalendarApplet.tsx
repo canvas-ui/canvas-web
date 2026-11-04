@@ -114,7 +114,7 @@ export function CalendarApplet({ autoAdd = false }: AppletProps) {
     if (nextView) setPrefs({ view: nextView })
   }, [setPrefs])
 
-  const openDraft = useCallback((start: Date, allDay: boolean) => setPanel({ kind: 'draft', draft: { start, allDay } }), [])
+  const openDraft = useCallback((start: Date, allDay: boolean, end?: Date) => setPanel({ kind: 'draft', draft: { start, allDay, end } }), [])
   const select = useCallback((o: Occurrence) => setPanel({ kind: 'occurrence', occurrence: o }), [])
 
   const handleDelete = useCallback(async (doc: Document) => {
@@ -129,7 +129,7 @@ export function CalendarApplet({ autoAdd = false }: AppletProps) {
     if (e.key === 'ArrowLeft') { go(step(view, cursor, -1)); e.preventDefault() }
     else if (e.key === 'ArrowRight') { go(step(view, cursor, 1)); e.preventDefault() }
     else if (e.key === 't') go(new Date())
-    else if (e.key === 'n') openDraft(nextSlot(), false)
+    else if (e.key === 'n') openDraft(nextSlot(cursor), false)
     else if (e.key === 'Escape') { setPanel(null); setCalendarsOpen(false) }
     else { const v = CALENDAR_VIEWS.find(x => x.key === e.key); if (v) setPrefs({ view: v.id }) }
   }
@@ -256,7 +256,7 @@ export function CalendarApplet({ autoAdd = false }: AppletProps) {
 
       {!loading && !error && !docs.length && view !== 'schedule' && (
         <p className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-muted/80 px-3 py-1 text-[11px] text-muted-foreground">
-          <CalendarDays className="mr-1 inline h-3 w-3" />Nothing here yet — click a slot to add an event.
+          <CalendarDays className="mr-1 inline h-3 w-3" />Nothing here yet — click or drag a slot to add an event.
         </p>
       )}
     </div>

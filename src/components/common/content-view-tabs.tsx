@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Plus, X, LayoutList, Columns3, ListTodo, StickyNote, PanelRight, SlidersHorizontal, TerminalSquare, Brush, ScanEye } from 'lucide-react'
+import { Plus, X, LayoutList, Columns3, ListTodo, StickyNote, PanelRight, SlidersHorizontal, TerminalSquare, Brush, ScanEye, CalendarDays } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { onAccentSolidTextClass } from '@/utils/color'
 import { CONTENT_APPS, DEFAULT_VIEW, defaultBoardColumns, type ContentAppId, type ContentView, type ContentViewKind } from './content-views'
@@ -23,7 +23,7 @@ interface ContentViewTabsProps {
   onOpenToSide?: (viewId: string) => void
 }
 
-const appIcons = { todos: ListTodo, 'todo-app': ListTodo, notes: StickyNote, 'notes-app': StickyNote, filters: SlidersHorizontal, sketch: TerminalSquare, Brush, terminal: TerminalSquare, lens: ScanEye }
+const appIcons = { todos: ListTodo, 'todo-app': ListTodo, notes: StickyNote, 'notes-app': StickyNote, calendar: CalendarDays, filters: SlidersHorizontal, sketch: Brush, terminal: TerminalSquare, lens: ScanEye }
 
 export function ContentViewTabs({ views, activeId, onSelect, onSave, readOnly = false, className, accentColor, onOpenToSide }: ContentViewTabsProps) {
   const [editingId, setEditingId] = useState<string | null>(null)

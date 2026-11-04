@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getWorkspaceDocuments, deleteWorkspaceDocuments, listWorkspaceBitmaps, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
+import { getWorkspaceDocuments, deleteWorkspaceDocuments, listWorkspaceBitmaps, listWorkspaceTimelinesVerbose, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
 import { getContextDocuments, getContext } from '@/services/context'
 import { EVENT_SCHEMA, TODO_SCHEMA } from '@/components/renderers/types'
 import type { Document } from '@/types/workspace'
@@ -20,6 +20,12 @@ export function rangeFilters(start: Date, end: Date): { events: string; tasks: s
 // pass their own range so a month load never pages; 0 = no limit on the
 // workspace side (synapsd semantics), the context API gets a large page.
 const CONTEXT_LIMIT = 5000
+
+// Built-in axes are not calendars: lifecycle stamps, content dates, the
+// events union and task due dates.
+export function isCalendarTimeline(name: string): boolean {
+  return !!name && !name.includes(':') && !['content', 'events', 'tasks'].includes(name.toLowerCase())
+}
 
 function workspaceKey(target: AppletTarget): string {
   if (!target) return ''
@@ -105,18 +111,27 @@ export function useCalendarDocs(target: AppletTarget, start: Date, end: Date, wi
     return () => window.removeEventListener('workspace:documents:refresh', onRefresh)
   }, [reload])
 
-  // Calendar names come from the `data/calendar/<name>` facet, so a calendar
-  // with nothing in the visible range is still listed and toggleable.
+  // Calendar names come from two places: the `data/calendar/<name>` facet
+  // (every calendar events were ever filed under) and the workspace's domain
+  // timelines (a calendar created empty in the toolbox Timeline tab is a
+  // valid destination before it holds anything). Both are listed even when
+  // nothing falls in the visible range.
   const workspaceName = scope?.workspaceName ?? null
-  useEffect(() => {
-    if (!workspaceName) return
-    let cancelled = false
-    listWorkspaceBitmaps(workspaceName).then(keys => {
-      if (cancelled) return
-      setKnownCalendars(keys.filter(k => k.startsWith('data/calendar/')).map(k => k.slice('data/calendar/'.length)).filter(Boolean).sort())
+  const refreshCalendars = useCallback(() => {
+    if (!workspaceName) return Promise.resolve()
+    return Promise.all([listWorkspaceBitmaps(workspaceName), listWorkspaceTimelinesVerbose(workspaceName)]).then(([keys, timelines]) => {
+      const names = new Set<string>()
+      for (const k of keys) if (k.startsWith('data/calendar/') && k.length > 'data/calendar/'.length) names.add(k.slice('data/calendar/'.length))
+      for (const t of timelines) if (isCalendarTimeline(t.name)) names.add(t.name)
+      setKnownCalendars([...names].sort())
     }).catch(() => {})
-    return () => { cancelled = true }
-  }, [workspaceName, docs.length])
+  }, [workspaceName])
+  useEffect(() => { void refreshCalendars() }, [refreshCalendars, docs.length])
+  useEffect(() => {
+    const onChange = () => { void refreshCalendars() }
+    window.addEventListener('workspace:timelines:changed', onChange)
+    return () => window.removeEventListener('workspace:timelines:changed', onChange)
+  }, [refreshCalendars])
 
   const removeDoc = useCallback(async (id: number) => {
     if (!scope) throw new Error('No workspace scope resolved')
