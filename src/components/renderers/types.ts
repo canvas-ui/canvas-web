@@ -16,6 +16,9 @@ export const FILE_SCHEMA = 'data/schema/file'
 export const DRAWING_SCHEMA = 'data/schema/drawing'
 export const EMAIL_SCHEMA = 'data/schema/message/email'
 export const TODO_SCHEMA = 'data/schema/task'
+// Calendar entries; querying the parent (data/schema/event) rolls up alerts
+// and activity too, so the calendar asks for the leaf.
+export const EVENT_SCHEMA = 'data/schema/event/calendar'
 export const IDENTITY_SCHEMA = 'data/schema/identity'
 
 export function schemaLeaf(schema: string, parent: string): string {

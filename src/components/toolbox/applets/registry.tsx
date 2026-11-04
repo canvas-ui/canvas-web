@@ -1,6 +1,6 @@
 import type { AppCategory } from '@/lib/app-catalog'
 import { lazy, Suspense, type ComponentType } from 'react'
-import { TerminalSquare, Brush, ListTodo, ScanEye, StickyNote, SlidersHorizontal, type LucideIcon } from 'lucide-react'
+import { TerminalSquare, Brush, CalendarDays, ListTodo, ScanEye, StickyNote, SlidersHorizontal, type LucideIcon } from 'lucide-react'
 
 // Applets are small self-contained apps hosted by the toolbox Apps tab, the
 // /apps/<id> content route, and the desktop shell - keep
@@ -45,6 +45,7 @@ const TodosApplet = loadApplet(() => import('./TodosApplet').then(module => ({ d
 const LensApplet = loadApplet(() => import('./LensApplet').then(module => ({ default: module.LensApplet })))
 const FiltersApplet = loadApplet(() => import('./FiltersApplet').then(module => ({ default: module.FiltersApplet })))
 const SketchApplet = loadApplet(() => import('./SketchApplet').then(module => ({ default: module.SketchApplet })))
+const CalendarApplet = loadApplet(() => import('./calendar/CalendarApplet').then(module => ({ default: module.CalendarApplet })))
 
 export const APPLETS: AppletDescriptor[] = [
   { id: 'terminal', category: 'utilities', label: 'Terminal', icon: TerminalSquare, modes: ['context'], description: 'Shell sessions for this context', Component: TerminalApplet },
@@ -66,6 +67,15 @@ export const APPLETS: AppletDescriptor[] = [
     modes: ['context'],
     description: 'Todos in the current context, done items hidden by default',
     Component: TodosApplet,
+  },
+  {
+    id: 'calendar',
+    category: 'productivity',
+    label: 'Calendar',
+    icon: CalendarDays,
+    modes: ['context'],
+    description: 'Day, week, month, year and schedule views of the events and due tasks in the current context',
+    Component: CalendarApplet,
   },
   {
     id: 'sketch',

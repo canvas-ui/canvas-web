@@ -95,7 +95,7 @@ const DRIVERS: Record<string, { label: string; icon: string; blurb: string; fiel
       { key: 'clientId', label: 'OAuth client id', required: true },
       { key: 'clientSecret', label: 'OAuth client secret', secret: true, required: true },
       { key: 'refreshToken', label: 'Refresh token', secret: true, required: true, oauth: 'google', oauthScope: 'calendar.readonly' },
-      { key: 'calendars', label: 'Calendar ids (empty = primary)', list: true },
+      { key: 'calendars', label: 'Calendar ids (empty = primary)', list: true, placeholder: 'primary\nteam@group.calendar.google.com = Team', hint: 'One per line. "<id> = <name>" names the calendar in Canvas (its own timeline and a toggle in the Calendar app); unnamed ones use the account label (primary) or the id.' },
     ],
   },
   caldav: {
@@ -107,7 +107,7 @@ const DRIVERS: Record<string, { label: string; icon: string; blurb: string; fiel
       { key: 'url', label: 'CalDAV URL (calendar home or one calendar)', placeholder: 'https://host/caldav/user', required: true },
       { key: 'username', label: 'Username' },
       { key: 'password', label: 'Password', secret: true },
-      { key: 'calendars', label: 'Calendars (names, empty = all)', list: true },
+      { key: 'calendars', label: 'Calendars (names, empty = all)', list: true, placeholder: 'personal\nwork = Work', hint: 'One per line. "<name> = <calendar name>" names the calendar in Canvas (its own timeline and a toggle in the Calendar app); otherwise the CalDAV display name is used.' },
       { key: 'writeBack', label: 'Create events from Canvas', hint: 'Write-back into the CalDAV calendar.', bool: true },
     ],
   },
