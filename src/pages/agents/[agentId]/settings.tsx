@@ -26,7 +26,9 @@ import {
   removeAgentSkill,
   revokeAgentAccess,
   rotateAgentAccessToken,
-  setAgentAccess,
+  setAgentAccessGrant,
+  revokeAgentAccessGrant,
+  type AgentAccessGrant,
   updateAgent,
   type Agent,
   type AgentAccess,
@@ -139,9 +141,10 @@ export default function AgentSettingsPage() {
   // Derived rather than set in the effect (react-hooks/set-state-in-effect).
   const [accessLoadedFor, setAccessLoadedFor] = useState<string | null>(null)
   const [accessBusy, setAccessBusy] = useState(false)
-  // Token minted by bind/rotate — the server stores only the hash, so this is
-  // the single chance to copy it.
+  // Plaintext tokens are returned only when minted; runtime credentials are managed separately.
   const [mintedToken, setMintedToken] = useState<string | null>(null)
+  const [connectionId, setConnectionId] = useState('')
+  const [editingConnection, setEditingConnection] = useState(false)
   const [bindType, setBindType] = useState<AgentBinding['type']>('context')
   const [bindWorkspace, setBindWorkspace] = useState('')
   const [bindPath, setBindPath] = useState('/')
@@ -224,14 +227,6 @@ export default function AgentSettingsPage() {
       setWorkspaceOptions(ws)
       setContextOptions(ctxs)
       setToolDefs(defs ? defs.tools : [])
-      if (acc) {
-        setBindType(acc.binding.type)
-        setBindWorkspace(acc.binding.workspace || '')
-        setBindPath(acc.binding.path || '/')
-        setBindContext(acc.binding.context || '')
-        setPermRead(acc.permissions.includes('read'))
-        setPermWrite(acc.permissions.includes('write'))
-      }
       setAccessLoadedFor(forAgentId)
     })
     return () => { cancelled = true }
@@ -365,18 +360,20 @@ export default function AgentSettingsPage() {
     const permissions: Array<'read' | 'write'> = []
     if (permRead) permissions.push('read')
     if (permWrite) permissions.push('write')
-    if (!binding || permissions.length === 0) {
-      showToast({ title: 'Invalid binding', description: 'Pick a scope target and at least one permission', variant: 'destructive' })
+    if (!binding || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(connectionId.trim()) || permissions.length === 0 || (!editingConnection && access?.grants.some(grant => grant.id === connectionId.trim()))) {
+      showToast({ title: 'Invalid binding', description: 'Choose a unique connection name (letters, numbers, hyphens or underscores), scope and permissions', variant: 'destructive' })
       return
     }
     if (binding.type === 'global'
       && !window.confirm(`Global scope lets this agent ${permWrite ? 'read and write' : 'read'} ALL your workspaces. Continue?`)) return
     setAccessBusy(true)
     try {
-      const result = await setAgentAccess(agent.id, { binding, permissions })
+      const result = await setAgentAccessGrant(agent.id, connectionId.trim(), { label: access?.grants.find(grant => grant.id === connectionId.trim())?.label || connectionId.trim(), binding, permissions })
       setAccess(result.access)
-      setMintedToken(result.token)
-      showToast({ title: 'Bound', description: 'Access bound — copy the token now, it is not shown again' })
+      setMintedToken(result.tokens[0]?.token ?? null)
+      setConnectionId('')
+      setEditingConnection(false)
+      showToast({ title: 'Connection saved', description: 'Other connections and their tokens are unchanged' })
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Bind failed', variant: 'destructive' })
     } finally {
@@ -384,13 +381,13 @@ export default function AgentSettingsPage() {
     }
   }
 
-  const handleRotateToken = async () => {
+  const handleRotateToken = async (grantId: string) => {
     if (!agent || accessBusy) return
     setAccessBusy(true)
     try {
-      const result = await rotateAgentAccessToken(agent.id)
+      const result = await rotateAgentAccessToken(agent.id, grantId)
       setAccess(result.access)
-      setMintedToken(result.token)
+      setMintedToken(result.tokens[0]?.token ?? null)
       showToast({ title: 'Rotated', description: 'New token minted — the previous one no longer works' })
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Rotate failed', variant: 'destructive' })
@@ -399,9 +396,33 @@ export default function AgentSettingsPage() {
     }
   }
 
+  const editConnection = (grant: AgentAccessGrant) => {
+    setConnectionId(grant.id)
+    setEditingConnection(true)
+    setBindType(grant.binding.type)
+    setBindWorkspace(grant.binding.workspace || '')
+    setBindPath(grant.binding.path || '/')
+    setBindContext(grant.binding.context || '')
+    setPermRead(grant.permissions.includes('read'))
+    setPermWrite(grant.permissions.includes('write'))
+  }
+
+  const removeConnection = async (grantId: string) => {
+    if (!agent || accessBusy) return
+    setAccessBusy(true)
+    try {
+      const result = await revokeAgentAccessGrant(agent.id, grantId)
+      setAccess(result.access)
+      setMintedToken(null)
+      if (connectionId === grantId) { setConnectionId(''); setEditingConnection(false) }
+    } catch (error) {
+      showToast({ title: 'Error', description: error instanceof Error ? error.message : 'Revoke failed', variant: 'destructive' })
+    } finally { setAccessBusy(false) }
+  }
+
   const handleRevokeAccess = async () => {
     if (!agent || accessBusy) return
-    if (!window.confirm("Revoke this agent's canvas access? Its token stops working immediately.")) return
+    if (!window.confirm("Revoke this agent's canvas access? All its connection tokens stop working immediately.")) return
     setAccessBusy(true)
     try {
       await revokeAgentAccess(agent.id)
@@ -632,7 +653,7 @@ export default function AgentSettingsPage() {
                   </div>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  {access ? describeBinding(access.binding) : 'Unbound — no canvas tools are injected. Bind under Access / ACL.'}
+                  {access ? access.grants.map(grant => `${grant.label}: ${describeBinding(grant.binding)}`).join('; ') : 'Unbound — no canvas tools are injected. Bind under Access / ACL.'}
                 </p>
               </section>
 
@@ -759,28 +780,25 @@ export default function AgentSettingsPage() {
                 <div>
                   <h2 className="text-sm font-semibold">Canvas Access</h2>
                   <p className="text-xs text-muted-foreground">
-                    The agent talks to canvas through its own scoped token; the server clamps every
-                    request to the binding. Bind, rotate and revoke apply immediately.
+                    Add named connections to workspaces, paths or contexts, with permissions for each.
+                    Every connection has its own scoped token. Overlapping grants are additive: a whole-workspace grant is not restricted by a context on that workspace.
                   </p>
                 </div>
                 {accessLoadedFor !== agent.id ? (
                   <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Loading…</div>
                 ) : access ? (
-                  <div className="space-y-2 rounded-md border p-3">
-                    <div className="text-sm font-medium">{describeBinding(access.binding)}</div>
-                    <div className="text-xs text-muted-foreground">
-                      Permissions: {access.permissions.join(', ') || 'none'}
-                      {access.boundAt ? ` · bound ${new Date(access.boundAt).toLocaleString()}` : ''}
-                      {access.rotatedAt ? ` · token rotated ${new Date(access.rotatedAt).toLocaleString()}` : ''}
-                    </div>
-                    <div className="flex gap-2 pt-1">
-                      <Button type="button" variant="outline" size="sm" disabled={accessBusy} onClick={handleRotateToken}>
-                        Rotate Token
-                      </Button>
-                      <Button type="button" variant="destructive" size="sm" disabled={accessBusy} onClick={handleRevokeAccess}>
-                        Revoke Access
-                      </Button>
-                    </div>
+                  <div className="space-y-2">
+                    {access.grants.map(grant => <div key={grant.id} className="space-y-2 rounded-md border p-3">
+                      <div className="text-sm font-medium">{grant.label || grant.id}</div>
+                      <div className="text-xs text-muted-foreground">{describeBinding(grant.binding)}</div>
+                      <div className="text-xs text-muted-foreground">Permissions: {grant.permissions.join(', ')}</div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" variant="outline" size="sm" disabled={accessBusy} onClick={() => editConnection(grant)}>Edit</Button>
+                        <Button type="button" variant="outline" size="sm" disabled={accessBusy} onClick={() => handleRotateToken(grant.id)}>Rotate Token</Button>
+                        <Button type="button" variant="destructive" size="sm" disabled={accessBusy} onClick={() => removeConnection(grant.id)}>Remove</Button>
+                      </div>
+                    </div>)}
+                    <Button type="button" variant="destructive" size="sm" disabled={accessBusy} onClick={handleRevokeAccess}>Revoke All Access</Button>
                   </div>
                 ) : (
                   <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
@@ -800,15 +818,17 @@ export default function AgentSettingsPage() {
                       </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      In-process agents receive it automatically (canvas.env); external runtimes
-                      (agentd) take it as CANVAS_TOKEN.
+                      Managed agents receive their connections automatically. External runtimes use the CANVAS_CONNECTIONS JSON array.
                     </p>
                   </div>
                 )}
               </section>
 
               <section className="space-y-4 rounded-lg border p-4">
-                <h2 className="text-sm font-semibold">{access ? 'Rebind' : 'Bind'}</h2>
+                <h2 className="text-sm font-semibold">{editingConnection ? 'Edit Connection' : 'Add Connection'}</h2>
+                <Field label="Connection name" hint="Agents use this name to select the scope for each tool call.">
+                  <Input value={connectionId} disabled={editingConnection} onChange={event => setConnectionId(event.target.value)} placeholder="bar, baz, baf" />
+                </Field>
                 <Field label="Scope" hint="Context bindings follow the context live; global spans all workspaces.">
                   <select value={bindType} onChange={e => setBindType(e.target.value as AgentBinding['type'])} className={SELECT_CLASS}>
                     <option value="context">Context (follows live)</option>
@@ -853,8 +873,9 @@ export default function AgentSettingsPage() {
                   </div>
                 </Field>
                 <Button type="button" disabled={accessBusy} onClick={handleBind}>
-                  {accessBusy ? 'Working…' : access ? 'Rebind & Mint Token' : 'Bind & Mint Token'}
+                  {accessBusy ? 'Working…' : editingConnection ? 'Save Connection' : 'Add Connection'}
                 </Button>
+                {editingConnection && <Button type="button" variant="outline" onClick={() => { setConnectionId(''); setEditingConnection(false) }}>Cancel Edit</Button>}
               </section>
             </>
           )}

@@ -129,3 +129,19 @@ test('image candidates are scoped to the selected tree, path and filters', async
   assert.equal(calls[0][1].applyCanvasQuerySpec, false)
   assert.equal(calls[0][2].signal, signal)
 })
+
+
+test('selecting a toolbox tab dismisses the agent overlay and preserves filters', () => {
+  const h = harness({ t1Open: true, t1View: 'agents', t2Open: true, t2AgentId: 'foo' })
+  for (const type of ['SET_VIEW', 'TOGGLE_VIEW']) {
+    const next = h.reducer(h.current, { type, view: 'tools' })
+    assert.equal(next.t1Open, true)
+    assert.equal(next.t1View, 'tools')
+    assert.equal(next.t2Open, false)
+    assert.equal(next.t2AgentId, null)
+    assert.equal(next.filters, h.current.filters)
+  }
+  const agents = h.reducer(h.current, { type: 'TOGGLE_VIEW', view: 'agents' })
+  assert.equal(agents.t1Open, true)
+  assert.equal(agents.t2Open, false)
+})

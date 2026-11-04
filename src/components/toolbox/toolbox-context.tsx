@@ -204,10 +204,10 @@ const initialState: ToolboxState = {
 function toolboxReducer(state: ToolboxState, action: ToolboxAction): ToolboxState {
   switch (action.type) {
     case 'SET_VIEW':
-      return { ...state, t1Open: action.view !== null, t1View: action.view }
+      return { ...state, t1Open: action.view !== null, t1View: action.view, t2Open: false, t2AgentId: null }
     case 'TOGGLE_VIEW':
-      if (state.t1View === action.view) return { ...state, t1Open: false, t1View: null }
-      return { ...state, t1Open: true, t1View: action.view }
+      if (state.t1View === action.view && !state.t2Open) return { ...state, t1Open: false, t1View: null }
+      return { ...state, t1Open: true, t1View: action.view, t2Open: false, t2AgentId: null }
     case 'CLOSE_T1':
       return { ...state, t1Open: false, t1View: null, t2Open: false, t2AgentId: null }
     case 'OPEN_T2_AGENT':

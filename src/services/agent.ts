@@ -665,7 +665,9 @@ export interface AgentBinding {
   context?: string;
 }
 
-export interface AgentAccess {
+export interface AgentAccessGrant {
+  id: string;
+  label: string;
   binding: AgentBinding;
   permissions: Array<'read' | 'write'>;
   tokenId?: string;
@@ -673,35 +675,30 @@ export interface AgentAccess {
   rotatedAt?: string;
 }
 
-// The token value is returned exactly once per mint/rotate; the server keeps
-// only its hash.
+export interface AgentAccess { grants: AgentAccessGrant[] }
 export interface AgentAccessResult {
-  access: AgentAccess;
-  token: string;
+  access: AgentAccess | null;
+  tokens: Array<{ id: string; token: string }>;
 }
 
-/** Current access binding, or null when the agent is unbound. */
 export async function getAgentAccess(agentId: string): Promise<AgentAccess | null> {
-  const response = await api.get<AgentAccess | null>(`${API_URL}/agents/${agentId}/access`);
-  return response || null;
+  return await api.get<AgentAccess | null>(`${API_URL}/agents/${agentId}/access`) || null;
 }
 
-/** Bind (or rebind) the agent; mints a fresh canvas-agent-* token. */
-export async function setAgentAccess(
-  agentId: string,
-  data: { binding: AgentBinding; permissions: Array<'read' | 'write'> }
-): Promise<AgentAccessResult> {
-  const response = await api.put<AgentAccessResult>(`${API_URL}/agents/${agentId}/access`, data);
-  return response;
+/** Save one connection; other grants and their tokens are unchanged. */
+export async function setAgentAccessGrant(agentId: string, grantId: string,
+  data: { label?: string; binding: AgentBinding; permissions: Array<'read' | 'write'> }): Promise<AgentAccessResult> {
+  return api.put<AgentAccessResult>(`${API_URL}/agents/${agentId}/access/grants/${encodeURIComponent(grantId)}`, data);
 }
 
-/** Rotate the agent token, keeping the binding. */
-export async function rotateAgentAccessToken(agentId: string): Promise<AgentAccessResult> {
-  const response = await api.post<AgentAccessResult>(`${API_URL}/agents/${agentId}/access/token`);
-  return response;
+export async function rotateAgentAccessToken(agentId: string, grantId: string): Promise<AgentAccessResult> {
+  return api.post<AgentAccessResult>(`${API_URL}/agents/${agentId}/access/grants/${encodeURIComponent(grantId)}/token`);
 }
 
-/** Revoke the binding and token entirely. */
+export async function revokeAgentAccessGrant(agentId: string, grantId: string): Promise<AgentAccessResult> {
+  return api.delete<AgentAccessResult>(`${API_URL}/agents/${agentId}/access/grants/${encodeURIComponent(grantId)}`);
+}
+
 export async function revokeAgentAccess(agentId: string): Promise<void> {
   await api.delete(`${API_URL}/agents/${agentId}/access`);
 }

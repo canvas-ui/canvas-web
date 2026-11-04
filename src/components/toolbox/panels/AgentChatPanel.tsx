@@ -2,7 +2,7 @@ import { useLocation } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Mic, Send, Square, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getAgent, getAgentAccess, getVoiceStatus, setAgentAccess, type Agent, type AgentAccess } from '@/services/agent'
+import { getAgent, getAgentAccess, getVoiceStatus, setAgentAccessGrant, type Agent, type AgentAccess } from '@/services/agent'
 import { useToast } from '@/components/ui/use-toast'
 import { useToolboxOptional } from '../use-toolbox'
 import { useAgentPromptStream } from '@/hooks/useAgentPromptStream'
@@ -22,7 +22,7 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
   const [voiceAvailable, setVoiceAvailable] = useState(false)
   const [access, setAccess] = useState<AgentAccess | null>(null)
   const [bindBusy, setBindBusy] = useState(false)
-  // Token minted by a rebind — shown exactly once (server stores only the hash).
+  // Newly minted connection token, shown once for external clients.
   const [mintedToken, setMintedToken] = useState<string | null>(null)
   const { showToast } = useToast()
   // Context hand-off: the toolbox knows which context the user is looking at.
@@ -53,32 +53,28 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const boundToActiveContext =
-    access?.binding.type === 'context' && Boolean(activeContextId) && access?.binding.context === activeContextId
-
-  const scopeLabel = !access
-    ? 'no canvas access'
-    : access.binding.type === 'global'
-      ? 'scope: global'
-      : access.binding.type === 'context'
-        ? (boundToActiveContext ? 'scoped to this context' : 'context-bound')
-        : `scope: ${access.binding.workspaceName || access.binding.workspace}${access.binding.type === 'path' ? `:${access.binding.path || '/'}` : ''}`
+  const boundToActiveContext = Boolean(activeContextId && access?.grants.some(grant =>
+    grant.binding.type === 'context' && grant.binding.context === activeContextId))
+  const scopeLabel = access?.grants.length
+    ? `Connections: ${access.grants.map(grant => grant.label || grant.id).join(', ')}`
+    : 'no canvas access'
 
   const handleBindToContext = async () => {
     if (!activeContextId || bindBusy) return
     const label = activeContextId || activeContextPath
     if (!window.confirm(
-      `Bind "${agent?.label || agent?.name || agentId}" to the current context (${label})? ` +
-      'This mints a new canvas token and restarts the agent if it is running.'
+      `Add the current context (${label}) to "${agent?.label || agent?.name || agentId}"? ` +
+      'Other connections remain unchanged. This restarts the agent if it is running.'
     )) return
     setBindBusy(true)
     try {
-      const result = await setAgentAccess(agentId, {
+      const result = await setAgentAccessGrant(agentId, `context-${crypto.randomUUID()}`, {
+        label: `Context ${activeContextId}`,
         binding: { type: 'context', context: activeContextId },
         permissions: ['read', 'write'],
       })
       setAccess(result.access)
-      setMintedToken(result.token)
+      setMintedToken(result.tokens[0]?.token ?? null)
     } catch (err) {
       showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Bind failed', variant: 'destructive' })
     } finally {
@@ -151,7 +147,7 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
             onClick={handleBindToContext}
             className="shrink-0 rounded border border-input px-2 py-1 hover:bg-accent disabled:opacity-50"
           >
-            {bindBusy ? 'Binding…' : 'Bind to this context'}
+            {bindBusy ? 'Binding…' : 'Add this context'}
           </button>
         </div>
       )}
