@@ -16,6 +16,7 @@ import { MonthView } from './MonthView'
 import { YearView } from './YearView'
 import { ScheduleView } from './ScheduleView'
 import { EventPanel, type PanelSubject } from './EventPanel'
+import type { DragRange } from '@/lib/calendar/drag'
 
 // Width below which the sidebar folds into a popover and the week grid
 // drops its labels (the toolbox), and below which month cells show dots.
@@ -114,6 +115,13 @@ export function CalendarApplet({ autoAdd = false }: AppletProps) {
     if (nextView) setPrefs({ view: nextView })
   }, [setPrefs])
 
+  // The drag selection outlives the drag: while the draft panel is open the
+  // grids keep its range highlighted so the dates can be checked at a glance.
+  const pending = useMemo<DragRange | null>(() => {
+    if (panel?.kind !== 'draft') return null
+    const { start, allDay, end } = panel.draft
+    return { start, allDay, end: end ?? (allDay ? addDays(startOfDay(start), 1) : new Date(start.getTime() + 3_600_000)) }
+  }, [panel])
   const openDraft = useCallback((start: Date, allDay: boolean, end?: Date) => setPanel({ kind: 'draft', draft: { start, allDay, end } }), [])
   const select = useCallback((o: Occurrence) => setPanel({ kind: 'occurrence', occurrence: o }), [])
 
@@ -171,11 +179,11 @@ export function CalendarApplet({ autoAdd = false }: AppletProps) {
   const body = (() => {
     switch (view) {
       case 'day':
-        return <TimeGrid days={[startOfDay(cursor)]} occurrences={occurrences} selectedKey={selectedKey} onSelect={select} onCreate={openDraft} onPickDay={(d) => go(d, 'day')} compact={compact} />
+        return <TimeGrid days={[startOfDay(cursor)]} occurrences={occurrences} selectedKey={selectedKey} pending={pending} onSelect={select} onCreate={openDraft} onPickDay={(d) => go(d, 'day')} compact={compact} />
       case 'week':
-        return <TimeGrid days={Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(cursor), i))} occurrences={occurrences} selectedKey={selectedKey} onSelect={select} onCreate={openDraft} onPickDay={(d) => go(d, 'day')} compact={narrow} />
+        return <TimeGrid days={Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(cursor), i))} occurrences={occurrences} selectedKey={selectedKey} pending={pending} onSelect={select} onCreate={openDraft} onPickDay={(d) => go(d, 'day')} compact={narrow} />
       case 'month':
-        return <MonthView month={startOfMonth(cursor)} occurrences={occurrences} selectedKey={selectedKey} onSelect={select} onCreate={openDraft} onPickDay={(d) => go(d, 'day')} narrow={narrow} />
+        return <MonthView month={startOfMonth(cursor)} occurrences={occurrences} selectedKey={selectedKey} pending={pending} onSelect={select} onCreate={openDraft} onPickDay={(d) => go(d, 'day')} narrow={narrow} />
       case 'year':
         return <YearView year={cursor.getFullYear()} occurrences={occurrences} onPickDay={(d) => go(d, 'day')} onPickMonth={(m) => go(m, 'month')} />
       case 'schedule':

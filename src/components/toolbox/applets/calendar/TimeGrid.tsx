@@ -14,10 +14,12 @@ const GUTTER_PX = 48
 // Day and week share one grid: a day is a week with one column. Timed
 // entries are laid out by layoutDay (overlaps share the width); all-day and
 // multi-day entries sit in the lane above the hours.
-export function TimeGrid({ days, occurrences, selectedKey, onSelect, onCreate, onPickDay, compact }: {
+export function TimeGrid({ days, occurrences, selectedKey, pending, onSelect, onCreate, onPickDay, compact }: {
   days: Date[]
   occurrences: Occurrence[]
   selectedKey: string | null
+  /** Range of the draft being edited — stays highlighted after the drag ends. */
+  pending: DragRange | null
   onSelect: (o: Occurrence) => void
   onCreate: (start: Date, allDay: boolean, end?: Date) => void
   onPickDay: (day: Date) => void
@@ -59,7 +61,7 @@ export function TimeGrid({ days, occurrences, selectedKey, onSelect, onCreate, o
     const range = timeGridDrag(days, d.fromDay, d.fromMin, d.toDay, d.toMin, SNAP_MIN)
     onCreate(range.start, range.allDay, range.end)
   }
-  const selection: DragRange | null = drag ? timeGridDrag(days, drag.fromDay, drag.fromMin, drag.toDay, drag.toMin, SNAP_MIN) : null
+  const selection: DragRange | null = drag ? timeGridDrag(days, drag.fromDay, drag.fromMin, drag.toDay, drag.toMin, SNAP_MIN) : pending
   const byDay = useMemo(() => groupByDay(occurrences), [occurrences])
   const [now, setNow] = useState(() => new Date())
   useEffect(() => {

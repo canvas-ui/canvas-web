@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { dateFromKey, dateKey, monthGrid, sameDay, WEEKDAY_SHORT } from '@/lib/calendar/dates'
-import { dayRangeDrag } from '@/lib/calendar/drag'
+import { dayRangeDrag, type DragRange } from '@/lib/calendar/drag'
 import { groupByDay, type Occurrence } from '@/lib/calendar/occurrences'
 import { occurrenceColor } from './calendar-colors'
 import { EntryChip } from './EntryChip'
@@ -11,10 +11,12 @@ const MAX_CHIPS = 3
 // Six-week grid. Wide hosts show entry chips per cell; a narrow host shows
 // density dots and the cell opens the day — the month then works as a
 // navigator, the way phone calendars do.
-export function MonthView({ month, occurrences, selectedKey, onSelect, onCreate, onPickDay, narrow }: {
+export function MonthView({ month, occurrences, selectedKey, pending, onSelect, onCreate, onPickDay, narrow }: {
   month: Date
   occurrences: Occurrence[]
   selectedKey: string | null
+  /** Range of the draft being edited — stays highlighted after the drag ends. */
+  pending: DragRange | null
   onSelect: (o: Occurrence) => void
   onCreate: (start: Date, allDay: boolean, end?: Date) => void
   onPickDay: (day: Date) => void
@@ -51,7 +53,7 @@ export function MonthView({ month, occurrences, selectedKey, onSelect, onCreate,
     const range = dayRangeDrag(dateFromKey(d.from), dateFromKey(d.to))
     onCreate(range.start, true, range.end)
   }
-  const selected = drag ? dayRangeDrag(dateFromKey(drag.from), dateFromKey(drag.to)) : null
+  const selected = drag ? dayRangeDrag(dateFromKey(drag.from), dateFromKey(drag.to)) : pending
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="grid shrink-0 grid-cols-7 border-b border-border text-center text-[10px] uppercase tracking-wide text-muted-foreground">
