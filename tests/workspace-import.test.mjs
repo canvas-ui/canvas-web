@@ -157,6 +157,7 @@ test('import transport uses the configured API URL once and waits for archive jo
   const workspace = { id: 'imported', name: 'travel' }
   const module = load('../src/services/workspace.ts', {
     '@/lib/document-sort': {}, '@/components/workspace/workspace-start-dialog': {}, '@/lib/remote-mirror': {},
+    '@/lib/tree-type': { DEFAULT_WORKSPACE_TREE_NAME: 'context', treeTypeForName: () => 'context' },
     '@/config/api': { API_ROUTES: { workspaces: root }, API_URL: 'https://canvas.example/rest/v2' },
     '@/lib/api': { api: {
       post: async (url, body) => { requests.push({ url, body }); return { id: 'job', phase: 'extracting' } },

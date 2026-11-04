@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo } from 'react'
 import { useToolboxOptional } from '../use-toolbox'
-import { DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
+import { DEFAULT_WORKSPACE_TREE_NAME, treeTypeForName } from '@/services/workspace'
 import type { AddTarget } from '../add/useAddTarget'
 
 // Where an applet reads from and writes to. Same discriminated union as the
@@ -34,7 +34,7 @@ export function useAppletTarget(): AppletTarget {
         workspaceName: activeWorkspaceName,
         path: activeContextPath,
         treeName: activeTreeName || DEFAULT_WORKSPACE_TREE_NAME,
-        treeType: (activeTreeName === 'directory' || activeTreeName === 'backends' ? 'directory' : 'context'),
+        treeType: treeTypeForName(activeTreeName),
       }
     }
     return null

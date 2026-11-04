@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { treeTypeForName } from '../src/lib/tree-type.ts'
 
 const { outputText } = ts.transpileModule(readFileSync(new URL('../src/components/common/content-app-view.tsx', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
@@ -13,6 +14,7 @@ vm.runInNewContext(outputText, { exports, require: name => ({
   'react/jsx-runtime': { jsx: (type, props) => ({ type, props }) },
   '@/components/toolbox/applets/registry': { APPLETS: applets },
   '@/components/toolbox/applets/applet-target': { AppletTargetProvider: 'target' },
+  '@/services/workspace': { treeTypeForName },
 }[name] ?? {}) })
 
 test('Todo App and Notes App reuse the Toolbox components bound to the tab path or context', () => {

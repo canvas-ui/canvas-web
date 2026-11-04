@@ -8,6 +8,7 @@ import type { DocumentPasteOptions } from '@/components/common/document-list'
 import { useToolbox } from '@/components/toolbox/use-toolbox'
 import { useSideView } from '@/components/shell/use-side-view'
 import { useContentWindow } from '@/components/common/content-window-context'
+import { DEFAULT_WORKSPACE_TREE_NAME, treeTypeForName } from '@/services/workspace'
 
 // The chip shows the ACTUAL tree name — 'backends' (or a custom tree) rather
 // than its generic 'directory' type — so `(string & {})` admits any tree name
@@ -175,7 +176,7 @@ export function DefaultCanvas({
   return (
     <FileDropArea target={onImportDocuments && workspaceId ? {
       mode: 'workspace', workspaceName: workspaceId, path: contextPath,
-      treeName: treeName || 'context', treeType: treeName === 'directory' ? 'directory' : 'context',
+      treeName: treeName || DEFAULT_WORKSPACE_TREE_NAME, treeType: treeTypeForName(treeName),
     } : null}>
       {navigationTabs && !contentWindow && <CanvasTabStrip accentColor={accentColor}>{navigationTabs}</CanvasTabStrip>}
       <div className={`canvas-surface-body${frameContent && !contentWindow ? ' is-framed' : ''}`}>

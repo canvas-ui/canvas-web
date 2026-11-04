@@ -21,7 +21,7 @@ import { useMenu } from '@/components/shell/use-menu'
 import { useCanvasRow } from '@/components/shell/strip/use-canvas-row'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { workspaceResumeUrl } from '@/lib/last-path'
-import { getWorkspace, getCachedWorkspaceTreeByName, invalidateWorkspaceTreeCache, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer, pasteDocumentsToWorkspacePath, imapFolderTarget, moveImapMessages, createPublicCanvasShare, listBackends, listWorkspacePins, pinWorkspacePath, unpinWorkspacePin, reorderWorkspacePins, workspacePinKey as pinKey, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
+import { getWorkspace, getCachedWorkspaceTreeByName, invalidateWorkspaceTreeCache, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer, pasteDocumentsToWorkspacePath, imapFolderTarget, moveImapMessages, createPublicCanvasShare, listBackends, listWorkspacePins, pinWorkspacePath, unpinWorkspacePin, reorderWorkspacePins, workspacePinKey as pinKey, DEFAULT_WORKSPACE_TREE_NAME, treeTypeForName } from '@/services/workspace'
 import type { Layer, WorkspacePin, Backend } from '@/services/workspace'
 import { getWebuiConfig, putWebuiConfig } from '@/services/user-config'
 import { WorkspacePinsTab } from './WorkspacePinsTab'
@@ -772,7 +772,7 @@ function WorkspaceM2Content() {
             } : wsName ? async (path, ids) => {
               // Ungated on the clipboard: also serves drag-and-drop from the
               // content area (no prior "Copy" involved).
-              const treeType: 'context' | 'directory' = activeTab === 'directory' ? 'directory' : 'context'
+              const treeType = treeTypeForName(activeTab)
               const treeName = activeTab === 'directory' ? 'directory' : DEFAULT_WORKSPACE_TREE_NAME
               const progress = showProgress({ title: 'Pasting…', description: `${ids.length} document(s) → "${path}"` })
               let success = false

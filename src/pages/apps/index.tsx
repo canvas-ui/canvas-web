@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import { APPLETS } from '@/components/toolbox/applets/registry'
 import { AppletTargetProvider } from '@/components/toolbox/applets/applet-target'
 import type { AppletTarget } from '@/components/toolbox/applets/use-applet-target'
-import { listWorkspaces, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
+import { listWorkspaces, DEFAULT_WORKSPACE_TREE_NAME, treeTypeForName } from '@/services/workspace'
 import { listContexts } from '@/services/context'
 
 const DEFAULT_WORKSPACE = 'universe'
@@ -28,7 +28,7 @@ export default function AppletHostPage() {
         workspaceName: workspace,
         path,
         treeName,
-        treeType: treeName === 'directory' ? 'directory' : 'context',
+        treeType: treeTypeForName(treeName),
       }, [contextId, workspace, path, treeName])
 
   // Binding bar data - loaded lazily, the applet works before either arrives.

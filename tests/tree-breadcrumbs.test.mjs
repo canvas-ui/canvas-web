@@ -7,6 +7,7 @@ import { parentCanvasPath } from '../src/lib/canvas-navigation.ts'
 import { treeBreadcrumbs } from '../src/lib/tree-breadcrumbs.ts'
 import { buildWorkspaceUrl, parseWorkspacePathFromUrl } from '../src/utils/url-params.ts'
 import { backendTrashLocation, backendTrashPath } from '../src/lib/backend-trash.ts'
+import { DEFAULT_WORKSPACE_TREE_NAME, treeTypeForName } from '../src/lib/tree-type.ts'
 
 test('ancestors retain exact names and their tree through URL navigation', () => {
   const path = '/Náš Domček/a #1?/literal %2F/100%'
@@ -45,6 +46,7 @@ const dependencies = {
   '@/lib/utils': { cn: (...classes) => classes.filter(Boolean).join(' ') },
   '@/lib/tree-breadcrumbs': { treeBreadcrumbs },
   '@/lib/canvas-navigation': { parentCanvasPath },
+  '@/services/workspace': { DEFAULT_WORKSPACE_TREE_NAME, treeTypeForName },
   './canvas-search': { SearchInput: 'search-input', SearchOptions: 'search-options' },
   './canvas-navigation.css': {},
   'lucide-react': {},

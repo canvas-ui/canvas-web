@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
 import { backendTrashLocation } from '../src/lib/backend-trash.ts'
+import { treeTypeForName } from '../src/lib/tree-type.ts'
 
 // Exercise the production fetch callback with controlled network completion
 // order, without mounting the surrounding shell, maps and canvas widgets.
@@ -28,7 +29,7 @@ function build() {
     sessionActiveRef: { current: false }, fetchSeqRef: { current: 0 }, fetchIdentityRef: { current: '' },
     documentFetchRef: { current: null }, purgeSelectionKey: 'loaded',
     setLoadedSelectionKey: value => { state.selectionKey = value },
-    backendTrashLocation,
+    backendTrashLocation, treeTypeForName,
     unfiledOnly: false, backendTarget: null, docScope: 'path', tbLensIds: null,
     currentPage: 1, pageSize: 50, serverSearchQueries: [], tbFiltersKey: '', tbFiltersKeyNoLens: '',
     isLayerView: false, selectedLayerId: null, queryDebug: false,

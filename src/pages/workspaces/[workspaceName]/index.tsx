@@ -685,7 +685,7 @@ function WorkspaceContent() {
           order: tbSort.order,
         });
       } else {
-        const selectedTreeType: 'context' | 'directory' = selectedTreeName === 'directory' || selectedTreeName === 'backends' ? 'directory' : 'context';
+        const selectedTreeType = treeTypeForName(selectedTreeName);
         response = await getWorkspaceDocuments(workspaceName, selectedPath, viewAllOf, {
           limit: pageSize,
           page: currentPage,

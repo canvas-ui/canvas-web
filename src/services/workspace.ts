@@ -22,17 +22,11 @@ export type DocumentsEnvelopeWithDebug = DocumentsEnvelope & {
 // GLOBAL Workspace type from src/types/api.d.ts will be used.
 // No local Workspace interface should be defined here.
 
-export const DEFAULT_WORKSPACE_TREE_NAME = 'context'
+export { DEFAULT_WORKSPACE_TREE_NAME, BACKENDS_TREE_NAME, treeTypeForName } from '@/lib/tree-type'
+import { DEFAULT_WORKSPACE_TREE_NAME, treeTypeForName } from '@/lib/tree-type'
 // Duplicated from components/renderers/types.ts on purpose: services must not
 // import from components (the import boundary the /next work relies on).
 const IDENTITY_SCHEMA_KEY = 'data/schema/identity'
-export const BACKENDS_TREE_NAME = 'backends'
-
-// Tree type from a well-known tree name. The pre-created trees are 'context'
-// (context type), 'directory' and 'backends' (both directory type); custom
-// trees should be resolved via listWorkspaceTrees instead.
-export const treeTypeForName = (treeName?: string | null): 'context' | 'directory' =>
-  treeName === 'directory' || treeName === BACKENDS_TREE_NAME ? 'directory' : 'context'
 
 // Resolve an absolute tree path to its node. Returns null for the root path
 // (which is the tree itself, not a node) and for any path that no longer exists.
@@ -660,10 +654,9 @@ export async function getCanvasPathDocuments(
   treeName = DEFAULT_WORKSPACE_TREE_NAME,
   options: { limit?: number; offset?: number; page?: number; q?: string; queries?: string[]; allOf?: string[]; anyOf?: string[]; noneOf?: string[]; filters?: string[]; ids?: number[] | null; sortBy?: string; order?: 'asc' | 'desc'; applyCanvasSpec?: boolean } = {}
 ): Promise<DocumentsEnvelope> {
-  const treeType = treeName === 'directory' ? 'directory' : 'context'
   return getWorkspaceDocuments(id, path, options.allOf || [], {
     treeName,
-    treeType,
+    treeType: treeTypeForName(treeName),
     limit: options.limit,
     page: options.page,
     offset: options.offset,

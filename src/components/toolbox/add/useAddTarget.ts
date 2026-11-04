@@ -7,6 +7,7 @@ import {
   listWorkspaceTrees,
   listBackends,
   pasteDocumentsToWorkspacePath,
+  treeTypeForName,
 } from '@/services/workspace'
 import { insertDocumentsToContextById, pasteDocumentsToContext, getContext } from '@/services/context'
 
@@ -41,7 +42,7 @@ export function useAddTarget(): AddTarget {
         // Best-effort default; submitDocuments resolves the real type so inserts
         // into directory (incl. virtual directory) trees aren't mislabelled.
         // Backend folders use the keyed-object upload API, not document import.
-        treeType: (activeTreeName === 'directory' || activeTreeName === 'backends' ? 'directory' : 'context'),
+        treeType: treeTypeForName(activeTreeName),
       }
     }
     return null

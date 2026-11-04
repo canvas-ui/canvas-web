@@ -3,7 +3,7 @@ import { TODO_SCHEMA } from '@/components/renderers/types'
 import { TodoRow } from '@/components/canvas/widgets/TodosWidget'
 import { APPLETS } from '@/components/toolbox/applets/registry'
 import { AppletTargetProvider } from '@/components/toolbox/applets/applet-target'
-import { getCanvasPathDocuments } from '@/services/workspace'
+import { getCanvasPathDocuments, treeTypeForName } from '@/services/workspace'
 import type { ContentAppId } from './content-views'
 import type { Document } from '@/types/workspace'
 
@@ -97,7 +97,7 @@ export function ContentAppView({ app, contextId, ...scope }: ContentAppViewProps
   const target = contextId && app !== 'lens'
     ? { mode: 'context' as const, contextId }
     : { mode: 'workspace' as const, workspaceName: scope.workspaceId, treeName: scope.treeName, path: scope.path,
-      treeType: (scope.treeName === 'directory' || scope.treeName === 'backends' ? 'directory' : 'context') as 'directory' | 'context' }
+      treeType: treeTypeForName(scope.treeName) }
   const appletId = app === 'todo-app' ? 'todo' : app === 'notes-app' ? 'notes' : app
   const applet = APPLETS.find(item => item.id === appletId)
   return <AppletTargetProvider target={target}>
