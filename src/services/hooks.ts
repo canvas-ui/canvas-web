@@ -227,6 +227,8 @@ export interface PendingAction {
   handler: string
   event: string | null
   envelope: { event: string | null; payload: Record<string, unknown> }
+  when?: Record<string, unknown>
+  pathMatch?: { tree: string; path: string; rel: string; prefix?: string } | null
   provenance: { origin: string; causedBy: string | null; depth: number }
   title: string
   summary: string | null

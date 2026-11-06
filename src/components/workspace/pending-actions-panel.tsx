@@ -6,6 +6,7 @@ import { useSocket } from '@/hooks/useSocket'
 import { useSocketSubscription } from '@/hooks/useSocketSubscription'
 import { useDocumentModal } from '@/components/shell/use-document-modal'
 import { getWorkspaceDocument } from '@/services/workspace'
+import { pendingActionDestination } from '@/lib/pending-action-destination'
 import type { Document } from '@/types/workspace'
 import {
   listPendingActions,
@@ -407,6 +408,13 @@ export function PendingActionsPanel({ workspaceId, onPendingCount }: PendingActi
                               onAmend={(path, value) => setAmend(item.actionId, path, value)}
                             />
                           )}
+                          {item.actions.map((action, index) => {
+                            const destination = pendingActionDestination(action, item.pathMatch)
+                            return destination && <p key={index} className="text-xs">
+                              <span className="font-medium">Destination folder: </span>
+                              <span className="font-mono break-all">{destination}</span>
+                            </p>
+                          })}
                           <div>
                             <span className="text-xs font-medium text-muted-foreground">Actions on approve</span>
                             <pre className="mt-1 rounded border bg-background p-2 font-mono text-xs overflow-auto max-h-56">
