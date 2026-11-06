@@ -158,6 +158,7 @@ interface ActionRow {
   attachmentPath: string
   includeInline: boolean
   // download action
+  deleteSource: boolean
   dlKind: DownloadKind
   dlDepth: string // website mirror depth
   dlTags: string // tags for the downloaded file (comma-separated)
@@ -176,7 +177,7 @@ const emptyAction = (kind: ActionKey): ActionRow => ({
   sendDriver: 'imap', sendSource: 'document', sendSubject: '{{file.name}}', sendMessage: '',
   kind, a: '', b: '', recursive: false, storeFrom: '', storeFolder: '', storeName: 'keep', storeMode: 'copy', storeConflict: 'rename',
   attachmentMime: 'application/pdf', attachmentName: '', attachmentPath: '{{YYYY}}/{{MM}}', includeInline: false,
-  dlKind: 'auto', dlDepth: '2', dlTags: '', keepLast: true,
+  deleteSource: false, dlKind: 'auto', dlDepth: '2', dlTags: '', keepLast: true,
   notePath: '', noteTitle: '', filePath: '', fileBackend: 'home', fileInsert: '', notifyReply: false,
 })
 
@@ -311,7 +312,7 @@ function exactContextSource(conditions: ConditionRow[]): string | null {
 function canKeepStorageSubfolders(conditions: ConditionRow[]): boolean {
   if (exactContextSource(conditions) !== null) return true
   const paths = conditions.filter(c => ['path', 'pathExact', 'eventPathExact'].includes(c.field)).flatMap(c => splitAlternatives(c.value))
-  return paths.length > 0 && paths.every(path => /^(dir|directory|backends):\//.test(path))
+  return paths.length > 0 && paths.every(path => /^(ctx|context|dir|directory|backends):\//.test(path))
 }
 
 function storagePathPreview(row: ActionRow, conditions: ConditionRow[], backend?: Backend): { root: string; recreated: string; result: string } {
@@ -394,7 +395,7 @@ function buildRule(form: RuleForm, backends: Backend[] = []): HookRule {
     }
     if (row.kind === 'store' && a) {
       if (row.storeMode === 'move' && !row.storeFrom.trim()) throw new Error('Choose the source backend whose copy should be moved.')
-      if (row.recursive && !canKeepStorageSubfolders(form.conditions)) throw new Error('Choose a Directory/Backends source path, or one exact Context insertion path, to recreate the path.')
+      if (row.recursive && !canKeepStorageSubfolders(form.conditions)) throw new Error('Choose a Context, Directory or Backends source path to recreate the path.')
       if (row.recursive && backends.find(backend => backend.address === a)?.capabilities?.paths !== true) throw new Error('This destination has not reported support for folder paths. Choose a supported backend or turn off path recreation.')
       const folder = row.storeFolder.trim().replace(/^\/+|\/+$/g, '')
       const key = row.storeName === 'title' ? TITLE_NAME : row.storeName === 'dated' ? DATED_NAME : row.storeName === 'custom' ? b : ''
@@ -405,6 +406,7 @@ function buildRule(form: RuleForm, backends: Backend[] = []): HookRule {
         mode: row.storeMode,
         ...(folder ? { folder } : {}),
         ...recursive,
+        ...(row.deleteSource ? { deleteSource: true } : {}),
         ...(row.recursive && exactContextSource(form.conditions) !== null ? { pathMode: 'full' } : {}),
         ...(key ? { key } : {}),
         onConflict: row.storeConflict,
@@ -434,6 +436,7 @@ function buildRule(form: RuleForm, backends: Backend[] = []): HookRule {
         to: a || 'workspace:home',
         ...(folder ? { folder } : {}),
         ...recursive,
+        ...(row.deleteSource ? { deleteSource: true } : {}),
         ...(row.dlKind !== 'auto' ? { kind: row.dlKind } : {}),
         ...(b ? { insert: splitList(b) } : {}),
         ...(row.dlTags.trim() ? { tags: splitList(row.dlTags) } : {}),
@@ -576,6 +579,7 @@ function parseRule(rule: HookRule): RuleForm | null {
         b: key === TITLE_NAME || key === DATED_NAME ? '' : key,
         storeFolder: typeof act.folder === 'string' ? act.folder : '',
         recursive: act.recursive === true,
+        deleteSource: act.deleteSource === true,
         storeName: !key ? 'keep' : key === TITLE_NAME ? 'title' : key === DATED_NAME ? 'dated' : 'custom',
         storeFrom: typeof act.from === 'string' ? act.from : (Array.isArray(act.from) ? String(act.from[0] ?? '') : ''),
         storeMode: act.mode === 'move' ? 'move' : 'copy',
@@ -612,7 +616,7 @@ function parseRule(rule: HookRule): RuleForm | null {
         includeInline: act.includeInline === true, storeConflict: act.onConflict === 'error' ? 'error' : 'rename',
       })
     } else if (act.action === 'download') {
-      const known = new Set(['action', 'to', 'folder', 'recursive', 'kind', 'insert', 'tags', 'depth'])
+      const known = new Set(['action', 'to', 'folder', 'recursive', 'kind', 'insert', 'tags', 'depth', 'deleteSource'])
       if (Object.keys(act).some((k) => !known.has(k))) return null
       const kind = typeof act.kind === 'string' ? act.kind : 'auto'
       if (!DOWNLOAD_KINDS.some((k) => k.value === kind)) return null
@@ -624,6 +628,7 @@ function parseRule(rule: HookRule): RuleForm | null {
         b: (insert as string[]).join(', '),
         storeFolder: typeof act.folder === 'string' ? act.folder : '',
         recursive: act.recursive === true,
+        deleteSource: act.deleteSource === true,
         dlKind: kind as DownloadKind,
         dlDepth: typeof act.depth === 'number' ? String(act.depth) : '2',
         dlTags: Array.isArray(act.tags) ? (act.tags as string[]).join(', ') : '',
@@ -1438,7 +1443,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                         hint={!destinationSupportsPaths
                           ? 'Choose a destination that reports support for folder paths. Content-addressed blob stores cannot recreate sub-folder paths.'
                           : !hasStorageSourcePath
-                            ? 'For Context, choose one folder with “is inserted / linked directly into”. Directory and Backends sources can include sub-folders.'
+                            ? 'Choose a source folder. Context paths use the destination of the insertion or link event.'
                             : contextSource !== null
                               ? `Only inserts or links directly into ctx:${contextSource} trigger this rule. Its full path is appended beneath the destination root; descendant inserts do not match.`
                               : 'The path below the source folder is appended beneath the destination root: …/UI/mobile → Root/mobile. Missing destination folders are created.'}
@@ -1469,6 +1474,11 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                           </Field>
                         </div>
                       </details>
+                      {row.storeMode === 'copy' && <Toggle
+                        checked={row.deleteSource} onChange={(v) => set({ deleteSource: v })}
+                        label="Delete source link from Canvas"
+                        hint="For links without stored bytes, download the target and remove the link only after success. Files are copied normally."
+                      />}
                       <p className="text-xs text-muted-foreground">The item keeps its id and virtual tree memberships. A move removes the chosen physical source location from the backend tree.</p>
                     </div>
                   )}
@@ -1555,8 +1565,13 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                         hint={hasPathCondition ? 'A link filed under …/folder/a/b is downloaded into Folder/a/b.' : 'Add an "is under the folder" condition to mirror sub-folders.'}
                         disabled={!hasPathCondition}
                       />
+                      <Toggle
+                        checked={row.deleteSource} onChange={(v) => set({ deleteSource: v })}
+                        label="Delete source link from Canvas"
+                        hint="Remove the source item only after the download is saved successfully. Kept links are related to their downloads."
+                      />
                       <p className="text-xs text-muted-foreground">
-                        The link stays as it is; the download becomes a new file item next to it. Each link is downloaded once per rule.
+                        The download becomes a file item at the filing destination. Repeated events reuse the saved download.
                         Videos need <span className="font-mono">yt-dlp</span>, pages and websites <span className="font-mono">wget</span> on the server.
                       </p>
                     </div>

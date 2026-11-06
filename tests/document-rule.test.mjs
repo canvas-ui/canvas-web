@@ -138,11 +138,13 @@ test('Context storage uses one explicit insertion destination and recreates its 
   }
 })
 
-test('Context path recreation refuses inferred membership, multiple folders and missing source paths', () => {
+test('Context subtree rules preserve relative filing paths', () => {
   for (const [field, value] of [['path', 'ctx:/foo'], ['pathExact', 'ctx:/foo'], ['eventPathExact', 'ctx:/foo | ctx:/bar']]) {
     const form = formFromPrefill({ kind: 'store', path: 'ctx:/foo', storeTo: 'workspace:home' })
     form.conditions = [{ field, value }]
-    assert.throws(() => buildRule(form, [pathBackend]), /source path/)
+    const rule = buildRule(form, [pathBackend])
+    assert.equal(rule.then[0].recursive, true)
+    assert.equal(rule.then[0].pathMode, undefined)
   }
 })
 
@@ -226,4 +228,13 @@ test('saving a document rule appends to the latest file and refuses failed or ma
   fail = true
   await assert.rejects(context.exports.appendHookRules('workspace', rule), /Offline/)
   assert.equal(writes.length, 1)
+})
+
+ test('download source-deletion toggle round trips', () => {
+  const rule = { id: 'download', enabled: true, when: { event: 'document.linked', path: 'ctx:/foo' }, then: [
+    { action: 'download', to: 'workspace:home', folder: 'foo', recursive: true, deleteSource: true },
+  ] }
+  const form = parseRule(rule)
+  assert.equal(form.actions[0].deleteSource, true)
+  assert.deepEqual(plain(buildRule(form).then), rule.then)
 })

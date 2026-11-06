@@ -27,7 +27,6 @@ export function AutoLinkFolderPanel({ workspaceId, sourcePath, onClose, onManage
   const [destinations, setDestinations] = useState<AutoLinkDestination[]>([])
   const [picker, setPicker] = useState(false)
   const [direction, setDirection] = useState<AutoLinkDirection>('forward')
-  const canRecreateStructure = direction === 'forward' || !destinations.some(target => target.tree === 'context')
   const [mode, setMode] = useState<'copy' | 'move'>('copy')
   const [from, setFrom] = useState('')
   const [backends, setBackends] = useState<Backend[]>([])
@@ -49,7 +48,6 @@ export function AutoLinkFolderPanel({ workspaceId, sourcePath, onClose, onManage
     if (next !== 'forward') {
       // Reverse mapping is for new arrivals unless the user opts into backfill.
       setIncludeExisting(false)
-      if (destinations.some(target => target.tree === 'context')) setRecursive(false)
     }
   }
   const samplePath = (root: string) => `${root.replace(/\/+$/, '')}/${recursive ? 'Subfolder/' : ''}example.pdf`
@@ -80,8 +78,7 @@ export function AutoLinkFolderPanel({ workspaceId, sourcePath, onClose, onManage
   }
 
   return <DocumentActionDialog label={picker ? 'Choose virtual paths' : 'Autolink documents'} onClose={picker ? () => setPicker(false) : close}>
-    {picker ? <LinkToCard fixedWorkspaceName={workspaceId} tabs={direction !== 'forward' && recursive ? ['directory'] : ['context', 'directory']} initialTab={direction === 'forward' ? undefined : 'directory'} title="Choose virtual paths" confirmLabel="Add paths" sizeClassName="h-full w-full rounded-none border-0 shadow-none" onClose={() => setPicker(false)} onConfirm={(paths, target) => {
-      if (direction !== 'forward' && target.treeType === 'context') setRecursive(false)
+    {picker ? <LinkToCard fixedWorkspaceName={workspaceId} tabs={['context', 'directory']} initialTab={direction === 'forward' ? undefined : 'directory'} title="Choose virtual paths" confirmLabel="Add paths" sizeClassName="h-full w-full rounded-none border-0 shadow-none" onClose={() => setPicker(false)} onConfirm={(paths, target) => {
       setDestinations(prev => {
         const next = [...prev]
         for (const path of paths) if (!next.some(item => item.tree === target.treeType && item.path === path)) next.push({ tree: target.treeType, path })
@@ -128,11 +125,10 @@ export function AutoLinkFolderPanel({ workspaceId, sourcePath, onClose, onManage
               <button type="button" aria-label={`Remove ${target.tree}:${target.path}`} disabled={busy} onClick={() => setDestinations(prev => prev.filter((_, i) => i !== index))}><X className="h-4 w-4" /></button>
             </div>)}
             <Button variant="outline" size="sm" disabled={busy} onClick={() => setPicker(true)}><Plus className="mr-1 h-4 w-4" />Add virtual path…</Button>
-            <p className="text-xs text-muted-foreground">{direction === 'forward' ? 'Choose the virtual folders where backend documents should appear.' : 'Choose a Directory tree folder to watch for newly added documents. Its files will be stored in the current backend folder.'}</p>
+            <p className="text-xs text-muted-foreground">{direction === 'forward' ? 'Choose the virtual folders where backend documents should appear.' : 'Choose a Context or Directory tree folder to watch for newly filed documents. Its files will be stored in the current backend folder.'}</p>
           </div>
           <fieldset disabled={busy} className="space-y-3 text-sm">
-            <label className="flex items-start gap-2"><input type="checkbox" checked={recursive} disabled={!canRecreateStructure} onChange={e => setRecursive(e.target.checked)} className="mt-1" />Include subfolders and recreate their path in the destination</label>
-            {!canRecreateStructure && <p className="text-xs text-muted-foreground">Context membership has no single folder path. To preserve subfolders on a backend, choose a directory source. Context paths store files directly in the selected backend folder.</p>}
+            <label className="flex items-start gap-2"><input type="checkbox" checked={recursive} onChange={e => setRecursive(e.target.checked)} className="mt-1" />Include subfolders and recreate their path in the destination</label>
             <label className="flex items-start gap-2"><input type="checkbox" checked={includeExisting} onChange={e => setIncludeExisting(e.target.checked)} className="mt-1" />Apply to existing documents</label>
           </fieldset>
           {!!destinations.length && <div className="space-y-3 rounded-lg border bg-muted/30 p-3 text-sm" aria-label="Mapping preview">

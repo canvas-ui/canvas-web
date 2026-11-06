@@ -58,12 +58,12 @@ test('Auto-Link moves require an explicit source backend', () => {
   assert.equal(rule.then[0].from, 'workspace:data')
 })
 
-test('context destinations allow forward recursion but cannot be recursive storage sources', () => {
+test('context destinations support recursive storage from filing events', () => {
   const [forward] = buildAutoLinkRules('a', '/workspace/home/foo/bar', targets, true, 'forward')
   assert.equal(forward.when.path, 'backends:/workspace/home/foo/bar')
   assert.ok(forward.then.every(action => action.action === 'link' && action.recursive))
   for (const direction of ['reverse', 'both']) {
-    assert.throws(() => buildAutoLinkRules('a', '/workspace/home/foo/bar', targets, true, direction, 'copy', storage), /requires a directory source/)
+    assert.equal(buildAutoLinkRules('a', '/workspace/home/foo/bar', targets, true, direction, 'copy', storage).at(-1).then[0].recursive, true)
     const rules = buildAutoLinkRules('a', '/workspace/home/foo/bar', targets, false, direction, 'copy', storage)
     const store = rules.at(-1).then[0]
     assert.equal(store.folder, 'foo/bar')
