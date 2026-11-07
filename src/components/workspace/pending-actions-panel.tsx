@@ -6,7 +6,7 @@ import { useSocket } from '@/hooks/useSocket'
 import { useSocketSubscription } from '@/hooks/useSocketSubscription'
 import { useDocumentModal } from '@/components/shell/use-document-modal'
 import { getWorkspaceDocument } from '@/services/workspace'
-import { pendingActionDestination } from '@/lib/pending-action-destination'
+import { pendingActionDestination, pendingActionPreview, pendingActionsForReview } from '@/lib/pending-action-destination'
 import type { Document } from '@/types/workspace'
 import {
   listPendingActions,
@@ -329,6 +329,7 @@ export function PendingActionsPanel({ workspaceId, onPendingCount }: PendingActi
               {items.map((item) => {
                 const isPending = item.status === 'pending' || item.status === 'failed'
                 const isExpanded = expanded === item.actionId
+                const reviewActions = isExpanded ? pendingActionsForReview(item, isPending ? amends[item.actionId] ?? {} : {}) : item.actions
                 const docStub = item.envelope?.payload?.document as { id?: number; schema?: string } | undefined
                 return (
                   <Fragment key={item.actionId}>
@@ -408,7 +409,7 @@ export function PendingActionsPanel({ workspaceId, onPendingCount }: PendingActi
                               onAmend={(path, value) => setAmend(item.actionId, path, value)}
                             />
                           )}
-                          {item.actions.map((action, index) => {
+                          {reviewActions.map((action, index) => {
                             const destination = pendingActionDestination(action, item.pathMatch)
                             return destination && <p key={index} className="text-xs">
                               <span className="font-medium">Destination folder: </span>
@@ -418,9 +419,15 @@ export function PendingActionsPanel({ workspaceId, onPendingCount }: PendingActi
                           <div>
                             <span className="text-xs font-medium text-muted-foreground">Actions on approve</span>
                             <pre className="mt-1 rounded border bg-background p-2 font-mono text-xs overflow-auto max-h-56">
-                              {JSON.stringify(item.actions, null, 2)}
+                              {JSON.stringify(reviewActions.map(action => pendingActionPreview(action, item.pathMatch)), null, 2)}
                             </pre>
                           </div>
+                          <details className="text-xs text-muted-foreground">
+                            <summary className="cursor-pointer">Rule action settings</summary>
+                            <pre className="mt-1 rounded border bg-background p-2 font-mono overflow-auto max-h-56">
+                              {JSON.stringify(reviewActions, null, 2)}
+                            </pre>
+                          </details>
                           {item.result && item.result.length > 0 && (
                             <div className="text-xs font-mono">
                               {item.result.map((r, idx) => (
