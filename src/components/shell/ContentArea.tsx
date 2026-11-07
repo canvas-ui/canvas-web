@@ -7,7 +7,9 @@ import { cn } from '@/lib/utils'
 import { useSideView } from './use-side-view'
 import { DocumentSideCard } from './DocumentSideCard'
 import { isBare, isFullBleed } from './route-chrome'
-import { useMenu } from './use-menu'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { useMobileTreeSwipe } from '@/hooks/use-mobile-tree-swipe'
+import { useMenu, sectionFromPath } from './use-menu'
 import { useMobileViewSlide } from '@/hooks/use-mobile-view-slide'
 
 // Shared mobile "drawer" treatment — same prominence as the M1/M2 menu panel
@@ -23,7 +25,11 @@ const MOBILE_SCRIM = 'fixed inset-0 z-side-scrim bg-scrim animate-fade-in md:hid
 export function ContentArea() {
   const width = useReaderWidth()
   const { pathname, search } = useLocation()
-  const { state: menu } = useMenu()
+  const { state: menu, openM2Drawer } = useMenu()
+  const mobile = useIsMobile()
+  const route = sectionFromPath(pathname)
+  const treeSwipe = useMobileTreeSwipe(mobile && !menu.m1Open && !menu.m0Open && route.section === 'workspaces' && !!route.entityId && route.m2View === 'detail', 'right',
+    () => openM2Drawer('workspaces', 'detail', route.entityId ? decodeURIComponent(route.entityId) : null))
   const contentRef = useRef<HTMLElement>(null)
   // M0 is an anchor, not another sheet: toggling it must not move the canvas.
   useMobileViewSlide(contentRef, !menu.m1Open, pathname + search, !menu.m0Open)
@@ -41,6 +47,7 @@ export function ContentArea() {
             otherwise sit on top of the last row of any list). `rail-stack` is
             the same token the toggle anchors to, so the two cannot drift. */}
         <main
+          {...treeSwipe}
           ref={contentRef}
           id="content-area"
           className={cn(

@@ -7,6 +7,7 @@ import { visibleAccentColor } from '@/utils/color'
 interface M2HeaderProps {
   title: string
   onBack: () => void
+  backLabel?: string
   action?: React.ReactNode
   className?: string
   // Workspace/context cues: icon beside the title and an accent divider.
@@ -15,7 +16,7 @@ interface M2HeaderProps {
   accentColor?: string | null
 }
 
-export function M2Header({ title, onBack, action, className, icon, accentColor }: M2HeaderProps) {
+export function M2Header({ title, onBack, backLabel = 'Back to previous view', action, className, icon, accentColor }: M2HeaderProps) {
   const { closeM1 } = useMenu()
   const accent = visibleAccentColor(accentColor)
   return (
@@ -31,9 +32,9 @@ export function M2Header({ title, onBack, action, className, icon, accentColor }
       <button
         type="button"
         onClick={onBack}
-        className="flex items-center gap-0.5 h-8 rounded px-1 hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors flex-1 min-w-0"
-        title="Back"
-        aria-label="Back to previous view"
+        className="flex items-center gap-0.5 h-11 rounded px-1 hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors flex-1 min-w-0"
+        title={backLabel}
+        aria-label={backLabel}
       >
         <ChevronLeft className="w-4 h-4 shrink-0" />
         {icon && (
@@ -51,7 +52,7 @@ export function M2Header({ title, onBack, action, className, icon, accentColor }
       <button
         type="button"
         onClick={closeM1}
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
         title="Close menu"
         aria-label="Close menu"
       >

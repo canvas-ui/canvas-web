@@ -42,6 +42,7 @@ const jsx = (type, props) => ({ type, props })
 const dependencies = {
   './FileDropArea': { FileDropArea: 'file-drop-area' },
   react: { useEffect: () => {}, useRef: () => ({ current: null }), useState: initial => [initial, () => {}] },
+  '@/hooks/use-mobile': { useIsMobile: () => false },
   'react/jsx-runtime': { jsx, jsxs: jsx },
   '@/lib/utils': { cn: (...classes) => classes.filter(Boolean).join(' ') },
   '@/lib/tree-breadcrumbs': { treeBreadcrumbs },
@@ -150,4 +151,24 @@ test('folder, layer, and canvas headers expose navigation, including pane-local 
     assert.equal(browsed, true)
     assert.ok(rendered.some(node => node.props?.className === 'canvas-address-tree' && JSON.stringify(node.props.children).includes(urlType.endsWith('-layer') ? 'My tree:layer' : 'My tree')))
   }
+})
+
+test('mobile keeps a tree button outside the scroller and the whole address inside it', () => {
+  dependencies['@/hooks/use-mobile'].useIsMobile = () => true
+  try {
+    const calls = []
+    const { CanvasAddressBar } = dependencies['@/components/common/canvas-address-bar']
+    const rendered = nodes(CanvasAddressBar({
+      workspace: 'Long workspace', tree: 'directory', path: '/one/two',
+      onBrowseTree: () => calls.push('tree'), onBack: () => calls.push('history'),
+      onBrowseWorkspaces() {},
+    }))
+    const nav = rendered.find(node => node.props?.['aria-label'] === 'Canvas address')
+    assert.ok(nodes(nav).some(node => node.props?.title === 'Browse workspaces'))
+    const tree = rendered.find(node => node.props?.['aria-label'] === 'Back to tree')
+    assert.ok(tree)
+    assert.ok(!nodes(nav).includes(tree))
+    tree.props.onClick()
+    assert.deepEqual(calls, ['tree'])
+  } finally { dependencies['@/hooks/use-mobile'].useIsMobile = () => false }
 })

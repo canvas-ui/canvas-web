@@ -1,5 +1,6 @@
 import { AppsMenu } from '@/components/menu/apps/AppsMenu'
 import { MenuResizeHandle } from './MenuResizeHandle'
+import { useMobileTreeSwipe } from '@/hooks/use-mobile-tree-swipe'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -42,6 +43,8 @@ export function M2Content() {
 
 export function MenuPanelArea() {
   const { state, closeM1, closeM2 } = useMenu()
+  const swipeMobile = useIsMobile()
+  const treeSwipe = useMobileTreeSwipe(swipeMobile && state.m1Open && state.m2Open && state.activeSection === 'workspaces' && state.m2View === 'detail', 'left', closeM1)
   // Esc closes the menu layers innermost-first: M2 drawer, then M1 panel.
   // Registration order (M1 hook first) keeps M2 topmost when both open at once.
   useEscapeClose(closeM1, state.m1Open && !state.m2Open)
@@ -98,6 +101,7 @@ export function MenuPanelArea() {
 
         {/* M2 layer — slides over M1 */}
         <div
+          {...treeSwipe}
           ref={m2Ref}
           data-menu-view="detail"
           inert={!state.m1Open || !state.m2Open}

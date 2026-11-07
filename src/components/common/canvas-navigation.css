@@ -56,3 +56,10 @@
 .canvas-search-query button { display: flex; align-items: center; justify-content: center; min-width: 40px; min-height: 40px; cursor: pointer; }
 .canvas-search-clear { font-size: 12px; text-decoration: underline; padding: 8px; }
 @media (min-width: 640px) { .canvas-address-row { gap: 6px; padding: 8px 10px; } }
+
+@media (max-width: 767px) {
+  .canvas-address-row { padding: 4px 2px; gap: 2px; }
+  .canvas-address-crumbs { touch-action: pan-x; }
+  .canvas-address-crumbs .canvas-address-workspace { max-width: none; padding-left: 4px; }
+  .canvas-address-segment button { max-width: none; }
+}

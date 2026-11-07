@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft, Search, SlidersHorizontal, Plus, X } from 'lucide-react'
+import { ArrowLeft, FolderTree, Search, SlidersHorizontal, Plus, X } from 'lucide-react'
 import { Icon } from '@iconify/react'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { DEFAULT_WORKSPACE_ICON } from '@/lib/layer-style'
 import { treeBreadcrumbs } from '@/lib/tree-breadcrumbs'
 import { SearchInput, SearchOptions, type CanvasSearchProps } from './canvas-search'
@@ -38,6 +39,7 @@ export interface CanvasAddressBarProps {
 }
 
 export function CanvasAddressBar({ workspace, workspaceIcon, tree, path, document: documentTitle, section, onBack, onBrowseWorkspaces, onBrowseTree, onNavigatePath, onDocument, onSection, onFilter, filtersActive, filtersOpen, onAdd, search, onDraftChange, tabs, accentColor, actions }: CanvasAddressBarProps) {
+  const mobile = useIsMobile()
   const [searching, setSearching] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const addressRef = useRef<HTMLDivElement>(null)
@@ -55,7 +57,9 @@ export function CanvasAddressBar({ workspace, workspaceIcon, tree, path, documen
     }
   }, [searching, identity, section])
   const closeSearch = () => { restoreSearchFocus.current = true; setSearching(false); onDraftChange?.('') }
-  const back = searching ? closeSearch : onBack ?? onBrowseTree
+  const treeBack = mobile && !!onBrowseTree
+  const back = searching ? closeSearch : treeBack ? onBrowseTree : onBack ?? onBrowseTree
+  const backLabel = searching ? 'Back to address' : treeBack ? 'Back to tree' : 'Back to previous view'
   const items = treeBreadcrumbs(path, workspace).slice(1)
   const crumb = (label: ReactNode, className: string, action?: () => void, title?: string, current = false) => action
     ? <button type="button" className={className} onClick={action} title={title} aria-current={current ? 'location' : undefined}>{label}</button>
@@ -64,14 +68,14 @@ export function CanvasAddressBar({ workspace, workspaceIcon, tree, path, documen
   return <header className={`canvas-navigation${tabs ? ' has-tabs' : ''}`} style={accentColor ? { borderTopColor: accentColor } : undefined}>
     {tabs && <CanvasTabStrip accentColor={accentColor}>{tabs}</CanvasTabStrip>}
     <div className="canvas-address-row">
-      <button type="button" className="canvas-nav-button" aria-label={searching ? 'Back to address' : 'Back to previous view'} title={searching ? 'Back to address' : 'Back to previous view'} disabled={!searching && !onBack && !onBrowseTree} onClick={back}><ArrowLeft size={19} /></button>
+      <button type="button" className="canvas-nav-button" aria-label={backLabel} title={backLabel} disabled={!searching && !onBack && !onBrowseTree} onClick={back}>{treeBack && !searching ? <FolderTree size={19} /> : <ArrowLeft size={19} />}</button>
       <div className="canvas-address-field" onDoubleClick={event => {
         if (search && !(event.target as HTMLElement).closest('button')) setSearching(true)
       }} onKeyDown={event => { if (event.key === 'Escape' && searching) { event.preventDefault(); event.stopPropagation(); closeSearch() } }}>
         {searching && search ? <SearchInput inputRef={inputRef} workspaceId={search.localOnly ? undefined : search.workspaceId} onSearch={search.onSearch} onDraftChange={onDraftChange} clearOnSubmit={!search.localOnly} showSubmitButton={false} label={search.queries.length ? 'Refine search…' : 'Search documents…'} /> : <>
-            {crumb(<><Icon icon={workspaceIcon || DEFAULT_WORKSPACE_ICON} className="h-4 w-4 shrink-0" aria-hidden="true" /><span className="truncate">{workspace}</span></>, 'canvas-address-workspace', onBrowseWorkspaces, 'Browse workspaces')}
           <div ref={addressRef} className={`canvas-address-crumbs${scrolled ? " is-scrolled" : ""}`} onScroll={event => setScrolled(event.currentTarget.scrollLeft > 1)} role="navigation" aria-label="Canvas address" tabIndex={0}
             onKeyDown={event => { if (event.key === 'Enter' && event.target === event.currentTarget && search) setSearching(true) }}>
+            {crumb(<><Icon icon={workspaceIcon || DEFAULT_WORKSPACE_ICON} className="h-4 w-4 shrink-0" aria-hidden="true" /><span className="truncate">{workspace}</span></>, 'canvas-address-workspace', onBrowseWorkspaces, 'Browse workspaces')}
             {tree && crumb(`[${tree}]`, 'canvas-address-tree', onBrowseTree, `Browse tree: ${tree}`)}
             {crumb(':/', 'canvas-address-root', onNavigatePath ? () => onNavigatePath('/') : undefined, 'Go to tree root')}
             {items.map((item, index) => <span className="canvas-address-segment" key={item.path}>

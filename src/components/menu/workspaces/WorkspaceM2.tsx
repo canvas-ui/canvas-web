@@ -88,7 +88,7 @@ export function WorkspaceM2() {
 }
 
 function WorkspaceM2Content() {
-  const { state, closeM2, openM2, navigateFromMenu } = useMenu()
+  const { state, closeM2, openM2, openM1Drawer, navigateFromMenu } = useMenu()
   const canvasRow = useCanvasRow()
   const isMobile = useIsMobile()
   const wsName = state.selectedEntityId
@@ -562,7 +562,8 @@ function WorkspaceM2Content() {
         title={wsLabel || wsName || 'Workspace'}
         icon={wsStyle.icon || DEFAULT_WORKSPACE_ICON}
         accentColor={wsStyle.color}
-        onBack={closeM2}
+        onBack={isMobile ? () => openM1Drawer('workspaces') : closeM2}
+        backLabel={isMobile ? 'Browse workspaces' : 'Back to previous view'}
         action={
           <div className="flex items-center gap-0.5">
             <button

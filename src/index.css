@@ -117,3 +117,8 @@
     background-color: var(--color-muted-foreground);
   }
 }
+
+@media (max-width: 767px) {
+  /* In-app tree swipes must not trigger browser history navigation. */
+  html { overscroll-behavior-x: none; }
+}
