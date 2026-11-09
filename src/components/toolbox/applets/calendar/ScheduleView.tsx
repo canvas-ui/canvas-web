@@ -3,10 +3,11 @@ import { cn } from '@/lib/utils'
 import { dateFromKey, formatMonthShort, formatTime, sameDay, WEEKDAY_SHORT } from '@/lib/calendar/dates'
 import { groupByDay, isAllDayLane, type Occurrence } from '@/lib/calendar/occurrences'
 import { occurrenceColor } from './calendar-colors'
+import type { CalendarMenuHandlers } from './CalendarMenu'
 
 // Agenda list: only days that have something, each with its entries. The
 // range is the parent's; "Earlier" / "Later" extend it.
-export function ScheduleView({ occurrences, selectedKey, onSelect, onEarlier, onLater, onPickDay, loading }: {
+export function ScheduleView({ occurrences, selectedKey, onSelect, onEntryMenu, onEarlier, onLater, onPickDay, loading }: {
   occurrences: Occurrence[]
   selectedKey: string | null
   onSelect: (o: Occurrence) => void
@@ -14,7 +15,7 @@ export function ScheduleView({ occurrences, selectedKey, onSelect, onEarlier, on
   onLater: () => void
   onPickDay: (day: Date) => void
   loading: boolean
-}) {
+} & Pick<CalendarMenuHandlers, 'onEntryMenu'>) {
   const days = useMemo(() => [...groupByDay(occurrences).entries()].sort(([a], [b]) => a.localeCompare(b)), [occurrences])
   const today = new Date()
   return (
@@ -41,6 +42,7 @@ export function ScheduleView({ occurrences, selectedKey, onSelect, onEarlier, on
                     key={o.key}
                     type="button"
                     onClick={() => onSelect(o)}
+                    onContextMenu={(e) => { e.preventDefault(); onEntryMenu(e, o) }}
                     className={cn(
                       'flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-muted',
                       o.key === selectedKey && 'bg-muted ring-1 ring-ring',

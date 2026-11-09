@@ -1,20 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { dateKey, formatHour, formatTime, minutesIntoDay, sameDay, startOfDay, WEEKDAY_SHORT } from '@/lib/calendar/dates'
-import { timeGridDrag, type DragRange } from '@/lib/calendar/drag'
+import { moveTimed, resizeTimed, timeGridDrag, type DragRange } from '@/lib/calendar/drag'
 import { groupByDay, isAllDayLane, layoutDay, type Occurrence } from '@/lib/calendar/occurrences'
 import { occurrenceColor, tint } from './calendar-colors'
 import { EntryChip } from './EntryChip'
+import { useDayDrag } from './use-day-drag'
+import type { CalendarMenuHandlers } from './CalendarMenu'
 
 const HOUR_PX = 48
 const SNAP_MIN = 30
+const MOVE_SNAP_MIN = 15
 const GUTTER = 'w-12'
 const GUTTER_PX = 48
 
 // Day and week share one grid: a day is a week with one column. Timed
 // entries are laid out by layoutDay (overlaps share the width); all-day and
 // multi-day entries sit in the lane above the hours.
-export function TimeGrid({ days, occurrences, selectedKey, pending, onSelect, onCreate, onPickDay, compact }: {
+export function TimeGrid({ days, occurrences, selectedKey, pending, onSelect, onCreate, onMove, onPickDay, onEntryMenu, onSlotMenu, compact }: {
   days: Date[]
   occurrences: Occurrence[]
   selectedKey: string | null
@@ -22,9 +25,10 @@ export function TimeGrid({ days, occurrences, selectedKey, pending, onSelect, on
   pending: DragRange | null
   onSelect: (o: Occurrence) => void
   onCreate: (start: Date, allDay: boolean, end?: Date) => void
+  onMove: (o: Occurrence, start: Date, end: Date) => void
   onPickDay: (day: Date) => void
   compact: boolean
-}) {
+} & CalendarMenuHandlers) {
   const scroller = useRef<HTMLDivElement>(null)
   const body = useRef<HTMLDivElement>(null)
   // Drag-to-select (Outlook/Google): press on empty grid, move, release. A
@@ -32,7 +36,7 @@ export function TimeGrid({ days, occurrences, selectedKey, pending, onSelect, on
   const [drag, setDrag] = useState<{ fromDay: number; fromMin: number; toDay: number; toMin: number } | null>(null)
   const dragRef = useRef(drag)
   useEffect(() => { dragRef.current = drag })
-  const pointAt = (e: React.PointerEvent): { day: number; min: number } | null => {
+  const pointAt = (e: React.MouseEvent): { day: number; min: number } | null => {
     const el = body.current
     if (!el) return null
     const rect = el.getBoundingClientRect()
@@ -61,8 +65,58 @@ export function TimeGrid({ days, occurrences, selectedKey, pending, onSelect, on
     const range = timeGridDrag(days, d.fromDay, d.fromMin, d.toDay, d.toMin, SNAP_MIN)
     onCreate(range.start, range.allDay, range.end)
   }
+  // Entry blocks stop their own context-menu event, so this is empty grid.
+  const onBodyContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
+    const at = pointAt(e)
+    if (!at) return
+    e.preventDefault()
+    onSlotMenu(e, timeGridDrag(days, at.day, at.min, at.day, at.min, SNAP_MIN).start, false)
+  }
   const selection: DragRange | null = drag ? timeGridDrag(days, drag.fromDay, drag.fromMin, drag.toDay, drag.toMin, SNAP_MIN) : pending
-  const byDay = useMemo(() => groupByDay(occurrences), [occurrences])
+
+  // Moving / resizing a timed block: the block holds the capture; the live
+  // span replaces the entry in the layout so it travels across columns.
+  const [moving, setMoving] = useState<{ key: string; start: Date; end: Date; mode: 'move' | 'resize' } | null>(null)
+  const movingRef = useRef(moving)
+  useEffect(() => { movingRef.current = moving })
+  const blockDrag = useRef<{ o: Occurrence; mode: 'move' | 'resize'; fromDay: number; fromMin: number } | null>(null)
+  const suppressClick = useRef(false)
+  const onBlockDown = (e: React.PointerEvent<HTMLButtonElement>, o: Occurrence) => {
+    if (e.button !== 0 || o.recurring) return
+    const at = pointAt(e)
+    if (!at) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    blockDrag.current = { o, mode: (e.target as HTMLElement).dataset.resize ? 'resize' : 'move', fromDay: at.day, fromMin: at.min }
+  }
+  const onBlockMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const d = blockDrag.current
+    if (!d) return
+    const at = pointAt(e)
+    if (!at) return
+    const span = d.mode === 'move'
+      ? moveTimed(days, d.o, d.fromDay, d.fromMin, at.day, at.min, MOVE_SNAP_MIN)
+      : resizeTimed(days, d.o, at.day, at.min, MOVE_SNAP_MIN)
+    const unchanged = span.start.getTime() === d.o.start.getTime() && span.end.getTime() === d.o.end.getTime()
+    setMoving(unchanged ? null : { key: d.o.key, ...span, mode: d.mode })
+  }
+  const onBlockUp = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const d = blockDrag.current
+    blockDrag.current = null
+    if (!d) return
+    e.currentTarget.releasePointerCapture(e.pointerId)
+    const m = movingRef.current
+    setMoving(null)
+    if (!m) return
+    // The click that follows the drop lands on this block; swallow just that one.
+    suppressClick.current = true
+    setTimeout(() => { suppressClick.current = false }, 0)
+    onMove(d.o, m.start, m.end)
+  }
+  const dayDrag = useDayDrag(onMove)
+  // apply() returns the list itself when nothing moves, so the memo holds.
+  const dayShown = dayDrag.apply(occurrences)
+  const shown = useMemo(() => moving ? dayShown.map(o => o.key === moving.key ? { ...o, start: moving.start, end: moving.end } : o) : dayShown, [dayShown, moving])
+  const byDay = useMemo(() => groupByDay(shown), [shown])
   const [now, setNow] = useState(() => new Date())
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60_000)
@@ -85,6 +139,7 @@ export function TimeGrid({ days, occurrences, selectedKey, pending, onSelect, on
   const hours = Array.from({ length: 24 }, (_, h) => h)
   const lane = days.map(day => (byDay.get(dateKey(day)) ?? []).filter(isAllDayLane))
   const laneRows = Math.max(0, ...lane.map(l => l.length))
+  const busy = !!drag || !!moving || !!dayDrag.moving
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -110,15 +165,23 @@ export function TimeGrid({ days, occurrences, selectedKey, pending, onSelect, on
 
       {/* All-day lane */}
       {laneRows > 0 && (
-        <div className="flex shrink-0 border-b border-border bg-muted/20">
+        <div className={cn('flex shrink-0 border-b border-border bg-muted/20', dayDrag.moving && 'select-none')}>
           <div className={cn(GUTTER, 'shrink-0 py-1 pr-1 text-right text-[10px] text-muted-foreground')}>{compact ? '' : 'all day'}</div>
           {days.map((day, i) => (
             <div
               key={dateKey(day)}
+              data-day={dateKey(day)}
               className="flex min-w-0 flex-1 flex-col gap-0.5 border-l border-border/60 p-0.5"
               onClick={(e) => { if (e.target === e.currentTarget) onCreate(startOfDay(day), true) }}
+              onContextMenu={(e) => { e.preventDefault(); onSlotMenu(e, startOfDay(day), true) }}
             >
-              {lane[i].map(o => <EntryChip key={o.key} occurrence={o} selected={o.key === selectedKey} showTime={false} onSelect={onSelect} />)}
+              {lane[i].map(o => (
+                <EntryChip
+                  key={o.key} occurrence={o} selected={o.key === selectedKey} moving={dayDrag.moving?.key === o.key} showTime={false}
+                  onSelect={onSelect} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onEntryMenu(e, o) }}
+                  {...dayDrag.handlers(o)}
+                />
+              ))}
             </div>
           ))}
         </div>
@@ -128,12 +191,13 @@ export function TimeGrid({ days, occurrences, selectedKey, pending, onSelect, on
       <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
         <div
           ref={body}
-          className={cn('relative flex select-none', drag && 'cursor-crosshair')}
+          className={cn('relative flex select-none', drag && 'cursor-crosshair', moving?.mode === 'move' && 'cursor-grabbing', moving?.mode === 'resize' && 'cursor-ns-resize')}
           style={{ height: 24 * HOUR_PX }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={() => setDrag(null)}
+          onContextMenu={onBodyContextMenu}
         >
           <div className={cn(GUTTER, 'relative shrink-0')}>
             {hours.map(h => (
@@ -149,6 +213,7 @@ export function TimeGrid({ days, occurrences, selectedKey, pending, onSelect, on
             return (
               <div
                 key={dateKey(day)}
+                data-day={dateKey(day)}
                 className="relative min-w-0 flex-1 cursor-cell border-l border-border/60"
                 role="presentation"
               >
@@ -173,15 +238,24 @@ export function TimeGrid({ days, occurrences, selectedKey, pending, onSelect, on
                   const color = occurrenceColor(o)
                   const width = 100 / block.columns
                   const short = block.height < 45
+                  const isMoving = moving?.key === o.key
+                  const draggable = !o.recurring
                   return (
                     <button
                       key={o.key}
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); onSelect(o) }}
+                      onClick={(e) => { e.stopPropagation(); if (suppressClick.current) { suppressClick.current = false; return } onSelect(o) }}
+                      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onEntryMenu(e, o) }}
+                      onPointerDown={(e) => onBlockDown(e, o)}
+                      onPointerMove={onBlockMove}
+                      onPointerUp={onBlockUp}
+                      onPointerCancel={() => { blockDrag.current = null; setMoving(null) }}
                       title={`${o.title} · ${formatTime(o.start)}${o.end > o.start ? ` – ${formatTime(o.end)}` : ''}`}
                       className={cn(
                         'absolute overflow-hidden rounded-md border-l-[3px] px-1.5 text-left text-[11px] leading-tight text-foreground shadow-elevation-1 transition-[filter] hover:brightness-110',
-                        o.key === selectedKey && 'ring-1 ring-ring',
+                        draggable && 'touch-none',
+                        isMoving ? 'z-20 ring-2 ring-primary shadow-elevation-2' : busy && 'pointer-events-none',
+                        o.key === selectedKey && !isMoving && 'ring-1 ring-ring',
                         o.done && 'line-through opacity-60',
                       )}
                       style={{
@@ -196,6 +270,7 @@ export function TimeGrid({ days, occurrences, selectedKey, pending, onSelect, on
                     >
                       <span className={cn('font-medium', short ? 'inline' : 'block truncate')}>{o.title}</span>
                       {!short && <span className="block truncate text-[10px] text-muted-foreground">{formatTime(o.start)}{o.end > o.start ? ` – ${formatTime(o.end)}` : ''}{o.calendar && !compact ? ` · ${o.calendar}` : ''}</span>}
+                      {draggable && o.kind === 'event' && <span data-resize="1" className="absolute inset-x-0 bottom-0 h-1.5 cursor-ns-resize" />}
                     </button>
                   )
                 })}

@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { CalendarDays, ChevronLeft, ChevronRight, Loader2, Plus, SlidersHorizontal } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAppletTarget } from '../use-applet-target'
 import { describeTarget } from '../../add/useAddTarget'
 import type { AppletProps } from '../registry'
 import type { Document } from '@/types/workspace'
-import { addDays, addMonths, formatDayLong, formatDayShort, formatMonth, formatWeekRange, monthGrid, startOfDay, startOfWeek, startOfMonth } from '@/lib/calendar/dates'
+import { addDays, addMonths, DAY_MS, formatDayLong, formatDayRange, formatDayShort, formatMonth, formatWeekRange, monthGrid, startOfDay, startOfWeek, startOfMonth } from '@/lib/calendar/dates'
 import { occurrencesIn, TASKS_CALENDAR, type Occurrence } from '@/lib/calendar/occurrences'
+import { movedData } from '@/lib/calendar/move'
+import { updateWorkspaceDocument } from '@/services/workspace'
 import { CALENDAR_VIEWS, readPrefs, writePrefs, type CalendarPrefs, type CalendarView } from './calendar-prefs'
 import { useCalendarDocs } from './use-calendar-docs'
 import { calendarColor } from './calendar-colors'
@@ -16,6 +19,7 @@ import { MonthView } from './MonthView'
 import { YearView } from './YearView'
 import { ScheduleView } from './ScheduleView'
 import { EventPanel, type PanelSubject } from './EventPanel'
+import { CalendarMenu, type CalendarMenuState } from './CalendarMenu'
 import type { DragRange } from '@/lib/calendar/drag'
 
 // Width below which the sidebar folds into a popover and the week grid
@@ -23,10 +27,12 @@ import type { DragRange } from '@/lib/calendar/drag'
 const NARROW = 640
 const COMPACT = 420
 const SCHEDULE_DAYS = 30
+// A span picked in the navigator shows as a multi-day "day" view, Outlook's cap.
+const MAX_DAYS = 14
 
-function viewRange(view: CalendarView, cursor: Date, scheduleSpan: { before: number; after: number }): { start: Date; end: Date } {
+function viewRange(view: CalendarView, cursor: Date, dayCount: number, scheduleSpan: { before: number; after: number }): { start: Date; end: Date } {
   switch (view) {
-    case 'day': { const s = startOfDay(cursor); return { start: s, end: addDays(s, 1) } }
+    case 'day': { const s = startOfDay(cursor); return { start: s, end: addDays(s, dayCount) } }
     case 'week': { const s = startOfWeek(cursor); return { start: s, end: addDays(s, 7) } }
     case 'month': { const grid = monthGrid(cursor); return { start: grid[0], end: addDays(grid[41], 1) } }
     case 'year': return { start: new Date(cursor.getFullYear(), 0, 1), end: new Date(cursor.getFullYear() + 1, 0, 1) }
@@ -34,9 +40,9 @@ function viewRange(view: CalendarView, cursor: Date, scheduleSpan: { before: num
   }
 }
 
-function step(view: CalendarView, cursor: Date, dir: 1 | -1): Date {
+function step(view: CalendarView, cursor: Date, dayCount: number, dir: 1 | -1): Date {
   switch (view) {
-    case 'day': return addDays(cursor, dir)
+    case 'day': return addDays(cursor, dayCount * dir)
     case 'week': return addDays(cursor, 7 * dir)
     case 'month': return addMonths(cursor, dir)
     case 'year': return new Date(cursor.getFullYear() + dir, cursor.getMonth(), 1)
@@ -44,9 +50,9 @@ function step(view: CalendarView, cursor: Date, dir: 1 | -1): Date {
   }
 }
 
-function rangeTitle(view: CalendarView, cursor: Date, compact: boolean): string {
+function rangeTitle(view: CalendarView, cursor: Date, dayCount: number, compact: boolean): string {
   switch (view) {
-    case 'day': return compact ? formatDayShort(cursor) : formatDayLong(cursor)
+    case 'day': return dayCount > 1 ? formatDayRange(cursor, addDays(cursor, dayCount - 1)) : compact ? formatDayShort(cursor) : formatDayLong(cursor)
     case 'week': return formatWeekRange(startOfWeek(cursor))
     case 'month': return formatMonth(cursor)
     case 'year': return String(cursor.getFullYear())
@@ -63,6 +69,9 @@ export function CalendarApplet({ autoAdd = false }: AppletProps) {
   }, [workspaceKey])
   const view = prefs.view
   const [cursor, setCursor] = useState(() => startOfDay(new Date()))
+  const [dayCount, setDayCount] = useState(1)
+  const [menu, setMenu] = useState<CalendarMenuState | null>(null)
+  const navigate = useNavigate()
   const [scheduleSpan, setScheduleSpan] = useState({ before: 0, after: SCHEDULE_DAYS })
   const [panel, setPanel] = useState<PanelSubject | null>(() => autoAdd ? { kind: 'draft', draft: { start: nextSlot(), allDay: false } } : null)
   const [calendarsOpen, setCalendarsOpen] = useState(false)
@@ -81,8 +90,8 @@ export function CalendarApplet({ autoAdd = false }: AppletProps) {
   const narrow = width < NARROW
   const compact = width < COMPACT
 
-  const range = useMemo(() => viewRange(view, cursor, scheduleSpan), [view, cursor, scheduleSpan])
-  const { docs, loading, error, scope, knownCalendars, reload, removeDoc } = useCalendarDocs(target, range.start, range.end, prefs.showTasks)
+  const range = useMemo(() => viewRange(view, cursor, dayCount, scheduleSpan), [view, cursor, dayCount, scheduleSpan])
+  const { docs, loading, error, scope, knownCalendars, reload, removeDoc, patchDoc } = useCalendarDocs(target, range.start, range.end, prefs.showTasks)
 
   // Calendar list: facet keys (lower-case) plus the cased names the loaded
   // documents carry, de-duplicated case-insensitively.
@@ -111,9 +120,20 @@ export function CalendarApplet({ autoAdd = false }: AppletProps) {
 
   const go = useCallback((next: Date, nextView?: CalendarView) => {
     setCursor(startOfDay(next))
+    setDayCount(1)
     setScheduleSpan({ before: 0, after: SCHEDULE_DAYS })
     if (nextView) setPrefs({ view: nextView })
   }, [setPrefs])
+  // A span from the navigator or the year view: those days side by side.
+  const goRange = useCallback((start: Date, end: Date) => {
+    const days = Math.round((startOfDay(end).getTime() - startOfDay(start).getTime()) / DAY_MS)
+    if (days > MAX_DAYS) { go(start, 'month'); return }
+    go(start, 'day')
+    setDayCount(Math.max(1, days))
+  }, [go])
+  const setView = useCallback((next: CalendarView) => { setDayCount(1); setPrefs({ view: next }) }, [setPrefs])
+  // What the navigator highlights: the days the main view shows.
+  const shownDays = useMemo(() => view === 'day' || view === 'week' ? { start: range.start, end: range.end } : { start: cursor, end: addDays(cursor, 1) }, [view, range, cursor])
 
   // The drag selection outlives the drag: while the draft panel is open the
   // grids keep its range highlighted so the dates can be checked at a glance.
@@ -125,6 +145,36 @@ export function CalendarApplet({ autoAdd = false }: AppletProps) {
   const openDraft = useCallback((start: Date, allDay: boolean, end?: Date) => setPanel({ kind: 'draft', draft: { start, allDay, end } }), [])
   const select = useCallback((o: Occurrence) => setPanel({ kind: 'occurrence', occurrence: o }), [])
 
+  // Drag-and-drop writes the new span straight to the document; the local
+  // copy updates first so the entry stays where it was dropped.
+  const moveOccurrence = useCallback(async (o: Occurrence, start: Date, end: Date) => {
+    if (!scope) return
+    const doc = o.doc as Document
+    const data = movedData(doc.data ?? {}, o, start, end)
+    patchDoc({ ...doc, data })
+    try {
+      await updateWorkspaceDocument(scope.workspaceName, { id: doc.id, schema: doc.schema, schemaVersion: doc.schemaVersion || '3.0', data, metadata: doc.metadata })
+    } catch {
+      patchDoc(doc)
+    }
+  }, [scope, patchDoc])
+
+  const toggleTask = useCallback(async (o: Occurrence) => {
+    if (!scope) return
+    const doc = o.doc as Document
+    const status = o.done ? 'pending' : 'completed'
+    const data = { ...(doc.data ?? {}), status, completed: status === 'completed' }
+    patchDoc({ ...doc, data })
+    try {
+      await updateWorkspaceDocument(scope.workspaceName, { id: doc.id, schema: doc.schema, schemaVersion: doc.schemaVersion, data, metadata: doc.metadata })
+    } catch {
+      patchDoc(doc)
+    }
+  }, [scope, patchDoc])
+
+  const onEntryMenu = useCallback((e: React.MouseEvent, occurrence: Occurrence) => setMenu({ x: e.clientX, y: e.clientY, kind: 'entry', occurrence }), [])
+  const onSlotMenu = useCallback((e: React.MouseEvent, start: Date, allDay: boolean) => setMenu({ x: e.clientX, y: e.clientY, kind: 'slot', start, allDay }), [])
+
   const handleDelete = useCallback(async (doc: Document) => {
     const label = doc.data?.title ? `"${doc.data.title}"` : `#${doc.id}`
     if (!window.confirm(`Delete event ${label}?\n\nIt is removed from this path and moves to the workspace trash if nothing else links it.`)) return
@@ -134,13 +184,15 @@ export function CalendarApplet({ autoAdd = false }: AppletProps) {
   const onKey = (e: React.KeyboardEvent) => {
     const el = e.target as HTMLElement
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable) return
-    if (e.key === 'ArrowLeft') { go(step(view, cursor, -1)); e.preventDefault() }
-    else if (e.key === 'ArrowRight') { go(step(view, cursor, 1)); e.preventDefault() }
+    if (e.key === 'ArrowLeft') { stepBy(-1); e.preventDefault() }
+    else if (e.key === 'ArrowRight') { stepBy(1); e.preventDefault() }
     else if (e.key === 't') go(new Date())
     else if (e.key === 'n') openDraft(nextSlot(cursor), false)
     else if (e.key === 'Escape') { setPanel(null); setCalendarsOpen(false) }
-    else { const v = CALENDAR_VIEWS.find(x => x.key === e.key); if (v) setPrefs({ view: v.id }) }
+    else { const v = CALENDAR_VIEWS.find(x => x.key === e.key); if (v) setView(v.id) }
   }
+  // Paging keeps a multi-day span; everything else about go() applies.
+  const stepBy = (dir: 1 | -1) => { const n = dayCount; go(step(view, cursor, dayCount, dir)); setDayCount(n) }
 
   if (!target) {
     return <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">{describeTarget(target)}</div>
@@ -179,17 +231,17 @@ export function CalendarApplet({ autoAdd = false }: AppletProps) {
   const body = (() => {
     switch (view) {
       case 'day':
-        return <TimeGrid days={[startOfDay(cursor)]} occurrences={occurrences} selectedKey={selectedKey} pending={pending} onSelect={select} onCreate={openDraft} onPickDay={(d) => go(d, 'day')} compact={compact} />
+        return <TimeGrid days={Array.from({ length: dayCount }, (_, i) => addDays(startOfDay(cursor), i))} occurrences={occurrences} selectedKey={selectedKey} pending={pending} onSelect={select} onCreate={openDraft} onMove={moveOccurrence} onPickDay={(d) => go(d, 'day')} onEntryMenu={onEntryMenu} onSlotMenu={onSlotMenu} compact={compact || dayCount > 3} />
       case 'week':
-        return <TimeGrid days={Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(cursor), i))} occurrences={occurrences} selectedKey={selectedKey} pending={pending} onSelect={select} onCreate={openDraft} onPickDay={(d) => go(d, 'day')} compact={narrow} />
+        return <TimeGrid days={Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(cursor), i))} occurrences={occurrences} selectedKey={selectedKey} pending={pending} onSelect={select} onCreate={openDraft} onMove={moveOccurrence} onPickDay={(d) => go(d, 'day')} onEntryMenu={onEntryMenu} onSlotMenu={onSlotMenu} compact={narrow} />
       case 'month':
-        return <MonthView month={startOfMonth(cursor)} occurrences={occurrences} selectedKey={selectedKey} pending={pending} onSelect={select} onCreate={openDraft} onPickDay={(d) => go(d, 'day')} narrow={narrow} />
+        return <MonthView month={startOfMonth(cursor)} occurrences={occurrences} selectedKey={selectedKey} pending={pending} onSelect={select} onCreate={openDraft} onMove={moveOccurrence} onPickDay={(d) => go(d, 'day')} onEntryMenu={onEntryMenu} onSlotMenu={onSlotMenu} narrow={narrow} />
       case 'year':
-        return <YearView year={cursor.getFullYear()} occurrences={occurrences} onPickDay={(d) => go(d, 'day')} onPickMonth={(m) => go(m, 'month')} />
+        return <YearView year={cursor.getFullYear()} occurrences={occurrences} onPickDay={(d) => go(d, 'day')} onPickRange={goRange} onPickMonth={(m) => go(m, 'month')} onSlotMenu={onSlotMenu} />
       case 'schedule':
         return (
           <ScheduleView
-            occurrences={occurrences} selectedKey={selectedKey} onSelect={select} loading={loading}
+            occurrences={occurrences} selectedKey={selectedKey} onSelect={select} onEntryMenu={onEntryMenu} loading={loading}
             onEarlier={() => setScheduleSpan(s => ({ ...s, before: s.before + SCHEDULE_DAYS }))}
             onLater={() => setScheduleSpan(s => ({ ...s, after: s.after + SCHEDULE_DAYS }))}
             onPickDay={(d) => go(d, 'day')}
@@ -203,19 +255,19 @@ export function CalendarApplet({ autoAdd = false }: AppletProps) {
       {/* Toolbar */}
       <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-border px-2 py-1.5">
         <button type="button" onClick={() => go(new Date())} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted" title="Today (t)">Today</button>
-        <button type="button" onClick={() => go(step(view, cursor, -1))} className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Previous" title="Previous (←)"><ChevronLeft className="h-4 w-4" /></button>
-        <button type="button" onClick={() => go(step(view, cursor, 1))} className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Next" title="Next (→)"><ChevronRight className="h-4 w-4" /></button>
-        <span className="min-w-0 truncate text-sm font-semibold">{rangeTitle(view, cursor, compact)}</span>
+        <button type="button" onClick={() => stepBy(-1)} className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Previous" title="Previous (←)"><ChevronLeft className="h-4 w-4" /></button>
+        <button type="button" onClick={() => stepBy(1)} className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Next" title="Next (→)"><ChevronRight className="h-4 w-4" /></button>
+        <span className="min-w-0 truncate text-sm font-semibold">{rangeTitle(view, cursor, dayCount, compact)}</span>
         {loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
         <span className="flex-1" />
         {compact ? (
-          <select value={view} onChange={(e) => setPrefs({ view: e.target.value as CalendarView })} aria-label="View" className="h-7 rounded-md border border-input bg-transparent px-1.5 text-xs">
+          <select value={view} onChange={(e) => setView(e.target.value as CalendarView)} aria-label="View" className="h-7 rounded-md border border-input bg-transparent px-1.5 text-xs">
             {CALENDAR_VIEWS.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
           </select>
         ) : (
           <div className="flex overflow-hidden rounded-md border border-border" role="tablist" aria-label="View">
             {CALENDAR_VIEWS.map(v => (
-              <button key={v.id} type="button" role="tab" aria-selected={view === v.id} onClick={() => setPrefs({ view: v.id })} title={`${v.label} (${v.key})`}
+              <button key={v.id} type="button" role="tab" aria-selected={view === v.id} onClick={() => setView(v.id)} title={`${v.label} (${v.key})`}
                 className={cn('px-2 py-1 text-xs transition-colors', view === v.id ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}>
                 {v.label}
               </button>
@@ -237,7 +289,7 @@ export function CalendarApplet({ autoAdd = false }: AppletProps) {
       <div className="flex min-h-0 flex-1">
         {!narrow && (
           <aside className="flex w-52 shrink-0 flex-col gap-4 overflow-y-auto border-r border-border p-3">
-            <MiniMonth month={startOfMonth(cursor)} selected={cursor} onPick={(d) => go(d, view === 'year' || view === 'month' ? 'day' : view)} onPrev={() => setCursor(c => addMonths(c, -1))} onNext={() => setCursor(c => addMonths(c, 1))} />
+            <MiniMonth month={startOfMonth(cursor)} selection={shownDays} onPick={(d) => go(d, view === 'year' || view === 'month' ? 'day' : view)} onPickRange={goRange} onPrev={() => setCursor(c => addMonths(c, -1))} onNext={() => setCursor(c => addMonths(c, 1))} />
             {calendarList}
           </aside>
         )}
@@ -260,6 +312,19 @@ export function CalendarApplet({ autoAdd = false }: AppletProps) {
         <div className="absolute inset-0 z-30 flex flex-col bg-card">
           <EventPanel subject={panel} target={target} workspaceName={scope?.workspaceName ?? null} calendars={calendars} defaultCalendar={prefs.defaultCalendar} onClose={() => setPanel(null)} onSaved={(c) => { if (c) setPrefs({ defaultCalendar: c }); setPanel(null); void reload() }} onDelete={handleDelete} />
         </div>
+      )}
+
+      {menu && (
+        <CalendarMenu
+          menu={menu}
+          onClose={() => setMenu(null)}
+          onOpen={select}
+          onOpenDocument={scope ? (o) => navigate(`/workspaces/${encodeURIComponent(scope.workspaceName)}/documents/${o.doc.id}`) : null}
+          onToggleDone={(o) => { void toggleTask(o) }}
+          onDelete={(o) => { void handleDelete(o.doc as Document) }}
+          onCreate={(start, allDay) => openDraft(start, allDay)}
+          onPickDay={(d) => go(d, 'day')}
+        />
       )}
 
       {!loading && !error && !docs.length && view !== 'schedule' && (

@@ -5,13 +5,15 @@ import { dayRangeDrag, type DragRange } from '@/lib/calendar/drag'
 import { groupByDay, type Occurrence } from '@/lib/calendar/occurrences'
 import { occurrenceColor } from './calendar-colors'
 import { EntryChip } from './EntryChip'
+import { useDayDrag } from './use-day-drag'
+import type { CalendarMenuHandlers } from './CalendarMenu'
 
 const MAX_CHIPS = 3
 
 // Six-week grid. Wide hosts show entry chips per cell; a narrow host shows
 // density dots and the cell opens the day — the month then works as a
 // navigator, the way phone calendars do.
-export function MonthView({ month, occurrences, selectedKey, pending, onSelect, onCreate, onPickDay, narrow }: {
+export function MonthView({ month, occurrences, selectedKey, pending, onSelect, onCreate, onMove, onPickDay, onEntryMenu, onSlotMenu, narrow }: {
   month: Date
   occurrences: Occurrence[]
   selectedKey: string | null
@@ -19,11 +21,15 @@ export function MonthView({ month, occurrences, selectedKey, pending, onSelect, 
   pending: DragRange | null
   onSelect: (o: Occurrence) => void
   onCreate: (start: Date, allDay: boolean, end?: Date) => void
+  onMove: (o: Occurrence, start: Date, end: Date) => void
   onPickDay: (day: Date) => void
   narrow: boolean
-}) {
+} & CalendarMenuHandlers) {
   const days = monthGrid(month)
-  const byDay = useMemo(() => groupByDay(occurrences), [occurrences])
+  const dayDrag = useDayDrag(onMove)
+  // apply() returns the list itself when nothing moves, so the memo holds.
+  const shown = dayDrag.apply(occurrences)
+  const byDay = useMemo(() => groupByDay(shown), [shown])
   const today = new Date()
   // Drag across cells selects a day span (a press without movement is a
   // click on that day). Cells carry data-day so the pointer can be resolved
@@ -31,7 +37,7 @@ export function MonthView({ month, occurrences, selectedKey, pending, onSelect, 
   const [drag, setDrag] = useState<{ from: string; to: string } | null>(null)
   const dragRef = useRef(drag)
   useEffect(() => { dragRef.current = drag })
-  const dayAt = (e: React.PointerEvent): string | null =>
+  const dayAt = (e: React.MouseEvent): string | null =>
     (document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-day]') as HTMLElement | null)?.dataset.day ?? null
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (narrow || e.button !== 0 || (e.target as HTMLElement).closest('button')) return
@@ -53,6 +59,13 @@ export function MonthView({ month, occurrences, selectedKey, pending, onSelect, 
     const range = dayRangeDrag(dateFromKey(d.from), dateFromKey(d.to))
     onCreate(range.start, true, range.end)
   }
+  // Chips stop their own context-menu event, so this is the cell itself.
+  const onContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
+    const key = dayAt(e)
+    if (!key) return
+    e.preventDefault()
+    onSlotMenu(e, dateFromKey(key), true)
+  }
   const selected = drag ? dayRangeDrag(dateFromKey(drag.from), dateFromKey(drag.to)) : pending
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -60,11 +73,12 @@ export function MonthView({ month, occurrences, selectedKey, pending, onSelect, 
         {WEEKDAY_SHORT.map(d => <span key={d} className="py-1">{narrow ? d[0] : d}</span>)}
       </div>
       <div
-        className={cn('grid min-h-0 flex-1 grid-cols-7 grid-rows-6 overflow-y-auto', drag && 'cursor-crosshair select-none')}
+        className={cn('grid min-h-0 flex-1 grid-cols-7 grid-rows-6 overflow-y-auto', drag && 'cursor-crosshair select-none', dayDrag.moving && 'select-none')}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={() => setDrag(null)}
+        onContextMenu={onContextMenu}
       >
         {days.map(day => {
           const key = dateKey(day)
@@ -102,7 +116,13 @@ export function MonthView({ month, occurrences, selectedKey, pending, onSelect, 
                 </div>
               ) : (
                 <>
-                  {list.slice(0, MAX_CHIPS).map(o => <EntryChip key={o.key} occurrence={o} selected={o.key === selectedKey} onSelect={onSelect} />)}
+                  {list.slice(0, MAX_CHIPS).map(o => (
+                    <EntryChip
+                      key={o.key} occurrence={o} selected={o.key === selectedKey} moving={dayDrag.moving?.key === o.key}
+                      onSelect={onSelect} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onEntryMenu(e, o) }}
+                      {...dayDrag.handlers(o)}
+                    />
+                  ))}
                   {overflow > 0 && (
                     <button type="button" onClick={() => onPickDay(day)} className="px-1 text-left text-[10px] text-muted-foreground hover:text-foreground">
                       +{overflow} more

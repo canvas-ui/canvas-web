@@ -13,7 +13,7 @@
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
-import { CalendarClock, ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { CalendarClock, CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // Outlook-style granularity.
@@ -158,11 +158,65 @@ export function DateTimePicker({
   )
 }
 
+/** Date-only sibling: the same calendar popover, value `YYYY-MM-DD` or ''. */
+export function DatePicker({
+  value, onChange, id, placeholder = 'Pick a date', min, disabled = false, className = '',
+}: {
+  value: string
+  onChange: (value: string) => void
+  id?: string
+  placeholder?: string
+  /** Earliest pickable day, `YYYY-MM-DD`. */
+  min?: string
+  disabled?: boolean
+  className?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const valid = /^\d{4}-\d{2}-\d{2}$/.test(value)
+  const label = valid ? dateFromKey(value).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : ''
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        id={id}
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        className={cn(
+          'inline-flex h-8 w-full items-center gap-2 rounded-md border border-input bg-transparent px-2 text-left text-sm transition-colors',
+          'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
+          !valid && 'text-muted-foreground',
+          className,
+        )}
+      >
+        <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1 truncate">{label || placeholder}</span>
+      </button>
+      {open && (
+        <PickerPanel
+          anchorRef={triggerRef}
+          value={valid ? `${value}T00:00` : ''}
+          min={min}
+          dateOnly
+          onChange={(v) => { onChange(v.slice(0, 10)); setOpen(false) }}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </>
+  )
+}
+
 function PickerPanel({
-  anchorRef, value, onChange, onClose,
+  anchorRef, value, min, dateOnly = false, onChange, onClose,
 }: {
   anchorRef: RefObject<HTMLElement | null>
   value: string
+  min?: string
+  /** No time column; picking a day commits and closes. */
+  dateOnly?: boolean
   onChange: (v: string) => void
   onClose: () => void
 }) {
@@ -189,9 +243,10 @@ function PickerPanel({
       const rect = anchor.getBoundingClientRect()
       const { width, height } = el.getBoundingClientRect()
       const below = rect.bottom + 4
-      const y = below + height + margin > window.innerHeight
-        ? Math.max(margin, rect.top - height - 4)
-        : below
+      const fitsBelow = below + height + margin <= window.innerHeight
+      const fitsAbove = rect.top - height - 4 >= margin
+      // Below the trigger, else above it, else wherever it fits on screen.
+      const y = fitsBelow ? below : fitsAbove ? rect.top - height - 4 : Math.max(margin, window.innerHeight - height - margin)
       const x = Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin))
       setPos({ x, y })
     }
@@ -230,7 +285,7 @@ function PickerPanel({
   const commit = (date: string, time: string) => onChange(`${date}T${time}`)
 
   const pickDay = (d: Date) => {
-    const time = selectedTime ?? nextSlotTime()
+    const time = dateOnly ? '00:00' : selectedTime ?? nextSlotTime()
     commit(dateKey(d), time)
     if (d.getMonth() !== month.getMonth()) setMonth(new Date(d.getFullYear(), d.getMonth(), 1))
   }
@@ -243,7 +298,7 @@ function PickerPanel({
   const shiftDays = (days: number) => {
     const d = new Date()
     d.setDate(d.getDate() + days)
-    const time = selectedTime ?? nextSlotTime()
+    const time = dateOnly ? '00:00' : selectedTime ?? nextSlotTime()
     commit(dateKey(d), time)
     setMonth(new Date(d.getFullYear(), d.getMonth(), 1))
   }
@@ -294,14 +349,16 @@ function PickerPanel({
               const key = dateKey(d)
               const outside = d.getMonth() !== month.getMonth()
               const selected = key === selectedDate && !!parts
+              const tooEarly = !!min && key < min
               return (
                 <button
                   key={key}
                   type="button"
+                  disabled={tooEarly}
                   onClick={() => pickDay(d)}
                   aria-pressed={selected}
                   className={cn(
-                    'h-7 rounded text-xs tabular-nums transition-colors',
+                    'h-7 rounded text-xs tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-30',
                     outside ? 'text-muted-foreground/40' : 'text-foreground',
                     selected
                       ? 'bg-primary text-primary-foreground'
@@ -330,7 +387,7 @@ function PickerPanel({
         </div>
 
         {/* Time slots — 15-minute windows */}
-        <div className="flex w-[104px] flex-col">
+        {!dateOnly && <div className="flex w-[104px] flex-col">
           <input
             type="time"
             step={MINUTE_STEP * 60}
@@ -359,7 +416,7 @@ function PickerPanel({
               )
             })}
           </div>
-        </div>
+        </div>}
       </div>
     </>,
     document.body,

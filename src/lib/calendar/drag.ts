@@ -32,3 +32,34 @@ export function dayRangeDrag(from: Date, to: Date): DragRange {
   const [lo, hi] = from.getTime() <= to.getTime() ? [from, to] : [to, from]
   return { start: startOfDay(lo), end: addDays(startOfDay(hi), 1), allDay: true }
 }
+
+interface Span { start: Date; end: Date }
+
+/**
+ * Timed entry dragged from (fromDay, fromMin) to (toDay, toMin) in the time
+ * grid: same duration, start snapped, kept inside its day.
+ */
+export function moveTimed(days: Date[], o: Span, fromDay: number, fromMin: number, toDay: number, toMin: number, snap = 15): Span {
+  const clampDay = (d: number) => Math.max(0, Math.min(days.length - 1, d))
+  const deltaDays = clampDay(toDay) - clampDay(fromDay)
+  const deltaMin = Math.round((toMin - fromMin) / snap) * snap
+  const duration = o.end.getTime() - o.start.getTime()
+  const moved = addDays(o.start, deltaDays)
+  const day = startOfDay(moved)
+  const minute = Math.max(0, Math.min(1440 - snap, (moved.getTime() - day.getTime()) / 60_000 + deltaMin))
+  const start = new Date(day.getTime() + minute * 60_000)
+  return { start, end: new Date(start.getTime() + duration) }
+}
+
+/** Bottom edge of a timed entry dragged to (toDay, toMin): the end snaps up, never before start + snap. */
+export function resizeTimed(days: Date[], o: Span, toDay: number, toMin: number, snap = 15): Span {
+  const day = startOfDay(days[Math.max(0, Math.min(days.length - 1, toDay))])
+  const minute = Math.min(1440, Math.ceil(toMin / snap) * snap)
+  const end = new Date(day.getTime() + minute * 60_000)
+  return { start: o.start, end: end.getTime() < o.start.getTime() + snap * 60_000 ? new Date(o.start.getTime() + snap * 60_000) : end }
+}
+
+/** Entry dropped on another day: same wall time, shifted by whole days. */
+export function moveByDays(o: Span, deltaDays: number): Span {
+  return { start: addDays(o.start, deltaDays), end: addDays(o.end, deltaDays) }
+}

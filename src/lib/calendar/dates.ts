@@ -81,13 +81,16 @@ export function formatDayLong(d: Date): string { return dayLong.format(d) }
 export function formatDayShort(d: Date): string { return dayShort.format(d) }
 export function formatTime(d: Date): string { return timeShort.format(d) }
 
-/** "3 – 9 Nov 2026" / "30 Nov – 6 Dec 2026" / "29 Dec 2025 – 4 Jan 2026". */
-export function formatWeekRange(weekStart: Date): string {
-  const end = addDays(weekStart, 6)
-  const s = weekStart, e = end
+/** "3 – 9 Nov 2026" / "30 Nov – 6 Dec 2026" / "29 Dec 2025 – 4 Jan 2026"; both days inclusive. */
+export function formatDayRange(s: Date, e: Date): string {
+  if (sameDay(s, e)) return formatDayLong(s)
   if (s.getFullYear() !== e.getFullYear()) return `${s.getDate()} ${monthShort.format(s)} ${s.getFullYear()} – ${e.getDate()} ${monthShort.format(e)} ${e.getFullYear()}`
   if (s.getMonth() !== e.getMonth()) return `${s.getDate()} ${monthShort.format(s)} – ${e.getDate()} ${monthShort.format(e)} ${e.getFullYear()}`
   return `${s.getDate()} – ${e.getDate()} ${monthShort.format(s)} ${s.getFullYear()}`
+}
+
+export function formatWeekRange(weekStart: Date): string {
+  return formatDayRange(weekStart, addDays(weekStart, 6))
 }
 
 /** Hour label for the time grid gutter ("9 AM" / "09:00" by locale). */

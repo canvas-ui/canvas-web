@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CheckCircle2, Circle, ExternalLink, Link2, Loader2, Repeat, Trash2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { DateTimePicker } from '@/components/ui/date-time-picker'
+import { DatePicker, DateTimePicker } from '@/components/ui/date-time-picker'
 import { EVENT_SCHEMA } from '@/components/renderers/types'
 import { updateWorkspaceDocument } from '@/services/workspace'
 import { useMirrorSaveState } from '@/lib/remote-mirror'
@@ -240,13 +240,13 @@ export function EventPanel({ subject, target, workspaceName, calendars, defaultC
             <label className="block text-xs">
               <span className="text-muted-foreground">Start</span>
               {fields.allDay
-                ? <input type="date" value={fields.start} onChange={(e) => patch({ start: e.target.value, end: fields.end && fields.end < e.target.value ? e.target.value : fields.end })} className="mt-1 h-8 w-full rounded-md border border-input bg-transparent px-2 text-sm" />
+                ? <div className="mt-1"><DatePicker value={fields.start} onChange={(v) => patch({ start: v, end: fields.end && fields.end < v ? v : fields.end })} /></div>
                 : <div className="mt-1"><DateTimePicker value={fields.start} onChange={(v) => patch({ start: v })} clearable={false} /></div>}
             </label>
             <label className="block text-xs">
               <span className="text-muted-foreground">End</span>
               {fields.allDay
-                ? <input type="date" value={fields.end} min={fields.start} onChange={(e) => patch({ end: e.target.value })} className="mt-1 h-8 w-full rounded-md border border-input bg-transparent px-2 text-sm" />
+                ? <div className="mt-1"><DatePicker value={fields.end} min={fields.start} placeholder="Same day" onChange={(v) => patch({ end: v })} /></div>
                 : <div className="mt-1"><DateTimePicker value={fields.end} onChange={(v) => patch({ end: v })} placeholder="No end" /></div>}
             </label>
           </div>
