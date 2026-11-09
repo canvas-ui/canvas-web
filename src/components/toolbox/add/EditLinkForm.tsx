@@ -7,6 +7,7 @@ import { TagInput } from './TagInput'
 import { useEditLinkFields } from './useEditLinkFields'
 import { useTagSuggestions } from './useTagSuggestions'
 import type { Document } from '@/types/workspace'
+import { WebAppFields } from './WebAppFields'
 
 export function EditLinkForm() {
   const { state, closeAdd } = useToolbox()
@@ -64,6 +65,8 @@ export function EditLinkFormBody({ doc, workspaceId, onCancel, onSaved, showSucc
         <Label>Tags</Label>
         <TagInput tags={f.tags} onChange={f.setTags} suggestions={suggestions} />
       </div>
+
+      <WebAppFields webapp={f.webapp} setWebapp={f.setWebapp} category={f.category} setCategory={f.setCategory} idPrefix="edit-link" alwaysShowCategory />
 
       <div className="flex justify-end gap-2">
         <Button variant="outline" size="sm" onClick={onCancel} disabled={f.saving}>

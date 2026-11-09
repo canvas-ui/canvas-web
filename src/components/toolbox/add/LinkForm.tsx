@@ -10,6 +10,7 @@ import { useTagSuggestions } from './useTagSuggestions'
 import { GeotagToggle } from './GeotagToggle'
 import { useRelationFields } from './useRelationFields'
 import { RelationFields } from './RelationFields'
+import { WebAppFields } from './WebAppFields'
 
 export function LinkForm() {
   const { closeAdd, state } = useToolbox()
@@ -63,6 +64,8 @@ export function LinkForm() {
         <Label>Tags</Label>
         <TagInput tags={f.tags} onChange={f.setTags} suggestions={suggestions} />
       </div>
+
+      <WebAppFields webapp={f.webapp} setWebapp={f.setWebapp} category={f.category} setCategory={f.setCategory} idPrefix="link" />
 
       <GeotagToggle geotag={f.geotag} idPrefix="link-geotag" />
 

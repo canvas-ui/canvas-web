@@ -7,6 +7,7 @@ import { useLinkFields } from '@/components/toolbox/add/useLinkFields'
 import { GeotagToggle } from '@/components/toolbox/add/GeotagToggle'
 import { B5Card, type B5SaveTarget } from '../B5Card'
 import type { QuickAddInitialData } from '../quick-add-types'
+import { WebAppFields } from '@/components/toolbox/add/WebAppFields'
 
 export function LinkCardBody({ onClose, initialData }: { onClose: () => void; initialData?: QuickAddInitialData }) {
   const f = useLinkFields()
@@ -57,6 +58,8 @@ export function LinkCardBody({ onClose, initialData }: { onClose: () => void; in
           <Label>Tags</Label>
           <TagInput tags={f.tags} onChange={f.setTags} />
         </div>
+
+        <WebAppFields webapp={f.webapp} setWebapp={f.setWebapp} category={f.category} setCategory={f.setCategory} idPrefix="qa-link" />
 
         <GeotagToggle geotag={f.geotag} idPrefix="qa-link-geotag" />
       </div>

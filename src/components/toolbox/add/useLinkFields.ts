@@ -2,11 +2,16 @@ import { useState } from 'react'
 import { tagsToFeatures } from './tags'
 import { submitDocuments, type AddTarget } from './useAddTarget'
 import { useGeotag } from '@/hooks/useGeotag'
+import { WEBAPP_TYPE } from './WebAppFields'
 
-// Links are stored as tabs for now (schema unification pending a larger
-// refactor — Link/Tab share the same shape). Editable fields: url + title.
+// Plain links are stored as tabs (url + title), which the browser extension
+// syncs. Web apps are data/schema/link documents with data.type = 'webapp' and
+// an optional data.category: launchers, not session tabs, so the extension
+// leaves them alone.
 const TAB_SCHEMA = 'data/schema/tab'
 const TAB_SCHEMA_VERSION = '2.0'
+const LINK_SCHEMA = 'data/schema/link'
+const LINK_SCHEMA_VERSION = '3.0'
 
 function isValidUrl(value: string): boolean {
   try { new URL(value); return true } catch { return false }
@@ -18,6 +23,8 @@ export function useLinkFields() {
   const [url, setUrl] = useState('')
   const [title, setTitle] = useState('')
   const [tags, setTags] = useState<string[]>([])
+  const [webapp, setWebapp] = useState(false)
+  const [category, setCategory] = useState('')
   const [saving, setSaving] = useState(false)
   const geotag = useGeotag()
 
@@ -34,21 +41,35 @@ export function useLinkFields() {
       // never rejects — a missing fix must not block saving the link.
       const geo = await geotag.capture()
       const cleanTags = tags.map((t) => t.trim()).filter(Boolean)
-      const doc = {
-        schema: TAB_SCHEMA,
-        schemaVersion: TAB_SCHEMA_VERSION,
-        data: {
-          url: trimmedUrl,
-          ...(title.trim() ? { title: title.trim() } : {}),
-          ...(cleanTags.length ? { tags: cleanTags } : {}),
-        },
-        metadata: { features: tagsToFeatures(tags), ...(geo ? { geo } : {}) },
-      }
+      const metadata = { features: tagsToFeatures(tags), ...(geo ? { geo } : {}) }
+      const doc = webapp
+        ? {
+            schema: LINK_SCHEMA,
+            schemaVersion: LINK_SCHEMA_VERSION,
+            data: {
+              uri: trimmedUrl,
+              type: WEBAPP_TYPE,
+              ...(title.trim() ? { label: title.trim() } : {}),
+              ...(category.trim() ? { category: category.trim() } : {}),
+              ...(cleanTags.length ? { tags: cleanTags } : {}),
+            },
+            metadata,
+          }
+        : {
+            schema: TAB_SCHEMA,
+            schemaVersion: TAB_SCHEMA_VERSION,
+            data: {
+              url: trimmedUrl,
+              ...(title.trim() ? { title: title.trim() } : {}),
+              ...(cleanTags.length ? { tags: cleanTags } : {}),
+            },
+            metadata,
+          }
       return await submitDocuments(target, [doc])
     } finally {
       setSaving(false)
     }
   }
 
-  return { url, setUrl, title, setTitle, tags, setTags, saving, canSave, urlValid, showUrlError, save, geotag }
+  return { url, setUrl, title, setTitle, tags, setTags, webapp, setWebapp, category, setCategory, saving, canSave, urlValid, showUrlError, save, geotag }
 }
