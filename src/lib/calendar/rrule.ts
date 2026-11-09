@@ -214,25 +214,44 @@ export function describeRRule(rule: RRule): string {
   return text
 }
 
-/** The preset the UI's "Repeat" select shows for a rule, or 'custom'. */
+/**
+ * The preset the UI's "Repeat" select shows for a rule, or 'custom'. The
+ * rule's end (COUNT/UNTIL) is a separate control, so it never forces custom.
+ */
 export type RepeatPreset = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekdays' | 'custom'
+
+export interface RecurrenceEnd {
+  /** Last day, `YYYY-MM-DD` local, or ''. */
+  until: string
+  /** Number of occurrences, or null. */
+  count: number | null
+}
 
 export function repeatPreset(recurrence: string | undefined): RepeatPreset {
   if (!recurrence) return 'none'
   const rule = parseRRule(recurrence)
-  if (!rule || rule.count !== null || rule.until || rule.interval !== 1 || rule.byMonthDay.length || rule.byMonth.length) return 'custom'
+  if (!rule || rule.interval !== 1 || rule.byMonthDay.length || rule.byMonth.length) return 'custom'
   if (rule.freq === 'WEEKLY' && rule.byDay.length === 5 && rule.byDay.every(d => d.ordinal === null && d.day >= 1 && d.day <= 5)) return 'weekdays'
   if (rule.byDay.length) return 'custom'
   return { DAILY: 'daily', WEEKLY: 'weekly', MONTHLY: 'monthly', YEARLY: 'yearly' }[rule.freq] as RepeatPreset
 }
 
-export function presetRRule(preset: RepeatPreset): string | undefined {
-  switch (preset) {
-    case 'daily': return 'FREQ=DAILY'
-    case 'weekly': return 'FREQ=WEEKLY'
-    case 'monthly': return 'FREQ=MONTHLY'
-    case 'yearly': return 'FREQ=YEARLY'
-    case 'weekdays': return 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR'
-    default: return undefined
-  }
+export function presetRRule(preset: RepeatPreset, end?: RecurrenceEnd): string | undefined {
+  const base = {
+    daily: 'FREQ=DAILY', weekly: 'FREQ=WEEKLY', monthly: 'FREQ=MONTHLY', yearly: 'FREQ=YEARLY',
+    weekdays: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR',
+  }[preset as Exclude<RepeatPreset, 'none' | 'custom'>]
+  if (!base) return undefined
+  if (end?.until) return `${base};UNTIL=${end.until.replace(/-/g, '')}`
+  if (end?.count) return `${base};COUNT=${end.count}`
+  return base
+}
+
+/** The end a stored rule carries, for the "Ends" control. */
+export function recurrenceEnd(recurrence: string | undefined): RecurrenceEnd {
+  const rule = recurrence ? parseRRule(recurrence) : null
+  if (!rule) return { until: '', count: null }
+  const u = rule.until
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return { until: u ? `${u.getFullYear()}-${pad(u.getMonth() + 1)}-${pad(u.getDate())}` : '', count: rule.count }
 }

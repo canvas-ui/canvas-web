@@ -27,12 +27,12 @@ export function MiniMonth({ month, selection, marks, onPick, onPickRange, onPrev
   const days = monthGrid(month)
   const label = title ?? formatMonth(month)
   // Drag across days → span. Buttons carry data-day; the grid holds the
-  // capture, like the month view.
+  // capture, like the month view. With the capture on the grid the browser
+  // sends the click to the grid, so a press is resolved here on release:
+  // same day = pick, else span. onClick on the buttons stays for the keyboard.
   const [drag, setDrag] = useState<{ from: string; to: string } | null>(null)
   const dragRef = useRef(drag)
   useEffect(() => { dragRef.current = drag })
-  // A finished span drag is followed by a click on the day under the pointer.
-  const swallowClick = useRef(false)
   const dayAt = (e: React.PointerEvent): string | null =>
     (document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-day]') as HTMLElement | null)?.dataset.day ?? null
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -52,14 +52,11 @@ export function MiniMonth({ month, selection, marks, onPick, onPickRange, onPrev
     if (!d) return
     e.currentTarget.releasePointerCapture(e.pointerId)
     setDrag(null)
-    if (d.from === d.to) return
-    swallowClick.current = true
-    setTimeout(() => { swallowClick.current = false }, 0)
+    if (d.from === d.to) { pick(e, dateFromKey(d.from)); return }
     const range = dayRangeDrag(dateFromKey(d.from), dateFromKey(d.to))
     onPickRange?.(range.start, range.end)
   }
-  const pick = (e: React.MouseEvent, day: Date) => {
-    if (swallowClick.current) { swallowClick.current = false; return }
+  const pick = (e: { shiftKey: boolean }, day: Date) => {
     if (e.shiftKey && onPickRange && selection) {
       const range = dayRangeDrag(selection.start, day)
       onPickRange(range.start, range.end)
@@ -103,7 +100,7 @@ export function MiniMonth({ month, selection, marks, onPick, onPickRange, onPrev
               key={key}
               type="button"
               data-day={key}
-              onClick={(e) => pick(e, day)}
+              onClick={(e) => { if (e.detail === 0 || !onPickRange) pick(e, day) }}
               onContextMenu={onDayMenu ? (e) => { e.preventDefault(); onDayMenu(e, day) } : undefined}
               aria-label={entries.length ? `${day.toDateString()}, ${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}` : day.toDateString()}
               title={entries.length ? entries.slice(0, 6).map(o => o.title).join('\n') + (entries.length > 6 ? `\n+${entries.length - 6} more` : '') : undefined}

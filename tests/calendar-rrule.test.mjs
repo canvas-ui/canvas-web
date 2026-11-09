@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parseRRule, expandRRule, describeRRule, repeatPreset, presetRRule } from '../src/lib/calendar/rrule.ts'
+import { parseRRule, expandRRule, describeRRule, repeatPreset, presetRRule, recurrenceEnd } from '../src/lib/calendar/rrule.ts'
 import { localInput } from '../src/lib/calendar/dates.ts'
 
 // Expansion steps on LOCAL wall-clock fields, so inputs and expectations are
@@ -52,5 +52,16 @@ test('presets round-trip and custom rules describe themselves', () => {
   for (const preset of ['daily', 'weekly', 'monthly', 'yearly', 'weekdays']) assert.equal(repeatPreset(presetRRule(preset)), preset)
   assert.equal(repeatPreset(undefined), 'none')
   assert.equal(repeatPreset('FREQ=WEEKLY;INTERVAL=2;BYDAY=TU,TH;UNTIL=20261231T235959Z'), 'custom')
+  // The end never forces custom: it is its own control.
+  assert.equal(repeatPreset('FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;UNTIL=20261218'), 'weekdays')
+  assert.equal(presetRRule('weekdays', { until: '2026-12-18', count: null }), 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;UNTIL=20261218')
+  assert.equal(presetRRule('daily', { until: '', count: 10 }), 'FREQ=DAILY;COUNT=10')
+  assert.deepEqual(recurrenceEnd('FREQ=DAILY;UNTIL=20261218'), { until: '2026-12-18', count: null })
+  assert.deepEqual(recurrenceEnd('FREQ=DAILY;COUNT=3'), { until: '', count: 3 })
+  assert.deepEqual(recurrenceEnd(undefined), { until: '', count: null })
+  // A date-only UNTIL covers its whole last day.
+  const scrum = parseRRule('FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;UNTIL=20261218')
+  const starts = expandRRule(scrum, new Date(2026, 10, 9, 9, 0), new Date(2026, 11, 14), new Date(2027, 0, 1), 1800000)
+  assert.deepEqual(starts.map(d => d.getDate()), [14, 15, 16, 17, 18])
   assert.match(describeRRule(parseRRule('FREQ=WEEKLY;INTERVAL=2;BYDAY=TU,TH;UNTIL=20261231T235959Z')), /^Every 2 weeks on Tue, Thu until/)
 })

@@ -36,7 +36,7 @@ export function TimeGrid({ days, occurrences, selectedKey, pending, onSelect, on
   const [drag, setDrag] = useState<{ fromDay: number; fromMin: number; toDay: number; toMin: number } | null>(null)
   const dragRef = useRef(drag)
   useEffect(() => { dragRef.current = drag })
-  const pointAt = (e: React.MouseEvent): { day: number; min: number } | null => {
+  const pointAt = (e: { clientX: number; clientY: number }): { day: number; min: number } | null => {
     const el = body.current
     if (!el) return null
     const rect = el.getBoundingClientRect()
@@ -74,43 +74,51 @@ export function TimeGrid({ days, occurrences, selectedKey, pending, onSelect, on
   }
   const selection: DragRange | null = drag ? timeGridDrag(days, drag.fromDay, drag.fromMin, drag.toDay, drag.toMin, SNAP_MIN) : pending
 
-  // Moving / resizing a timed block: the block holds the capture; the live
-  // span replaces the entry in the layout so it travels across columns.
+  // Moving / resizing a timed block. The block re-mounts in another column
+  // as it travels, so the drag listens on the window rather than holding a
+  // pointer capture; the live span replaces the entry in the layout.
   const [moving, setMoving] = useState<{ key: string; start: Date; end: Date; mode: 'move' | 'resize' } | null>(null)
-  const movingRef = useRef(moving)
-  useEffect(() => { movingRef.current = moving })
-  const blockDrag = useRef<{ o: Occurrence; mode: 'move' | 'resize'; fromDay: number; fromMin: number } | null>(null)
+  const onMoveRef = useRef(onMove)
+  useEffect(() => { onMoveRef.current = onMove })
+  const blockDrag = useRef<{ stop: () => void } | null>(null)
+  useEffect(() => () => blockDrag.current?.stop(), [])
   const suppressClick = useRef(false)
   const onBlockDown = (e: React.PointerEvent<HTMLButtonElement>, o: Occurrence) => {
-    if (e.button !== 0 || o.recurring) return
-    const at = pointAt(e)
-    if (!at) return
-    e.currentTarget.setPointerCapture(e.pointerId)
-    blockDrag.current = { o, mode: (e.target as HTMLElement).dataset.resize ? 'resize' : 'move', fromDay: at.day, fromMin: at.min }
-  }
-  const onBlockMove = (e: React.PointerEvent<HTMLButtonElement>) => {
-    const d = blockDrag.current
-    if (!d) return
-    const at = pointAt(e)
-    if (!at) return
-    const span = d.mode === 'move'
-      ? moveTimed(days, d.o, d.fromDay, d.fromMin, at.day, at.min, MOVE_SNAP_MIN)
-      : resizeTimed(days, d.o, at.day, at.min, MOVE_SNAP_MIN)
-    const unchanged = span.start.getTime() === d.o.start.getTime() && span.end.getTime() === d.o.end.getTime()
-    setMoving(unchanged ? null : { key: d.o.key, ...span, mode: d.mode })
-  }
-  const onBlockUp = (e: React.PointerEvent<HTMLButtonElement>) => {
-    const d = blockDrag.current
-    blockDrag.current = null
-    if (!d) return
-    e.currentTarget.releasePointerCapture(e.pointerId)
-    const m = movingRef.current
-    setMoving(null)
-    if (!m) return
-    // The click that follows the drop lands on this block; swallow just that one.
-    suppressClick.current = true
-    setTimeout(() => { suppressClick.current = false }, 0)
-    onMove(d.o, m.start, m.end)
+    if (e.button !== 0 || o.recurring || blockDrag.current) return
+    const from = pointAt(e)
+    if (!from) return
+    const mode: 'move' | 'resize' = (e.target as HTMLElement).dataset.resize ? 'resize' : 'move'
+    let current: { start: Date; end: Date } | null = null
+    const move = (ev: PointerEvent) => {
+      const at = pointAt(ev)
+      if (!at) return
+      const span = mode === 'move'
+        ? moveTimed(days, o, from.day, from.min, at.day, at.min, MOVE_SNAP_MIN)
+        : resizeTimed(days, o, at.day, at.min, MOVE_SNAP_MIN)
+      const unchanged = span.start.getTime() === o.start.getTime() && span.end.getTime() === o.end.getTime()
+      current = unchanged ? null : span
+      setMoving(current ? { key: o.key, ...current, mode } : null)
+    }
+    const up = () => {
+      stop()
+      setMoving(null)
+      if (!current) return
+      // The click that follows the drop lands on this block; swallow just that one.
+      suppressClick.current = true
+      setTimeout(() => { suppressClick.current = false }, 0)
+      onMoveRef.current(o, current.start, current.end)
+    }
+    const cancel = () => { stop(); setMoving(null) }
+    const stop = () => {
+      blockDrag.current = null
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', cancel)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', cancel)
+    blockDrag.current = { stop }
   }
   const dayDrag = useDayDrag(onMove)
   // apply() returns the list itself when nothing moves, so the memo holds.
@@ -247,9 +255,6 @@ export function TimeGrid({ days, occurrences, selectedKey, pending, onSelect, on
                       onClick={(e) => { e.stopPropagation(); if (suppressClick.current) { suppressClick.current = false; return } onSelect(o) }}
                       onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onEntryMenu(e, o) }}
                       onPointerDown={(e) => onBlockDown(e, o)}
-                      onPointerMove={onBlockMove}
-                      onPointerUp={onBlockUp}
-                      onPointerCancel={() => { blockDrag.current = null; setMoving(null) }}
                       title={`${o.title} · ${formatTime(o.start)}${o.end > o.start ? ` – ${formatTime(o.end)}` : ''}`}
                       className={cn(
                         'absolute overflow-hidden rounded-md border-l-[3px] px-1.5 text-left text-[11px] leading-tight text-foreground shadow-elevation-1 transition-[filter] hover:brightness-110',

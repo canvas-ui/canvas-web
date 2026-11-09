@@ -7,7 +7,7 @@ import { EVENT_SCHEMA } from '@/components/renderers/types'
 import { updateWorkspaceDocument } from '@/services/workspace'
 import { useMirrorSaveState } from '@/lib/remote-mirror'
 import { dateKey, dateFromKey, localInput, addDays } from '@/lib/calendar/dates'
-import { describeRRule, parseRRule, presetRRule, repeatPreset, type RepeatPreset } from '@/lib/calendar/rrule'
+import { describeRRule, parseRRule, presetRRule, recurrenceEnd, repeatPreset, type RepeatPreset } from '@/lib/calendar/rrule'
 import type { Occurrence } from '@/lib/calendar/occurrences'
 import type { Document } from '@/types/workspace'
 import { submitDocuments, type AddTarget } from '../../add/useAddTarget'
@@ -47,6 +47,10 @@ interface Fields {
   location: string
   description: string
   repeat: RepeatPreset
+  /** Last day of the series, `YYYY-MM-DD`, or '' for no end by date. */
+  until: string
+  /** Occurrence count as typed, or '' for no end by count. */
+  count: string
   rrule: string
 }
 
@@ -57,6 +61,7 @@ function fieldsFromDoc(doc: Document, defaultCalendar: string): Fields {
   const endIso = typeof d.end === 'string' ? d.end : ''
   const recurrence = typeof d.recurrence === 'string' ? d.recurrence : ''
   const repeat = repeatPreset(recurrence || undefined)
+  const end = recurrenceEnd(recurrence || undefined)
   return {
     title: String(d.title ?? ''),
     calendar: typeof d.calendar === 'string' ? d.calendar : (syncSource(doc) ? '' : defaultCalendar),
@@ -67,6 +72,8 @@ function fieldsFromDoc(doc: Document, defaultCalendar: string): Fields {
     location: String(d.location ?? ''),
     description: String(d.description ?? ''),
     repeat,
+    until: end.until,
+    count: end.count === null ? '' : String(end.count),
     rrule: recurrence,
   }
 }
@@ -78,8 +85,15 @@ function fieldsFromDraft(draft: EventDraft, defaultCalendar: string): Fields {
     start: draft.allDay ? dateKey(draft.start) : localInput(draft.start),
     // All-day ends are exclusive; the form shows the last day inclusively.
     end: draft.allDay ? dateKey(addDays(end, -1) < draft.start ? draft.start : addDays(end, -1)) : localInput(end),
-    location: '', description: '', repeat: 'none', rrule: '',
+    location: '', description: '', repeat: 'none', until: '', count: '', rrule: '',
   }
+}
+
+/** The recurrence a form state stores: the raw rule when custom, else preset + end. */
+function recurrenceOf(f: Fields): string | undefined {
+  if (f.repeat === 'custom') return f.rrule.trim()
+  const count = Number(f.count)
+  return presetRRule(f.repeat, { until: f.until, count: Number.isInteger(count) && count > 0 ? count : null })
 }
 
 /** Connector-synced documents carry their driver and backend in metadata. */
@@ -108,7 +122,7 @@ function buildData(previous: Record<string, unknown>, f: Fields): Record<string,
   set('allDay', f.allDay)
   set('location', f.location.trim())
   set('description', f.description.trim())
-  set('recurrence', f.repeat === 'custom' ? f.rrule.trim() : presetRRule(f.repeat))
+  set('recurrence', recurrenceOf(f))
   if (f.allDay) {
     data.start = `${f.start}T00:00:00.000Z`
     set('end', f.end ? allDayEndExclusive(f.end) : undefined)
@@ -125,6 +139,8 @@ function validate(f: Fields): string | null {
   if (f.end && f.end < f.start) return 'The end is before the start.'
   if (f.calendar.includes(':')) return 'A calendar name cannot contain ":".'
   if (f.repeat === 'custom' && (!f.rrule.trim() || !parseRRule(f.rrule))) return 'Enter a supported RRULE (FREQ=…, INTERVAL, COUNT, UNTIL, BYDAY, BYMONTHDAY, BYMONTH).'
+  if (f.repeat !== 'none' && f.repeat !== 'custom' && f.until && f.until < f.start.slice(0, 10)) return 'The series ends before it starts.'
+  if (f.repeat !== 'none' && f.repeat !== 'custom' && f.count && !(Number.isInteger(Number(f.count)) && Number(f.count) > 0)) return 'The number of occurrences must be a whole number above zero.'
   return null
 }
 
@@ -228,7 +244,11 @@ export function EventPanel({ subject, target, workspaceName, calendars, defaultC
                 if (allDay) patch({ allDay, start: fields.start.slice(0, 10), end: (fields.end || fields.start).slice(0, 10) })
                 else {
                   const day = fields.start.slice(0, 10) || dateKey(new Date())
-                  patch({ allDay, start: `${day}T09:00`, end: `${(fields.end || day).slice(0, 10)}T10:00` })
+                  const lastDay = (fields.end || day).slice(0, 10)
+                  // A timed event over a selected span of days is a daily
+                  // series across that span, not one event lasting days.
+                  if (lastDay > day) patch({ allDay, start: `${day}T09:00`, end: `${day}T10:00`, repeat: fields.repeat === 'none' ? 'daily' : fields.repeat, until: lastDay, count: '' })
+                  else patch({ allDay, start: `${day}T09:00`, end: `${day}T10:00` })
                 }
               }}
               className="h-4 w-4 accent-primary"
@@ -263,6 +283,9 @@ export function EventPanel({ subject, target, workspaceName, calendars, defaultC
               </>
             )}
           </label>
+          {fields.repeat !== 'none' && fields.repeat !== 'custom' && (
+            <RecurrenceEnds fields={fields} patch={patch} />
+          )}
 
           <label className="block text-xs">
             <span className="text-muted-foreground">Location</span>
@@ -301,6 +324,43 @@ export function EventPanel({ subject, target, workspaceName, calendars, defaultC
       )}
 
       {linking && doc && <LinkDocOverlay documentId={doc.id} workspaceName={workspaceName ?? undefined} onClose={() => setLinking(false)} />}
+    </div>
+  )
+}
+
+// How a preset series ends: never, on a last day, or after N occurrences.
+function RecurrenceEnds({ fields, patch }: { fields: Fields; patch: (p: Partial<Fields>) => void }) {
+  const mode = fields.until ? 'until' : fields.count ? 'count' : 'never'
+  const startDay = fields.start.slice(0, 10)
+  const summary = recurrenceOf(fields)
+  const rule = summary ? parseRRule(summary) : null
+  return (
+    <div className="text-xs">
+      <span className="text-muted-foreground">Ends</span>
+      <div className="mt-1 flex items-center gap-1.5">
+        <select
+          value={mode}
+          onChange={(e) => {
+            const next = e.target.value
+            if (next === 'never') patch({ until: '', count: '' })
+            else if (next === 'until') patch({ until: fields.until || startDay, count: '' })
+            else patch({ until: '', count: fields.count || '10' })
+          }}
+          className="h-8 w-28 shrink-0 rounded-md border border-input bg-transparent px-2 text-sm"
+        >
+          <option value="never">Never</option>
+          <option value="until">On date</option>
+          <option value="count">After</option>
+        </select>
+        {mode === 'until' && <div className="min-w-0 flex-1"><DatePicker value={fields.until} min={startDay} onChange={(v) => patch({ until: v })} /></div>}
+        {mode === 'count' && (
+          <label className="flex items-center gap-1.5">
+            <input type="number" min={1} step={1} value={fields.count} onChange={(e) => patch({ count: e.target.value })} className="h-8 w-20 rounded-md border border-input bg-transparent px-2 text-sm tabular-nums" />
+            <span className="text-muted-foreground">occurrences</span>
+          </label>
+        )}
+      </div>
+      {rule && <span className="mt-0.5 block text-[11px] text-muted-foreground">{describeRRule(rule)}</span>}
     </div>
   )
 }
