@@ -408,16 +408,17 @@ function WorkspaceM2Content() {
     onRefresh: handleRefresh,
   })
 
-  // Refresh remote sources on folder navigation, at most once a minute per view.
-  const lastSourceRefresh = useRef(new Map<string, number>())
+  // Check IMAP mailboxes for new mail on folder navigation, at most once a
+  // minute per view.
+  const lastMailboxCheck = useRef(new Map<string, number>())
   useEffect(() => {
     if (!wsName) return
     const key = `${wsName}:${activeTab}:${selectedPath}`
     const operations = ops
     if (!operations.canResyncBackend(selectedPath)) return
-    if (Date.now() - (lastSourceRefresh.current.get(key) || 0) < 60_000) return
-    lastSourceRefresh.current.set(key, Date.now())
-    void operations.onResyncBackend?.(selectedPath).catch(() => {})
+    if (Date.now() - (lastMailboxCheck.current.get(key) || 0) < 60_000) return
+    lastMailboxCheck.current.set(key, Date.now())
+    void operations.onCheckMailboxes?.(selectedPath).catch(() => {})
   }, [wsName, activeTab, selectedPath, ops])
 
   // ── Pins ──

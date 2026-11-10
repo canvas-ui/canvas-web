@@ -27,6 +27,7 @@ import {
   updateWorkspacePath,
   listBackends,
   backendAddressFromTreePath,
+  syncBackendContainer,
   addBackendContainers,
   removeBackendContainer,
   renameBackendContainer,
@@ -250,6 +251,24 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     return sources.length > 0
   }, [workspaceId, refresh, showProgress, backendSources])
 
+  // Opening a subscribed IMAP mailbox checks for new mail, like a mail
+  // client: incremental (new UIDs only) and silent. Ingested messages arrive
+  // over the socket. File backends have live watchers and are never rescanned
+  // on navigation; a full resync stays an explicit menu action.
+  const onCheckMailboxes = useCallback(async (path: string): Promise<void> => {
+    if (!workspaceId) return
+    const sources = backendSources(path)
+    if (!sources.length) return
+    const backends = await listBackends(workspaceId)
+    for (const source of sources) {
+      const target = backendAddressFromTreePath(source, backends)
+      if (target?.driver !== 'imap') continue
+      const backend = backends.find(b => b.driver === 'imap' && b.address === target.address)
+      const container = backend?.containers?.find(c => c.treePath === source)
+      if (container) await syncBackendContainer(workspaceId, 'imap', target.address, container.name)
+    }
+  }, [workspaceId, backendSources])
+
   // ── Backend file-folder ops (writable file backends in the backends tree) ──
   // Real fs directories on the backend; the server mirrors them into the tree
   // (empty folders included). key '' = the backend root node (children only).
@@ -335,6 +354,7 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     onDestroyLayer: workspaceId && !isDirectoryTree ? onDestroyLayer : undefined,
     canResyncBackend: (path: string) => backendSources(path).length > 0,
     onResyncBackend: workspaceId ? onResyncBackend : undefined,
+    onCheckMailboxes: workspaceId ? onCheckMailboxes : undefined,
     onCreateBackendFolder: workspaceId ? onCreateBackendFolder : undefined,
     onRenameBackendFolder: workspaceId ? onRenameBackendFolder : undefined,
     onDeleteBackendFolder: workspaceId ? onDeleteBackendFolder : undefined,
