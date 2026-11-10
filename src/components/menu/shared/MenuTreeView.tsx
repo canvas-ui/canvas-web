@@ -1445,7 +1445,9 @@ export function MenuTreeView({
   }
 
   return (
-    <div data-menu-tree className="px-3 py-2 space-y-1.5 outline-none min-h-full" tabIndex={0} onKeyDown={handleTreeKeyDown}
+    // Mobile: long names in deep trees widen the tree instead of truncating;
+    // the M2 scroller pans it sideways (overflow-y-auto implies x auto).
+    <div data-menu-tree className="px-3 py-2 space-y-1.5 outline-none min-h-full max-md:w-max max-md:min-w-full" tabIndex={0} onKeyDown={handleTreeKeyDown}
       onContextMenu={e => {
         if (e.defaultPrevented || readOnly) return
         e.preventDefault()

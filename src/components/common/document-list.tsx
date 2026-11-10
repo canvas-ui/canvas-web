@@ -113,8 +113,8 @@ interface DocumentListProps {
   // When provided, enables "Link to…" — links selected documents to chosen tree
   // paths (via onPasteDocuments with move:false). Hidden when absent.
   linkTree?: TreeNode | null
-  // File-manager folders rendered ABOVE the documents (directory trees). The
-  // caller derives them from the tree it already holds — synapsd keeps folders
+  // File-manager folders rendered ABOVE the documents (directories or context
+  // layers). The caller derives them from the tree it already holds — synapsd keeps folders
   // and documents as separate primitives on purpose, so the list composes them
   // here, exactly like the WebDAV/FUSE renderers do. Hidden while a local
   // search query is typed (folders are not searched).

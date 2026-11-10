@@ -94,7 +94,7 @@ interface DefaultCanvasProps {
    * document list, so anything meant to sit beside it belongs here.
    */
   contentBanner?: ReactNode
-  // Directory-tree folders shown above the documents (file-manager style).
+  // Tree folders (directories or context layers) shown above the documents.
   folders?: FolderEntry[]
   onOpenFolder?: (path: string) => void
 }

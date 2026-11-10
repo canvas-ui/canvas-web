@@ -133,6 +133,9 @@ export function MenuBar() {
   const { showToast } = useToast()
   const isAdmin = state.user?.userType === 'admin'
   const runtime = useRuntimeCapabilities()
+  // Mobile: M2 (tree, sessions) takes the rail's width too; its back button
+  // returns to M1 with the rail beside it.
+  const railOpen = state.m0Open && !(state.m1Open && state.m2Open)
 
   // Mobile replacement for the (hidden) toolbox FAB — opening the toolbox
   // drawer dismisses the rail and any M1 drawer it was floating beside.
@@ -165,7 +168,7 @@ export function MenuBar() {
           treatment as the M1/M2 drawer. */}
       {/* z-nav-scrim: above content, below the M1/M2 drawer (z-40) and the rail
           toggle (z-nav) — only the content section dims, not other menus. */}
-      {state.m0Open && (
+      {railOpen && (
         <div className="fixed inset-0 z-nav-scrim bg-scrim animate-fade-in md:hidden" onClick={closeM0} aria-hidden />
       )}
       <div
@@ -174,7 +177,7 @@ export function MenuBar() {
           'flex flex-col items-center w-rail h-full rounded-(--panel-radius) bg-transparent shrink-0',
           // Mobile: hidden by default; while open it floats as a slim rail
           // card anchored above the bottom-left toggle button.
-          state.m0Open
+          railOpen
             ? 'max-md:fixed max-md:left-2 max-md:top-2 max-md:bottom-rail-stack max-md:z-rail max-md:h-auto max-md:bg-card max-md:surface-glass max-md:shadow-elevation-5'
             : 'max-md:hidden',
         )}

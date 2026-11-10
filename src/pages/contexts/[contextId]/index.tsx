@@ -34,6 +34,7 @@ import { useToolbox } from '@/components/toolbox/use-toolbox';
 import { useMenu } from '@/components/shell/use-menu';
 import { visibleAccentColor } from '@/utils/color';
 import { TreeBreadcrumbs } from '@/components/common/tree-breadcrumbs';
+import { folderEntriesForPath } from '@/lib/tree-folders';
 import { treeBreadcrumbs } from '@/lib/tree-breadcrumbs';
 
 function contextUrlToPath(url: string, workspaceName?: string): string {
@@ -150,6 +151,10 @@ export default function ContextDetailPage() {
   const nodeForViews = !layerParam && !isSharedContext && wsTree
     ? (selectedPath === '/' ? wsTree : findTreeNodeByPath(wsTree, selectedPath))
     : null;
+  // Layers below the context path, shown as folders above the documents.
+  // Opening one proposes it as the context's new path (same as breadcrumbs).
+  const showFolders = !layerParam && !isSharedContext && serverSearchQueries.length === 0;
+  const contentFolders = useMemo(() => (showFolders ? folderEntriesForPath(wsTree, selectedPath) : []), [showFolders, wsTree, selectedPath]);
   const viewsKey = `${context?.workspaceName ?? ''}\0${selectedPath}`;
   const [viewsState, setViewsState] = useState<{ key: string; views: ContentView[]; activeId: string } | null>(null);
   const contentViews = viewsState?.key === viewsKey ? viewsState.views : viewsFromLayerMetadata(nodeForViews?.metadata);
@@ -604,6 +609,8 @@ export default function ContextDetailPage() {
         onSaveChanges={saveFilters}
         onBrowseTree={!isSharedContext && contextId ? () => openM2Drawer('contexts', 'detail', contextId) : undefined}
         onBrowseWorkspaces={() => openM1Drawer('workspaces')}
+        folders={contentFolders}
+        onOpenFolder={(path) => { if (!settingPath.current) setPendingNavigation({ id: context.id, url: context.url, path }); }}
         onNavigatePath={!isSharedContext ? path => {
           if (!settingPath.current) setPendingNavigation({ id: context.id, url: context.url, path });
         } : undefined}
