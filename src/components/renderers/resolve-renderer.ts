@@ -14,6 +14,7 @@ import { isPdfUrl } from './pdf-url'
 import { LinkCardRenderer } from './LinkCardRenderer'
 import { TodoRenderer } from './TodoRenderer'
 import { EmailRenderer } from './EmailRenderer'
+import { HtmlRenderer } from './HtmlRenderer'
 import { MessageRenderer } from './MessageRenderer'
 import { IdentityRenderer } from './IdentityRenderer'
 import { BinaryFallback } from './BinaryFallback'
@@ -47,6 +48,7 @@ export function resolveRenderer(document: Document): ComponentType<RendererProps
     case 'audio': return AudioRenderer
     case 'video': return VideoRenderer
     case 'pdf': return PdfRenderer
+    case 'html': return HtmlRenderer
     case 'markdown': return MarkdownRenderer
     case 'text': return PlaintextRenderer
     default: return BinaryFallback

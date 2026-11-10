@@ -13,7 +13,7 @@ import type { RendererProps } from './types'
 // Share-aware "Download original" button — hits the content endpoint with
 // download=1 (Content-Disposition: attachment) via an authed fetch, so no token
 // is ever placed in a URL. Shared by the media renderers.
-function DownloadButton({ workspaceId, document }: RendererProps) {
+export function DownloadButton({ workspaceId, document }: RendererProps) {
   const { download } = useDocumentContent(workspaceId)
   const [busy, setBusy] = useState(false)
   const filename = getLocationFilename(document) || `document-${document.id}`

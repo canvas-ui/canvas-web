@@ -757,7 +757,7 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
   // Notes, tabs/URLs, emails, todos: the content IS the picture — render a
   // text tile (title + clamped body, or just title + status subtitle) instead
   // of a giant icon. Text files use a fetched, bounded preview below.
-  const fileKind = classifyMime(String(document.metadata?.contentType || '').split(';')[0].trim().toLowerCase(), document.metadata?.filename || getLocationFilename(document))
+  const fileKind = classifyMime(String(document.metadata?.contentType || ''), document.metadata?.filename || getLocationFilename(document))
   const isTextFile = document.schema === 'data/schema/file' && (fileKind === 'markdown' || fileKind === 'text')
     && (document.metadata?.size ?? document.data?.size ?? 0) <= 1_048_576
   const isTextTile = !hasThumb && document.schema !== 'data/schema/file' && !!(display.preview || display.subtitle)

@@ -21,7 +21,8 @@ export function documentBodyKind(doc: Document): BodyKind | null {
   if (doc.schema !== FILE_SCHEMA) return null
   const kind = classifyMime(String(doc.metadata?.contentType ?? ''), getLocationFilename(doc))
   if (kind === 'markdown') return 'markdown'
-  if (kind === 'text') return 'text'
+  // HTML renders as a page but edits as its source.
+  if (kind === 'text' || kind === 'html') return 'text'
   return null
 }
 

@@ -25,7 +25,7 @@ export function schemaLeaf(schema: string, parent: string): string {
   return schema.startsWith(`${parent}/`) ? schema.slice(parent.length + 1) : ''
 }
 
-export type MimeKind = 'image' | 'audio' | 'video' | 'pdf' | 'text' | 'markdown' | 'binary'
+export type MimeKind = 'image' | 'audio' | 'video' | 'pdf' | 'html' | 'text' | 'markdown' | 'binary'
 
 // Filename extension → concrete MIME. Used both to classify a document whose
 // stored `contentType` is missing/generic (octet-stream) and to re-type the
@@ -39,7 +39,7 @@ const EXT_MIME: Record<string, string> = {
   // video
   mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', mkv: 'video/x-matroska', avi: 'video/x-msvideo', ogv: 'video/ogg',
   // documents / text
-  pdf: 'application/pdf', md: 'text/markdown', markdown: 'text/markdown',
+  pdf: 'application/pdf', html: 'text/html', htm: 'text/html', xhtml: 'application/xhtml+xml', md: 'text/markdown', markdown: 'text/markdown',
   txt: 'text/plain', json: 'application/json', xml: 'application/xml', csv: 'text/csv', log: 'text/plain', yml: 'text/yaml', yaml: 'text/yaml',
 }
 
@@ -58,11 +58,14 @@ function kindFromMime(mime: string): MimeKind | null {
   if (mime.startsWith('audio/')) return 'audio'
   if (mime.startsWith('video/')) return 'video'
   if (mime === 'application/pdf') return 'pdf'
+  if (mime === 'text/html' || mime === 'application/xhtml+xml') return 'html'
   if (mime.startsWith('text/') || mime.endsWith('+json') || mime === 'application/json' || mime === 'application/xml') return 'text'
   return null
 }
 
 export function classifyMime(mime: string, filename?: string | null): MimeKind {
+  // Stored types may carry parameters (`text/html; charset=utf-8`).
+  mime = mime.split(';')[0].trim().toLowerCase()
   if (mime === 'text/markdown' || /\.(md|markdown)$/i.test(filename || '')) return 'markdown'
   // A concrete stored contentType wins; a missing/generic one (octet-stream,
   // common for files ingested by extension only) falls back to the filename —
