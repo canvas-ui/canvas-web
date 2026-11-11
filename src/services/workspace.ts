@@ -2167,48 +2167,6 @@ export async function setWorkspaceSearchTuning(
 }
 
 
-// ── Trash ───────────────────────────────────────────────────────────────────
-// See docs/data-representation.md. Listing is a plain read; restore re-files a
-// document where it was; emptying is the one hard delete.
-
-export interface TrashedDocument extends CanvasDocument {
-  trashed?: {
-    trashedAt: string
-    placements: Array<{ tree: string; treeId: string; type: string; paths: string[] }>
-  } | null
-}
-
-export async function listTrash(workspaceId: string): Promise<TrashedDocument[]> {
-  const response = await api.get<TrashedDocument[]>(
-    `${API_ROUTES.workspaces}/${workspaceId}/trash`
-  )
-  return Array.isArray(response) ? response : []
-}
-
-export async function restoreFromTrash(
-  workspaceId: string,
-  documentIds: readonly (string | number)[]
-): Promise<{ restored: number[]; failed: Array<{ id: number; error: string }> }> {
-  const response = await api.post<{ restored: number[]; failed: Array<{ id: number; error: string }> }>(
-    `${API_ROUTES.workspaces}/${workspaceId}/trash/restore`,
-    { documentIds: normalizeDocumentIds(documentIds) }
-  )
-  return response
-}
-
-export async function emptyTrash(
-  workspaceId: string,
-  documentIds?: readonly (string | number)[]
-): Promise<{ destroyed: number[]; preserved?: number[]; failed: unknown[] }> {
-  const response = await api.delete<{ destroyed: number[]; preserved?: number[]; failed: unknown[] }>(
-    `${API_ROUTES.workspaces}/${workspaceId}/trash`,
-    documentIds?.length
-      ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ documentIds: normalizeDocumentIds(documentIds) }) }
-      : {}
-  )
-  return response
-}
-
 // ─── Members: e-mail / directory-group shares (team workspaces) ─────────────
 
 export type WorkspacePermission = 'read' | 'write' | 'admin'
