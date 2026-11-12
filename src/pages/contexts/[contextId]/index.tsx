@@ -420,7 +420,7 @@ export default function ContextDetailPage() {
     const events: [string, (d: unknown) => void][] = [
       ['context.updated', onContextUpdate], ['context:updated', onContextUpdate],
       ['context.url.set', onUrlChanged], ['context:url:set', onUrlChanged],
-      ['document.inserted', onDocumentChanged], ['document.updated', onDocumentChanged], ['document.moved', onDocumentChanged],
+      ['document.inserted', onDocumentChanged], ['document.updated', onDocumentChanged], ['document.moved', onDocumentChanged], ['document.moved.batch', onDocumentChanged],
       ['document.removed', onDocumentChanged], ['document.removed.batch', onDocumentChanged],
       // Membership events — the successors of the deprecated membership-only
       // document.updated / document.removed forms this page relied on. This
