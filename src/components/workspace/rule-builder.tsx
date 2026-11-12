@@ -58,6 +58,7 @@ const SCHEMA_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
 const EVENT_OPTIONS = [
   { value: 'document.inserted', label: 'is added', hint: 'Fires when the item is created or uploaded.' },
   { value: 'document.updated', label: 'is updated', hint: 'Fires on every edit of the item.' },
+  { value: 'document.moved', label: 'is moved or renamed', hint: 'Fires when the file behind the item changes its path. Its content and modified date stay the same.' },
   { value: 'document.linked', label: 'is filed into a folder', hint: 'Fires when the item is (re)filed into a tree path — the usual pair with "is added" for folder rules.' },
   { value: 'document.unlinked', label: 'is removed from a folder', hint: 'Fires when the item leaves a tree path.' },
 ] as const

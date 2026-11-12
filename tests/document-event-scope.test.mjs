@@ -27,6 +27,12 @@ test('content/relations updates only touch views that list the document', () => 
   assert.equal(eventTouchesView(scope, workView, new Set([7])), true)
 })
 
+test('a move only touches views that list the document', () => {
+  const scope = documentEventScope('document.moved', { id: 7, reason: 'moved', document: {}, from: ['stored://home/a.txt'], to: ['stored://home/b.txt'] })
+  assert.equal(eventTouchesView(scope, workView, [1, 2]), false)
+  assert.equal(eventTouchesView(scope, workView, new Set([7])), true)
+})
+
 test('unplaceable events and unresolved tree ids stay conservative', () => {
   assert.equal(eventTouchesView(documentEventScope('document.deleted', { id: 4 }), workView), true)
   assert.equal(eventTouchesView(documentEventScope('document.inserted', null), workView), true)

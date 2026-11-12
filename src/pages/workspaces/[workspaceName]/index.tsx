@@ -828,7 +828,7 @@ function WorkspaceContent() {
     };
 
     const events = [
-      'document.inserted', 'document.inserted.batch', 'document.updated', 'document.removed', 'document.deleted',
+      'document.inserted', 'document.inserted.batch', 'document.updated', 'document.moved', 'document.removed', 'document.deleted',
       'document.removed.batch', 'document.deleted.batch',
       // Membership. document.updated/removed also fire on a link/unlink, but
       // only as deprecated aliases scheduled for removal — these are the ones

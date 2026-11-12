@@ -110,8 +110,8 @@ export function documentEventScope(eventName: string, raw: unknown, treeNames: M
   if (targets.length) return { targets, ids, unknown: false }
   // A content/relations update names only the document: it can change how
   // that document renders, not which view lists it.
-  const placementFree = payload.reason === 'content' || payload.reason === 'relations'
-  if (eventName.startsWith('document.updated') && placementFree && ids.length) return { targets: [], ids, unknown: false }
+  const placementFree = payload.reason === 'content' || payload.reason === 'relations' || payload.reason === 'moved'
+  if ((eventName.startsWith('document.updated') || eventName === 'document.moved') && placementFree && ids.length) return { targets: [], ids, unknown: false }
   // `context: null` + `directory: null` is still "no placement" — but an
   // insert/remove we cannot place might be anywhere.
   return { targets: [], ids, unknown: true }
