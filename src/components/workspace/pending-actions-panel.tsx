@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown, ChevronRight, RefreshCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/use-toast'
@@ -57,6 +57,9 @@ function fieldLabel(path: string): string {
 }
 
 const LONG_FIELD = /(body|content|message|text|prompt)$/i
+
+// Shortest gap between two list reloads caused by workspace events.
+const EVENT_REFRESH_MS = 2000
 
 // `doc <id>` reference (rule summaries, the handler column) that opens the
 // shared document modal, so a reviewer can check what an action would touch
@@ -163,12 +166,17 @@ export function PendingActionsPanel({ workspaceId, onPendingCount }: PendingActi
 
   // Fetch without the synchronous spinner set — the load effect calls this
   // directly; setState only happens inside promise callbacks.
-  const fetchActions = useCallback(() =>
-    listPendingActions(workspaceId, {
+  // Only the newest request may update the list: an older answer that arrives
+  // late would put decided actions back on screen.
+  const latestRequest = useRef(0)
+  const fetchActions = useCallback(() => {
+    const request = ++latestRequest.current
+    return listPendingActions(workspaceId, {
       status: statusFilter === 'all' ? undefined : statusFilter,
       limit: 200,
     })
       .then((list) => {
+        if (request !== latestRequest.current) return
         setItems(list)
         setSelected((prev) => new Set(list.filter((i) => i.status === 'pending' && prev.has(i.actionId)).map((i) => i.actionId)))
         onPendingCount?.(
@@ -178,11 +186,13 @@ export function PendingActionsPanel({ workspaceId, onPendingCount }: PendingActi
         )
       })
       .catch(() => {
+        if (request !== latestRequest.current) return
         showToast({ title: 'Error', description: 'Failed to load pending actions', variant: 'destructive' })
       })
-      .finally(() => setIsLoading(false)), [workspaceId, statusFilter]) // eslint-disable-line react-hooks/exhaustive-deps
+      .finally(() => { if (request === latestRequest.current) setIsLoading(false) })
+  }, [workspaceId, statusFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Handler/socket-triggered reloads keep the sync spinner (fine in callbacks).
+  // Reloads the user asked for (button, decision) show the spinner.
   const load = useCallback(async () => {
     setIsLoading(true)
     await fetchActions()
@@ -200,16 +210,33 @@ export function PendingActionsPanel({ workspaceId, onPendingCount }: PendingActi
   useEffect(() => { void fetchActions() }, [fetchActions])
 
   // Live refresh: proposal/decision events for this workspace push through the
-  // websocket workspace channel.
+  // websocket workspace channel. A burst of them (a mail sync, a bulk approve)
+  // reloads the list in place, once per EVENT_REFRESH_MS.
+  const fetchRef = useRef(fetchActions)
+  useEffect(() => { fetchRef.current = fetchActions })
+  const refreshTimer = useRef<number | null>(null)
+  const lastEventRefresh = useRef(0)
+  useEffect(() => () => {
+    if (refreshTimer.current !== null) window.clearTimeout(refreshTimer.current)
+  }, [])
+
   useSocketSubscription(socket, `workspace:${workspaceId}`, useMemo(() => {
-    const refresh = () => { void load() }
+    const refresh = () => {
+      if (refreshTimer.current !== null) return
+      const wait = Math.max(0, lastEventRefresh.current + EVENT_REFRESH_MS - Date.now())
+      refreshTimer.current = window.setTimeout(() => {
+        refreshTimer.current = null
+        lastEventRefresh.current = Date.now()
+        void fetchRef.current()
+      }, wait)
+    }
     return {
       'action.proposed': refresh,
       'action.approved': refresh,
       'action.declined': refresh,
       'action.failed': refresh,
     }
-  }, [load]))
+  }, []))
 
   const pendingItems = items.filter((i) => i.status === 'pending')
   const allSelected = pendingItems.length > 0 && pendingItems.every((i) => selected.has(i.actionId))
