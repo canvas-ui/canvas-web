@@ -252,14 +252,15 @@ export interface PendingDecisionOutcome {
 export async function listPendingActions(
   workspaceId: string,
   opts: { status?: PendingActionStatus; handler?: string; limit?: number } = {},
-): Promise<PendingAction[]> {
+): Promise<{ actions: PendingAction[]; total: number }> {
   const params = new URLSearchParams()
   if (opts.status) params.set('status', opts.status)
   if (opts.handler) params.set('handler', opts.handler)
   if (opts.limit) params.set('limit', String(opts.limit))
   const query = params.toString()
-  const res = await api.get<PendingAction[]>(`${hooksBase(workspaceId)}/pending${query ? `?${query}` : ''}`)
-  return res || []
+  const res = await api.getEnvelope<PendingAction[]>(`${hooksBase(workspaceId)}/pending${query ? `?${query}` : ''}`)
+  const actions = res.payload || []
+  return { actions, total: res.totalCount ?? actions.length }
 }
 
 export async function getPendingAction(workspaceId: string, actionId: string): Promise<PendingAction> {
@@ -278,6 +279,32 @@ export async function decidePendingActions(
     `${hooksBase(workspaceId)}/pending/decisions`, decisions,
   )
   return res
+}
+
+/** Progress of a decision applied to every pending action. */
+export interface BulkDecision {
+  decision: 'approve' | 'decline'
+  handler: string | null
+  nothingToDo: boolean
+  state: 'running' | 'done' | 'failed'
+  startedAt: string
+  finishedAt?: string
+  total: number
+  decided: number
+  failed: number
+  kept: number
+  error?: string
+}
+
+export async function startBulkDecision(
+  workspaceId: string,
+  options: { decision: 'approve' | 'decline'; handler?: string; nothingToDo?: boolean },
+): Promise<BulkDecision> {
+  return api.post<BulkDecision>(`${hooksBase(workspaceId)}/pending/decisions/all`, options)
+}
+
+export async function getBulkDecision(workspaceId: string): Promise<BulkDecision | null> {
+  return (await api.get<BulkDecision | null>(`${hooksBase(workspaceId)}/pending/decisions/all`)) ?? null
 }
 
 // ── Run log + explain (GET /hooks/runs, POST /hooks/explain) ────────────────

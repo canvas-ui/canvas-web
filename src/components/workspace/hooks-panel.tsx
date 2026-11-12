@@ -118,8 +118,8 @@ export function HooksPanel({ workspaceId, prefillRule, onPrefillConsumed, initia
   // Badge count on the Pending tab; the panel keeps it fresh while open.
   useEffect(() => {
     let cancelled = false
-    listPendingActions(workspaceId, { status: 'pending', limit: 500 })
-      .then((list) => { if (!cancelled) setPendingCount(list.length) })
+    listPendingActions(workspaceId, { status: 'pending', limit: 1 })
+      .then(({ total }) => { if (!cancelled) setPendingCount(total) })
       .catch(() => {})
     return () => { cancelled = true }
   }, [workspaceId])

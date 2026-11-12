@@ -11,6 +11,9 @@ import type { Document } from '@/types/workspace'
 import {
   listPendingActions,
   decidePendingActions,
+  startBulkDecision,
+  getBulkDecision,
+  type BulkDecision,
   type PendingAction,
   type PendingActionStatus,
 } from '@/services/hooks'
@@ -158,6 +161,7 @@ export function PendingActionsPanel({ workspaceId, onPendingCount }: PendingActi
   const socket = useSocket()
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending')
   const [items, setItems] = useState<PendingAction[]>([])
+  const [total, setTotal] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -171,19 +175,21 @@ export function PendingActionsPanel({ workspaceId, onPendingCount }: PendingActi
   const latestRequest = useRef(0)
   const fetchActions = useCallback(() => {
     const request = ++latestRequest.current
+    // The badge counts every pending action, whatever the list is filtered to.
+    const pendingTotal = statusFilter === 'pending'
+      ? null
+      : listPendingActions(workspaceId, { status: 'pending', limit: 1 }).then(({ total }) => total)
     return listPendingActions(workspaceId, {
       status: statusFilter === 'all' ? undefined : statusFilter,
       limit: 200,
     })
-      .then((list) => {
+      .then(async ({ actions: list, total }) => {
+        const pending = pendingTotal === null ? total : await pendingTotal
         if (request !== latestRequest.current) return
         setItems(list)
+        setTotal(total)
         setSelected((prev) => new Set(list.filter((i) => i.status === 'pending' && prev.has(i.actionId)).map((i) => i.actionId)))
-        onPendingCount?.(
-          statusFilter === 'pending'
-            ? list.length
-            : list.filter((i) => i.status === 'pending').length,
-        )
+        onPendingCount?.(pending)
       })
       .catch(() => {
         if (request !== latestRequest.current) return
@@ -237,6 +243,35 @@ export function PendingActionsPanel({ workspaceId, onPendingCount }: PendingActi
       'action.failed': refresh,
     }
   }, []))
+
+  // A decision for the whole queue runs on the server; its progress is polled
+  // while it runs, also after a page reload.
+  const [bulk, setBulk] = useState<BulkDecision | null>(null)
+  const bulkRunning = bulk?.state === 'running'
+  useEffect(() => {
+    let cancelled = false
+    getBulkDecision(workspaceId).then((progress) => { if (!cancelled) setBulk(progress) }).catch(() => {})
+    return () => { cancelled = true }
+  }, [workspaceId])
+  useEffect(() => {
+    if (!bulkRunning) return
+    const timer = window.setInterval(() => {
+      getBulkDecision(workspaceId).then((progress) => {
+        setBulk(progress)
+        void fetchRef.current()
+      }).catch(() => {})
+    }, EVENT_REFRESH_MS)
+    return () => window.clearInterval(timer)
+  }, [workspaceId, bulkRunning])
+
+  const decideAll = async (decision: 'approve' | 'decline', nothingToDo: boolean, question: string) => {
+    if (!window.confirm(question)) return
+    try {
+      setBulk(await startBulkDecision(workspaceId, { decision, nothingToDo }))
+    } catch (error) {
+      showToast({ title: 'Could not start', description: error instanceof Error ? error.message : 'Unknown error', variant: 'destructive' })
+    }
+  }
 
   const pendingItems = items.filter((i) => i.status === 'pending')
   const allSelected = pendingItems.length > 0 && pendingItems.every((i) => selected.has(i.actionId))
@@ -313,6 +348,9 @@ export function PendingActionsPanel({ workspaceId, onPendingCount }: PendingActi
           <Button size="sm" variant="ghost" onClick={() => void load()} title="Reload">
             <RefreshCw className="h-4 w-4" />
           </Button>
+          {total > items.length && (
+            <span className="text-xs text-muted-foreground">Showing {items.length} of {total}</span>
+          )}
         </div>
         {selected.size > 0 && (
           <div className="flex items-center gap-2">
@@ -326,6 +364,42 @@ export function PendingActionsPanel({ workspaceId, onPendingCount }: PendingActi
           </div>
         )}
       </div>
+
+      {statusFilter === 'pending' && (total > 0 || bulk) && (
+        <div className="flex items-center gap-2 flex-wrap text-xs">
+          {total > 0 && (
+            <>
+              <Button
+                size="sm" variant="outline" disabled={bulkRunning || isDeciding}
+                onClick={() => void decideAll('approve', false, `Approve and run all ${total} pending actions?`)}
+              >
+                Approve all
+              </Button>
+              <Button
+                size="sm" variant="outline" disabled={bulkRunning || isDeciding}
+                title="Declines the actions whose document is gone or has nothing for them to work on, such as an email without a matching attachment"
+                onClick={() => void decideAll('decline', true, `Decline the pending actions that have nothing to do? The rest of the ${total} stay in the queue.`)}
+              >
+                Decline those with nothing to do
+              </Button>
+              <Button
+                size="sm" variant="outline" disabled={bulkRunning || isDeciding}
+                onClick={() => void decideAll('decline', false, `Decline all ${total} pending actions?`)}
+              >
+                Decline all
+              </Button>
+            </>
+          )}
+          {bulk && (
+            <span className={bulk.state === 'failed' ? 'text-destructive' : 'text-muted-foreground'}>
+              {bulk.state === 'running' ? 'Running: ' : bulk.state === 'failed' ? `Stopped (${bulk.error}): ` : 'Last run: '}
+              {bulk.decision === 'approve' ? 'approved' : 'declined'} {bulk.decided} of {bulk.total}
+              {bulk.kept > 0 && `, kept ${bulk.kept}`}
+              {bulk.failed > 0 && `, ${bulk.failed} failed`}
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="border rounded-lg overflow-auto max-h-[560px]">
         {isLoading ? (
