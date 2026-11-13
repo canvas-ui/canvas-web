@@ -98,6 +98,20 @@ test('PDF extraction and exact recipient survive edit/save/reopen', () => {
   assert.equal(parseRule({ ...rule, then: [{ ...rule.then[0], unknown: true }] }), null, 'unknown settings stay JSON-only')
 })
 
+test('exact email addresses accept pipe alternatives and round-trip without becoming regex', () => {
+  for (const field of ['from', 'to']) {
+    const rule = { id: 'accounting', enabled: true,
+      when: { event: 'document.inserted', schema: 'email', [field]: { equals: ' accounting@augmentd.eu | invoice@augmentd.eu | faktury@augmentd.eu ' } },
+      then: [{ action: 'link', paths: ['dir:/Emaily'] }] }
+    const saved = buildRule(parseRule(rule))
+    assert.deepEqual(plain(saved.when[field]), ['accounting@augmentd.eu', 'invoice@augmentd.eu', 'faktury@augmentd.eu'].map(equals => ({ equals })))
+    assert.deepEqual(plain(buildRule(parseRule(saved))), plain(saved))
+    const form = parseRule(saved)
+    form.conditions = [{ field: `${field}Regex`, value: 'accounting|invoice' }]
+    assert.deepEqual(plain(buildRule(form).when[field]), { regex: 'accounting|invoice' })
+  }
+})
+
 test('attachment destination preview shows the selected root, appended month and actual result', () => {
   const sample = new Date(2026, 9, 16, 12)
   assert.deepEqual(attachmentDestinationPreview('workspace:home', 'Accounting', '{{YYYY}}/{{MM}}', sample), {

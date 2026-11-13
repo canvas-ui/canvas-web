@@ -334,7 +334,8 @@ function buildRule(form: RuleForm, backends: Backend[] = []): HookRule {
   for (const row of form.conditions) {
     const regex = row.field.endsWith('Regex')
     const exact = EXACT_FIELDS.has(row.field)
-    const values = regex || exact ? (row.value.trim() ? [row.value] : []) : splitAlternatives(row.value)
+    const literalIdentifier = exact && !['fromExact', 'toExact'].includes(row.field)
+    const values = regex || literalIdentifier ? (row.value.trim() ? [row.value] : []) : splitAlternatives(row.value)
     if (regex && values.length) {
       try { new RegExp(row.value, 'i') } catch { throw new Error(`Invalid regular expression for ${CONDITION_FIELDS.find(field => field.key === row.field)?.label}: ${row.value}`) }
     }
@@ -1133,6 +1134,9 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
     const stat = runStats[rule.id]
     const primary = actionMeta(rule.then?.[0]?.action || 'link')
     const paths = rulePaths(rule)
+    const applyBlockedReason = rule.when.eventPathExact !== undefined
+      ? 'Apply is unavailable: “is inserted / linked directly into” requires an original filing event. To process existing items, edit the condition to “is directly in the folder” or “is under the folder” to match current membership instead.'
+      : backfillingId !== null ? 'Apply is busy checking or starting another rule. Please wait.' : null
     return (
       <div className={cn('rule-card rounded-xl border bg-card p-4 transition-opacity', !enabled && 'opacity-60')}>
         <IconBadge icon={primary.icon} tone={primary.tone} />
@@ -1144,6 +1148,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
             {!editable && <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground" title="This rule uses matchers the builder cannot show; edit it as JSON.">JSON only</span>}
           </div>
           <p className="text-sm text-muted-foreground">{summarizeWhen(rule, schemaOptions)}</p>
+          {applyBlockedReason && <p id={`apply-reason-${rule.id}`} className="text-sm text-muted-foreground">{applyBlockedReason}</p>}
           <p className="flex items-start gap-1.5 text-sm"><ArrowRight className="mt-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" /><span>{summarizeThen(rule)}</span></p>
           {paths.length > 0 && (
             <p className="truncate font-mono text-xs text-muted-foreground" title={paths.join(' | ')}>{paths.join(' | ')}</p>
@@ -1170,7 +1175,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
           >
             <span className={cn('h-5 w-5 rounded-full bg-background shadow transition-transform', enabled && 'translate-x-5')} />
           </button>
-          <Button size="sm" variant="ghost" className="h-9 px-2.5" title={rule.when.eventPathExact !== undefined ? 'Requires an original insert/link event. Current folder membership cannot reconstruct its destination.' : 'Apply this rule to existing items (dry-run first)'} disabled={backfillingId !== null || rule.when.eventPathExact !== undefined} onClick={() => backfillRule(rule.id)}>
+          <Button size="sm" variant="ghost" className="h-9 px-2.5" title={applyBlockedReason || 'Apply this rule to existing items (dry-run first)'} aria-describedby={applyBlockedReason ? `apply-reason-${rule.id}` : undefined} disabled={applyBlockedReason !== null} onClick={() => backfillRule(rule.id)}>
             {backfillingId === rule.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlayCircle className="h-4 w-4" />}
             <span className="rule-card-action-label ml-1.5">Apply</span>
           </Button>
@@ -1303,6 +1308,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                       <Button size="sm" variant="ghost" className="order-3 h-10 w-10 p-0 text-muted-foreground sm:order-4" title="Remove condition" onClick={() => setField('conditions', form.conditions.filter((_, j) => j !== i))}>
                         <X className="h-4 w-4" />
                       </Button>
+                      {row.field === 'eventPathExact' && <p className="order-5 col-span-full text-xs text-muted-foreground">Matches new filing events only; Apply to existing items is unavailable. Choose “is directly in the folder” or “is under the folder” to match current membership.</p>}
                     </div>
                   )
                 })}
@@ -1312,7 +1318,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
               <Button size="sm" variant="outline" onClick={() => setField('conditions', [...form.conditions, { field: form.schema === 'email' ? 'from' : 'path', value: '' }])}>
                 <Plus className="mr-1 h-4 w-4" /> Add condition
               </Button>
-              <span className="text-xs text-muted-foreground">Contains matches literal text. Regex is case-insensitive: enter the pattern without /…/ delimiters; | stays part of the expression. For other filters, separate alternatives with <span className="font-mono">|</span>, e.g. <span className="font-mono">image/* | video/*</span>.</span>
+              <span className="text-xs text-muted-foreground">Contains matches literal text. Regex is case-insensitive: enter the pattern without /…/ delimiters; | stays part of the expression. Email sender and recipient filters, folder filters and file types accept alternatives separated by <span className="font-mono">|</span>, e.g. <span className="font-mono">accounting@example.com | invoices@example.com</span>. Exact sender, thread, conversation and platform IDs are literal; add another condition of the same type for alternatives.</span>
             </div>
           </section>
 
