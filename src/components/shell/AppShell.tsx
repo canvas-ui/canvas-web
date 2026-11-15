@@ -3,6 +3,7 @@ import { MenuBar, MobileMenuToggle } from './MenuBar'
 import { MenuPanelArea } from './MenuPanelArea'
 import { ContentArea } from './ContentArea'
 import { ToolboxFab } from './ToolboxFab'
+import { UploadTray } from '@/components/toolbox/add/UploadTray'
 import { AgentSessionProvider } from '@/components/agent/agent-session-context'
 import { ToolboxProvider } from '@/components/toolbox/toolbox-context'
 import { AddPanel } from '@/components/toolbox/AddPanel'
@@ -53,6 +54,7 @@ export function AppShell() {
             <LensFeedWidget />
             </DocumentModalProvider>)}
           </SideViewProvider>
+          <UploadTray />
           </LensFeedProvider>
         </ToolboxProvider>
       </AgentSessionProvider>

@@ -174,7 +174,7 @@ export function DefaultCanvas({
   </>
 
   return (
-    <FileDropArea target={onImportDocuments && workspaceId ? {
+    <FileDropArea target={workspaceId && (onImportDocuments || treeName === 'backends') ? {
       mode: 'workspace', workspaceName: workspaceId, path: contextPath,
       treeName: treeName || DEFAULT_WORKSPACE_TREE_NAME, treeType: treeTypeForName(treeName),
     } : null}>
@@ -281,7 +281,9 @@ export function DefaultCanvas({
       ) : null}
       {children && (onSaveAsCanvas || navigationActions) && <div className="flex items-center gap-2 border-b px-3 py-1">{listActions}</div>}
 
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      {/* The list fills the canvas so empty space below it is still the folder
+          (context menu, marquee, drop target); other views keep block flow. */}
+      <div className={`flex-1 min-h-0 overflow-y-auto${children ? '' : ' flex flex-col'}`}>
         {contentBanner}
         {/* ⚠️ `children ||` means ANY children replace the document list — and an
             array of children is truthy even when every element is false. Never

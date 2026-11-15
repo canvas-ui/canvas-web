@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react'
-import { Upload, RotateCcw } from 'lucide-react'
+import { Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { useToolbox } from '../use-toolbox'
 import { useRelationFields } from './useRelationFields'
 import { RelationFields } from './RelationFields'
-import { useAddTarget, describeTarget, resolveUploadWorkspace, type AddTarget } from './useAddTarget'
+import { useAddTarget, describeTarget, resolveUploadWorkspace } from './useAddTarget'
 import { useFileFields, buildFileDocument } from './useFileFields'
 import { FileMetaFields } from './FileMetaFields'
 import { useUploadQueue } from './useUploadQueue'
+import { enqueueUpload } from './upload-manager'
 import { UploadProgressList } from './UploadProgressList'
 import { cn } from '@/lib/utils'
 
@@ -18,22 +19,20 @@ import { cn } from '@/lib/utils'
 
 // `capture` turns the form into the Photo/Video variant: the file input asks
 // the OS for the camera (mobile) or restricts the picker to media (desktop).
-// Upload plumbing is identical either way.
-export function FileForm({ capture = false, target: explicitTarget, initialFiles = [], onClose, onBusyChange }: { capture?: boolean; target?: AddTarget; initialFiles?: File[]; onClose?: () => void; onBusyChange?: (busy: boolean) => void } = {}) {
+// Upload plumbing is identical either way. The form only collects files and
+// their metadata: submitting hands the batch to the background upload manager
+// and closes, so the upload outlives this panel and the folder it started in.
+export function FileForm({ capture = false }: { capture?: boolean } = {}) {
   const { closeAdd, state } = useToolbox()
-  const activeTarget = useAddTarget()
-  const target = explicitTarget === undefined ? activeTarget : explicitTarget
-  const close = onClose ?? closeAdd
+  const target = useAddTarget()
   const isBackend = target?.mode === 'workspace' && target.treeName === 'backends'
-  const rel = useRelationFields(target, explicitTarget === undefined ? state.addRelateTo : null)
+  const rel = useRelationFields(target, state.addRelateTo)
   const { showSuccessToast, showErrorToast } = useToastHelpers()
 
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
-  const queue = useUploadQueue(initialFiles)
-  const { items, running } = queue
-  const busy = useRef(false)
-  const cancelled = useRef(false)
+  const queue = useUploadQueue()
+  const { items } = queue
   const [submitting, setSubmitting] = useState(false)
 
   // Workspace mode already knows where it uploads; only a context has to be
@@ -66,40 +65,29 @@ export function FileForm({ capture = false, target: explicitTarget, initialFiles
     addFiles(e.dataTransfer.files)
   }
 
-  const failed = items.filter((it) => it.status === 'error').length
-  const done = items.filter((it) => it.status === 'done').length
-  const pending = items.length - done
-  const canSubmit = !!target && !submitting && pending > 0
+  const canSubmit = !!target && !submitting && items.length > 0
 
   const handleSubmit = async () => {
-    if (!canSubmit || !target || busy.current) return
-    busy.current = true
-    cancelled.current = false
+    if (!canSubmit || !target) return
     setSubmitting(true)
-    onBusyChange?.(true)
     try {
       // One fix for the whole batch, taken before the uploads start — the
       // same location the user saw in the form, not wherever they are several
       // megabytes later. Resolves null unless they opted in; never rejects.
       const geo = isBackend ? null : await meta.geotag.capture()
-      if (cancelled.current) return
-      const summary = await queue.start(target, (blob, file) =>
-        buildFileDocument(blob, file, { tags: meta.tags, comment: meta.comment, geo }))
-      const relFailed = await rel.write(summary.docIds)
-      if (summary.failed === 0) {
-        const resumedNote = summary.resumed ? ` (${summary.resumed} already uploaded)` : ''
-        const relNote = relFailed ? '; some relations failed' : ''
-        showSuccessToast(`${summary.done} file(s) uploaded${resumedNote}${relNote}`)
-        close()
-      } else {
-        showErrorToast(`${summary.failed} of ${summary.total} file(s) failed — retry keeps what already made it`)
-      }
+      const { tags, comment } = meta
+      enqueueUpload(items.map((it) => it.file), target, {
+        buildDoc: (blob, file) => buildFileDocument(blob, file, { tags, comment, geo }),
+        onSettled: async (summary) => {
+          const relFailed = await rel.write(summary.docIds)
+          if (relFailed) showErrorToast('Files uploaded, but some relations failed')
+          else if (summary.failed === 0) showSuccessToast(`${summary.done} file(s) uploaded`)
+        },
+      })
+      closeAdd()
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to upload files')
-    } finally {
-      busy.current = false
       setSubmitting(false)
-      onBusyChange?.(false)
     }
   }
 
@@ -135,7 +123,7 @@ export function FileForm({ capture = false, target: explicitTarget, initialFiles
         />
       </div>
 
-      <UploadProgressList items={items} running={running} onRemove={queue.removeItem} />
+      <UploadProgressList items={items} running={false} onRemove={queue.removeItem} />
 
       {!isBackend && <FileMetaFields fields={meta} idPrefix="file" multiple={items.length > 1} />}
 
@@ -144,20 +132,8 @@ export function FileForm({ capture = false, target: explicitTarget, initialFiles
       <p className="text-xs text-muted-foreground">{describeTarget(target)}{isBackend ? '. Existing files are never overwritten.' : ''}</p>
 
       <div className="flex justify-end gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => { if (submitting) { cancelled.current = true; queue.cancel() } else close() }}
-        >
-          Cancel
-        </Button>
-        <Button size="sm" onClick={handleSubmit} disabled={!canSubmit}>
-          {submitting
-            ? 'Uploading…'
-            : failed > 0
-              ? (<span className="flex items-center gap-1"><RotateCcw className="h-3.5 w-3.5" />Retry failed ({failed})</span>)
-              : 'Add files'}
-        </Button>
+        <Button variant="outline" size="sm" onClick={closeAdd}>Cancel</Button>
+        <Button size="sm" onClick={handleSubmit} disabled={!canSubmit}>Add files</Button>
       </div>
     </div>
   )

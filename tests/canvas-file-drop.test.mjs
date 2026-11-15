@@ -4,58 +4,46 @@ import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
 
-const source = readFileSync(new URL('../src/components/canvas/FileDropArea.tsx', import.meta.url), 'utf8')
-const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText
+const transpile = (path, options = {}) => ts.transpileModule(readFileSync(new URL(path, import.meta.url), 'utf8'), {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, ...options },
+}).outputText
+
 function harness(target) {
-  const calls = [], errors = [], slots = []
+  const uploads = [], errors = [], slots = []
   let cursor = 0
   const jsx = (type, props) => ({ type, props })
   const deps = {
-    react: {
-      useState(initial) { const i = cursor++; slots[i] ??= { value: initial }; return [slots[i].value, v => { slots[i].value = v }] },
-      useRef(initial) { const i = cursor++; return slots[i] ??= { current: initial } },
-    },
+    react: { useState(initial) { const i = cursor++; slots[i] ??= { value: initial }; return [slots[i].value, v => { slots[i].value = v }] } },
     'react/jsx-runtime': { jsx, jsxs: jsx },
-    '@/components/toolbox/add/FileForm': { FileForm: 'SharedFileForm' },
-    '@/components/common/document-action-dialog': { DocumentActionDialog: 'Dialog' },
-    '@/hooks/useToastHelpers': { useToastHelpers: () => ({ showErrorToast: text => errors.push(text), showSuccessToast() {} }) },
+    '@/components/toolbox/add/upload-manager': { uploadDroppedFiles: async (transfer, to) => { uploads.push({ files: transfer.files, to }); return transfer.files.length } },
+    '@/components/toolbox/add/dropped-files': { isFileDrag: transfer => transfer.types.includes('Files') },
+    '@/hooks/useToastHelpers': { useToastHelpers: () => ({ showErrorToast: text => errors.push(text) }) },
   }
   const exports = {}
-  vm.runInNewContext(compiled, { exports, require: name => deps[name] || {} })
-  return {
-    render(next = target) { cursor = 0; return exports.FileDropArea({ target: next, children: null }).props },
-    calls, errors,
-  }
+  vm.runInNewContext(transpile('../src/components/canvas/FileDropArea.tsx'), { exports, require: name => deps[name] || {} })
+  return { render(next = target) { cursor = 0; return exports.FileDropArea({ target: next, children: null }).props }, uploads, errors }
 }
-const event = (types, files = []) => ({ dataTransfer: { types, files }, prevented: false, stopped: false,
-  preventDefault() { this.prevented = true }, stopPropagation() { this.stopped = true } })
+const event = (types, files = [], folder) => ({
+  dataTransfer: { types, files }, prevented: false, stopped: false,
+  target: { closest: () => (folder ? { dataset: { dropFolder: folder } } : null) },
+  preventDefault() { this.prevented = true }, stopPropagation() { this.stopped = true },
+})
 const target = { mode: 'workspace', workspaceName: 'home', treeName: 'directory', treeType: 'directory', path: '/Accounting/Invoices' }
+const files = [{ name: 'invoice.pdf' }, { name: 'photo.jpg' }]
 
-test('OS drops await confirmation and keep the receiving canvas destination while navigation changes', async () => {
+test('OS drops upload at once into the folder in view, or into the folder entry under the pointer', async () => {
   const ui = harness(target), props = ui.render()
   const over = event(['Files'])
   props.onDragOverCapture(over)
   assert.equal(over.dataTransfer.dropEffect, 'copy')
-  const files = [{ name: 'invoice.pdf' }, { name: 'photo.jpg' }]
   const drop = event(['Files'], files)
   props.onDropCapture(drop)
   assert.equal(drop.prevented, true)
   assert.equal(drop.stopped, true)
-  assert.equal(ui.calls.length, 0)
-  const elements = value => Array.isArray(value) ? value.flatMap(elements)
-    : value && typeof value === 'object' ? [value, ...elements(value.props?.children)] : []
-  const dialog = ui.render({ ...target, path: '/Elsewhere' })
-  const form = elements(dialog.children).find(el => el.type === 'SharedFileForm')
-  assert.ok(form, 'drop uses the shared Add Files form')
-  assert.equal(form.props.target, target, 'form uses drop-time destination')
-  assert.deepEqual(Array.from(form.props.initialFiles), files)
-  form.props.onBusyChange(true)
-  elements(dialog.children).find(el => el.type === 'Dialog').props.onClose()
-  assert.ok(elements(ui.render().children).find(el => el.type === 'SharedFileForm'), 'busy uploads keep the dialog open')
-  form.props.onBusyChange(false)
-  form.props.onClose()
-  assert.equal(elements(ui.render().children).some(el => el.type === 'SharedFileForm'), false)
-
+  assert.deepEqual(ui.uploads, [{ files, to: target }])
+  ui.render().onDropCapture(event(['Files'], files, '/Accounting/Invoices/2026'))
+  assert.equal(ui.uploads[1].to.path, '/Accounting/Invoices/2026')
+  assert.equal(ui.uploads[1].to.treeName, 'directory')
 })
 
 test('internal document drags remain untouched and read-only canvases do not import', () => {
@@ -64,6 +52,53 @@ test('internal document drags remain untouched and read-only canvases do not imp
     ui.render().onDragOverCapture(e)
     ui.render().onDropCapture(e)
     assert.equal(e.prevented, false)
-    assert.equal(ui.calls.length, 0)
+    assert.equal(ui.uploads.length, 0)
   }
+})
+
+test('background uploads outlive their caller: batches run in order, report per file, and failures can be retried', async () => {
+  const attempts = [], events = []
+  const pipeline = async ({ target: to, items, patch }) => {
+    attempts.push(to.path)
+    for (const item of items().filter(entry => entry.status !== 'done')) {
+      patch(item.id, item.file.name === 'broken.bin' && attempts.length < 3 ? { status: 'error', error: 'offline' } : { status: 'done', docId: 7 })
+    }
+  }
+  const deps = {
+    react: { useSyncExternalStore: (_subscribe, snapshot) => snapshot() },
+    './useAddTarget': { resolveUploadWorkspace: async to => to, resolveBackendUpload: async () => null },
+    './useFileFields': { buildFileDocument: () => ({}) },
+    './dropped-files': {},
+    './useUploadQueue': {
+      itemKey: file => file.name, runUploadPipeline: pipeline,
+      summarizeUpload: items => ({ done: items.filter(i => i.status === 'done').length, failed: items.filter(i => i.status === 'error').length, total: items.length, docIds: [] }),
+    },
+  }
+  const exports = {}
+  vm.runInNewContext(transpile('../src/components/toolbox/add/upload-manager.ts'), {
+    exports, require: name => deps[name], window: { dispatchEvent: e => events.push(e) }, CustomEvent: class {}, setTimeout: () => 0, console, AbortController,
+  })
+  const settled = () => new Promise((resolve, reject) => {
+    let turns = 0
+    const poll = () => {
+      if (exports.useUploadBatches().every(batch => batch.state === 'settled')) resolve()
+      else if (++turns > 1000) reject(new Error(`uploads never settled: ${JSON.stringify(exports.useUploadBatches())}`))
+      else setImmediate(poll)
+    }
+    poll()
+  })
+  let summary
+  exports.enqueueUpload([{ name: 'a.txt' }, { name: 'a.txt' }], { ...target, path: '/A' }, { onSettled: value => { summary = value } })
+  exports.enqueueUpload([{ name: 'broken.bin' }], { ...target, path: '/B' })
+  assert.equal(exports.useUploadBatches().map(batch => batch.state).join(), 'waiting,waiting')
+  await settled()
+  assert.deepEqual(attempts, ['/A', '/B'])
+  assert.equal(summary.done, 1, 'duplicate picks collapse to one file')
+  const failed = exports.useUploadBatches().find(batch => batch.label.endsWith('/B'))
+  assert.equal(failed.items[0].error, 'offline')
+  exports.retryUploadBatch(failed.id)
+  await settled()
+  assert.equal(exports.useUploadBatches().find(batch => batch.id === failed.id).items[0].status, 'done')
+  exports.dismissUploadBatch(failed.id)
+  assert.equal(exports.useUploadBatches().some(batch => batch.id === failed.id), false)
 })

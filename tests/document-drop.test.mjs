@@ -25,7 +25,8 @@ function loadHandler(path, name, dependencies) {
 }
 
 const imapFolderTarget = loadHandler('../src/services/workspace.ts', 'imapFolderTarget', {})
-const acceptsDocuments = loadHandler('../src/components/menu/shared/MenuTreeView.tsx', 'acceptsDocuments', { imapFolderTarget })
+const fileBackendTarget = loadHandler('../src/components/menu/shared/MenuTreeView.tsx', 'fileBackendTarget', {})
+const acceptsDocuments = loadHandler('../src/components/menu/shared/MenuTreeView.tsx', 'acceptsDocuments', { imapFolderTarget, fileBackendTarget })
 
 const source = { type: 'document', documentIds: [1, 2], sourceWorkspaceId: 'studio', sourceTreeName: 'directory', sourcePath: '/Notes' }
 
@@ -35,7 +36,7 @@ function setup(surface, target = {}) {
   const workspaceId = target.workspaceId ?? 'studio', treeName = target.treeName ?? 'directory', path = target.path ?? '/Notes'
   const paste = async (...args) => { calls.push(args); return true }
   const dependencies = {
-    isSameDocumentFolder, acceptsDocuments, isBackendsTree: treeName === 'backends', workspaceId, treeName, contextPath: path, onPasteDocuments: paste,
+    isSameDocumentFolder, acceptsDocuments, isFileDrag: () => false, isBackendsTree: treeName === 'backends', workspaceId, treeName, contextPath: path, onPasteDocuments: paste,
     setIsDragOver: value => feedback.push(value), setSelectedDocuments: () => { cleared = true },
     useState: () => [false, value => feedback.push(value)],
     backendTrashLocation: () => null, draggedPathRef: {}, isCopyRef: {}, setIsCopyDrag() {}, setDragOverPath: value => feedback.push(value),
@@ -84,6 +85,19 @@ for (const surface of ['list', 'folder', 'tree']) {
   })
 }
 
+for (const surface of ['list', 'folder', 'tree']) {
+  test(`${surface}: a plain drop copies and a Shift drop moves out of the source folder`, async () => {
+    for (const shift of [false, true]) {
+      const ui = setup(surface, { path: '/Other' })
+      await ui.drop(source, shift)
+      const options = ui.calls[0][2]
+      assert.equal(options.move, shift)
+      assert.equal(options.sourcePath, '/Notes')
+      assert.equal(options.sourceTreeName, 'directory')
+    }
+  })
+}
+
 test('unknown origins and similarly named folders are not treated as the same folder', () => {
   for (const payload of [{}, { ...source, sourcePath: undefined }, { ...source, sourceWorkspaceId: undefined }, { ...source, sourceTreeName: undefined }]) {
     assert.equal(isSameDocumentFolder(payload, 'studio', 'directory', '/Notes'), false)
@@ -107,9 +121,9 @@ test('document drags carry their folder scope, but workspace-wide results do not
   }
 })
 
-test('backends tree: emails drop onto mail folders only (an IMAP move), never onto storage folders', async () => {
+test('backends tree: documents drop onto mail folders and file backend folders, not onto account roots or connectors', async () => {
   const mail = { ...source, sourceTreeName: 'backends', sourcePath: '/imap/me@x.eu/inbox' }
-  for (const [path, accepted] of [['/imap/me@x.eu/inbox/accounting', true], ['/imap/me@x.eu', false], ['/imap/me@x.eu/inbox/attachments', false], ['/workspace/home/Notes', false]]) {
+  for (const [path, accepted] of [['/imap/me@x.eu/inbox/accounting', true], ['/imap/me@x.eu', false], ['/imap/me@x.eu/inbox/attachments', false], ['/workspace/home/Notes', true], ['/workspace/home', true], ['/workspace/git/repo', false], ['/s3/bucket/prefix', false]]) {
     const ui = setup('tree', { treeName: 'backends', path })
     await ui.drop(mail)
     assert.equal(ui.calls.length, accepted ? 1 : 0, path)

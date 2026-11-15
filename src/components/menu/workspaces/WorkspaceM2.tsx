@@ -1,4 +1,6 @@
 import { WorkspaceAreaMenu } from '@/components/workspace/workspace-area-menu'
+import { setDocumentClipboard, useDocumentClipboard } from '@/lib/document-clipboard'
+import { pasteDocuments } from '@/services/document-paste'
 import { canManageWorkspace } from '@/lib/workspace-access'
 import { restoreBackendTrashPath, discardBackendTrashPath } from '@/services/backend-trash'
 import { WorkspaceContentGate } from '@/components/workspace/workspace-content-gate'
@@ -21,7 +23,7 @@ import { useMenu } from '@/components/shell/use-menu'
 import { useCanvasRow } from '@/components/shell/strip/use-canvas-row'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { workspaceResumeUrl } from '@/lib/last-path'
-import { getWorkspace, getCachedWorkspaceTreeByName, invalidateWorkspaceTreeCache, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer, pasteDocumentsToWorkspacePath, imapFolderTarget, moveImapMessages, createPublicCanvasShare, listBackends, listWorkspacePins, pinWorkspacePath, unpinWorkspacePin, reorderWorkspacePins, workspacePinKey as pinKey, DEFAULT_WORKSPACE_TREE_NAME, treeTypeForName } from '@/services/workspace'
+import { getWorkspace, getCachedWorkspaceTreeByName, invalidateWorkspaceTreeCache, listWorkspaceLayers, lockWorkspaceLayer, unlockWorkspaceLayer, renameWorkspaceLayer, destroyWorkspaceLayer, createPublicCanvasShare, listBackends, listWorkspacePins, pinWorkspacePath, unpinWorkspacePin, reorderWorkspacePins, workspacePinKey as pinKey, DEFAULT_WORKSPACE_TREE_NAME } from '@/services/workspace'
 import type { Layer, WorkspacePin, Backend } from '@/services/workspace'
 import { getWebuiConfig, putWebuiConfig } from '@/services/user-config'
 import { WorkspacePinsTab } from './WorkspacePinsTab'
@@ -125,7 +127,7 @@ function WorkspaceM2Content() {
   const [resyncingPaths, setResyncingPaths] = useState<Set<string>>(new Set())
   const [contentPath, setContentPath] = useState<string | null>(urlIsLayer && urlPath !== '/' ? urlPath : null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [docClipboard, setDocClipboard] = useState<{ documentIds: number[]; operation: 'copy' | 'cut' } | null>(null)
+  const docClipboard = useDocumentClipboard(wsName)
   const [autoLinkPath, setAutoLinkPath] = useState<string | null>(null)
   // Storage policy dialog: the qualified virtual path (ctx:/… or dir:/…) it
   // was opened for; null = closed.
@@ -202,12 +204,6 @@ function WorkspaceM2Content() {
     }
     endTabDrag()
   }
-
-  useEffect(() => {
-    const handler = (e: CustomEvent) => setDocClipboard(e.detail ?? null)
-    window.addEventListener('documents:clipboard', handler as EventListener)
-    return () => window.removeEventListener('documents:clipboard', handler as EventListener)
-  }, [])
 
   // Keep selectedPath in sync with the URL — handles external navigation (back/forward,
   // direct links, workspace-detail navigation) where setSelectedPath is never called.
@@ -743,58 +739,22 @@ function WorkspaceM2Content() {
             pastedDocumentIds={docClipboard?.documentIds}
             isPathPinned={isPathPinned}
             onTogglePin={wsName ? handleTogglePin : undefined}
-            onPasteDocuments={wsName && activeTab === 'backends' ? async (path, ids) => {
-              // The backends tree mirrors backend storage, so a drop there is
-              // a move ON the backend — only mail folders support it (IMAP
-              // MOVE, like dragging a message in a mail client).
-              const target = imapFolderTarget(path)
-              if (!target) return false
-              const folder = path.split('/').filter(Boolean).slice(2).join('/')
-              const progress = showProgress({ title: 'Moving…', description: `${ids.length} message(s) → ${folder}` })
+            onPasteDocuments={wsName ? async (path, ids, source) => {
+              // A drop names its own source and mode; the menu item and Ctrl+V
+              // paste the clipboard (a cut moves).
+              const move = source?.move ?? docClipboard?.operation === 'cut'
+              const sourcePath = source ? source.sourcePath : docClipboard?.sourcePath
+              const sourceTreeName = source ? source.sourceTreeName : docClipboard?.sourceTreeName
+              const progress = showProgress({ title: move ? 'Moving…' : 'Pasting…', description: `${ids.length} document(s) → "${path}"` })
               try {
-                const { moved, results } = await moveImapMessages(wsName, target.address, ids, path)
-                const failed = results.filter(r => !r.ok)
-                if (failed.length) {
-                  progress.fail({ title: `${failed.length} message(s) not moved`, description: failed[0].error || 'Move failed', variant: 'destructive' })
-                } else {
-                  progress.done({ title: 'Moved', description: `${moved} message(s) → ${folder}` })
-                }
-                if (docClipboard && moved) {
-                  setDocClipboard(null)
-                  window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: null }))
-                }
-                // Account root: overlaps both the source folder (the view the drag
-                // came from) and the target.
-                window.dispatchEvent(new CustomEvent('workspace:documents:refresh', { detail: { workspaceName: wsName, path: `/imap/${target.address}`, treeName: 'backends' } }))
-                return moved > 0
-              } catch (err) {
-                progress.fail({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to move messages', variant: 'destructive' })
-                return false
-              }
-            } : wsName ? async (path, ids) => {
-              // Ungated on the clipboard: also serves drag-and-drop from the
-              // content area (no prior "Copy" involved).
-              const treeType = treeTypeForName(activeTab)
-              const treeName = activeTab === 'directory' ? 'directory' : DEFAULT_WORKSPACE_TREE_NAME
-              const progress = showProgress({ title: 'Pasting…', description: `${ids.length} document(s) → "${path}"` })
-              let success = false
-              try {
-                success = await pasteDocumentsToWorkspacePath(wsName, path, ids, treeName, treeType)
+                const summary = await pasteDocuments(wsName, { treeName: activeTreeName, path }, ids, { move, sourcePath, sourceTreeName })
+                progress.done({ title: 'Success', description: summary })
+                if (!source) setDocumentClipboard(null)
+                return true
               } catch (err) {
                 progress.fail({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to paste documents', variant: 'destructive' })
                 return false
               }
-              progress.done(success ? { title: 'Success', description: `${ids.length} document(s) pasted to "${path}"` } : undefined)
-              if (success) {
-                if (docClipboard) {
-                  setDocClipboard(null)
-                  window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: null }))
-                }
-                window.dispatchEvent(new CustomEvent('workspace:documents:refresh', {
-                  detail: { workspaceName: wsName, path, treeName },
-                }))
-              }
-              return success
             } : undefined}
             {...ops}
           />

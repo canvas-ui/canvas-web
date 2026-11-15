@@ -4,6 +4,8 @@ import { useContentWindow } from '@/components/common/content-window-context';
 import { WorkspaceAreaMenu } from '@/components/workspace/workspace-area-menu';
 import { TrashPanel } from '@/components/workspace/trash-panel';
 import { BackendTrashBrowser } from '@/components/workspaces/BackendTrashBrowser';
+import { setDocumentClipboard, useDocumentClipboard } from '@/lib/document-clipboard';
+import { pasteDocuments } from '@/services/document-paste';
 import { backendTrashLocation } from '@/lib/backend-trash';
 import { WorkspaceContentGate } from '@/components/workspace/workspace-content-gate';
 import { StorageScanIndicator } from '@/components/notifications/StorageScanIndicator';
@@ -79,13 +81,6 @@ type WorkspaceSidePane = {
 };
 
 type FocusedPane = 'left' | 'right';
-type WorkspaceClipboard = {
-  documentIds: number[];
-  operation: 'copy' | 'cut';
-  sourcePath?: string;
-  sourceTreeName?: string;
-};
-
 const documentCache = new Map<string, { documents: Document[]; totalCount: number }>();
 
 function paneKey(workspaceName: string, treeName: string, path: string) {
@@ -166,7 +161,7 @@ function WorkspaceContent() {
   const [docScope, setDocScope] = useState<'path' | 'workspace'>('path');
   const [isStartingWorkspace, setIsStartingWorkspace] = useState(false);
 
-  const [clipboard, setClipboard] = useState<WorkspaceClipboard | null>(null);
+  const clipboard = useDocumentClipboard(workspaceName);
 
   // Canvas creation is a content-area form, not a tree input or a modal: the
   // parent path comes either from the tree ("New canvas here…", which lands
@@ -1121,14 +1116,14 @@ function WorkspaceContent() {
   };
 
   const handleCopyDocuments = (documentIds: number[]) => {
-    setClipboard({ documentIds, operation: 'copy', sourcePath: selectedPath, sourceTreeName: selectedTreeName });
-    window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: { documentIds, operation: 'copy' } }));
+    if (!workspaceName) return;
+    setDocumentClipboard({ workspaceName, documentIds, operation: 'copy', sourcePath: selectedPath, sourceTreeName: selectedTreeName });
     showToast({ title: 'Copied', description: `${documentIds.length} document(s) copied to clipboard` });
   };
 
   const handleCutDocuments = (documentIds: number[]) => {
-    setClipboard({ documentIds, operation: 'cut', sourcePath: selectedPath, sourceTreeName: selectedTreeName });
-    window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: { documentIds, operation: 'cut' } }));
+    if (!workspaceName) return;
+    setDocumentClipboard({ workspaceName, documentIds, operation: 'cut', sourcePath: selectedPath, sourceTreeName: selectedTreeName });
     showToast({ title: 'Cut', description: `${documentIds.length} document(s) cut to clipboard` });
   };
 
@@ -1141,38 +1136,22 @@ function WorkspaceContent() {
     // of a read-only backends path into a context/directory tree.
     const targetTreeName = options.targetTreeName ?? selectedTreeName;
     const targetTreeType = options.targetTreeType ?? selectedTreeType;
-    const moving = options.move ?? clipboard?.operation === 'cut';
-    const progress = showProgress({ title: moving ? 'Moving…' : 'Pasting…', description: `${documentIds.length} document(s) → "${path}"` });
+    const move = options.move ?? clipboard?.operation === 'cut';
+    const sourceTreeName = options.sourceTreeName || clipboard?.sourceTreeName;
+    const sourcePath = options.sourcePath || clipboard?.sourcePath;
+    const progress = showProgress({ title: move ? 'Moving…' : 'Pasting…', description: `${documentIds.length} document(s) → "${path}"` });
     try {
-      const success = await pasteDocumentsToWorkspacePath(workspaceName, path, documentIds, targetTreeName, targetTreeType);
-      if (success) {
-        invalidateDocumentCache(workspaceName, targetTreeName, path);
-        const sourceTreeName = options.sourceTreeName || clipboard?.sourceTreeName;
-        const sourcePath = options.sourcePath || clipboard?.sourcePath;
-        const shouldMove = options.move ?? clipboard?.operation === 'cut';
-        if (shouldMove && sourcePath && sourceTreeName) {
-          const sourceTreeType: 'context' | 'directory' = treeTypeForName(sourceTreeName);
-          await removeWorkspaceDocuments(workspaceName, documentIds, sourcePath, [], sourceTreeName, sourceTreeType);
-          invalidateDocumentCache(workspaceName, sourceTreeName, sourcePath);
-          window.dispatchEvent(new CustomEvent('workspace:documents:refresh', {
-            detail: { workspaceName, path: sourcePath, treeName: sourceTreeName },
-          }));
-        }
-        // Done as far as the user is concerned: the server has the links. The
-        // list reload below is ours, and is timed separately.
-        progress.done({ title: 'Success', description: `${documentIds.length} document(s) ${moving ? 'moved' : 'pasted'} to "${path}"` });
-        setClipboard(null);
-        window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: null }));
-        const refreshStarted = performance.now();
-        await fetchDocuments();
-        console.info(`[paste] list refresh ${Math.round(performance.now() - refreshStarted)} ms`);
-        window.dispatchEvent(new CustomEvent('workspace:documents:refresh', {
-          detail: { workspaceName, path, treeName: targetTreeName },
-        }));
-      } else {
-        progress.done();
-      }
-      return success;
+      const summary = await pasteDocuments(workspaceName, { treeName: targetTreeName, treeType: targetTreeType, path }, documentIds, { move, sourcePath, sourceTreeName });
+      invalidateDocumentCache(workspaceName, targetTreeName, path);
+      if (move && sourcePath && sourceTreeName) invalidateDocumentCache(workspaceName, sourceTreeName, sourcePath);
+      // Done as far as the user is concerned: the server has the documents.
+      // The list reload below is ours.
+      progress.done({ title: 'Success', description: summary });
+      // A drag-and-drop or "Link to…" names its own source; only a clipboard
+      // paste consumes the clipboard.
+      if (options.move === undefined) setDocumentClipboard(null);
+      await fetchDocuments();
+      return true;
     } catch (err) {
       progress.fail({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to paste documents', variant: 'destructive' });
       return false;
@@ -1430,7 +1409,7 @@ function WorkspaceContent() {
       onDestroyDocuments={handleDestroyDocuments}
       onCopyDocuments={handleCopyDocuments}
       onCutDocuments={handleCutDocuments}
-      onPasteDocuments={isBackendsPath ? undefined : handlePasteDocuments}
+      onPasteDocuments={handlePasteDocuments}
       onImportDocuments={isBackendsPath ? undefined : handleImportDocuments}
       onSelectionChange={setLeftSelection}
       onBrowseTree={() => openM2Drawer('workspaces', 'detail', workspaceName ?? null)}
@@ -1590,8 +1569,6 @@ function WorkspaceContent() {
             workspaceIcon={workspace.icon}
             pane={sidePane}
             isFocused={focusedPane === 'right'}
-            clipboard={clipboard}
-            setClipboard={setClipboard}
             onFocus={() => setFocusedPane('right')}
             onSelectionChange={setRightSelection}
             onNavigate={(path) => setSidePane(prev => (prev ? { ...prev, path, viewId: undefined } : prev))}
@@ -1624,8 +1601,6 @@ function SideWorkspaceCanvas({
   workspaceIcon,
   pane,
   isFocused = false,
-  clipboard,
-  setClipboard,
   onFocus,
   onSelectionChange,
   onNavigate,
@@ -1636,8 +1611,6 @@ function SideWorkspaceCanvas({
   workspaceIcon?: string | null;
   pane: WorkspaceSidePane;
   isFocused?: boolean;
-  clipboard: WorkspaceClipboard | null;
-  setClipboard: (clipboard: WorkspaceClipboard | null) => void;
   onFocus: () => void;
   onSelectionChange?: (documentIds: number[]) => void;
   // Folder rows re-point the pane at another path of the same tree.
@@ -1741,42 +1714,30 @@ function SideWorkspaceCanvas({
     return () => window.removeEventListener('workspace:documents:refresh', onRefresh);
   }, [fetchPaneDocuments, workspaceName, pane.treeName, pane.path]);
 
-  const pasteDocuments = useCallback(async (path: string, documentIds: number[], options: DocumentPasteOptions = {}) => {
+  const clipboard = useDocumentClipboard(workspaceName);
+  const pastePaneDocuments = useCallback(async (path: string, documentIds: number[], options: DocumentPasteOptions = {}) => {
     // "Link to…" targets an explicit tree; a plain paste targets this pane's tree.
     const targetTreeName = options.targetTreeName ?? pane.treeName;
     const targetTreeType = options.targetTreeType ?? treeType;
-    const moving = options.move ?? clipboard?.operation === 'cut';
-    const progress = showProgress({ title: moving ? 'Moving…' : 'Pasting…', description: `${documentIds.length} document(s) → "${path}"` });
+    const move = options.move ?? clipboard?.operation === 'cut';
+    const sourcePath = options.sourcePath || clipboard?.sourcePath;
+    const sourceTreeName = options.sourceTreeName || clipboard?.sourceTreeName;
+    const progress = showProgress({ title: move ? 'Moving…' : 'Pasting…', description: `${documentIds.length} document(s) → "${path}"` });
     try {
-      const success = await pasteDocumentsToWorkspacePath(workspaceName, path, documentIds, targetTreeName, targetTreeType);
-      if (success) {
-        invalidateDocumentCache(workspaceName, targetTreeName, path);
-        const sourcePath = options.sourcePath || clipboard?.sourcePath;
-        const sourceTreeName = options.sourceTreeName || clipboard?.sourceTreeName;
-        const shouldMove = options.move ?? clipboard?.operation === 'cut';
-        if (shouldMove && sourcePath && sourceTreeName) {
-          const sourceTreeType: 'context' | 'directory' = treeTypeForName(sourceTreeName);
-          await removeWorkspaceDocuments(workspaceName, documentIds, sourcePath, [], sourceTreeName, sourceTreeType);
-          invalidateDocumentCache(workspaceName, sourceTreeName, sourcePath);
-          window.dispatchEvent(new CustomEvent('workspace:documents:refresh', {
-            detail: { workspaceName, path: sourcePath, treeName: sourceTreeName },
-          }));
-        }
-        progress.done({ title: 'Success', description: `${documentIds.length} document(s) ${moving ? 'moved' : 'pasted'} to "${path}"` });
-        setClipboard(null);
-        await fetchPaneDocuments();
-        window.dispatchEvent(new CustomEvent('workspace:documents:refresh', {
-          detail: { workspaceName, path, treeName: targetTreeName },
-        }));
-      } else {
-        progress.done();
-      }
-      return success;
+      const summary = await pasteDocuments(workspaceName, { treeName: targetTreeName, treeType: targetTreeType, path }, documentIds, { move, sourcePath, sourceTreeName });
+      invalidateDocumentCache(workspaceName, targetTreeName, path);
+      if (move && sourcePath && sourceTreeName) invalidateDocumentCache(workspaceName, sourceTreeName, sourcePath);
+      progress.done({ title: 'Success', description: summary });
+      // A drag-and-drop or "Link to…" names its own source; only a clipboard
+      // paste consumes the clipboard.
+      if (options.move === undefined) setDocumentClipboard(null);
+      await fetchPaneDocuments();
+      return true;
     } catch (err) {
       progress.fail({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to paste documents', variant: 'destructive' });
       return false;
     }
-  }, [workspaceName, pane.treeName, treeType, fetchPaneDocuments, showProgress, clipboard, setClipboard]);
+  }, [workspaceName, pane.treeName, treeType, fetchPaneDocuments, showProgress, clipboard]);
 
   // Remove / delete / destroy, scoped to this pane's own path + tree.
   const refreshPane = useCallback(() => {
@@ -1868,15 +1829,9 @@ function SideWorkspaceCanvas({
         onDeleteDocuments={deleteDocs}
         onDestroyDocument={(id) => destroyDocs([id])}
         onDestroyDocuments={destroyDocs}
-        onCopyDocuments={(documentIds) => {
-          setClipboard({ documentIds, operation: 'copy', sourcePath: pane.path, sourceTreeName: pane.treeName });
-          window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: { documentIds, operation: 'copy' } }));
-        }}
-        onCutDocuments={(documentIds) => {
-          setClipboard({ documentIds, operation: 'cut', sourcePath: pane.path, sourceTreeName: pane.treeName });
-          window.dispatchEvent(new CustomEvent('documents:clipboard', { detail: { documentIds, operation: 'cut' } }));
-        }}
-        onPasteDocuments={pane.treeName === 'backends' ? undefined : pasteDocuments}
+        onCopyDocuments={(documentIds) => setDocumentClipboard({ workspaceName, documentIds, operation: 'copy', sourcePath: pane.path, sourceTreeName: pane.treeName })}
+        onCutDocuments={(documentIds) => setDocumentClipboard({ workspaceName, documentIds, operation: 'cut', sourcePath: pane.path, sourceTreeName: pane.treeName })}
+        onPasteDocuments={pastePaneDocuments}
         onSelectionChange={onSelectionChange}
         pastedDocumentIds={clipboard?.documentIds}
         linkTree={tree}

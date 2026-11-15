@@ -24,7 +24,10 @@ import {
 import { LayerIconPicker } from './LayerIconPicker'
 import { ContextMenuShell } from '@/components/common/context-menu-shell'
 import { isTextInteraction, matchesShortcut } from '@/components/common/action-menu'
-import { findTreeNodeByPath, backendRemovalTarget, imapFolderTarget, type Backend } from '@/services/workspace'
+import { findTreeNodeByPath, backendRemovalTarget, imapFolderTarget, treeTypeForName, type Backend } from '@/services/workspace'
+import type { DocumentPasteSource } from '@/services/document-paste'
+import { isFileDrag } from '@/components/toolbox/add/dropped-files'
+import { uploadDroppedFiles } from '@/components/toolbox/add/upload-manager'
 import { useTreeAccordion } from '@/lib/tree-style'
 import { onAccentTextClass } from '@/utils/color'
 
@@ -105,7 +108,7 @@ export interface MenuTreeViewProps {
   onTogglePin?: (path: string, node: TreeNode) => Promise<void>
   searchQuery?: string
   pastedDocumentIds?: number[]
-  onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
+  onPasteDocuments?: (path: string, documentIds: number[], source?: DocumentPasteSource) => Promise<boolean>
   // Backends tree only: mirror-root paths with a resync scan in flight — their
   // nodes get a spinner badge.
   backends?: Backend[]
@@ -141,11 +144,18 @@ function fileBackendTarget(path: string, isBackendsTree: boolean): { address: st
   return null
 }
 
-// Documents dragged/pasted into the backends tree are only meaningful where
-// the backend can move them — mail folders (an IMAP move on the server).
-// Every other tree takes them anywhere (a link).
+// Documents dragged/pasted into the backends tree need a backend that can
+// take them: mail folders (an IMAP move on the server) and file backend
+// folders (the bytes are copied or moved there). Every other tree takes them
+// anywhere (a link).
 function acceptsDocuments(path: string, isBackendsTree: boolean): boolean {
-  return !isBackendsTree || imapFolderTarget(path) !== null
+  return !isBackendsTree || imapFolderTarget(path) !== null || fileBackendTarget(path, true) !== null
+}
+
+// OS files can be dropped on any folder of a context/directory tree and on
+// file backend folders.
+function acceptsFiles(path: string, isBackendsTree: boolean): boolean {
+  return !isBackendsTree || fileBackendTarget(path, true) !== null
 }
 
 const isDocumentDrag = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes('application/json')
@@ -204,7 +214,7 @@ interface CtxMenuProps {
   onCut: (path: string) => void
   onPaste: (target: string) => Promise<void>
   pastedDocumentIds?: number[]
-  onPasteDocuments?: (path: string, documentIds: number[]) => Promise<boolean>
+  onPasteDocuments?: (path: string, documentIds: number[], source?: DocumentPasteSource) => Promise<boolean>
   isPinned?: boolean
   onTogglePin?: () => Promise<void>
 }
@@ -410,7 +420,7 @@ function CtxMenu({
         )}
         {pastedDocumentIds && pastedDocumentIds.length > 0 && onPasteDocuments && acceptsDocuments(path, isBackendsTree) && item(
           <Clipboard className="w-3 h-3" />,
-          isBackendsTree ? `Move ${pastedDocumentIds.length} message(s) here` : `Paste ${pastedDocumentIds.length} document(s)`,
+          imapFolderTarget(path) && isBackendsTree ? `Move ${pastedDocumentIds.length} message(s) here` : `Paste ${pastedDocumentIds.length} document(s)`,
           async () => { await onPasteDocuments(path, pastedDocumentIds) },
         )}
 
@@ -1167,10 +1177,12 @@ export function MenuTreeView({
     if (isCopy !== isCopyRef.current) { isCopyRef.current = isCopy; setIsCopyDrag(isCopy) }
     if (src) {
       if (!isValidPathDrop(src, path, isCopy)) return
+    } else if (isFileDrag(e.dataTransfer)) {
+      if (!workspaceId || !acceptsFiles(path, isBackendsTree)) return
     } else if (isDocumentDrag(e) && !acceptsDocuments(path, isBackendsTree)) return
     e.preventDefault()
     setDragOverPath(path)
-  }, [isValidPathDrop, treeName, isBackendsTree])
+  }, [isValidPathDrop, treeName, isBackendsTree, workspaceId])
 
   const handleDragOver = useCallback((path: string, e: React.DragEvent) => {
     if (backendTrashLocation(treeName, path)) { e.dataTransfer.dropEffect = 'none'; return }
@@ -1185,13 +1197,21 @@ export function MenuTreeView({
         e.dataTransfer.dropEffect = 'none'
         return
       }
-    } else if (isDocumentDrag(e) && !acceptsDocuments(path, isBackendsTree)) {
-      e.dataTransfer.dropEffect = 'none'
+    } else if (isFileDrag(e.dataTransfer)) {
+      if (!workspaceId || !acceptsFiles(path, isBackendsTree)) { e.dataTransfer.dropEffect = 'none'; return }
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'copy'
+      return
+    } else if (isDocumentDrag(e)) {
+      if (!acceptsDocuments(path, isBackendsTree)) { e.dataTransfer.dropEffect = 'none'; return }
+      // Documents: a plain drop copies (links), Shift moves; mail only moves.
+      e.preventDefault()
+      e.dataTransfer.dropEffect = e.shiftKey || (isBackendsTree && imapFolderTarget(path)) ? 'move' : 'copy'
       return
     }
     e.preventDefault()
     e.dataTransfer.dropEffect = isCopy && !isBackendsTree ? 'copy' : 'move'
-  }, [isValidPathDrop, treeName, isBackendsTree])
+  }, [isValidPathDrop, treeName, isBackendsTree, workspaceId])
 
   const handleDragLeave = useCallback((path: string, e: React.DragEvent) => {
     if (!(e.currentTarget as Node).contains(e.relatedTarget as Node)) {
@@ -1211,6 +1231,14 @@ export function MenuTreeView({
     e.preventDefault()
     e.stopPropagation()
     if (backendTrashLocation(treeName, targetPath)) return
+    if (isFileDrag(e.dataTransfer)) {
+      setDragOverPath(null)
+      if (!workspaceId || !acceptsFiles(targetPath, isBackendsTree)) return
+      try {
+        await uploadDroppedFiles(e.dataTransfer, { mode: 'workspace', workspaceName: workspaceId, path: targetPath, treeName, treeType: treeTypeForName(treeName) })
+      } catch (err) { alert(err instanceof Error ? err.message : String(err)) }
+      return
+    }
     // Documents dragged from the content area carry an application/json
     // payload ({ type: 'document', documentIds }) — link them into the
     // drop path instead of treating the drop as a tree-path move.
@@ -1225,7 +1253,7 @@ export function MenuTreeView({
       setDragOverPath(null)
       if (isSameDocumentFolder(docPayload, workspaceId, treeName, targetPath)) return
       if (onPasteDocuments && acceptsDocuments(targetPath, isBackendsTree)) {
-        try { await onPasteDocuments(targetPath, docPayload.documentIds) }
+        try { await onPasteDocuments(targetPath, docPayload.documentIds, { move: e.shiftKey, sourcePath: docPayload.sourcePath, sourceTreeName: docPayload.sourceTreeName }) }
         catch (err) { alert(err instanceof Error ? err.message : String(err)) }
       }
       return

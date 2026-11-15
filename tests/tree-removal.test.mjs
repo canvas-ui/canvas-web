@@ -41,6 +41,8 @@ function setup() {
     '@/lib/backend-trash': { backendTrashLocation },
     '@/lib/tree-selection': { selectTreeRange, topLevelTreeSelection },
     '@/lib/document-drag': { isSameDocumentFolder },
+    '@/components/toolbox/add/dropped-files': { isFileDrag: () => false },
+    '@/components/toolbox/add/upload-manager': {},
     '@/lib/layer-style': {}, './LayerIconPicker': {},
     '@/components/common/context-menu-shell': { ContextMenuShell: 'menu' },
     '@/components/common/action-menu': {},

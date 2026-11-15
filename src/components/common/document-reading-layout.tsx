@@ -47,7 +47,7 @@ function ReadingLayout({ workspaceId, scope, documents, loading, children, autoO
   }), [document, workspaceId, open])
   return <SideViewContext.Provider value={value}>
     <div data-always-reader className="flex h-full min-h-0 min-w-0 flex-1 gap-shell">
-      <div className="min-h-0 min-w-0 flex-1 overflow-auto">{children}</div>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">{children}</div>
       {visible && <aside data-reader-pane aria-label="Document reading pane"
         style={{ width: width ? `${width}px` : '50vw', maxWidth: 'calc(100% - 240px)' } as CSSProperties}
         className="relative flex min-h-0 min-w-0 shrink-0 overflow-hidden border-l bg-card">

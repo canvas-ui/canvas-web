@@ -16,7 +16,7 @@ for (const name of ['DocumentRow', 'DocumentTableRow', 'DocumentTile']) {
     }
     visit(component)
     let opened = 0, selected = 0
-    const context = { document: { id: 7 }, isSelected: false, onSelect: () => selected++, setShowDetailModal: value => { if (value) opened++ }, window: { open: () => assert.fail('row must not launch browser') } }
+    const context = { document: { id: 7 }, isSelected: false, onSelect: () => selected++, setShowDetailModal: value => { if (value) opened++ }, window: { open: () => assert.fail('row must not launch browser'), getSelection: () => ({ removeAllRanges() {} }) } }
     vm.runInNewContext(compile(`globalThis.click = ${callback}`), context)
     context.click({})
     assert.equal(opened, 1)

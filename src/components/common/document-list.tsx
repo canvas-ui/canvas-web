@@ -7,6 +7,8 @@ import { DocumentReadingLayout } from './document-reading-layout'
 import './document-list-toolbar.css'
 import { runBackendDeletionBatch } from '@/lib/backend-transfer-batch'
 import { splitBackendsPath } from '@/services/hooks'
+import { useTreeOperations } from '@/hooks/useTreeOperations'
+import { enqueueUpload } from '@/components/toolbox/add/upload-manager'
 import { documentType, isDocumentFieldSort } from '@/lib/document-sort'
 import { parseDocumentIdQuery } from '@/lib/document-id-query'
 import { backendTransferFailureMessage } from '@/lib/backend-transfer-errors'
@@ -17,13 +19,13 @@ import { DocumentSelectionArea } from './document-selection-area'
 import { CopyToWorkspacePanel } from '@/components/menu/shared/CopyToWorkspacePanel'
 import { BulkEditDialog } from './BulkEditDialog'
 import { Document, TreeNode } from '@/types/workspace'
-import { File, Calendar, CalendarDays, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, MoreHorizontal, Play, Table as TableIcon, HardDrive, ArrowRightLeft, Loader2, Folder, FolderOpen, CornerLeftUp, Plus, Sparkles } from 'lucide-react'
+import { File, FolderPlus, FileJson, Calendar, CalendarDays, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, MoreHorizontal, Play, Table as TableIcon, HardDrive, ArrowRightLeft, Loader2, Folder, FolderOpen, CornerLeftUp, Plus, Sparkles } from 'lucide-react'
 import { LinkToCard, type LinkToTarget, type LinkToRelation } from '@/components/menu/shared/LinkToCard'
 import { DocumentActionDialog } from './document-action-dialog'
 import { isSameDocumentFolder, type DocumentDragPayload } from '@/lib/document-drag'
 import { BackendActionCard, type BackendTransferConfirmOptions } from '@/components/menu/shared/BackendActionCard'
 import { PickDocumentsCard } from '@/components/menu/shared/PickDocumentsCard'
-import { transferDocumentsToBackends, createDocumentRelations, type BackendTransferMode } from '@/services/workspace'
+import { transferDocumentsToBackends, createDocumentRelations, backendFolderTarget, treeTypeForName, type BackendTransferMode } from '@/services/workspace'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { useToast } from '@/components/ui/use-toast'
 import { useSideView } from '@/components/shell/use-side-view'
@@ -472,7 +474,7 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRight
 
   const handleDocumentClick = (e: React.MouseEvent) => {
     const isCtrlClick = e.ctrlKey || e.metaKey
-    if (e.shiftKey && onSelect) { e.preventDefault(); onSelect(document.id, true, isCtrlClick, true); return }
+    if (e.shiftKey && onSelect) { e.preventDefault(); window.getSelection()?.removeAllRanges(); onSelect(document.id, true, isCtrlClick, true); return }
     if (onSelect) {
       if (isCtrlClick) {
         // For ctrl+click, toggle selection state
@@ -487,11 +489,6 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRight
     }
   }
 
-  const handleMouseDown = (event: React.MouseEvent) => {
-    if (event.shiftKey) event.preventDefault()
-    // Removed auto-selection logic to avoid race conditions with drag operations
-    // Drag will work based on current selection state, click will handle selection
-  }
 
   const handleRightClick = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -510,7 +507,6 @@ function DocumentTableRow({ document, isSelected, workspaceId, onSelect, onRight
         onKeyDown={(e) => rowKeyDown(e, () => setShowDetailModal(true), () => onSelect?.(document.id, !isSelected, true))}
         className={`data-[reading=true]:bg-accent data-[reading=true]:text-accent-foreground cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring transition-opacity ${replicating ? 'opacity-60' : ''} ${isSelected ? 'bg-info-subtle hover:bg-info-subtle' : 'hover:bg-muted/50'}`}
         onClick={handleDocumentClick}
-        onMouseDown={handleMouseDown}
         {...longPressMenu}
         onContextMenu={handleRightClick}
         draggable
@@ -588,7 +584,7 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRightClick
 
   const handleDocumentClick = (e: React.MouseEvent) => {
     const isCtrlClick = e.ctrlKey || e.metaKey
-    if (e.shiftKey && onSelect) { e.preventDefault(); onSelect(document.id, true, isCtrlClick, true); return }
+    if (e.shiftKey && onSelect) { e.preventDefault(); window.getSelection()?.removeAllRanges(); onSelect(document.id, true, isCtrlClick, true); return }
     if (onSelect) {
       if (isCtrlClick) {
         // For ctrl+click, toggle selection state
@@ -601,11 +597,6 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRightClick
     if (!isCtrlClick) setShowDetailModal(true)
   }
 
-  const handleMouseDown = (event: React.MouseEvent) => {
-    if (event.shiftKey) event.preventDefault()
-    // Removed auto-selection logic to avoid race conditions with drag operations
-    // Drag will work based on current selection state, click will handle selection
-  }
 
   const handleRightClick = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); if (onSelect && !isSelected) { onSelect(document.id, true, false) } onRightClick?.(e, document.id) }
 
@@ -619,7 +610,6 @@ function DocumentRow({ document, isSelected, workspaceId, onSelect, onRightClick
         onKeyDown={(e) => rowKeyDown(e, () => setShowDetailModal(true), () => onSelect?.(document.id, !isSelected, true))}
         className={`data-[reading=true]:bg-accent data-[reading=true]:border-primary border rounded-(--card-radius) p-4 transition cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring ${replicating ? 'opacity-60' : ''} ${isSelected ? 'bg-info-subtle border-info ring-1 ring-info' : ''} ${isTabDocument && !isSelected ? 'hover:bg-info-subtle hover:border-info' : !isSelected ? 'hover:bg-accent/50' : ''}`}
         onClick={handleDocumentClick}
-        onMouseDown={handleMouseDown}
         {...longPressMenu}
         onContextMenu={handleRightClick}
         draggable
@@ -767,7 +757,7 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
 
   const handleClick = (e: React.MouseEvent) => {
     const isCtrlClick = e.ctrlKey || e.metaKey
-    if (e.shiftKey && onSelect) { e.preventDefault(); onSelect(document.id, true, isCtrlClick, true); return }
+    if (e.shiftKey && onSelect) { e.preventDefault(); window.getSelection()?.removeAllRanges(); onSelect(document.id, true, isCtrlClick, true); return }
     if (onSelect) onSelect(document.id, isCtrlClick ? !isSelected : true, isCtrlClick)
     if (!isCtrlClick) setShowDetailModal(true)
   }
@@ -784,7 +774,6 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
         onKeyDown={(e) => rowKeyDown(e, () => setShowDetailModal(true), () => onSelect?.(document.id, !isSelected, true))}
         className={`document-tile data-[reading=true]:bg-accent data-[reading=true]:border-primary group relative mb-3 flex break-inside-avoid flex-col overflow-hidden rounded-(--card-radius) border transition cursor-pointer outline-none hover:shadow-elevation-2 focus-visible:ring-2 focus-visible:ring-ring ${replicating ? 'opacity-60' : ''} ${isSelected ? 'ring-2 ring-info border-info' : ''}`}
         onClick={handleClick}
-        onMouseDown={event => { if (event.shiftKey) event.preventDefault() }}
         {...longPressMenu}
         onContextMenu={handleRightClick}
         draggable
@@ -875,15 +864,15 @@ function DocumentTile({ document, isSelected, workspaceId, onSelect, onOpenToSid
 // collapses the band; the checkbox selects/deselects everything in it (Explorer
 // selects a whole group when you click its header).
 // Shared drop handling for folder entries: the same `application/json`
-// document payload the tree accepts, linked into the folder via the paste
-// handler (move:false — mirrors the tree drop; Cut+Paste is the explicit move).
+// document payload the tree accepts, pasted into the folder. Like a file
+// manager, a plain drop copies (links) and a Shift drop moves.
 function useFolderDrop(folder: FolderEntry, onPasteDocuments?: DocumentListProps['onPasteDocuments'], contextPath?: string, treeName?: string, workspaceId?: string) {
   const [over, setOver] = useState(false)
   const hasDocPayload = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes('application/json')
   const onDragOver = (e: React.DragEvent) => {
     if (!onPasteDocuments || !hasDocPayload(e)) return
     e.preventDefault()
-    e.dataTransfer.dropEffect = 'link'
+    e.dataTransfer.dropEffect = e.shiftKey ? 'move' : 'copy'
     if (!over) setOver(true)
   }
   const onDragLeave = () => setOver(false)
@@ -892,12 +881,13 @@ function useFolderDrop(folder: FolderEntry, onPasteDocuments?: DocumentListProps
     if (!onPasteDocuments || !hasDocPayload(e)) return
     e.preventDefault()
     e.stopPropagation()
+    const move = e.shiftKey
     let payload: DocumentDragPayload | null = null
     try { payload = JSON.parse(e.dataTransfer.getData('application/json')) } catch { payload = null }
     if (payload?.type !== 'document' || !Array.isArray(payload.documentIds) || payload.documentIds.length === 0) return
     if (isSameDocumentFolder(payload, workspaceId, treeName, folder.path)) return
     try {
-      await onPasteDocuments(folder.path, payload.documentIds, { move: false, sourcePath: payload.sourcePath ?? contextPath, sourceTreeName: payload.sourceTreeName ?? treeName })
+      await onPasteDocuments(folder.path, payload.documentIds, { move, sourcePath: payload.sourcePath ?? contextPath, sourceTreeName: payload.sourceTreeName ?? treeName })
     } catch { /* toast raised by the caller */ }
   }
   return { over, onDragOver, onDragLeave, onDrop }
@@ -928,6 +918,7 @@ function FolderChip({ folder, onOpen, onMenu, onPasteDocuments, contextPath, tre
     <button
       type="button"
       title={folderTitle(folder)}
+      data-drop-folder={folder.path}
       onClick={() => onOpen?.(folder.path)}
       onContextMenu={(e) => openFolderMenu(e, folder, onMenu)}
       onDragOver={drop.onDragOver}
@@ -956,6 +947,7 @@ function FolderTile({ folder, onOpen, onMenu, onPasteDocuments, contextPath, tre
     <button
       type="button"
       title={folderTitle(folder)}
+      data-drop-folder={folder.path}
       onClick={() => onOpen?.(folder.path)}
       onContextMenu={(e) => openFolderMenu(e, folder, onMenu)}
       onDragOver={drop.onDragOver}
@@ -984,7 +976,7 @@ function FolderTile({ folder, onOpen, onMenu, onPasteDocuments, contextPath, tre
 function FolderTileGrid({ folders, onOpen, onMenu, onPasteDocuments, contextPath, treeName, workspaceId }: { folders: FolderEntry[]; onOpen?: (path: string) => void; onMenu?: FolderMenuHandler; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string; workspaceId?: string }) {
   if (folders.length === 0) return null
   return (
-    <div className="mb-4 grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3 pr-2" onContextMenu={(e) => e.stopPropagation()}>
+    <div className="mb-4 grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3 pr-2">
       {folders.map((folder) => (
         <FolderTile key={folder.path} folder={folder} onOpen={onOpen} onMenu={onMenu} onPasteDocuments={onPasteDocuments} contextPath={contextPath} treeName={treeName} workspaceId={workspaceId} />
       ))}
@@ -995,7 +987,7 @@ function FolderTileGrid({ folders, onOpen, onMenu, onPasteDocuments, contextPath
 function FolderStrip({ folders, onOpen, onMenu, onPasteDocuments, contextPath, treeName, workspaceId }: { folders: FolderEntry[]; onOpen?: (path: string) => void; onMenu?: FolderMenuHandler; onPasteDocuments?: DocumentListProps['onPasteDocuments']; contextPath: string; treeName?: string; workspaceId?: string }) {
   if (folders.length === 0) return null
   return (
-    <div className="mb-3 flex flex-wrap gap-2 pr-2" onContextMenu={(e) => e.stopPropagation()}>
+    <div className="mb-3 flex flex-wrap gap-2 pr-2">
       {folders.map((folder) => (
         <FolderChip key={folder.path} folder={folder} onOpen={onOpen} onMenu={onMenu} onPasteDocuments={onPasteDocuments} contextPath={contextPath} treeName={treeName} workspaceId={workspaceId} />
       ))}
@@ -1012,6 +1004,7 @@ function FolderTableRow({ folder, onOpen, onMenu, onPasteDocuments, contextPath,
     <TableRow
       data-selection-ignore=""
       className={`cursor-pointer ${drop.over ? 'bg-accent ring-1 ring-inset ring-info' : ''} ${folder.isParent ? 'text-muted-foreground' : ''}`}
+      data-drop-folder={folder.path}
       onClick={() => onOpen?.(folder.path)}
       onContextMenu={(e) => openFolderMenu(e, folder, onMenu)}
       onDragOver={drop.onDragOver}
@@ -1162,6 +1155,33 @@ export function DocumentList({ readingPane = false, externalSearchQuery, toolbar
 
   const [showExportModal, setShowExportModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
+  // File-manager mode: a workspace folder in view (not a widget, search scope
+  // or context list). Enables New folder / Upload files on the area menu.
+  const isBackendsTree = treeName === 'backends'
+  const fileManager = Boolean(workspaceId && treeName && onOpenFolder && scope === 'path')
+  const treeOps = useTreeOperations({ workspaceId: fileManager ? workspaceId : undefined, treeName })
+  const canCreateFolder = fileManager && (!isBackendsTree || backendFolderTarget(contextPath) !== null)
+  // Inside a storage backend (mail accounts take messages, not files); the
+  // upload itself checks the backend is writable.
+  const canUploadFiles = fileManager && (isBackendsTree ? Boolean(splitBackendsPath(contextPath)) && !contextPath.startsWith('/imap/') : Boolean(onImportDocuments))
+  const pickUploadFiles = () => {
+    const input = window.document.createElement('input')
+    input.type = 'file'
+    input.multiple = true
+    input.onchange = () => enqueueUpload(Array.from(input.files ?? []), { mode: 'workspace', workspaceName: workspaceId!, path: contextPath, treeName: treeName!, treeType: treeTypeForName(treeName) })
+    input.click()
+  }
+  const createFolder = async () => {
+    const name = prompt('New folder name:')?.trim()
+    if (!name) return
+    try {
+      if (/[\\/]/.test(name) || name === '.' || name === '..') throw new Error('Enter a folder name without slashes')
+      if (isBackendsTree) await treeOps.onCreateBackendFolder?.(contextPath, name)
+      else await treeOps.onInsertPath(`${contextPath === '/' ? '' : contextPath}/${name}`)
+    } catch (error) {
+      showErrorToast(error instanceof Error ? error.message : 'Failed to create the folder')
+    }
+  }
   // The input is a buffer for the NEXT query to add to the stack (not a mirror of
   // a single active query) — submitting appends a chip and clears it. It also
   // drives the local fuse filter over the loaded page while you type.
@@ -1622,6 +1642,8 @@ export function DocumentList({ readingPane = false, externalSearchQuery, toolbar
   const areaActions = (): ActionItem[] => {
     const items: ActionItem[] = []
     const add = (item: ActionItem | false | undefined | null | 0) => { if (item) items.push(item) }
+    add(canCreateFolder && { id: 'new-folder', group: 'new', label: 'New folder…', icon: FolderPlus, run: createFolder })
+    add(canUploadFiles && { id: 'upload', group: 'new', label: 'Upload files…', icon: Upload, hint: 'Uploads run in the background; you can keep browsing', run: pickUploadFiles })
     const pasteIds = pastedDocumentIds ?? []
     add(onPasteDocuments && pasteIds.length > 0 && {
       id: 'paste', group: 'clipboard', label: `Paste (${pasteIds.length})`, icon: Clipboard, shortcut: 'Mod+V',
@@ -1634,8 +1656,8 @@ export function DocumentList({ readingPane = false, externalSearchQuery, toolbar
       run: () => setSelectedDocuments(new Set(filteredDocuments.map(doc => doc.id))),
     })
     add(selectedDocuments.size > 0 && { id: 'select-none', group: 'select', label: 'Clear selection', icon: Square, run: () => setSelectedDocuments(new Set()) })
-    add(onPasteDocuments && { id: 'add-existing', group: 'add', label: 'Add existing documents…', icon: FileSearch, hint: 'Browse and add existing documents to this folder', run: () => setPickDocsOpen(true) })
-    add(onImportDocuments && { id: 'import', group: 'add', label: 'Import…', icon: Upload, run: () => setShowImportModal(true) })
+    add(onPasteDocuments && !isBackendsTree && { id: 'add-existing', group: 'add', label: 'Add existing documents…', icon: FileSearch, hint: 'Browse and add existing documents to this folder', run: () => setPickDocsOpen(true) })
+    add(onImportDocuments && { id: 'import', group: 'add', label: 'Import…', icon: FileJson, run: () => setShowImportModal(true) })
     add(documents.length > 0 && { id: 'export-all', group: 'add', label: 'Export all…', icon: Download, run: () => { setSelectedDocuments(new Set()); setShowExportModal(true) } })
     add(onPurgeDocuments && totalCount > 0 && {
       id: 'purge', group: 'purge', label: `Purge all (${totalCount})`, icon: Trash2, destructive: true,

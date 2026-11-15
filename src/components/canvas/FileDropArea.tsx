@@ -1,45 +1,43 @@
-import { DocumentActionDialog } from '@/components/common/document-action-dialog'
-import { useRef, useState, type ReactNode } from 'react'
-import { FileForm } from '@/components/toolbox/add/FileForm'
-import type { AddTarget } from '@/components/toolbox/add/useAddTarget'
+import { useState, type DragEvent, type ReactNode } from 'react'
+import { uploadDroppedFiles, type WorkspaceUploadTarget } from '@/components/toolbox/add/upload-manager'
+import { isFileDrag } from '@/components/toolbox/add/dropped-files'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
 
-/** OS file drops belong to this canvas, independently of toolbox focus. */
-export function FileDropArea({ target, children }: { target: AddTarget; children: ReactNode }) {
-  const [files, setFiles] = useState<File[]>([])
-  const busy = useRef(false)
-  const [over, setOver] = useState(false)
-  const [open, setOpen] = useState(false)
-  const [destination, setDestination] = useState<AddTarget>(null)
+/**
+ * OS file drops belong to this canvas, independently of toolbox focus. Files
+ * dropped on a folder entry (`data-drop-folder`) go into that folder, anything
+ * else into the folder in view. Uploads start at once and run in the
+ * background (upload tray).
+ */
+export function FileDropArea({ target, children }: { target: WorkspaceUploadTarget | null; children: ReactNode }) {
+  const [over, setOver] = useState<string | null>(null)
   const { showErrorToast } = useToastHelpers()
+  const folderAt = (event: DragEvent): string | null =>
+    (event.target as HTMLElement).closest?.<HTMLElement>('[data-drop-folder]')?.dataset.dropFolder || null
   return <div className={`relative flex flex-col h-full min-h-0 bg-background ${over ? 'ring-2 ring-inset ring-primary' : ''}`}
     onDragOverCapture={event => {
-      if (open || !target || !Array.from(event.dataTransfer.types).includes('Files')) return
+      if (!target || !isFileDrag(event.dataTransfer)) return
       event.preventDefault()
       event.stopPropagation()
-      event.dataTransfer.dropEffect = busy.current ? 'none' : 'copy'
-      setOver(!busy.current)
+      event.dataTransfer.dropEffect = 'copy'
+      setOver(folderAt(event) ?? target.path)
     }}
     onDragLeaveCapture={event => {
-      if (!event.currentTarget.contains(event.relatedTarget as Node)) setOver(false)
+      if (!event.currentTarget.contains(event.relatedTarget as Node)) setOver(null)
     }}
     onDropCapture={event => {
-      if (open || !target || !Array.from(event.dataTransfer.types).includes('Files')) return
+      if (!target || !isFileDrag(event.dataTransfer)) return
       event.preventDefault()
       event.stopPropagation()
-      setOver(false)
-      if (busy.current) { showErrorToast('Wait for the current upload to finish'); return }
-      const files = Array.from(event.dataTransfer.files)
-      if (!files.length) { showErrorToast('Drop files rather than folders'); return }
-      setFiles(files)
-      setDestination(target)
-      setOpen(true)
+      setOver(null)
+      const folder = folderAt(event)
+      void uploadDroppedFiles(event.dataTransfer, folder ? { ...target, path: folder } : target)
+        .then(count => { if (!count) showErrorToast('Nothing to upload in this drop') })
+        .catch(error => showErrorToast(error instanceof Error ? error.message : 'Could not read the dropped files'))
     }}>
     {children}
-    {over && <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-background/80 text-sm font-medium">Drop files to upload to {target?.mode === 'workspace' ? target.path : 'this context'}</div>}
-    {open && <DocumentActionDialog label="Import files" onClose={() => { if (!busy.current) setOpen(false) }}>
-      <h2 className="border-b px-4 py-3 text-sm font-medium">Import files</h2>
-      <FileForm target={destination} initialFiles={files} onClose={() => setOpen(false)} onBusyChange={value => { busy.current = value }} />
-    </DocumentActionDialog>}
+    {over && <div className="pointer-events-none absolute inset-x-0 bottom-4 z-30 flex justify-center">
+      <span className="rounded-md border bg-popover px-3 py-1.5 text-sm font-medium shadow-elevation-3">Drop to upload to {over}</span>
+    </div>}
   </div>
 }
