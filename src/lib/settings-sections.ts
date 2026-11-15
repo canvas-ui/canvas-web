@@ -8,6 +8,7 @@ import {
   HardDrive,
   KeyRound,
   Link2,
+  Mic,
   Monitor,
   Plug,
   RefreshCw,
@@ -89,6 +90,7 @@ export type AgentSettingsTab =
   | 'identity'
   | 'provider'
   | 'models'
+  | 'voice'
   | 'tools'
   | 'access'
   | 'memory'
@@ -98,6 +100,7 @@ export const AGENT_SETTINGS_SECTIONS: readonly SettingsSection<AgentSettingsTab>
   { id: 'identity', label: 'Identity & instructions', description: 'Set the agent’s name, role and instructions', icon: Settings2 },
   { id: 'provider', label: 'AI connection', description: 'Connect a chat model provider and manage its credentials', icon: Plug },
   { id: 'models', label: 'Chat model', description: 'Choose the model and tune how it responds', icon: Cpu },
+  { id: 'voice', label: 'Voice', description: 'Set how the agent hears you and how it sounds', icon: Mic },
   { id: 'tools', label: 'Tools & skills', description: 'Choose the skills and MCP tools the agent can use', icon: Wrench },
   { id: 'access', label: 'Access & permissions', description: 'Choose which Canvas content the agent can access', icon: KeyRound },
   { id: 'memory', label: 'Memory', description: 'Configure how the agent remembers information', icon: Brain },

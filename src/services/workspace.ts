@@ -1588,6 +1588,9 @@ export interface BackendCapabilities {
   // Objects live under person-chosen paths (directory share, drive): a
   // transfer there takes a folder + filename. False for the hash-keyed blob store.
   paths?: boolean;
+  // Can hold the workspace's content-addressed blobs: eligible as the
+  // primary data store.
+  blobs?: boolean;
 }
 
 export interface BackendContainer {
@@ -1636,6 +1639,8 @@ export interface Backend {
   treePath?: string | null;
   // Last on-demand disk usage, if computed this server runtime.
   usage?: BackendDiskUsage | null;
+  // The primary data store: new blobs are also uploaded here.
+  primary?: boolean;
   capabilities: BackendCapabilities;
   containers?: BackendContainer[];
   config?: Record<string, unknown>;

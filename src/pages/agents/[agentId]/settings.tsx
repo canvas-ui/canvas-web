@@ -1,10 +1,14 @@
 import { buildSystemPrompt } from '@/lib/agent-persona'
 import { ModelPicker } from '@/components/agent/ModelPicker'
+import { VoiceSettingsFields } from '@/components/agent/VoiceSettingsFields'
+import { EMPTY_VOICE_FORM, voiceConfigFromForm, voiceFormFromConfig } from '@/lib/agent-voice'
+import { useSpeechPlayer } from '@/hooks/useSpeechPlayer'
+import { canvasToolsEnabledIn, groupAgentTools, withCanvasToolsEnabled } from '@/lib/agent-tools'
 import { useAgentModels } from '@/hooks/useAgentModels'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Volume2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/common/page-header'
@@ -21,12 +25,14 @@ import {
   getAgent,
   getAgentAccess,
   getAgentToolDefinitions,
+  getAgentVoiceStatus,
   installAgentSkill,
   listAgentSkills,
   removeAgentSkill,
   revokeAgentAccess,
   rotateAgentAccessToken,
   setAgentAccessGrant,
+  speakAgentReply,
   revokeAgentAccessGrant,
   type AgentAccessGrant,
   updateAgent,
@@ -35,6 +41,7 @@ import {
   type AgentBinding,
   type AgentSkill,
   type AgentToolDefinition,
+  type AgentVoiceStatus,
   type CreateAgentData,
 } from '@/services/agent'
 import { listContexts } from '@/services/context'
@@ -126,6 +133,13 @@ export default function AgentSettingsPage() {
   const modelDiscovery = useAgentModels(provider, providerApiKey, providerHost, agent?.id)
   const selectedModel = modelDiscovery.models.find(model => model.id === mainModel)
 
+  // Voice: the form holds the agent's own settings, the status what is in
+  // effect once the server's shared settings are applied underneath.
+  const [voiceForm, setVoiceForm] = useState(EMPTY_VOICE_FORM)
+  const [voiceStatus, setVoiceStatus] = useState<AgentVoiceStatus | null>(null)
+  const [isSampling, setIsSampling] = useState(false)
+  const speech = useSpeechPlayer()
+
   // Skills
   const [skills, setSkills] = useState<AgentSkill[]>([])
   const [skillName, setSkillName] = useState('')
@@ -158,6 +172,11 @@ export default function AgentSettingsPage() {
   const [toolDefs, setToolDefs] = useState<AgentToolDefinition[] | null>(null)
   const [toolsJson, setToolsJson] = useState('{}')
   const [toolsJsonError, setToolsJsonError] = useState<string | null>(null)
+  const canvasToolsEnabled = canvasToolsEnabledIn(toolsJson)
+  const setCanvasToolsEnabled = (enabled: boolean) => {
+    setToolsJson(withCanvasToolsEnabled(toolsJson, enabled))
+    setToolsJsonError(null)
+  }
 
   // Switching agents while settings are open resets to a loading state during
   // render, so the previous agent's values never show under the new name.
@@ -196,6 +215,7 @@ export default function AgentSettingsPage() {
       }
       setToolsJson(JSON.stringify(a.config?.tools ?? {}, null, 2))
       setToolsJsonError(null)
+      setVoiceForm(voiceFormFromConfig(a.config?.voice))
       setError(null)
       try {
         setSkills(await listAgentSkills(a.id))
@@ -232,6 +252,29 @@ export default function AgentSettingsPage() {
     return () => { cancelled = true }
   }, [activeTab, agent?.id])
 
+  // `agent` changes on load and on every save, so the status follows both.
+  useEffect(() => {
+    if (activeTab !== 'voice' || !agent?.id) return
+    let cancelled = false
+    getAgentVoiceStatus(agent.id)
+      .then(status => { if (!cancelled) setVoiceStatus(status) })
+      .catch(() => { if (!cancelled) setVoiceStatus({ stt: null, tts: null }) })
+    return () => { cancelled = true }
+  }, [activeTab, agent])
+
+  const playVoiceSample = async () => {
+    if (!agent) return
+    speech.prime()
+    setIsSampling(true)
+    try {
+      await speech.play(await speakAgentReply(agent.id, `Hello, I am ${agent.label || agent.name}. This is how I sound.`))
+    } catch (err) {
+      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Speech failed', variant: 'destructive' })
+    } finally {
+      setIsSampling(false)
+    }
+  }
+
   const buildPayload = (): Partial<CreateAgentData> => {
     const compiled = buildSystemPrompt(idRole, idIdentity, idInstructions)
     let parsedTools: Record<string, unknown> | undefined
@@ -262,6 +305,7 @@ export default function AgentSettingsPage() {
           instructions: idInstructions.trim() || undefined,
         },
         prompts: (idSystemPrompt.trim() || compiled) ? { system: idSystemPrompt.trim() || compiled } : undefined,
+        voice: voiceConfigFromForm(voiceForm),
         connectors: {
           [provider]: { ...(provider !== 'anthropic' ? { temperature: mainTemp } : {}), maxTokens: mainMaxTokens, topP: mainTopP },
         },
@@ -455,7 +499,7 @@ export default function AgentSettingsPage() {
   const routeAgentId = encodeURIComponent(agent.name || agent.id)
   // Only the sections that hold form fields save; the rest are read-only or
   // manage their own writes (skills install immediately).
-  const savable = activeTab === 'identity' || activeTab === 'provider' || activeTab === 'models' || activeTab === 'tools'
+  const savable = activeTab === 'identity' || activeTab === 'provider' || activeTab === 'models' || activeTab === 'voice' || activeTab === 'tools'
 
   return (
     <div className="h-full min-h-0 overflow-y-auto">
@@ -613,17 +657,50 @@ export default function AgentSettingsPage() {
             </>
           )}
 
+          {activeTab === 'voice' && (
+            <>
+              <section className="rounded-lg border p-4">
+                <VoiceSettingsFields value={voiceForm} onChange={setVoiceForm} />
+              </section>
+              <section className="space-y-3 rounded-lg border p-4">
+                <div>
+                  <h2 className="text-sm font-semibold">In effect</h2>
+                  <p className="text-xs text-muted-foreground">What the saved settings resolve to. Save changes to update it.</p>
+                </div>
+                {voiceStatus === null ? (
+                  <p className="text-sm text-muted-foreground">Loading…</p>
+                ) : (
+                  <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[max-content_1fr]">
+                    <dt className="text-muted-foreground">Listening</dt>
+                    <dd>{voiceStatus.stt ? `${voiceStatus.stt.model}, ${voiceStatus.stt.language || 'language detected'}` : 'Off. The microphone is hidden in chat.'}</dd>
+                    <dt className="text-muted-foreground">Speaking</dt>
+                    <dd>{voiceStatus.tts ? `${voiceStatus.tts.model}, voice ${voiceStatus.tts.voice}` : 'Off. Replies stay text only.'}</dd>
+                  </dl>
+                )}
+                {voiceStatus?.tts && (
+                  <Button type="button" variant="outline" size="sm" disabled={isSampling} onClick={speech.isSpeaking ? speech.stop : playVoiceSample}>
+                    <Volume2 className="mr-2 h-4 w-4" />
+                    {speech.isSpeaking ? 'Stop' : isSampling ? 'Speaking…' : 'Play a sample'}
+                  </Button>
+                )}
+              </section>
+            </>
+          )}
+
           {activeTab === 'tools' && (
             <>
               <section className="space-y-3 rounded-lg border p-4">
                 <div>
-                  <h2 className="text-sm font-semibold">Runtime Tools</h2>
+                  <h2 className="text-sm font-semibold">Tools</h2>
                   <p className="text-xs text-muted-foreground">
-                    Injected at start (pi defineTool): coding tools plus canvas tools scoped by the
-                    token binding (Access / ACL). Definitions live in the runtime — read-only here
-                    until the agent-runtime workspace lands.
+                    What the agent can do when it starts. Canvas tools follow its access:{' '}
+                    {access ? access.grants.map(grant => `${grant.label}: ${describeBinding(grant.binding)}`).join('; ') : 'none yet, grant it under Access & permissions.'}
                   </p>
                 </div>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={canvasToolsEnabled} onChange={e => setCanvasToolsEnabled(e.target.checked)} />
+                  Let this agent read and organize Canvas content
+                </label>
                 {toolDefs === null ? (
                   <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Loading…</div>
                 ) : toolDefs.length === 0 ? (
@@ -632,52 +709,51 @@ export default function AgentSettingsPage() {
                   </div>
                 ) : (
                   <div className="space-y-1.5">
-                    {toolDefs.map(tool => (
-                      <details key={tool.name} className="rounded-md border px-3 py-2">
+                    {groupAgentTools(toolDefs).map(group => (
+                      <details key={group.label} className="rounded-md border px-3 py-2">
                         <summary className="cursor-pointer text-sm">
-                          <code className="font-mono text-xs font-medium">{tool.name}</code>
-                          <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
-                            {tool.source}
-                          </span>
+                          <span className="font-medium">{group.label}</span>
+                          <span className="ml-2 text-xs text-muted-foreground">{group.tools.map(tool => tool.action).join(', ')}</span>
                         </summary>
-                        {tool.description && (
-                          <p className="mt-2 whitespace-pre-wrap text-xs text-muted-foreground">{tool.description}</p>
-                        )}
-                        {tool.parameters != null && (
-                          <pre className="mt-2 overflow-x-auto rounded bg-muted p-2 font-mono text-[11px]">
-                            {JSON.stringify(tool.parameters, null, 2)}
-                          </pre>
-                        )}
+                        <div className="mt-2 space-y-1.5">
+                          {group.tools.map(tool => (
+                            <details key={tool.name} className="rounded border px-2 py-1.5">
+                              <summary className="cursor-pointer text-xs">
+                                <code className="font-mono font-medium">{tool.name}</code>
+                                {tool.summary && <span className="ml-2 text-muted-foreground">{tool.summary}</span>}
+                              </summary>
+                              {tool.description && (
+                                <p className="mt-2 whitespace-pre-wrap text-xs text-muted-foreground">{tool.description}</p>
+                              )}
+                              {tool.parameters != null && (
+                                <pre className="mt-2 overflow-x-auto rounded bg-muted p-2 font-mono text-[11px]">
+                                  {JSON.stringify(tool.parameters, null, 2)}
+                                </pre>
+                              )}
+                            </details>
+                          ))}
+                        </div>
                       </details>
                     ))}
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground">
-                  {access ? access.grants.map(grant => `${grant.label}: ${describeBinding(grant.binding)}`).join('; ') : 'Unbound — no canvas tools are injected. Bind under Access / ACL.'}
-                </p>
-              </section>
-
-              <section className="space-y-3 rounded-lg border p-4">
-                <div>
-                  <h2 className="text-sm font-semibold">Tools Config</h2>
-                  <p className="text-xs text-muted-foreground">
-                    {'config.tools JSON, merged server-side — e.g. {"canvas": {"enabled": false}} gates the canvas tools. Saved with Save Changes.'}
-                  </p>
-                </div>
-                <textarea
-                  value={toolsJson}
-                  onChange={e => {
-                    setToolsJson(e.target.value)
-                    try {
-                      JSON.parse(e.target.value)
-                      setToolsJsonError(null)
-                    } catch (err) {
-                      setToolsJsonError(err instanceof Error ? err.message : 'Invalid JSON')
-                    }
-                  }}
-                  className={`${TEXTAREA_CLASS} min-h-[120px] font-mono text-xs`}
-                />
-                {toolsJsonError && <p className="text-xs text-destructive">Invalid JSON (not saved): {toolsJsonError}</p>}
+                <details>
+                  <summary className="cursor-pointer text-xs text-muted-foreground">Advanced: tools configuration (JSON)</summary>
+                  <textarea
+                    value={toolsJson}
+                    onChange={e => {
+                      setToolsJson(e.target.value)
+                      try {
+                        JSON.parse(e.target.value)
+                        setToolsJsonError(null)
+                      } catch (err) {
+                        setToolsJsonError(err instanceof Error ? err.message : 'Invalid JSON')
+                      }
+                    }}
+                    className={`${TEXTAREA_CLASS} mt-2 min-h-[120px] font-mono text-xs`}
+                  />
+                  {toolsJsonError && <p className="text-xs text-destructive">Invalid JSON (not saved): {toolsJsonError}</p>}
+                </details>
               </section>
 
               <section className="space-y-3 rounded-lg border p-4">

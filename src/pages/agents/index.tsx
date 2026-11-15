@@ -1,5 +1,7 @@
 import { buildSystemPrompt } from '@/lib/agent-persona'
 import { ModelPicker } from '@/components/agent/ModelPicker'
+import { VoiceSettingsFields } from '@/components/agent/VoiceSettingsFields'
+import { EMPTY_VOICE_FORM, voiceConfigFromForm } from '@/lib/agent-voice'
 import { useAgentModels } from '@/hooks/useAgentModels'
 import { useRuntimeCapabilities } from '@/hooks/useRuntimeCapabilities'
 import { PageHeader } from '@/components/common/page-header'
@@ -57,6 +59,7 @@ export default function AgentsPage() {
     presencePenalty: 0.0,
     numCtx: 4096
   })
+  const [newAgentVoice, setNewAgentVoice] = useState(EMPTY_VOICE_FORM)
   const modelDiscovery = useAgentModels(newAgentProvider, newAgentConnectorConfig.apiKey, newAgentConnectorConfig.baseUrl)
   const selectedModel = modelDiscovery.models.find(model => model.id === newAgentModel)
   const [newAgentRole, setNewAgentRole] = useState('')
@@ -173,6 +176,7 @@ export default function AgentsPage() {
             instructions: newAgentInstructions.trim() || undefined,
           },
           prompts: systemPrompt ? { system: systemPrompt } : undefined,
+          voice: voiceConfigFromForm(newAgentVoice),
           connectors: {
             [newAgentProvider]: {
               maxTokens: newAgentConnectorConfig.maxTokens,
@@ -207,6 +211,7 @@ export default function AgentsPage() {
       setNewAgentRole('')
       setNewAgentIdentity('')
       setNewAgentInstructions('')
+      setNewAgentVoice(EMPTY_VOICE_FORM)
       setNewAgentConnectorConfig({
         apiKey: "",
         baseUrl: defaultBaseUrls[newAgentProvider],
@@ -439,6 +444,13 @@ export default function AgentsPage() {
               />
             </div>
           </div>
+
+          <details className="rounded-lg border p-4">
+            <summary className="cursor-pointer text-lg font-medium">Voice (optional)</summary>
+            <div className="mt-4">
+              <VoiceSettingsFields value={newAgentVoice} onChange={setNewAgentVoice} disabled={isCreating} />
+            </div>
+          </details>
 
           {/* LLM Parameters */}
           <div className="space-y-4">

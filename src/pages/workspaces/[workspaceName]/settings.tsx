@@ -1,22 +1,19 @@
 import { WorkspaceBackupsPanel } from '@/components/workspace/workspace-backups-panel'
-import { CacheMaintenancePanel } from '@/components/workspace/cache-maintenance-panel'
 import { dbJobLabel, dbJobSummary, followDbMaintenance, getDbMaintenance, isDbJobActive, startDbMaintenance, type DbMaintenanceAction, type DbMaintenanceJob } from '@/services/db-maintenance'
-import { syncBackendWithProgress } from '@/services/backend-sync-progress'
-import { BackendRemovalSettings } from '@/components/workspace/backend-removal-settings'
-import type { RemovalPolicy } from '@/services/trash-operations'
-import { S3BackendForm } from '@/components/settings/S3BackendForm'
+import { StorageSettingsPanel } from '@/components/workspace/storage-settings-panel'
+import { Switch } from '@/components/ui/switch'
 import { WorkspaceProtectionPanel } from '@/components/workspace/protection-panel'
 import { canManageWorkspace } from '@/lib/workspace-access'
 import { useMenu } from '@/components/shell/use-menu'
 import { useIsMobile } from '@/hooks/use-mobile'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { Copy, Database, ExternalLink, FolderPlus, HardDrive, RefreshCw, Server, Square, Trash2, Unlink, Activity, Monitor, Link2, Check, X as XIcon, Pencil } from 'lucide-react'
+import { Copy, Database, ExternalLink, HardDrive, RefreshCw, Server, Trash2, Unlink, Activity, Monitor, Link2, Check, X as XIcon, Pencil } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { LayerIconPicker } from '@/components/menu/shared/LayerIconPicker'
-import { DEFAULT_WORKSPACE_ICON, getBackendStyle, type LayerStyle } from '@/lib/layer-style'
+import { DEFAULT_WORKSPACE_ICON, type LayerStyle } from '@/lib/layer-style'
 import { DefaultFoldersPicker } from '@/components/workspaces/DefaultFoldersPicker'
 import { createDefaultFolders, useFolderSelection } from '@/components/workspaces/default-folders'
 import { PageHeader } from '@/components/common/page-header'
@@ -26,10 +23,8 @@ import { InferdSettingsPanel } from '@/components/workspace/inferd-settings-pane
 import { HooksPanel } from '@/components/workspace/hooks-panel'
 import { StoragePoliciesPanel } from '@/components/workspace/storage-policies-panel'
 import type { RulePrefill } from '@/services/hooks'
-import { TrashPanel } from '@/components/workspace/trash-panel'
 import { SyncPanel } from '@/components/workspace/sync-panel'
 import { ConnectorsSection } from '@/components/settings/ConnectorsSection'
-import { GoogleOAuthButton } from '@/components/settings/GoogleOAuthButton'
 import { ImapMailboxesPanel } from '@/components/workspace/imap-mailboxes-panel'
 import { TokenManager } from '@/components/workspace/token-manager'
 import { MembersManager } from '@/components/workspace/members-manager'
@@ -40,11 +35,6 @@ import {
   disableWorkspaceService,
   enableWorkspaceService,
   listBackends,
-  addBackend,
-  testBackend,
-  removeBackend,
-  updateBackend,
-  cancelBackendSync,
   getWorkspaceDbStats,
   setWorkspaceSearchTuning,
   getWorkspaceServicesStatus,
@@ -53,13 +43,10 @@ import {
   removeWorkspace,
   revokeWorkspacePublicCanvasShare,
   updateWorkspace,
-  getBackendDiskUsage,
   getWorkspaceDiskUsage,
-  clearThumbnailCache,
   invalidateWorkspaceTreeCache,
   formatBytes,
   type Backend,
-  type BackendDiskUsage,
   type WorkspaceDiskUsage,
   type WorkspaceDbStats,
   type WorkspacePublicCanvasShare,
@@ -79,316 +66,11 @@ import {
 type SettingsTab = WorkspaceSettingsTab
 type ServiceId = 'dotfiles' | 'git' | 'home' | 'webdav' | 'imap' | 'imapSync'
 
-const DATA_BACKEND_LABELS: Record<string, { title: string; description: string }> = {
-  'workspace:home': {
-    title: 'Workspace Home',
-    description: 'User-managed roaming home folder, exported through WebDAV and watched for changes. Mirrored into the backends tree.',
-  },
-  'workspace:data': {
-    title: 'Workspace Data',
-    description: 'Managed content-addressable blob store (deduped, checksum-keyed). Opaque by design: the tree is the navigation; not meant for direct edits or export.',
-  },
-  imap: {
-    title: 'IMAP',
-    description: 'Mailbox data source; ingested mail lands in the backends tree.',
-  },
-}
-
 const SERVICE_ITEMS: Array<{ id: ServiceId; title: string; description: string }> = [
   { id: 'git', title: 'Git', description: 'Git-backed dotfile access.' },
   { id: 'webdav', title: 'WebDAV', description: 'Mountable access to the workspace home backend.' },
   { id: 'imapSync', title: 'IMAP Sync Worker', description: 'Background mailbox polling and ingestion.' },
 ]
-
-function Toggle({
-  checked,
-  disabled,
-  onClick,
-}: {
-  checked: boolean
-  disabled?: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      disabled={disabled}
-      onClick={onClick}
-      className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${checked ? 'bg-primary' : 'bg-muted-foreground/30'}`}
-    >
-      <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow transition-transform ${checked ? 'translate-x-4' : 'translate-x-0'}`} />
-    </button>
-  )
-}
-
-// Mount an arbitrary server-local folder as an fs data backend. The name is
-// the human handle (its slug becomes the backend address and the
-// /device/<device>/<mount> node in the backends tree); the path must be an
-// absolute, readable directory on the server host.
-function LocalFolderForm({ workspaceId, backend, onAdded }: { workspaceId: string; backend?: Backend; onAdded: () => Promise<void> | void }) {
-  const cfg = backend?.config || {}
-  const [open, setOpen] = useState(false)
-  const [name, setName] = useState(String(cfg.label || backend?.address || ''))
-  const [path, setPath] = useState(String(cfg.root || ''))
-  const [watch, setWatch] = useState(cfg.watch === true)
-  const [readOnly, setReadOnly] = useState(cfg.readOnly === true)
-  const [busy, setBusy] = useState(false)
-  const { showToast } = useToast()
-
-  const reset = () => { setName(String(cfg.label || backend?.address || '')); setPath(String(cfg.root || '')); setWatch(cfg.watch === true); setReadOnly(cfg.readOnly === true) }
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!name.trim() || !path.trim()) return
-    setBusy(true)
-    try {
-      if (backend) await updateBackend(workspaceId, 'file', backend.address, { label: name.trim(), root: path.trim(), watch, readOnly })
-      else await addBackend(workspaceId, 'file', { name: name.trim(), path: path.trim(), watch, readOnly })
-      showToast({ title: backend ? 'Saved' : 'Added', description: backend ? 'Folder settings updated' : `${name.trim()} mounted; initial scan running in the background` })
-      reset()
-      setOpen(false)
-      await onAdded()
-    } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to add folder backend', variant: 'destructive' })
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  if (!open) {
-    return (
-      <Button type="button" variant="outline" size="sm" onClick={() => { reset(); setOpen(true) }}>
-        <FolderPlus className="mr-2 h-3.5 w-3.5" />
-        {backend ? 'Edit folder' : 'Add local folder'}
-      </Button>
-    )
-  }
-
-  return (
-    <form onSubmit={submit} className="w-full space-y-3 rounded-lg border p-4">
-      <div className="flex items-center gap-2">
-        <FolderPlus className="h-4 w-4 text-muted-foreground" />
-        <h2 className="text-sm font-semibold">{backend ? 'Edit folder' : 'Add local folder'}</h2>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Index a folder on the server host as a data source. Files stay in place; the index records them as
-        device-scoped locations, so they remain addressable if the workspace moves to another server.
-      </p>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="space-y-1">
-          <label className="text-xs font-medium">Name</label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Financial Reports" required />
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-medium">Absolute path on server</label>
-          <Input value={path} onChange={(e) => setPath(e.target.value)} placeholder="/mnt/data/reports" required className="font-mono" />
-        </div>
-      </div>
-      <div className="flex items-center gap-6 text-[11px] text-muted-foreground">
-        <label className="flex items-center gap-1.5">
-          watch
-          <Toggle checked={watch} onClick={() => setWatch((v) => !v)} />
-        </label>
-        <label className="flex items-center gap-1.5" title="Never delete bytes in this folder. Destroy degrades to a reference drop. Recommended for folders managed outside Canvas.">
-          read-only
-          <Toggle checked={readOnly} onClick={() => setReadOnly((v) => !v)} />
-        </label>
-      </div>
-      <div className="flex gap-2">
-        <Button type="submit" size="sm" disabled={busy || !name.trim() || !path.trim()}>
-          {busy ? 'Saving…' : backend ? 'Save folder' : 'Add folder'}
-        </Button>
-        <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => { reset(); setOpen(false) }}>
-          Cancel
-        </Button>
-      </div>
-    </form>
-  )
-}
-
-// Mount a Google Drive folder as a remote data backend. Credentials are an
-// offline-access OAuth client + refresh token (same grant as the Calendar
-// connector, with the Drive scope); the server validates them against the API
-// before saving and never returns them in reads.
-function GoogleDriveForm({ workspaceId, backend, onAdded }: { workspaceId: string; backend?: Backend; onAdded: () => Promise<void> | void }) {
-  const cfg = backend?.config || {}
-  const initial = () => ({ name: String(cfg.label || backend?.address || ''), clientId: String(cfg.clientId || ''), clientSecret: '', refreshToken: '', folderId: String(cfg.folderId || '') })
-  const [open, setOpen] = useState(false)
-  const [form, setForm] = useState(initial)
-  const [watch, setWatch] = useState(cfg.watch === true)
-  const [readOnly, setReadOnly] = useState(cfg.readOnly === true)
-  const [busy, setBusy] = useState(false)
-  const { showToast } = useToast()
-
-  const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [key]: e.target.value }))
-  const reset = () => { setForm(initial()); setWatch(cfg.watch === true); setReadOnly(cfg.readOnly === true) }
-  const valid = form.name.trim() && form.clientId.trim() && (backend || (form.clientSecret.trim() && form.refreshToken.trim()))
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!valid) return
-    setBusy(true)
-    try {
-      const config = {
-        label: form.name.trim(),
-        clientId: form.clientId.trim(),
-        ...(form.clientSecret.trim() ? { clientSecret: form.clientSecret.trim() } : {}),
-        ...(form.refreshToken.trim() ? { refreshToken: form.refreshToken.trim() } : {}),
-        folderId: form.folderId.trim() || 'root',
-        watch,
-        readOnly,
-      }
-      if (backend) await updateBackend(workspaceId, 'gdrive', backend.address, config)
-      else await addBackend(workspaceId, 'gdrive', config)
-      showToast({ title: backend ? 'Saved' : 'Added', description: backend ? 'Google Drive connection updated' : `${form.name.trim()} connected; initial scan running in the background` })
-      reset()
-      setOpen(false)
-      await onAdded()
-    } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to add Google Drive backend', variant: 'destructive' })
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  if (!open) {
-    return (
-      <Button type="button" variant="outline" size="sm" onClick={() => { reset(); setOpen(true) }}>
-        <Icon icon="mdi:google-drive" width={14} height={14} className="mr-2" />
-        {backend ? 'Edit Google Drive' : 'Add Google Drive'}
-      </Button>
-    )
-  }
-
-  return (
-    <form onSubmit={submit} className="w-full space-y-3 rounded-lg border p-4">
-      <div className="flex items-center gap-2">
-        <Icon icon="mdi:google-drive" width={16} height={16} className="text-muted-foreground" />
-        <h2 className="text-sm font-semibold">{backend ? 'Edit Google Drive' : 'Add Google Drive'}</h2>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Index a Drive folder (or the whole My Drive) as a remote data source. Files are hashed from Drive metadata,
-        uploads are queued through the workspace cache. Needs a Google OAuth client (Web application) — enter its id and
-        secret, then sign in to obtain the offline-access refresh token, or paste one you already have.
-      </p>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="space-y-1">
-          <label className="text-xs font-medium">Name</label>
-          <Input value={form.name} onChange={set('name')} placeholder="Work Drive" required />
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-medium">Folder id (empty = My Drive root)</label>
-          <Input value={form.folderId} onChange={set('folderId')} placeholder="1AbC…" className="font-mono" />
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-medium">OAuth client id</label>
-          <Input value={form.clientId} onChange={set('clientId')} required className="font-mono" />
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-medium">OAuth client secret</label>
-          <Input type="password" value={form.clientSecret} onChange={set('clientSecret')} required={!backend} placeholder={backend ? 'Leave blank to keep stored value' : ''} className="font-mono" autoComplete="off" />
-        </div>
-        <div className="space-y-1 sm:col-span-2">
-          <label className="text-xs font-medium">Refresh token</label>
-          <Input type="password" value={form.refreshToken} onChange={set('refreshToken')} required={!backend} className="font-mono" autoComplete="off"
-            placeholder={backend ? 'Leave blank to keep stored value' : 'Sign in below, or paste an offline-access refresh token'} />
-          <GoogleOAuthButton
-            clientId={form.clientId}
-            clientSecret={form.clientSecret}
-            backend={backend && form.clientId.trim() === cfg.clientId
-              ? { workspaceId, driver: 'gdrive', address: backend.address }
-              : undefined}
-            scope={readOnly ? 'drive.readonly' : 'drive'}
-            disabled={busy}
-            onLinked={({ refreshToken, account }) => setForm((f) => ({
-              ...f,
-              refreshToken,
-              name: f.name.trim() || (account ? `Drive (${account})` : f.name),
-            }))}
-          />
-        </div>
-      </div>
-      <div className="flex items-center gap-6 text-[11px] text-muted-foreground">
-        <label className="flex items-center gap-1.5" title="Poll the Drive changes feed (every 60s) so edits made in Drive show up without a manual re-sync.">
-          watch
-          <Toggle checked={watch} onClick={() => setWatch((v) => !v)} />
-        </label>
-        <label className="flex items-center gap-1.5" title="Never delete files in this Drive. Destroy degrades to a reference drop.">
-          read-only
-          <Toggle checked={readOnly} onClick={() => setReadOnly((v) => !v)} />
-        </label>
-      </div>
-      <div className="flex gap-2">
-        <Button type="submit" size="sm" disabled={busy || !valid}>
-          {busy ? 'Checking…' : backend ? 'Save Drive' : 'Add Drive'}
-        </Button>
-        <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => { reset(); setOpen(false) }}>
-          Cancel
-        </Button>
-      </div>
-    </form>
-  )
-}
-
-// On-demand on-disk size for a local backend. Never computed automatically —
-// the server walks the whole backend root (slow on a large home dir).
-function BackendSizeButton({ workspaceId, backend }: { workspaceId: string; backend: Backend }) {
-  const [usage, setUsage] = useState<BackendDiskUsage | null>(backend.usage ?? null)
-  const [busy, setBusy] = useState(false)
-  const { showToast } = useToast()
-
-  const compute = async () => {
-    setBusy(true)
-    try {
-      setUsage(await getBackendDiskUsage(workspaceId, backend.driver, backend.address))
-    } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to compute size', variant: 'destructive' })
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={compute}
-      disabled={busy}
-      className="flex items-center gap-1.5 rounded border px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
-      title={usage ? `Computed ${new Date(usage.computedAt).toLocaleString()}; click to refresh` : 'Compute on-disk size (walks the backend folder; may take a while)'}
-    >
-      <HardDrive className={`h-3 w-3 ${busy ? 'animate-pulse' : ''}`} />
-      {busy ? 'Calculating…' : usage ? formatBytes(usage.bytes) : 'Size'}
-    </button>
-  )
-}
-
-// Wipe the on-demand thumbnail cache (thumb:* entries in the stored cache).
-// Thumbnails are derived artifacts regenerated on demand — always safe.
-function ClearThumbnailsButton({ workspaceId }: { workspaceId: string }) {
-  const [busy, setBusy] = useState(false)
-  const { showToast } = useToast()
-
-  const clear = async () => {
-    setBusy(true)
-    try {
-      const { removed } = await clearThumbnailCache(workspaceId)
-      showToast({ title: 'Thumbnail cache cleared', description: `${removed} cached thumbnail(s) removed` })
-    } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to clear thumbnail cache', variant: 'destructive' })
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <Button type="button" variant="outline" size="sm" disabled={busy} onClick={clear} title="Remove all cached thumbnails; they regenerate on demand">
-      <Trash2 className={`mr-2 h-3.5 w-3.5 ${busy ? 'animate-pulse' : ''}`} />
-      {busy ? 'Clearing…' : 'Clear thumbnails'}
-    </Button>
-  )
-}
 
 // On-demand on-disk size of the whole workspace root with a per-directory
 // breakdown — the number a future export/sync needs to plan around.
@@ -442,86 +124,6 @@ function WorkspaceUsageSection({ workspaceId }: { workspaceId: string }) {
         </div>
       )}
     </section>
-  )
-}
-
-// Per-backend sync exclusions (glob patterns) for enumerable file backends.
-// Server-side defaults (dotfiles, node_modules, __pycache__, caches, …) always
-// apply; the user list here is merged on top. Patterns apply to the live
-// watcher immediately and to list/scan on the next re-sync (which also unlinks
-// already-mirrored entries that are now excluded — blobs untouched).
-function BackendExclusionsEditor({
-  backend,
-  busy,
-  onSave,
-}: {
-  backend: Backend
-  busy: boolean
-  onSave: (patterns: string[]) => void | Promise<void>
-}) {
-  const cfg = (backend.config || {}) as Record<string, unknown>
-  const userPatterns = Array.isArray(cfg.exclude) ? (cfg.exclude as string[]) : []
-  const effective = Array.isArray(cfg.effectiveExclusions) ? (cfg.effectiveExclusions as string[]) : []
-  const defaultCount = Math.max(effective.length - userPatterns.length, 0)
-  const [open, setOpen] = useState(false)
-  const [draft, setDraft] = useState(userPatterns.join('\n'))
-  const [showDefaults, setShowDefaults] = useState(false)
-
-  // Re-seed the draft when the backend's saved patterns change (state
-  // adjustment during render, not an effect).
-  const userPatternsKey = userPatterns.join('\n')
-  const [prevUserPatternsKey, setPrevUserPatternsKey] = useState(userPatternsKey)
-  if (prevUserPatternsKey !== userPatternsKey) {
-    setPrevUserPatternsKey(userPatternsKey)
-    setDraft(userPatternsKey)
-  }
-
-  return (
-    <div className="mt-3 border-t pt-3">
-      <button
-        type="button"
-        className="text-[11px] font-medium text-muted-foreground hover:text-foreground"
-        onClick={() => setOpen(!open)}
-      >
-        Sync exclusions {userPatterns.length > 0 ? `(${userPatterns.length} custom` : `(defaults only`}{defaultCount > 0 ? `, ${defaultCount} default)` : ')'} {open ? '▾' : '▸'}
-      </button>
-      {open && (
-        <div className="mt-2 space-y-2">
-          <p className="text-[11px] text-muted-foreground">
-            One glob pattern per line, e.g. <code className="font-mono">**/node_modules/**</code> or <code className="font-mono">**/target/**</code>.
-            Defaults (dotfiles, node_modules, __pycache__, caches, …) always apply. Changes take effect immediately for
-            the watcher; run Re-sync to also unlink already-mirrored entries.
-          </p>
-          <textarea
-            className="w-full min-h-[80px] rounded-md border bg-background p-2 font-mono text-xs"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder={'**/node_modules/**\n**/dist/**'}
-            spellCheck={false}
-          />
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              disabled={busy || draft.split('\n').map(s => s.trim()).filter(Boolean).join('\n') === userPatterns.join('\n')}
-              onClick={() => onSave(draft.split('\n').map(s => s.trim()).filter(Boolean))}
-            >
-              Save exclusions
-            </Button>
-            {defaultCount > 0 && (
-              <button type="button" className="text-[11px] text-muted-foreground hover:text-foreground" onClick={() => setShowDefaults(!showDefaults)}>
-                {showDefaults ? 'Hide' : 'Show'} default patterns
-              </button>
-            )}
-          </div>
-          {showDefaults && (
-            <pre className="max-h-40 overflow-auto rounded-md bg-muted/50 p-2 font-mono text-[11px] text-muted-foreground">
-              {effective.filter(p => !userPatterns.includes(p)).join('\n')}
-            </pre>
-          )}
-        </div>
-      )}
-    </div>
   )
 }
 
@@ -1007,7 +609,7 @@ function WorkspaceSettingsContent() {
     }, { replace: true })
   }, [setSearchParams])
   const navigate = useNavigate()
-  const { showToast, showProgress } = useToast()
+  const { showToast } = useToast()
   // Tab is URL-driven (/workspaces/:name/settings/:tab); bare or invalid tab
   // segments normalize to /settings/general below.
   // Bare, invalid and retired tab segments (embedding, trash) normalize to the
@@ -1244,91 +846,6 @@ function WorkspaceSettingsContent() {
     window.dispatchEvent(new CustomEvent('workspace:tree:refresh', { detail: { workspaceName: workspaceId } }))
   }
 
-  const toggleDataBackend = async (backend: Backend) => {
-    if (backend.address === 'workspace:data' || backend.config?.supported === false) return
-    setBusyAction(`backend:${backend.address}`)
-    try {
-      await updateBackend(workspaceId, backend.driver, backend.address, { enabled: !backend.enabled })
-      await loadRuntimeSettings()
-      refreshBackendsTree()
-      showToast({ title: 'Saved', description: `${backend.address} ${backend.enabled ? 'disabled' : 'enabled'}` })
-    } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to update backend', variant: 'destructive' })
-    } finally {
-      setBusyAction(null)
-    }
-  }
-
-  const patchDataBackend = async (backend: Backend, patch: Record<string, unknown>, action: string) => {
-    setBusyAction(`${action}:${backend.address}`)
-    try {
-      await updateBackend(workspaceId, backend.driver, backend.address, patch)
-      await loadRuntimeSettings()
-    } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to update backend', variant: 'destructive' })
-    } finally {
-      setBusyAction(null)
-    }
-  }
-
-  const removeDataBackend = async (backend: Backend) => {
-    const label = (typeof backend.config?.label === 'string' && backend.config.label) || backend.address
-    if (!window.confirm(`Remove backend "${label}"? No files are deleted; indexed entries remain until purged from the backends tree.`)) return
-    setBusyAction(`remove:${backend.address}`)
-    try {
-      await removeBackend(workspaceId, backend.driver, backend.address)
-      await loadRuntimeSettings()
-      refreshBackendsTree()
-      showToast({ title: 'Removed', description: `${label} unmounted` })
-    } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to remove backend', variant: 'destructive' })
-    } finally {
-      setBusyAction(null)
-    }
-  }
-
-  const resyncBackend = async (backend: Backend) => {
-    setBusyAction(`resync:${backend.address}`)
-    try {
-      await syncBackendWithProgress(showProgress, workspaceId, backend.driver, backend.address, current => {
-        setDataBackends(prev => prev.map(item => item.driver === current.driver && item.address === current.address ? current : item))
-      })
-      await loadRuntimeSettings()
-    } catch {
-      // The scan monitor records and displays the failure.
-    } finally {
-      setBusyAction(null)
-    }
-  }
-
-  // Connectivity probe for remote storage backends (capability-gated).
-  const testDataBackend = async (backend: Backend) => {
-    setBusyAction(`test:${backend.address}`)
-    try {
-      await testBackend(workspaceId, backend.driver, backend.address)
-      showToast({ title: 'Connected', description: `${backend.address}: credentials and root folder verified` })
-    } catch (err) {
-      showToast({ title: 'Connection failed', description: err instanceof Error ? err.message : 'Test failed', variant: 'destructive' })
-    } finally {
-      setBusyAction(null)
-    }
-  }
-
-  // Stop an in-flight resync. Indexed files stay; a later Re-sync resumes
-  // cheaply via the checksum cache, so stop + re-sync ≈ pause/resume.
-  const stopResync = async (backend: Backend) => {
-    setBusyAction(`stopsync:${backend.address}`)
-    try {
-      await cancelBackendSync(workspaceId, backend.driver, backend.address)
-      await loadRuntimeSettings()
-      showToast({ title: 'Sync stopped', description: `${backend.address}: indexed files are kept; Re-sync resumes where it left off` })
-    } catch (err) {
-      showToast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to stop sync', variant: 'destructive' })
-    } finally {
-      setBusyAction(null)
-    }
-  }
-
   const toggleService = async (serviceId: ServiceId, enabled: boolean) => {
     setBusyAction(`service:${serviceId}`)
     try {
@@ -1528,176 +1045,14 @@ function WorkspaceSettingsContent() {
       )}
 
       {workspace.status === 'active' && activeTab === 'data' && (
-        <div className="space-y-3">
-          {dataBackends.map((backend) => {
-            const cfg = (backend.config || {}) as Record<string, unknown>
-            const backendId = backend.address
-            const device = (cfg.device || null) as { id?: string; name?: string } | null
-            // User-added mounts: labelled, removable.
-            const isGdrive = backend.driver === 'gdrive'
-            const isS3 = backend.driver === 's3'
-            const isUserMount = (backend.driver === 'file' || isGdrive || isS3) && cfg.managed !== true && !DATA_BACKEND_LABELS[backendId]
-            const copy = DATA_BACKEND_LABELS[backendId] || {
-              title: (typeof cfg.label === 'string' && cfg.label) || backendId,
-              description: isS3
-                ? `S3 bucket ${cfg.bucket || ''}${cfg.prefix ? `/${cfg.prefix}` : ''}${cfg.endpoint ? ` at ${cfg.endpoint}` : ''}. Filing copies only.`
-                : isGdrive
-                ? `Google Drive${typeof cfg.account === 'string' && cfg.account && cfg.account !== cfg.label ? ` (${cfg.account})` : ''}, folder ${typeof cfg.folderId === 'string' && cfg.folderId ? cfg.folderId : 'root'}${backend.treePath ? `, mirrored at ${backend.treePath}` : ''}.`
-                : isUserMount
-                  ? `Local folder${device?.name ? ` on ${device.name}` : ''}, indexed in place${backend.treePath ? ` and mirrored at ${backend.treePath}` : ''}.`
-                  : 'Workspace data backend.',
-            }
-            const supported = cfg.supported !== false
-            // Structural local store: workspace:data (managed blob target) can
-            // never be disabled; as a managed, non-exported store the
-            // read-only knob doesn't apply to it either.
-            const alwaysOn = backendId === 'workspace:data'
-            const canToggle = supported && !alwaysOn
-            const hasReadOnly = canToggle && cfg.managed !== true
-            // Distinct default glyph per store/driver (workspace:home → house,
-            // workspace:data → database, mounts → folder, …) so the built-in
-            // stores don't all read as the same database icon.
-            const style = getBackendStyle(backend)
-            return (
-              <section key={backendId} className="rounded-lg border p-4">
-                <div className="flex flex-col gap-4">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <Icon icon={style.icon} width={16} height={16} color={style.color} className="shrink-0" />
-                      <h2 className="text-sm font-semibold">{copy.title}</h2>
-                      <label className="ml-auto flex shrink-0 items-center gap-2 text-xs text-muted-foreground" title={alwaysOn ? 'Required workspace storage; cannot be disabled' : undefined}>
-                        Enabled
-                        <Toggle checked={alwaysOn || !!backend.enabled} disabled={!canToggle || busyAction === `backend:${backendId}`} onClick={() => toggleDataBackend(backend)} />
-                      </label>
-                      {!supported && <span className="rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">unsupported</span>}
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">{copy.description}</p>
-                    {typeof cfg.root === 'string' && cfg.root && <p className="mt-2 truncate font-mono text-xs text-muted-foreground">{cfg.root}</p>}
-                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                      <span>status: {backend.status}</span>
-                      {backend.resyncing && (
-                        <span className="flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
-                          <RefreshCw className="h-3 w-3 animate-spin" />
-                          indexing{backend.progress ? ` ${backend.progress.scanned}${backend.progress.total != null ? ` / ${backend.progress.total}` : ''}` : ''}
-                        </span>
-                      )}
-                      {device?.name && <span title={device.id}>device: {device.name}</span>}
-                      {cfg.readOnly === true && <span className="rounded bg-warning/15 px-1.5 py-0.5 font-medium text-warning">read-only</span>}
-                      {backend.lastSyncAt && <span>last scan: {new Date(backend.lastSyncAt).toLocaleString()}</span>}
-                    </div>
-                    {backend.lastError && <p className="mt-2 text-xs text-destructive">{backend.lastError}</p>}
-                    {cfg.readOnly === true && (
-                      <p className="mt-1 text-[11px] text-warning">
-                        Read-only: the web UI / REST API never deletes bytes on this backend. Destroy degrades to a reference drop.
-                        Recommended when the folder is exported elsewhere (e.g. via Samba).
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3 border-t pt-3">
-                    {backend.capabilities?.sync && supported && (
-                      <label className="flex items-center gap-1.5 text-xs text-muted-foreground" title="Scan this backend in the background whenever the workspace starts. Manual scans remain available when off.">
-                        Scan on start
-                        <Toggle
-                          checked={cfg.scanOnStart === true}
-                          disabled={busyAction === `startup:${backendId}`}
-                          onClick={() => patchDataBackend(backend, { scanOnStart: cfg.scanOnStart !== true }, 'startup')}
-                        />
-                      </label>
-                    )}
-                    {(backend.driver === 'file' || isGdrive || isS3) && canToggle && (
-                      <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground" title={isGdrive ? 'Poll the Drive changes feed so edits made in Drive show up without a manual re-sync.' : undefined}>
-                        Watch for changes
-                        <Toggle
-                          checked={!!cfg.watch}
-                          disabled={!backend.enabled || busyAction === `watch:${backendId}`}
-                          onClick={() => patchDataBackend(backend, { watch: !cfg.watch }, 'watch')}
-                        />
-                      </label>
-                    )}
-                    {hasReadOnly && (
-                      <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground" title="Read-only: Destroy never deletes bytes on this backend (references are dropped instead). Important when the folder is exported via Samba or shared otherwise.">
-                        read-only
-                        <Toggle
-                          checked={cfg.readOnly === true}
-                          disabled={busyAction === `readonly:${backendId}`}
-                          onClick={() => patchDataBackend(backend, { readOnly: cfg.readOnly !== true }, 'readonly')}
-                        />
-                      </label>
-                    )}
-                    {(backend.driver === 'file' || backend.driver === 'cacache') && supported && (
-                      <BackendSizeButton workspaceId={workspaceId} backend={backend} />
-                    )}
-                    {backend.capabilities?.test && (
-                      <Button type="button" variant="outline" size="sm" disabled={busyAction === `test:${backendId}`} onClick={() => testDataBackend(backend)} title="Verify credentials and root folder">
-                        <Activity className="mr-2 h-3.5 w-3.5" />
-                        {busyAction === `test:${backendId}` ? 'Testing…' : 'Test'}
-                      </Button>
-                    )}
-                    {backend.capabilities?.sync && (backend.resyncing ? (
-                      <Button
-                        type="button" variant="outline" size="sm"
-                        disabled={busyAction === `stopsync:${backendId}`}
-                        onClick={() => stopResync(backend)}
-                        title="Stop the running scan. Files indexed so far are kept; Re-sync later resumes where it left off (unchanged files are skipped)."
-                      >
-                        <Square className="mr-2 h-3.5 w-3.5 fill-current" />
-                        {busyAction === `stopsync:${backendId}` ? 'Stopping…' : 'Stop sync'}
-                      </Button>
-                    ) : (
-                      <Button type="button" variant="outline" size="sm" disabled={busyAction === `resync:${backendId}`} onClick={() => resyncBackend(backend)}>
-                        <RefreshCw className={`mr-2 h-3.5 w-3.5 ${busyAction === `resync:${backendId}` ? 'animate-spin' : ''}`} />
-                        Re-sync
-                      </Button>
-                    ))}
-                    {isUserMount && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="text-destructive hover:text-destructive"
-                        disabled={busyAction === `remove:${backendId}`}
-                        title="Unmount this folder (no files are deleted)"
-                        onClick={() => removeDataBackend(backend)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-                {supported && <BackendRemovalSettings value={cfg.removalPolicy as RemovalPolicy} backends={dataBackends} source={backendId} destination={cfg.propagatedRemovalSupported === true}
-                  onSave={async removalPolicy => { await updateBackend(workspaceId, backend.driver, backend.address, { removalPolicy }); await loadRuntimeSettings() }} />}
-                {isGdrive && <GoogleDriveForm workspaceId={workspaceId} backend={backend} onAdded={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />}
-                {backend.driver === 'file' && <LocalFolderForm workspaceId={workspaceId} backend={backend} onAdded={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />}
-                {isS3 && <S3BackendForm workspaceId={workspaceId} backend={backend} onSaved={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />}
-                {/* Sync exclusions only apply to enumerable/synced backends —
-                    the internal cache is not synced or mirrored. */}
-                {backend.driver === 'file' && supported && !alwaysOn && (
-                  <BackendExclusionsEditor
-                    backend={backend}
-                    busy={busyAction === `exclude:${backendId}`}
-                    onSave={(patterns) => patchDataBackend(backend, { exclude: patterns }, 'exclude')}
-                  />
-                )}
-              </section>
-            )
-          })}
-          <CacheMaintenancePanel key={workspaceId} workspaceId={workspaceId}>
-            <ClearThumbnailsButton workspaceId={workspaceId} />
-          </CacheMaintenancePanel>
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start">
-            <LocalFolderForm workspaceId={workspaceId} onAdded={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />
-            <GoogleDriveForm workspaceId={workspaceId} onAdded={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />
-            <S3BackendForm workspaceId={workspaceId} onSaved={async () => { await loadRuntimeSettings(); refreshBackendsTree() }} />
-          </div>
-
-          {/* Trash is where deleted documents are held before they are purged
-              from these same backends — it reads as one story with them. */}
-          {workspaceName && (
-            <section className="border-t pt-4">
-              <TrashPanel workspaceName={workspaceName} />
-            </section>
-          )}
-        </div>
+        <StorageSettingsPanel
+          workspaceId={workspaceId}
+          workspaceName={workspaceName}
+          backends={dataBackends}
+          onBackendChange={(current) => setDataBackends(prev => prev.map(item => item.driver === current.driver && item.address === current.address ? current : item))}
+          reload={loadRuntimeSettings}
+          refreshTree={refreshBackendsTree}
+        />
       )}
 
       {workspace.status === 'active' && activeTab === 'db' && (
@@ -1765,7 +1120,7 @@ function WorkspaceSettingsContent() {
                       <p className="mt-1 text-xs text-muted-foreground">{service.description}</p>
                       <p className="mt-2 text-[11px] text-muted-foreground">initialized: {status?.initialized ? 'true' : 'false'}</p>
                     </div>
-                    <Toggle checked={enabled} disabled={busyAction === `service:${service.id}`} onClick={() => toggleService(service.id, enabled)} />
+                    <Switch checked={enabled} disabled={busyAction === `service:${service.id}`} onClick={() => toggleService(service.id, enabled)} />
                   </div>
                 </section>
               )

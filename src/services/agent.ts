@@ -139,6 +139,15 @@ export interface AgentSessionMutationResult {
 }
 
 // Main Agent interface used throughout the application
+/**
+ * An agent's own speech settings. Empty fields fall back to the server's
+ * shared speech settings, so an agent can set only a voice or a language.
+ */
+export interface AgentVoiceConfig {
+  stt?: { baseUrl?: string; apiKey?: string; model?: string; language?: string };
+  tts?: { baseUrl?: string; apiKey?: string; model?: string; voice?: string };
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -167,6 +176,7 @@ export interface Agent {
       user?: string;
     };
     memory?: string;
+    voice?: AgentVoiceConfig;
     tools?: Record<string, unknown>;
     skills?: AgentSkill[];
     connectors?: {
