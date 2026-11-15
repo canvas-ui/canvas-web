@@ -2,7 +2,7 @@ import type { AgentViewContext } from '@/lib/agent-view-context'
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { api } from '@/lib/api'
 import { API_URL } from '@/config/api'
-import { getAgentSession, startAgent, voicePrompt } from '@/services/agent'
+import { getAgentSession, startAgent, transcribeAgentVoice } from '@/services/agent'
 import { extractAgentMessageReasoning } from '@/services/agent'
 import { extractAgentMessageMetadata, type AgentResponseMetadata, type RawAgentMessage } from '@/services/agent'
 
@@ -68,8 +68,9 @@ export function useAgentPromptStream(agentId: string) {
     }
   }, [agentId])
 
-  const send = useCallback(async (text: string, viewContext?: AgentViewContext | null) => {
-    if (isStreaming || !text.trim() || !agentId) return
+  // Streams one prompt and resolves with the final reply text, or null when
+  // the turn failed or was stopped.
+  const runPrompt = useCallback(async (text: string, viewContext?: AgentViewContext | null): Promise<string | null> => {
     setError(null)
 
     setMessages(prev => [
@@ -88,7 +89,7 @@ export function useAgentPromptStream(agentId: string) {
       if (!startMessage?.includes('not active') && !startMessage?.includes('already')) {
         setError(startMessage ?? 'Failed to start agent')
         setIsStreaming(false)
-        return
+        return null
       }
     }
 
@@ -97,6 +98,7 @@ export function useAgentPromptStream(agentId: string) {
     let assistantContent = ''
     let assistantReasoning = ''
     let assistantMetadata: AgentResponseMetadata | undefined
+    let reply: string | null = null
 
     try {
       await api.stream(
@@ -150,6 +152,7 @@ export function useAgentPromptStream(agentId: string) {
                   const finalReasoning = extractAgentMessageReasoning(finalMessage) || assistantReasoning
                   assistantMetadata = extractAgentMessageMetadata(finalMessage)
 
+                  reply = finalContent || assistantContent || null
                   setMessages(prev => {
                     const copy = [...prev]
                     const currentContent = assistantContent || copy[copy.length - 1]?.content || ''
@@ -164,6 +167,7 @@ export function useAgentPromptStream(agentId: string) {
                   })
                 } else if (ev.type === 'error') {
                   setError(ev.error)
+                  reply = null
                 }
               } catch { /* malformed line */ }
             }
@@ -192,47 +196,42 @@ export function useAgentPromptStream(agentId: string) {
         return copy
       })
       setIsStreaming(false)
+      return null
     }
-  }, [agentId, isStreaming])
+    return abortRef.current?.signal.aborted ? null : reply
+  }, [agentId])
 
-  // Voice round-trip: transcribed + answered server-side (non-streaming);
-  // appends the transcript as the user message and plays the spoken reply.
+  const send = useCallback(async (text: string, viewContext?: AgentViewContext | null) => {
+    if (isStreaming || !text.trim() || !agentId) return null
+    return runPrompt(text, viewContext)
+  }, [agentId, isStreaming, runPrompt])
+
+  // Spoken turn: the clip is transcribed, then sent as an ordinary streamed
+  // prompt. Resolves with the reply text for the caller to have spoken.
   const sendVoice = useCallback(async (audio: Blob, viewContext?: AgentViewContext | null) => {
-    if (isStreaming || !agentId) return
+    if (isStreaming || !agentId) return null
     setError(null)
     setIsStreaming(true)
-    setMessages(prev => [
-      ...prev,
-      { role: 'user', content: '🎤 Transcribing…', isComplete: false },
-    ])
+    setMessages(prev => [...prev, { role: 'user', content: 'Transcribing…', isComplete: false }])
+    const dropPlaceholder = () => setMessages(prev => {
+      const last = prev[prev.length - 1]
+      return last?.role === 'user' && !last.isComplete ? prev.slice(0, -1) : prev
+    })
 
+    let transcript = ''
     try {
-      const result = await voicePrompt(agentId, audio, { viewContext })
-      setMessages(prev => {
-        const copy = [...prev]
-        copy[copy.length - 1] = { role: 'user', content: `🎤 ${result.transcript}`, isComplete: true }
-        return [
-          ...copy,
-          { role: 'assistant', content: result.reply, isComplete: true },
-        ]
-      })
-      if (result.audio && result.audioMimeType) {
-        const player = new Audio(`data:${result.audioMimeType};base64,${result.audio}`)
-        player.play().catch(() => { /* autoplay blocked — text reply is still shown */ })
-      }
+      transcript = (await transcribeAgentVoice(agentId, audio)).trim()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Voice prompt failed')
-      // Drop the transcribing placeholder so the log stays clean.
-      setMessages(prev => {
-        const copy = [...prev]
-        const last = copy[copy.length - 1]
-        if (last?.role === 'user' && !last.isComplete) copy.pop()
-        return copy
-      })
-    } finally {
-      setIsStreaming(false)
+      setError(err instanceof Error ? err.message : 'Transcription failed')
     }
-  }, [agentId, isStreaming])
+    dropPlaceholder()
+    if (!transcript) {
+      setError(current => current ?? 'Nothing was heard, try again')
+      setIsStreaming(false)
+      return null
+    }
+    return runPrompt(transcript, viewContext)
+  }, [agentId, isStreaming, runPrompt])
 
   const stop = useCallback(() => {
     abortRef.current?.abort()

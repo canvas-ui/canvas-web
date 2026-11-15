@@ -1,4 +1,3 @@
-import type { AgentViewContext } from '@/lib/agent-view-context';
 import { api } from '@/lib/api';
 import { API_URL } from '@/config/api';
 import { AnthropicConnector, WebSocketStreamingService, StreamMessage } from './streaming';
@@ -1059,52 +1058,38 @@ export function convertToStreamingMessages(messages: ChatMessage[]): ChatMessage
 }
 
 /**
- * Voice — agent voice round-trip + voice service status
+ * Voice: which sides an agent can use, clip transcription and reply synthesis.
+ * A spoken turn is transcribe -> ordinary streamed prompt -> speak.
  */
 
-export interface AgentVoiceResult {
-  transcript: string;
-  reply: string;
-  audio: string | null;          // base64-encoded synthesized reply
-  audioMimeType: string | null;
-  voice: string | null;
+export interface AgentVoiceStatus {
+  stt: { model: string; language: string | null } | null;
+  tts: { model: string; voice: string } | null;
 }
 
-export interface VoiceStatus {
-  enabled: boolean;
-  stt: { baseUrl: string; model: string } | null;
-  tts: { baseUrl: string; model: string; voice: string } | null;
+export async function getAgentVoiceStatus(agentId: string): Promise<AgentVoiceStatus> {
+  return api.get<AgentVoiceStatus>(`${API_URL}/agents/${agentId}/voice`);
 }
 
-export async function getVoiceStatus(): Promise<VoiceStatus> {
-  const response = await api.get<VoiceStatus>(`${API_URL}/voice/status`);
-  return response;
-}
-
-/**
- * Send a recorded audio clip to an agent: transcribed server-side, prompted,
- * and (when TTS is configured) the reply comes back as base64 audio.
- */
-export async function voicePrompt(
-  agentId: string,
-  audio: Blob,
-  options: { tts?: boolean; voice?: string; viewContext?: AgentViewContext | null } = {},
-): Promise<AgentVoiceResult> {
+export async function transcribeAgentVoice(agentId: string, audio: Blob): Promise<string> {
   const form = new FormData();
   const extension = (audio.type.split('/')[1] || 'webm').split(';')[0];
-  if (options.viewContext !== undefined) form.append('viewContext', JSON.stringify(options.viewContext));
   form.append('file', audio, `voice.${extension}`);
+  const result = await api.post<{ text: string }>(`${API_URL}/agents/${agentId}/voice/transcribe`, form);
+  return result.text;
+}
 
-  const params = new URLSearchParams();
-  if (options.tts === false) params.set('tts', 'false');
-  if (options.voice) params.set('voice', options.voice);
-  const query = params.toString() ? `?${params.toString()}` : '';
-
-  const response = await api.post<AgentVoiceResult>(
-    `${API_URL}/agents/${agentId}/voice${query}`,
-    form,
-  );
-  return response;
+/** Synthesized speech for a reply (markdown is fine, the server reads only prose). */
+export async function speakAgentReply(agentId: string, text: string, signal?: AbortSignal): Promise<Blob> {
+  const token = localStorage.getItem('authToken');
+  const response = await fetch(`${API_URL}/agents/${agentId}/voice/speak`, {
+    method: 'POST',
+    signal,
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify({ text }),
+  });
+  if (!response.ok) throw new Error(`Speech synthesis failed (HTTP ${response.status})`);
+  return response.blob();
 }
 
 export interface AgentProviderModel {

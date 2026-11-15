@@ -42,7 +42,7 @@ test('map and lens constraints use the same query builders as the content view',
 })
 
 test('toolbox text and voice send the snapshot separately from the displayed message', async () => {
-  const calls = [], voiceCalls = []
+  const calls = []
   const exports = {}
   const react = { useState: initial => [initial, () => {}], useCallback: fn => fn, useRef: initial => ({ current: initial }), useEffect: () => {} }
   vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../src/hooks/useAgentPromptStream.ts', import.meta.url), 'utf8'), {
@@ -52,7 +52,7 @@ test('toolbox text and voice send the snapshot separately from the displayed mes
       if (name === 'react') return react
       if (name === '@/config/api') return { API_URL: '/rest/v2' }
       if (name === '@/lib/api') return { api: { stream: async (_url, body, callbacks) => { calls.push(body); callbacks.onComplete() } } }
-      if (name === '@/services/agent') return { startAgent: async () => {}, voicePrompt: async (_id, _audio, options) => { voiceCalls.push(options); return { transcript: 'spoken', reply: 'answer' } } }
+      if (name === '@/services/agent') return { startAgent: async () => {}, transcribeAgentVoice: async () => 'spoken' }
       throw new Error(name)
     },
   })
@@ -62,7 +62,8 @@ test('toolbox text and voice send the snapshot separately from the displayed mes
   assert.equal(calls[0].message, 'What is here?')
   assert.deepEqual(calls[0].viewContext, snapshot)
   await hook.sendVoice(new Blob(['audio']), snapshot)
-  assert.deepEqual(voiceCalls[0].viewContext, snapshot)
+  assert.equal(calls[1].message, 'spoken')
+  assert.deepEqual(calls[1].viewContext, snapshot)
   await hook.send('Now outside the workspace', null)
-  assert.equal(calls[1].viewContext, null)
+  assert.equal(calls[2].viewContext, null)
 })

@@ -2,11 +2,12 @@ import { useLocation } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Mic, Send, Square, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getAgent, getAgentAccess, getVoiceStatus, setAgentAccessGrant, type Agent, type AgentAccess } from '@/services/agent'
+import { getAgent, getAgentAccess, getAgentVoiceStatus, setAgentAccessGrant, speakAgentReply, type Agent, type AgentAccess, type AgentVoiceStatus } from '@/services/agent'
 import { useToast } from '@/components/ui/use-toast'
 import { useToolboxOptional } from '../use-toolbox'
 import { useAgentPromptStream } from '@/hooks/useAgentPromptStream'
 import { useVoiceRecorder } from '@/hooks/useVoiceRecorder'
+import { useSpeechPlayer } from '@/hooks/useSpeechPlayer'
 import AgentAssistantExtras from '@/components/agent/AgentAssistantExtras'
 import { MarkdownView } from '@/components/common/markdown-view'
 import { CopyReplyButton } from '@/components/agent/CopyReplyButton'
@@ -19,7 +20,7 @@ interface AgentChatPanelProps {
 export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
   const [agent, setAgent] = useState<Agent | null>(null)
   const [input, setInput] = useState('')
-  const [voiceAvailable, setVoiceAvailable] = useState(false)
+  const [voice, setVoice] = useState<AgentVoiceStatus | null>(null)
   const [access, setAccess] = useState<AgentAccess | null>(null)
   const [bindBusy, setBindBusy] = useState(false)
   // Newly minted connection token, shown once for external clients.
@@ -35,6 +36,7 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const { messages, isStreaming, error, send, sendVoice, stop, clear } = useAgentPromptStream(agentId)
   const { isRecording, recorderError, start: startRecording, stop: stopRecording } = useVoiceRecorder()
+  const speech = useSpeechPlayer()
 
   useEffect(() => {
     getAgent(agentId).then(setAgent).catch(() => {})
@@ -42,11 +44,14 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
   }, [agentId])
 
   useEffect(() => {
-    // Mic button only when server-side STT is configured.
-    getVoiceStatus()
-      .then(status => setVoiceAvailable(Boolean(status.enabled && status.stt)))
-      .catch(() => setVoiceAvailable(false))
-  }, [])
+    // Mic button only when the agent has speech-to-text; replies are spoken
+    // when it also has text-to-speech.
+    let cancelled = false
+    getAgentVoiceStatus(agentId)
+      .then(status => { if (!cancelled) setVoice(status) })
+      .catch(() => { if (!cancelled) setVoice(null) })
+    return () => { cancelled = true }
+  }, [agentId])
 
   useEffect(() => {
     if (messages.length === 0) return
@@ -93,10 +98,25 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
   const handleMicClick = async () => {
     if (isRecording) {
       const clip = await stopRecording()
-      if (clip) await sendVoice(clip, viewContext)
+      if (!clip) return
+      const reply = await sendVoice(clip, viewContext)
+      if (!reply || !voice?.tts) return
+      try {
+        await speech.play(await speakAgentReply(agentId, reply))
+      } catch (err) {
+        showToast({ title: 'Could not speak the reply', description: err instanceof Error ? err.message : undefined, variant: 'destructive' })
+      }
     } else if (!isStreaming) {
+      // Inside the tap: silences a reply still playing and unlocks playback
+      // for the next one.
+      if (voice?.tts) speech.prime()
       await startRecording()
     }
+  }
+
+  const handleStop = () => {
+    speech.stop()
+    stop()
   }
 
   return (
@@ -225,7 +245,7 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
             rows={2}
             className="flex-1 resize-y text-sm px-3 py-2 border border-input bg-background rounded-md focus:outline-none focus:ring-1 focus:ring-ring min-h-[38px] max-h-[120px]"
           />
-          {voiceAvailable && (
+          {voice?.stt && (
             <button
               type="button"
               onClick={handleMicClick}
@@ -241,12 +261,12 @@ export function AgentChatPanel({ agentId, onClose }: AgentChatPanelProps) {
               {isRecording ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
             </button>
           )}
-          {isStreaming ? (
+          {isStreaming || speech.isSpeaking ? (
             <button
               type="button"
-              onClick={stop}
+              onClick={handleStop}
               className="flex items-center justify-center w-9 h-9 rounded-md bg-destructive text-destructive-foreground hover:opacity-90 transition-opacity shrink-0"
-              title="Stop"
+              title={isStreaming ? 'Stop' : 'Stop speaking'}
             >
               <Square className="w-4 h-4" />
             </button>
