@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { Activity, Check, ChevronDown, ChevronRight, CloudUpload, FolderPlus, HardDrive, Pencil, Plus, RefreshCw, Square, Trash2 } from 'lucide-react'
+import { Activity, ChevronDown, ChevronRight, FolderPlus, HardDrive, Pencil, Plus, RefreshCw, Square, Trash2 } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -30,10 +30,13 @@ const BUILT_IN: Record<string, { title: string; summary: string }> = {
   [BLOB_STORE]: { title: 'Workspace Data', summary: 'Uploads, mail and attachments on this server, stored by content hash.' },
 }
 
-const ADD_OPTIONS: Array<{ kind: StorageKind; label: string; hint: string; icon: ReactNode }> = [
-  { kind: 'file', label: 'Local folder', hint: 'A directory on the server host', icon: <FolderPlus className="h-4 w-4" /> },
-  { kind: 's3', label: 'S3 bucket', hint: 'Amazon S3 or a compatible service', icon: <Icon icon="mdi:bucket-outline" width={16} height={16} /> },
-  { kind: 'gdrive', label: 'Google Drive', hint: 'A Drive folder or all of My Drive', icon: <Icon icon="mdi:google-drive" width={16} height={16} /> },
+// Every kind of storage a workspace can connect. A new driver adds one entry.
+interface StorageType { id: string; kind: StorageKind; mode?: 'cas' | 'path'; label: string; hint: string; icon: ReactNode }
+const STORAGE_TYPES: StorageType[] = [
+  { id: 's3-cas', kind: 's3', mode: 'cas', label: 'S3 content store', hint: 'Holds all workspace data by content hash, each file once. Can be the primary data store or a backup.', icon: <Icon icon="mdi:database-outline" width={18} height={18} /> },
+  { id: 's3-path', kind: 's3', mode: 'path', label: 'S3 bucket', hint: 'Files under readable folders and names. Indexed in place, usable as a filing target.', icon: <Icon icon="mdi:bucket-outline" width={18} height={18} /> },
+  { id: 'file', kind: 'file', label: 'Local folder', hint: 'A directory on the server host, indexed in place.', icon: <FolderPlus className="h-[18px] w-[18px]" /> },
+  { id: 'gdrive', kind: 'gdrive', label: 'Google Drive', hint: 'A Drive folder or all of My Drive.', icon: <Icon icon="mdi:google-drive" width={18} height={18} /> },
 ]
 
 const errorText = (error: unknown, fallback: string) => (error instanceof Error ? error.message : fallback)
@@ -51,10 +54,7 @@ function backendTitle(backend: Backend): string {
 function backendSummary(backend: Backend): string {
   const cfg = config(backend)
   if (BUILT_IN[backend.address]) return BUILT_IN[backend.address].summary
-  if (backend.driver === 's3') {
-    const host = typeof cfg.endpoint === 'string' && cfg.endpoint ? cfg.endpoint.replace(/^https?:\/\//, '').replace(/\/$/, '') : 'Amazon S3'
-    return `s3://${cfg.bucket || ''}${cfg.prefix ? `/${cfg.prefix}` : ''} on ${host}`
-  }
+  if (backend.driver === 's3') return s3Address(backend)
   if (backend.driver === 'gdrive') {
     const account = typeof cfg.account === 'string' && cfg.account && cfg.account !== cfg.label ? `${cfg.account}, ` : ''
     return `Google Drive, ${account}${cfg.folderId && cfg.folderId !== 'root' ? `folder ${cfg.folderId}` : 'My Drive'}`
@@ -62,6 +62,14 @@ function backendSummary(backend: Backend): string {
   const device = (cfg.device || null) as { name?: string } | null
   return `${typeof cfg.root === 'string' ? cfg.root : 'Local folder'}${device?.name ? ` on ${device.name}` : ''}`
 }
+
+function s3Address(backend: Backend): string {
+  const cfg = config(backend)
+  const host = typeof cfg.endpoint === 'string' && cfg.endpoint ? cfg.endpoint.replace(/^https?:\/\//, '').replace(/\/$/, '') : 'Amazon S3'
+  return `s3://${cfg.bucket || ''}${cfg.prefix ? `/${cfg.prefix}` : ''} on ${host}`
+}
+
+const isCas = (backend: Backend) => backend.driver === 's3' && config(backend).mode === 'cas'
 
 function StatusPill({ backend }: { backend: Backend }) {
   if (config(backend).supported === false) return <Pill tone="muted">Unsupported</Pill>
@@ -212,7 +220,8 @@ export function StorageSettingsPanel({ workspaceId, workspaceName, backends, onB
   const [busy, setBusy] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
-  const [adding, setAdding] = useState<StorageKind | null>(null)
+  // null: closed, 'choose': the type list, otherwise the chosen type's form.
+  const [adding, setAdding] = useState<StorageType | 'choose' | null>(null)
 
   const run = async (key: string, failure: string, action: () => Promise<void>) => {
     setBusy(key)
@@ -266,78 +275,63 @@ export function StorageSettingsPanel({ workspaceId, workspaceName, backends, onB
     })
   }
 
-  // Blob-capable remote backends can take over as the primary data store.
-  const primary = backends.find((b) => b.primary) || null
-  const candidates = backends.filter((b) => b.capabilities?.blobs === true && b.enabled)
-  const choosePrimary = (next: Backend | null) => {
-    if ((next?.address ?? null) === (primary?.address ?? null)) return
-    const target = next ?? primary
-    if (!target) return
-    void run('primary', 'Could not change the primary data store', async () => {
-      await updateBackend(workspaceId, target.driver, target.address, { primary: next !== null })
-      await reload()
-      showToast({
-        title: 'Primary data store changed',
-        description: next ? `All new data is stored in ${backendTitle(next)} by default.` : 'All new data is stored on this server by default.',
-      })
+  // One content-addressed backend is the primary data store. Turning it on
+  // elsewhere moves the role; turning it off on a bucket returns it to the
+  // local blob store.
+  const setPrimary = (backend: Backend, next: boolean) => run(`patch:${backend.address}`, 'Could not change the primary data store', async () => {
+    await updateBackend(workspaceId, backend.driver, backend.address, { primary: next })
+    await reload()
+    showToast({
+      title: 'Primary data store changed',
+      description: next ? `All new data is stored in ${backendTitle(backend)} by default.` : `All new data is stored in ${BUILT_IN[BLOB_STORE].title} by default.`,
     })
-  }
+  })
 
   const afterSaved = async () => { setEditing(null); setAdding(null); await reload(); refreshTree() }
 
   return (
     <div className="space-y-8">
       <section className="space-y-3">
-        <SectionHeading title="Primary data store" description="Where all data of this workspace is stored by default." />
-        <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Primary data store">
-          <PrimaryOption
-            selected={!primary} disabled={busy === 'primary'} onSelect={() => choosePrimary(null)}
-            icon={<HardDrive className="h-4 w-4" />} title="This server"
-            detail="All data is stored in Workspace Data on this server's disk by default."
-          />
-          {candidates.map((backend) => (
-            <PrimaryOption
-              key={backend.address} selected={primary?.address === backend.address} disabled={busy === 'primary'} onSelect={() => choosePrimary(backend)}
-              icon={<CloudUpload className="h-4 w-4" />} title={backendTitle(backend)}
-              detail={`All data is stored in ${backendSummary(backend)} by default.`}
-            />
-          ))}
-        </div>
-        <p className="text-[11px] text-muted-foreground">
-          {candidates.length === 0
-            ? 'Connect a writable S3 bucket below to store all data in object storage by default.'
-            : primary
-              ? 'New data is received by this server, then uploaded and verified in the background. It is stored by content hash under .canvas-blobs/ in the bucket, outside its folder tree. Data added before this was chosen is not moved.'
-              : 'Choosing a bucket applies to data added from then on.'}
-        </p>
-      </section>
-
-      <section className="space-y-3">
         <SectionHeading
           title="Storage locations"
           description="Folders, buckets and drives this workspace reads from and files into."
           action={!adding && (
-            <Button type="button" size="sm" variant="outline" onClick={() => setAdding('file')}>
+            <Button type="button" size="sm" variant="outline" onClick={() => setAdding('choose')}>
               <Plus className="mr-2 h-3.5 w-3.5" />Add storage
             </Button>
           )}
         />
 
-        {adding && (
-          <div className="space-y-3 rounded-lg border p-4">
-            <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Storage type">
-              {ADD_OPTIONS.map((option) => (
-                <button key={option.kind} type="button" role="radio" aria-checked={adding === option.kind} onClick={() => setAdding(option.kind)}
-                  className={`flex items-center gap-2 rounded-md border px-3 py-2 text-left transition-colors ${adding === option.kind ? 'border-primary bg-primary/5' : 'hover:bg-accent'}`}>
-                  <span className="text-muted-foreground">{option.icon}</span>
-                  <span className="min-w-0">
-                    <span className="block text-xs font-medium">{option.label}</span>
-                    <span className="block truncate text-[11px] text-muted-foreground">{option.hint}</span>
-                  </span>
-                </button>
-              ))}
+        {adding === 'choose' && (
+          <div className="rounded-lg border">
+            <div className="flex items-center justify-between border-b px-4 py-2">
+              <span className="text-xs font-medium">What do you want to connect?</span>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setAdding(null)}>Cancel</Button>
             </div>
-            <StorageForm key={adding} kind={adding} workspaceId={workspaceId} onSaved={afterSaved} onCancel={() => setAdding(null)} />
+            <ul className="divide-y">
+              {STORAGE_TYPES.map((type) => (
+                <li key={type.id}>
+                  <button type="button" onClick={() => setAdding(type)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-accent">
+                    <span className="shrink-0 text-muted-foreground">{type.icon}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-medium">{type.label}</span>
+                      <span className="block text-[11px] text-muted-foreground">{type.hint}</span>
+                    </span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {adding && adding !== 'choose' && (
+          <div className="space-y-3 rounded-lg border p-4">
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">{adding.icon}</span>
+              <h3 className="text-sm font-semibold">Connect: {adding.label}</h3>
+              <button type="button" className="ml-auto text-[11px] text-muted-foreground underline-offset-2 hover:underline" onClick={() => setAdding('choose')}>Choose another type</button>
+            </div>
+            <StorageForm key={adding.id} kind={adding.kind} mode={adding.mode} workspaceId={workspaceId} onSaved={afterSaved} onCancel={() => setAdding(null)} />
           </div>
         )}
 
@@ -362,14 +356,14 @@ export function StorageSettingsPanel({ workspaceId, workspaceName, backends, onB
                     <span className="min-w-0 flex-1">
                       <span className="flex flex-wrap items-center gap-2">
                         <span className="truncate text-sm font-medium">{backendTitle(backend)}</span>
-                        {backend.primary && <Pill tone="primary">Primary</Pill>}
+                        {backend.primary ? <Pill tone="primary">Primary</Pill> : isCas(backend) && backend.enabled && <Pill tone="muted">Backup</Pill>}
                         {cfg.readOnly === true && <Pill tone="warning">Read-only</Pill>}
                       </span>
                       <span className={`block truncate text-[11px] text-muted-foreground ${builtIn ? '' : 'font-mono'}`}>{backendSummary(backend)}</span>
                     </span>
                   </button>
                   <StatusPill backend={backend} />
-                  <span title={alwaysOn ? 'Required by every workspace' : backend.primary ? 'The primary data store cannot be turned off' : undefined}>
+                  <span title={alwaysOn ? 'Required by every workspace: all data is received here first' : backend.primary ? 'The primary data store cannot be turned off' : undefined}>
                     <Switch
                       label={`${backendTitle(backend)} enabled`}
                       checked={alwaysOn || !!backend.enabled}
@@ -414,23 +408,46 @@ export function StorageSettingsPanel({ workspaceId, workspaceName, backends, onB
                       )}
                     </div>
 
+                    {isCas(backend) && (
+                      <p className="text-[11px] text-muted-foreground">
+                        {backend.primary ? '' : backend.enabled ? 'Backup: every new file is also stored here. ' : 'Disabled: no data is stored here. '}
+                        Each file is stored once, by content hash, under .canvas-blobs/.
+                      </p>
+                    )}
                     {backend.lastSyncAt && <p className="text-[11px] text-muted-foreground">Last scan {new Date(backend.lastSyncAt).toLocaleString()}{backend.treePath ? `. Shown in the backends tree at ${backend.treePath}.` : '.'}</p>}
 
                     {kind && editing === id ? (
                       <div className="rounded-md border bg-background p-3">
                         <StorageForm kind={kind} backend={backend} workspaceId={workspaceId} onSaved={afterSaved} onCancel={() => setEditing(null)} />
                       </div>
-                    ) : supported && !alwaysOn && (
+                    ) : supported && (
                       <div className="divide-y rounded-md border bg-background px-3">
+                        {(id === BLOB_STORE || isCas(backend)) && (
+                          <OptionRow
+                            label="Primary data store"
+                            hint={backend.primary
+                              ? (id === BLOB_STORE
+                                ? 'All workspace data is stored here by default. To move the role, turn it on for another content store.'
+                                : 'All workspace data is stored here by default. Turning it off returns the role to Workspace Data.')
+                              : 'Store all new workspace data here by default. Data already stored stays where it is.'}
+                            checked={backend.primary === true}
+                            disabled={saving || !backend.enabled || (id === BLOB_STORE && backend.primary === true)}
+                            onChange={(next) => setPrimary(backend, next)}
+                          />
+                        )}
                         {backend.capabilities?.sync && (
                           <OptionRow label="Scan when the workspace starts" hint="Off: files are indexed only when you press Re-sync."
                             checked={cfg.scanOnStart === true} disabled={saving} onChange={(next) => patch(backend, { scanOnStart: next })} />
                         )}
-                        {(backend.driver === 'file' || backend.driver === 'gdrive' || backend.driver === 's3') && (
+                        {isCas(backend) && (
+                          <OptionRow label="Write a description file next to each blob" hint="A small JSON file with the document's type, title and metadata, written once. It lets the bucket be read without the Canvas index after a disaster."
+                            checked={cfg.sidecar === true} disabled={saving} onChange={(next) => patch(backend, { sidecar: next })} />
+                        )}
+                        {(backend.driver === 'file' || backend.driver === 'gdrive' || backend.driver === 's3') && !isCas(backend) && (
                           <OptionRow label="Watch for changes" hint="Pick up changes made outside Canvas without a manual re-sync."
                             checked={!!cfg.watch} disabled={!backend.enabled || saving} onChange={(next) => patch(backend, { watch: next })} />
                         )}
-                        {!builtIn || id === 'workspace:home' ? (
+                        {(!builtIn || id === 'workspace:home') && !isCas(backend) ? (
                           <OptionRow label="Read-only" hint="Canvas never writes or deletes here. Deleting a document only drops its reference."
                             checked={cfg.readOnly === true} disabled={saving || backend.primary} onChange={(next) => patch(backend, { readOnly: next })} />
                         ) : null}
@@ -441,7 +458,7 @@ export function StorageSettingsPanel({ workspaceId, workspaceName, backends, onB
                     {backend.driver === 'file' && supported && !alwaysOn && (
                       <ExclusionsEditor backend={backend} busy={saving} onSave={(patterns) => patch(backend, { exclude: patterns })} />
                     )}
-                    {supported && (
+                    {supported && !isCas(backend) && (
                       <BackendRemovalSettings value={cfg.removalPolicy as RemovalPolicy} backends={backends} source={id} destination={cfg.propagatedRemovalSupported === true}
                         onSave={async (removalPolicy) => { await updateBackend(workspaceId, backend.driver, backend.address, { removalPolicy }); await reload() }} />
                     )}
@@ -467,21 +484,5 @@ export function StorageSettingsPanel({ workspaceId, workspaceName, backends, onB
         </section>
       )}
     </div>
-  )
-}
-
-function PrimaryOption({ selected, disabled, onSelect, icon, title, detail }: {
-  selected: boolean; disabled: boolean; onSelect: () => void; icon: ReactNode; title: string; detail: string
-}) {
-  return (
-    <button type="button" role="radio" aria-checked={selected} disabled={disabled} onClick={onSelect}
-      className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors disabled:opacity-60 ${selected ? 'border-primary bg-primary/5' : 'hover:bg-accent'}`}>
-      <span className={`mt-0.5 ${selected ? 'text-primary' : 'text-muted-foreground'}`}>{icon}</span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-medium">{title}</span>
-        <span className="mt-0.5 block text-[11px] text-muted-foreground">{detail}</span>
-      </span>
-      {selected && <Check className="h-4 w-4 shrink-0 text-primary" />}
-    </button>
   )
 }

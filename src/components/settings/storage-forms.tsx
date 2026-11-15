@@ -169,17 +169,22 @@ export function GoogleDriveForm({ workspaceId, backend, onSaved, onCancel }: For
   )
 }
 
-// An existing S3-compatible bucket, optionally scoped to a key prefix.
-export function S3BackendForm({ workspaceId, backend, onSaved, onCancel }: FormProps) {
+// An existing S3-compatible bucket, optionally scoped to a key prefix. `mode`
+// is chosen when the bucket is connected: 'cas' holds content-addressed blobs
+// only, 'path' holds files under folders and names.
+export function S3BackendForm({ workspaceId, backend, mode: initialMode = 'path', onSaved, onCancel }: FormProps & { mode?: 'cas' | 'path' }) {
   const cfg = backend?.config || {}
   const [form, setForm] = useState({
     name: String(cfg.label || ''), bucket: String(cfg.bucket || ''), prefix: String(cfg.prefix || ''),
     endpoint: String(cfg.endpoint || ''), region: String(cfg.region || 'us-east-1'),
     accessKeyId: '', secretAccessKey: '', sessionToken: '',
   })
+  const mode = backend ? (cfg.mode === 'cas' ? 'cas' : 'path') : initialMode
+  const [sidecar, setSidecar] = useState(cfg.sidecar === true)
   const [pathStyle, setPathStyle] = useState(cfg.forcePathStyle !== false)
   const [readOnly, setReadOnly] = useState(cfg.readOnly === true)
   const [watch, setWatch] = useState(cfg.watch === true)
+  const cas = mode === 'cas'
   const [clearToken, setClearToken] = useState(false)
   const [busy, setBusy] = useState(false)
   const { showToast } = useToast()
@@ -194,15 +199,17 @@ export function S3BackendForm({ workspaceId, backend, onSaved, onCancel }: FormP
         const value = form[key].trim()
         return value ? [[key, value]] : []
       }))
-      // Bucket, endpoint and prefix identify the backend; an edit leaves them out.
+      // Bucket, endpoint, prefix and mode identify the backend; an edit leaves them out.
       const config = {
-        label: form.name.trim(), region: form.region.trim() || 'us-east-1', forcePathStyle: pathStyle, readOnly, watch,
-        ...(backend ? {} : { bucket: form.bucket.trim(), prefix: form.prefix.trim(), endpoint: form.endpoint.trim() }),
+        label: form.name.trim(), region: form.region.trim() || 'us-east-1', forcePathStyle: pathStyle, readOnly,
+        ...(cas ? { sidecar } : { watch }),
+        ...(backend ? {} : { bucket: form.bucket.trim(), prefix: form.prefix.trim(), endpoint: form.endpoint.trim(), mode }),
         ...secrets, ...(clearToken ? { sessionToken: '' } : {}),
       }
       if (backend) await updateBackend(workspaceId, 's3', backend.address, config)
       else await addBackend(workspaceId, 's3', config)
-      showToast({ title: backend ? 'S3 connection saved' : 'S3 bucket connected', description: backend ? undefined : `${form.name.trim()} is being indexed in the background` })
+      showToast({ title: backend ? 'S3 connection saved' : 'S3 bucket connected',
+        description: backend ? undefined : cas ? `New data is now also stored in ${form.name.trim()}` : `${form.name.trim()} is being indexed in the background` })
       await onSaved()
     } catch (err) {
       showToast({ title: 'Could not connect S3', description: message(err, 'Request failed'), variant: 'destructive' })
@@ -213,7 +220,7 @@ export function S3BackendForm({ workspaceId, backend, onSaved, onCancel }: FormP
 
   const keep = backend ? 'Leave blank to keep the stored value' : ''
   return (
-    <FormShell intro="Amazon S3, OVH, MinIO, Garage, RustFS or Ceph RGW. Connects an existing bucket; the access key needs list, read and write on it."
+    <FormShell intro={`${cas ? 'Holds workspace data by content hash, each file once; not browsable by folder.' : 'Holds files under readable folders and names; indexed in place and usable as a filing target.'} Works with Amazon S3, OVH, MinIO, Garage, RustFS or Ceph RGW. Connects an existing bucket; the access key needs list, read and write on it.`}
       busy={busy} valid={valid} submitLabel={backend ? 'Save connection' : 'Connect bucket'} onSubmit={submit} onCancel={onCancel}>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Name"><Input {...field('name')} required placeholder="Accounting archive" /></Field>
@@ -232,18 +239,21 @@ export function S3BackendForm({ workspaceId, backend, onSaved, onCancel }: FormP
       <div className="divide-y">
         {backend && <OptionRow label="Remove the stored session token" checked={clearToken} onChange={setClearToken} />}
         <OptionRow label="Path-style addressing" hint="Needed by most S3-compatible servers. Turn off for Amazon S3 virtual-hosted buckets." checked={pathStyle} onChange={setPathStyle} />
-        <OptionRow label="Watch for changes" hint="List the bucket every minute. Each pass costs list requests, and changed objects are downloaded to index them." checked={watch} onChange={setWatch} />
-        <OptionRow label="Read-only" hint="Canvas never writes or deletes objects in this bucket." checked={readOnly} onChange={setReadOnly} />
+        {cas
+          ? <OptionRow label="Write a description file next to each blob" hint="A small JSON file with the document's type, title and metadata, written once. It lets the bucket be read without the Canvas index after a disaster." checked={sidecar} onChange={setSidecar} />
+          : <OptionRow label="Watch for changes" hint="List the bucket every minute. Each pass costs list requests, and changed objects are downloaded to index them." checked={watch} onChange={setWatch} />}
+        {!cas && <OptionRow label="Read-only" hint="Canvas never writes or deletes objects in this bucket." checked={readOnly} onChange={setReadOnly} />}
       </div>
       <p className="text-[11px] text-muted-foreground">
-        Saving a writable connection writes and removes one small test object under <code className="font-mono">.canvas-probe/</code>. Files filed to a chosen path are limited to 5 GiB each; uploads to a primary data store have no size limit.
+        Saving a writable connection writes and removes one small test object under <code className="font-mono">.canvas-probe/</code>.
+        {cas ? ' Blobs have no size limit.' : ' Files are limited to 5 GiB each.'}
       </p>
     </FormShell>
   )
 }
 
-export function StorageForm({ kind, ...props }: FormProps & { kind: StorageKind }) {
+export function StorageForm({ kind, mode, ...props }: FormProps & { kind: StorageKind; mode?: 'cas' | 'path' }) {
   if (kind === 'gdrive') return <GoogleDriveForm {...props} />
-  if (kind === 's3') return <S3BackendForm {...props} />
+  if (kind === 's3') return <S3BackendForm mode={mode} {...props} />
   return <LocalFolderForm {...props} />
 }
