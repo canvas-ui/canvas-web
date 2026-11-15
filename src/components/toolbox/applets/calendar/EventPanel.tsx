@@ -1,19 +1,31 @@
-import { useEffect, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CheckCircle2, Circle, ExternalLink, Link2, Loader2, Repeat, Trash2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { DatePicker, DateTimePicker } from '@/components/ui/date-time-picker'
 import { EVENT_SCHEMA } from '@/components/renderers/types'
-import { updateWorkspaceDocument } from '@/services/workspace'
+import { createDocumentRelations, getWorkspaceDocument, pasteDocumentsToWorkspacePath, updateWorkspaceDocument } from '@/services/workspace'
 import { useMirrorSaveState } from '@/lib/remote-mirror'
 import { dateKey, dateFromKey, localInput, addDays } from '@/lib/calendar/dates'
 import { describeRRule, parseRRule, presetRRule, recurrenceEnd, repeatPreset, type RepeatPreset } from '@/lib/calendar/rrule'
 import type { Occurrence } from '@/lib/calendar/occurrences'
-import type { Document } from '@/types/workspace'
-import { submitDocuments, type AddTarget } from '../../add/useAddTarget'
+import type { Document, DocumentGeo } from '@/types/workspace'
+import { resolveUploadWorkspace, submitDocuments, type AddTarget } from '../../add/useAddTarget'
 import { isoToLocalInput, localInputToISO } from '../../add/useTodoFields'
 import { GrowingTextarea, LinkDocOverlay } from '../shared'
 import { calendarColor } from './calendar-colors'
+
+import { DocumentGeoField } from '@/components/common/DocumentGeoField'
+import { DocumentRelationsSection } from '@/components/object-card/RelationsSection'
+import { TagInput } from '../../add/TagInput'
+import { useTagSuggestions } from '../../add/useTagSuggestions'
+import { featuresToTags, tagsToFeatures } from '../../add/tags'
+import { useRelationFields } from '../../add/useRelationFields'
+import { RelationFields } from '../../add/RelationFields'
+import { LinkToCard, type LinkToTarget } from '@/components/menu/shared/LinkToCard'
+import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from '@/components/menu/shared/LinkToSidePanel'
+import { useEscapeClose } from '@/hooks/useEscapeClose'
+import { announceRelationsChanged } from '@/lib/relation-events'
 
 const EVENT_SCHEMA_VERSION = '3.0'
 
@@ -144,7 +156,7 @@ function validate(f: Fields): string | null {
   return null
 }
 
-export function EventPanel({ subject, target, workspaceName, calendars, defaultCalendar, onClose, onSaved, onDelete }: {
+interface EventPanelProps {
   subject: PanelSubject
   target: AddTarget
   workspaceName: string | null
@@ -153,26 +165,33 @@ export function EventPanel({ subject, target, workspaceName, calendars, defaultC
   onClose: () => void
   onSaved: (calendar: string) => void
   onDelete: (doc: Document) => Promise<void>
-}) {
+}
+
+export function EventPanel(props: EventPanelProps) {
+  const { subject } = props
+  const key = subject.kind === 'draft'
+    ? `draft:${subject.draft.start.getTime()}:${subject.draft.end?.getTime() ?? ''}:${subject.draft.allDay}`
+    : subject.occurrence.key
+  return <EventEditor key={JSON.stringify([props.workspaceName, props.target, key])} {...props} />
+}
+
+function EventEditor({ subject, target, workspaceName, calendars, defaultCalendar, onClose, onSaved, onDelete }: EventPanelProps) {
   const doc = subject.kind === 'occurrence' ? (subject.occurrence.doc as Document) : null
   const isTask = subject.kind === 'occurrence' && subject.occurrence.kind === 'task'
   const [fields, setFields] = useState<Fields>(() => doc ? fieldsFromDoc(doc, defaultCalendar) : fieldsFromDraft((subject as { draft: EventDraft }).draft, defaultCalendar))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [linking, setLinking] = useState(false)
-  // Re-seed when the panel is pointed at another subject.
-  const subjectKey = subject.kind === 'draft' ? `draft:${subject.draft.start.getTime()}:${subject.draft.end?.getTime() ?? ''}:${subject.draft.allDay}` : subject.occurrence.key
-  const [prevKey, setPrevKey] = useState(subjectKey)
-  if (prevKey !== subjectKey) {
-    setPrevKey(subjectKey)
-    setFields(doc ? fieldsFromDoc(doc, defaultCalendar) : fieldsFromDraft((subject as { draft: EventDraft }).draft, defaultCalendar))
-    setError(null)
-  }
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  const savedId = useRef<number | null>(doc?.id ?? null)
+  const [created, setCreated] = useState(false)
+  const storedFeatures = doc?.features ?? []
+  const [tags, setTags] = useState(() => featuresToTags(storedFeatures))
+  const [geo, setGeo] = useState<DocumentGeo | null>(() => (doc?.metadata?.geo as DocumentGeo | undefined) ?? null)
+  const relations = useRelationFields(target, workspaceName ? { workspaceName, documents: [] } : null)
+  const resolvedWorkspace = workspaceName ?? relations.workspaceName
+  const suggestions = useTagSuggestions(resolvedWorkspace)
+  const [paths, setPaths] = useState<Array<LinkToTarget & { path: string }>>([])
+  useEscapeClose(onClose, !saving)
 
   const patch = (p: Partial<Fields>) => setFields(f => ({ ...f, ...p }))
   const synced = doc ? syncSource(doc) : null
@@ -184,18 +203,40 @@ export function EventPanel({ subject, target, workspaceName, calendars, defaultC
     setSaving(true)
     setError(null)
     try {
-      if (doc) {
-        if (!workspaceName) throw new Error('No workspace resolved for this calendar')
-        await updateWorkspaceDocument(workspaceName, {
-          id: doc.id, schema: doc.schema, schemaVersion: doc.schemaVersion || EVENT_SCHEMA_VERSION,
-          data: buildData(doc.data ?? {}, fields), metadata: doc.metadata,
+      const workspace = resolvedWorkspace ?? (await resolveUploadWorkspace(target)).workspaceName
+      // Relation controls write through to data.relations. Re-read before
+      // replacing data so saving event fields retains those edges.
+      const latest = savedId.current !== null ? await getWorkspaceDocument(workspace, savedId.current) : null
+      const metadata = {
+        ...latest?.metadata,
+        features: [...(latest?.features ?? storedFeatures).filter(feature => !feature.startsWith('tag/')), ...tagsToFeatures(tags)],
+        ...(geo || latest?.metadata?.geo ? { geo } : {}),
+      }
+      if (savedId.current !== null) {
+        await updateWorkspaceDocument(workspace, {
+          id: savedId.current, schema: doc?.schema ?? EVENT_SCHEMA, schemaVersion: doc?.schemaVersion || EVENT_SCHEMA_VERSION,
+          data: buildData(latest?.data ?? {}, fields), metadata,
         })
       } else {
-        await submitDocuments(target, [{ schema: EVENT_SCHEMA, schemaVersion: EVENT_SCHEMA_VERSION, data: buildData({}, fields), metadata: { features: [] } }])
+        const ids = await submitDocuments(target, [{ schema: EVENT_SCHEMA, schemaVersion: EVENT_SCHEMA_VERSION, data: buildData({}, fields), metadata }])
+        if (!ids.length) throw new Error('The event was not created. Try again.')
+        savedId.current = ids[0]
+        setCreated(true)
+      }
+      // Remove each completed operation so a retry only writes pending links.
+      for (let i = relations.rows.length - 1; i >= 0; i--) {
+        const row = relations.rows[i]
+        await createDocumentRelations(workspace, savedId.current, row.predicate, [row.targetId], row.direction)
+        relations.remove(i)
+        announceRelationsChanged()
+      }
+      for (const destination of paths) {
+        await pasteDocumentsToWorkspacePath(workspace, destination.path, [savedId.current], destination.treeName, destination.treeType)
+        setPaths(current => current.filter(item => item !== destination))
       }
       onSaved(fields.calendar.trim())
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save the event')
+      setError((savedId.current !== null && !doc ? 'Event created. Save again to finish pending changes: ' : '') + (err instanceof Error ? err.message : 'Failed to save the event'))
     } finally {
       setSaving(false)
     }
@@ -215,15 +256,15 @@ export function EventPanel({ subject, target, workspaceName, calendars, defaultC
             <ExternalLink className="h-3.5 w-3.5" />
           </Link>
         )}
-        {doc && <button type="button" onClick={() => setLinking(true)} className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" title="Link to…" aria-label="Link to…"><Link2 className="h-3.5 w-3.5" /></button>}
-        {doc && !isTask && <button type="button" onClick={() => { void onDelete(doc) }} className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive" title="Delete (moves to trash)" aria-label="Delete"><Trash2 className="h-3.5 w-3.5" /></button>}
-        <button type="button" onClick={onClose} className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Close"><X className="h-4 w-4" /></button>
+        {(doc || resolvedWorkspace) && <button type="button" disabled={saving} onClick={() => setLinking(true)} className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" title="Link to…" aria-label="Link to…"><Link2 className="h-3.5 w-3.5" /></button>}
+        {doc && !isTask && <button type="button" disabled={saving} onClick={() => { void onDelete(doc) }} className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive" title="Delete (moves to trash)" aria-label="Delete"><Trash2 className="h-3.5 w-3.5" /></button>}
+        <button type="button" onClick={onClose} disabled={saving} className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Close"><X className="h-4 w-4" /></button>
       </div>
 
       {isTask && doc ? (
         <TaskSummary doc={doc} occurrence={subject.occurrence} workspaceName={workspaceName} onSaved={() => onSaved('')} />
       ) : (
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+        <fieldset disabled={saving} className="min-h-0 min-w-0 flex-1 space-y-3 overflow-y-auto p-3">
           <input
             value={fields.title}
             onChange={(e) => patch({ title: e.target.value })}
@@ -299,6 +340,26 @@ export function EventPanel({ subject, target, workspaceName, calendars, defaultC
             </div>
           </div>
 
+          <div className="space-y-1.5">
+            <span className="text-sm font-medium">Tags</span>
+            <TagInput tags={tags} onChange={setTags} suggestions={suggestions} />
+          </div>
+          <DocumentGeoField value={geo} onChange={setGeo} idPrefix="event-geo" label="Geotag" />
+          {doc && resolvedWorkspace
+            ? <DocumentRelationsSection document={doc} workspaceId={resolvedWorkspace} />
+            : <RelationFields f={relations} idPrefix="event" />}
+
+          <div className="space-y-1.5">
+            <button type="button" disabled={!resolvedWorkspace} onClick={() => setLinking(true)} className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50">
+              <Link2 className="h-3.5 w-3.5" /> Link to…
+            </button>
+            {!doc && <p className="text-xs text-muted-foreground">Also file this event in project folders. Links are applied when you create it.</p>}
+            {paths.map((destination, index) => <div key={`${destination.treeName}:${destination.path}`} className="flex items-center gap-2 text-xs">
+              <span className="min-w-0 flex-1 break-all">[{destination.treeName}] {destination.path}</span>
+              <button type="button" onClick={() => setPaths(current => current.filter((_, i) => i !== index))} aria-label={`Remove link to ${destination.path}`} className="rounded p-1 hover:bg-muted"><X className="h-3.5 w-3.5" /></button>
+            </div>)}
+          </div>
+
           {synced && (
             <p className="rounded-md bg-muted/50 px-2 py-1.5 text-[11px] text-muted-foreground">
               Synced from {synced.connector || synced.source}. Edits stay in Canvas unless the connector supports write-back.
@@ -309,20 +370,30 @@ export function EventPanel({ subject, target, workspaceName, calendars, defaultC
             <p className="text-[11px] text-muted-foreground">This series uses RRULE parts the calendar cannot expand; only its first occurrence is shown.</p>
           )}
           {error && <p className="text-xs text-destructive" role="alert">{error}</p>}
-        </div>
+        </fieldset>
       )}
 
       {!isTask && (
         <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-3 py-2">
           <SaveState doc={doc} />
-          <button type="button" onClick={onClose} className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted">Cancel</button>
+          <button type="button" onClick={onClose} disabled={saving} className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted">Cancel</button>
           <button type="button" onClick={save} disabled={saving} className={cn('flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-50')}>
             {saving && <Loader2 className="h-3 w-3 animate-spin" />}
-            {doc ? 'Save' : 'Create'}
+            {doc || created ? 'Save' : 'Create'}
           </button>
         </div>
       )}
 
+      {linking && !doc && resolvedWorkspace && <LinkToSidePanel onClose={() => setLinking(false)}>
+        <LinkToCard fixedWorkspaceName={resolvedWorkspace} sizeClassName={LINK_TO_SIDE_SIZE}
+          title="Link event to…" confirmLabel="Add links" onClose={() => setLinking(false)}
+          onConfirm={(selectedPaths, destination) => {
+            setPaths(current => [...current, ...selectedPaths
+              .filter(path => !current.some(item => item.path === path && item.treeName === destination.treeName))
+              .map(path => ({ ...destination, path }))])
+            setLinking(false)
+          }} />
+      </LinkToSidePanel>}
       {linking && doc && <LinkDocOverlay documentId={doc.id} workspaceName={workspaceName ?? undefined} onClose={() => setLinking(false)} />}
     </div>
   )

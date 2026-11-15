@@ -28,17 +28,18 @@ function describe(geo: DocumentGeo): string {
 }
 
 export function DocumentGeoField({
-  value, onChange, idPrefix = 'edit-geo',
+  value, onChange, idPrefix = 'edit-geo', label = 'Location',
 }: {
   value: DocumentGeo | null
   onChange: (geo: DocumentGeo | null) => void
   idPrefix?: string
+  label?: string
 }) {
   const [pickerOpen, setPickerOpen] = useState(false)
 
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={`${idPrefix}-action`}>Location</Label>
+      <Label htmlFor={`${idPrefix}-action`}>{label}</Label>
       <div className="flex items-center justify-between gap-3">
         <span className="flex min-w-0 items-center gap-2 text-xs">
           <MapPin className={value ? 'h-4 w-4 shrink-0 text-info' : 'h-4 w-4 shrink-0 text-muted-foreground'} />
