@@ -18,7 +18,7 @@ import {
   getBackendDiskUsage,
   removeBackend,
   testBackend,
-  updateBackend,
+  syncBackend, updateBackend,
   type Backend,
   type BackendDiskUsage,
 } from '@/services/workspace'
@@ -180,28 +180,29 @@ function ExclusionsEditor({ backend, busy, onSave }: { backend: Backend; busy: b
   )
 }
 
-// What deleting a file on an S3 bucket does, and the one switch that changes it.
+// Deleting on an S3 bucket is opt-in; versioning and Object Lock are shown as
+// the options they will become.
 function S3DeleteSettings({ backend, busy, onPatch }: { backend: Backend; busy: boolean; onPatch: (patch: Record<string, unknown>) => void }) {
   const cfg = config(backend)
-  if (cfg.readOnly === true) return null
-  if (cfg.versioned === true) {
-    return (
-      <p className="py-2 text-[11px] text-muted-foreground">
-        <span className="font-medium text-foreground">Deleting files:</span> the bucket is versioned, so a delete adds a delete marker and earlier versions stay in the bucket.
-        Object Lock retention keeps applying to those versions.
-      </p>
-    )
-  }
   return (
-    <OptionRow
-      label="Allow permanent deletes"
-      hint={cfg.versioned === false
-        ? 'The bucket is not versioned: a deleted object cannot be recovered. Off keeps deleting disabled.'
-        : 'Versioning has not been checked yet. Run Test connection: on a versioned bucket deleting works without this switch.'}
-      checked={cfg.permanentDelete === true}
-      disabled={busy}
-      onChange={(next) => onPatch({ permanentDelete: next })}
-    />
+    <>
+      {cfg.readOnly !== true && (
+        <OptionRow
+          label="Allow deletes"
+          hint="Deleting a file in Canvas removes the object from the bucket. Off keeps deleting disabled for this bucket."
+          checked={cfg.permanentDelete === true}
+          disabled={busy}
+          onChange={(next) => onPatch({ permanentDelete: next })}
+        />
+      )}
+      {['Versioning (keep earlier versions of a file)', 'Object Lock / WORM (retention on every upload)'].map((label) => (
+        <label key={label} className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+          <input type="checkbox" disabled checked={false} readOnly className="h-3.5 w-3.5" />
+          <span>{label}</span>
+          <span className="text-[11px]">Not supported yet</span>
+        </label>
+      ))}
+    </>
   )
 }
 
@@ -238,12 +239,10 @@ export function StorageSettingsPanel({ workspaceId, workspaceName, backends, onB
     })
 
   const test = (backend: Backend) => run(`test:${backend.address}`, 'Connection failed', async () => {
-    const result = await testBackend(workspaceId, backend.driver, backend.address) as { versioned?: boolean } | null
+    const result = await testBackend(workspaceId, backend.driver, backend.address) as { uploadChecksum?: 'sha256' | 'md5' } | null
     await reload()
-    const versioning = backend.driver === 's3' && typeof result?.versioned === 'boolean'
-      ? (result.versioned ? ' The bucket is versioned: deleting files is available.' : ' The bucket is not versioned.')
-      : ''
-    showToast({ title: 'Connection works', description: `${backendTitle(backend)}: credentials and location verified.${versioning}` })
+    const checksum = result?.uploadChecksum ? ` Uploads are checked by ${result.uploadChecksum === 'sha256' ? 'SHA-256' : 'MD5'}.` : ''
+    showToast({ title: 'Connection works', description: `${backendTitle(backend)}: credentials and location verified.${checksum}` })
   })
 
   const resync = async (backend: Backend) => {
@@ -257,6 +256,11 @@ export function StorageSettingsPanel({ workspaceId, workspaceName, backends, onB
       setBusy(null)
     }
   }
+
+  const uploadExisting = (backend: Backend) => run(`sync:${backend.address}`, 'Could not start the upload', async () => {
+    await syncBackend(workspaceId, backend.driver, backend.address)
+    showToast({ title: 'Upload started', description: `Files stored before ${backendTitle(backend)} was connected are uploading in the background.` })
+  })
 
   const stopSync = (backend: Backend) => run(`sync:${backend.address}`, 'Could not stop the scan', async () => {
     await cancelBackendSync(workspaceId, backend.driver, backend.address)
@@ -378,7 +382,12 @@ export function StorageSettingsPanel({ workspaceId, workspaceName, backends, onB
                     {backend.lastError && <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">{backend.lastError}</p>}
 
                     <div className="flex flex-wrap items-center gap-2">
-                      {backend.capabilities?.sync && (backend.resyncing ? (
+                      {isCas(backend) ? (
+                        <Button type="button" variant="outline" size="sm" disabled={!backend.enabled || busy === `sync:${id}`} onClick={() => uploadExisting(backend)}
+                          title="Uploads every file Workspace Data holds that this store does not have yet.">
+                          <RefreshCw className={`mr-2 h-3.5 w-3.5 ${busy === `sync:${id}` ? 'animate-spin' : ''}`} />Upload existing files
+                        </Button>
+                      ) : backend.capabilities?.sync && (backend.resyncing ? (
                         <Button type="button" variant="outline" size="sm" disabled={busy === `sync:${id}`} onClick={() => stopSync(backend)}
                           title="Files indexed so far are kept; Re-sync continues from there.">
                           <Square className="mr-2 h-3.5 w-3.5 fill-current" />Stop scan
@@ -411,7 +420,7 @@ export function StorageSettingsPanel({ workspaceId, workspaceName, backends, onB
                     {isCas(backend) && (
                       <p className="text-[11px] text-muted-foreground">
                         {backend.primary ? '' : backend.enabled ? 'Backup: every new file is also stored here. ' : 'Disabled: no data is stored here. '}
-                        Each file is stored once, by content hash, under .canvas-blobs/.
+                        Each file is stored once, named by its content hash, directly under the key prefix.
                       </p>
                     )}
                     {backend.lastSyncAt && <p className="text-[11px] text-muted-foreground">Last scan {new Date(backend.lastSyncAt).toLocaleString()}{backend.treePath ? `. Shown in the backends tree at ${backend.treePath}.` : '.'}</p>}
@@ -435,7 +444,16 @@ export function StorageSettingsPanel({ workspaceId, workspaceName, backends, onB
                             onChange={(next) => setPrimary(backend, next)}
                           />
                         )}
-                        {backend.capabilities?.sync && (
+                        {id === BLOB_STORE && backend.primary !== true && (
+                          <OptionRow
+                            label="Keep a local copy of every file"
+                            hint="Off: a file is held here only until the primary store has a verified copy, then removed. On: every file also stays on this server."
+                            checked={backend.keepCopy === true}
+                            disabled={saving}
+                            onChange={(next) => patch(backend, { keepCopy: next })}
+                          />
+                        )}
+                        {backend.capabilities?.sync && !isCas(backend) && (
                           <OptionRow label="Scan when the workspace starts" hint="Off: files are indexed only when you press Re-sync."
                             checked={cfg.scanOnStart === true} disabled={saving} onChange={(next) => patch(backend, { scanOnStart: next })} />
                         )}

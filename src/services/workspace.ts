@@ -1641,6 +1641,8 @@ export interface Backend {
   usage?: BackendDiskUsage | null;
   // The primary data store: new blobs are also uploaded here.
   primary?: boolean;
+  // workspace:data while another store is primary: keep a local copy of every blob.
+  keepCopy?: boolean;
   capabilities: BackendCapabilities;
   containers?: BackendContainer[];
   config?: Record<string, unknown>;

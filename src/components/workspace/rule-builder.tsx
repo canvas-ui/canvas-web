@@ -183,7 +183,7 @@ const emptyAction = (kind: ActionKey): ActionRow => ({
 })
 
 interface RuleForm {
-  id: string | null // null = new (slug generated from description)
+  id: string | null // null = new
   description: string
   events: string[] // at least one EVENT_OPTIONS value (engine ORs arrays)
   schema: string
@@ -204,9 +204,14 @@ const EMPTY_FORM: RuleForm = {
 // 'FMO | DC Migration | SDI' → ['FMO', 'DC Migration', 'SDI'] (engine ORs arrays)
 const splitAlternatives = (value: string) => value.split('|').map((s) => s.trim()).filter(Boolean)
 
-function slugify(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || `rule-${Math.random().toString(36).slice(2, 7)}`
-}
+// A content store names every file by its checksum: no folder, no file name.
+// How a rule names a backend: built-ins by address, others qualified by driver
+// ("s3:Universe"), so the JSON says what kind of store a name refers to.
+const backendRef = (b: Backend) => b.address.startsWith('workspace:') ? b.address : `${b.driver}:${b.address}`
+const findBackend = (list: Backend[], ref: string) => list.find((b) => b.address === ref || backendRef(b) === ref)
+const qualified = (list: Backend[], ref: string) => { const backend = findBackend(list, ref); return backend ? backendRef(backend) : ref }
+
+const isContentStore = (backend?: Backend) => backend?.capabilities?.blobs === true || backend?.address === 'workspace:data'
 
 const splitList = (value: string) => value.split(',').map((s) => s.trim()).filter(Boolean)
 
@@ -395,16 +400,18 @@ function buildRule(form: RuleForm, backends: Backend[] = []): HookRule {
       if (!a) throw new Error('Enter the mail folder to move the email to, such as INBOX/Accounting/{{YYYY}}/Expenses.')
       then.push({ action: 'moveMessage', folder: a })
     }
-    if (row.kind === 'store' && a) {
+    if (row.kind === 'store' && a && isContentStore(findBackend(backends, a))) {
+      then.push({ action: 'store', to: qualified(backends, a), ...(row.storeFrom.trim() ? { from: qualified(backends, row.storeFrom.trim()) } : {}), mode: 'copy' })
+    } else if (row.kind === 'store' && a) {
       if (row.storeMode === 'move' && !row.storeFrom.trim()) throw new Error('Choose the source backend whose copy should be moved.')
       if (row.recursive && !canKeepStorageSubfolders(form.conditions)) throw new Error('Choose a Context, Directory or Backends source path to recreate the path.')
-      if (row.recursive && backends.find(backend => backend.address === a)?.capabilities?.paths !== true) throw new Error('This destination has not reported support for folder paths. Choose a supported backend or turn off path recreation.')
+      if (row.recursive && findBackend(backends, a)?.capabilities?.paths !== true) throw new Error('This destination has not reported support for folder paths. Choose a supported backend or turn off path recreation.')
       const folder = row.storeFolder.trim().replace(/^\/+|\/+$/g, '')
       const key = row.storeName === 'title' ? TITLE_NAME : row.storeName === 'dated' ? DATED_NAME : row.storeName === 'custom' ? b : ''
       then.push({
         action: 'store',
-        to: a,
-        ...(row.storeFrom.trim() ? { from: row.storeFrom.trim() } : {}),
+        to: qualified(backends, a),
+        ...(row.storeFrom.trim() ? { from: qualified(backends, row.storeFrom.trim()) } : {}),
         mode: row.storeMode,
         ...(folder ? { folder } : {}),
         ...recursive,
@@ -416,13 +423,13 @@ function buildRule(form: RuleForm, backends: Backend[] = []): HookRule {
     }
     if (row.kind === 'extractAttachments') {
       if (!a) throw new Error('Choose a destination backend for the attachments.')
-      const backend = backends.find(backend => backend.address === a)
+      const backend = findBackend(backends, a)
       if (backend?.capabilities?.paths !== true) throw new Error('Choose an attachment destination with support for folder paths.')
       const mime = splitList(row.attachmentMime)
       if (!mime.length || mime.some(pattern => !/^(\*|[a-z0-9!#$&^_.+-]+\/(\*|[a-z0-9!#$&^_.+-]+)|\*\/\*)$/i.test(pattern))) throw new Error('Enter attachment MIME types, such as application/pdf or image/*. Use * for all attachments.')
       if (!['rename', 'error'].includes(row.storeConflict)) throw new Error('Choose rename or skip for attachment filename conflicts.')
       then.push({
-        action: 'extractAttachments', to: a, mime: mime.length === 1 ? mime[0] : mime,
+        action: 'extractAttachments', to: qualified(backends, a), mime: mime.length === 1 ? mime[0] : mime,
         ...(row.storeFolder.trim() ? { folder: row.storeFolder.trim() } : {}),
         ...(row.attachmentPath.trim() ? { subfolder: row.attachmentPath.trim() } : {}),
         ...(row.attachmentName.trim() ? { filename: row.attachmentName.trim() } : {}),
@@ -467,7 +474,7 @@ function buildRule(form: RuleForm, backends: Backend[] = []): HookRule {
   }
 
   return {
-    id: form.id || slugify(form.description),
+    id: form.id || crypto.randomUUID(),
     enabled: true,
     ...(form.description ? { description: form.description } : {}),
     ...(form.cascade ? { cascade: true } : {}),
@@ -1024,7 +1031,6 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
       } finally { setIsSaving(false) }
       return
     }
-    if (!form.id && rules.some(existing => existing.id === rule.id)) rule.id = `${rule.id}-${Math.random().toString(36).slice(2, 10)}`
     const next = form.id
       ? rules.map((r) => (r.id === form.id ? { ...rule, enabled: r.enabled !== false } : r))
       : [...rules, rule]
@@ -1087,7 +1093,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
     if (picker.target === 'storeFolder') {
       const parts = splitBackendsPath(paths[0])
       setField('actions', form.actions.map((a, j) => (j === picker.index
-        ? { ...a, storeFolder: parts?.rel || '', ...(parts?.backend && backends.some((b) => b.address === parts.backend) ? { a: parts.backend } : {}) }
+        ? { ...a, storeFolder: parts?.rel || '', ...(parts?.backend && findBackend(backends, parts.backend) ? { a: backendRef(findBackend(backends, parts.backend)!) } : {}) }
         : a)))
     } else if (picker.target === 'condition') {
       const prefixed = paths.map((p) => prefixedPath(p, ctx))
@@ -1110,14 +1116,13 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
 
   const hasStorageSourcePath = canKeepStorageSubfolders(form?.conditions || [])
   const hasPathCondition = Boolean(form?.conditions.some((c) => (['path', 'pathExact', 'eventPathExact'].includes(c.field)) && c.value.trim()))
-  const backendLabel = (b: Backend) => `${b.address}${b.address === 'workspace:data' ? ' — managed blob store (default)' : b.address === 'workspace:home' ? ' — workspace home folder' : b.driver ? ` — ${b.driver}` : ''}`
 
   const backendSelect = (value: string, onChange: (v: string) => void, emptyLabel: string, placeholder = 'workspace:home') => (
     backends.length ? (
-      <select className={selectClass} value={value} onChange={(e) => onChange(e.target.value)}>
+      <select className={selectClass} value={findBackend(backends, value) ? backendRef(findBackend(backends, value)!) : value} onChange={(e) => onChange(e.target.value)}>
         <option value="">{emptyLabel}</option>
-        {backends.map((b) => <option key={b.address} value={b.address}>{backendLabel(b)}</option>)}
-        {value && !backends.some((b) => b.address === value) && <option value={value}>{value}</option>}
+        {backends.map((b) => <option key={b.address} value={backendRef(b)}>{backendRef(b)}</option>)}
+        {value && !findBackend(backends, value) && <option value={value}>{value}</option>}
       </select>
     ) : (
       <Input className={cn(inputClass, 'font-mono')} placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
@@ -1327,8 +1332,9 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
             <SectionHeading step={2} title="Then…" hint="Actions run in order. The item keeps its id, tags and folders unless an action says otherwise." />
             {form.actions.map((row, i) => {
               const set = (patch: Partial<ActionRow>) => setField('actions', form.actions.map((a, j) => (j === i ? { ...a, ...patch } : a)))
-              const destination = backends.find(backend => backend.address === row.a)
+              const destination = findBackend(backends, row.a)
               const destinationSupportsPaths = destination?.capabilities?.paths === true
+              const contentStore = isContentStore(destination)
               const canRecreateStorageStructure = hasStorageSourcePath && destinationSupportsPaths
               const meta = actionMeta(row.kind)
               const outputControls = (label: string) => (
@@ -1362,7 +1368,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                 </div>
               )
               const contextSource = exactContextSource(form.conditions)
-              const storePreview = row.kind === 'store' && row.a && (!row.recursive || canRecreateStorageStructure)
+              const storePreview = row.kind === 'store' && row.a && !contentStore && (!row.recursive || canRecreateStorageStructure)
                 ? storagePathPreview(row, form.conditions, destination) : null
               const attachmentPreview = row.kind === 'extractAttachments' && row.a
                 ? attachmentDestinationPreview(row.a, row.storeFolder, row.attachmentPath) : null
@@ -1421,29 +1427,35 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                         <Field label="Storage backend" hint="Where the file's bytes should live. Only writable backends are listed.">
                           {backendSelect(row.a, (v) => set({ a: v }), 'pick a backend…')}
                         </Field>
-                        <Field label="Destination root folder" hint="Choose the folder beneath which the path will be recreated. Leave empty to use the backend root.">
+                        {contentStore && <Field label="Copy bytes from" hint="Optional. Default: any readable copy on another backend.">
+                          {backendSelect(row.storeFrom, (v) => set({ storeFrom: v }), 'any readable source', 'workspace:home (optional)')}
+                        </Field>}
+                        {!contentStore && <Field label="Destination root folder" hint="Choose the folder beneath which the path will be recreated. Leave empty to use the backend root.">
                           <div className="flex gap-2">
                             <Input className={cn(inputClass, 'font-mono')} placeholder="Projects/Canvas/UI" value={row.storeFolder} onChange={(e) => set({ storeFolder: e.target.value })} />
                             {browseButton('storeFolder', i, 'Browse storage backends')}
                           </div>
-                        </Field>
-                        <Field label="File name">
+                        </Field>}
+                        {!contentStore && <Field label="File name">
                           <select className={selectClass} value={row.storeName} onChange={(e) => set({ storeName: e.target.value as StoreName })}>
                             {STORE_NAME_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                           </select>
-                        </Field>
-                        <Field label="Move or copy" hint={row.storeMode === 'move' ? 'Remove only the selected source copy after the destination is safely stored.' : 'Preserve every existing copy.'}>
+                        </Field>}
+                        {!contentStore && <Field label="Move or copy" hint={row.storeMode === 'move' ? 'Remove only the selected source copy after the destination is safely stored.' : 'Preserve every existing copy.'}>
                           <Segmented value={row.storeMode} onChange={(v) => set({ storeMode: v })} options={[{ value: 'copy', label: 'Copy' }, { value: 'move', label: 'Move' }]} />
-                        </Field>
-                        {row.storeMode === 'move' && <Field className="sm:col-span-2" label="Move bytes from (required)" hint="Context membership does not identify a source copy. If the file is absent here, nothing is moved. Multiple locations on this backend make the move ambiguous; use copy.">
+                        </Field>}
+                        {!contentStore && row.storeMode === 'move' && <Field className="sm:col-span-2" label="Move bytes from (required)" hint="Context membership does not identify a source copy. If the file is absent here, nothing is moved. Multiple locations on this backend make the move ambiguous; use copy.">
                           {backendSelect(row.storeFrom, (v) => set({ storeFrom: v }), 'choose a source backend…', 'workspace:data')}
                         </Field>}
-                        {row.storeName === 'custom' && (
+                        {!contentStore && row.storeName === 'custom' && (
                           <Field className="sm:col-span-2" label="Name template" hint={'Tokens: {{YYYY}} {{MM}} {{DD}} {{HH}} {{mm}} {{ss}} (photo capture time when present), {{ext}} {{basename}} {{filename}} {{title}} {{id}}, plus {{doc.…}} fields. Slashes create sub-folders.'}>
                             <Input className={cn(inputClass, 'font-mono')} placeholder={'{{YYYY}}-{{MM}}-{{DD}} {{title}}{{ext}}'} value={row.b} onChange={(e) => set({ b: e.target.value })} />
                           </Field>
                         )}
                       </div>
+                      {contentStore ? (
+                        <p className="text-xs text-muted-foreground">A content store keeps one copy of each file under its checksum, so there is no folder or file name to choose. The file is copied; every existing copy stays.</p>
+                      ) : (<>
                       <Toggle
                         checked={row.recursive} onChange={(v) => set({ recursive: v })}
                         label={contextSource !== null ? 'Recreate directory path in destination' : 'Recreate sub-folder path in destination'}
@@ -1487,6 +1499,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                         hint="For links without stored bytes, download the target and remove the link only after success. Files are copied normally."
                       />}
                       <p className="text-xs text-muted-foreground">The item keeps its id and virtual tree memberships. A move removes the chosen physical source location from the backend tree.</p>
+                      </>)}
                     </div>
                   )}
 

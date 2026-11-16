@@ -227,8 +227,8 @@ export function S3BackendForm({ workspaceId, backend, mode: initialMode = 'path'
         <Field label="Bucket" hint={backend ? 'Fixed after the bucket is connected.' : undefined}><Input {...field('bucket')} disabled={!!backend} required placeholder="accounting" className="font-mono" /></Field>
         <Field label="Endpoint" hint={backend ? 'Fixed after the bucket is connected.' : 'Blank for Amazon S3.'}><Input {...field('endpoint')} disabled={!!backend} type="url" placeholder="https://s3.gra.io.cloud.ovh.net" className="font-mono" /></Field>
         <Field label="Region"><Input {...field('region')} required placeholder="us-east-1" className="font-mono" /></Field>
-        <Field label="Key prefix" wide hint={backend ? 'Fixed after the bucket is connected.' : 'Optional. Canvas only reads and writes below this prefix.'}>
-          <Input {...field('prefix')} disabled={!!backend} placeholder="Augmentd/Accounting" className="font-mono" />
+        <Field label="Key prefix" wide hint={backend ? 'Fixed after the bucket is connected.' : cas ? 'Blobs are stored directly under this prefix, for example blobs/ab/cd/<hash>. Blank uses the bucket root.' : 'Optional. Canvas only reads and writes below this prefix.'}>
+          <Input {...field('prefix')} disabled={!!backend} placeholder={cas ? 'blobs' : 'Augmentd/Accounting'} className="font-mono" />
         </Field>
         <Field label="Access key ID"><Input {...field('accessKeyId')} required={!backend} autoComplete="off" placeholder={keep} className="font-mono" /></Field>
         <Field label="Secret access key"><Input {...field('secretAccessKey')} type="password" required={!backend} autoComplete="off" placeholder={keep} className="font-mono" /></Field>

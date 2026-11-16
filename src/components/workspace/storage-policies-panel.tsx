@@ -25,6 +25,8 @@ function Switch({ checked, disabled, onClick, label }: { checked: boolean; disab
   )
 }
 
+const OPEN_COPIES_SHOWN = 25
+
 function Badge({ children, title }: { children: React.ReactNode; title?: string }) {
   return <span title={title} className="rounded border px-1 py-px text-[10px] uppercase tracking-wide text-muted-foreground">{children}</span>
 }
@@ -77,6 +79,9 @@ export function StoragePoliciesPanel({ workspaceId }: { workspaceId: string }) {
     } catch (err) { fail(err, 'Could not apply the policy') } finally { setBusy(null); setProgress('') }
   }
 
+  const open = status?.operations?.operations.filter(op => op.state !== 'complete') ?? []
+  const blocked = open.filter(op => op.state === 'blocked').length
+
   return (
     <div className="space-y-4">
       <section className="rounded-lg border p-4">
@@ -88,7 +93,6 @@ export function StoragePoliciesPanel({ workspaceId }: { workspaceId: string }) {
           A mirror keeps filed documents on its targets and moves removed copies to Trash. A filing policy makes copies that stay on the targets. Uploads are kept locally until every required destination has been verified.
         </p>
         {status?.error && <p role="alert" className="mt-2 text-xs text-destructive">{status.error.message}</p>}
-        {status?.operations?.operations.filter(op => op.state !== 'complete').map(op => <div key={op.id} className="mt-2 rounded border p-2 text-xs"><p>{op.owner}: {op.state}</p><p>{op.error?.message}</p>{op.outcomes.map(target => <p key={`${target.backend}:${target.key}`}>{target.backend}:{target.key} — {target.state}</p>)}{op.state === 'blocked' && <Button size="sm" variant="outline" onClick={() => { void retryStorageOperation(workspaceId, op.id).then(refresh).catch(err => fail(err, 'Retry failed')) }}>Retry</Button>}</div>)}
         {error && <p role="alert" className="mt-2 text-xs text-destructive">{error}</p>}
       </section>
 
@@ -139,6 +143,31 @@ export function StoragePoliciesPanel({ workspaceId }: { workspaceId: string }) {
           </section>
         )
       })}
+
+      {open.length > 0 && (
+        <details className="rounded-lg border p-4">
+          <summary className="cursor-pointer select-none text-sm font-semibold">
+            Copies in progress <span className="font-normal text-muted-foreground">({open.length}{blocked ? `, ${blocked} blocked` : ''})</span>
+          </summary>
+          <p className="mt-1 text-xs text-muted-foreground">Uploads and policy copies that have not reached every destination yet. A blocked copy waits for a retry.</p>
+          <ul className="mt-3 divide-y text-xs">
+            {open.slice(0, OPEN_COPIES_SHOWN).map(op => (
+              <li key={op.id} className="flex flex-wrap items-start justify-between gap-2 py-2">
+                <div className="min-w-0">
+                  <p className="break-all font-mono">{op.owner}</p>
+                  {op.outcomes.map(target => <p key={`${target.backend}:${target.key}`} className="break-all text-muted-foreground">{target.backend}:{target.key} ({target.state})</p>)}
+                  {op.error?.message && <p className="text-destructive">{op.error.message}</p>}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge>{op.state}</Badge>
+                  {op.state === 'blocked' && <Button size="sm" variant="outline" onClick={() => { void retryStorageOperation(workspaceId, op.id).then(refresh).catch(err => fail(err, 'Retry failed')) }}>Retry</Button>}
+                </div>
+              </li>
+            ))}
+          </ul>
+          {open.length > OPEN_COPIES_SHOWN && <p className="mt-2 text-xs text-muted-foreground">Showing the first {OPEN_COPIES_SHOWN} of {open.length}.</p>}
+        </details>
+      )}
 
       {editing && (
         <StoragePolicyPanel
