@@ -180,7 +180,7 @@ function ExclusionsEditor({ backend, busy, onSave }: { backend: Backend; busy: b
   )
 }
 
-// Deleting on an S3 bucket is opt-in; versioning and Object Lock are shown as
+// Deleting on an S3 bucket is on unless turned off; versioning and Object Lock are shown as
 // the options they will become.
 function S3DeleteSettings({ backend, busy, onPatch }: { backend: Backend; busy: boolean; onPatch: (patch: Record<string, unknown>) => void }) {
   const cfg = config(backend)
@@ -189,8 +189,8 @@ function S3DeleteSettings({ backend, busy, onPatch }: { backend: Backend; busy: 
       {cfg.readOnly !== true && (
         <OptionRow
           label="Allow deletes"
-          hint="Deleting a file in Canvas removes the object from the bucket. Off keeps deleting disabled for this bucket."
-          checked={cfg.permanentDelete === true}
+          hint="Deleting a file in Canvas removes the object from the bucket. Turn off to keep every object."
+          checked={cfg.permanentDelete !== false}
           disabled={busy}
           onChange={(next) => onPatch({ permanentDelete: next })}
         />

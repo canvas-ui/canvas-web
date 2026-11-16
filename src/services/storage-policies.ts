@@ -42,7 +42,7 @@ export interface StoragePolicy {
 export interface StoragePoliciesResponse {
   policies: StoragePolicy[]
   revision: string
-  status?: { state: string; error?: { message: string } | null; operations?: { operations: StorageOperation[] } }
+  status?: { state: string; error?: { message: string } | null; operations?: { operations: StorageOperation[] }; counts?: { pending: number; running: number; blocked: number } }
   blobBackend: string | null
 }
 
@@ -170,4 +170,12 @@ export function describePolicyTargets(policies: StoragePolicy[]): string {
   return [...seen].join(', ')
 }
 
+export async function retryBlockedStorageOperations(workspaceId: string): Promise<number> {
+  return (await api.post<{ retried: number }>(`${base(workspaceId)}/operations/retry`, {})).retried
+}
+// Gives up blocked uploads and rule copies; policy placements are left alone.
+export async function cancelBlockedStorageOperations(workspaceId: string): Promise<number> {
+  return (await api.post<{ cancelled: number }>(`${base(workspaceId)}/operations/cancel`, {})).cancelled
+}
+export async function cancelStorageOperation(workspaceId: string, id: string): Promise<void> { await api.post(`${base(workspaceId)}/operations/${encodeURIComponent(id)}/cancel`, {}) }
 export async function retryStorageOperation(workspaceId: string, id: string): Promise<void> { await api.post(`${base(workspaceId)}/operations/${encodeURIComponent(id)}/retry`, {}) }

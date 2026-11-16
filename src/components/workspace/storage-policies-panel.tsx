@@ -5,7 +5,8 @@ import { useToast } from '@/components/ui/use-toast'
 import { StoragePolicyPanel } from '@/components/menu/shared/StoragePolicyPanel'
 import { invalidateStoragePolicies, useStoragePolicies } from '@/hooks/useStoragePolicies'
 import {
-  applyStoragePolicyAll, describePolicyTarget, saveStoragePolicies, retryStorageOperation,
+  applyStoragePolicyAll, cancelBlockedStorageOperations, cancelStorageOperation, describePolicyTarget, retryBlockedStorageOperations,
+  saveStoragePolicies, retryStorageOperation,
   type StoragePolicy,
 } from '@/services/storage-policies'
 
@@ -80,7 +81,19 @@ export function StoragePoliciesPanel({ workspaceId }: { workspaceId: string }) {
   }
 
   const open = status?.operations?.operations.filter(op => op.state !== 'complete') ?? []
-  const blocked = open.filter(op => op.state === 'blocked').length
+  const counts = status?.counts
+  const openCount = counts ? counts.pending + counts.running + counts.blocked : open.length
+  const blocked = counts?.blocked ?? open.filter(op => op.state === 'blocked').length
+  const retryAll = () => {
+    void retryBlockedStorageOperations(workspaceId)
+      .then(n => { showToast({ title: `Retrying ${n} blocked ${n === 1 ? 'copy' : 'copies'}` }); return refresh() })
+      .catch(err => fail(err, 'Retry failed'))
+  }
+  const dismissAll = () => {
+    void cancelBlockedStorageOperations(workspaceId)
+      .then(n => { showToast({ title: `Dismissed ${n} blocked ${n === 1 ? 'copy' : 'copies'}`, description: 'The files stay where they are; nothing was deleted.' }); return refresh() })
+      .catch(err => fail(err, 'Could not dismiss the blocked copies'))
+  }
 
   return (
     <div className="space-y-4">
@@ -144,12 +157,18 @@ export function StoragePoliciesPanel({ workspaceId }: { workspaceId: string }) {
         )
       })}
 
-      {open.length > 0 && (
+      {openCount > 0 && (
         <details className="rounded-lg border p-4">
           <summary className="cursor-pointer select-none text-sm font-semibold">
-            Copies in progress <span className="font-normal text-muted-foreground">({open.length}{blocked ? `, ${blocked} blocked` : ''})</span>
+            Copies in progress <span className="font-normal text-muted-foreground">({openCount}{blocked ? `, ${blocked} blocked` : ''})</span>
           </summary>
-          <p className="mt-1 text-xs text-muted-foreground">Uploads and policy copies that have not reached every destination yet. A blocked copy waits for a retry.</p>
+          <p className="mt-1 text-xs text-muted-foreground">Uploads and policy copies that have not reached every destination yet. A blocked copy waits for a retry; dismissing one gives up that copy and leaves the file where it is.</p>
+          {blocked > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={retryAll}>Retry all blocked</Button>
+              <Button size="sm" variant="outline" onClick={dismissAll}>Dismiss all blocked</Button>
+            </div>
+          )}
           <ul className="mt-3 divide-y text-xs">
             {open.slice(0, OPEN_COPIES_SHOWN).map(op => (
               <li key={op.id} className="flex flex-wrap items-start justify-between gap-2 py-2">
@@ -161,11 +180,12 @@ export function StoragePoliciesPanel({ workspaceId }: { workspaceId: string }) {
                 <div className="flex items-center gap-2">
                   <Badge>{op.state}</Badge>
                   {op.state === 'blocked' && <Button size="sm" variant="outline" onClick={() => { void retryStorageOperation(workspaceId, op.id).then(refresh).catch(err => fail(err, 'Retry failed')) }}>Retry</Button>}
+                  {op.state === 'blocked' && <Button size="sm" variant="ghost" onClick={() => { void cancelStorageOperation(workspaceId, op.id).then(refresh).catch(err => fail(err, 'Could not dismiss this copy')) }}>Dismiss</Button>}
                 </div>
               </li>
             ))}
           </ul>
-          {open.length > OPEN_COPIES_SHOWN && <p className="mt-2 text-xs text-muted-foreground">Showing the first {OPEN_COPIES_SHOWN} of {open.length}.</p>}
+          {openCount > OPEN_COPIES_SHOWN && <p className="mt-2 text-xs text-muted-foreground">Showing the first {OPEN_COPIES_SHOWN} of {openCount}.</p>}
         </details>
       )}
 
