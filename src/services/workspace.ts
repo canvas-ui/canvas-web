@@ -1627,7 +1627,8 @@ export interface Backend {
   address: string;
   kind: 'storage' | 'messages' | 'connector' | 'hybrid';
   enabled: boolean;
-  status: 'running' | 'idle' | 'stopped' | 'error' | 'syncing' | string;
+  // 'offline': a share whose machine is not connected (its catalog stays).
+  status: 'running' | 'idle' | 'stopped' | 'error' | 'syncing' | 'offline' | string;
   // Live resync state (initial/catch-up scan running in the background).
   resyncing?: boolean;
   resyncStartedAt?: string | null;

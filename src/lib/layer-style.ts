@@ -113,6 +113,7 @@ const BACKEND_DRIVER_DEFAULTS: Record<string, LayerStyle> = {
   cacache: { icon: 'ph:database-fill', color: '#14b8a6' },
   s3: { icon: 'ph:cloud-fill', color: '#0ea5e9' },
   gdrive: { icon: 'mdi:google-drive', color: '#fbbc04' },
+  share: { icon: 'ph:hard-drives-fill', color: '#8b5cf6' },
   http: { icon: 'ph:globe-fill', color: '#0ea5e9' },
   imap: { icon: 'ph:envelope-fill', color: '#a855f7' },
 }

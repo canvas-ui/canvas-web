@@ -59,6 +59,12 @@ function backendSummary(backend: Backend): string {
     const account = typeof cfg.account === 'string' && cfg.account && cfg.account !== cfg.label ? `${cfg.account}, ` : ''
     return `Google Drive, ${account}${cfg.folderId && cfg.folderId !== 'root' ? `folder ${cfg.folderId}` : 'My Drive'}`
   }
+  if (backend.driver === 'share') {
+    const source = (cfg.source || null) as { device?: { name?: string } | null; files?: number | null; seenAt?: string | null } | null
+    const where = source?.device?.name ? ` on ${source.device.name}` : ''
+    if (cfg.online) return `Read-only share file://${backend.address}/${where}${source?.files != null ? `, ${source.files} files` : ''}`
+    return `Read-only share file://${backend.address}/, ${source?.seenAt ? `last seen${where} ${new Date(source.seenAt).toLocaleString()}` : 'not connected'}. Its files stay listed.`
+  }
   const device = (cfg.device || null) as { name?: string } | null
   return `${typeof cfg.root === 'string' ? cfg.root : 'Local folder'}${device?.name ? ` on ${device.name}` : ''}`
 }
@@ -79,6 +85,7 @@ function StatusPill({ backend }: { backend: Backend }) {
   }
   if (backend.lastError || backend.status === 'error') return <Pill tone="danger">Error</Pill>
   if (!backend.enabled || backend.status === 'stopped') return <Pill tone="muted">Off</Pill>
+  if (backend.status === 'offline') return <Pill tone="muted">Offline</Pill>
   return <Pill tone="ok">{backend.status === 'running' ? 'Watching' : 'Ready'}</Pill>
 }
 
@@ -453,7 +460,7 @@ export function StorageSettingsPanel({ workspaceId, workspaceName, backends, onB
                             onChange={(next) => patch(backend, { keepCopy: next })}
                           />
                         )}
-                        {backend.capabilities?.sync && !isCas(backend) && (
+                        {backend.capabilities?.sync && !isCas(backend) && backend.driver !== 'share' && (
                           <OptionRow label="Scan when the workspace starts" hint="Off: files are indexed only when you press Re-sync."
                             checked={cfg.scanOnStart === true} disabled={saving} onChange={(next) => patch(backend, { scanOnStart: next })} />
                         )}
@@ -465,7 +472,11 @@ export function StorageSettingsPanel({ workspaceId, workspaceName, backends, onB
                           <OptionRow label="Watch for changes" hint="Pick up changes made outside Canvas without a manual re-sync."
                             checked={!!cfg.watch} disabled={!backend.enabled || saving} onChange={(next) => patch(backend, { watch: next })} />
                         )}
-                        {(!builtIn || id === 'workspace:home') && !isCas(backend) ? (
+                        {backend.driver === 'share' && (
+                          <OptionRow label="Follow changes" hint="List files as they are added, moved or removed on the machine that holds the folder. Off: only when that machine rescans."
+                            checked={!!cfg.watch} disabled={!backend.enabled || saving} onChange={(next) => patch(backend, { watch: next })} />
+                        )}
+                        {(!builtIn || id === 'workspace:home') && !isCas(backend) && backend.driver !== 'share' ? (
                           <OptionRow label="Read-only" hint="Canvas never writes or deletes here. Deleting a document only drops its reference."
                             checked={cfg.readOnly === true} disabled={saving || backend.primary} onChange={(next) => patch(backend, { readOnly: next })} />
                         ) : null}
