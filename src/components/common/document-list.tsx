@@ -1613,27 +1613,24 @@ export function DocumentList({ readingPane = false, externalSearchQuery, toolbar
       hint: 'Unlinks from this folder; the document stays in the index',
       run: () => { if (n === 1 && removeDocument) removeDocument(ids[0]); else removeDocuments?.(ids); done() },
     })
-    add(treeName !== 'backends' && (onDeleteDocument || onDeleteDocuments) && {
-      id: 'delete', group: 'remove', label: `Delete from index${count}`, icon: Trash2, destructive: true,
-      hint: 'Removes the document from the index entirely; file data stays on its backend(s)',
-      run: () => { if (n === 1 && onDeleteDocument) onDeleteDocument(ids[0]); else onDeleteDocuments?.(ids); done() },
-    })
 
     // Backends — only for a selection that actually has file data on a
     // backend; JSON-only docs have no bytes to move.
     if (hasFileData && canUseBackends) {
       add({ id: 'backend-copy', group: 'backends', groupLabel: 'Backends', label: `Copy to backend…${count}`, icon: HardDrive, hint: 'Copy the file data to another storage backend (keeps the existing copies)', run: () => setBackendPanel({ ids, mode: 'copy' }) })
       add({ id: 'backend-move', group: 'backends', label: `Move to backend…${count}`, icon: ArrowRightLeft, hint: 'Move the file data to another storage backend (source released once the copy is durable)', run: () => setBackendPanel({ ids, mode: 'move' }) })
-      add({ id: 'backend-delete', group: 'backends', label: `Delete from backend…${count}`, icon: Trash2, destructive: true, hint: 'Delete the file data from selected backends (copies elsewhere are kept)', run: () => setBackendPanel({ ids, mode: 'delete' }) })
-    } else if (hasFileData && (onDestroyDocument || onDestroyDocuments)) {
-      // Legacy whole-object destroy (every location at once) — kept for
-      // views that pass the handler explicitly.
-      add({
-        id: 'destroy', group: 'backends', label: `Delete from backend(s)${count}`, icon: Trash2, destructive: true,
-        hint: 'Deletes the document and its file data from the storage backend(s)',
-        run: () => { if (n === 1 && onDestroyDocument) onDestroyDocument(ids[0]); else onDestroyDocuments?.(ids); done() },
-      })
+      add({ id: 'backend-delete', group: 'remove', label: `Delete from backend…${count}`, icon: Trash2, destructive: true, hint: 'Delete the file data from selected backends (copies elsewhere are kept)', run: () => setBackendPanel({ ids, mode: 'delete' }) })
     }
+    add((onDeleteDocument || onDeleteDocuments) && {
+      id: 'delete', group: 'remove', label: `Delete from index${count}`, icon: Trash2, destructive: true,
+      hint: 'Removes the document from the index entirely; file data stays on its backend(s)',
+      run: () => { if (n === 1 && onDeleteDocument) onDeleteDocument(ids[0]); else onDeleteDocuments?.(ids); done() },
+    })
+    add((onDestroyDocument || onDestroyDocuments) && {
+      id: 'destroy', group: 'remove', label: `Delete from index and all backends${count}`, icon: Trash2, destructive: true,
+      hint: 'Deletes the document from the index and its file data from all backends',
+      run: () => { if (n === 1 && onDestroyDocument) onDestroyDocument(ids[0]); else onDestroyDocuments?.(ids); done() },
+    })
     return items
   }
 

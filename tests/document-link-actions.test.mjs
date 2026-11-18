@@ -96,3 +96,33 @@ test('Link to from a live context uses the tree chosen in the picker', async () 
   assert.equal(await run('/Notes', [1]), true)
   assert.equal(pasted[0][0], 'design')
 })
+
+for (const treeName of ['context', 'backends']) {
+  test(`document menu in ${treeName} offers distinct backend, index and complete deletion`, async () => {
+    const calls = []
+    const dependencies = {
+      treeName, documents: [1, 2].map(id => ({ id, schema: 'data/schema/file', data: {}, locations: [{ url: `stored://home/${id}` }] })),
+      workspaceId: 'studio', bulkEditAllowed: false, canLink: false, canAddRelated: false, canUseBackends: true,
+      openToSide: undefined, onCopyDocuments: undefined, onCutDocuments: undefined,
+      removeDocument: undefined, removeDocuments: undefined,
+      onDeleteDocument: id => calls.push(['index', id]), onDeleteDocuments: ids => calls.push(['index-many', ...ids]),
+      onDestroyDocument: id => calls.push(['all', id]), onDestroyDocuments: ids => calls.push(['all-many', ...ids]),
+      setBackendPanel: panel => calls.push(['backend', panel.mode, ...panel.ids]), setSelectedDocuments() {},
+    }
+    for (const icon of ['Eye', 'Link', 'Download', 'Trash2', 'HardDrive', 'ArrowRightLeft']) dependencies[icon] = icon
+    const actions = loadHandler('../src/components/common/document-list.tsx', 'documentActions', dependencies)
+    for (const ids of [[1], [1, 2]]) {
+      const menu = actions(ids)
+      const suffix = ids.length > 1 ? ' (2)' : ''
+      const deletions = menu.filter(item => ['backend-delete', 'delete', 'destroy'].includes(item.id))
+      assert.deepEqual(Array.from(deletions, item => item.label), [
+        `Delete from backend…${suffix}`, `Delete from index${suffix}`, `Delete from index and all backends${suffix}`,
+      ])
+      for (const action of deletions) await action.run()
+    }
+    assert.deepEqual(calls, [
+      ['backend', 'delete', 1], ['index', 1], ['all', 1],
+      ['backend', 'delete', 1, 2], ['index-many', 1, 2], ['all-many', 1, 2],
+    ])
+  })
+}
