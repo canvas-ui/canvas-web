@@ -1,4 +1,3 @@
-import { DocumentActionDialog } from '@/components/common/document-action-dialog'
 import { PlaintextFileForm } from './add/PlaintextFileForm'
 import { FileText } from 'lucide-react'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
@@ -7,7 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import { sketchEditor } from '@/components/editors/registry'
 import { useAddTarget, useBackendAddTarget } from './add/useAddTarget'
 import { useCallback, useRef, useState } from 'react'
-import { ArrowLeft, X, MessageSquarePlus, StickyNote, Link as LinkIcon, Upload, Camera, Brush, Plus, Pencil, FileSearch, FolderPlus, ListTodo, User } from 'lucide-react'
+import { ArrowLeft, X, Maximize2, Minimize2, MessageSquarePlus, StickyNote, Link as LinkIcon, Upload, Camera, Brush, Plus, Pencil, FileSearch, FolderPlus, ListTodo, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useIsTooNarrowToDock } from '@/hooks/use-mobile'
 import { MessageComposer } from '@/components/common/MessageComposer'
@@ -17,6 +16,7 @@ import { type AddKind } from './toolbox-context'
 import { NoteForm } from './add/NoteForm'
 import { LinkForm } from './add/LinkForm'
 import { TodoForm } from './add/TodoForm'
+import { useCreateDestinations } from './add/useCreateDestinations'
 import { IdentityForm } from './add/IdentityForm'
 import { FileForm } from './add/FileForm'
 import { FolderForm } from './add/FolderForm'
@@ -43,17 +43,23 @@ const TITLES: Record<AddKind, { label: string; icon: typeof StickyNote }> = {
 }
 
 export function AddPanel() {
-  const { state, openAdd, openAddPicker, closeAdd } = useToolbox()
+  const { state, openAdd, openAddPicker, closeAdd, setAddModal } = useToolbox()
   useEscapeClose(closeAdd, state.addOpen)
   const { addOpen, addKind, editDocument, addModal } = state
   const target = useAddTarget()
   const backend = useBackendAddTarget(target)
-  const allowedBackendKinds = ['file', 'photo', 'folder', 'message', 'plaintext']
+  // A connected service that takes new tasks (a GitHub repository, a CalDAV
+  // task list) makes Todo available inside the backends tree as well.
+  const taskDestinations = useCreateDestinations(backend.isBackend ? state.activeWorkspaceName : null, 'task')
+  const backendTodo = backend.isBackend && taskDestinations.length > 0
+  const allowedBackendKinds = [...(backend.destination ? ['file', 'photo', 'folder', 'plaintext'] : []), 'message', ...(backendTodo ? ['todo'] : [])]
   const backendBlockedKind = backend.isBackend && !!addKind && !allowedBackendKinds.includes(addKind)
   const messageWorkspace = state.activeWorkspaceName
   const omitMessage = !messageWorkspace || !!state.addRelateTo
   const blockedKind = backendBlockedKind || (addKind === 'message' && omitMessage)
-  const omittedKinds: AddKind[] = backend.isBackend ? ['note', 'link', 'todo', 'identity', 'sketch', 'existing'] : ['plaintext']
+  const omittedKinds: AddKind[] = backend.isBackend
+    ? ['note', 'link', 'identity', 'sketch', 'existing', ...(backendTodo ? [] : ['todo' as const]), ...(backend.destination ? [] : ['file' as const, 'photo' as const, 'folder' as const, 'plaintext' as const])]
+    : ['plaintext']
   if (omitMessage) omittedKinds.push('message')
   const formKey = target?.mode === 'workspace' ? `${target.workspaceName}:${target.treeName}:${target.path}` : target?.contextId
   const navigate = useNavigate()
@@ -113,18 +119,23 @@ export function AddPanel() {
   const content = (
     <>
       {/* Mobile scrim — same treatment as the M1/M2 menu drawer */}
-      {asDrawer && !addModal && (
-        <div className="fixed inset-0 z-panel-scrim bg-scrim animate-fade-in" onClick={closeAdd} aria-hidden />
+      {(asDrawer || addModal) && (
+        <div className={cn('fixed inset-0 bg-scrim animate-fade-in', addModal ? 'z-dialog' : 'z-panel-scrim')} onClick={closeAdd} aria-hidden />
       )}
     <div
+      role={addModal ? 'dialog' : undefined}
+      aria-modal={addModal || undefined}
+      aria-label={addModal ? headerLabel : undefined}
       style={asDrawer || addModal ? undefined : { width }}
       className={cn(
         'flex flex-col overflow-hidden rounded-[var(--panel-radius)] border bg-card surface-glass',
-        // Mobile: M1/M2-style drawer next to the menubar, above everything
-        // (incl. the z-50 toolbox FAB, which would otherwise cover the form's
-        // bottom controls). Desktop: a resizable flex sibling that shrinks
-        // the main content.
-        addModal ? 'h-full w-full' : asDrawer
+        // Full editor: a centered surface above the page. It is this same
+        // element restyled, not a second host, so the open form keeps its
+        // state when the user switches. Mobile: M1/M2-style drawer next to
+        // the menubar, above everything (incl. the z-50 toolbox FAB, which
+        // would otherwise cover the form's bottom controls). Desktop: a
+        // resizable flex sibling that shrinks the main content.
+        addModal ? 'fixed inset-0 z-dialog m-auto h-[86dvh] max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] max-w-5xl bg-popover shadow-elevation-4' : asDrawer
           ? 'fixed bottom-2 left-2 right-2 top-2 z-panel shadow-elevation-5 animate-fade-in'
           : 'relative shrink-0 shadow-elevation-3',
       )}
@@ -143,6 +154,18 @@ export function AddPanel() {
           {isEditMode ? <Pencil className="h-4 w-4" /> : <HeaderIcon className="h-4 w-4" />}
           {headerLabel}
         </span>
+        {!isPicker && (
+          <button
+            type="button"
+            onClick={() => setAddModal(!addModal)}
+            className="flex h-8 w-8 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label={addModal ? 'Back to side panel' : 'Open full editor'}
+            title={addModal ? 'Back to side panel' : 'Open full editor'}
+            aria-pressed={addModal}
+          >
+            {addModal ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </button>
+        )}
         <button
           type="button"
           onClick={closeAdd}
@@ -153,7 +176,7 @@ export function AddPanel() {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {isEditMode && editDocument!.schema === 'data/schema/note' && <EditNoteForm />}
         {isEditMode && editDocument!.schema === 'data/schema/link' && <EditLinkForm />}
         {/* Shared insertion menu — same entries/order as the home quick-add */}
@@ -164,14 +187,17 @@ export function AddPanel() {
         )}
         {!isEditMode && backend.isBackend && addKind !== 'message' && (
           <p className="border-b px-4 py-3 text-xs text-muted-foreground">
-            {backend.loading ? 'Checking storage destination…' : backend.error || 'Files are saved directly to this backend folder. Notes and other database documents belong in context or directory trees.'}
+            {backend.loading ? 'Checking storage destination…'
+              : backend.destination ? 'Files are saved directly to this backend folder. Notes and other database documents belong in context or directory trees.'
+                : backendTodo ? 'Todos added here are created on the connected service. Notes and other database documents belong in context or directory trees.'
+                  : backend.error}
           </p>
         )}
-        {!isEditMode && isPicker && (!backend.isBackend || backend.destination) && <InsertMenu onSelect={openAdd} omit={omittedKinds} />}
-        {!isEditMode && addKind === 'message' && !omitMessage && messageWorkspace && <MessageComposer key={messageWorkspace} workspaceId={messageWorkspace} onClose={closeAdd} />}
+        {!isEditMode && isPicker && (!backend.isBackend || backend.destination || backendTodo) && <InsertMenu onSelect={openAdd} omit={omittedKinds} />}
+        {!isEditMode && addKind === 'message' && !omitMessage && messageWorkspace && <MessageComposer key={messageWorkspace} workspaceId={messageWorkspace} onClose={closeAdd} embedded wide={addModal} />}
         {!isEditMode && !backend.isBackend && addKind === 'note' && <NoteForm key={formKey} />}
         {!isEditMode && !backend.isBackend && addKind === 'link' && <LinkForm />}
-        {!isEditMode && !backend.isBackend && addKind === 'todo' && <TodoForm />}
+        {!isEditMode && (!backend.isBackend || backendTodo) && addKind === 'todo' && <TodoForm />}
         {!isEditMode && !backend.isBackend && addKind === 'identity' && <IdentityForm />}
         {!isEditMode && backend.destination && addKind === 'plaintext' && <PlaintextFileForm key={formKey} />}
         {!isEditMode && (!backend.isBackend || backend.destination) && addKind === 'file' && <FileForm key={formKey} />}
@@ -182,5 +208,5 @@ export function AddPanel() {
     </div>
     </>
   )
-  return addModal ? <DocumentActionDialog label={headerLabel} onClose={closeAdd}>{content}</DocumentActionDialog> : content
+  return content
 }

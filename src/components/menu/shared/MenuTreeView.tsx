@@ -292,10 +292,10 @@ function CtxMenu({
 
         {node.type === 'canvas' && onShareCanvas && <div className="my-1 h-px bg-border" />}
 
-        {/* Refresh the backend source of this folder. */}
+        {/* Rescan the backend source of this folder. */}
         {onResyncBackend && (canResyncBackend?.(path) ?? !!backendNameForPath(path, isBackendsTree)) && (
           <>
-            {item(<RefreshCw className="w-3 h-3" />, 'Refresh backend', async () => {
+            {item(<RefreshCw className="w-3 h-3" />, 'Rescan backend', async () => {
               await onResyncBackend(path)
             })}
             <div className="my-1 h-px bg-border" />

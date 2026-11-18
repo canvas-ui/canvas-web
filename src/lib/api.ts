@@ -42,6 +42,10 @@ interface RequestOptions extends RequestInit {
   // state. For optional/background fetches whose failure must never hijack
   // navigation — e.g. a `.catch()`ed notifications poll on a public page.
   noAuthRedirect?: boolean
+  // Reject without the global error toast. For optional fetches whose
+  // failure the caller handles itself (a destination list built from every
+  // connected backend must not toast because one of them is down).
+  quiet?: boolean
   // Resolve to the whole ResponseEnvelope rather than its payload. Needed only
   // where the caller reads `count`/`totalCount`, which the payload does not
   // carry. Prefer the plain (unwrapped) methods everywhere else.
@@ -172,7 +176,7 @@ async function requestJson<T>(
   data: unknown,
   options: RequestOptions = {},
 ): Promise<T> {
-  const { skipAuth = false, noAuthRedirect = false, envelope = false, headers, signal, body } = options;
+  const { skipAuth = false, noAuthRedirect = false, quiet = false, envelope = false, headers, signal, body } = options;
 
   ensureAuthReady(skipAuth, noAuthRedirect);
 
@@ -211,7 +215,7 @@ async function requestJson<T>(
     }
 
     console.error(`API Error: ${endpoint}`, error);
-    if (error instanceof Error) {
+    if (error instanceof Error && !quiet) {
       handleApiError(error, `${method} ${endpoint}`);
     }
     throw error;

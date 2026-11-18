@@ -25,6 +25,9 @@ export interface ObjectPropertiesCardProps {
   navigation?: CanvasAddressBarProps
   tabActions?: ReactNode
   onTabChange?: (tab: ObjectCardTab) => void
+  // Called when a link inside the card navigates away (a Synapses path), so a
+  // modal host can close itself.
+  onNavigate?: () => void
 }
 
 const TABS: TabDef<ObjectCardTab>[] = [
@@ -39,7 +42,7 @@ const TABS: TabDef<ObjectCardTab>[] = [
 // Unified tabbed object properties card — the ONE detail surface for any
 // document. Chrome-less: hosts (side card, modal) provide their own frame.
 export function ObjectPropertiesCard({
-  document, workspaceId, initialTab = 'view', initialEdit = false, onChanged, className = '', compact = false, navigation, tabActions, onTabChange,
+  document, workspaceId, initialTab = 'view', initialEdit = false, onChanged, className = '', compact = false, navigation, tabActions, onTabChange, onNavigate,
 }: ObjectPropertiesCardProps) {
   // Public share viewer: no authenticated APIs — hide Synapses/Backends + edit.
   const isPublic = usePublicShareCode() != null
@@ -77,7 +80,7 @@ export function ObjectPropertiesCard({
         {visibleTab === 'location' && geo && <Suspense fallback={<p className="text-sm text-muted-foreground">Loading map…</p>}><LocationTab lat={geo.lat} lon={geo.lon} /></Suspense>}
         {visibleTab === 'metadata' && <MetadataTab document={document} workspaceId={workspaceId} />}
         {visibleTab === 'json' && <JsonTab document={document} workspaceId={workspaceId} />}
-        {visibleTab === 'synapses' && !isPublic && <SynapsesTab document={document} workspaceId={workspaceId} />}
+        {visibleTab === 'synapses' && !isPublic && <SynapsesTab document={document} workspaceId={workspaceId} onNavigate={onNavigate} />}
         {visibleTab === 'backends' && !isPublic && <BackendsTab document={document} workspaceId={workspaceId} onChanged={onChanged} />}
       </div>
       </div>

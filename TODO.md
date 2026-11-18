@@ -10,6 +10,23 @@ everything; only what has been thought through.
 
 ---
 
+## Creating on connected backends: open items (2026-11-18)
+
+The toolbox todo form and the Calendar event panel create on connected
+backends through `useCreateDestinations` (server `creates` per container).
+Not covered yet:
+
+- Home quick-add todo card (`home/cards/TodoCardBody.tsx`) and the Todos
+  applet's inline add save to Canvas only. The card picks its workspace at
+  save time, so it needs the destination list for the workspace chosen there.
+- An existing Canvas event or todo cannot be moved onto a connected calendar
+  or task list; the destination applies to new items only.
+- `ConnectorsSection.tsx` still carries its own per-driver field table next to
+  the one the server serves (`describe()`); the write-back switch for a new
+  driver has to be added in both.
+
+---
+
 ## Server-side appearance + live video wallpapers (not MVP)
 
 Decided 2026-10-07. Today a wallpaper is pure CSS (`applyWallpaper` in

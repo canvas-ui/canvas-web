@@ -33,6 +33,8 @@ interface FieldSpec {
   // Google-backed drivers: offer the consent popup under the refresh-token field.
   oauth?: 'google'
   oauthScope?: GoogleOAuthScope
+  // Scope to ask for instead when the form's write-back switch is on.
+  oauthWriteScope?: GoogleOAuthScope
 }
 
 const DRIVERS: Record<string, { label: string; icon: string; blurb: string; fields: FieldSpec[] }> = {
@@ -89,26 +91,27 @@ const DRIVERS: Record<string, { label: string; icon: string; blurb: string; fiel
   gcal: {
     label: 'Google Calendar',
     icon: 'mdi:calendar-month',
-    blurb: 'Events sync as calendar entries (recurring series kept as series). Offline-access OAuth credentials.',
+    blurb: 'Events sync as calendar entries (recurring series kept as series). Offline-access OAuth credentials. Read-only by default; enable write-back to create and edit events from Canvas.',
     fields: [
       { key: 'address', label: 'Account label', placeholder: 'e.g. me-gmail', required: true },
       { key: 'clientId', label: 'OAuth client id', required: true },
       { key: 'clientSecret', label: 'OAuth client secret', secret: true, required: true },
-      { key: 'refreshToken', label: 'Refresh token', secret: true, required: true, oauth: 'google', oauthScope: 'calendar.readonly' },
+      { key: 'refreshToken', label: 'Refresh token', secret: true, required: true, oauth: 'google', oauthScope: 'calendar.readonly', oauthWriteScope: 'calendar' },
       { key: 'calendars', label: 'Calendar ids (empty = primary)', list: true, placeholder: 'primary\nteam@group.calendar.google.com = Team', hint: 'One per line. "<id> = <name>" names the calendar in Canvas (its own timeline and a toggle in the Calendar app); unnamed ones use the account label (primary) or the id.' },
+      { key: 'writeBack', label: 'Create and edit events from Canvas', hint: 'Needs the read/write calendar permission: turn this on, then sign in with Google again.', bool: true },
     ],
   },
   caldav: {
     label: 'CalDAV',
     icon: 'mdi:calendar-sync',
-    blurb: 'Any CalDAV endpoint (GroupOffice, Nextcloud, Radicale, SOGo…). Read-only by default; enable write-back to create events from Canvas.',
+    blurb: 'Any CalDAV endpoint (GroupOffice, Nextcloud, Radicale, SOGo…). Events sync as calendar entries, tasks (VTODO) as todos. Read-only by default; enable write-back to create and edit them from Canvas.',
     fields: [
       { key: 'address', label: 'Account label', placeholder: 'e.g. groupoffice', required: true },
       { key: 'url', label: 'CalDAV URL (calendar home or one calendar)', placeholder: 'https://host/caldav/user', required: true },
       { key: 'username', label: 'Username' },
       { key: 'password', label: 'Password', secret: true },
       { key: 'calendars', label: 'Calendars (names, empty = all)', list: true, placeholder: 'personal\nwork = Work', hint: 'One per line. "<name> = <calendar name>" names the calendar in Canvas (its own timeline and a toggle in the Calendar app); otherwise the CalDAV display name is used.' },
-      { key: 'writeBack', label: 'Create events from Canvas', hint: 'Write-back into the CalDAV calendar.', bool: true },
+      { key: 'writeBack', label: 'Create and edit events and tasks from Canvas', hint: 'Write-back into the CalDAV calendar.', bool: true },
     ],
   },
   teams: {
@@ -348,7 +351,7 @@ export function ConnectorsSection({ workspaceId }: { workspaceId: string }) {
                     <GoogleOAuthButton
                       clientId={form.clientId || ''}
                       clientSecret={form.clientSecret || ''}
-                      scope={field.oauthScope || 'calendar.readonly'}
+                      scope={(form.writeBack === 'true' && field.oauthWriteScope) || field.oauthScope || 'calendar.readonly'}
                       disabled={busy}
                       backend={editing && form.clientId?.trim() === editing.config?.clientId
                         ? { workspaceId, driver: editing.driver, address: editing.address }

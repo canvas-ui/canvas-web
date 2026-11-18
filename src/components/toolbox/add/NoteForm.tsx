@@ -12,6 +12,7 @@ import { useTagSuggestions } from './useTagSuggestions'
 import { GeotagToggle } from './GeotagToggle'
 import { useRelationFields } from './useRelationFields'
 import { RelationFields } from './RelationFields'
+import { AddFormBody, AddFormLayout } from './AddFormLayout'
 
 export function NoteForm() {
   const { closeAdd, state } = useToolbox()
@@ -36,55 +37,55 @@ export function NoteForm() {
     }
   }
 
+  const wide = state.addModal
   return (
-    <div className="flex flex-col gap-4 p-4">
-      <div className="space-y-1.5">
-        <Label htmlFor="note-title">Title</Label>
-        <Input
-          id="note-title"
-          value={f.title}
-          onChange={(e) => f.setTitle(e.target.value)}
-          placeholder="Optional; defaults to today's date"
-        />
-      </div>
-
-      <div className="space-y-1.5">
-        <Label>Body</Label>
-        <DocumentBodyEditor kind="markdown" value={f.content} onChange={f.setContent} placeholder="Write your note…" />
-      </div>
-
-      <div className="space-y-1.5">
-        <Label htmlFor="note-comment">Comment</Label>
-        <textarea
-          id="note-comment"
-          value={f.comment}
-          onChange={(e) => f.setComment(e.target.value)}
-          rows={2}
-          placeholder="Optional; context you can't infer from the body"
-          className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-elevation-1 transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-        />
-      </div>
-
-      <div className="space-y-1.5">
-        <Label>Tags</Label>
-        <TagInput tags={f.tags} onChange={f.setTags} suggestions={suggestions} />
-      </div>
-
-      <GeotagToggle geotag={f.geotag} idPrefix="note-geotag" />
-
-      <RelationFields f={rel} idPrefix="note" />
-
-      <p className="text-xs text-muted-foreground">{describeTarget(target)}</p>
-
-      <NoteSaveStatus {...f} onRetry={f.retry} />
-      <div className="flex justify-end gap-2">
-        <Button variant="outline" size="sm" onClick={closeAdd} disabled={f.saving}>
-          Close
-        </Button>
-        <Button size="sm" onClick={handleSave} disabled={!canSave}>
-          {f.saving ? 'Saving…' : 'Done'}
-        </Button>
-      </div>
-    </div>
+    <AddFormLayout
+      wide={wide}
+      main={<>
+        <div className="space-y-1.5">
+          <Label htmlFor="note-title">Title</Label>
+          <Input
+            id="note-title"
+            value={f.title}
+            onChange={(e) => f.setTitle(e.target.value)}
+            placeholder="Optional; defaults to today's date"
+          />
+        </div>
+        <AddFormBody wide={wide} label={<Label>Body</Label>}>
+          <DocumentBodyEditor kind="markdown" value={f.content} onChange={f.setContent} placeholder="Write your note…" fill={wide} />
+        </AddFormBody>
+      </>}
+      side={<>
+        <div className="space-y-1.5">
+          <Label htmlFor="note-comment">Comment</Label>
+          <textarea
+            id="note-comment"
+            value={f.comment}
+            onChange={(e) => f.setComment(e.target.value)}
+            rows={2}
+            placeholder="Optional; context you can't infer from the body"
+            className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-elevation-1 transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Tags</Label>
+          <TagInput tags={f.tags} onChange={f.setTags} suggestions={suggestions} />
+        </div>
+        <GeotagToggle geotag={f.geotag} idPrefix="note-geotag" />
+        <RelationFields f={rel} idPrefix="note" />
+        <p className="text-xs text-muted-foreground">{describeTarget(target)}</p>
+      </>}
+      footer={<>
+        <NoteSaveStatus {...f} onRetry={f.retry} />
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={closeAdd} disabled={f.saving}>
+            Close
+          </Button>
+          <Button size="sm" onClick={handleSave} disabled={!canSave}>
+            {f.saving ? 'Saving…' : 'Done'}
+          </Button>
+        </div>
+      </>}
+    />
   )
 }

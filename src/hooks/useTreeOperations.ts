@@ -232,7 +232,7 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
     return result
   }, [workspaceId, wsTree, refresh])
 
-  // Refresh the selected mailbox, or the backend when its root is selected.
+  // Rescan the selected mailbox, or the backend when its root is selected.
   const onResyncBackend = useCallback(async (path: string): Promise<boolean> => {
     if (!workspaceId) return false
     // Backends list resolves device-scoped mount nodes (/device/<device>/<mount>)
@@ -244,7 +244,7 @@ export function useTreeOperations({ contextId, workspaceId, treeName, onRefresh 
       if (!target) continue
       const backend = backends.find(b => b.driver === target.driver && b.address === target.address)
       const container = target.driver === 'imap' ? backend?.containers?.find(c => c.treePath === source) : undefined
-      if (target.driver === 'imap' && source !== backend?.treePath && !container) throw new Error('Select a subscribed mailbox folder to refresh')
+      if (target.driver === 'imap' && source !== backend?.treePath && !container) throw new Error('Select a subscribed mailbox folder to rescan')
       await syncBackendWithProgress(showProgress, workspaceId, target.driver, target.address, undefined, container?.name)
     }
     refresh(300)

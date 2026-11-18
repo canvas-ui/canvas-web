@@ -21,6 +21,7 @@ import { TagInput } from '../../add/TagInput'
 import { useTagSuggestions } from '../../add/useTagSuggestions'
 import { featuresToTags, tagsToFeatures } from '../../add/tags'
 import { useRelationFields } from '../../add/useRelationFields'
+import { createOnDestination, useCreateDestinations, type CreateDestination } from '../../add/useCreateDestinations'
 import { RelationFields } from '../../add/RelationFields'
 import { LinkToCard, type LinkToTarget } from '@/components/menu/shared/LinkToCard'
 import { LinkToSidePanel, LINK_TO_SIDE_SIZE } from '@/components/menu/shared/LinkToSidePanel'
@@ -193,6 +194,12 @@ function EventEditor({ subject, target, workspaceName, calendars, defaultCalenda
   const [paths, setPaths] = useState<Array<LinkToTarget & { path: string }>>([])
   useEscapeClose(onClose, !saving)
 
+  // Connected calendars with write-back. A new event filed under the Canvas
+  // name of one of them is created there, and its mirror comes back synced.
+  const destinations = useCreateDestinations(doc ? null : resolvedWorkspace, 'event')
+  const remote = !doc && !created ? destinations.find(d => d.calendar?.toLowerCase() === fields.calendar.trim().toLowerCase()) : undefined
+  const pickerCalendars = [...calendars, ...destinations.map(d => d.calendar).filter((name): name is string => !!name && !calendars.some(c => c.toLowerCase() === name.toLowerCase()))]
+
   const patch = (p: Partial<Fields>) => setFields(f => ({ ...f, ...p }))
   const synced = doc ? syncSource(doc) : null
   const link = typeof doc?.data?.htmlLink === 'string' ? doc.data.htmlLink : null
@@ -217,6 +224,9 @@ function EventEditor({ subject, target, workspaceName, calendars, defaultCalenda
           id: savedId.current, schema: doc?.schema ?? EVENT_SCHEMA, schemaVersion: doc?.schemaVersion || EVENT_SCHEMA_VERSION,
           data: buildData(latest?.data ?? {}, fields), metadata,
         })
+      } else if (remote) {
+        savedId.current = await createOnDestination(workspace, remote, 'event', buildData({}, fields), { features: metadata.features, target })
+        setCreated(true)
       } else {
         const ids = await submitDocuments(target, [{ schema: EVENT_SCHEMA, schemaVersion: EVENT_SCHEMA_VERSION, data: buildData({}, fields), metadata }])
         if (!ids.length) throw new Error('The event was not created. Try again.')
@@ -274,7 +284,7 @@ function EventEditor({ subject, target, workspaceName, calendars, defaultCalenda
             className="w-full border-0 border-b border-border bg-transparent px-0 py-1 text-base font-semibold outline-none placeholder:text-muted-foreground/60 focus:border-ring"
           />
 
-          <CalendarPicker value={fields.calendar} calendars={calendars} onChange={(calendar) => patch({ calendar })} />
+          <CalendarPicker value={fields.calendar} calendars={pickerCalendars} remote={remote} onChange={(calendar) => patch({ calendar })} />
 
           <label className="flex items-center gap-2 text-xs">
             <input
@@ -344,7 +354,7 @@ function EventEditor({ subject, target, workspaceName, calendars, defaultCalenda
             <span className="text-sm font-medium">Tags</span>
             <TagInput tags={tags} onChange={setTags} suggestions={suggestions} />
           </div>
-          <DocumentGeoField value={geo} onChange={setGeo} idPrefix="event-geo" label="Geotag" />
+          {!remote && <DocumentGeoField value={geo} onChange={setGeo} idPrefix="event-geo" label="Geotag" />}
           {doc && resolvedWorkspace
             ? <DocumentRelationsSection document={doc} workspaceId={resolvedWorkspace} />
             : <RelationFields f={relations} idPrefix="event" />}
@@ -362,7 +372,7 @@ function EventEditor({ subject, target, workspaceName, calendars, defaultCalenda
 
           {synced && (
             <p className="rounded-md bg-muted/50 px-2 py-1.5 text-[11px] text-muted-foreground">
-              Synced from {synced.connector || synced.source}. Edits stay in Canvas unless the connector supports write-back.
+              Synced from {synced.connector || synced.source}. Edits and deletes reach the source when write-back is enabled for it, and stay in Canvas otherwise.
               {link && <> <a href={link} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Open at source</a></>}
             </p>
           )}
@@ -439,7 +449,7 @@ function RecurrenceEnds({ fields, patch }: { fields: Fields; patch: (p: Partial<
 // Workspace calendars (facet + domain timelines) as a real dropdown, with a
 // "New calendar…" entry that turns into a text field. A synced event whose
 // calendar is not in the list keeps its own name as an extra option.
-function CalendarPicker({ value, calendars, onChange }: { value: string; calendars: string[]; onChange: (name: string) => void }) {
+function CalendarPicker({ value, calendars, remote, onChange }: { value: string; calendars: string[]; remote?: CreateDestination; onChange: (name: string) => void }) {
   const known = calendars.some(c => c.toLowerCase() === value.toLowerCase())
   const [creating, setCreating] = useState(!known && !!value === false && calendars.length === 0)
   const options = known || !value ? calendars : [value, ...calendars]
@@ -473,6 +483,7 @@ function CalendarPicker({ value, calendars, onChange }: { value: string; calenda
           <option value={'\u0000new'}>New calendar…</option>
         </select>
       )}
+      {remote && <span className="mt-0.5 block text-[11px] text-muted-foreground">Created on {remote.label}, then synced back into Canvas.</span>}
     </label>
   )
 }

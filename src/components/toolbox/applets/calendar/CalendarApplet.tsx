@@ -9,7 +9,7 @@ import type { Document } from '@/types/workspace'
 import { addDays, addMonths, DAY_MS, formatDayLong, formatDayRange, formatDayShort, formatMonth, formatWeekRange, monthGrid, startOfDay, startOfWeek, startOfMonth } from '@/lib/calendar/dates'
 import { occurrencesIn, TASKS_CALENDAR, type Occurrence } from '@/lib/calendar/occurrences'
 import { movedData } from '@/lib/calendar/move'
-import { updateWorkspaceDocument } from '@/services/workspace'
+import { deleteBackendDocument, getBackend, updateWorkspaceDocument } from '@/services/workspace'
 import { CALENDAR_VIEWS, readPrefs, writePrefs, type CalendarPrefs, type CalendarView } from './calendar-prefs'
 import { useCalendarDocs } from './use-calendar-docs'
 import { calendarColor } from './calendar-colors'
@@ -58,6 +58,17 @@ function rangeTitle(view: CalendarView, cursor: Date, dayCount: number, compact:
     case 'year': return String(cursor.getFullYear())
     case 'schedule': return compact ? formatDayShort(cursor) : `From ${formatDayLong(cursor)}`
   }
+}
+
+// The connected backend a synced document can be deleted on, or null when it
+// is not a mirror or its backend has no write-back.
+async function deletableSource(workspaceName: string, doc: Document): Promise<{ driver: string; address: string } | null> {
+  const connector = (doc.metadata as Record<string, unknown> | undefined)?.connector
+  if (typeof connector !== 'string' || !connector.includes(':')) return null
+  const driver = connector.slice(0, connector.indexOf(':'))
+  const address = connector.slice(connector.indexOf(':') + 1)
+  const backend = await getBackend(workspaceName, driver, address).catch(() => null)
+  return backend?.capabilities?.delete ? { driver, address } : null
 }
 
 export function CalendarApplet({ autoAdd = false }: AppletProps) {
@@ -177,9 +188,19 @@ export function CalendarApplet({ autoAdd = false }: AppletProps) {
 
   const handleDelete = useCallback(async (doc: Document) => {
     const label = doc.data?.title ? `"${doc.data.title}"` : `#${doc.id}`
-    if (!window.confirm(`Delete event ${label}?\n\nIt is removed from this path and moves to the workspace trash if nothing else links it.`)) return
-    try { await removeDoc(doc.id); setPanel(null) } catch { /* toast handled globally */ }
-  }, [removeDoc])
+    try {
+      // A synced event on a backend with write-back is deleted at its source;
+      // removing only the mirror would bring it back at the next sync.
+      const source = scope ? await deletableSource(scope.workspaceName, doc) : null
+      if (source) {
+        if (!window.confirm(`Delete event ${label}?\n\nIt is also deleted on ${source.driver}: ${source.address}.`)) return
+        const { removed } = await deleteBackendDocument(scope!.workspaceName, source.driver, source.address, doc.id)
+        if (removed) { setPanel(null); void reload(); return }
+      } else if (!window.confirm(`Delete event ${label}?\n\nIt is removed from this path and moves to the workspace trash if nothing else links it.`)) return
+      await removeDoc(doc.id)
+      setPanel(null)
+    } catch { /* toast handled globally */ }
+  }, [removeDoc, reload, scope])
 
   const onKey = (e: React.KeyboardEvent) => {
     const el = e.target as HTMLElement

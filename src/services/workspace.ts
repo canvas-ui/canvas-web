@@ -1583,8 +1583,13 @@ export interface BackendCapabilities {
   containers: boolean;
   mutableContainers: boolean;
   deleteObject: boolean;
-  // Connectors: write-back (create/update/delete remote objects) enabled.
+  // Connectors: write-back enabled. `creates` lists the document kinds
+  // ('task', 'event') a create accepts; `update`/`delete` say whether edits
+  // and deletes of a synced document reach the source.
   write?: boolean;
+  creates?: string[];
+  update?: boolean;
+  delete?: boolean;
   // Objects live under person-chosen paths (directory share, drive): a
   // transfer there takes a folder + filename. False for the hash-keyed blob store.
   paths?: boolean;
@@ -1603,9 +1608,13 @@ export interface BackendContainer {
   status?: string;
   lastSyncAt?: string | null;
   lastError?: string | null;
-  // Connector containers: write-back enabled (rw backend) — destination
-  // pickers (todo → GitHub repo, event → calendar) read this.
+  // Connector containers: write-back enabled (rw backend), and the document
+  // kinds ('task', 'event') that can be created there. Destination pickers
+  // read these.
   writable?: boolean;
+  creates?: string[];
+  // Calendar containers: the calendar's name in Canvas (`data.calendar`).
+  calendar?: string;
 }
 
 export interface BackendDiskUsage {
@@ -1733,19 +1742,34 @@ export async function testBackend(workspaceId: string, driver: string, address: 
   return response;
 }
 
-export async function listBackendContainers(workspaceId: string, driver: string, address: string): Promise<BackendContainer[]> {
-  const response = await api.get<BackendContainer[]>(`${backendPath(workspaceId, driver, address)}/containers`);
+export async function listBackendContainers(workspaceId: string, driver: string, address: string, options: { quiet?: boolean } = {}): Promise<BackendContainer[]> {
+  const response = await api.get<BackendContainer[]>(`${backendPath(workspaceId, driver, address)}/containers`, options);
   return response || [];
 }
 
-/** Write-back: create a document in a connector container (GitHub issue, calendar event). */
+/**
+ * Write-back: create a document in a connector container (GitHub issue,
+ * calendar event, CalDAV task). `payload` is the document's data plus `kind`
+ * ('task' | 'event') and optional `features` (tags).
+ */
 export async function createBackendContainerDocument(
   workspaceId: string, driver: string, address: string, container: string,
   payload: Record<string, unknown>,
-): Promise<{ uid?: string; href?: string; docId?: number | null }> {
-  const response = await api.post<{ uid?: string; href?: string; docId?: number | null }>(
+): Promise<{ kind?: string; uid?: string; href?: string; docId?: number | null }> {
+  const response = await api.post<{ kind?: string; uid?: string; href?: string; docId?: number | null }>(
     `${backendPath(workspaceId, driver, address)}/containers/${encodeURIComponent(container)}/documents`, payload);
   return response;
+}
+
+/**
+ * Write-back: delete the remote object behind a synced document. `removed`
+ * is true when the source deleted it and the Canvas mirror went with it;
+ * false when the source only closed it (GitHub issues) and the mirror stays.
+ */
+export async function deleteBackendDocument(workspaceId: string, driver: string, address: string, documentId: number): Promise<{ removed: boolean }> {
+  const response = await api.delete<{ removedRemote?: boolean; hasMirror?: boolean }>(
+    `${backendPath(workspaceId, driver, address)}/documents/${documentId}`);
+  return { removed: response?.removedRemote === true && response?.hasMirror !== true };
 }
 
 export async function syncBackendContainer(workspaceId: string, driver: string, address: string, name: string): Promise<unknown> {

@@ -120,6 +120,7 @@ type ToolboxAction =
   // picker), null clears it (a fresh open), a value replaces it.
   | { type: 'OPEN_ADD'; kind: AddKind | null; modal?: boolean; relateTo?: RelateSeed | null }
   | { type: 'CLOSE_ADD' }
+  | { type: 'SET_ADD_MODAL'; modal: boolean }
   | { type: 'OPEN_EDIT'; document: WorkspaceDocument; workspaceId: string }
   | { type: 'SET_TOOLS_TAB'; tab: ToolsTab }
   | { type: 'SET_APPS_APPLET'; appletId: string | null }
@@ -224,6 +225,8 @@ function toolboxReducer(state: ToolboxState, action: ToolboxAction): ToolboxStat
         editDocument: null,
         editWorkspaceId: null,
       }
+    case 'SET_ADD_MODAL':
+      return state.addOpen ? { ...state, addModal: action.modal } : state
     case 'CLOSE_ADD':
       return { ...state, addOpen: false, addModal: false, addKind: null, addRelateTo: null, editDocument: null, editWorkspaceId: null }
     case 'OPEN_EDIT':
@@ -422,6 +425,8 @@ export interface ToolboxContextValue {
   /** Open the picker with the new document pre-related to `seed.documents`. */
   openAddRelated: (seed: RelateSeed, modal?: boolean) => void
   closeAdd: () => void
+  // Show the open add form as a centered full editor (true) or in the side panel.
+  setAddModal: (modal: boolean) => void
   openEdit: (document: WorkspaceDocument, workspaceId: string) => void
   setToolsTab: (tab: ToolsTab) => void
   /** Open an applet in the Apps tab (null returns to the launcher). */
@@ -722,6 +727,7 @@ export function ToolboxProvider({ children, target }: { children: ReactNode; tar
   const openAddPicker = useCallback((options?: { modal?: boolean; fresh?: boolean }) => dispatch({ type: 'OPEN_ADD', kind: null, modal: options?.modal, relateTo: options?.fresh ? null : undefined }), [])
   const openAddRelated = useCallback((seed: RelateSeed, modal = false) => dispatch({ type: 'OPEN_ADD', kind: null, relateTo: seed, modal }), [])
   const closeAdd = useCallback(() => dispatch({ type: 'CLOSE_ADD' }), [])
+  const setAddModal = useCallback((modal: boolean) => dispatch({ type: 'SET_ADD_MODAL', modal }), [])
   const openEdit = useCallback((document: WorkspaceDocument, workspaceId: string) => dispatch({ type: 'OPEN_EDIT', document, workspaceId }), [])
   const setToolsTab = useCallback((tab: ToolsTab) => dispatch({ type: 'SET_TOOLS_TAB', tab }), [])
   const openApplet = useCallback((appletId: string | null) => dispatch({ type: 'SET_APPS_APPLET', appletId }), [])
@@ -947,7 +953,7 @@ export function ToolboxProvider({ children, target }: { children: ReactNode; tar
 
   return (
     <ToolboxCtx.Provider
-      value={{ agentView, setAgentView, state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, openAddRelated, closeAdd, openEdit, setToolsTab, openApplet, setAccentColor, setFilters, setFeatureToggle, setFeatureMode, clearFilters, hasActiveFilters, setTimelineFilter, setGeoBBox, setLensGps, setLensIds, setGeoSelection, setMapDocuments, setSort, setLiveEnabled, saveFilters, deleteBitmap, deleteDataset, createTimeline, deleteTimeline, refreshTimelines }}
+      value={{ agentView, setAgentView, state, setView, toggleView, closeT1, openAgentT2, closeT2, openAdd, openAddPicker, openAddRelated, closeAdd, setAddModal, openEdit, setToolsTab, openApplet, setAccentColor, setFilters, setFeatureToggle, setFeatureMode, clearFilters, hasActiveFilters, setTimelineFilter, setGeoBBox, setLensGps, setLensIds, setGeoSelection, setMapDocuments, setSort, setLiveEnabled, saveFilters, deleteBitmap, deleteDataset, createTimeline, deleteTimeline, refreshTimelines }}
     >
       {children}
     </ToolboxCtx.Provider>

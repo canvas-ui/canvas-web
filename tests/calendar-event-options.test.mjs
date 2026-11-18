@@ -17,10 +17,10 @@ function nodes(node) {
   if (Array.isArray(node)) return node.flatMap(nodes)
   return [node, ...nodes(node.props?.children)]
 }
-function editor(doc = null) {
+function editor(doc = null, destinations = []) {
   const cells = []
   let cursor = 0
-  const calls = { creates: [], updates: [], relations: [], links: [], saved: [], escape: [] }
+  const calls = { creates: [], remoteCreates: [], updates: [], relations: [], links: [], saved: [], escape: [] }
   let failLinks = false
   let persisted = doc
   const relation = { rows: [], workspaceName: 'home', remove: index => relation.rows.splice(index, 1) }
@@ -51,6 +51,15 @@ function editor(doc = null) {
     '../../add/useAddTarget': {
       submitDocuments: async (target, documents) => { calls.creates.push({ target, documents }); persisted = { ...documents[0], id: 123 }; return [123] },
       resolveUploadWorkspace: async () => ({ workspaceName: 'home' }),
+    },
+    '../../add/useCreateDestinations': {
+      // An existing event is never offered a destination.
+      useCreateDestinations: workspace => workspace ? destinations : [],
+      createOnDestination: async (workspace, destination, kind, data, options) => {
+        calls.remoteCreates.push({ workspace, destination, kind, data, options })
+        persisted = { schema: 'data/schema/event', data, metadata: { source: destination.driver }, features: options.features, id: 456 }
+        return 456
+      },
     },
     '../../add/useTodoFields': { isoToLocalInput: value => value, localInputToISO: value => value },
     '../../add/tags': { tagsToFeatures, featuresToTags },
@@ -142,4 +151,42 @@ test('editing preserves source data and non-tag features and supports removing a
   assert.equal(payload.metadata.features.join(','), 'custom/keep,tag/new')
   assert.equal(payload.metadata.geo, null)
   assert.equal(e.calls.creates.length, 0)
+})
+
+test('a new event in a connected calendar is created on that calendar, then linked like any other', async () => {
+  const meetings = { key: 'caldav:home:meetings', driver: 'caldav', address: 'home', container: 'meetings', label: 'Meetings (caldav: home)', calendar: 'Meetings' }
+  const picker = view => view.find(n => typeof n.type === 'function' && n.type.name === 'CalendarPicker')
+  const fill = e => {
+    const view = e.render()
+    view.find(n => n.type === 'input' && n.props.placeholder === 'Title').props.onChange({ target: { value: 'Board meeting' } })
+    view.find(n => n.type === 'tags').props.onChange(['board'])
+  }
+
+  // Connected calendars are offered before any of their events exist; the
+  // default calendar still saves to Canvas.
+  const local = editor(null, [meetings])
+  assert.deepEqual([...picker(local.render()).props.calendars], ['Work', 'Meetings'])
+  assert.equal(picker(local.render()).props.remote, undefined)
+  fill(local)
+  await local.save()
+  assert.equal(local.calls.creates.length, 1)
+  assert.equal(local.calls.remoteCreates.length, 0)
+
+  const remote = editor(null, [meetings])
+  fill(remote)
+  picker(remote.render()).props.onChange('Meetings')
+  remote.relation.rows.push({ predicate: 'references', direction: 'out', targetId: 42 })
+  const view = remote.render()
+  assert.equal(picker(view).props.remote.container, 'meetings')
+  assert.ok(!view.some(n => n.type === 'geo'), 'a geotag has no place on the remote calendar')
+  await remote.save()
+  assert.equal(remote.calls.creates.length, 0)
+  const [created] = remote.calls.remoteCreates
+  assert.equal(created.destination.container, 'meetings')
+  assert.equal(created.kind, 'event')
+  assert.equal(created.data.title, 'Board meeting')
+  assert.deepEqual([...created.options.features], ['tag/board'])
+  assert.equal(created.options.target.path, '/')
+  assert.deepEqual(remote.calls.relations[0].slice(0, 3), ['home', 456, 'references'])
+  assert.deepEqual(remote.calls.saved, ['Meetings'])
 })

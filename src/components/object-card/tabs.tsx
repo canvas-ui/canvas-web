@@ -4,6 +4,8 @@ import { MessageComposerDialog } from '@/components/common/MessageComposerDialog
 import type { ComposeMode } from '@/services/messages'
 import { Suspense, useEffect, useState, type MouseEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { Link } from 'react-router-dom'
+import { buildWorkspaceUrl } from '@/utils/url-params'
 import { Copy, Download, Trash2, Database, HardDrive, Mail, Globe, FileQuestion, Pencil, Brush, PenLine, ArrowRight, Reply, ReplyAll, Forward } from 'lucide-react'
 import { BackendActionCard, type BackendTransferConfirmOptions } from '@/components/menu/shared/BackendActionCard'
 import { Button } from '@/components/ui/button'
@@ -381,7 +383,7 @@ export function JsonTab({ document }: TabProps) {
 
 // ── Synapses (tree memberships) ─────────────────────────────────────────────
 
-export function SynapsesTab({ document, workspaceId }: TabProps) {
+export function SynapsesTab({ document, workspaceId, onNavigate }: TabProps & { onNavigate?: () => void }) {
   const [memberships, setMemberships] = useState<DocumentTreeMembership[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   // Render-time reset when the target document changes.
@@ -424,7 +426,8 @@ export function SynapsesTab({ document, workspaceId }: TabProps) {
                 <div className="space-y-1">
                   {paths.map(({ tree, path }, i) => (
                     <div key={`${tree}:${path}:${i}`} className="flex items-center gap-2 text-sm">
-                      <span className="break-all font-mono text-xs">{path}</span>
+                      <Link to={buildWorkspaceUrl(workspaceId, path, tree)} onClick={onNavigate} title={`Open ${tree}:${path}`}
+                        className="break-all rounded-sm font-mono text-xs text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{path}</Link>
                       {trees.length > 1 && <span className="shrink-0 text-xs text-muted-foreground">({tree})</span>}
                     </div>
                   ))}

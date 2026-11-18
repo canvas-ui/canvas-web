@@ -123,6 +123,7 @@ function DocumentModal({ document: opened, isOpen, onClose, workspaceId, initial
               initialTab={initialTab}
               initialEdit={initialEdit}
               onChanged={refresh}
+              onNavigate={onClose}
             />
           </ImageViewContext.Provider>
         </div>
