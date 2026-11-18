@@ -18,7 +18,7 @@
   "dependencies": {
     "@augmentd-labs/canvas-api-client": "^0.3.0",
     "@augmentd-labs/canvas-protocol": "^0.4.0",
-    "@augmentd-labs/canvas-wallpapers": "^0.1.0",
+    "@augmentd-labs/canvas-wallpapers": "^0.1.1",
     "@codemirror/lang-javascript": "^6.2.5",
     "@codemirror/lang-json": "^6.0.2",
     "@codemirror/language": "^6.12.4",
