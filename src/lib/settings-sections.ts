@@ -48,7 +48,7 @@ export const WORKSPACE_SETTINGS_SECTIONS: readonly SettingsSection<WorkspaceSett
   { id: 'db', label: 'Search & indexing', description: 'How documents become searchable: AI models, image descriptions, index repairs', icon: Database },
   { id: 'devices', label: 'Devices', description: 'Link devices to this workspace', icon: Monitor },
   { id: 'sync', label: 'Synchronization', description: 'Manage device copies and resolve sync conflicts', icon: RefreshCw },
-  { id: 'services', label: 'Connected services', description: 'Configure Git, WebDAV, IMAP and other connectors', icon: Server },
+  { id: 'services', label: 'Connected services', description: 'Configure website capture, Git, WebDAV, IMAP and other connectors', icon: Server },
   { id: 'shares', label: 'Sharing & permissions', description: 'Create public links and manage workspace access', icon: Link2 },
   { id: 'policies', label: 'Storage policies', description: 'Mirror folders of the virtual tree to physical backends', icon: FolderSync },
   { id: 'hooks', label: 'Automation', description: 'Run hooks in response to workspace events', icon: Webhook },

@@ -125,7 +125,7 @@ const DOWNLOAD_KINDS: Array<{ value: DownloadKind; label: string; hint: string }
   { value: 'image', label: 'the file itself (image, PDF, …)', hint: 'Fetches the bytes the URL serves.' },
   { value: 'video', label: 'the video (yt-dlp)', hint: 'Best video + audio, merged. Needs yt-dlp on the server.' },
   { value: 'arxiv', label: 'the arXiv paper (PDF)', hint: 'Works for abs/ and pdf/ links.' },
-  { value: 'page', label: 'the page with its images & styles', hint: 'One page, offline-readable (wget --page-requisites).' },
+  { value: 'page', label: 'the page as one HTML file', hint: 'Offline copy with embedded images and styles. Configure Website capture under this workspace’s Connected services.' },
   { value: 'website', label: 'the whole website (mirror)', hint: 'Follows links on the same site up to the chosen depth.' },
 ]
 
@@ -1592,7 +1592,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                       />
                       <p className="text-xs text-muted-foreground">
                         The download becomes a file item at the filing destination. Repeated events reuse the saved download.
-                        Videos need <span className="font-mono">yt-dlp</span>, pages and websites <span className="font-mono">wget</span> on the server.
+                        Pages use Website capture in this workspace’s Connected services settings. Videos and recursive website mirrors require their download tools on the workspace host.
                       </p>
                     </div>
                   )}

@@ -19,6 +19,7 @@ import { createDefaultFolders, useFolderSelection } from '@/components/workspace
 import { PageHeader } from '@/components/common/page-header'
 import { WORKSPACE_SETTINGS_SECTIONS, resolveWorkspaceSettingsTab, type WorkspaceSettingsTab } from '@/lib/settings-sections'
 import { spaceLabel } from '@/lib/search-labels'
+import { CaptureSettingsPanel } from '@/components/workspace/capture-settings-panel'
 import { InferdSettingsPanel } from '@/components/workspace/inferd-settings-panel'
 import { HooksPanel } from '@/components/workspace/hooks-panel'
 import { StoragePoliciesPanel } from '@/components/workspace/storage-policies-panel'
@@ -1105,6 +1106,7 @@ function WorkspaceSettingsContent() {
               Teams) — background sync services over the backends facade,
               read-only mirrors into the backends tree. */}
           {workspaceId && <ConnectorsSection workspaceId={workspaceId} />}
+          {workspaceId && canManage && <CaptureSettingsPanel key={workspaceId} workspaceId={workspaceId} />}
           <div className="space-y-3">
             {SERVICE_ITEMS.map(service => {
               const status = services?.[service.id] || services?.[service.id === 'git' ? 'dotfiles' : service.id === 'webdav' ? 'home' : 'imap']
