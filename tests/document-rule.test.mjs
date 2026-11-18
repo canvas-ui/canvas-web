@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
 import { documentRulePresets } from '../src/lib/document-rule.ts'
+import { supportsBackendFolders } from '../src/lib/backend-folders.ts'
 import { attachmentDestinationPreview } from '../src/lib/attachment-destination.ts'
 
 const doc = (schema, data, metadata = {}) => ({ id: 12, schema: `data/schema/${schema}`, data, metadata })
@@ -36,13 +37,13 @@ test('thread roots and replies share a scoped rule, WhatsApp offers its stored c
 
 // Exercise the real builder serialization without mounting the settings page.
 const source = ts.createSourceFile('rule-builder.tsx', readFileSync(new URL('../src/components/workspace/rule-builder.tsx', import.meta.url), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
-const names = new Set(['EVENT_OPTIONS', 'CONDITION_FIELDS', 'EXACT_FIELDS', 'conditionKey', 'TITLE_NAME', 'DATED_NAME', 'DOWNLOAD_KINDS', 'emptyAction', 'EMPTY_FORM', 'splitAlternatives', 'splitList', 'slugify', 'canKeepStorageSubfolders', 'exactContextSource', 'storagePathPreview', 'buildRule', 'parseRule', 'formFromPrefill'])
+const names = new Set(['EVENT_OPTIONS', 'CONDITION_FIELDS', 'EXACT_FIELDS', 'conditionKey', 'TITLE_NAME', 'DATED_NAME', 'DOWNLOAD_KINDS', 'emptyAction', 'EMPTY_FORM', 'splitAlternatives', 'splitList', 'slugify', 'canKeepStorageSubfolders', 'exactContextSource', 'storagePathPreview', 'buildRule', 'parseRule', 'formFromPrefill', 'backendRef', 'findBackend', 'qualified', 'isContentStore'])
 const statements = source.statements.filter(node => ts.isFunctionDeclaration(node) ? names.has(node.name.text) : ts.isVariableStatement(node) && node.declarationList.declarations.some(d => names.has(d.name.getText(source))))
-const context = {}
+const context = { supportsBackendFolders, crypto: globalThis.crypto }
 vm.runInNewContext(ts.transpileModule(statements.map(s => s.getText(source)).join('\n') + '\nglobalThis.builder = { buildRule, parseRule, formFromPrefill, storagePathPreview }', { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, context)
 const { buildRule, parseRule, formFromPrefill, storagePathPreview } = context.builder
 const plain = value => JSON.parse(JSON.stringify(value))
-const pathBackend = { address: 'workspace:home', driver: 'custom', capabilities: { paths: true } }
+const pathBackend = { address: 'archive', driver: 'file', capabilities: { paths: true } }
 
 test('send-file rules round-trip each channel, PDF filters, templates and download sources', () => {
   for (const driver of ['imap', 'slack', 'whatsapp']) {
@@ -58,7 +59,7 @@ test('send-file rules round-trip each channel, PDF filters, templates and downlo
     assert.throws(() => buildRule(form), /destination/)
   }
   const rule = { id: 'send-download', enabled: true, when: { event: 'document.inserted' }, then: [
-    { action: 'download', to: 'workspace:home' },
+    { action: 'download', to: 'file:archive' },
     { action: 'sendFile', source: 'download', driver: 'slack', address: 'acme', target: 'C1' },
   ] }
   assert.deepEqual(plain(buildRule(parseRule(rule))), rule)
@@ -70,7 +71,7 @@ test('send-file rules round-trip each channel, PDF filters, templates and downlo
 test('extract-then-move-to-mail-folder survives edit/save/reopen', () => {
   const rule = { id: 'expenses', enabled: true, when: { event: 'document.inserted', schema: 'email', to: { equals: 'accounting@augmend.eu' } },
     then: [
-      { action: 'extractAttachments', to: 'workspace:home', mime: 'application/pdf', folder: 'Accounting', subfolder: '{{YYYY}}/{{MM}}', onConflict: 'rename' },
+      { action: 'extractAttachments', to: 'file:archive', mime: 'application/pdf', folder: 'Accounting', subfolder: '{{YYYY}}/{{MM}}', onConflict: 'rename' },
       { action: 'moveMessage', folder: 'INBOX/Accounting/{{YYYY}}/Expenses' },
     ] }
   assert.deepEqual(plain(buildRule(parseRule(rule), [pathBackend])), rule)
@@ -81,7 +82,7 @@ test('extract-then-move-to-mail-folder survives edit/save/reopen', () => {
 
 test('PDF extraction and exact recipient survive edit/save/reopen', () => {
   const rule = { id: 'accounting', enabled: true, when: { event: 'document.inserted', schema: 'email', to: { equals: 'accounting@augmend.eu' } },
-    then: [{ action: 'extractAttachments', to: 'workspace:home', mime: 'application/pdf', folder: 'Accounting', subfolder: '{{YYYY}}/{{MM}}', onConflict: 'rename' }] }
+    then: [{ action: 'extractAttachments', to: 'file:archive', mime: 'application/pdf', folder: 'Accounting', subfolder: '{{YYYY}}/{{MM}}', onConflict: 'rename' }] }
   const form = parseRule(rule)
   assert.equal(form.conditions[0].field, 'toExact')
   assert.deepEqual(plain(buildRule(form, [pathBackend])), rule)
@@ -114,15 +115,15 @@ test('exact email addresses accept pipe alternatives and round-trip without beco
 
 test('attachment destination preview shows the selected root, appended month and actual result', () => {
   const sample = new Date(2026, 9, 16, 12)
-  assert.deepEqual(attachmentDestinationPreview('workspace:home', 'Accounting', '{{YYYY}}/{{MM}}', sample), {
-    root: 'workspace:home/Accounting', added: '2026/10', result: 'workspace:home/Accounting/2026/10/<attachment filename>', date: '2026-10-16',
+  assert.deepEqual(attachmentDestinationPreview('file:archive', 'Accounting', '{{YYYY}}/{{MM}}', sample), {
+    root: 'file:archive/Accounting', added: '2026/10', result: 'file:archive/Accounting/2026/10/<attachment filename>', date: '2026-10-16',
   })
-  assert.equal(attachmentDestinationPreview('workspace:home', 'Archive', '', sample).result, 'workspace:home/Archive/<attachment filename>')
-  assert.equal(attachmentDestinationPreview('workspace:home', '', '{{YYYY}}/{{MM}}', sample).result, 'workspace:home/2026/10/<attachment filename>')
+  assert.equal(attachmentDestinationPreview('file:archive', 'Archive', '', sample).result, 'file:archive/Archive/<attachment filename>')
+  assert.equal(attachmentDestinationPreview('file:archive', '', '{{YYYY}}/{{MM}}', sample).result, 'file:archive/2026/10/<attachment filename>')
 })
 
 test('store wizard defaults to copy and cannot save a move without its source', () => {
-  const form = formFromPrefill({ kind: 'store', path: 'ctx:/Architecture', storeTo: 'workspace:home' })
+  const form = formFromPrefill({ kind: 'store', path: 'ctx:/Architecture', storeTo: 'file:archive' })
   assert.equal(buildRule(form, [pathBackend]).then[0].mode, 'copy')
   form.actions[0].storeMode = 'move'
   assert.throws(() => buildRule(form), /Choose the source backend/)
@@ -134,7 +135,7 @@ test('store wizard defaults to copy and cannot save a move without its source', 
 
 test('Context storage uses one explicit insertion destination and recreates its full path', () => {
   for (const path of ['context:/foo/bar/baz', 'ctx:/foo/bar/baz', '/foo/bar/baz']) {
-    const form = formFromPrefill({ kind: 'store', path, storeTo: 'workspace:home', storeFolder: 'Archive' })
+    const form = formFromPrefill({ kind: 'store', path, storeTo: 'file:archive', storeFolder: 'Archive' })
     const rule = buildRule(form, [pathBackend])
     assert.equal(rule.when.path, undefined)
     assert.match(rule.when.eventPathExact, /^(ctx|context):\/foo\/bar\/baz$/)
@@ -146,15 +147,15 @@ test('Context storage uses one explicit insertion destination and recreates its 
     assert.equal(preview.recreated, 'foo/bar/baz')
     assert.equal(preview.result, 'backends:/workspace/home/Archive/foo/bar/baz/<original filename>')
     form.actions[0].storeFolder = ''
-    assert.equal(storagePathPreview(form.actions[0], form.conditions, pathBackend).result, 'workspace:home/foo/bar/baz/<original filename>')
+    assert.equal(storagePathPreview(form.actions[0], form.conditions, pathBackend).result, 'file:archive/foo/bar/baz/<original filename>')
     form.actions[0].recursive = false
-    assert.equal(storagePathPreview(form.actions[0], form.conditions, pathBackend).result, 'workspace:home/<original filename>')
+    assert.equal(storagePathPreview(form.actions[0], form.conditions, pathBackend).result, 'file:archive/<original filename>')
   }
 })
 
 test('Context subtree rules preserve relative filing paths', () => {
   for (const [field, value] of [['path', 'ctx:/foo'], ['pathExact', 'ctx:/foo'], ['eventPathExact', 'ctx:/foo | ctx:/bar']]) {
-    const form = formFromPrefill({ kind: 'store', path: 'ctx:/foo', storeTo: 'workspace:home' })
+    const form = formFromPrefill({ kind: 'store', path: 'ctx:/foo', storeTo: 'file:archive' })
     form.conditions = [{ field, value }]
     const rule = buildRule(form, [pathBackend])
     assert.equal(rule.then[0].recursive, true)
@@ -164,7 +165,7 @@ test('Context subtree rules preserve relative filing paths', () => {
 
 test('copy and move recreate paths on any backend that advertises support', () => {
   for (const mode of ['copy', 'move']) {
-    const form = formFromPrefill({ kind: 'store', path: 'dir:/Projects', storeTo: 'workspace:home', storeFolder: 'Archive' })
+    const form = formFromPrefill({ kind: 'store', path: 'dir:/Projects', storeTo: 'file:archive', storeFolder: 'Archive' })
     form.actions[0].storeMode = mode
     form.actions[0].storeFrom = 'source'
     const rule = buildRule(form, [pathBackend])
@@ -176,12 +177,14 @@ test('copy and move recreate paths on any backend that advertises support', () =
   }
 })
 
-test('unsupported, unknown or unloaded capabilities cannot silently flatten a recursive rule', () => {
-  for (const backends of [[], [{ ...pathBackend, capabilities: { paths: false } }], [{ ...pathBackend, driver: 'file', capabilities: {} }]]) {
-    const form = formFromPrefill({ kind: 'store', path: 'dir:/Projects', storeTo: 'workspace:home' })
-    assert.throws(() => buildRule(form, backends), /support for folder paths/)
-    form.actions[0].recursive = false
-    assert.equal(buildRule(form, backends).then[0].recursive, undefined)
+test('backends without folder controls discard hidden path options when saved', () => {
+  for (const backend of [undefined, { ...pathBackend, capabilities: { paths: false } }, { ...pathBackend, capabilities: {} }, { address: 'workspace:home', driver: 'file', capabilities: { paths: true } }]) {
+    const backends = backend ? [backend] : []
+    const form = formFromPrefill({ kind: 'store', path: 'dir:/Projects', storeTo: backend?.address || 'unknown', storeFolder: 'Hidden' })
+    const saved = buildRule(form, backends).then[0]
+    assert.equal(saved.folder, undefined)
+    assert.equal(saved.recursive, undefined)
+    assert.equal(saved.pathMode, undefined)
   }
 })
 
@@ -246,9 +249,31 @@ test('saving a document rule appends to the latest file and refuses failed or ma
 
  test('download source-deletion toggle round trips', () => {
   const rule = { id: 'download', enabled: true, when: { event: 'document.linked', path: 'ctx:/foo' }, then: [
-    { action: 'download', to: 'workspace:home', folder: 'foo', recursive: true, deleteSource: true },
+    { action: 'download', to: 'file:archive', folder: 'foo', recursive: true, deleteSource: true },
   ] }
   const form = parseRule(rule)
   assert.equal(form.actions[0].deleteSource, true)
-  assert.deepEqual(plain(buildRule(form).then), rule.then)
+  assert.deepEqual(plain(buildRule(form, [pathBackend]).then), rule.then)
+})
+
+
+test('download folder options follow backend selection while Canvas filing stays intact', () => {
+  const rule = { id: 'capture', enabled: true, when: { event: 'document.linked', path: 'ctx:/IT/db' }, then: [
+    { action: 'download', to: 'file:archive', kind: 'page', folder: 'Pages', recursive: true, insert: ['ctx:/IT/db'], tags: ['website'] },
+  ] }
+  const form = parseRule(rule)
+  assert.deepEqual(plain(buildRule(form, [pathBackend])), rule)
+  for (const backend of [
+    { address: 'workspace:home', driver: 'file', capabilities: { paths: true } },
+    { address: 'workspace:data', driver: 'cas', capabilities: { paths: false, blobs: true } },
+    { address: 'flat', driver: 'custom', capabilities: { paths: false } },
+  ]) {
+    form.actions[0].a = backend.address
+    const action = buildRule(form, [backend]).then[0]
+    assert.equal(action.folder, undefined)
+    assert.equal(action.recursive, undefined)
+    assert.deepEqual(plain(action.insert), ['ctx:/IT/db'])
+    assert.deepEqual(plain(action.tags), ['website'])
+    assert.equal(action.kind, 'page')
+  }
 })

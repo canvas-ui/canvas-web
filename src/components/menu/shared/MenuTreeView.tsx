@@ -24,7 +24,7 @@ import {
 import { LayerIconPicker } from './LayerIconPicker'
 import { ContextMenuShell } from '@/components/common/context-menu-shell'
 import { isTextInteraction, matchesShortcut } from '@/components/common/action-menu'
-import { findTreeNodeByPath, backendRemovalTarget, imapFolderTarget, treeTypeForName, type Backend } from '@/services/workspace'
+import { findTreeNodeByPath, backendRemovalTarget, isStaleBackendRoot, imapFolderTarget, treeTypeForName, type Backend } from '@/services/workspace'
 import type { DocumentPasteSource } from '@/services/document-paste'
 import { isFileDrag } from '@/components/toolbox/add/dropped-files'
 import { uploadDroppedFiles } from '@/components/toolbox/add/upload-manager'
@@ -362,6 +362,11 @@ function CtxMenu({
         {onDeleteBackendFolder && isBackendsTree && backendRemovalTarget(path, backends) && item(
           <Trash2 className="w-3 h-3" />, 'Delete from backend', async () => {
             if (confirm(`Delete folder "${path.split('/').pop()}" and its contents from the backend?`)) await onDeleteBackendFolder(path)
+          }, true,
+        )}
+        {onRemove && isBackendsTree && isStaleBackendRoot(path, backends) && item(
+          <Trash2 className="w-3 h-3" />, 'Remove stale backend entry', async () => {
+            if (confirm(`Remove "${node.label || node.name}" from the Backends tree? Documents and stored files are kept.`)) await onRemove(path, true)
           }, true,
         )}
 
@@ -1068,12 +1073,13 @@ export function MenuTreeView({
   const [removingPaths, setRemovingPaths] = useState<Map<string, string>>(new Map())
   const removingRef = useRef(new Set<string>())
   const handleRemovePath = useCallback(async (path: string, recursive = false, purge = false, destroy = false) => {
-    if (!(isBackendsTree ? onDeleteBackendFolder : onRemovePath) || [...removingRef.current].some(p => p === path || p.startsWith(path + '/') || path.startsWith(p + '/'))) return false
+    const physical = isBackendsTree && !isStaleBackendRoot(path, backends)
+    if (!(physical ? onDeleteBackendFolder : onRemovePath) || [...removingRef.current].some(p => p === path || p.startsWith(path + '/') || path.startsWith(p + '/'))) return false
     removingRef.current.add(path)
-    const message = isBackendsTree ? 'Deleting from backend…' : destroy ? 'Removing documents and backend files…' : purge ? 'Removing and purging documents…' : 'Removing folder…'
+    const message = physical ? 'Deleting from backend…' : destroy ? 'Removing documents and backend files…' : purge ? 'Removing and purging documents…' : 'Removing folder…'
     setRemovingPaths(previous => new Map(previous).set(path, message))
     try {
-      return isBackendsTree ? await onDeleteBackendFolder!(path) : await onRemovePath!(path, treeName === 'directory' || recursive, purge, destroy)
+      return physical ? await onDeleteBackendFolder!(path) : await onRemovePath!(path, isBackendsTree || treeName === 'directory' || recursive, purge, destroy)
     } finally {
       removingRef.current.delete(path)
       setRemovingPaths(previous => {
@@ -1082,7 +1088,7 @@ export function MenuTreeView({
         return next
       })
     }
-  }, [onRemovePath, onDeleteBackendFolder, isBackendsTree, treeName])
+  }, [onRemovePath, onDeleteBackendFolder, isBackendsTree, treeName, backends])
   const [picker, setPicker] = useState<{ x: number; y: number; path: string; node: TreeNode } | null>(null)
   // Live style preview keyed by path; persistence is debounced. Cleared on
   // every tree refetch (root identity change) so server data takes over.
@@ -1422,13 +1428,14 @@ export function MenuTreeView({
       copyPath(selectedPath, event.key.toLowerCase() === 'x' ? 'cut' : 'copy')
       return
     }
-    if (isBackendsTree ? !onDeleteBackendFolder || !backendRemovalTarget(selectedPath || '', backends) : !onRemovePath) return
+    const stale = isBackendsTree && isStaleBackendRoot(selectedPath || '', backends)
+    if (isBackendsTree && !stale ? !onDeleteBackendFolder || !backendRemovalTarget(selectedPath || '', backends) : !onRemovePath) return
     if (event.key !== 'Delete' && event.key !== 'Backspace') return
     if (!selectedPath || selectedPath === '/') return
     event.preventDefault()
     const node = findTreeNodeByPath(root, selectedPath)
     if (!isBackendsTree && node?.locked) { alert(`"${selectedPath}" is locked`); return }
-    if (confirm(isBackendsTree ? `Delete "${selectedPath}" and its contents from this backend?` : `Remove "${selectedPath}"${treeName === 'directory' ? ' and all children' : ''}?`)) {
+    if (confirm(stale ? `Remove "${selectedPath}" from the Backends tree? Documents and stored files are kept.` : isBackendsTree ? `Delete "${selectedPath}" and its contents from this backend?` : `Remove "${selectedPath}"${treeName === 'directory' ? ' and all children' : ''}?`)) {
       handleRemovePath(selectedPath, false).catch(err => alert(err instanceof Error ? err.message : String(err)))
     }
   }, [readOnly, onRemovePath, onDeleteBackendFolder, handleRemovePath, selectedPath, root, pastedDocumentIds, onPasteDocuments, clipboard, handlePaste, isBackendsTree, copyPath, treeName, backends])

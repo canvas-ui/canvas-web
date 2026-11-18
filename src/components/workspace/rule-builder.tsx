@@ -1,3 +1,4 @@
+import { supportsBackendFolders } from '@/lib/backend-folders'
 import './rule-builder.css'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
@@ -404,9 +405,9 @@ function buildRule(form: RuleForm, backends: Backend[] = []): HookRule {
       then.push({ action: 'store', to: qualified(backends, a), ...(row.storeFrom.trim() ? { from: qualified(backends, row.storeFrom.trim()) } : {}), mode: 'copy' })
     } else if (row.kind === 'store' && a) {
       if (row.storeMode === 'move' && !row.storeFrom.trim()) throw new Error('Choose the source backend whose copy should be moved.')
-      if (row.recursive && !canKeepStorageSubfolders(form.conditions)) throw new Error('Choose a Context, Directory or Backends source path to recreate the path.')
-      if (row.recursive && findBackend(backends, a)?.capabilities?.paths !== true) throw new Error('This destination has not reported support for folder paths. Choose a supported backend or turn off path recreation.')
-      const folder = row.storeFolder.trim().replace(/^\/+|\/+$/g, '')
+      const folders = supportsBackendFolders(findBackend(backends, a))
+      if (folders && row.recursive && !canKeepStorageSubfolders(form.conditions)) throw new Error('Choose a Context, Directory or Backends source path to recreate the path.')
+      const folder = folders ? row.storeFolder.trim().replace(/^\/+|\/+$/g, '') : ''
       const key = row.storeName === 'title' ? TITLE_NAME : row.storeName === 'dated' ? DATED_NAME : row.storeName === 'custom' ? b : ''
       then.push({
         action: 'store',
@@ -414,9 +415,9 @@ function buildRule(form: RuleForm, backends: Backend[] = []): HookRule {
         ...(row.storeFrom.trim() ? { from: qualified(backends, row.storeFrom.trim()) } : {}),
         mode: row.storeMode,
         ...(folder ? { folder } : {}),
-        ...recursive,
+        ...(folders ? recursive : {}),
         ...(row.deleteSource ? { deleteSource: true } : {}),
-        ...(row.recursive && exactContextSource(form.conditions) !== null ? { pathMode: 'full' } : {}),
+        ...(folders && row.recursive && exactContextSource(form.conditions) !== null ? { pathMode: 'full' } : {}),
         ...(key ? { key } : {}),
         onConflict: row.storeConflict,
       })
@@ -438,13 +439,14 @@ function buildRule(form: RuleForm, backends: Backend[] = []): HookRule {
       })
     }
     if (row.kind === 'download') {
-      const folder = row.storeFolder.trim().replace(/^\/+|\/+$/g, '')
+      const folders = supportsBackendFolders(findBackend(backends, a))
+      const folder = folders ? row.storeFolder.trim().replace(/^\/+|\/+$/g, '') : ''
       const depth = Number(row.dlDepth)
       then.push({
         action: 'download',
         to: a || 'workspace:home',
         ...(folder ? { folder } : {}),
-        ...recursive,
+        ...(folders ? recursive : {}),
         ...(row.deleteSource ? { deleteSource: true } : {}),
         ...(row.dlKind !== 'auto' ? { kind: row.dlKind } : {}),
         ...(b ? { insert: splitList(b) } : {}),
@@ -1334,6 +1336,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
               const set = (patch: Partial<ActionRow>) => setField('actions', form.actions.map((a, j) => (j === i ? { ...a, ...patch } : a)))
               const destination = findBackend(backends, row.a)
               const destinationSupportsPaths = destination?.capabilities?.paths === true
+              const destinationHasFolders = supportsBackendFolders(destination)
               const contentStore = isContentStore(destination)
               const canRecreateStorageStructure = hasStorageSourcePath && destinationSupportsPaths
               const meta = actionMeta(row.kind)
@@ -1430,7 +1433,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                         {contentStore && <Field label="Copy bytes from" hint="Optional. Default: any readable copy on another backend.">
                           {backendSelect(row.storeFrom, (v) => set({ storeFrom: v }), 'any readable source', 'workspace:home (optional)')}
                         </Field>}
-                        {!contentStore && <Field label="Destination root folder" hint="Choose the folder beneath which the path will be recreated. Leave empty to use the backend root.">
+                        {destinationHasFolders && <Field label="Destination root folder" hint="Choose the folder beneath which the path will be recreated. Leave empty to use the backend root.">
                           <div className="flex gap-2">
                             <Input className={cn(inputClass, 'font-mono')} placeholder="Projects/Canvas/UI" value={row.storeFolder} onChange={(e) => set({ storeFolder: e.target.value })} />
                             {browseButton('storeFolder', i, 'Browse storage backends')}
@@ -1456,7 +1459,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                       {contentStore ? (
                         <p className="text-xs text-muted-foreground">A content store keeps one copy of each file under its checksum, so there is no folder or file name to choose. The file is copied; every existing copy stays.</p>
                       ) : (<>
-                      <Toggle
+                      {destinationHasFolders && <Toggle
                         checked={row.recursive} onChange={(v) => set({ recursive: v })}
                         label={contextSource !== null ? 'Recreate directory path in destination' : 'Recreate sub-folder path in destination'}
                         hint={!destinationSupportsPaths
@@ -1467,8 +1470,8 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                               ? `Only inserts or links directly into ctx:${contextSource} trigger this rule. Its full path is appended beneath the destination root; descendant inserts do not match.`
                               : 'The path below the source folder is appended beneath the destination root: …/UI/mobile → Root/mobile. Missing destination folders are created.'}
                         disabled={!canRecreateStorageStructure && !row.recursive}
-                      />
-                      {storePreview && (
+                      />}
+                      {destinationHasFolders && storePreview && (
                         <div className="space-y-1.5 rounded-lg bg-muted/60 px-3 py-3 text-sm" aria-live="polite">
                           <p className="font-medium">Destination preview</p>
                           <p className="text-xs text-muted-foreground">Root folder: <span className="break-all font-mono">{storePreview.root}/</span></p>
@@ -1563,12 +1566,12 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                         <Field label="Storage backend" hint="Where the downloaded file's bytes should live.">
                           {backendSelect(row.a, (v) => set({ a: v }), 'workspace:home (default)')}
                         </Field>
-                        <Field label="Folder on that backend" hint="Relative to the backend root.">
+                        {destinationHasFolders && <Field label="Folder on that backend" hint="Relative to the backend root.">
                           <div className="flex gap-2">
                             <Input className={cn(inputClass, 'font-mono')} placeholder="Downloads" value={row.storeFolder} onChange={(e) => set({ storeFolder: e.target.value })} />
                             {browseButton('storeFolder', i, 'Browse storage backends')}
                           </div>
-                        </Field>
+                        </Field>}
                         <Field label="File the download under" hint="Leave empty to file it in the same folder(s) as the link. Comma-separate several.">
                           <div className="flex gap-2">
                             <Input className={cn(inputClass, 'font-mono')} placeholder="same folders as the link" value={row.b} onChange={(e) => set({ b: e.target.value })} />
@@ -1579,12 +1582,12 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                           <Input className={cn(inputClass, 'font-mono')} placeholder="downloaded, custom/paper" value={row.dlTags} onChange={(e) => set({ dlTags: e.target.value })} />
                         </Field>
                       </div>
-                      <Toggle
+                      {destinationHasFolders && <Toggle
                         checked={row.recursive} onChange={(v) => set({ recursive: v })}
                         label="Recreate sub-folder path in destination"
                         hint={hasPathCondition ? 'A link filed under …/folder/a/b is downloaded into Folder/a/b.' : 'Add an "is under the folder" condition to mirror sub-folders.'}
                         disabled={!hasPathCondition}
-                      />
+                      />}
                       <Toggle
                         checked={row.deleteSource} onChange={(v) => set({ deleteSource: v })}
                         label="Delete source link from Canvas"

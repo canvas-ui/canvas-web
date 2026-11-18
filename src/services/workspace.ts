@@ -1888,6 +1888,16 @@ export function backendRemovalTarget(path: string, backends?: Backend[]): { driv
   return file?.key ? file : null;
 }
 
+/** A storage mirror root whose backend is absent from a successfully loaded inventory. */
+export function isStaleBackendRoot(path: string, backends?: Backend[]): boolean {
+  if (!backends) return false;
+  const parts = path.split('/').filter(Boolean);
+  if (parts.length !== 2 || !['file', 'cacache', 'gdrive', 's3', 'share'].includes(parts[0])) return false;
+  const clean = `/${parts.join('/')}`;
+  return !backends.some(backend => backend.address === parts[1]
+    || (backend.treePath && (backend.treePath === clean || backend.treePath.startsWith(clean + '/') || clean.startsWith(backend.treePath + '/'))));
+}
+
 // Documents mirrored under a backend address, filtered by linkage into other
 // trees. linked=false → present ONLY on the backend, never filed into any
 // context/directory tree (safe-to-purge candidates); linked=true → the

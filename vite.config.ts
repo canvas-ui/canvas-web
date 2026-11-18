@@ -117,7 +117,7 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
-    dedupe: ['react', 'react-dom'],
+    dedupe: ['react', 'react-dom', '@codemirror/state', '@codemirror/language'],
   },
   json: {
     stringify: false

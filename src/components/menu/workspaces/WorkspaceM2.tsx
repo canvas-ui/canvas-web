@@ -123,7 +123,7 @@ function WorkspaceM2Content() {
   // Backends-tree mirror roots with a resync (initial/catch-up scan) in flight
   // — badged with a spinner in the tree. Seeded from the backends list, kept
   // live via the backend.resync.changed ws event.
-  const [backends, setBackends] = useState<Backend[]>([])
+  const [backends, setBackends] = useState<Backend[]>()
   const [resyncingPaths, setResyncingPaths] = useState<Set<string>>(new Set())
   const [contentPath, setContentPath] = useState<string | null>(urlIsLayer && urlPath !== '/' ? urlPath : null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -313,13 +313,16 @@ function WorkspaceM2Content() {
   useEffect(() => {
     if (!wsName) return
     let cancelled = false
-    const load = () => listBackends(wsName)
-      .then(backends => {
-        if (cancelled) return
-        setBackends(backends)
-        setResyncingPaths(new Set(backends.filter(b => b.resyncing && b.treePath).map(b => b.treePath as string)))
-      })
-      .catch(() => {})
+    const load = () => {
+      setBackends(undefined)
+      return listBackends(wsName)
+        .then(backends => {
+          if (cancelled) return
+          setBackends(backends)
+          setResyncingPaths(new Set(backends.filter(b => b.resyncing && b.treePath).map(b => b.treePath as string)))
+        })
+        .catch(() => {})
+    }
     void load()
     const refresh = (event: Event) => {
       const detail = (event as CustomEvent<TreeRefreshDetail>).detail

@@ -8,7 +8,7 @@ import { backendTrashLocation } from '../src/lib/backend-trash.ts'
 import { isSameDocumentFolder } from '../src/lib/document-drag.ts'
 
 const serviceSource = ts.createSourceFile('workspace.ts', readFileSync(new URL('../src/services/workspace.ts', import.meta.url), 'utf8'), ts.ScriptTarget.Latest, true)
-const targetCode = ts.transpileModule(serviceSource.statements.filter(node => ts.isFunctionDeclaration(node) && ['matchBackendByTreePath', 'backendFolderTarget', 'backendRemovalTarget'].includes(node.name?.text)).map(node => node.getText(serviceSource)).join('\n'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText
+const targetCode = ts.transpileModule(serviceSource.statements.filter(node => ts.isFunctionDeclaration(node) && ['matchBackendByTreePath', 'backendFolderTarget', 'backendRemovalTarget', 'isStaleBackendRoot'].includes(node.name?.text)).map(node => node.getText(serviceSource)).join('\n'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText
 const targets = { exports: {} }
 vm.runInNewContext(targetCode, targets)
 
@@ -210,4 +210,26 @@ test('range selection exposes a limited bulk menu with no document destruction',
   assert.ok(labels.includes('Copy paths'))
   assert.ok(labels.includes('Clear selection'))
   assert.ok(!labels.some(label => typeof label === 'string' && /destroy|purge/i.test(label)))
+})
+
+
+test('stale storage roots offer membership-only removal even with an obsolete system lock', async () => {
+  const ui = setup()
+  ui.props.backends = [{ driver: 's3', address: 'Universe', capabilities: {} }]
+  ui.props.onDeleteBackendFolder = () => assert.fail('must not delete stored files')
+  const menu = ui.open()
+  menu.props.path = '/s3/Universe-@OVH'
+  menu.props.node = { ...menu.props.node, name: 'Universe-@OVH', locked: true, lockedBy: ['system:backend:Universe-@OVH'] }
+  const remove = buttons(menu).find(button => label(button) === 'Remove stale backend entry')
+  assert.ok(remove)
+  const running = remove.props.onClick()
+  assert.deepEqual(Array.from(ui.requests[0].args), ['/s3/Universe-@OVH', true, false, false])
+  ui.requests[0].resolve(true)
+  await running
+  assert.equal(ui.card(ui.render()).props.removingPaths.size, 0)
+  menu.props.path = '/s3/Universe'
+  assert.ok(!buttons(menu).some(button => label(button) === 'Remove stale backend entry'), 'configured CAS backend stays protected without a treePath')
+  menu.props.path = '/s3/Universe-@OVH'
+  menu.props.backends = undefined
+  assert.ok(!buttons(menu).some(button => label(button) === 'Remove stale backend entry'), 'loading or failed inventory is not evidence that a backend was removed')
 })
