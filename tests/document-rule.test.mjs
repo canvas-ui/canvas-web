@@ -37,7 +37,7 @@ test('thread roots and replies share a scoped rule, WhatsApp offers its stored c
 
 // Exercise the real builder serialization without mounting the settings page.
 const source = ts.createSourceFile('rule-builder.tsx', readFileSync(new URL('../src/components/workspace/rule-builder.tsx', import.meta.url), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
-const names = new Set(['EVENT_OPTIONS', 'CONDITION_FIELDS', 'EXACT_FIELDS', 'conditionKey', 'TITLE_NAME', 'DATED_NAME', 'DOWNLOAD_KINDS', 'emptyAction', 'EMPTY_FORM', 'splitAlternatives', 'splitList', 'slugify', 'canKeepStorageSubfolders', 'exactContextSource', 'storagePathPreview', 'buildRule', 'parseRule', 'formFromPrefill', 'backendRef', 'findBackend', 'qualified', 'isContentStore'])
+const names = new Set(['EVENT_OPTIONS', 'CONDITION_FIELDS', 'EXACT_FIELDS', 'conditionKey', 'TITLE_NAME', 'DATED_NAME', 'DOWNLOAD_KINDS', 'emptyAction', 'EMPTY_FORM', 'splitAlternatives', 'splitList', 'slugify', 'canKeepStorageSubfolders', 'exactContextSource', 'storagePathPreview', 'buildRule', 'parseRule', 'formFromPrefill', 'backendRef', 'findBackend', 'qualified', 'isPathlessBackend'])
 const statements = source.statements.filter(node => ts.isFunctionDeclaration(node) ? names.has(node.name.text) : ts.isVariableStatement(node) && node.declarationList.declarations.some(d => names.has(d.name.getText(source))))
 const context = { supportsBackendFolders, crypto: globalThis.crypto }
 vm.runInNewContext(ts.transpileModule(statements.map(s => s.getText(source)).join('\n') + '\nglobalThis.builder = { buildRule, parseRule, formFromPrefill, storagePathPreview }', { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, context)
@@ -178,7 +178,7 @@ test('copy and move recreate paths on any backend that advertises support', () =
 })
 
 test('backends without folder controls discard hidden path options when saved', () => {
-  for (const backend of [undefined, { ...pathBackend, capabilities: { paths: false } }, { ...pathBackend, capabilities: {} }, { address: 'workspace:home', driver: 'file', capabilities: { paths: true } }]) {
+  for (const backend of [undefined, { ...pathBackend, capabilities: { paths: false } }, { ...pathBackend, capabilities: {} }]) {
     const backends = backend ? [backend] : []
     const form = formFromPrefill({ kind: 'store', path: 'dir:/Projects', storeTo: backend?.address || 'unknown', storeFolder: 'Hidden' })
     const saved = buildRule(form, backends).then[0]
@@ -263,8 +263,19 @@ test('download folder options follow backend selection while Canvas filing stays
   ] }
   const form = parseRule(rule)
   assert.deepEqual(plain(buildRule(form, [pathBackend])), rule)
+  const home = { address: 'workspace:home', driver: 'file', capabilities: { paths: true } }
+  for (const selection of ['workspace:home', '']) {
+    form.actions[0].a = selection
+    const saved = buildRule(form, [home])
+    assert.equal(saved.then[0].to, 'workspace:home')
+    assert.equal(saved.then[0].folder, 'Pages')
+    assert.equal(saved.then[0].recursive, true)
+    assert.deepEqual(plain(buildRule(parseRule(saved), [home])), plain(saved))
+  }
+  const store = formFromPrefill({ kind: 'store', path: 'ctx:/IT/db', storeTo: 'workspace:home', storeFolder: 'Pages' })
+  assert.equal(buildRule(store, [home]).then[0].folder, 'Pages')
+  assert.equal(buildRule(store, [home]).then[0].recursive, true)
   for (const backend of [
-    { address: 'workspace:home', driver: 'file', capabilities: { paths: true } },
     { address: 'workspace:data', driver: 'cas', capabilities: { paths: false, blobs: true } },
     { address: 'flat', driver: 'custom', capabilities: { paths: false } },
   ]) {
@@ -276,4 +287,20 @@ test('download folder options follow backend selection while Canvas filing stays
     assert.deepEqual(plain(action.tags), ['website'])
     assert.equal(action.kind, 'page')
   }
+})
+
+
+test('backend-reported path support controls rules regardless of address or driver name', () => {
+  for (const address of ['workspace:home', 'workspace:data', 'custom-store']) {
+    for (const paths of [true, false]) {
+      const backend = { address, driver: 'plugin-driver', capabilities: { paths } }
+      const form = formFromPrefill({ kind: 'store', path: 'ctx:/IT/db', storeTo: address, storeFolder: 'Archive' })
+      const action = buildRule(form, [backend]).then[0]
+      assert.equal(supportsBackendFolders(backend), paths)
+      assert.equal(action.folder, paths ? 'Archive' : undefined)
+      assert.equal(action.recursive, paths ? true : undefined)
+      assert.equal(action.pathMode, paths ? 'full' : undefined)
+    }
+  }
+  assert.equal(supportsBackendFolders({ capabilities: {} }), false)
 })

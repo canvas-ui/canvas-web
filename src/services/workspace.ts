@@ -1221,13 +1221,6 @@ export async function transferDocumentsToBackends(
   return response
 }
 
-// Does a transfer onto this backend take a folder + filename? Server flag
-// first; older servers without it are judged by driver.
-export function backendKeepsPaths(backend: Backend): boolean {
-  if (typeof backend.capabilities?.paths === 'boolean') return backend.capabilities.paths
-  return backend.kind === 'storage' && backend.driver !== 'cacache'
-}
-
 // ── Document sub-resources (object properties card) ─────────────────────────
 
 export interface DocumentLocationInfo {

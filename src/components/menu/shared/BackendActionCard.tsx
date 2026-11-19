@@ -4,11 +4,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Loader } from '@/components/ui/loader'
 import { cn } from '@/lib/utils'
+import { supportsBackendFolders } from '@/lib/backend-folders'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { useToastHelpers } from '@/hooks/useToastHelpers'
 import {
   listBackends,
-  backendKeepsPaths,
   backendTreeTarget,
   backendFolderTarget,
   addBackendContainers,
@@ -153,7 +153,7 @@ export function BackendActionCard({
   // Selected targets that address objects by path: only they take a folder
   // and a filename — the blob store keeps its content-hash key regardless.
   const pathTargets = useMemo(
-    () => (backends || []).filter(b => selected.has(b.address) && backendKeepsPaths(b)),
+    () => (backends || []).filter(b => selected.has(b.address) && supportsBackendFolders(b)),
     [backends, selected],
   )
   const showDestination = mode !== 'delete' && pathTargets.length > 0
@@ -177,7 +177,7 @@ export function BackendActionCard({
     const backend = target ? (backends || []).find(b => b.address === target.address) : null
     if (!target || !backend) { showErrorToast('Pick a folder inside a storage backend'); return }
     if (isDisabled(backend)) { showErrorToast(`${backend.address} is ${isDisabled(backend)}`); return }
-    if (!backendKeepsPaths(backend)) { showErrorToast(`${backend.address} does not keep folders — objects are stored by content`); return }
+    if (!supportsBackendFolders(backend)) { showErrorToast(`${backend.address} does not keep folders — objects are stored by content`); return }
     setFolder(target.key)
     setSelected(prev => (single ? new Set([target.address]) : new Set([...prev, target.address])))
   }

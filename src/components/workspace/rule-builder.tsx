@@ -205,14 +205,13 @@ const EMPTY_FORM: RuleForm = {
 // 'FMO | DC Migration | SDI' → ['FMO', 'DC Migration', 'SDI'] (engine ORs arrays)
 const splitAlternatives = (value: string) => value.split('|').map((s) => s.trim()).filter(Boolean)
 
-// A content store names every file by its checksum: no folder, no file name.
 // How a rule names a backend: built-ins by address, others qualified by driver
 // ("s3:Universe"), so the JSON says what kind of store a name refers to.
 const backendRef = (b: Backend) => b.address.startsWith('workspace:') ? b.address : `${b.driver}:${b.address}`
 const findBackend = (list: Backend[], ref: string) => list.find((b) => b.address === ref || backendRef(b) === ref)
 const qualified = (list: Backend[], ref: string) => { const backend = findBackend(list, ref); return backend ? backendRef(backend) : ref }
 
-const isContentStore = (backend?: Backend) => backend?.capabilities?.blobs === true || backend?.address === 'workspace:data'
+const isPathlessBackend = (backend?: Backend) => backend?.capabilities?.paths === false
 
 const splitList = (value: string) => value.split(',').map((s) => s.trim()).filter(Boolean)
 
@@ -401,7 +400,7 @@ function buildRule(form: RuleForm, backends: Backend[] = []): HookRule {
       if (!a) throw new Error('Enter the mail folder to move the email to, such as INBOX/Accounting/{{YYYY}}/Expenses.')
       then.push({ action: 'moveMessage', folder: a })
     }
-    if (row.kind === 'store' && a && isContentStore(findBackend(backends, a))) {
+    if (row.kind === 'store' && a && isPathlessBackend(findBackend(backends, a))) {
       then.push({ action: 'store', to: qualified(backends, a), ...(row.storeFrom.trim() ? { from: qualified(backends, row.storeFrom.trim()) } : {}), mode: 'copy' })
     } else if (row.kind === 'store' && a) {
       if (row.storeMode === 'move' && !row.storeFrom.trim()) throw new Error('Choose the source backend whose copy should be moved.')
@@ -439,7 +438,7 @@ function buildRule(form: RuleForm, backends: Backend[] = []): HookRule {
       })
     }
     if (row.kind === 'download') {
-      const folders = supportsBackendFolders(findBackend(backends, a))
+      const folders = supportsBackendFolders(findBackend(backends, a || 'workspace:home'))
       const folder = folders ? row.storeFolder.trim().replace(/^\/+|\/+$/g, '') : ''
       const depth = Number(row.dlDepth)
       then.push({
@@ -774,10 +773,10 @@ function relativeTime(iso: string): string {
 }
 
 // Backend to suggest for storage rules: the workspace home folder, else the
-// first writable backend that is not the managed blob store.
+// first writable backend that reports folder-path support.
 function preferredBackend(backends: Backend[]): string {
   if (backends.some((b) => b.address === 'workspace:home')) return 'workspace:home'
-  return backends.find((b) => b.address !== 'workspace:data')?.address || backends[0]?.address || ''
+  return backends.find(supportsBackendFolders)?.address || backends[0]?.address || ''
 }
 
 // Form for a tree context-menu prefill (mirror / store rule).
@@ -1334,10 +1333,10 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
             <SectionHeading step={2} title="Then…" hint="Actions run in order. The item keeps its id, tags and folders unless an action says otherwise." />
             {form.actions.map((row, i) => {
               const set = (patch: Partial<ActionRow>) => setField('actions', form.actions.map((a, j) => (j === i ? { ...a, ...patch } : a)))
-              const destination = findBackend(backends, row.a)
+              const destination = findBackend(backends, row.a || (row.kind === 'download' ? 'workspace:home' : ''))
               const destinationSupportsPaths = destination?.capabilities?.paths === true
               const destinationHasFolders = supportsBackendFolders(destination)
-              const contentStore = isContentStore(destination)
+              const pathlessDestination = isPathlessBackend(destination)
               const canRecreateStorageStructure = hasStorageSourcePath && destinationSupportsPaths
               const meta = actionMeta(row.kind)
               const outputControls = (label: string) => (
@@ -1371,7 +1370,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                 </div>
               )
               const contextSource = exactContextSource(form.conditions)
-              const storePreview = row.kind === 'store' && row.a && !contentStore && (!row.recursive || canRecreateStorageStructure)
+              const storePreview = row.kind === 'store' && row.a && !pathlessDestination && (!row.recursive || canRecreateStorageStructure)
                 ? storagePathPreview(row, form.conditions, destination) : null
               const attachmentPreview = row.kind === 'extractAttachments' && row.a
                 ? attachmentDestinationPreview(row.a, row.storeFolder, row.attachmentPath) : null
@@ -1430,7 +1429,7 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                         <Field label="Storage backend" hint="Where the file's bytes should live. Only writable backends are listed.">
                           {backendSelect(row.a, (v) => set({ a: v }), 'pick a backend…')}
                         </Field>
-                        {contentStore && <Field label="Copy bytes from" hint="Optional. Default: any readable copy on another backend.">
+                        {pathlessDestination && <Field label="Copy bytes from" hint="Optional. Default: any readable copy on another backend.">
                           {backendSelect(row.storeFrom, (v) => set({ storeFrom: v }), 'any readable source', 'workspace:home (optional)')}
                         </Field>}
                         {destinationHasFolders && <Field label="Destination root folder" hint="Choose the folder beneath which the path will be recreated. Leave empty to use the backend root.">
@@ -1439,25 +1438,25 @@ export function RuleBuilder({ workspaceId, onOpenJson, onShowRuns, backfillLimit
                             {browseButton('storeFolder', i, 'Browse storage backends')}
                           </div>
                         </Field>}
-                        {!contentStore && <Field label="File name">
+                        {!pathlessDestination && <Field label="File name">
                           <select className={selectClass} value={row.storeName} onChange={(e) => set({ storeName: e.target.value as StoreName })}>
                             {STORE_NAME_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                           </select>
                         </Field>}
-                        {!contentStore && <Field label="Move or copy" hint={row.storeMode === 'move' ? 'Remove only the selected source copy after the destination is safely stored.' : 'Preserve every existing copy.'}>
+                        {!pathlessDestination && <Field label="Move or copy" hint={row.storeMode === 'move' ? 'Remove only the selected source copy after the destination is safely stored.' : 'Preserve every existing copy.'}>
                           <Segmented value={row.storeMode} onChange={(v) => set({ storeMode: v })} options={[{ value: 'copy', label: 'Copy' }, { value: 'move', label: 'Move' }]} />
                         </Field>}
-                        {!contentStore && row.storeMode === 'move' && <Field className="sm:col-span-2" label="Move bytes from (required)" hint="Context membership does not identify a source copy. If the file is absent here, nothing is moved. Multiple locations on this backend make the move ambiguous; use copy.">
+                        {!pathlessDestination && row.storeMode === 'move' && <Field className="sm:col-span-2" label="Move bytes from (required)" hint="Context membership does not identify a source copy. If the file is absent here, nothing is moved. Multiple locations on this backend make the move ambiguous; use copy.">
                           {backendSelect(row.storeFrom, (v) => set({ storeFrom: v }), 'choose a source backend…', 'workspace:data')}
                         </Field>}
-                        {!contentStore && row.storeName === 'custom' && (
+                        {!pathlessDestination && row.storeName === 'custom' && (
                           <Field className="sm:col-span-2" label="Name template" hint={'Tokens: {{YYYY}} {{MM}} {{DD}} {{HH}} {{mm}} {{ss}} (photo capture time when present), {{ext}} {{basename}} {{filename}} {{title}} {{id}}, plus {{doc.…}} fields. Slashes create sub-folders.'}>
                             <Input className={cn(inputClass, 'font-mono')} placeholder={'{{YYYY}}-{{MM}}-{{DD}} {{title}}{{ext}}'} value={row.b} onChange={(e) => set({ b: e.target.value })} />
                           </Field>
                         )}
                       </div>
-                      {contentStore ? (
-                        <p className="text-xs text-muted-foreground">A content store keeps one copy of each file under its checksum, so there is no folder or file name to choose. The file is copied; every existing copy stays.</p>
+                      {pathlessDestination ? (
+                        <p className="text-xs text-muted-foreground">This backend does not accept a folder or file name. The file is copied; every existing copy stays.</p>
                       ) : (<>
                       {destinationHasFolders && <Toggle
                         checked={row.recursive} onChange={(v) => set({ recursive: v })}
