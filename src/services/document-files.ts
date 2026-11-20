@@ -38,17 +38,30 @@ function dragFilename(document: Document): string {
   return `${title}${extension}`
 }
 
+// Chromium implements `DownloadURL` on Windows and macOS. On Linux the drop
+// target receives only the file name and saves a broken link to it.
+function dragOutSupported(): boolean {
+  const platform = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform || navigator.platform || ''
+  return /^(win|mac)/i.test(platform)
+}
+
 /**
  * Add the "drag this out of the browser" payload to a document drag.
  *
- * Chromium turns a `DownloadURL` entry into a file where the drag is dropped
- * (desktop, file manager). It carries exactly one file, so several documents
+ * Chromium on Windows and macOS turns a `DownloadURL` entry into a file where
+ * the drag is dropped (desktop, file manager). It carries exactly one file, so several documents
  * travel as one zip. The download is the browser's own request: it
  * authenticates with the media-ticket cookie, which keepContentTicket holds.
- * Returns false when the selection is too large to name in one request.
+ * Returns false when the platform cannot do it or the selection is too large
+ * to name in one request.
  */
 export function setDragOutData(dataTransfer: DataTransfer, workspaceId: string, documents: Document[], archiveName: string): boolean {
-  if (documents.length === 0 || documents.length > ARCHIVE_MAX_DOCUMENTS) return false
+  // A thumbnail the drag started on contributes its own blob: address, which
+  // means nothing outside this page; a file manager would save it as a link.
+  for (const type of ['text/uri-list', 'text/plain']) {
+    if (dataTransfer.getData(type).startsWith('blob:')) dataTransfer.clearData(type)
+  }
+  if (!dragOutSupported() || documents.length === 0 || documents.length > ARCHIVE_MAX_DOCUMENTS) return false
   if (documents.length === 1) {
     const [document] = documents
     const mime = document.metadata?.contentType || 'application/octet-stream'
@@ -95,7 +108,7 @@ interface DirectoryHandle {
   getFileHandle(name: string, options?: { create?: boolean }): Promise<{ createWritable(): Promise<WritableStream<Uint8Array>> }>
   removeEntry(name: string): Promise<void>
 }
-type DirectoryPicker = (options: { id: string; mode: 'readwrite' }) => Promise<DirectoryHandle>
+type DirectoryPicker = (options: { id: string; mode: 'readwrite'; startIn?: 'downloads' }) => Promise<DirectoryHandle>
 
 const directoryPicker = (): DirectoryPicker | undefined =>
   (window as unknown as { showDirectoryPicker?: DirectoryPicker }).showDirectoryPicker
@@ -131,9 +144,12 @@ export interface SaveToFolderResult {
 }
 
 /**
- * Ask for a folder and write each document into it as a file. The browser
- * remembers the folder last used for this picker. Resolves null when the
- * picker is dismissed.
+ * Ask for a folder and write each document into it as a file. The picker opens
+ * in Downloads the first time and in the folder last used after that.
+ * Resolves null when no folder was chosen: the picker was dismissed, or the
+ * browser refused the folder. Chromium refuses the home folder, Desktop,
+ * Documents and Downloads themselves ("contains system files") and accepts
+ * folders inside them; a page cannot tell the two cases apart.
  */
 export async function saveDocumentsToFolder(
   workspaceId: string,
@@ -143,7 +159,7 @@ export async function saveDocumentsToFolder(
   const pick = directoryPicker()
   if (!pick) throw new Error('This browser cannot write into a folder')
   let folder: DirectoryHandle
-  try { folder = await pick({ id: 'canvas-save-documents', mode: 'readwrite' }) }
+  try { folder = await pick({ id: 'canvas-save-documents', mode: 'readwrite', startIn: 'downloads' }) }
   catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') return null
     throw error

@@ -1573,6 +1573,8 @@ export interface BackendCapabilities {
   upload?: boolean;
   sync: boolean;
   test: boolean;
+  // Can report how much space it takes (getBackendDiskUsage).
+  usage?: boolean;
   containers: boolean;
   mutableContainers: boolean;
   deleteObject: boolean;
@@ -1613,7 +1615,12 @@ export interface BackendContainer {
 export interface BackendDiskUsage {
   backend: string;
   bytes: number;
-  computedAt: string;
+  // S3: objects under the bucket prefix.
+  objects?: number;
+  // S3: the listing is still running and `bytes`/`objects` are running totals.
+  // Ask again until it is gone; `computedAt` is set once it is.
+  measuring?: boolean;
+  computedAt?: string;
 }
 
 export interface WorkspaceDiskUsage {
@@ -1666,8 +1673,9 @@ export async function getBackend(workspaceId: string, driver: string, address: s
   return response;
 }
 
-// On-demand on-disk size of a local storage backend. Walks the backend root
-// server-side — potentially slow on large trees, so only call on user action.
+// On-demand size of a backend with `capabilities.usage`. The server walks a
+// local folder or lists an S3 prefix, both slow on large ones, so only call on
+// user action. A long S3 listing answers with `measuring: true`: call again.
 export async function getBackendDiskUsage(workspaceId: string, driver: string, address: string): Promise<BackendDiskUsage> {
   const response = await api.get<BackendDiskUsage>(`${backendPath(workspaceId, driver, address)}/usage`);
   return response;

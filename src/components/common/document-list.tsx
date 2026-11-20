@@ -1269,7 +1269,10 @@ export function DocumentList({ readingPane = false, externalSearchQuery, toolbar
       const result = await saveDocumentsToFolder(workspaceId, ids, (done, total) => {
         progress().update({ title: 'Saving to folder…', description: `${done} / ${total} document(s)` })
       })
-      if (!result) return
+      if (!result) {
+        showSuccessToast('The browser does not let a site write straight into Downloads, Documents, Desktop or your home folder. Choose or create a folder inside one of them, or use Download.', 'No folder chosen')
+        return
+      }
       const description = `${result.saved} file(s) saved to "${result.folder}"`
       if (result.failed.length === 0) { progress().done({ title: 'Saved to folder', description }); return }
       const titles = new Map(documents.map(doc => [doc.id, getDocumentDisplayInfo(doc).title]))
@@ -1278,7 +1281,7 @@ export function DocumentList({ readingPane = false, externalSearchQuery, toolbar
     } catch (error) {
       progress().fail({ title: 'Save to folder failed', description: error instanceof Error ? error.message : String(error), variant: 'destructive' })
     }
-  }, [workspaceId, documents, showProgress])
+  }, [workspaceId, documents, showProgress, showSuccessToast])
 
   const downloadToDisk = useCallback(async (ids: number[]) => {
     if (!workspaceId) return

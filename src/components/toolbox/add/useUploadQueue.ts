@@ -8,12 +8,15 @@ import {
   uploadBackendFileWithProgress,
   type BlobUploadResult,
 } from '@/services/blobs'
+import { transferDocumentsToBackends } from '@/services/workspace'
 import { submitDocuments, notifyWorkspaceDocumentsChanged, resolveUploadWorkspace, resolveBackendUpload, type AddTarget } from './useAddTarget'
+import type { UploadStorage } from './useStorageFields'
 
 // Per-file upload pipeline with resume semantics:
 //   hash small files locally → batch-ask the server which checksums it already holds →
 //   skip the byte transfer for those (content-addressed store) → upload the
-//   rest with real progress → insert each File document as its blob lands.
+//   rest with real progress → insert each File document as its blob lands →
+//   copy it to the backends picked in the form, when any were.
 // Large files upload through resumable sessions (services/blobs.ts): a
 // dropped connection continues where the server's copy ends.
 // A failed batch is re-runnable: retry (or re-selecting the same files later)
@@ -27,6 +30,7 @@ export type UploadStatus =
   | 'checking'
   | 'uploading'
   | 'linking' // blob persisted, inserting the File document
+  | 'storing' // document inserted, copying to the picked backends
   | 'done'
   | 'error'
 
@@ -70,13 +74,34 @@ export function summarizeUpload(items: UploadItem[]): UploadSummary {
 export type BuildUploadDocument = (blob: BlobUploadResult, file: File) => Record<string, unknown>
 
 /**
+ * Put an uploaded document on the backends picked for it. Every upload first
+ * lands in the default content store; without `keepDefault` that copy is
+ * released by a move to the first backend, after the others have theirs.
+ * Safe to repeat: a backend that already holds the file is left alone.
+ */
+async function storeUpload(workspaceName: string, docId: number, storage: UploadStorage): Promise<void> {
+  // One backend per request: a document already on one backend ends its
+  // request there, and the others still have to get their copy.
+  const send = async (to: string, mode: 'copy' | 'move') => {
+    const result = await transferDocumentsToBackends(workspaceName, [docId], { to: [to], mode, folder: storage.folder, onConflict: 'rename' })
+    const failed = result.failed.find((failure) => failure.code !== 'ALREADY_THERE')
+    if (failed) throw new Error(`Uploaded to workspace data, but not stored in ${to}: ${failed.reason}`)
+  }
+  const [first, ...rest] = storage.to
+  for (const backend of rest) await send(backend, 'copy')
+  await send(first, storage.keepDefault ? 'copy' : 'move')
+}
+
+/**
  * Runs every non-done item through the pipeline. State lives with the caller
  * (`items` reads it fresh between awaits, `patch` writes it), so the same
  * pipeline serves a form's own queue and the background upload manager.
  */
-export async function runUploadPipeline({ target, destination, items, patch, buildDoc, signal }: {
+export async function runUploadPipeline({ target, destination, storage = null, items, patch, buildDoc, signal }: {
   target: NonNullable<AddTarget>
   destination: { workspaceName: string; backend: BackendUploadTarget | null }
+  /** Backends picked for the files, beyond the default content store. Not used with `destination.backend`. */
+  storage?: UploadStorage | null
   items: () => UploadItem[]
   patch: (id: string, changes: Partial<UploadItem>) => void
   buildDoc: BuildUploadDocument
@@ -163,6 +188,10 @@ export async function runUploadPipeline({ target, destination, items, patch, bui
             // Insert immediately so a later failure can't orphan this file's
             // work. synapsd upserts by checksum, so re-runs are idempotent.
             const ids = await submitDocuments(target, [buildDoc(blob, it.file)], { refresh: false })
+            if (storage && ids[0] != null) {
+              patch(it.id, { status: 'storing', docId: ids[0] })
+              await storeUpload(workspaceName, ids[0], storage)
+            }
             patch(it.id, { status: 'done', docId: ids[0] })
           } catch (err) {
             const aborted = err instanceof DOMException && err.name === 'AbortError'

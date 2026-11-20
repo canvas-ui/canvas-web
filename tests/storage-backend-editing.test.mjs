@@ -4,9 +4,9 @@ import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
 
-const source = readFileSync(new URL('../src/pages/workspaces/[workspaceName]/settings.tsx', import.meta.url), 'utf8')
+const source = readFileSync(new URL('../src/components/settings/storage-forms.tsx', import.meta.url), 'utf8')
 function form(name, backend) {
-  const ast = ts.createSourceFile('settings.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  const ast = ts.createSourceFile('storage-forms.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
   const declaration = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === name)
   const slots = [], calls = []
   let cursor = 0
@@ -19,10 +19,10 @@ function form(name, backend) {
     useState(initial) { const i = cursor++; slots[i] ??= { value: typeof initial === 'function' ? initial() : initial }; return [slots[i].value, next => { slots[i].value = typeof next === 'function' ? next(slots[i].value) : next }] },
     useToast: () => ({ showToast() {} }),
     updateBackend: async (...args) => calls.push(args), addBackend: async () => { throw Error('Must update existing backend') },
-    Button: 'button', Input: 'input', Toggle: 'toggle', Icon: 'icon', FolderPlus: 'icon', GoogleOAuthButton: 'oauth',
+    Button: 'button', Input: 'input', FormShell: 'form', Field: 'field', OptionRow: 'option', GoogleOAuthButton: 'oauth',
+    message: (error, fallback) => error?.message || fallback,
   })
-  const render = () => { cursor = 0; return exports.form({ workspaceId: 'ws', backend, onAdded() {} }) }
-  render().props.onClick()
+  const render = () => { cursor = 0; return exports.form({ workspaceId: 'ws', backend, onSaved() {}, onCancel() {} }) }
   return { render, calls }
 }
 const flatten = node => !node || typeof node !== 'object' ? [] : [node, ...[node.props?.children].flat(Infinity).flatMap(flatten)]

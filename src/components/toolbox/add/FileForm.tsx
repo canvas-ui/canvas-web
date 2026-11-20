@@ -8,14 +8,12 @@ import { RelationFields } from './RelationFields'
 import { useAddTarget, describeTarget, resolveUploadWorkspace } from './useAddTarget'
 import { useFileFields, buildFileDocument } from './useFileFields'
 import { FileMetaFields } from './FileMetaFields'
+import { useStorageFields } from './useStorageFields'
+import { StorageFields } from './StorageFields'
 import { useUploadQueue } from './useUploadQueue'
 import { enqueueUpload } from './upload-manager'
 import { UploadProgressList } from './UploadProgressList'
 import { cn } from '@/lib/utils'
-
-// TODO: copy-to-multiple-backends (workspace:home vs workspace:data) once more
-// than one blob backend is exposed server-side — for now every upload goes to
-// the workspace's default `workspace:data` blob store.
 
 // `capture` turns the form into the Photo/Video variant: the file input asks
 // the OS for the camera (mobile) or restricts the picker to media (desktop).
@@ -53,6 +51,8 @@ export function FileForm({ capture = false }: { capture?: boolean } = {}) {
     ? target.workspaceName
     : (target && ctxWorkspace?.contextId === target.contextId ? ctxWorkspace.workspaceName : null)
   const meta = useFileFields(uploadWorkspace)
+  // A backends-tree folder already names its backend; only virtual trees choose.
+  const store = useStorageFields(isBackend ? null : uploadWorkspace, target)
 
   const addFiles = (list: FileList | null) => {
     if (!list) return
@@ -78,6 +78,7 @@ export function FileForm({ capture = false }: { capture?: boolean } = {}) {
       const { tags, comment } = meta
       enqueueUpload(items.map((it) => it.file), target, {
         buildDoc: (blob, file) => buildFileDocument(blob, file, { tags, comment, geo }),
+        storage: isBackend ? null : store.storage,
         onSettled: async (summary) => {
           const relFailed = await rel.write(summary.docIds)
           if (relFailed) showErrorToast('Files uploaded, but some relations failed')
@@ -126,6 +127,8 @@ export function FileForm({ capture = false }: { capture?: boolean } = {}) {
       <UploadProgressList items={items} running={false} onRemove={queue.removeItem} />
 
       {!isBackend && <FileMetaFields fields={meta} idPrefix="file" multiple={items.length > 1} />}
+
+      {!isBackend && <StorageFields fields={store} />}
 
       <RelationFields f={rel} idPrefix="file" />
 

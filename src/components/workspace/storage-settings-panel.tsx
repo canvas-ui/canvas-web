@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Activity, ChevronDown, ChevronRight, FolderPlus, HardDrive, Pencil, Plus, RefreshCw, Square, Trash2 } from 'lucide-react'
 import { Icon } from '@iconify/react'
 import { Button } from '@/components/ui/button'
@@ -116,17 +116,32 @@ function DiskUsageButton({ workspaceId, backend }: { workspaceId: string; backen
   const [usage, setUsage] = useState<BackendDiskUsage | null>(backend.usage ?? null)
   const [busy, setBusy] = useState(false)
   const { showToast } = useToast()
+  const mounted = useRef(true)
+  useEffect(() => () => { mounted.current = false }, [])
+  const remote = backend.driver === 's3'
   const compute = async () => {
     setBusy(true)
-    try { setUsage(await getBackendDiskUsage(workspaceId, backend.driver, backend.address)) }
+    try {
+      // A long S3 listing answers with running totals until it is complete.
+      for (;;) {
+        const next = await getBackendDiskUsage(workspaceId, backend.driver, backend.address)
+        if (!mounted.current) return
+        setUsage(next)
+        if (!next.measuring) break
+      }
+    }
     catch (err) { showToast({ title: 'Could not measure size', description: errorText(err, 'Request failed'), variant: 'destructive' }) }
     finally { setBusy(false) }
   }
+  const size = usage && `${formatBytes(usage.bytes)}${usage.objects == null ? '' : ` · ${usage.objects.toLocaleString()} objects`}`
+  const how = remote
+    ? 'Lists every object under the bucket prefix (one request per 1,000 objects). Old versions and unfinished multipart uploads are not counted.'
+    : 'Walks the whole folder; slow on large ones.'
   return (
-    <Button type="button" variant="outline" size="sm" disabled={busy} onClick={compute}
-      title={usage ? `Measured ${new Date(usage.computedAt).toLocaleString()}. Click to measure again.` : 'Walks the whole folder; slow on large ones.'}>
+    <Button type="button" variant="outline" size="sm" disabled={busy || (remote && !backend.enabled)} onClick={compute}
+      title={usage?.computedAt ? `Measured ${new Date(usage.computedAt).toLocaleString()}. Click to measure again. ${how}` : how}>
       <HardDrive className={`mr-2 h-3.5 w-3.5 ${busy ? 'animate-pulse' : ''}`} />
-      {busy ? 'Measuring…' : usage ? formatBytes(usage.bytes) : 'Measure size'}
+      {busy ? (usage?.measuring ? `Measuring… ${size}` : 'Measuring…') : size || 'Measure size'}
     </Button>
   )
 }
@@ -409,7 +424,7 @@ export function StorageSettingsPanel({ workspaceId, workspaceName, backends, onB
                           <Activity className="mr-2 h-3.5 w-3.5" />{busy === `test:${id}` ? 'Testing…' : 'Test connection'}
                         </Button>
                       )}
-                      {(backend.driver === 'file' || backend.driver === 'cacache') && supported && <DiskUsageButton workspaceId={workspaceId} backend={backend} />}
+                      {backend.capabilities?.usage && <DiskUsageButton workspaceId={workspaceId} backend={backend} />}
                       {kind && editing !== id && (
                         <Button type="button" variant="outline" size="sm" onClick={() => setEditing(id)}>
                           <Pencil className="mr-2 h-3.5 w-3.5" />Edit connection
