@@ -1,4 +1,5 @@
 import { downloadLinkToWorkspace } from '@/services/workspace'
+import { canSaveToFolder, downloadDocuments, keepContentTicket, saveDocumentsToFolder, setDragOutData } from '@/services/document-files'
 import { RelationSearchSuggestions } from './relation-search-suggestions'
 import { useContentWindow } from './content-window-context'
 import { useTileStyle } from '@/lib/tile-style'
@@ -1247,6 +1248,44 @@ export function DocumentList({ readingPane = false, externalSearchQuery, toolbar
     resetSearchInput()
     if (onRemoveBackendQuery && backendSearchQueries.length > 0) onRemoveBackendQuery(-1) // clear all
   }, [onRemoveBackendQuery, backendSearchQueries.length, resetSearchInput])
+  // Names the zip a multi-document drag or download produces: the folder shown.
+  const archiveName = (scope === 'path' && contextPath.split('/').filter(Boolean).pop()) || 'canvas-documents'
+
+  // A drag out of the browser downloads with the media-ticket cookie, which
+  // has to exist before the drag starts.
+  const ticketDocumentId = documents[0]?.id
+  useEffect(() => {
+    if (!workspaceId || ticketDocumentId == null) return
+    return keepContentTicket(workspaceId, ticketDocumentId)
+  }, [workspaceId, ticketDocumentId])
+
+  const saveToFolder = useCallback(async (ids: number[]) => {
+    if (!workspaceId) return
+    // The folder picker must open inside the click, so the progress toast
+    // starts with the first file rather than before the picker.
+    const toast: { progress: ReturnType<typeof showProgress> | null } = { progress: null }
+    const progress = () => (toast.progress ??= showProgress({ title: 'Saving to folder…' }))
+    try {
+      const result = await saveDocumentsToFolder(workspaceId, ids, (done, total) => {
+        progress().update({ title: 'Saving to folder…', description: `${done} / ${total} document(s)` })
+      })
+      if (!result) return
+      const description = `${result.saved} file(s) saved to "${result.folder}"`
+      if (result.failed.length === 0) { progress().done({ title: 'Saved to folder', description }); return }
+      const titles = new Map(documents.map(doc => [doc.id, getDocumentDisplayInfo(doc).title]))
+      const failures = result.failed.slice(0, 5).map(f => `${titles.get(f.documentId) || `#${f.documentId}`}: ${f.error}`).join('; ')
+      progress().fail({ title: `${result.failed.length} document(s) not saved`, description: `${description}. ${failures}${result.failed.length > 5 ? '; …' : ''}`, variant: 'destructive' })
+    } catch (error) {
+      progress().fail({ title: 'Save to folder failed', description: error instanceof Error ? error.message : String(error), variant: 'destructive' })
+    }
+  }, [workspaceId, documents, showProgress])
+
+  const downloadToDisk = useCallback(async (ids: number[]) => {
+    if (!workspaceId) return
+    try { await downloadDocuments(workspaceId, ids, archiveName) }
+    catch (error) { showProgress({ title: 'Downloading…' }).fail({ title: 'Download failed', description: error instanceof Error ? error.message : String(error), variant: 'destructive' }) }
+  }, [workspaceId, archiveName, showProgress])
+
       // Handle drag start for selected documents
   const handleMultiDragStart = useCallback((e: React.DragEvent, documentId: number) => {
     // Always ensure the dragged document is included
@@ -1273,9 +1312,15 @@ export function DocumentList({ readingPane = false, externalSearchQuery, toolbar
     e.dataTransfer.setData('application/json', JSON.stringify(dragData));
     e.dataTransfer.effectAllowed = 'copyMove';
 
+    // Dropped outside the browser, the same drag saves the documents as files.
+    if (workspaceId) {
+      const dragged = documents.filter(d => draggedIds.includes(d.id));
+      setDragOutData(e.dataTransfer, workspaceId, dragged, archiveName);
+    }
+
     // Add visual feedback for dragging
     e.dataTransfer.setDragImage(e.currentTarget as Element, 0, 0);
-  }, [selectedDocuments, contextPath, treeName, workspaceId, scope])
+  }, [selectedDocuments, contextPath, treeName, workspaceId, scope, documents, archiveName])
 
   const handleDrop = useCallback(async (event: React.DragEvent) => {
     if (!onPasteDocuments) return
@@ -1604,6 +1649,8 @@ export function DocumentList({ readingPane = false, externalSearchQuery, toolbar
     add(bulkEditAllowed && { id: 'copy-workspace', group: 'organize', label: 'Copy to workspace…', icon: Copy, run: invocation => { setCopyWorkspaceModal(!!invocation?.shiftKey); setCopyWorkspaceIds(ids) } })
     // The export modal exports the current selection, which opening this menu
     // has already narrowed to `ids`.
+    add(workspaceId && canSaveToFolder() && { id: 'save-to-folder', group: 'organize', label: `Save to folder…${count}`, icon: FolderOpen, run: () => saveToFolder(ids) })
+    add(workspaceId && { id: 'download', group: 'organize', label: n > 1 ? `Download as zip${count}` : 'Download', icon: Download, run: () => downloadToDisk(ids) })
     add({ id: 'export', group: 'organize', label: `Export…${count}`, icon: Download, run: () => setShowExportModal(true) })
 
     // Delete key = the safe, reversible one (unlink). Deleting from the index

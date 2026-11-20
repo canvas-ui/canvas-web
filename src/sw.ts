@@ -50,6 +50,9 @@ const SHARE_INBOX_TTL_MS = 24 * 60 * 60 * 1000
 // Document bytes and server thumbnails. `download=1` is a user-initiated save
 // (don't burn cache on it); a Range header means a media element is streaming.
 const CONTENT_RE = /^\/rest\/v2\/workspaces\/[^/]+\/documents\/[^/]+\/(content|thumbnail)$/
+// Downloads to the user's disk (a document as a file, a zip of a selection)
+// go straight to the network: they are not offline reads and a zip is large.
+const DOWNLOAD_RE = /^\/rest\/v2\/workspaces\/[^/]+\/documents\/([^/]+\/file|archive)$/
 // Never serve stale auth, admin or realtime endpoints from cache.
 const API_EXCLUDE_RE = /^\/rest\/v2\/(auth|admin|ping|events)\b/
 
@@ -94,7 +97,7 @@ self.addEventListener('fetch', (event) => {
       event.respondWith(handleContent(event, request))
       return
     }
-    if (!API_EXCLUDE_RE.test(url.pathname) && !CONTENT_RE.test(url.pathname)) {
+    if (!API_EXCLUDE_RE.test(url.pathname) && !CONTENT_RE.test(url.pathname) && !DOWNLOAD_RE.test(url.pathname)) {
       event.respondWith(handleApi(event, request))
       return
     }
