@@ -33,6 +33,22 @@ export function reportNetworkSuccess(): void {
   set(false)
 }
 
+// A dead route to the server (a proxy host that is down, a dropped packet
+// path) neither answers nor refuses: requests just wait. A request that has
+// waited this long asks whoever can check the server to do so.
+export const STALLED_REQUEST_MS = 8000
+
+const stallListeners = new Set<() => void>()
+
+export function reportStalledRequest(): void {
+  for (const l of stallListeners) l()
+}
+
+export function onStalledRequest(listener: () => void): () => void {
+  stallListeners.add(listener)
+  return () => { stallListeners.delete(listener) }
+}
+
 // The one message api.ts throws for network-layer failures (no HTTP response
 // at all). Toast surfaces drop anything carrying it: offline every request
 // fails identically, and the connection indicator already shows the status.

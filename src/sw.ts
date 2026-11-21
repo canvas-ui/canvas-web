@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 import { SHARE_CACHE, stageShare } from './lib/share-inbox'
+import { isGatewayFailure } from './lib/api-network-error'
 import { cleanupOutdatedCaches, matchPrecache, precacheAndRoute } from 'workbox-precaching'
 import {
   CONTENT_CACHE,
@@ -150,17 +151,39 @@ async function handleContent(event: FetchEvent, request: Request): Promise<Respo
   return res
 }
 
+// How long a request may wait on the network before the cached copy answers.
+// A dead route to the server neither answers nor refuses.
+const API_WAIT_MS = 8000
+const NAVIGATION_WAIT_MS = 4000
+
+const after = (ms: number) => new Promise<undefined>(resolve => setTimeout(resolve, ms))
+
+// The cached copy of an API read, stamped so the app's connectivity tracking
+// does not read a cache-served answer as "server reachable" (lib/api.ts).
+async function cachedApi(event: FetchEvent, request: Request): Promise<Response | undefined> {
+  const cache = await caches.open(API_CACHE)
+  const hit = await cache.match(request.url, { ignoreVary: true })
+  if (!hit) return undefined
+  event.waitUntil(touchEntry(request.url).catch(() => {}))
+  const headers = new Headers(hit.headers)
+  headers.set('X-Canvas-Offline', 'fallback')
+  return new Response(hit.body, { status: hit.status, statusText: hit.statusText, headers })
+}
+
 // Network-first for API JSON: the live answer always wins; the cached copy
-// exists only for when the server is unreachable.
+// answers when the server is unreachable: a failed request, a proxy's error
+// page, or no answer within API_WAIT_MS. Without a cached copy the page gets
+// whatever the network gives, however late.
 async function handleApi(event: FetchEvent, request: Request): Promise<Response> {
   const settings = await offlineSettings()
   if (!settings.enabled || isExcluded(settings, new URL(request.url).pathname)) return fetch(request)
 
-  try {
-    const res = await fetch(request)
+  let unreachable: Response | undefined
+  const network = fetch(request).then((res) => {
+    if (isGatewayFailure(res)) { unreachable = res; throw new Error('Server unreachable') }
     if (res.ok && res.status === 200) {
       const clone = res.clone()
-      event.waitUntil((async () => {
+      const stored = (async () => {
         try {
           const cache = await caches.open(API_CACHE)
           await cache.put(request.url, clone)
@@ -168,34 +191,38 @@ async function handleApi(event: FetchEvent, request: Request): Promise<Response>
         } catch (err) {
           console.warn('[sw] offline api cache put failed', err)
         }
-      })())
+      })()
+      // An answer arriving after the cached copy was served finds the event closed.
+      try { event.waitUntil(stored) } catch { /* the put runs on regardless */ }
     }
     return res
+  })
+  network.catch(() => {})
+
+  try {
+    return await Promise.race([network, after(API_WAIT_MS)]) ?? await cachedApi(event, request) ?? await network
   } catch (err) {
-    const cache = await caches.open(API_CACHE)
-    const hit = await cache.match(request.url, { ignoreVary: true })
-    if (hit) {
-      event.waitUntil(touchEntry(request.url).catch(() => {}))
-      // Stamp the fallback so the app's connectivity tracking doesn't read a
-      // cache-served success as "server reachable" (lib/connectivity.ts).
-      const headers = new Headers(hit.headers)
-      headers.set('X-Canvas-Offline', 'fallback')
-      return new Response(hit.body, { status: hit.status, statusText: hit.statusText, headers })
-    }
+    const hit = await cachedApi(event, request)
+    if (hit) return hit
+    if (unreachable) return unreachable
     throw err
   }
 }
 
+// Offline, a proxy answering for an unreachable server, or no answer within
+// NAVIGATION_WAIT_MS: serve the SPA shell so the client router can pick up the
+// URL (crucially ?token=…, so a stashed share is still recoverable).
 async function handleNavigation(request: Request): Promise<Response> {
+  const network = fetch(request)
+  network.catch(() => {})
+  let response: Response | undefined
   try {
-    return await fetch(request)
-  } catch {
-    // Offline: serve the SPA shell so the client router can pick up the URL
-    // (crucially ?token=…, so a stashed share is still recoverable).
-    const cached = await matchPrecache('/index.html')
-    if (cached) return cached
-    throw new Error('offline and index.html is not precached')
-  }
+    response = await Promise.race([network, after(NAVIGATION_WAIT_MS)])
+    if (response && !isGatewayFailure(response)) return response
+  } catch { /* fall through to the precached shell */ }
+  const cached = await matchPrecache('/index.html')
+  if (cached) return cached
+  return response ?? network
 }
 
 // Never rejects: a rejected respondWith on a share navigation surfaces as

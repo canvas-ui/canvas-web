@@ -1,4 +1,4 @@
-import { isOffline, reportNetworkFailure, reportNetworkSuccess, onConnectivityChange } from './connectivity'
+import { isOffline, reportNetworkFailure, reportNetworkSuccess, onConnectivityChange, onStalledRequest } from './connectivity'
 
 // Probes never gate document requests: the service worker can continue serving
 // cached metadata/content even while the server is unreachable.
@@ -43,6 +43,9 @@ export function createConnectionMonitor(url: string, recovered: () => void) {
   }
 
   const unsubscribe = onConnectivityChange(schedule)
+  // A request that gets no answer says nothing by itself; the probe, which
+  // gives up after five seconds, settles whether the server is reachable.
+  const unsubscribeStall = onStalledRequest(() => { void retry() })
   const online = () => { void retry() }
   window.addEventListener('online', online)
   schedule()
@@ -53,6 +56,7 @@ export function createConnectionMonitor(url: string, recovered: () => void) {
       clearTimeout(timer)
       controller?.abort()
       unsubscribe()
+      unsubscribeStall()
       window.removeEventListener('online', online)
     },
   }

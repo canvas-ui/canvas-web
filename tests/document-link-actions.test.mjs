@@ -108,8 +108,9 @@ for (const treeName of ['context', 'backends']) {
       onDeleteDocument: id => calls.push(['index', id]), onDeleteDocuments: ids => calls.push(['index-many', ...ids]),
       onDestroyDocument: id => calls.push(['all', id]), onDestroyDocuments: ids => calls.push(['all-many', ...ids]),
       setBackendPanel: panel => calls.push(['backend', panel.mode, ...panel.ids]), setSelectedDocuments() {},
+      canSaveToFolder: () => true, saveToFolder: ids => calls.push(['folder', ...ids]), downloadToDisk: ids => calls.push(['download', ...ids]),
     }
-    for (const icon of ['Eye', 'Link', 'Download', 'Trash2', 'HardDrive', 'ArrowRightLeft']) dependencies[icon] = icon
+    for (const icon of ['Eye', 'Link', 'Download', 'FolderOpen', 'Trash2', 'HardDrive', 'ArrowRightLeft']) dependencies[icon] = icon
     const actions = loadHandler('../src/components/common/document-list.tsx', 'documentActions', dependencies)
     for (const ids of [[1], [1, 2]]) {
       const menu = actions(ids)
@@ -118,11 +119,13 @@ for (const treeName of ['context', 'backends']) {
       assert.deepEqual(Array.from(deletions, item => item.label), [
         `Delete from backend…${suffix}`, `Delete from index${suffix}`, `Delete from index and all backends${suffix}`,
       ])
-      for (const action of deletions) await action.run()
+      const toDisk = menu.filter(item => ['save-to-folder', 'download'].includes(item.id))
+      assert.deepEqual(Array.from(toDisk, item => item.label), [`Save to folder…${suffix}`, ids.length > 1 ? 'Download as zip (2)' : 'Download'])
+      for (const action of [...toDisk, ...deletions]) await action.run()
     }
     assert.deepEqual(calls, [
-      ['backend', 'delete', 1], ['index', 1], ['all', 1],
-      ['backend', 'delete', 1, 2], ['index-many', 1, 2], ['all-many', 1, 2],
+      ['folder', 1], ['download', 1], ['backend', 'delete', 1], ['index', 1], ['all', 1],
+      ['folder', 1, 2], ['download', 1, 2], ['backend', 'delete', 1, 2], ['index-many', 1, 2], ['all-many', 1, 2],
     ])
   })
 }

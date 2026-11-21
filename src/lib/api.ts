@@ -2,8 +2,8 @@ import { CanvasApiClient, CanvasError, isNetworkError } from '@augmentd-labs/can
 import { type ResponseEnvelope } from '@augmentd-labs/canvas-protocol'
 import { API_URL } from '@/config/api'
 import { handleApiError } from './error-handler'
-import { isBrowserNetworkFailure } from './api-network-error'
-import { reportNetworkFailure, reportNetworkSuccess } from './connectivity'
+import { isBrowserNetworkFailure, isGatewayFailure } from './api-network-error'
+import { isOffline, onConnectivityChange, reportNetworkFailure, reportNetworkSuccess, reportStalledRequest, STALLED_REQUEST_MS } from './connectivity'
 
 // JSON transport comes from the shared workspace client on its DEFAULT
 // unwrapping semantics: api.get/post/... resolve to the envelope's payload,
@@ -127,16 +127,46 @@ function toClientPath(endpoint: string): string {
   return endpoint;
 }
 
+// Reads still waiting for an answer after STALLED_REQUEST_MS. They are given
+// up once the server is known to be unreachable, so a view shows its offline
+// state instead of loading forever. Writes are left alone: the server may be
+// acting on one whose answer is slow.
+const stalledReads = new Set<() => void>()
+onConnectivityChange((offline) => {
+  if (offline) for (const giveUp of [...stalledReads]) giveUp()
+})
+
 const webFetch: typeof fetch = (input, init = {}) => {
+  const own = new AbortController()
+  let gaveUp = false
+  const giveUp = () => { gaveUp = true; own.abort() }
+  const timer = setTimeout(() => {
+    reportStalledRequest()
+    if ((init.method || 'GET').toUpperCase() !== 'GET') return
+    if (isOffline()) giveUp()
+    else stalledReads.add(giveUp)
+  }, STALLED_REQUEST_MS)
+  const settle = () => { clearTimeout(timer); stalledReads.delete(giveUp) }
+  const signal = init.signal ? AbortSignal.any([init.signal, own.signal]) : own.signal
+
   // Always include credentials for cookie support (historical behavior).
-  return fetch(input, { ...init, credentials: 'include' }).then((response) => {
+  return fetch(input, { ...init, credentials: 'include', signal }).then((response) => {
+    settle()
     // Connectivity is judged HERE, on the raw response: a service-worker
     // cache fallback is stamped X-Canvas-Offline and must not count as the
-    // server being reachable, while any real HTTP response (even a 4xx) does.
+    // server being reachable, while any answer from Canvas (even a 4xx) does.
+    // A proxy's error page for an unreachable server is no answer at all, so
+    // it fails the way a refused connection does.
+    if (isGatewayFailure(response)) {
+      reportNetworkFailure();
+      throw new TypeError('Failed to fetch');
+    }
     if (response.headers.get('x-canvas-offline') === 'fallback') reportNetworkFailure();
     else reportNetworkSuccess();
     return response;
   }, (err) => {
+    settle()
+    if (gaveUp) throw new TypeError('Failed to fetch');
     if (!init.signal?.aborted && !(err instanceof Error && err.name === 'AbortError')) {
       reportNetworkFailure();
     }

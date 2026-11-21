@@ -109,11 +109,14 @@ test('unknown origins and similarly named folders are not treated as the same fo
 
 test('document drags carry their folder scope, but workspace-wide results do not claim a source folder', () => {
   for (const scope of ['path', 'workspace']) {
-    let payload
+    let payload, dragOut
     const handler = loadHandler('../src/components/common/document-list.tsx', 'handleMultiDragStart', {
       selectedDocuments: new Set([1, 2]), setSelectedDocuments() {}, contextPath: '/Notes', treeName: 'directory', workspaceId: 'studio', scope,
+      documents: [{ id: 1 }, { id: 2 }, { id: 3 }], archiveName: 'Notes',
+      setDragOutData: (_, workspaceId, dragged, archiveName) => { dragOut = [workspaceId, dragged.map(d => d.id), archiveName] },
     })
     handler({ dataTransfer: { setData: (_, raw) => { payload = JSON.parse(raw) }, setDragImage() {} } }, 1)
+    assert.deepEqual(dragOut, ['studio', [1, 2], 'Notes'])
     assert.deepEqual(payload.documentIds, [1, 2])
     assert.equal(payload.sourceWorkspaceId, 'studio')
     assert.equal(payload.sourceTreeName, 'directory')

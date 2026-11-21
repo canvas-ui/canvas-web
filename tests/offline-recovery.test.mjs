@@ -151,6 +151,7 @@ test('connection checks bypass cache, coalesce retries, and keep cached response
       reportNetworkFailure: () => setOffline(true),
       reportNetworkSuccess: () => setOffline(false),
       onConnectivityChange(fn) { listeners.add(fn); return () => listeners.delete(fn) },
+      onStalledRequest(fn) { listeners.add(fn); return () => listeners.delete(fn) },
     },
   }, {
     AbortController,
