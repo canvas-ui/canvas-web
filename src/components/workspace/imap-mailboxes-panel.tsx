@@ -376,7 +376,7 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
             <input type="checkbox" checked={form.tls} onChange={(e) => change('tls', e.target.checked)} /> TLS
           </label>
           <label className="flex items-center gap-2">
-            <input type="checkbox" checked={form.allowSelfSigned} onChange={(e) => change('allowSelfSigned', e.target.checked)} /> Allow self-signed
+            <input type="checkbox" checked={form.allowSelfSigned} onChange={(e) => change('allowSelfSigned', e.target.checked)} /> Allow self-signed certificates (IMAP and SMTP)
           </label>
         </div>
       </form>
