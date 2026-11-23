@@ -16,8 +16,10 @@ function draftKey(workspace: string, replyId?: number, forward = false) {
 
 const TITLES: Record<ComposeMode, string> = { reply: 'Reply', replyAll: 'Reply all', forward: 'Forward' }
 
-export function MessageComposer({ workspaceId, replyToDocumentId, mode = 'reply', originalSubject, initialAccount, testEmail = false, embedded = false, wide = false, onClose }: {
+export function MessageComposer({ workspaceId, replyToDocumentId, mode = 'reply', originalSubject, initialAccount, files, testEmail = false, embedded = false, wide = false, onClose }: {
   workspaceId: string
+  /** File documents of the workspace sent as attachments of a new message. */
+  files?: Array<{ documentId: number; name: string }>
   initialAccount?: { driver: MessageAccount['driver']; address: string }
   testEmail?: boolean
   replyToDocumentId?: number
@@ -32,9 +34,13 @@ export function MessageComposer({ workspaceId, replyToDocumentId, mode = 'reply'
   onClose: () => void
 }) {
   const forward = !!replyToDocumentId && mode === 'forward'
-  const key = testEmail ? `${draftKey(workspaceId)}:smtp-test:${initialAccount?.address}` : draftKey(workspaceId, replyToDocumentId, forward)
+  const hasFiles = !!files?.length
+  const key = testEmail ? `${draftKey(workspaceId)}:smtp-test:${initialAccount?.address}`
+    : hasFiles ? `${draftKey(workspaceId)}:send:${initialAccount?.driver}:${initialAccount?.address}:${files.map((file) => file.documentId).join(',')}`
+      : draftKey(workspaceId, replyToDocumentId, forward)
   const fresh = (): MessageSend => ({ requestId: crypto.randomUUID(), text: testEmail ? 'This is a test email sent from Canvas to check the SMTP configuration.' : '', replyToDocumentId,
     ...initialAccount, ...(testEmail ? { subject: 'Canvas SMTP test' } : {}),
+    ...(hasFiles ? { files: files.map(({ documentId }) => ({ documentId })) } : {}),
     ...(forward ? { forward: true } : replyToDocumentId ? { replyAll: mode === 'replyAll', quote: true } : {}) })
   const [draft, setDraft] = useState<MessageSend>(() => {
     try {
@@ -139,7 +145,7 @@ export function MessageComposer({ workspaceId, replyToDocumentId, mode = 'reply'
   }
   const replyRecipients = draft.replyAll ? replyTarget?.allRecipients : replyTarget?.recipients
   const locked = busy || attempted || picturesBusy
-  const title = testEmail ? 'Send test email' : replyToDocumentId ? (forward ? TITLES.forward : TITLES[draft.replyAll ? 'replyAll' : 'reply']) : 'New message'
+  const title = testEmail ? 'Send test email' : hasFiles ? (files.length > 1 ? `Send ${files.length} files` : 'Send file') : replyToDocumentId ? (forward ? TITLES.forward : TITLES[draft.replyAll ? 'replyAll' : 'reply']) : 'New message'
   const subjectPlaceholder = replyToDocumentId && originalSubject
     ? `${forward ? 'Fwd' : 'Re'}: ${originalSubject.replace(forward ? /^(fwd?|fw):\s*/i : /^re:\s*/i, '')}`
     : ''
@@ -180,7 +186,8 @@ export function MessageComposer({ workspaceId, replyToDocumentId, mode = 'reply'
       ? <div className={editorHost}><LazyMarkdownEditor format="markdown" editable={!locked} value={draft.text} placeholder="Write a message…" fill={wide} onChange={(text) => patch({ text: text.slice(0, 32000) })} /></div>
       : <textarea aria-label="Message text" className={cn('w-full rounded border bg-background p-2 text-sm', wide && 'md:min-h-0 md:flex-1 md:resize-none')} rows={5} maxLength={32000} disabled={locked} value={draft.text} onChange={(e) => patch({ text: e.target.value })} placeholder="Write a message…" />}
   </div>
-  const pictures = (isEmail || isWhatsApp) && <div className={cn('space-y-2', wide && 'md:col-start-2 md:row-start-2 md:overflow-y-auto')}>
+  // WhatsApp carries one file or one picture per message.
+  const pictures = (isEmail || (isWhatsApp && !hasFiles)) && <div className={cn('space-y-2', wide && 'md:col-start-2 md:row-start-2 md:overflow-y-auto')}>
     <label className="block text-xs">Paste a picture into the reply, or attach one<input aria-label="Attach pictures" className="block" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple={!isWhatsApp} disabled={locked} onChange={(event) => { void addPictures(Array.from(event.target.files || [])); event.target.value = '' }} /></label>
     {draft.images?.map((image, index) => <div key={index} className="flex items-center gap-2"><img className="h-20 w-20 rounded object-contain" src={`data:${image.mimeType};base64,${image.base64}`} alt={image.name} /><span className="text-xs">{image.name}</span><Button size="sm" variant="ghost" disabled={locked} onClick={() => patch({ images: draft.images?.filter((_, position) => position !== index) })}>Remove picture</Button></div>)}
     {isWhatsApp && <p className="text-xs text-muted-foreground">Bold, italic, strikethrough and code are supported. Your reply becomes the picture caption.</p>}
@@ -189,10 +196,14 @@ export function MessageComposer({ workspaceId, replyToDocumentId, mode = 'reply'
     if (!(isEmail || isWhatsApp)) return
     const files = Array.from(event.clipboardData.files)
     if (files.some((file) => file.type.startsWith('image/'))) { event.preventDefault(); event.stopPropagation(); void addPictures(files) }
-  }} className={cn('flex flex-col gap-3', embedded ? 'p-4' : 'max-h-[70dvh] overflow-y-auto rounded-md border bg-card p-3', wide && 'md:h-full md:min-h-0 md:p-6')} aria-label={replyToDocumentId ? `${title} to message` : 'New message'}>
+  }} className={cn('flex flex-col gap-3', embedded ? 'p-4' : 'max-h-[70dvh] overflow-y-auto rounded-md border bg-card p-3', wide && 'md:h-full md:min-h-0 md:p-6')} aria-label={replyToDocumentId ? `${title} to message` : hasFiles ? title : 'New message'}>
     {!embedded && <div className="flex justify-between items-center"><strong className="text-sm">{title}</strong><Button size="sm" variant="ghost" onClick={onClose}>Close</Button></div>}
     <div className={cn('flex flex-col gap-3', wide && 'md:grid md:min-h-0 md:flex-1 md:grid-cols-[minmax(0,1fr)_18rem] md:grid-rows-[auto_minmax(0,1fr)] md:gap-x-6')}>
       {addressing}
+      {hasFiles && <div className={cn('text-xs', wide && 'md:col-start-2')}>
+        <p className="text-muted-foreground">{files.length > 1 ? 'Attachments' : 'Attachment'}</p>
+        <ul aria-label="Attachments">{files.map((file) => <li key={file.documentId} className="truncate" title={file.name}>{file.name}</li>)}</ul>
+      </div>}
       {body}
       {pictures}
     </div>
@@ -204,7 +215,7 @@ export function MessageComposer({ workspaceId, replyToDocumentId, mode = 'reply'
           if (!window.confirm(attempted ? 'This message may already have been sent. Discard this draft only after checking the conversation.' : 'Discard this draft?')) return
           setDraft({ ...fresh(), driver: draft.driver, address: draft.address }); setAttempted(false); setReceipt(null); setError('')
         }}>Discard draft</Button>
-        {receipt?.status !== 'accepted' && <Button size="sm" disabled={busy || picturesBusy || (!attempted && (!account || (!hasText && !hasPictures && !(isEmail && forward)) || (forward && !draft.to?.some((s) => s.trim())))) || !online} onClick={() => void send()}>{busy ? 'Sending…' : attempted ? 'Check send status' : 'Send'}</Button>}
+        {receipt?.status !== 'accepted' && <Button size="sm" disabled={busy || picturesBusy || (!attempted && (!account || (!hasText && !hasPictures && !hasFiles && !(isEmail && forward)) || (forward && !draft.to?.some((s) => s.trim())))) || !online} onClick={() => void send()}>{busy ? 'Sending…' : attempted ? 'Check send status' : 'Send'}</Button>}
       </div>
       {attempted && receipt?.status !== 'accepted' && <p className="text-xs text-muted-foreground">Do not start another send until you have checked the conversation. The same request will not be delivered twice by Canvas.</p>}
     </div>

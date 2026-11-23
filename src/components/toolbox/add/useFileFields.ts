@@ -4,6 +4,8 @@ import { useTagSuggestions } from './useTagSuggestions'
 import { useGeotag, type Geotag } from '@/hooks/useGeotag'
 import type { BlobUploadResult } from '@/services/blobs'
 import type { DocumentGeo } from '@/types/workspace'
+import { bulkEditDocument } from '@/lib/bulk-edit'
+import { getWorkspaceDocument, updateWorkspaceDocument } from '@/services/workspace'
 
 const FILE_SCHEMA = 'data/schema/file'
 const FILE_SCHEMA_VERSION = '3.0'
@@ -65,4 +67,20 @@ export function buildFileDocument(
       ...(opts.geo ? { geo: opts.geo } : {}),
     },
   }
+}
+
+/**
+ * buildFileDocument's tags, comment and location for a File document the
+ * server created itself (a direct backend upload).
+ */
+export async function annotateFileDocument(
+  workspaceName: string,
+  docId: number,
+  opts: { tags?: string[]; comment?: string; geo?: DocumentGeo | null } = {},
+): Promise<void> {
+  const tags = opts.tags ?? []
+  const comment = opts.comment?.trim()
+  if (!tags.length && !comment && !opts.geo) return
+  const doc = await getWorkspaceDocument(workspaceName, docId)
+  await updateWorkspaceDocument(workspaceName, bulkEditDocument(doc, tags, opts.geo ?? null, comment || undefined))
 }

@@ -207,7 +207,7 @@ function uploadWithProgress<T>(
       if (xhr.status >= 200 && xhr.status < 300 && envelope?.payload) {
         resolve(envelope.payload)
       } else {
-        reject(new Error(xhr.status === 412 ? 'A file with this name already exists. Rename the file before uploading; nothing was overwritten.' : envelope?.message || `Upload failed (HTTP ${xhr.status})`))
+        reject(Object.assign(new Error(xhr.status === 412 ? 'A file with this name already exists. Rename the file before uploading; nothing was overwritten.' : envelope?.message || `Upload failed (HTTP ${xhr.status})`), { statusCode: xhr.status }))
       }
     })
     xhr.addEventListener('error', () => {

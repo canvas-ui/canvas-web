@@ -30,3 +30,10 @@ export function backendUploadKey(folder: string, filename: string): string {
   }
   return [folder.replace(/^\/+|\/+$/g, ''), filename].filter(Boolean).join('/')
 }
+
+/** `report.pdf` → `report (2).pdf` for attempt 2; attempt 0 is the name itself. */
+export function numberedFilename(filename: string, attempt: number): string {
+  if (attempt < 1) return filename
+  const dot = filename.lastIndexOf('.')
+  return dot > 0 ? `${filename.slice(0, dot)} (${attempt})${filename.slice(dot)}` : `${filename} (${attempt})`
+}

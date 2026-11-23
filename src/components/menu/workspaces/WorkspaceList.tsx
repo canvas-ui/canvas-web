@@ -255,12 +255,13 @@ export function WorkspaceList() {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation()
-                          selectEntity(workspaceAddress(ws))
-                          // Mobile gets the section list as its own step (the
+                          // Open the section list in M2 explicitly: the URL sync
+                          // keeps a closed M2 closed for the selected workspace.
+                          // Mobile stops there, the list is its own step (the
                           // drawer closes on navigation, so jumping straight to
                           // a section would strand the user in one pane).
-                          if (isMobile) { openM2('settings', workspaceAddress(ws)) }
-                          else { navigate(`/workspaces/${workspaceAddress(ws)}/settings/general`) }
+                          openM2('settings', workspaceAddress(ws))
+                          if (!isMobile) navigate(`/workspaces/${workspaceAddress(ws)}/settings/general`)
                         }}
                         className="flex items-center justify-center w-6 h-6 rounded hover:bg-muted-foreground/10 text-muted-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                         disabled={!canManage}

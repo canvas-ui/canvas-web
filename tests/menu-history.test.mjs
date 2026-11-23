@@ -161,3 +161,21 @@ test('desktop M2 stays closed while navigating content in the same workspace', (
     assert.equal(ui.render().state.m2Open, true)
   }
 })
+
+test('desktop: the M1 settings gear opens the section list although M2 was closed', () => {
+  const ui = setup({ mobile: false, url: '/workspaces/studio/trees/email/path/Inbox' })
+  ui.render().closeM2()
+  // Selecting and navigating alone keeps the closed M2 closed: the settings
+  // page would open without its section list.
+  ui.render().selectEntity('studio')
+  ui.navigate('/workspaces/studio/settings/general')
+  assert.equal(ui.render().state.m2Open, false)
+
+  ui.navigate('/workspaces/studio/trees/email/path/Inbox')
+  assert.equal(ui.render().state.m2Open, false)
+  ui.render().openM2('settings', 'studio')
+  ui.navigate('/workspaces/studio/settings/general')
+  const { state } = ui.render()
+  assert.equal(state.m2Open, true)
+  assert.equal(state.m2View, 'settings')
+})

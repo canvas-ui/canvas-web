@@ -16,7 +16,6 @@ function statusLabel(item: UploadItem): string {
     case 'checking': return 'checking'
     case 'uploading': return `${Math.round(item.progress * 100)}%`
     case 'linking': return 'saving'
-    case 'storing': return 'copying to storage'
     case 'done': return item.resumed ? 'already uploaded' : 'done'
     case 'error': return item.error || 'failed'
     default: return formatSize(item.file.size)
@@ -41,7 +40,7 @@ function StatusIcon({ item }: { item: UploadItem }) {
 function ProgressBar({ item }: { item: UploadItem }) {
   const active = item.status !== 'queued'
   if (!active) return null
-  const fraction = item.status === 'done' || item.status === 'error' || item.status === 'linking' || item.status === 'storing'
+  const fraction = item.status === 'done' || item.status === 'error' || item.status === 'linking'
     ? 1
     : item.status === 'checking' ? 0 : item.progress
   return (

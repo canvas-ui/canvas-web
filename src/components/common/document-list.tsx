@@ -20,7 +20,7 @@ import { DocumentSelectionArea } from './document-selection-area'
 import { CopyToWorkspacePanel } from '@/components/menu/shared/CopyToWorkspacePanel'
 import { BulkEditDialog } from './BulkEditDialog'
 import { Document, TreeNode } from '@/types/workspace'
-import { File, FolderPlus, FileJson, Calendar, CalendarDays, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, MoreHorizontal, Play, Table as TableIcon, HardDrive, ArrowRightLeft, Loader2, Folder, FolderOpen, CornerLeftUp, Plus, Sparkles } from 'lucide-react'
+import { File, FolderPlus, FileJson, Calendar, CalendarDays, Hash, Eye, ExternalLink, Globe, X, Trash2, Copy, Move, Clipboard, CheckSquare, Square, Download, Upload, Search, Save, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Scissors, Link, Link2, Pencil, PanelRight, FileSearch, LayoutGrid, LayoutList, MoreVertical, MoreHorizontal, Play, Table as TableIcon, HardDrive, ArrowRightLeft, Loader2, Folder, FolderOpen, CornerLeftUp, Plus, Sparkles, Send, Mail, MessageCircle } from 'lucide-react'
 import { LinkToCard, type LinkToTarget, type LinkToRelation } from '@/components/menu/shared/LinkToCard'
 import { DocumentActionDialog } from './document-action-dialog'
 import { isSameDocumentFolder, type DocumentDragPayload } from '@/lib/document-drag'
@@ -47,7 +47,9 @@ import {
 import { useSortableData } from '@/components/ui/use-sortable-data'
 import { Button } from '@/components/ui/button'
 import { ActionMenuHost, anchorFromElement, dispatchActionShortcut, formatShortcut, isMenuKey, isTextInteraction, type ActionAnchor, type ActionItem } from '@/components/common/action-menu'
-import { getExternalUrl, getDocumentDisplayInfo, getLocationFilename } from '@/lib/document-display'
+import { FILE_SCHEMA, getExternalUrl, getDocumentDisplayInfo, getLocationFilename } from '@/lib/document-display'
+import { MESSAGE_DRIVER_LABELS, sendingAccounts, type MessageAccount } from '@/services/messages'
+import { MessageComposerDialog } from './MessageComposerDialog'
 import { announceRelationsChanged } from '@/lib/relation-events'
 import { ObjectPropertiesModal } from '@/components/object-card/ObjectPropertiesModal'
 import { useMirrorSaveState } from '@/lib/remote-mirror'
@@ -62,6 +64,9 @@ import { groupByDate, documentTimelineDate } from '@/lib/date-groups'
 import { MarkdownView } from './markdown-view'
 import { FolderContextMenu } from '@/components/workspaces/FolderContextMenu'
 import { classifyMime } from '@/components/renderers/types'
+
+// The messaging route takes at most this many files per message.
+const MAX_SEND_FILES = 8
 
 interface DocumentListProps {
   readingPane?: boolean
@@ -1112,6 +1117,18 @@ export function DocumentList({ readingPane = false, externalSearchQuery, toolbar
   // null = the folder itself (empty-area menu).
   const [menu, setMenu] = useState<{ anchor: ActionAnchor; ids: number[] | null } | null>(null)
   const [linkPanelIds, setLinkPanelIds] = useState<number[] | null>(null)
+  // "Send to": the accounts are asked for when a document menu opens.
+  const [sendAccounts, setSendAccounts] = useState<{ workspaceId: string; accounts: MessageAccount[] } | null>(null)
+  const [sendTo, setSendTo] = useState<{ account: MessageAccount; files: Array<{ documentId: number; name: string }> } | null>(null)
+  const menuHasDocuments = Boolean(menu?.ids)
+  useEffect(() => {
+    if (!workspaceId || !menuHasDocuments) return
+    let cancelled = false
+    sendingAccounts(workspaceId)
+      .then(accounts => { if (!cancelled) setSendAccounts({ workspaceId, accounts }) })
+      .catch(() => { /* no accounts to offer (a public share, or offline) */ })
+    return () => { cancelled = true }
+  }, [workspaceId, menuHasDocuments])
   // "Add related document…": opens the add panel with the selection as the
   // relation targets of whatever gets created (see toolbox add/RelationFields).
   // Optional provider: the list also renders on public shares without a shell.
@@ -1655,6 +1672,27 @@ export function DocumentList({ readingPane = false, externalSearchQuery, toolbar
     add(workspaceId && canSaveToFolder() && { id: 'save-to-folder', group: 'organize', label: `Save to folder…${count}`, icon: FolderOpen, run: () => saveToFolder(ids) })
     add(workspaceId && { id: 'download', group: 'organize', label: n > 1 ? `Download as zip${count}` : 'Download', icon: Download, run: () => downloadToDisk(ids) })
     add({ id: 'export', group: 'organize', label: `Export…${count}`, icon: Download, run: () => setShowExportModal(true) })
+
+    // Send to: files leave as attachments through an account that can send.
+    const accounts = sendAccounts && sendAccounts.workspaceId === workspaceId ? sendAccounts.accounts : []
+    const attachments = ids.flatMap(id => {
+      const doc = documents.find(d => d.id === id)
+      return doc?.schema === FILE_SCHEMA ? [{ documentId: doc.id, name: getLocationFilename(doc) || getDocumentDisplayInfo(doc).title }] : []
+    })
+    add(accounts.length > 0 && attachments.length === n && n <= MAX_SEND_FILES && {
+      id: 'send-to', group: 'send', label: `Send to${count}`, icon: Send,
+      children: accounts.map(account => {
+        const oneFileOnly = account.driver === 'whatsapp' && n > 1
+        return {
+          id: `send-to:${account.driver}:${account.address}`,
+          label: `${MESSAGE_DRIVER_LABELS[account.driver]} · ${account.from || account.address}`,
+          icon: account.driver === 'imap' ? Mail : MessageCircle,
+          disabled: oneFileOnly,
+          hint: oneFileOnly ? 'WhatsApp takes one file per message' : undefined,
+          run: () => setSendTo({ account, files: attachments }),
+        }
+      }),
+    })
 
     // Delete key = the safe, reversible one (unlink). Deleting from the index
     // has no confirmation upstream, so it gets no shortcut.
@@ -2254,6 +2292,15 @@ export function DocumentList({ readingPane = false, externalSearchQuery, toolbar
         </div>
       )}
       </DocumentSelectionArea>
+      {sendTo && workspaceId && (
+        <MessageComposerDialog
+          key={`${sendTo.account.driver}:${sendTo.account.address}:${sendTo.files.map(file => file.documentId).join(',')}`}
+          workspaceId={workspaceId}
+          initialAccount={{ driver: sendTo.account.driver, address: sendTo.account.address }}
+          files={sendTo.files}
+          onClose={() => setSendTo(null)}
+        />
+      )}
       {menu && (
         <ActionMenuHost
           anchor={menu.anchor}

@@ -109,8 +109,15 @@ for (const treeName of ['context', 'backends']) {
       onDestroyDocument: id => calls.push(['all', id]), onDestroyDocuments: ids => calls.push(['all-many', ...ids]),
       setBackendPanel: panel => calls.push(['backend', panel.mode, ...panel.ids]), setSelectedDocuments() {},
       canSaveToFolder: () => true, saveToFolder: ids => calls.push(['folder', ...ids]), downloadToDisk: ids => calls.push(['download', ...ids]),
+      sendAccounts: { workspaceId: 'studio', accounts: [
+        { driver: 'imap', address: 'office', from: 'office@example.com', canSend: true },
+        { driver: 'whatsapp', address: 'phone', canSend: true },
+      ] },
+      FILE_SCHEMA: 'data/schema/file', MAX_SEND_FILES: 8, MESSAGE_DRIVER_LABELS: { imap: 'E-mail', whatsapp: 'WhatsApp' },
+      getLocationFilename: doc => `invoice-${doc.id}.pdf`, getDocumentDisplayInfo: () => ({ title: '' }),
+      setSendTo: send => calls.push(['send', send.account.driver, ...send.files.map(file => file.name)]),
     }
-    for (const icon of ['Eye', 'Link', 'Download', 'FolderOpen', 'Trash2', 'HardDrive', 'ArrowRightLeft']) dependencies[icon] = icon
+    for (const icon of ['Eye', 'Link', 'Download', 'FolderOpen', 'Trash2', 'HardDrive', 'ArrowRightLeft', 'Send', 'Mail', 'MessageCircle']) dependencies[icon] = icon
     const actions = loadHandler('../src/components/common/document-list.tsx', 'documentActions', dependencies)
     for (const ids of [[1], [1, 2]]) {
       const menu = actions(ids)
@@ -122,10 +129,17 @@ for (const treeName of ['context', 'backends']) {
       const toDisk = menu.filter(item => ['save-to-folder', 'download'].includes(item.id))
       assert.deepEqual(Array.from(toDisk, item => item.label), [`Save to folder…${suffix}`, ids.length > 1 ? 'Download as zip (2)' : 'Download'])
       for (const action of [...toDisk, ...deletions]) await action.run()
+      // Send to: one entry per sending account; WhatsApp carries a single file.
+      const sendTo = menu.find(item => item.id === 'send-to')
+      assert.equal(sendTo.label, `Send to${suffix}`)
+      assert.deepEqual(Array.from(sendTo.children, item => [item.label, !!item.disabled]), [
+        ['E-mail · office@example.com', false], ['WhatsApp · phone', ids.length > 1],
+      ])
+      await sendTo.children[0].run()
     }
     assert.deepEqual(calls, [
-      ['folder', 1], ['download', 1], ['backend', 'delete', 1], ['index', 1], ['all', 1],
-      ['folder', 1, 2], ['download', 1, 2], ['backend', 'delete', 1, 2], ['index-many', 1, 2], ['all-many', 1, 2],
+      ['folder', 1], ['download', 1], ['backend', 'delete', 1], ['index', 1], ['all', 1], ['send', 'imap', 'invoice-1.pdf'],
+      ['folder', 1, 2], ['download', 1, 2], ['backend', 'delete', 1, 2], ['index-many', 1, 2], ['all-many', 1, 2], ['send', 'imap', 'invoice-1.pdf', 'invoice-2.pdf'],
     ])
   })
 }

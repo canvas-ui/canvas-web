@@ -6,7 +6,7 @@ import { useToolbox } from '../use-toolbox'
 import { useRelationFields } from './useRelationFields'
 import { RelationFields } from './RelationFields'
 import { useAddTarget, describeTarget, resolveUploadWorkspace } from './useAddTarget'
-import { useFileFields, buildFileDocument } from './useFileFields'
+import { useFileFields, buildFileDocument, annotateFileDocument } from './useFileFields'
 import { FileMetaFields } from './FileMetaFields'
 import { useStorageFields } from './useStorageFields'
 import { StorageFields } from './StorageFields'
@@ -79,6 +79,7 @@ export function FileForm({ capture = false }: { capture?: boolean } = {}) {
       enqueueUpload(items.map((it) => it.file), target, {
         buildDoc: (blob, file) => buildFileDocument(blob, file, { tags, comment, geo }),
         storage: isBackend ? null : store.storage,
+        annotate: (workspaceName, docId) => annotateFileDocument(workspaceName, docId, { tags, comment, geo }),
         onSettled: async (summary) => {
           const relFailed = await rel.write(summary.docIds)
           if (relFailed) showErrorToast('Files uploaded, but some relations failed')
@@ -128,7 +129,7 @@ export function FileForm({ capture = false }: { capture?: boolean } = {}) {
 
       {!isBackend && <FileMetaFields fields={meta} idPrefix="file" multiple={items.length > 1} />}
 
-      {!isBackend && <StorageFields fields={store} />}
+      {!isBackend && <StorageFields fields={store} idPrefix="file" />}
 
       <RelationFields f={rel} idPrefix="file" />
 

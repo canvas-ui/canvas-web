@@ -75,6 +75,20 @@ export function notifyWorkspaceDocumentsChanged(target: AddTarget): void {
   )
 }
 
+// Resolve the actual tree type by name so directory / virtual-directory trees
+// get treeType:'directory' (the server otherwise builds a context selector and
+// throws "Tree is not a context tree").
+async function resolveTreeType(target: Extract<NonNullable<AddTarget>, { mode: 'workspace' }>): Promise<'context' | 'directory'> {
+  try {
+    const trees = await listWorkspaceTreesCached(target.workspaceName)
+    const match = trees.find((t) => t?.name === target.treeName || t?.id === target.treeName)
+    if (match?.type === 'directory' || match?.type === 'context') return match.type
+  } catch {
+    /* fall back to the best-effort type from useAddTarget */
+  }
+  return target.treeType
+}
+
 // A document carries its own tags inside metadata.features, so submission is the same
 // shape for both targets. Workspace mode additionally fires a refresh event so the
 // open list reloads immediately (context mode refreshes via socket events).
@@ -89,24 +103,12 @@ export async function submitDocuments(
 
   if (target.mode === 'workspace') {
     if (target.treeName === 'backends') throw new Error('Backend folders accept files, not database-only documents')
-    // Resolve the actual tree type by name so directory / virtual-directory trees
-    // get treeType:'directory' (the server otherwise builds a context selector and
-    // throws "Tree is not a context tree").
-    let treeType = target.treeType
-    try {
-      const trees = await listWorkspaceTreesCached(target.workspaceName)
-      const match = trees.find((t) => t?.name === target.treeName || t?.id === target.treeName)
-      if (match?.type === 'directory' || match?.type === 'context') treeType = match.type
-    } catch {
-      /* fall back to the best-effort type from useAddTarget */
-    }
-
     const ids = await importDocumentsToWorkspacePath(
       target.workspaceName,
       target.path,
       documents,
       target.treeName,
-      treeType,
+      await resolveTreeType(target),
     )
     if (ids.length && opts.refresh !== false) {
       notifyWorkspaceDocumentsChanged(target)
@@ -138,20 +140,17 @@ export async function resolveUploadWorkspace(target: AddTarget): Promise<{ works
 // uses (pages/contexts/[contextId]/index.tsx), so this stays consistent with
 // the existing clipboard-paste flow rather than a second, subtly different one.
 export async function linkExistingDocuments(target: AddTarget, documentIds: number[]): Promise<boolean> {
+  const success = await linkDocuments(target, documentIds)
+  if (success) notifyWorkspaceDocumentsChanged(target)
+  return success
+}
+
+/** linkExistingDocuments without the list reload, for callers that emit one per batch. */
+export async function linkDocuments(target: AddTarget, documentIds: number[]): Promise<boolean> {
   if (!target) throw new Error('No active workspace or context to add to')
-
   if (target.mode === 'workspace') {
-    const success = await pasteDocumentsToWorkspacePath(target.workspaceName, target.path, documentIds, target.treeName, target.treeType)
-    if (success) {
-      window.dispatchEvent(
-        new CustomEvent('workspace:documents:refresh', {
-          detail: { workspaceName: target.workspaceName, treeName: target.treeName, path: target.path },
-        }),
-      )
-    }
-    return success
+    return pasteDocumentsToWorkspacePath(target.workspaceName, target.path, documentIds, target.treeName, await resolveTreeType(target))
   }
-
   const ctx = await getContext(target.contextId)
   return pasteDocumentsToContext(target.contextId, ctx.path || '/', documentIds)
 }

@@ -22,7 +22,10 @@ export interface ActionItem {
   disabled?: boolean
   // Tooltip — why an item does what it does, or why it is disabled.
   hint?: string
-  run: (invocation?: { shiftKey: boolean }) => void | Promise<void>
+  // Omitted on an item that only opens `children`.
+  run?: (invocation?: { shiftKey: boolean }) => void | Promise<void>
+  // A submenu: the item opens these instead of running.
+  children?: ActionItem[]
 }
 
 export type ActionAnchor = { x: number; y: number }

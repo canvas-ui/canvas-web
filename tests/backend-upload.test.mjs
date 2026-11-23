@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { backendUploadTarget, backendUploadKey } from '../src/lib/backend-upload.ts'
+import { backendUploadTarget, backendUploadKey, numberedFilename } from '../src/lib/backend-upload.ts'
 
 const home = { driver: 'file', address: 'workspace:home', enabled: true, treePath: '/workspace/home', capabilities: { upload: true }, config: {} }
 const mount = { ...home, address: 'photos', treePath: '/device/laptop/photos' }
@@ -29,4 +29,11 @@ test('filenames and folder paths cannot smuggle traversal or path separators', (
   }
   assert.throws(() => backendUploadTarget('/workspace/home/../data', [home]))
   assert.throws(() => backendUploadKey('../data', 'file.txt'))
+})
+
+test('a taken name gets a number before its extension', () => {
+  assert.equal(numberedFilename('report.pdf', 0), 'report.pdf')
+  assert.equal(numberedFilename('report.final.pdf', 2), 'report.final (2).pdf')
+  assert.equal(numberedFilename('README', 1), 'README (1)')
+  assert.equal(numberedFilename('.env', 1), '.env (1)')
 })

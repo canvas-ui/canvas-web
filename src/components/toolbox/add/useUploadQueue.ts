@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { backendUploadKey, type BackendUploadTarget } from '@/lib/backend-upload'
+import { backendUploadKey, numberedFilename, type BackendUploadTarget } from '@/lib/backend-upload'
 import { sha256File } from '@/lib/sha256'
 import {
   RESUMABLE_MIN_BYTES,
@@ -8,15 +8,16 @@ import {
   uploadBackendFileWithProgress,
   type BlobUploadResult,
 } from '@/services/blobs'
-import { transferDocumentsToBackends } from '@/services/workspace'
-import { submitDocuments, notifyWorkspaceDocumentsChanged, resolveUploadWorkspace, resolveBackendUpload, type AddTarget } from './useAddTarget'
+import { submitDocuments, linkDocuments, notifyWorkspaceDocumentsChanged, resolveUploadWorkspace, resolveBackendUpload, type AddTarget } from './useAddTarget'
 import type { UploadStorage } from './useStorageFields'
 
 // Per-file upload pipeline with resume semantics:
 //   hash small files locally → batch-ask the server which checksums it already holds →
 //   skip the byte transfer for those (content-addressed store) → upload the
-//   rest with real progress → insert each File document as its blob lands →
-//   copy it to the backends picked in the form, when any were.
+//   rest with real progress → insert each File document as its blob lands.
+// With a backend picked in the form the bytes skip the content store: each
+// file is written straight to the backend, which indexes it, and the resulting
+// document is filed under the upload's target.
 // Large files upload through resumable sessions (services/blobs.ts): a
 // dropped connection continues where the server's copy ends.
 // A failed batch is re-runnable: retry (or re-selecting the same files later)
@@ -29,8 +30,7 @@ export type UploadStatus =
   | 'hashing'
   | 'checking'
   | 'uploading'
-  | 'linking' // blob persisted, inserting the File document
-  | 'storing' // document inserted, copying to the picked backends
+  | 'linking' // bytes persisted, inserting or filing the File document
   | 'done'
   | 'error'
 
@@ -73,23 +73,26 @@ export function summarizeUpload(items: UploadItem[]): UploadSummary {
 
 export type BuildUploadDocument = (blob: BlobUploadResult, file: File) => Record<string, unknown>
 
-/**
- * Put an uploaded document on the backends picked for it. Every upload first
- * lands in the default content store; without `keepDefault` that copy is
- * released by a move to the first backend, after the others have theirs.
- * Safe to repeat: a backend that already holds the file is left alone.
- */
-async function storeUpload(workspaceName: string, docId: number, storage: UploadStorage): Promise<void> {
-  // One backend per request: a document already on one backend ends its
-  // request there, and the others still have to get their copy.
-  const send = async (to: string, mode: 'copy' | 'move') => {
-    const result = await transferDocumentsToBackends(workspaceName, [docId], { to: [to], mode, folder: storage.folder, onConflict: 'rename' })
-    const failed = result.failed.find((failure) => failure.code !== 'ALREADY_THERE')
-    if (failed) throw new Error(`Uploaded to workspace data, but not stored in ${to}: ${failed.reason}`)
+/** Called with each document a direct backend upload produced, to add what the form collected. */
+export type AnnotateUpload = (workspaceName: string, docId: number, file: File) => Promise<void>
+
+const NAME_ATTEMPTS = 50
+
+/** Create-only write that takes the next free numbered name when `rename` is set. */
+async function uploadToBackend(
+  workspaceName: string, backend: BackendUploadTarget, file: File, rename: boolean,
+  options: { signal: AbortSignal; onProgress: (sent: number, total: number) => void },
+) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await uploadBackendFileWithProgress(workspaceName, {
+        ...backend, key: backendUploadKey(backend.key, numberedFilename(file.name, attempt)),
+      }, file, options)
+    } catch (error) {
+      const taken = (error as { statusCode?: number }).statusCode === 412
+      if (!rename || !taken || attempt >= NAME_ATTEMPTS) throw error
+    }
   }
-  const [first, ...rest] = storage.to
-  for (const backend of rest) await send(backend, 'copy')
-  await send(first, storage.keepDefault ? 'copy' : 'move')
 }
 
 /**
@@ -97,17 +100,23 @@ async function storeUpload(workspaceName: string, docId: number, storage: Upload
  * (`items` reads it fresh between awaits, `patch` writes it), so the same
  * pipeline serves a form's own queue and the background upload manager.
  */
-export async function runUploadPipeline({ target, destination, storage = null, items, patch, buildDoc, signal }: {
+export async function runUploadPipeline({ target, destination, storage = null, items, patch, buildDoc, annotate, signal }: {
   target: NonNullable<AddTarget>
   destination: { workspaceName: string; backend: BackendUploadTarget | null }
-  /** Backends picked for the files, beyond the default content store. Not used with `destination.backend`. */
+  /** Backend picked for the files of a virtual-tree target. Not used with `destination.backend`. */
   storage?: UploadStorage | null
   items: () => UploadItem[]
   patch: (id: string, changes: Partial<UploadItem>) => void
   buildDoc: BuildUploadDocument
+  /** Runs on each document of a `storage` upload, which `buildDoc` never sees. */
+  annotate?: AnnotateUpload
   signal: AbortSignal
 }): Promise<void> {
-  const { workspaceName, backend } = destination
+  const { workspaceName } = destination
+  // A picked backend receives the files like a backends-tree folder does; the
+  // documents are then filed under the target, which is elsewhere.
+  const placed = !destination.backend && storage ? storage : null
+  const backend: BackendUploadTarget | null = destination.backend ?? (placed && { driver: placed.driver, address: placed.address, key: placed.folder })
   const pending = items().filter((it) => it.status !== 'done')
   // Fresh run over previously failed items: clear stale error state.
   for (const it of pending) patch(it.id, { status: 'queued', progress: 0, error: undefined })
@@ -122,12 +131,16 @@ export async function runUploadPipeline({ target, destination, storage = null, i
           const it = pending[cursor++]
           try {
             patch(it.id, { status: 'uploading', progress: 0, resumed: false })
-            const result = await uploadBackendFileWithProgress(workspaceName, {
-              ...backend, key: backendUploadKey(backend.key, it.file.name),
-            }, it.file, {
+            const result = await uploadToBackend(workspaceName, backend, it.file, !!placed, {
               signal: signal,
               onProgress: (sent, total) => patch(it.id, { progress: total ? sent / total : 0 }),
             })
+            if (placed) {
+              if (result.docId == null) throw new Error(`Stored as ${result.key}, but the backend has not indexed it yet. Find it in the backends tree.`)
+              patch(it.id, { status: 'linking', progress: 1, docId: result.docId })
+              await linkDocuments(target, [result.docId])
+              await annotate?.(workspaceName, result.docId, it.file)
+            }
             patch(it.id, { status: 'done', progress: 1, docId: result.docId ?? undefined })
           } catch (error) {
             patch(it.id, { status: 'error', error: error instanceof Error ? error.message : 'Upload failed' })
@@ -188,10 +201,6 @@ export async function runUploadPipeline({ target, destination, storage = null, i
             // Insert immediately so a later failure can't orphan this file's
             // work. synapsd upserts by checksum, so re-runs are idempotent.
             const ids = await submitDocuments(target, [buildDoc(blob, it.file)], { refresh: false })
-            if (storage && ids[0] != null) {
-              patch(it.id, { status: 'storing', docId: ids[0] })
-              await storeUpload(workspaceName, ids[0], storage)
-            }
             patch(it.id, { status: 'done', docId: ids[0] })
           } catch (err) {
             const aborted = err instanceof DOMException && err.name === 'AbortError'

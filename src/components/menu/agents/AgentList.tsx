@@ -141,10 +141,9 @@ export function AgentList() {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation()
-                          selectEntity(agent.id)
                           // See WorkspaceList — the list is its own step on mobile.
-                          if (isMobile) { openM2('settings', agent.id) }
-                          else { navigate(`/agents/${encodeURIComponent(agent.name || agent.id)}/settings/identity`) }
+                          openM2('settings', agent.id)
+                          if (!isMobile) navigate(`/agents/${encodeURIComponent(agent.name || agent.id)}/settings/identity`)
                         }}
                         className="flex items-center justify-center w-6 h-6 rounded hover:bg-muted-foreground/10 text-muted-foreground transition-colors"
                         title="Settings"

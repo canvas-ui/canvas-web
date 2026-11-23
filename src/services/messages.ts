@@ -35,3 +35,18 @@ export interface MessageThreadResult {
   truncated: boolean
 }
 export const getMessageThread = (workspace: string, id: number) => api.get<MessageThreadResult>(`${base(workspace)}/thread/${id}`)
+
+const SENDING_ACCOUNTS_TTL_MS = 60_000
+const sendingAccountsCache = new Map<string, { at: number; promise: Promise<MessageAccount[]> }>()
+
+/** Accounts of a workspace that can send right now. Shared briefly: every open action menu asks. */
+export function sendingAccounts(workspace: string): Promise<MessageAccount[]> {
+  const hit = sendingAccountsCache.get(workspace)
+  if (hit && Date.now() - hit.at < SENDING_ACCOUNTS_TTL_MS) return hit.promise
+  const promise = messageAccounts(workspace).then((list) => list.filter((account) => account.canSend))
+  promise.catch(() => sendingAccountsCache.delete(workspace))
+  sendingAccountsCache.set(workspace, { at: Date.now(), promise })
+  return promise
+}
+
+export const MESSAGE_DRIVER_LABELS: Record<MessageAccount['driver'], string> = { imap: 'E-mail', slack: 'Slack', whatsapp: 'WhatsApp' }

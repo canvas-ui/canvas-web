@@ -3,7 +3,7 @@ import { resolveBackendUpload, resolveUploadWorkspace, type AddTarget } from './
 import { buildFileDocument } from './useFileFields'
 import { readDroppedFiles } from './dropped-files'
 import type { UploadStorage } from './useStorageFields'
-import { itemKey, runUploadPipeline, summarizeUpload, type BuildUploadDocument, type UploadItem, type UploadSummary } from './useUploadQueue'
+import { itemKey, runUploadPipeline, summarizeUpload, type AnnotateUpload, type BuildUploadDocument, type UploadItem, type UploadSummary } from './useUploadQueue'
 
 // Background uploads. A batch belongs to the app, not to the form or folder
 // that started it, so it keeps running while the user navigates elsewhere and
@@ -22,6 +22,7 @@ interface BatchRun {
   target: NonNullable<AddTarget>
   buildDoc: BuildUploadDocument
   storage: UploadStorage | null
+  annotate?: AnnotateUpload
   onSettled?: (summary: UploadSummary) => void | Promise<void>
   /** The tree gained folders (a dropped directory): reload it afterwards. */
   refreshTree: boolean
@@ -62,7 +63,7 @@ async function run(id: number): Promise<void> {
     const backend = treeName === 'backends' ? await resolveBackendUpload(workspaceName, path) : null
     await runUploadPipeline({
       target: job.target, destination: { workspaceName, backend }, storage: backend ? null : job.storage,
-      items: () => find(id)?.items ?? [], patch, buildDoc: job.buildDoc, signal: abort.signal,
+      items: () => find(id)?.items ?? [], patch, buildDoc: job.buildDoc, annotate: job.annotate, signal: abort.signal,
     })
     if (job.refreshTree) window.dispatchEvent(new CustomEvent('workspace:tree:refresh', { detail: { workspaceName } }))
   } catch (error) {
@@ -90,8 +91,10 @@ function schedule(id: number): void {
 /** Start uploading `files` into `target` in the background. */
 export function enqueueUpload(files: File[], target: AddTarget, options: {
   buildDoc?: BuildUploadDocument
-  /** Backends picked for the files; omitted, they stay in the default content store. */
+  /** Backend the files are written to; omitted, they go to the workspace's own storage. */
   storage?: UploadStorage | null
+  /** What `buildDoc` adds, for the documents a `storage` upload produces. */
+  annotate?: AnnotateUpload
   onSettled?: (summary: UploadSummary) => void | Promise<void>
   refreshTree?: boolean
 } = {}): void {
@@ -108,6 +111,7 @@ export function enqueueUpload(files: File[], target: AddTarget, options: {
     target,
     buildDoc: options.buildDoc ?? ((blob, file) => buildFileDocument(blob, file)),
     storage: options.storage ?? null,
+    annotate: options.annotate,
     onSettled: options.onSettled,
     refreshTree: options.refreshTree ?? false,
     abort: null,

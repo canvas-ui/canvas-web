@@ -143,10 +143,9 @@ export function ContextList() {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation()
-                        selectEntity(ctx.id)
                         // See WorkspaceList — the list is its own step on mobile.
-                        if (isMobile) { openM2('settings', ctx.id) }
-                        else { navigate(`/contexts/${ctx.id}/settings/general`) }
+                        openM2('settings', ctx.id)
+                        if (!isMobile) navigate(`/contexts/${ctx.id}/settings/general`)
                       }}
                       className="reveal-on-hover shrink-0 mt-0.5"
                       title="Settings"
