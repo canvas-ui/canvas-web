@@ -133,7 +133,7 @@ for (const treeName of ['context', 'backends']) {
       const sendTo = menu.find(item => item.id === 'send-to')
       assert.equal(sendTo.label, `Send to${suffix}`)
       assert.deepEqual(Array.from(sendTo.children, item => [item.label, !!item.disabled]), [
-        ['E-mail · office@example.com', false], ['WhatsApp · phone', ids.length > 1],
+        ['E-mail · via office@example.com', false], ['WhatsApp · via phone', ids.length > 1],
       ])
       await sendTo.children[0].run()
     }

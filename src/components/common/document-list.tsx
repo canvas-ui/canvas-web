@@ -1685,7 +1685,7 @@ export function DocumentList({ readingPane = false, externalSearchQuery, toolbar
         const oneFileOnly = account.driver === 'whatsapp' && n > 1
         return {
           id: `send-to:${account.driver}:${account.address}`,
-          label: `${MESSAGE_DRIVER_LABELS[account.driver]} · ${account.from || account.address}`,
+          label: `${MESSAGE_DRIVER_LABELS[account.driver]} · via ${account.from || account.address}`,
           icon: account.driver === 'imap' ? Mail : MessageCircle,
           disabled: oneFileOnly,
           hint: oneFileOnly ? 'WhatsApp takes one file per message' : undefined,
