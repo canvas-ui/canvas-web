@@ -16,7 +16,7 @@ export interface MessageSend {
   forward?: boolean
 }
 export type ComposeMode = 'reply' | 'replyAll' | 'forward'
-export interface MessageReceipt { status: 'accepted' | 'unknown'; requestId: string; docId?: number; message?: string; warnings?: string[]; rejected?: string[] }
+export interface MessageReceipt { status: 'accepted' | 'unknown'; requestId: string; docId?: number; message?: string; /** E-mail: the IMAP folder that received a copy. */ sentFolder?: string; warnings?: string[]; rejected?: string[] }
 const base = (workspace: string) => `${API_ROUTES.workspaces}/${encodeURIComponent(workspace)}/messages`
 export const messageAccounts = (workspace: string) => api.get<MessageAccount[]>(`${base(workspace)}/accounts`)
 export interface ReplyTarget { driver: string; address: string; target?: string; recipients?: { to: string[]; cc: string[] }; allRecipients?: { to: string[]; cc: string[] } }

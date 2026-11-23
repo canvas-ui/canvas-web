@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { useToastHelpers } from '@/hooks/useToastHelpers'
 import { LazyMarkdownEditor } from '@/components/common/lazy-editor'
 import { messageAccounts, messageReplyTarget, sendMessage, messageSendStatus, type ComposeMode, type MessageAccount, type MessageSend, type MessageReceipt, type ReplyTarget } from '@/services/messages'
 
@@ -72,6 +73,7 @@ export function MessageComposer({ workspaceId, replyToDocumentId, mode = 'reply'
   const [attempted, setAttempted] = useState(() => { try { return JSON.parse(localStorage.getItem(key) || '{}').attempted === true } catch { return false } })
   const [error, setError] = useState('')
   const [receipt, setReceipt] = useState<MessageReceipt | null>(null)
+  const { showSuccessToast } = useToastHelpers()
   useEffect(() => {
     let active = true
     Promise.all([messageAccounts(workspaceId), replyToDocumentId ? messageReplyTarget(workspaceId, replyToDocumentId) : Promise.resolve(null)])
@@ -117,6 +119,11 @@ export function MessageComposer({ workspaceId, replyToDocumentId, mode = 'reply'
       if (result.status === 'accepted') {
         try { localStorage.removeItem(key) } catch { /* unavailable storage */ }
         window.dispatchEvent(new CustomEvent('workspace:documents:refresh', { detail: { workspaceName: workspaceId } }))
+        // A clean send needs no further attention; anything to read keeps the composer open.
+        if (!result.warnings?.length && !result.rejected?.length) {
+          showSuccessToast(result.sentFolder ? `Message sent. A copy is in ${result.sentFolder}.` : 'Message sent.')
+          onClose()
+        }
       }
     } catch (e) {
       const failure = e as Error & { statusCode?: number }
@@ -209,12 +216,13 @@ export function MessageComposer({ workspaceId, replyToDocumentId, mode = 'reply'
     </div>
     <div className={cn('space-y-2', wide && 'md:border-t md:pt-4')}>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-      {receipt && <p role="status" className="text-sm">{receipt.status === 'accepted' ? 'Accepted by the provider.' : receipt.message} {receipt.warnings?.join(' ')} {receipt.rejected?.length ? `Not accepted for: ${receipt.rejected.join(', ')}` : ''}</p>}
+      {receipt && <p role="status" className="text-sm">{receipt.status === 'accepted' ? `Message sent.${receipt.sentFolder ? ` A copy is in ${receipt.sentFolder}.` : ''}` : receipt.message} {receipt.warnings?.join(' ')} {receipt.rejected?.length ? `Not accepted for: ${receipt.rejected.join(', ')}` : ''}</p>}
       <div className={cn('flex flex-wrap gap-2', wide && 'md:justify-end')}>
         <Button size="sm" variant="ghost" disabled={busy} onClick={() => {
           if (!window.confirm(attempted ? 'This message may already have been sent. Discard this draft only after checking the conversation.' : 'Discard this draft?')) return
           setDraft({ ...fresh(), driver: draft.driver, address: draft.address }); setAttempted(false); setReceipt(null); setError('')
         }}>Discard draft</Button>
+        {receipt?.status === 'accepted' && <Button size="sm" onClick={onClose}>Close</Button>}
         {receipt?.status !== 'accepted' && <Button size="sm" disabled={busy || picturesBusy || (!attempted && (!account || (!hasText && !hasPictures && !hasFiles && !(isEmail && forward)) || (forward && !draft.to?.some((s) => s.trim())))) || !online} onClick={() => void send()}>{busy ? 'Sending…' : attempted ? 'Check send status' : 'Send'}</Button>}
       </div>
       {attempted && receipt?.status !== 'accepted' && <p className="text-xs text-muted-foreground">Do not start another send until you have checked the conversation. The same request will not be delivered twice by Canvas.</p>}

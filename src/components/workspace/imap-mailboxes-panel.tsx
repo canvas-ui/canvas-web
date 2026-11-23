@@ -39,13 +39,13 @@ interface AccountForm {
   password: string;
   pollInterval: number;
   initialSyncDays: number;
-  smtp: { enabled: boolean; host: string; port: number; secure: boolean; user: string; password: string; from: string; sentFolder: string; appendSent: boolean; allowAgentSend: boolean };
+  smtp: { enabled: boolean; host: string; port: number; secure: boolean; user: string; password: string; from: string; sentFolder: string; sentCopy: boolean; allowAgentSend: boolean };
 }
 
 const EMPTY_FORM: AccountForm = {
   host: '', port: 993, tls: true, allowSelfSigned: true,
   user: '', password: '', pollInterval: 60000, initialSyncDays: 180,
-  smtp: { enabled: false, host: '', port: 587, secure: false, user: '', password: '', from: '', sentFolder: 'Sent', appendSent: false, allowAgentSend: false },
+  smtp: { enabled: false, host: '', port: 587, secure: false, user: '', password: '', from: '', sentFolder: '', sentCopy: true, allowAgentSend: false },
 };
 
 function formFromBackend(b: Backend): AccountForm {
@@ -350,7 +350,7 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
           <div className="grid gap-3 sm:grid-cols-2">
             {(['host', 'user', 'from', 'sentFolder'] as const).map((field) => <label key={field} className="text-xs">
               {{ host: 'SMTP host', user: 'SMTP username', from: 'From address', sentFolder: 'Sent folder' }[field]}
-              <Input name={`smtp-${field}`} value={form.smtp[field]} autoComplete={field === 'user' ? 'section-smtp username' : 'off'} onChange={(e) => change('smtp', { ...form.smtp, [field]: e.target.value })} />
+              <Input name={`smtp-${field}`} value={form.smtp[field]} placeholder={field === 'sentFolder' ? 'Found automatically' : undefined} autoComplete={field === 'user' ? 'section-smtp username' : 'off'} onChange={(e) => change('smtp', { ...form.smtp, [field]: e.target.value })} />
             </label>)}
             {form.smtp.enabled && (!current || replaceSmtpPassword) && <label className="text-xs">SMTP password (blank keeps current)
               <Input name="smtp-password" type="password" autoComplete="section-smtp new-password" data-lpignore="true" data-1p-ignore="true" value={form.smtp.password} onChange={e => change('smtp', { ...form.smtp, password: e.target.value })} />
@@ -359,7 +359,7 @@ export function ImapMailboxesPanel({ workspaceId, enabled }: ImapMailboxesPanelP
             <label className="text-xs">Port<Input type="number" min={1} max={65535} value={form.smtp.port} onChange={(e) => change('smtp', { ...form.smtp, port: Number(e.target.value) })} /></label>
           </div>
           <label className="flex gap-2 text-xs"><input type="checkbox" checked={form.smtp.secure} onChange={(e) => change('smtp', { ...form.smtp, secure: e.target.checked })} />Implicit TLS (usually port 465; otherwise STARTTLS is required)</label>
-          <label className="flex gap-2 text-xs"><input type="checkbox" checked={form.smtp.appendSent} onChange={(e) => change('smtp', { ...form.smtp, appendSent: e.target.checked })} />Save a copy in the IMAP Sent folder (leave off if your provider does this automatically)</label>
+          <label className="flex gap-2 text-xs"><input type="checkbox" checked={form.smtp.sentCopy} onChange={(e) => change('smtp', { ...form.smtp, sentCopy: e.target.checked })} />Save a copy of sent mail in the IMAP Sent folder (turn off if your provider already does, or sent mail appears twice)</label>
           <label className="flex gap-2 text-xs"><input type="checkbox" checked={form.smtp.allowAgentSend} onChange={(e) => change('smtp', { ...form.smtp, allowAgentSend: e.target.checked })} />Allow agents with workspace write access to send</label>
         </fieldset>
         <div className="grid gap-2">
